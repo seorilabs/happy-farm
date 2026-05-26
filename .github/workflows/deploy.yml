@@ -1,0 +1,149 @@
+name: Deploy Apps in Toss
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      memo:
+        description: "앱인토스 배포 메모 (선택, 최대 1000자)"
+        required: false
+        type: string
+      create_release_tag:
+        description: "앱인토스 배포 성공 후 릴리즈 태그 생성"
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: happy-farm-apps-in-toss-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Build and Deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment: apps-in-toss
+    permissions:
+      contents: write
+
+    env:
+      APPS_IN_TOSS_API_KEY: ${{ secrets.APPS_IN_TOSS_API_KEY }}
+      APPS_IN_TOSS_INPUT_MEMO: ${{ github.event.inputs.memo || '' }}
+      CREATE_RELEASE_TAG_INPUT: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.create_release_tag != 'false' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.3.0
+          run_install: false
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Check required config
+        run: |
+          if [ -z "$APPS_IN_TOSS_API_KEY" ]; then
+            echo "APPS_IN_TOSS_API_KEY secret is required." >&2
+            exit 1
+          fi
+
+      - name: Resolve release tag
+        id: release
+        run: |
+          set -euo pipefail
+
+          create_release_tag="$CREATE_RELEASE_TAG_INPUT"
+
+          if [ "$create_release_tag" = "false" ]; then
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [ -z "${GITHUB_RUN_NUMBER:-}" ]; then
+            echo "GITHUB_RUN_NUMBER is required to create a sequential release tag." >&2
+            exit 1
+          fi
+
+          short_sha="${GITHUB_SHA::7}"
+          tag="happy-farm-release-$GITHUB_RUN_NUMBER"
+          existing_tag_sha="$(git ls-remote --tags origin "refs/tags/$tag^{}" | awk 'NR == 1 { print $1 }')"
+
+          if [ -z "$existing_tag_sha" ]; then
+            existing_tag_sha="$(git ls-remote --tags origin "refs/tags/$tag" | awk 'NR == 1 { print $1 }')"
+          fi
+
+          if [ "$existing_tag_sha" = "$GITHUB_SHA" ]; then
+            echo "Release tag '$tag' already exists for this commit. Skipping tag creation."
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [ -n "$existing_tag_sha" ]; then
+            echo "Git tag '$tag' already exists for a different commit ($existing_tag_sha)." >&2
+            exit 1
+          fi
+
+          {
+            echo "enabled=true"
+            echo "tag=$tag"
+            echo "message=Happy Farm AppsInToss deploy #$GITHUB_RUN_NUMBER ($short_sha)"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test
+        run: pnpm test
+
+      - name: Build AIT artifact
+        run: pnpm build
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: happy-farm-deploy-${{ github.sha }}
+          if-no-files-found: error
+          retention-days: 30
+          path: "*.ait"
+
+      - name: Deploy to Apps in Toss
+        run: |
+          memo="$APPS_IN_TOSS_INPUT_MEMO"
+
+          if [ -z "$memo" ]; then
+            memo="GitHub Actions ${GITHUB_REF_NAME}@${GITHUB_SHA::7}"
+          fi
+
+          pnpm deploy -- --api-key "$APPS_IN_TOSS_API_KEY" --memo "$memo"
+
+      - name: Push release tag
+        if: steps.release.outputs.enabled == 'true'
+        env:
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+          RELEASE_TAG_MESSAGE: ${{ steps.release.outputs.message }}
+        run: |
+          set -euo pipefail
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$RELEASE_TAG" "$GITHUB_SHA" -m "$RELEASE_TAG_MESSAGE"
+          git push origin "refs/tags/$RELEASE_TAG"
