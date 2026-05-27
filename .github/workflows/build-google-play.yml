@@ -1,0 +1,189 @@
+name: Build Google Play AAB
+
+on:
+  workflow_dispatch:
+    inputs:
+      upload_to_internal:
+        description: "Google Play internal track에 AAB 업로드"
+        required: false
+        default: false
+        type: boolean
+      release_status:
+        description: "internal track release status"
+        required: false
+        default: "draft"
+        type: choice
+        options:
+          - draft
+          - completed
+      changes_not_sent_for_review:
+        description: "검토 제출 없이 edit commit"
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: google-play-aab-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-aab:
+    name: Build signed Android App Bundle
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.3.0
+          run_install: false
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Prepare Android SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
+          yes | sdkmanager --licenses >/dev/null
+          sdkmanager \
+            "platform-tools" \
+            "platforms;android-36" \
+            "build-tools;36.0.0" \
+            "ndk;27.1.12297006" \
+            "cmdline-tools;latest"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck mobile app
+        run: pnpm --dir apps/mobile typecheck
+
+      - name: Test mobile app
+        run: pnpm --dir apps/mobile test --watchAll=false
+
+      - name: Validate signing secrets
+        shell: bash
+        env:
+          GOOGLE_PLAY_UPLOAD_KEYSTORE_BASE64: ${{ secrets.GOOGLE_PLAY_UPLOAD_KEYSTORE_BASE64 }}
+          GOOGLE_PLAY_UPLOAD_KEYSTORE_PASSWORD: ${{ secrets.GOOGLE_PLAY_UPLOAD_KEYSTORE_PASSWORD }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "$GOOGLE_PLAY_UPLOAD_KEYSTORE_BASE64" ]; then
+            echo "GOOGLE_PLAY_UPLOAD_KEYSTORE_BASE64 secret is required." >&2
+            exit 1
+          fi
+
+          if [ -z "$GOOGLE_PLAY_UPLOAD_KEYSTORE_PASSWORD" ]; then
+            echo "GOOGLE_PLAY_UPLOAD_KEYSTORE_PASSWORD secret is required." >&2
+            exit 1
+          fi
+
+      - name: Restore Google Play upload keystore
+        shell: bash
+        env:
+          GOOGLE_PLAY_UPLOAD_KEYSTORE_BASE64: ${{ secrets.GOOGLE_PLAY_UPLOAD_KEYSTORE_BASE64 }}
+          GOOGLE_PLAY_UPLOAD_KEYSTORE_PASSWORD: ${{ secrets.GOOGLE_PLAY_UPLOAD_KEYSTORE_PASSWORD }}
+          GOOGLE_PLAY_UPLOAD_KEY_PASSWORD: ${{ secrets.GOOGLE_PLAY_UPLOAD_KEY_PASSWORD }}
+          GOOGLE_PLAY_UPLOAD_KEY_ALIAS: ${{ vars.GOOGLE_PLAY_UPLOAD_KEY_ALIAS }}
+        run: |
+          set -euo pipefail
+
+          signing_dir="$RUNNER_TEMP/happy-farm-signing"
+          keystore_path="$signing_dir/happy-farm-upload-key.jks"
+          key_alias="${GOOGLE_PLAY_UPLOAD_KEY_ALIAS:-happy-farm-upload}"
+          key_password="${GOOGLE_PLAY_UPLOAD_KEY_PASSWORD:-$GOOGLE_PLAY_UPLOAD_KEYSTORE_PASSWORD}"
+
+          mkdir -p "$signing_dir"
+          printf '%s' "$GOOGLE_PLAY_UPLOAD_KEYSTORE_BASE64" | base64 --decode > "$keystore_path"
+          chmod 600 "$keystore_path"
+
+          {
+            printf 'storeFile=%s\n' "$keystore_path"
+            printf 'storePassword=%s\n' "$GOOGLE_PLAY_UPLOAD_KEYSTORE_PASSWORD"
+            printf 'keyAlias=%s\n' "$key_alias"
+            printf 'keyPassword=%s\n' "$key_password"
+          } > apps/mobile/android/key.properties
+          chmod 600 apps/mobile/android/key.properties
+
+      - name: Build signed Android AAB
+        working-directory: apps/mobile/android
+        run: ./gradlew :app:bundleRelease --no-daemon
+
+      - name: Upload AAB artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: happy-farm-google-play-aab-${{ github.sha }}
+          path: apps/mobile/android/app/build/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Validate Google Play WIF config
+        if: ${{ inputs.upload_to_internal }}
+        shell: bash
+        env:
+          GOOGLE_WORKLOAD_IDENTITY_PROVIDER: ${{ vars.GOOGLE_WORKLOAD_IDENTITY_PROVIDER }}
+          GOOGLE_PLAY_SERVICE_ACCOUNT_EMAIL: ${{ vars.GOOGLE_PLAY_SERVICE_ACCOUNT_EMAIL }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "$GOOGLE_WORKLOAD_IDENTITY_PROVIDER" ]; then
+            echo "GOOGLE_WORKLOAD_IDENTITY_PROVIDER repository variable is required to upload to Google Play." >&2
+            exit 1
+          fi
+
+          if [ -z "$GOOGLE_PLAY_SERVICE_ACCOUNT_EMAIL" ]; then
+            echo "GOOGLE_PLAY_SERVICE_ACCOUNT_EMAIL repository variable is required to upload to Google Play." >&2
+            exit 1
+          fi
+
+      - name: Authenticate to Google Cloud
+        if: ${{ inputs.upload_to_internal }}
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.GOOGLE_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GOOGLE_PLAY_SERVICE_ACCOUNT_EMAIL }}
+          create_credentials_file: true
+
+      - name: Install Google Play API client
+        if: ${{ inputs.upload_to_internal }}
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install google-api-python-client google-auth
+
+      - name: Upload AAB to Google Play internal track
+        if: ${{ inputs.upload_to_internal }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          args=(--release-status "${{ inputs.release_status }}")
+          if [ "${{ inputs.changes_not_sent_for_review }}" = "true" ]; then
+            args+=(--changes-not-sent-for-review)
+          fi
+
+          python3 scripts/upload-google-play-internal.py "${args[@]}"
+
+      - name: Print remaining Google Play readiness blockers
+        continue-on-error: true
+        run: pnpm check:play -- --json

@@ -56,4 +56,4 @@ jobs:
           name: happy-farm-ci-${{ github.sha }}
           if-no-files-found: error
           retention-days: 14
-          path: "*.ait"
+          path: "apps/ait/*.ait"

@@ -1,26 +1,15 @@
 /// <reference types="jest" />
 
-import { MAX_PLOTS, SAVE_KEY } from '../constants';
+import { MAX_PLOTS, SAVE_KEY } from '../../../../../packages/farm-core/src';
+import { createFarmPersistence } from '../persistence';
 
-jest.mock('@apps-in-toss/framework', () => ({
-  Storage: {
-    getItem: jest.fn(),
-    setItem: jest.fn(),
-    removeItem: jest.fn(),
-  },
-}));
-
-const { readPersistedGameState, removePersistedGameState, writePersistedGameState } = jest.requireActual(
-  '../storage'
-) as typeof import('../storage');
-const frameworkMock = jest.requireMock('@apps-in-toss/framework') as {
-  Storage: {
-    getItem: jest.Mock<Promise<string | null>, [string]>;
-    setItem: jest.Mock<Promise<void>, [string, string]>;
-    removeItem: jest.Mock<Promise<void>, [string]>;
-  };
+const mockStorage = {
+  getItem: jest.fn<Promise<string | null>, [string]>(),
+  setItem: jest.fn<Promise<void>, [string, string]>(),
+  removeItem: jest.fn<Promise<void>, [string]>(),
 };
-const mockStorage = frameworkMock.Storage;
+const { readPersistedGameState, writePersistedGameState, removePersistedGameState } =
+  createFarmPersistence(mockStorage);
 
 describe('farm storage', () => {
   beforeEach(() => {

@@ -1,4 +1,3 @@
-import { loadFullScreenAd, showFullScreenAd } from '@apps-in-toss/framework';
 import { useToast } from '@toss/tds-react-native';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -15,26 +14,6 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import type { AreaKey, CropKey, GameState } from './types';
-import {
-  type GameAnalyticsContext,
-  getGameAnalyticsContext,
-  trackAdLimitBlocked,
-  trackAdRewardClick,
-  trackAdRewardCompleted,
-  trackAdRewardFailed,
-  trackAdRewardImpression,
-  trackAreaUnlockClicked,
-  trackAreaUnlocked,
-  trackCropHarvested,
-  trackCropPlanted,
-  trackCropReady,
-  trackFarmScreen,
-  trackGameStart,
-  trackPlotUnlocked,
-  trackSeedSelected,
-  trackUpgradePurchased,
-} from './analytics';
 import {
   CROPS,
   FARM_AREAS,
@@ -44,10 +23,16 @@ import {
   INTERSTITIAL_MILESTONE_COOLDOWN_MS,
   MAX_PLOTS,
   REWARDED_GOLD_AMOUNT,
+  type AreaKey,
+  type CropKey,
+  type GameAnalyticsContext,
+  type GameState,
+  type RewardedAdType,
   canUnlockArea,
   createInitialState,
   formatMoney,
   getAreaUnlockRequirementText,
+  getGameAnalyticsContext,
   getPlotCost,
   getProfitMultiplier,
   getRewardedAdLimitStatus,
@@ -55,8 +40,9 @@ import {
   getUpgradeCost,
   isAreaUnlocked,
   recordRewardedAdUsage,
-  type RewardedAdType,
-} from './constants';
+} from '../../../../packages/farm-core/src';
+import { farmAnalytics } from './platform/analytics';
+import { useFullScreenAd } from './platform/fullScreenAd';
 import { readPersistedGameState, removePersistedGameState, writePersistedGameState } from './storage';
 
 const REWARDED_AD_GROUP_ID = '';
@@ -93,111 +79,6 @@ type ActiveSheet =
 
 type GetAnalyticsContext = (state?: GameState) => GameAnalyticsContext;
 type ToolKey = 'harvest' | CropKey;
-
-function isFullScreenAdSupported() {
-  try {
-    return loadFullScreenAd.isSupported() && showFullScreenAd.isSupported();
-  } catch {
-    return false;
-  }
-}
-
-function useFullScreenAd(adGroupId: string) {
-  const [isLoaded, setIsLoaded] = useState(false);
-  const [isSupported, setIsSupported] = useState(false);
-  const unregisterLoadRef = useRef<(() => void) | null>(null);
-  const unregisterShowRef = useRef<(() => void) | null>(null);
-
-  const loadAd = useCallback(() => {
-    unregisterLoadRef.current?.();
-    unregisterLoadRef.current = null;
-    setIsLoaded(false);
-
-    if (adGroupId.length === 0 || !isFullScreenAdSupported()) {
-      setIsSupported(false);
-      return;
-    }
-
-    setIsSupported(true);
-
-    try {
-      unregisterLoadRef.current = loadFullScreenAd({
-        options: { adGroupId },
-        onEvent: (event) => {
-          if (event.type === 'loaded') {
-            setIsLoaded(true);
-          }
-        },
-        onError: () => {
-          setIsLoaded(false);
-        },
-      });
-    } catch {
-      setIsLoaded(false);
-      setIsSupported(false);
-    }
-  }, [adGroupId]);
-
-  useEffect(() => {
-    loadAd();
-    return () => {
-      unregisterLoadRef.current?.();
-      unregisterShowRef.current?.();
-    };
-  }, [loadAd]);
-
-  const showAd = useCallback(
-    (onReward?: () => void) => {
-      if (adGroupId.length === 0 || !isFullScreenAdSupported() || !isLoaded) {
-        return Promise.resolve(false);
-      }
-
-      setIsLoaded(false);
-
-      return new Promise<boolean>((resolve) => {
-        let settled = false;
-        let rewardGranted = false;
-
-        const finish = (ok: boolean) => {
-          if (settled) {
-            return;
-          }
-          settled = true;
-          unregisterShowRef.current?.();
-          unregisterShowRef.current = null;
-          loadAd();
-          resolve(ok);
-        };
-
-        try {
-          unregisterShowRef.current = showFullScreenAd({
-            options: { adGroupId },
-            onEvent: (event) => {
-              if (event.type === 'userEarnedReward' && !rewardGranted) {
-                rewardGranted = true;
-                onReward?.();
-              }
-              if (event.type === 'dismissed') {
-                finish(onReward == null ? true : rewardGranted);
-              }
-              if (event.type === 'failedToShow') {
-                finish(false);
-              }
-            },
-            onError: () => {
-              finish(false);
-            },
-          });
-        } catch {
-          finish(false);
-        }
-      });
-    },
-    [adGroupId, isLoaded, loadAd]
-  );
-
-  return { isAdReady: isSupported && isLoaded, isAdSupported: isSupported, showAd };
-}
 
 export default function FarmGame() {
   const insets = useSafeAreaInsets();
@@ -267,8 +148,8 @@ export default function FarmGame() {
 
     gameStartTrackedRef.current = true;
     const context = analyticsContext();
-    trackGameStart(context);
-    trackFarmScreen(context);
+    farmAnalytics.trackGameStart(context);
+    farmAnalytics.trackFarmScreen(context);
     toast('농장 기록을 불러왔어요.');
   }, [analyticsContext, isSaveLoaded, toast]);
 
@@ -281,14 +162,14 @@ export default function FarmGame() {
   useEffect(() => {
     if (activeSheet?.type === 'shop') {
       const context = analyticsContext();
-      trackAdRewardImpression('rewardedGold', 'shop_gold_reward', context);
-      trackAdRewardImpression('rewardedGold', 'shop_free_plot', context);
+      farmAnalytics.trackAdRewardImpression('rewardedGold', 'shop_gold_reward', context);
+      farmAnalytics.trackAdRewardImpression('rewardedGold', 'shop_free_plot', context);
     }
     if (activeSheet?.type === 'growthAd') {
-      trackAdRewardImpression('growthAd', 'growth_ad_sheet', analyticsContext());
+      farmAnalytics.trackAdRewardImpression('growthAd', 'growth_ad_sheet', analyticsContext());
     }
     if (activeSheet?.type === 'harvestBonus') {
-      trackAdRewardImpression('harvestBonusAd', 'harvest_bonus_sheet', analyticsContext());
+      farmAnalytics.trackAdRewardImpression('harvestBonusAd', 'harvest_bonus_sheet', analyticsContext());
     }
   }, [activeSheet, analyticsContext]);
 
@@ -335,7 +216,7 @@ export default function FarmGame() {
       const elapsed = (now - plot.startTime) * speedMult;
       if (elapsed >= crop.growTime) {
         updated = true;
-        trackCropReady(plot.cropType, crop.area, crop.tier, analyticsContext());
+        farmAnalytics.trackCropReady(plot.cropType, crop.area, crop.tier, analyticsContext());
         return { ...plot, state: 2 as const };
       }
       return plot;
@@ -371,7 +252,7 @@ export default function FarmGame() {
 
     const isFirstSeedSelection = !firstSeedSelectedRef.current;
     firstSeedSelectedRef.current = true;
-    trackSeedSelected(cropKey, crop.area, isFirstSeedSelection, analyticsContext());
+    farmAnalytics.trackSeedSelected(cropKey, crop.area, isFirstSeedSelection, analyticsContext());
     setSelectedArea(crop.area);
     setSelectedTool(cropKey);
   }
@@ -379,13 +260,13 @@ export default function FarmGame() {
   async function showRewardedAd(type: RewardedAdType, rewardValue: number, onReward: () => void) {
     const limit = getRewardedAdLimitStatus(gameState, type);
     if (!limit.allowed) {
-      trackAdLimitBlocked(type, limit.reason, analyticsContext());
+      farmAnalytics.trackAdLimitBlocked(type, limit.reason, analyticsContext());
       toast(limit.reason);
       return false;
     }
 
     if (!rewardedAd.isAdReady) {
-      trackAdRewardFailed(type, rewardedAd.isAdSupported ? 'not_ready' : 'unsupported', analyticsContext());
+      farmAnalytics.trackAdRewardFailed(type, rewardedAd.isAdSupported ? 'not_ready' : 'unsupported', analyticsContext());
       toast(
         rewardedAd.isAdSupported
           ? '광고를 준비하는 중이에요. 잠시 후 다시 시도해 주세요.'
@@ -394,11 +275,11 @@ export default function FarmGame() {
       return false;
     }
 
-    trackAdRewardClick(type, analyticsContext());
+    farmAnalytics.trackAdRewardClick(type, analyticsContext());
     const ok = await rewardedAd.showAd(() => {
       const rewardedAt = Date.now();
       onReward();
-      trackAdRewardCompleted({
+      farmAnalytics.trackAdRewardCompleted({
         type,
         rewardValue,
         context: analyticsContext(),
@@ -410,7 +291,7 @@ export default function FarmGame() {
     });
 
     if (!ok) {
-      trackAdRewardFailed(type, 'failed_to_show', analyticsContext());
+      farmAnalytics.trackAdRewardFailed(type, 'failed_to_show', analyticsContext());
       toast('광고를 표시하지 못했어요.');
     }
 
@@ -449,7 +330,7 @@ export default function FarmGame() {
         if (state.unlockedPlotCount >= MAX_PLOTS) {
           return state;
         }
-        trackPlotUnlocked({
+        farmAnalytics.trackPlotUnlocked({
           method: 'ad',
           cost: 0,
           nextPlotCount: state.unlockedPlotCount + 1,
@@ -497,7 +378,7 @@ export default function FarmGame() {
       next[index] = { ...plot, cropType: cropKey, startTime: Date.now(), state: 1 };
       return { ...state, gold: state.gold - crop.cost, plots: next };
     });
-    trackCropPlanted(cropKey, crop.area, crop.tier, crop.cost, analyticsContext());
+    farmAnalytics.trackCropPlanted(cropKey, crop.area, crop.tier, crop.cost, analyticsContext());
   }
 
   function harvestCrop(index: number) {
@@ -519,7 +400,7 @@ export default function FarmGame() {
       return { ...state, gold: state.gold + finalPrice, plots: next, harvestedCropKeys };
     });
 
-    trackCropHarvested({
+    farmAnalytics.trackCropHarvested({
       cropKey: plot.cropType,
       areaKey: crop.area,
       cropTier: crop.tier,
@@ -574,7 +455,7 @@ export default function FarmGame() {
               remainingMs,
             });
           } else {
-            trackAdLimitBlocked('growthAd', growthAdLimit.reason, analyticsContext());
+            farmAnalytics.trackAdLimitBlocked('growthAd', growthAdLimit.reason, analyticsContext());
             toast(growthAdLimit.reason);
           }
         } else {
@@ -1067,7 +948,7 @@ function ShopPlotRow({
           gold: state.gold - cost,
           unlockedPlotCount: state.unlockedPlotCount + 1,
         }));
-        trackPlotUnlocked({
+        farmAnalytics.trackPlotUnlocked({
           method: 'gold',
           cost,
           nextPlotCount: gameState.unlockedPlotCount + 1,
@@ -1122,7 +1003,7 @@ function ShopAreaUnlockRows({
             price={`${formatMoney(area.unlock.cost)}G`}
             disabled={!canBuy}
             onPress={() => {
-              trackAreaUnlockClicked(area.key, getAnalyticsContext(gameState));
+              farmAnalytics.trackAreaUnlockClicked(area.key, getAnalyticsContext(gameState));
               if (!isNextArea) {
                 onDone('앞 구역부터 차례대로 열어 주세요.');
                 return;
@@ -1142,7 +1023,7 @@ function ShopAreaUnlockRows({
                   unlockedAreas: [...state.unlockedAreas, area.key],
                 };
               });
-              trackAreaUnlocked({
+              farmAnalytics.trackAreaUnlocked({
                 areaKey: area.key,
                 cost: area.unlock.cost,
                 context: getAnalyticsContext(gameState),
@@ -1195,7 +1076,7 @@ function ShopUpgradeRow({
           gold: state.gold - cost,
           upgrades: { ...state.upgrades, [kind]: state.upgrades[kind] + 1 },
         }));
-        trackUpgradePurchased({
+        farmAnalytics.trackUpgradePurchased({
           kind,
           cost,
           nextLevel: level + 1,

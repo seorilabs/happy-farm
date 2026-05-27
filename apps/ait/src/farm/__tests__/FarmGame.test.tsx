@@ -2,9 +2,15 @@
 
 import React from 'react';
 import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react-native';
-
-import { CROPS, FARM_AREAS, MAX_PLOTS, createInitialState, formatMoney } from '../constants';
-import type { CropKey, GameState } from '../types';
+import {
+  CROPS,
+  FARM_AREAS,
+  MAX_PLOTS,
+  createInitialState,
+  formatMoney,
+  type CropKey,
+  type GameState,
+} from '../../../../../packages/farm-core/src';
 
 const NOW = Date.parse('2026-05-27T03:00:00.000Z');
 

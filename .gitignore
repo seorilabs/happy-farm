@@ -16,3 +16,12 @@ yarn-error.log
 .swc
 .DS_Store
 *.ait
+
+# Google Play / Android release secrets
+*.jks
+*.keystore
+android/key.properties
+**/android/key.properties
+play-store/secrets/
+play-store/service-account*.json
+gha-creds-*.json

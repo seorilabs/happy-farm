@@ -5,7 +5,15 @@ import pluginReact from 'eslint-plugin-react';
 /** @type {import('eslint').Linter.Config[]} */
 export default [
   {
-    ignores: ['**/node_modules/**', '**/dist/**', '**/.granite/**', '**/.swc/**', '**/*.ait', '*.{cjs,js}'],
+    ignores: ['**/node_modules/**', '**/dist/**', '**/.granite/**', '**/.swc/**', '**/*.ait', '**/*.{cjs,js}'],
+  },
+  {
+    files: ['scripts/**/*.mjs'],
+    languageOptions: {
+      globals: {
+        process: 'readonly',
+      },
+    },
   },
   { files: ['pages/**/*.{ts,jsx,tsx}', 'src/**/*.{ts,jsx,tsx}'] },
   pluginJs.configs.recommended,

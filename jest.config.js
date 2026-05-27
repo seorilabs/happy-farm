@@ -9,4 +9,6 @@ const config = require('@granite-js/react-native/jest').config({
   },
 });
 
+config.testPathIgnorePatterns = [...(config.testPathIgnorePatterns ?? []), '<rootDir>/apps/mobile/'];
+
 module.exports = config;
