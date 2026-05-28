@@ -1,8 +1,11 @@
 import { useToast } from '@toss/tds-react-native';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Animated,
+  Easing,
   KeyboardAvoidingView,
   Modal,
+  PanResponder,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -51,6 +54,11 @@ const RESET_CONFIRM_TEXT = '초기화';
 const PLOT_COLUMNS = 4;
 const PLOT_GAP = 10;
 const MAIN_HORIZONTAL_PADDING = 16;
+const MIN_PROGRESS_ANIMATION_DURATION_MS = 80;
+const SHEET_DISMISS_DRAG_DISTANCE = 96;
+const SHEET_DISMISS_VELOCITY = 1.1;
+const SHEET_DISMISS_TRANSLATE_Y = 520;
+const SHEET_ANIMATION_DURATION_MS = 180;
 
 function getFirstArea() {
   const area = FARM_AREAS[0];
@@ -66,6 +74,24 @@ function getCrop(cropKey: CropKey) {
     throw new Error(`Unknown crop: ${cropKey}`);
   }
   return crop;
+}
+
+function getGrowthProgressRatio(startTime: number, growTime: number, speedMult: number, now = Date.now()) {
+  if (growTime <= 0 || speedMult <= 0) {
+    return 1;
+  }
+
+  const elapsed = Math.max(0, now - startTime) * speedMult;
+  return Math.min(Math.max(elapsed / growTime, 0), 1);
+}
+
+function getRemainingGrowthDuration(startTime: number, growTime: number, speedMult: number, now = Date.now()) {
+  if (growTime <= 0 || speedMult <= 0) {
+    return 0;
+  }
+
+  const elapsed = Math.max(0, now - startTime) * speedMult;
+  return Math.max(0, (growTime - elapsed) / speedMult);
 }
 
 const FIRST_AREA = getFirstArea();
@@ -109,6 +135,9 @@ export default function FarmGame() {
     },
     [toastApi]
   );
+  const closeSheet = useCallback(() => {
+    setActiveSheet(null);
+  }, []);
 
   const analyticsContext = useCallback(
     (state = gameState) => getGameAnalyticsContext(state, sessionStartedAtRef.current),
@@ -630,7 +659,7 @@ export default function FarmGame() {
         </ScrollView>
       </View>
 
-      <Sheet activeSheet={activeSheet} onClose={() => setActiveSheet(null)}>
+      <Sheet activeSheet={activeSheet} onClose={closeSheet}>
         {activeSheet?.type === 'shop' ? (
           <View>
             <Text style={styles.sheetSectionTitle}>광고 보상</Text>
@@ -773,11 +802,11 @@ function PlotCell({
   }
 
   const crop = plot.cropType != null ? getCrop(plot.cropType) : null;
-  const pct =
+  const progressRatio =
     plot.state === 1 && crop != null && plot.startTime != null
-      ? Math.min((((Date.now() - plot.startTime) * speedMult) / crop.growTime) * 100, 100)
-      : 100;
-  const icon = plot.state === 2 ? (crop?.icon ?? '🌱') : pct > 50 ? '🌿' : '🌱';
+      ? getGrowthProgressRatio(plot.startTime, crop.growTime, speedMult)
+      : 1;
+  const icon = plot.state === 2 ? (crop?.icon ?? '🌱') : progressRatio > 0.5 ? '🌿' : '🌱';
 
   return (
     <Pressable
@@ -789,13 +818,57 @@ function PlotCell({
           <Text style={styles.harvestBadgeText}>GET</Text>
         </View>
       ) : null}
-      {plot.state === 1 ? (
-        <View style={styles.progressTrack}>
-          <View style={[styles.progressFill, { width: `${pct}%` }]} />
-        </View>
+      {plot.state === 1 && crop != null && plot.startTime != null ? (
+        <GrowthProgressBar growTime={crop.growTime} speedMult={speedMult} startTime={plot.startTime} />
       ) : null}
       <Text style={plot.state === 2 ? styles.readyCropIcon : styles.cropIcon}>{icon}</Text>
     </Pressable>
+  );
+}
+
+function GrowthProgressBar({
+  growTime,
+  speedMult,
+  startTime,
+}: {
+  growTime: number;
+  speedMult: number;
+  startTime: number;
+}) {
+  const progressScaleRef = useRef<Animated.Value | null>(null);
+  if (progressScaleRef.current == null) {
+    progressScaleRef.current = new Animated.Value(getGrowthProgressRatio(startTime, growTime, speedMult));
+  }
+  const progressScale = progressScaleRef.current;
+
+  useEffect(() => {
+    const currentRatio = getGrowthProgressRatio(startTime, growTime, speedMult);
+    const remainingDuration = getRemainingGrowthDuration(startTime, growTime, speedMult);
+
+    progressScale.stopAnimation();
+    progressScale.setValue(currentRatio);
+
+    if (currentRatio >= 1 || remainingDuration <= 0) {
+      progressScale.setValue(1);
+      return undefined;
+    }
+
+    Animated.timing(progressScale, {
+      toValue: 1,
+      duration: Math.max(MIN_PROGRESS_ANIMATION_DURATION_MS, remainingDuration),
+      easing: Easing.linear,
+      useNativeDriver: true,
+    }).start();
+
+    return () => {
+      progressScale.stopAnimation();
+    };
+  }, [growTime, progressScale, speedMult, startTime]);
+
+  return (
+    <View style={styles.progressTrack}>
+      <Animated.View style={[styles.progressFill, { transform: [{ scaleX: progressScale }] }]} />
+    </View>
   );
 }
 
@@ -808,18 +881,124 @@ function Sheet({
   children: React.ReactNode;
   onClose: () => void;
 }) {
+  const dragYRef = useRef<Animated.Value | null>(null);
+  if (dragYRef.current == null) {
+    dragYRef.current = new Animated.Value(SHEET_DISMISS_TRANSLATE_Y);
+  }
+  const dragY = dragYRef.current;
+  const wasVisibleRef = useRef(false);
+  const isClosingRef = useRef(false);
+  const dimmedOpacity = dragY.interpolate({
+    inputRange: [0, SHEET_DISMISS_TRANSLATE_Y],
+    outputRange: [1, 0],
+    extrapolate: 'clamp',
+  });
+  const shouldHandleSheetDrag = useCallback(
+    (dy: number, dx: number) => dy > 4 && Math.abs(dy) > Math.abs(dx),
+    []
+  );
+  const closeSheetWithAnimation = useCallback(() => {
+    if (isClosingRef.current) {
+      return;
+    }
+
+    isClosingRef.current = true;
+    dragY.stopAnimation();
+    Animated.timing(dragY, {
+      toValue: SHEET_DISMISS_TRANSLATE_Y,
+      duration: SHEET_ANIMATION_DURATION_MS,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start(({ finished }) => {
+      isClosingRef.current = false;
+      if (finished) {
+        onClose();
+      }
+    });
+  }, [dragY, onClose]);
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onStartShouldSetPanResponderCapture: () => true,
+        onMoveShouldSetPanResponder: (_, gestureState) =>
+          shouldHandleSheetDrag(gestureState.dy, gestureState.dx),
+        onMoveShouldSetPanResponderCapture: (_, gestureState) =>
+          shouldHandleSheetDrag(gestureState.dy, gestureState.dx),
+        onPanResponderTerminationRequest: () => false,
+        onPanResponderGrant: () => {
+          dragY.stopAnimation();
+        },
+        onPanResponderMove: (_, gestureState) => {
+          dragY.setValue(Math.max(0, gestureState.dy));
+        },
+        onPanResponderRelease: (_, gestureState) => {
+          if (gestureState.dy > SHEET_DISMISS_DRAG_DISTANCE || gestureState.vy > SHEET_DISMISS_VELOCITY) {
+            closeSheetWithAnimation();
+            return;
+          }
+
+          Animated.spring(dragY, {
+            toValue: 0,
+            damping: 18,
+            stiffness: 220,
+            mass: 0.8,
+            useNativeDriver: true,
+          }).start();
+        },
+        onPanResponderTerminate: () => {
+          Animated.spring(dragY, {
+            toValue: 0,
+            damping: 18,
+            stiffness: 220,
+            mass: 0.8,
+            useNativeDriver: true,
+          }).start();
+        },
+      }),
+    [closeSheetWithAnimation, dragY, shouldHandleSheetDrag]
+  );
+
+  useEffect(() => {
+    const isVisible = activeSheet != null;
+
+    if (isVisible && !wasVisibleRef.current) {
+      isClosingRef.current = false;
+      dragY.stopAnimation();
+      dragY.setValue(SHEET_DISMISS_TRANSLATE_Y);
+      Animated.timing(dragY, {
+        toValue: 0,
+        duration: SHEET_ANIMATION_DURATION_MS,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }).start();
+    }
+
+    if (!isVisible) {
+      isClosingRef.current = false;
+      dragY.stopAnimation();
+      dragY.setValue(SHEET_DISMISS_TRANSLATE_Y);
+    }
+
+    wasVisibleRef.current = isVisible;
+  }, [activeSheet, dragY]);
+
   return (
-    <Modal transparent visible={activeSheet != null} animationType="slide" onRequestClose={onClose}>
+    <Modal transparent visible={activeSheet != null} animationType="none" onRequestClose={closeSheetWithAnimation}>
       <KeyboardAvoidingView behavior="padding" style={styles.modalRoot}>
-        <Pressable style={StyleSheet.absoluteFillObject} onPress={onClose} />
-        <View style={styles.sheet}>
-          <View style={styles.sheetHandle} />
-          <Text style={styles.sheetTitle}>{getSheetTitle(activeSheet)}</Text>
-          <Text style={styles.sheetDescription}>{getSheetDescription(activeSheet)}</Text>
+        <Animated.View style={[StyleSheet.absoluteFillObject, styles.modalBackdrop, { opacity: dimmedOpacity }]}>
+          <Pressable style={StyleSheet.absoluteFillObject} onPress={closeSheetWithAnimation} />
+        </Animated.View>
+        <Animated.View style={[styles.sheet, { transform: [{ translateY: dragY }] }]}>
+          <View style={styles.sheetDragArea} {...panResponder.panHandlers}>
+            <View style={styles.sheetHandle} />
+            <Text style={styles.sheetTitle}>{getSheetTitle(activeSheet)}</Text>
+            <Text style={styles.sheetDescription}>{getSheetDescription(activeSheet)}</Text>
+          </View>
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.sheetContent}>
             {children}
           </ScrollView>
-        </View>
+        </Animated.View>
       </KeyboardAvoidingView>
     </Modal>
   );
@@ -1359,8 +1538,10 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.22)',
   },
   progressFill: {
+    width: '100%',
     height: '100%',
     backgroundColor: '#76d275',
+    transformOrigin: 'left center',
   },
   cropIcon: {
     fontSize: 28,
@@ -1492,6 +1673,8 @@ const styles = StyleSheet.create({
   modalRoot: {
     flex: 1,
     justifyContent: 'flex-end',
+  },
+  modalBackdrop: {
     backgroundColor: 'rgba(16, 24, 40, 0.45)',
   },
   sheet: {
@@ -1501,6 +1684,11 @@ const styles = StyleSheet.create({
     paddingTop: 10,
     paddingHorizontal: 20,
     backgroundColor: '#ffffff',
+  },
+  sheetDragArea: {
+    marginHorizontal: -20,
+    paddingHorizontal: 20,
+    paddingBottom: 10,
   },
   sheetHandle: {
     alignSelf: 'center',
