@@ -22,6 +22,10 @@ def uploadKeyProperties = new Properties()
 if (uploadKeyPropertiesFile.exists()) {
     uploadKeyProperties.load(new FileInputStream(uploadKeyPropertiesFile))
 }
+def resolveUploadStoreFile = { String storeFilePath ->
+    def candidate = new File(storeFilePath)
+    return candidate.isAbsolute() ? candidate : new File(rootProject.projectDir, storeFilePath)
+}
 
 /**
  * This is the configuration block to customize your React Native Android app.
@@ -118,7 +122,7 @@ android {
             if (!uploadKeyPropertiesFile.exists()) {
                 throw new GradleException("Missing ${uploadKeyPropertiesFile}. Create it from the upload keystore before building release.")
             }
-            storeFile new File(rootProject.projectDir, uploadKeyProperties['storeFile'])
+            storeFile resolveUploadStoreFile(uploadKeyProperties['storeFile'] as String)
             storePassword uploadKeyProperties['storePassword']
             keyAlias uploadKeyProperties['keyAlias']
             keyPassword uploadKeyProperties['keyPassword']
