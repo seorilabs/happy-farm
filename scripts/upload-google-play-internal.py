@@ -7,6 +7,8 @@ import sys
 from pathlib import Path
 
 import google.auth
+import google_auth_httplib2
+import httplib2
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
@@ -16,6 +18,8 @@ ROOT = Path(__file__).resolve().parents[1]
 CONFIG_PATH = ROOT / "play-store" / "google-play.config.json"
 DEFAULT_AAB_PATH = ROOT / "apps/mobile/android/app/build/outputs/bundle/release/app-release.aab"
 ANDROID_PUBLISHER_SCOPE = "https://www.googleapis.com/auth/androidpublisher"
+DEFAULT_API_TIMEOUT_SECONDS = 300
+DEFAULT_API_RETRIES = 5
 
 
 def load_config():
@@ -43,7 +47,37 @@ def decode_service_account_secret():
     return None
 
 
-def make_android_publisher():
+def env_int(name, default, minimum=None):
+    raw_value = os.environ.get(name)
+    if raw_value in (None, ""):
+        return default
+
+    try:
+        parsed = int(raw_value)
+    except ValueError as error:
+        raise RuntimeError(f"{name} must be an integer.") from error
+
+    if minimum is not None and parsed < minimum:
+        raise RuntimeError(f"{name} must be {minimum} or greater.")
+
+    return parsed
+
+
+def positive_int(value):
+    parsed = int(value)
+    if parsed <= 0:
+        raise argparse.ArgumentTypeError("must be greater than 0")
+    return parsed
+
+
+def non_negative_int(value):
+    parsed = int(value)
+    if parsed < 0:
+        raise argparse.ArgumentTypeError("must be 0 or greater")
+    return parsed
+
+
+def make_android_publisher(timeout_seconds):
     info = decode_service_account_secret()
     if info:
         credentials = service_account.Credentials.from_service_account_info(
@@ -53,7 +87,15 @@ def make_android_publisher():
     else:
         credentials, _project_id = google.auth.default(scopes=[ANDROID_PUBLISHER_SCOPE])
 
-    return build("androidpublisher", "v3", credentials=credentials, cache_discovery=False)
+    http = google_auth_httplib2.AuthorizedHttp(
+        credentials,
+        http=httplib2.Http(timeout=timeout_seconds),
+    )
+    return build("androidpublisher", "v3", http=http, cache_discovery=False)
+
+
+def execute_request(request, retries):
+    return request.execute(num_retries=retries)
 
 
 def default_release_notes(release_config, language):
@@ -67,13 +109,11 @@ def default_release_notes(release_config, language):
     return ""
 
 
-def resolve_track(publisher, package_name, edit_id, requested_track):
+def resolve_track(publisher, package_name, edit_id, requested_track, retries):
     try:
-        response = (
-            publisher.edits()
-            .tracks()
-            .list(packageName=package_name, editId=edit_id)
-            .execute()
+        response = execute_request(
+            publisher.edits().tracks().list(packageName=package_name, editId=edit_id),
+            retries,
         )
     except Exception:
         return requested_track
@@ -103,10 +143,13 @@ def upload_internal_release(args):
     if not args.release_notes:
         raise RuntimeError("Release notes are required.")
 
-    publisher = make_android_publisher()
-    edit = publisher.edits().insert(packageName=package_name, body={}).execute()
+    publisher = make_android_publisher(args.api_timeout_seconds)
+    edit = execute_request(
+        publisher.edits().insert(packageName=package_name, body={}),
+        args.api_retries,
+    )
     edit_id = edit["id"]
-    track = resolve_track(publisher, package_name, edit_id, args.track)
+    track = resolve_track(publisher, package_name, edit_id, args.track, args.api_retries)
 
     try:
         media = MediaFileUpload(
@@ -115,11 +158,13 @@ def upload_internal_release(args):
             chunksize=16 * 1024 * 1024,
             resumable=True,
         )
-        bundle = (
-            publisher.edits()
-            .bundles()
-            .upload(packageName=package_name, editId=edit_id, media_body=media)
-            .execute()
+        bundle = execute_request(
+            publisher.edits().bundles().upload(
+                packageName=package_name,
+                editId=edit_id,
+                media_body=media,
+            ),
+            args.api_retries,
         )
         version_code = int(bundle["versionCode"])
 
@@ -139,12 +184,15 @@ def upload_internal_release(args):
             "releases": [release],
         }
 
-        publisher.edits().tracks().update(
-            packageName=package_name,
-            editId=edit_id,
-            track=track,
-            body=track_body,
-        ).execute()
+        execute_request(
+            publisher.edits().tracks().update(
+                packageName=package_name,
+                editId=edit_id,
+                track=track,
+                body=track_body,
+            ),
+            args.api_retries,
+        )
 
         commit_kwargs = {
             "packageName": package_name,
@@ -153,7 +201,10 @@ def upload_internal_release(args):
         if args.changes_not_sent_for_review:
             commit_kwargs["changesNotSentForReview"] = True
 
-        committed_edit = publisher.edits().commit(**commit_kwargs).execute()
+        committed_edit = execute_request(
+            publisher.edits().commit(**commit_kwargs),
+            args.api_retries,
+        )
         return {
             "packageName": package_name,
             "requestedTrack": args.track,
@@ -163,7 +214,13 @@ def upload_internal_release(args):
             "editId": committed_edit["id"],
         }
     except Exception:
-        publisher.edits().delete(packageName=package_name, editId=edit_id).execute()
+        try:
+            execute_request(
+                publisher.edits().delete(packageName=package_name, editId=edit_id),
+                args.api_retries,
+            )
+        except Exception as cleanup_error:
+            print(f"Warning: failed to delete Google Play edit {edit_id}: {cleanup_error}", file=sys.stderr)
         raise
 
 
@@ -195,6 +252,18 @@ def main():
         "--changes-not-sent-for-review",
         action="store_true",
         help="Commit the edit with changesNotSentForReview=true.",
+    )
+    parser.add_argument(
+        "--api-timeout-seconds",
+        type=positive_int,
+        default=env_int("GOOGLE_PLAY_API_TIMEOUT_SECONDS", DEFAULT_API_TIMEOUT_SECONDS, minimum=1),
+        help="HTTP timeout for Google Play API calls. Defaults to GOOGLE_PLAY_API_TIMEOUT_SECONDS or 300.",
+    )
+    parser.add_argument(
+        "--api-retries",
+        type=non_negative_int,
+        default=env_int("GOOGLE_PLAY_API_RETRIES", DEFAULT_API_RETRIES, minimum=0),
+        help="Retries for Google API requests. Defaults to GOOGLE_PLAY_API_RETRIES or 5.",
     )
     args = parser.parse_args()
 
