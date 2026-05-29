@@ -14,45 +14,16 @@ import {
 
 const NOW = Date.parse('2026-05-27T03:00:00.000Z');
 
-jest.mock('@apps-in-toss/framework', () => ({
-  Storage: {
-    getItem: jest.fn(),
-    setItem: jest.fn(),
-    removeItem: jest.fn(),
-  },
-  loadFullScreenAd: Object.assign(jest.fn(() => jest.fn()), {
-    isSupported: jest.fn(() => false),
-  }),
-  showFullScreenAd: Object.assign(jest.fn(() => jest.fn()), {
-    isSupported: jest.fn(() => false),
-  }),
-}));
-
-jest.mock('@toss/tds-react-native', () => ({
-  useToast: jest.fn(),
-}));
-
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
 }));
 
 const FarmGame = jest.requireActual('../FarmGame').default as typeof import('../FarmGame').default;
-const frameworkMock = jest.requireMock('@apps-in-toss/framework') as {
-  Storage: {
-    getItem: jest.Mock<Promise<string | null>, [string]>;
-    setItem: jest.Mock<Promise<void>, [string, string]>;
-    removeItem: jest.Mock<Promise<void>, [string]>;
-  };
-  loadFullScreenAd: jest.Mock & { isSupported: jest.Mock<boolean, []> };
-  showFullScreenAd: jest.Mock & { isSupported: jest.Mock<boolean, []> };
+const mockPersistence = {
+  readPersistedGameState: jest.fn<Promise<GameState>, []>(),
+  writePersistedGameState: jest.fn<Promise<void>, [GameState]>(),
+  removePersistedGameState: jest.fn<Promise<void>, []>(),
 };
-const tdsMock = jest.requireMock('@toss/tds-react-native') as {
-  useToast: jest.Mock;
-};
-const mockStorage = frameworkMock.Storage;
-const mockLoadFullScreenAd = frameworkMock.loadFullScreenAd;
-const mockShowFullScreenAd = frameworkMock.showFullScreenAd;
-const mockToastOpen = jest.fn();
 
 function getCropKeys() {
   return Object.keys(CROPS) as CropKey[];
@@ -83,9 +54,9 @@ function createLateGameState(): GameState {
 }
 
 async function renderGame(savedState: GameState | null) {
-  mockStorage.getItem.mockResolvedValueOnce(savedState == null ? null : JSON.stringify(savedState));
+  mockPersistence.readPersistedGameState.mockResolvedValueOnce(savedState ?? createInitialState());
 
-  const view = render(<FarmGame />);
+  const view = render(<FarmGame persistence={mockPersistence} />);
   await act(async () => {
     await Promise.resolve();
     await Promise.resolve();
@@ -98,15 +69,9 @@ describe('FarmGame UI flow', () => {
   beforeEach(() => {
     jest.useFakeTimers();
     jest.setSystemTime(NOW);
-    mockStorage.getItem.mockReset();
-    mockStorage.setItem.mockResolvedValue(undefined);
-    mockStorage.removeItem.mockResolvedValue(undefined);
-    mockLoadFullScreenAd.mockClear();
-    mockLoadFullScreenAd.isSupported.mockReturnValue(false);
-    mockShowFullScreenAd.mockClear();
-    mockShowFullScreenAd.isSupported.mockReturnValue(false);
-    tdsMock.useToast.mockReturnValue({ open: mockToastOpen });
-    mockToastOpen.mockClear();
+    mockPersistence.readPersistedGameState.mockReset();
+    mockPersistence.writePersistedGameState.mockResolvedValue(undefined);
+    mockPersistence.removePersistedGameState.mockResolvedValue(undefined);
   });
 
   afterEach(() => {

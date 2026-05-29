@@ -13,6 +13,15 @@ const config = {
   watchFolders: [workspaceRoot],
   resolver: {
     unstable_enableSymlinks: true,
+    extraNodeModules: {
+      '@react-native-async-storage/async-storage': path.resolve(
+        __dirname,
+        'node_modules/@react-native-async-storage/async-storage'
+      ),
+      react: path.resolve(__dirname, 'node_modules/react'),
+      'react-native': path.resolve(__dirname, 'node_modules/react-native'),
+      'react-native-safe-area-context': path.resolve(__dirname, 'node_modules/react-native-safe-area-context'),
+    },
     nodeModulesPaths: [
       path.resolve(__dirname, 'node_modules'),
       path.resolve(workspaceRoot, 'node_modules'),

@@ -19,7 +19,7 @@ on:
       changes_not_sent_for_review:
         description: "검토 제출 없이 edit commit"
         required: false
-        default: true
+        default: false
         type: boolean
 
 permissions:

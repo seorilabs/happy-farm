@@ -40,6 +40,15 @@ function fail(message, detail) {
   add('failures', message, detail);
 }
 
+function valueAt(config, path) {
+  const parts = path.split('.');
+  let value = config;
+  for (const part of parts) {
+    value = value?.[part];
+  }
+  return value;
+}
+
 function readJson(path) {
   try {
     return JSON.parse(readFileSync(repoPath(path), 'utf8'));
@@ -144,18 +153,57 @@ function hasReleaseSigningConfig(contents) {
   return releaseBuildTypeBlock != null && /signingConfig\s+signingConfigs\./.test(releaseBuildTypeBlock);
 }
 
-function assertField(config, path, validator = isConcrete) {
-  const parts = path.split('.');
-  let value = config;
-  for (const part of parts) {
-    value = value?.[part];
-  }
+function assertValue(label, value, validator = isConcrete) {
   if (!validator(value)) {
-    fail(`${path} 값이 확정되지 않았습니다.`, value == null ? 'missing' : String(value));
+    fail(`${label} 값이 확정되지 않았습니다.`, value == null ? 'missing' : String(value));
     return null;
   }
-  pass(`${path} 값이 있습니다.`, String(value));
+  pass(`${label} 값이 있습니다.`, String(value));
   return value;
+}
+
+function assertField(config, path, validator = isConcrete) {
+  return assertValue(path, valueAt(config, path), validator);
+}
+
+function listingValue(config, key, locale) {
+  const listing = config.storeListing ?? {};
+  const currentSchemaKey = key === 'title' ? 'appName' : key;
+  return listing[currentSchemaKey]?.[locale] ?? listing[locale]?.[key];
+}
+
+function releaseNote(config, locale) {
+  const notes = config.release?.notes ?? config.release?.releaseNotes ?? {};
+  if (typeof notes !== 'object' || notes == null) {
+    return null;
+  }
+  return notes[locale] ?? Object.values(notes).find((value) => isConcrete(value)) ?? null;
+}
+
+function assetValue(assets, key, legacyKey) {
+  return assets[key] ?? (legacyKey == null ? undefined : assets[legacyKey]);
+}
+
+function checkAssetPaths(key, value) {
+  const values = Array.isArray(value) ? value : [value];
+  if (values.length === 0 || !isConcrete(value)) {
+    fail(`assets.${key} 경로가 확정되지 않았습니다.`, value == null ? 'missing' : String(value));
+    return;
+  }
+
+  for (const assetPath of values) {
+    if (!isConcrete(assetPath)) {
+      fail(`assets.${key} 경로가 확정되지 않았습니다.`, String(assetPath));
+    } else if (!existsSync(repoPath(assetPath))) {
+      fail(`assets.${key} 파일이 없습니다.`, assetPath);
+    } else {
+      pass(`assets.${key} 파일이 있습니다.`, assetPath);
+    }
+  }
+}
+
+function yesLike(value) {
+  return typeof value === 'string' && ['yes', 'true', 'y', '예'].includes(value.trim().toLowerCase());
 }
 
 const pkg = readJson('package.json');
@@ -188,27 +236,40 @@ if (config == null) {
   assertField(config, 'release.name');
 
   const defaultLanguage = typeof config.defaultLanguage === 'string' ? config.defaultLanguage : 'ko-KR';
-  const listingBase = `storeListing.${defaultLanguage}`;
-  assertField(config, `${listingBase}.title`);
-  assertField(config, `${listingBase}.shortDescription`, (value) => typeof value === 'string' && value.length > 0 && value.length <= 80);
-  assertField(config, `${listingBase}.fullDescription`, (value) => typeof value === 'string' && value.length > 0 && value.length <= 4000);
-  assertField(config, `release.notes.${defaultLanguage}`);
+  assertValue(`storeListing.appName.${defaultLanguage}`, listingValue(config, 'title', defaultLanguage));
+  assertValue(
+    `storeListing.shortDescription.${defaultLanguage}`,
+    listingValue(config, 'shortDescription', defaultLanguage),
+    (value) => typeof value === 'string' && value.length > 0 && value.length <= 80,
+  );
+  assertValue(
+    `storeListing.fullDescription.${defaultLanguage}`,
+    listingValue(config, 'fullDescription', defaultLanguage),
+    (value) => typeof value === 'string' && value.length > 0 && value.length <= 4000,
+  );
+  assertValue(`release.notes.${defaultLanguage}`, releaseNote(config, defaultLanguage));
 
-  for (const declaration of ['contentRating', 'targetAudience', 'dataSafety', 'ads', 'koreaGameDistribution']) {
+  for (const declaration of ['contentRating', 'targetAudience', 'dataSafety', 'ads']) {
     assertField(config, `contentDeclarations.${declaration}`);
+  }
+  const koreaDistribution = config.contentDeclarations?.koreaDistribution ?? config.contentDeclarations?.koreaGameDistribution;
+  assertValue('contentDeclarations.koreaDistribution', koreaDistribution);
+  if (config.appType === 'game' && yesLike(koreaDistribution)) {
+    assertField(config, 'contentDeclarations.koreaGameRating');
   }
 
   const assets = config.assets ?? {};
-  for (const [key, value] of Object.entries(assets)) {
-    const values = Array.isArray(value) ? value : [value];
-    for (const assetPath of values) {
-      if (!isConcrete(assetPath)) {
-        fail(`assets.${key} 경로가 확정되지 않았습니다.`, String(assetPath));
-      } else if (!existsSync(repoPath(assetPath))) {
-        fail(`assets.${key} 파일이 없습니다.`, assetPath);
-      } else {
-        pass(`assets.${key} 파일이 있습니다.`, assetPath);
-      }
+  for (const [key, value] of [
+    ['playIcon', assetValue(assets, 'playIcon', 'appIcon')],
+    ['featureGraphic', assetValue(assets, 'featureGraphic')],
+    ['phoneScreenshots', assetValue(assets, 'phoneScreenshots')],
+  ]) {
+    checkAssetPaths(key, value);
+  }
+  for (const key of ['sevenInchTabletScreenshots', 'tenInchTabletScreenshots']) {
+    const value = assets[key];
+    if (Array.isArray(value) && value.length > 0) {
+      checkAssetPaths(key, value);
     }
   }
 }

@@ -1,6 +1,8 @@
 import { loadFullScreenAd, showFullScreenAd } from '@apps-in-toss/framework';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import type { RewardedAdController, RewardedAdShowResult } from '../../../../../packages/farm-core/src';
+
 function isFullScreenAdSupported() {
   try {
     return loadFullScreenAd.isSupported() && showFullScreenAd.isSupported();
@@ -9,7 +11,7 @@ function isFullScreenAdSupported() {
   }
 }
 
-export function useFullScreenAd(adGroupId: string) {
+export function useFullScreenAd(adGroupId: string): RewardedAdController {
   const [isLoaded, setIsLoaded] = useState(false);
   const [isSupported, setIsSupported] = useState(false);
   const unregisterLoadRef = useRef<(() => void) | null>(null);
@@ -54,18 +56,19 @@ export function useFullScreenAd(adGroupId: string) {
   }, [loadAd]);
 
   const showAd = useCallback(
-    (onReward?: () => void) => {
-      if (adGroupId.length === 0 || !isFullScreenAdSupported() || !isLoaded) {
-        return Promise.resolve(false);
+    () => {
+      const supported = adGroupId.length > 0 && isFullScreenAdSupported();
+      if (!supported || !isLoaded) {
+        return Promise.resolve<RewardedAdShowResult>({ status: supported ? 'notReady' : 'unsupported' });
       }
 
       setIsLoaded(false);
 
-      return new Promise<boolean>((resolve) => {
+      return new Promise<RewardedAdShowResult>((resolve) => {
         let settled = false;
         let rewardGranted = false;
 
-        const finish = (ok: boolean) => {
+        const finish = (result: RewardedAdShowResult) => {
           if (settled) {
             return;
           }
@@ -73,7 +76,7 @@ export function useFullScreenAd(adGroupId: string) {
           unregisterShowRef.current?.();
           unregisterShowRef.current = null;
           loadAd();
-          resolve(ok);
+          resolve(result);
         };
 
         try {
@@ -82,21 +85,20 @@ export function useFullScreenAd(adGroupId: string) {
             onEvent: (event) => {
               if (event.type === 'userEarnedReward' && !rewardGranted) {
                 rewardGranted = true;
-                onReward?.();
               }
               if (event.type === 'dismissed') {
-                finish(onReward == null ? true : rewardGranted);
+                finish(rewardGranted ? { status: 'earned' } : { status: 'dismissed' });
               }
               if (event.type === 'failedToShow') {
-                finish(false);
+                finish({ status: 'failed' });
               }
             },
             onError: () => {
-              finish(false);
+              finish({ status: 'failed' });
             },
           });
         } catch {
-          finish(false);
+          finish({ status: 'failed' });
         }
       });
     },

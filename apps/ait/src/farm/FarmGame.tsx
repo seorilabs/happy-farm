@@ -1,4 +1,3 @@
-import { useToast } from '@toss/tds-react-native';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
@@ -30,8 +29,11 @@ import {
   type CropKey,
   type GameAnalyticsContext,
   type GameState,
+  type RewardedAdController,
+  type RewardedAdShowResult,
   type RewardedAdType,
   canUnlockArea,
+  createFarmAnalytics,
   createInitialState,
   formatMoney,
   getAreaUnlockRequirementText,
@@ -44,9 +46,6 @@ import {
   isAreaUnlocked,
   recordRewardedAdUsage,
 } from '../../../../packages/farm-core/src';
-import { farmAnalytics } from './platform/analytics';
-import { useFullScreenAd } from './platform/fullScreenAd';
-import { readPersistedGameState, removePersistedGameState, writePersistedGameState } from './storage';
 
 const REWARDED_AD_GROUP_ID = '';
 const INTERSTITIAL_AD_GROUP_ID = '';
@@ -59,6 +58,7 @@ const SHEET_DISMISS_DRAG_DISTANCE = 96;
 const SHEET_DISMISS_VELOCITY = 1.1;
 const SHEET_DISMISS_TRANSLATE_Y = 520;
 const SHEET_ANIMATION_DURATION_MS = 180;
+const EMPTY_SAFE_AREA_INSETS = { top: 0, right: 0, bottom: 0, left: 0 };
 
 function getFirstArea() {
   const area = FARM_AREAS[0];
@@ -103,22 +103,84 @@ type ActiveSheet =
   | { type: 'resetConfirm' }
   | null;
 
+export type FarmGamePersistence = {
+  readPersistedGameState: () => Promise<GameState>;
+  writePersistedGameState: (gameState: GameState) => Promise<void>;
+  removePersistedGameState: () => Promise<void>;
+};
+
+type UseFarmAd = (adGroupId: string) => RewardedAdController;
+type FarmAnalytics = ReturnType<typeof createFarmAnalytics>;
+
+export type FarmGameProps = {
+  persistence?: FarmGamePersistence;
+  analytics?: FarmAnalytics;
+  useRewardedAd?: UseFarmAd;
+  useInterstitialAd?: UseFarmAd;
+};
+
 type GetAnalyticsContext = (state?: GameState) => GameAnalyticsContext;
 type ToolKey = 'harvest' | CropKey;
 
-export default function FarmGame() {
-  const insets = useSafeAreaInsets();
+const defaultFarmAnalytics = createFarmAnalytics();
+const defaultPersistence: FarmGamePersistence = {
+  readPersistedGameState: async () => createInitialState(),
+  writePersistedGameState: async () => undefined,
+  removePersistedGameState: async () => undefined,
+};
+
+function useUnsupportedAd(): RewardedAdController {
+  return {
+    isAdReady: false,
+    isAdSupported: false,
+    showAd: () => Promise.resolve({ status: 'unsupported' }),
+  };
+}
+
+function getAdFailureReason(result: RewardedAdShowResult) {
+  if (result.status === 'notReady') {
+    return 'not_ready';
+  }
+  if (result.status === 'unsupported') {
+    return 'unsupported';
+  }
+  if (result.status === 'dismissed') {
+    return 'dismissed';
+  }
+  if (result.status === 'failed') {
+    return result.error ?? 'failed_to_show';
+  }
+  return 'failed_to_show';
+}
+
+function useFarmSafeAreaInsets() {
+  try {
+    return useSafeAreaInsets();
+  } catch {
+    return EMPTY_SAFE_AREA_INSETS;
+  }
+}
+
+export default function FarmGame({
+  persistence = defaultPersistence,
+  analytics = defaultFarmAnalytics,
+  useRewardedAd = useUnsupportedAd,
+  useInterstitialAd = useUnsupportedAd,
+}: FarmGameProps = {}) {
+  const insets = useFarmSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
-  const toastApi = useToast();
   const [activeSheet, setActiveSheet] = useState<ActiveSheet>(null);
   const [resetConfirmText, setResetConfirmText] = useState('');
   const [isSaveLoaded, setIsSaveLoaded] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastInterstitialShownAtRef = useRef(0);
   const sessionStartedAtRef = useRef(Date.now());
   const gameStartTrackedRef = useRef(false);
   const firstSeedSelectedRef = useRef(false);
-  const rewardedAd = useFullScreenAd(REWARDED_AD_GROUP_ID);
-  const interstitialAd = useFullScreenAd(INTERSTITIAL_AD_GROUP_ID);
+  const rewardedAd = useRewardedAd(REWARDED_AD_GROUP_ID);
+  const interstitialAd = useInterstitialAd(INTERSTITIAL_AD_GROUP_ID);
+  const farmAnalytics = analytics;
 
   const [gameState, setGameState] = useState<GameState>(() => createInitialState());
   const [selectedTool, setSelectedTool] = useState<ToolKey>('harvest');
@@ -131,12 +193,27 @@ export default function FarmGame() {
 
   const toast = useCallback(
     (message: string) => {
-      toastApi.open(message, { type: 'bottom', duration: 1800 });
+      if (toastTimerRef.current != null) {
+        clearTimeout(toastTimerRef.current);
+      }
+      setToastMessage(message);
+      toastTimerRef.current = setTimeout(() => {
+        setToastMessage(null);
+        toastTimerRef.current = null;
+      }, 1800);
     },
-    [toastApi]
+    []
   );
   const closeSheet = useCallback(() => {
     setActiveSheet(null);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current != null) {
+        clearTimeout(toastTimerRef.current);
+      }
+    };
   }, []);
 
   const analyticsContext = useCallback(
@@ -148,7 +225,7 @@ export default function FarmGame() {
     let cancelled = false;
 
     async function loadSavedGame() {
-      const savedState = await readPersistedGameState();
+      const savedState = await persistence.readPersistedGameState();
       if (cancelled) {
         return;
       }
@@ -161,14 +238,14 @@ export default function FarmGame() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [persistence]);
 
   useEffect(() => {
     if (!isSaveLoaded) {
       return;
     }
-    void writePersistedGameState(gameState);
-  }, [gameState, isSaveLoaded]);
+    void persistence.writePersistedGameState(gameState);
+  }, [gameState, isSaveLoaded, persistence]);
 
   useEffect(() => {
     if (!isSaveLoaded || gameStartTrackedRef.current) {
@@ -305,7 +382,9 @@ export default function FarmGame() {
     }
 
     farmAnalytics.trackAdRewardClick(type, analyticsContext());
-    const ok = await rewardedAd.showAd(() => {
+    const result = await rewardedAd.showAd();
+
+    if (result.status === 'earned') {
       const rewardedAt = Date.now();
       onReward();
       farmAnalytics.trackAdRewardCompleted({
@@ -317,14 +396,13 @@ export default function FarmGame() {
         ...state,
         adUsage: recordRewardedAdUsage(state, type, rewardedAt),
       }));
-    });
-
-    if (!ok) {
-      farmAnalytics.trackAdRewardFailed(type, 'failed_to_show', analyticsContext());
-      toast('광고를 표시하지 못했어요.');
+      return true;
     }
 
-    return ok;
+    farmAnalytics.trackAdRewardFailed(type, getAdFailureReason(result), analyticsContext());
+    toast(result.status === 'dismissed' ? '광고 보상이 완료되지 않았어요.' : '광고를 표시하지 못했어요.');
+
+    return false;
   }
 
   async function maybeShowMilestoneAd() {
@@ -376,7 +454,7 @@ export default function FarmGame() {
       toast(`계속하려면 '${RESET_CONFIRM_TEXT}'를 입력해 주세요.`);
       return;
     }
-    await removePersistedGameState();
+    await persistence.removePersistedGameState();
     setGameState(createInitialState());
     setSelectedArea(FIRST_AREA.key);
     setSelectedTool('harvest');
@@ -659,6 +737,12 @@ export default function FarmGame() {
         </ScrollView>
       </View>
 
+      {toastMessage != null ? (
+        <View pointerEvents="none" style={[styles.toast, { bottom: insets.bottom + 142 }]}>
+          <Text style={styles.toastText}>{toastMessage}</Text>
+        </View>
+      ) : null}
+
       <Sheet activeSheet={activeSheet} onClose={closeSheet}>
         {activeSheet?.type === 'shop' ? (
           <View>
@@ -683,6 +767,7 @@ export default function FarmGame() {
               gameState={gameState}
               setGameState={setGameState}
               getAnalyticsContext={analyticsContext}
+              analytics={farmAnalytics}
               onDone={toast}
               onMilestone={() => void maybeShowMilestoneAd()}
             />
@@ -692,6 +777,7 @@ export default function FarmGame() {
               gameState={gameState}
               setGameState={setGameState}
               getAnalyticsContext={analyticsContext}
+              analytics={farmAnalytics}
               onDone={toast}
               onMilestone={() => void maybeShowMilestoneAd()}
             />
@@ -702,6 +788,7 @@ export default function FarmGame() {
               gameState={gameState}
               setGameState={setGameState}
               getAnalyticsContext={analyticsContext}
+              analytics={farmAnalytics}
               onDone={toast}
               onMilestone={() => void maybeShowMilestoneAd()}
             />
@@ -710,6 +797,7 @@ export default function FarmGame() {
               gameState={gameState}
               setGameState={setGameState}
               getAnalyticsContext={analyticsContext}
+              analytics={farmAnalytics}
               onDone={toast}
               onMilestone={() => void maybeShowMilestoneAd()}
             />
@@ -1094,12 +1182,14 @@ function ShopPlotRow({
   gameState,
   setGameState,
   getAnalyticsContext,
+  analytics,
   onDone,
   onMilestone,
 }: {
   gameState: GameState;
   setGameState: React.Dispatch<React.SetStateAction<GameState>>;
   getAnalyticsContext: GetAnalyticsContext;
+  analytics: FarmAnalytics;
   onDone: (msg: string) => void;
   onMilestone: () => void;
 }) {
@@ -1127,7 +1217,7 @@ function ShopPlotRow({
           gold: state.gold - cost,
           unlockedPlotCount: state.unlockedPlotCount + 1,
         }));
-        farmAnalytics.trackPlotUnlocked({
+        analytics.trackPlotUnlocked({
           method: 'gold',
           cost,
           nextPlotCount: gameState.unlockedPlotCount + 1,
@@ -1144,12 +1234,14 @@ function ShopAreaUnlockRows({
   gameState,
   setGameState,
   getAnalyticsContext,
+  analytics,
   onDone,
   onMilestone,
 }: {
   gameState: GameState;
   setGameState: React.Dispatch<React.SetStateAction<GameState>>;
   getAnalyticsContext: GetAnalyticsContext;
+  analytics: FarmAnalytics;
   onDone: (msg: string) => void;
   onMilestone: () => void;
 }) {
@@ -1182,7 +1274,7 @@ function ShopAreaUnlockRows({
             price={`${formatMoney(area.unlock.cost)}G`}
             disabled={!canBuy}
             onPress={() => {
-              farmAnalytics.trackAreaUnlockClicked(area.key, getAnalyticsContext(gameState));
+              analytics.trackAreaUnlockClicked(area.key, getAnalyticsContext(gameState));
               if (!isNextArea) {
                 onDone('앞 구역부터 차례대로 열어 주세요.');
                 return;
@@ -1202,7 +1294,7 @@ function ShopAreaUnlockRows({
                   unlockedAreas: [...state.unlockedAreas, area.key],
                 };
               });
-              farmAnalytics.trackAreaUnlocked({
+              analytics.trackAreaUnlocked({
                 areaKey: area.key,
                 cost: area.unlock.cost,
                 context: getAnalyticsContext(gameState),
@@ -1222,6 +1314,7 @@ function ShopUpgradeRow({
   gameState,
   setGameState,
   getAnalyticsContext,
+  analytics,
   onDone,
   onMilestone,
 }: {
@@ -1229,6 +1322,7 @@ function ShopUpgradeRow({
   gameState: GameState;
   setGameState: React.Dispatch<React.SetStateAction<GameState>>;
   getAnalyticsContext: GetAnalyticsContext;
+  analytics: FarmAnalytics;
   onDone: (msg: string) => void;
   onMilestone: () => void;
 }) {
@@ -1255,7 +1349,7 @@ function ShopUpgradeRow({
           gold: state.gold - cost,
           upgrades: { ...state.upgrades, [kind]: state.upgrades[kind] + 1 },
         }));
-        farmAnalytics.trackUpgradePurchased({
+        analytics.trackUpgradePurchased({
           kind,
           cost,
           nextLevel: level + 1,
@@ -1478,6 +1572,26 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: PLOT_GAP,
+  },
+  toast: {
+    position: 'absolute',
+    left: 18,
+    right: 18,
+    zIndex: 20,
+    alignItems: 'center',
+  },
+  toastText: {
+    maxWidth: '100%',
+    overflow: 'hidden',
+    borderRadius: 8,
+    backgroundColor: 'rgba(31, 41, 55, 0.94)',
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '800',
+    lineHeight: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    textAlign: 'center',
   },
   plotTile: {
     borderRadius: 8,

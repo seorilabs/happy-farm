@@ -11,6 +11,7 @@ import google_auth_httplib2
 import httplib2
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaFileUpload
 
 
@@ -102,6 +103,17 @@ def make_android_publisher(timeout_seconds):
 
 def execute_request(request, retries):
     return request.execute(num_retries=retries)
+
+
+def is_changes_not_sent_for_review_rejected(error):
+    if not isinstance(error, HttpError):
+        return False
+
+    try:
+        reason = error.error_details[0].get("message", "")
+    except Exception:
+        reason = str(error)
+    return "changesNotSentForReview must not be set" in reason
 
 
 def default_release_notes(release_config, language):
@@ -207,10 +219,20 @@ def upload_internal_release(args):
         if args.changes_not_sent_for_review:
             commit_kwargs["changesNotSentForReview"] = True
 
-        committed_edit = execute_request(
-            publisher.edits().commit(**commit_kwargs),
-            args.api_retries,
-        )
+        try:
+            committed_edit = execute_request(
+                publisher.edits().commit(**commit_kwargs),
+                args.api_retries,
+            )
+        except Exception as commit_error:
+            if not args.changes_not_sent_for_review or not is_changes_not_sent_for_review_rejected(commit_error):
+                raise
+
+            commit_kwargs.pop("changesNotSentForReview", None)
+            committed_edit = execute_request(
+                publisher.edits().commit(**commit_kwargs),
+                args.api_retries,
+            )
         return {
             "packageName": package_name,
             "requestedTrack": args.track,

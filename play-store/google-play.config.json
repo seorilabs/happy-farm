@@ -14,10 +14,14 @@
     }
   },
   "storeListing": {
-    "ko-KR": {
-      "title": "행복 농장 타이쿤",
-      "shortDescription": "작물을 심고 수확하며 농장을 확장하는 방치형 농장 게임",
-      "fullDescription": "작은 밭에서 시작해 작물을 심고, 성장 시간을 기다린 뒤 수확해 골드를 모으는 농장 타이쿤 게임입니다. 골드로 밭을 넓히고 성장 속도와 판매 수익을 업그레이드하며, 조건을 채우면 새 구역을 순서대로 열 수 있습니다."
+    "appName": {
+      "ko-KR": "행복 농장 타이쿤"
+    },
+    "shortDescription": {
+      "ko-KR": "작물을 심고 수확하며 농장을 확장하는 방치형 농장 게임"
+    },
+    "fullDescription": {
+      "ko-KR": "작은 밭에서 시작해 작물을 심고, 성장 시간을 기다린 뒤 수확해 골드를 모으는 농장 타이쿤 게임입니다. 골드로 밭을 넓히고 성장 속도와 판매 수익을 업그레이드하며, 조건을 채우면 새 구역을 순서대로 열 수 있습니다."
     }
   },
   "contentDeclarations": {
@@ -25,14 +29,23 @@
     "targetAudience": "확정 필요",
     "dataSafety": "확정 필요",
     "ads": "yes",
-    "koreaGameDistribution": "yes"
+    "koreaDistribution": "yes",
+    "koreaGameRating": "확정 필요"
   },
   "assets": {
-    "appIcon": "play-store/assets/icon-512.png",
+    "playIcon": "play-store/assets/icon-512.png",
     "featureGraphic": "play-store/assets/feature-graphic-1024x500.png",
     "phoneScreenshots": [
-      "play-store/assets/screenshots/phone-1.png",
-      "play-store/assets/screenshots/phone-2.png"
+      "play-store/screenshots/phone/phone-1.png",
+      "play-store/screenshots/phone/phone-2.png"
+    ],
+    "sevenInchTabletScreenshots": [
+      "play-store/screenshots/tablet-7/tablet-7-1.png",
+      "play-store/screenshots/tablet-7/tablet-7-2.png"
+    ],
+    "tenInchTabletScreenshots": [
+      "play-store/screenshots/tablet-10/tablet-10-1.png",
+      "play-store/screenshots/tablet-10/tablet-10-2.png"
     ]
   },
   "automation": {

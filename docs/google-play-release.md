@@ -32,9 +32,11 @@
 ```bash
 pnpm check:play
 pnpm check:play -- --json
+python3 /Users/syous/.codex/skills/google-play-store-registration/scripts/validate_play_store_config.py --root .
+python3 /Users/syous/.codex/skills/google-play-store-registration/scripts/validate_play_store_config.py --root . --allow-console-gates
 ```
 
-이 체크는 아직 실패하는 것이 정상입니다. Android 프로젝트, `.aab`, release signing, 고객지원/개인정보/광고/한국 배포 선언은 통과하지만, 콘텐츠 등급/타겟 연령/데이터 보안과 이미지 항목이 남아 있습니다.
+전체 출시 readiness 체크는 아직 실패하는 것이 정상입니다. Android 프로젝트, `.aab`, release signing, 고객지원/개인정보/광고/한국 배포 선언과 Play Store 이미지 항목은 통과하지만, 콘텐츠 등급/타겟 연령/데이터 보안/한국 게임 등급 판단이 남아 있습니다.
 
 ## 1단계: Google Play용 앱 구조 결정
 
@@ -61,7 +63,7 @@ pnpm check:play -- --json
 - release signing 설정
 - `pnpm build:android` 또는 `apps/mobile/android/gradlew :app:bundleRelease`로 `.aab` 생성
 
-2026-05-27 확인 기준 Google Play 신규 앱/업데이트 제출은 Android 15, API level 35 이상을 요구합니다.
+2026-05-29 공식 Play Console Help 확인 기준 Google Play 신규 앱/업데이트 제출은 Android 15, API level 35 이상을 요구합니다. 현재 `apps/mobile`의 `targetSdkVersion`은 36이라 이 기준은 충족합니다.
 
 Google 공식 문서 기준으로, Google Play 제출에는 Android App Bundle을 만들고 release bundle은 개인 키로 서명되어야 합니다.
 
@@ -164,12 +166,26 @@ gh variable set GOOGLE_PLAY_SERVICE_ACCOUNT_EMAIL --body "<service-account>@<pro
 
 service account는 Play Console에서 이 앱에 대한 최소 권한을 받아야 합니다. 첫 목표는 internal testing track release 관리 권한입니다.
 
+### 로컬 Android Publisher API 인증
+
+2026-05-29에 로컬 ADC(Application Default Credentials)를 생성해 스토어 등록값 apply/verify를 완료했습니다.
+
+```bash
+gcloud auth application-default login --no-browser --scopes=https://www.googleapis.com/auth/androidpublisher,https://www.googleapis.com/auth/cloud-platform
+gcloud auth application-default print-access-token >/dev/null
+python3 -m pip install --user google-api-python-client google-auth
+```
+
+현재 gcloud 계정 토큰이 stale이면 일반 `application-default login`이 실패할 수 있습니다. 이 경우 `--no-browser`가 출력한 `--remote-bootstrap` 명령을 브라우저가 있는 셸에서 실행하고, 반환된 localhost URL을 대기 중인 명령에 붙여 넣습니다.
+
 수동 실행 예:
 
 ```bash
 gh workflow run build-google-play.yml -f upload_to_internal=false
 gh workflow run build-google-play.yml -f upload_to_internal=true -f release_status=draft
 ```
+
+`changes_not_sent_for_review`는 기본값 `false`입니다. 현재 이 앱은 `changesNotSentForReview=true`를 API commit에서 거부하므로, 필요한 경우에만 명시적으로 켭니다. 업로드 스크립트는 이 거부 응답을 받으면 해당 플래그 없이 commit을 재시도합니다.
 
 업로드 스크립트는 `play-store/google-play.config.json`의 `packageName`, `targetTrack`, `release.name`, `release.notes`, `release.aabPath`를 기본값으로 사용합니다.
 
@@ -193,6 +209,16 @@ gh workflow run build-google-play.yml -f upload_to_internal=true -f release_stat
 - Play App Signing 최초 약관/키 선택
 - 콘텐츠 등급/데이터 보안/정책 설문 최종 제출
 - 한국 게임물 등급 인증 판단
+
+스토어 등록 문구, 이미지 경로, API 자동화 범위는 `docs/google-play-store-listing.md`를 기준으로 관리합니다.
+
+2026-05-29 적용 결과:
+
+- Android Publisher API `edits.details`: 기본 언어와 고객지원 이메일 적용 및 검증 완료
+- Android Publisher API `edits.listings`: `ko-KR` title/short/full description 적용 및 검증 완료
+- Android Publisher API `edits.images`: icon, feature graphic, phone/7-inch/10-inch screenshots 적용 및 검증 완료
+- `changesNotSentForReview=true`는 현재 앱 상태에서 API가 거부해 플래그 없이 commit했습니다.
+- Android Publisher API `edits.bundles`/`edits.tracks`: `versionCode=1` AAB를 `internal` track에 `0.1.0-internal` draft release로 업로드하고 readback 검증 완료
 
 ## 공식 참고 문서
 
