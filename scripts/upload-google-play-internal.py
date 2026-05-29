@@ -87,9 +87,15 @@ def make_android_publisher(timeout_seconds):
     else:
         credentials, _project_id = google.auth.default(scopes=[ANDROID_PUBLISHER_SCOPE])
 
+    base_http = httplib2.Http(timeout=timeout_seconds)
+    try:
+        base_http.redirect_codes = base_http.redirect_codes - {308}
+    except AttributeError:
+        pass
+
     http = google_auth_httplib2.AuthorizedHttp(
         credentials,
-        http=httplib2.Http(timeout=timeout_seconds),
+        http=base_http,
     )
     return build("androidpublisher", "v3", http=http, cache_discovery=False)
 
