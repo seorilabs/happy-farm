@@ -2,12 +2,20 @@
   "name": "happy-farm",
   "private": true,
   "scripts": {
-    "dev": "granite dev",
-    "build": "ait build",
+    "dev": "pnpm --dir apps/ait dev",
+    "dev:ait": "pnpm --dir apps/ait dev",
+    "dev:mobile": "pnpm --dir apps/mobile start",
+    "build": "pnpm --dir apps/ait build",
+    "build:ait": "pnpm --dir apps/ait build",
+    "build:android": "pnpm --dir apps/mobile build:android",
+    "check:core": "jest packages/farm-core --runInBand",
+    "check:ait": "pnpm lint && pnpm typecheck && pnpm test && pnpm build",
+    "check:mobile": "pnpm --dir apps/mobile typecheck && pnpm --dir apps/mobile test --watchAll=false && pnpm --dir apps/mobile build:android",
+    "check:play": "node scripts/check-google-play-readiness.mjs",
     "test": "jest --passWithNoTests",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
-    "deploy": "ait deploy"
+    "deploy": "pnpm --dir apps/ait deploy"
   },
   "dependencies": {
     "@apps-in-toss/framework": "^2.6.0",

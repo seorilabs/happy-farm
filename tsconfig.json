@@ -1,7 +1,10 @@
 {
   "compilerOptions": {
     "rootDir": ".",
-    "baseUrl": "src",
+    "baseUrl": ".",
+    "paths": {
+      "pages/*": ["apps/ait/src/pages/*"]
+    },
     "target": "ESNext",
     "moduleResolution": "bundler",
     "lib": ["ESNext"],
@@ -20,5 +23,5 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true
   },
-  "include": ["**/*.ts", "**/*.tsx"]
+  "include": ["apps/**/*.ts", "apps/**/*.tsx", "packages/**/*.ts", "scripts/**/*.mjs"]
 }
