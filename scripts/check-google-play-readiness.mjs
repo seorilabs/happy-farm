@@ -153,6 +153,10 @@ function hasReleaseSigningConfig(contents) {
   return releaseBuildTypeBlock != null && /signingConfig\s+signingConfigs\./.test(releaseBuildTypeBlock);
 }
 
+function hasDynamicVersionCode(contents) {
+  return /versionCodeOverride|GOOGLE_PLAY_VERSION_CODE|resolveVersionCode/.test(contents);
+}
+
 function assertValue(label, value, validator = isConcrete) {
   if (!validator(value)) {
     fail(`${label} 값이 확정되지 않았습니다.`, value == null ? 'missing' : String(value));
@@ -334,8 +338,10 @@ if (!androidRootExists || appBuildPath == null) {
     pass('Google Play 신규 앱 제출 기준 targetSdk를 충족합니다.', String(targetSdk));
   }
 
-  if (Number.isNaN(versionCode) || versionCode <= 0) {
+  if ((Number.isNaN(versionCode) || versionCode <= 0) && !hasDynamicVersionCode(appBuildContents)) {
     fail('Android versionCode가 유효하지 않습니다.', appBuildPath);
+  } else if (hasDynamicVersionCode(appBuildContents)) {
+    pass('Android versionCode 자동 주입 설정이 있습니다.', 'versionCodeOverride 또는 GOOGLE_PLAY_VERSION_CODE');
   } else {
     pass('Android versionCode가 유효합니다.', String(versionCode));
   }

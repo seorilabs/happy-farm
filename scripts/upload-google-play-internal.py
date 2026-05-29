@@ -21,6 +21,7 @@ DEFAULT_AAB_PATH = ROOT / "apps/mobile/android/app/build/outputs/bundle/release/
 ANDROID_PUBLISHER_SCOPE = "https://www.googleapis.com/auth/androidpublisher"
 DEFAULT_API_TIMEOUT_SECONDS = 300
 DEFAULT_API_RETRIES = 5
+MAX_VERSION_CODE = 2100000000
 
 
 def load_config():
@@ -105,6 +106,24 @@ def execute_request(request, retries):
     return request.execute(num_retries=retries)
 
 
+def collect_version_codes(items):
+    version_codes = []
+    for item in items:
+        raw_value = item.get("versionCode")
+        if raw_value is not None:
+            version_codes.append(int(raw_value))
+    return version_codes
+
+
+def collect_track_version_codes(tracks):
+    version_codes = []
+    for track in tracks:
+        for release in track.get("releases", []):
+            for raw_value in release.get("versionCodes", []):
+                version_codes.append(int(raw_value))
+    return version_codes
+
+
 def is_changes_not_sent_for_review_rejected(error):
     if not isinstance(error, HttpError):
         return False
@@ -149,6 +168,45 @@ def resolve_track(publisher, package_name, edit_id, requested_track, retries):
         return alias
 
     return requested_track
+
+
+def resolve_next_version_code(args):
+    package_name = args.package_name
+    publisher = make_android_publisher(args.api_timeout_seconds)
+    edit = execute_request(
+        publisher.edits().insert(packageName=package_name, body={}),
+        args.api_retries,
+    )
+    edit_id = edit["id"]
+
+    try:
+        bundle_response = execute_request(
+            publisher.edits().bundles().list(packageName=package_name, editId=edit_id),
+            args.api_retries,
+        )
+        version_codes = collect_version_codes(bundle_response.get("bundles", []))
+
+        try:
+            track_response = execute_request(
+                publisher.edits().tracks().list(packageName=package_name, editId=edit_id),
+                args.api_retries,
+            )
+            version_codes.extend(collect_track_version_codes(track_response.get("tracks", [])))
+        except Exception as track_error:
+            print(f"Warning: failed to inspect Google Play tracks: {track_error}", file=sys.stderr)
+
+        next_version_code = max(version_codes, default=0) + 1
+        if next_version_code > MAX_VERSION_CODE:
+            raise RuntimeError(f"Next versionCode exceeds Google Play maximum: {next_version_code}")
+        return next_version_code
+    finally:
+        try:
+            execute_request(
+                publisher.edits().delete(packageName=package_name, editId=edit_id),
+                args.api_retries,
+            )
+        except Exception as cleanup_error:
+            print(f"Warning: failed to delete Google Play edit {edit_id}: {cleanup_error}", file=sys.stderr)
 
 
 def upload_internal_release(args):
@@ -293,11 +351,24 @@ def main():
         default=env_int("GOOGLE_PLAY_API_RETRIES", DEFAULT_API_RETRIES, minimum=0),
         help="Retries for Google API requests. Defaults to GOOGLE_PLAY_API_RETRIES or 5.",
     )
+    parser.add_argument(
+        "--print-next-version-code",
+        action="store_true",
+        help="Print the next Google Play versionCode and exit.",
+    )
     args = parser.parse_args()
 
     if not args.package_name:
         print("Google Play package name is required.", file=sys.stderr)
         return 1
+
+    if args.print_next_version_code:
+        try:
+            print(resolve_next_version_code(args))
+        except Exception as error:
+            print(f"Failed to resolve next Google Play versionCode: {error}", file=sys.stderr)
+            return 1
+        return 0
 
     try:
         result = upload_internal_release(args)

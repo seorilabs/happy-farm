@@ -26,6 +26,17 @@ def resolveUploadStoreFile = { String storeFilePath ->
     def candidate = new File(storeFilePath)
     return candidate.isAbsolute() ? candidate : new File(rootProject.projectDir, storeFilePath)
 }
+def resolveVersionCode = { int defaultValue ->
+    def rawValue = (project.findProperty("versionCodeOverride") ?: System.getenv("GOOGLE_PLAY_VERSION_CODE") ?: defaultValue.toString()).toString()
+    if (!(rawValue ==~ /[0-9]+/)) {
+        throw new GradleException("versionCode must be a positive integer, got: ${rawValue}")
+    }
+    def parsedValue = rawValue.toInteger()
+    if (parsedValue <= 0 || parsedValue > 2100000000) {
+        throw new GradleException("versionCode must be between 1 and 2100000000, got: ${parsedValue}")
+    }
+    return parsedValue
+}
 
 /**
  * This is the configuration block to customize your React Native Android app.
@@ -108,7 +119,7 @@ android {
         applicationId "com.seorilabs.happyfarm"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 2
+        versionCode resolveVersionCode(2)
         versionName "1.0.1"
     }
     signingConfigs {
@@ -131,6 +142,8 @@ android {
     buildTypes {
         debug {
             signingConfig signingConfigs.debug
+            applicationIdSuffix ".debug"
+            versionNameSuffix "-debug"
         }
         release {
             signingConfig signingConfigs.release

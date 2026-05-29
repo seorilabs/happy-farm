@@ -128,9 +128,11 @@ workflow:
 이 workflow는 수동 실행(`workflow_dispatch`) 전용입니다.
 
 - 기본 실행: signed AAB를 빌드하고 artifact로 보관
-- `upload_to_internal=true`: Google Play Developer API로 internal track에 업로드
-- `release_status=draft`: 첫 자동화 검증용 draft
-- `release_status=completed`: 내부 테스터에게 배포 가능한 release
+- `send_to_google_play=true`: Google Play Developer API로 내부 테스트 트랙에 업로드
+- `after_upload=초안만 만들기`: 첫 자동화 검증용 초안 릴리스 생성
+- `after_upload=내부 테스터에게 배포하기`: 내부 테스터에게 배포 가능한 릴리스 생성
+- `versionCode`: 업로드 실행 시 Play API에서 기존 bundle/track의 최댓값을 조회해 `+1`로 자동 주입
+- `send_to_google_play=false`: Play API 조회 없이 `GITHUB_RUN_NUMBER * 100 + GITHUB_RUN_ATTEMPT` 값을 빌드 artifact용 fallback으로 주입
 
 필수 GitHub Actions secrets:
 
@@ -181,11 +183,11 @@ python3 -m pip install --user google-api-python-client google-auth
 수동 실행 예:
 
 ```bash
-gh workflow run build-google-play.yml -f upload_to_internal=false
-gh workflow run build-google-play.yml -f upload_to_internal=true -f release_status=draft
+gh workflow run build-google-play.yml -f send_to_google_play=false
+gh workflow run build-google-play.yml -f send_to_google_play=true -f after_upload='초안만 만들기'
 ```
 
-`changes_not_sent_for_review`는 기본값 `false`입니다. 현재 이 앱은 `changesNotSentForReview=true`를 API commit에서 거부하므로, 필요한 경우에만 명시적으로 켭니다. 업로드 스크립트는 이 거부 응답을 받으면 해당 플래그 없이 commit을 재시도합니다.
+`review_later_in_console`은 기본값 `false`입니다. 이 값을 켜면 검토 제출을 자동으로 하지 않고 Play Console에서 나중에 처리하도록 요청합니다. 현재 이 앱은 내부 API 값인 `changesNotSentForReview=true`를 API commit에서 거부하므로, 필요한 경우에만 명시적으로 켭니다. 업로드 스크립트는 이 거부 응답을 받으면 해당 플래그 없이 commit을 재시도합니다.
 
 업로드 스크립트는 `play-store/google-play.config.json`의 `packageName`, `targetTrack`, `release.name`, `release.notes`, `release.aabPath`를 기본값으로 사용합니다.
 
