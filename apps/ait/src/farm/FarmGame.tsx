@@ -22,6 +22,7 @@ import {
   GROWTH_AD_MAX_SKIP_MS,
   GROWTH_AD_MIN_REMAINING_MS,
   HARVEST_BONUS_MULTIPLIER,
+  HARVEST_BONUS_NUDGE_DECLINE_SKIP_HARVESTS,
   INTERSTITIAL_MILESTONE_COOLDOWN_MS,
   MAX_PLOTS,
   REWARDED_GOLD_AMOUNT,
@@ -175,6 +176,8 @@ export default function FarmGame({
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastInterstitialShownAtRef = useRef(0);
+  const harvestBonusHarvestCountRef = useRef(0);
+  const harvestBonusNudgeAvailableAtHarvestRef = useRef(1);
   const sessionStartedAtRef = useRef(Date.now());
   const gameStartTrackedRef = useRef(false);
   const firstSeedSelectedRef = useRef(false);
@@ -204,9 +207,23 @@ export default function FarmGame({
     },
     []
   );
-  const closeSheet = useCallback(() => {
-    setActiveSheet(null);
+  const deferHarvestBonusNudge = useCallback(() => {
+    harvestBonusNudgeAvailableAtHarvestRef.current =
+      harvestBonusHarvestCountRef.current + HARVEST_BONUS_NUDGE_DECLINE_SKIP_HARVESTS + 1;
   }, []);
+
+  const dismissHarvestBonusNudge = useCallback(() => {
+    deferHarvestBonusNudge();
+    setActiveSheet(null);
+  }, [deferHarvestBonusNudge]);
+
+  const closeSheet = useCallback(() => {
+    if (activeSheet?.type === 'harvestBonus') {
+      dismissHarvestBonusNudge();
+      return;
+    }
+    setActiveSheet(null);
+  }, [activeSheet, dismissHarvestBonusNudge]);
 
   useEffect(() => {
     return () => {
@@ -517,7 +534,10 @@ export default function FarmGame({
       context: analyticsContext(),
     });
     toast(`+${formatMoney(finalPrice)}G 수확했어요.`);
-    if (rewardedAd.isAdReady && harvestBonusAdLimit.allowed) {
+    harvestBonusHarvestCountRef.current += 1;
+    const canShowHarvestBonusNudge =
+      harvestBonusHarvestCountRef.current >= harvestBonusNudgeAvailableAtHarvestRef.current;
+    if (rewardedAd.isAdReady && harvestBonusAdLimit.allowed && canShowHarvestBonusNudge) {
       setActiveSheet({ type: 'harvestBonus', amount: finalPrice });
     }
     Vibration.vibrate(50);
@@ -826,7 +846,7 @@ export default function FarmGame({
               disabled={!rewardedAd.isAdReady || !harvestBonusAdLimit.allowed}
               onPress={() => void doubleHarvestWithAd(activeSheet.amount)}
             />
-            <SheetAction label="괜찮아요" secondary onPress={() => setActiveSheet(null)} />
+            <SheetAction label="괜찮아요" secondary onPress={dismissHarvestBonusNudge} />
           </View>
         ) : null}
 

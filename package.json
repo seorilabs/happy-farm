@@ -12,6 +12,7 @@
     "check:ait": "pnpm lint && pnpm typecheck && pnpm test && pnpm build",
     "check:mobile": "pnpm --dir apps/mobile typecheck && pnpm --dir apps/mobile test --watchAll=false && pnpm --dir apps/mobile build:android",
     "check:play": "node scripts/check-google-play-readiness.mjs",
+    "check:firebase:android": "node scripts/check-firebase-android-config.mjs",
     "test": "jest --passWithNoTests",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",

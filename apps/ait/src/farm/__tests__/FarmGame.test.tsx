@@ -5,11 +5,14 @@ import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react
 import {
   CROPS,
   FARM_AREAS,
+  HARVEST_BONUS_MULTIPLIER,
+  HARVEST_BONUS_NUDGE_DECLINE_SKIP_HARVESTS,
   MAX_PLOTS,
   createInitialState,
   formatMoney,
   type CropKey,
   type GameState,
+  type RewardedAdController,
 } from '../../../../../packages/farm-core/src';
 
 const NOW = Date.parse('2026-05-27T03:00:00.000Z');
@@ -53,16 +56,24 @@ function createLateGameState(): GameState {
   };
 }
 
-async function renderGame(savedState: GameState | null) {
+async function renderGame(savedState: GameState | null, props: Partial<React.ComponentProps<typeof FarmGame>> = {}) {
   mockPersistence.readPersistedGameState.mockResolvedValueOnce(savedState ?? createInitialState());
 
-  const view = render(<FarmGame persistence={mockPersistence} />);
+  const view = render(<FarmGame persistence={mockPersistence} {...props} />);
   await act(async () => {
     await Promise.resolve();
     await Promise.resolve();
   });
 
   return view;
+}
+
+function createReadyRewardedAd(): RewardedAdController {
+  return {
+    isAdReady: true,
+    isAdSupported: true,
+    showAd: jest.fn(async () => ({ status: 'earned' as const })),
+  };
 }
 
 describe('FarmGame UI flow', () => {
@@ -133,5 +144,31 @@ describe('FarmGame UI flow', () => {
     expect(screen.getByText('농장 관리소')).toBeTruthy();
     expect(screen.getByText('모든 구역 해금 완료')).toBeTruthy();
     expect(screen.getByText('현재 24칸 · 작물을 심을 공간을 1칸 늘려요')).toBeTruthy();
+  });
+
+  test('spaces out harvest bonus nudges after the player declines one', async () => {
+    const lateGame = createLateGameState();
+    const rewardedAd = createReadyRewardedAd();
+    const harvestBonusCta = `광고 보고 이번 수확 ${HARVEST_BONUS_MULTIPLIER}배 받기`;
+    const screen = await renderGame(lateGame, { useRewardedAd: () => rewardedAd });
+
+    await waitFor(() => expect(screen.getByText(`${formatMoney(lateGame.gold)}G`)).toBeTruthy());
+
+    fireEvent.press(screen.getAllByText('GET')[0]!);
+
+    expect(screen.getByText(harvestBonusCta)).toBeTruthy();
+
+    fireEvent.press(screen.getByText('괜찮아요'));
+
+    expect(screen.queryByText(harvestBonusCta)).toBeNull();
+
+    for (let index = 0; index < HARVEST_BONUS_NUDGE_DECLINE_SKIP_HARVESTS; index += 1) {
+      fireEvent.press(screen.getAllByText('GET')[0]!);
+      expect(screen.queryByText(harvestBonusCta)).toBeNull();
+    }
+
+    fireEvent.press(screen.getAllByText('GET')[0]!);
+
+    expect(screen.getByText(harvestBonusCta)).toBeTruthy();
   });
 });

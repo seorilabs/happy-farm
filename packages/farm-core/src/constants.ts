@@ -63,6 +63,7 @@ export const REWARDED_GOLD_DAILY_LIMIT = balance.ads.rewardedGoldDailyLimit;
 export const HARVEST_BONUS_MULTIPLIER = balance.ads.harvestBonusMultiplier;
 export const HARVEST_BONUS_AD_COOLDOWN_MS = balance.ads.harvestBonusAdCooldownMs;
 export const HARVEST_BONUS_AD_DAILY_LIMIT = balance.ads.harvestBonusAdDailyLimit;
+export const HARVEST_BONUS_NUDGE_DECLINE_SKIP_HARVESTS = balance.ads.harvestBonusNudgeDeclineSkipHarvests;
 export const GROWTH_AD_MIN_REMAINING_MS = balance.ads.growthAdMinRemainingMs;
 export const GROWTH_AD_MAX_SKIP_MS = balance.ads.growthAdMaxSkipMs;
 export const GROWTH_AD_COOLDOWN_MS = balance.ads.growthAdCooldownMs;
