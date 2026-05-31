@@ -35,6 +35,7 @@ jobs:
     name: Signed Android App Bundle
     runs-on: ubuntu-latest
     timeout-minutes: 35
+    environment: google-play
 
     steps:
       - name: Checkout
