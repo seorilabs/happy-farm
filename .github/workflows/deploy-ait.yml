@@ -6,6 +6,10 @@ on:
       - 'v*.*.*'
   workflow_dispatch:
     inputs:
+      release_tag:
+        description: '배포할 릴리즈 태그 (예: v1.1.0). 비우면 선택한 ref를 사용합니다.'
+        required: false
+        type: string
       memo:
         description: '앱인토스 배포 메모 (선택, 최대 1000자)'
         required: false
@@ -15,7 +19,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: happy-farm-apps-in-toss-deploy-${{ github.ref_name }}
+  group: happy-farm-apps-in-toss-deploy-${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
   cancel-in-progress: false
 
 jobs:
@@ -28,10 +32,13 @@ jobs:
     env:
       APPS_IN_TOSS_API_KEY: ${{ secrets.APPS_IN_TOSS_API_KEY }}
       APPS_IN_TOSS_INPUT_MEMO: ${{ github.event_name == 'workflow_dispatch' && inputs.memo || '' }}
+      APPS_IN_TOSS_RELEASE_REF: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
 
       - name: Check required config
         shell: bash
@@ -43,11 +50,18 @@ jobs:
             exit 1
           fi
 
+          if [ -z "$APPS_IN_TOSS_RELEASE_REF" ]; then
+            echo "release_tag input or release tag ref is required." >&2
+            exit 1
+          fi
+
       - name: Setup pnpm workspace
         uses: ./.github/actions/setup-pnpm-workspace
 
       - name: Resolve release version
         id: release-version
+        env:
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
         run: node scripts/resolve-release-version.mjs --github-output --github-step-summary --write-release-info --quiet
 
       - name: Lint
@@ -80,9 +94,10 @@ jobs:
           memo="$APPS_IN_TOSS_INPUT_MEMO"
 
           if [ -z "$memo" ]; then
-            memo="v${RELEASE_VERSION_NAME} GitHub Actions ${GITHUB_REF_NAME}@${GITHUB_SHA::7}"
+            source_sha="$(git rev-parse --short HEAD)"
+            memo="v${RELEASE_VERSION_NAME} GitHub Actions ${APPS_IN_TOSS_RELEASE_REF}@${source_sha}"
           else
             memo="v${RELEASE_VERSION_NAME} ${memo}"
           fi
 
-          pnpm deploy -- --api-key "$APPS_IN_TOSS_API_KEY" --memo "$memo"
+          pnpm --dir apps/ait run deploy --api-key "$APPS_IN_TOSS_API_KEY" --memo "$memo"

@@ -16,7 +16,9 @@ Example:
 v1.27.0
 ```
 
-The deploy workflows must run from a release tag. If a non-tag build needs to ship, create a release or hotfix tag first.
+The deploy workflows ship release-tagged source. If a non-tag build needs to ship, create a release or hotfix tag first.
+
+For AppsInToss manual deploys, run the `Deploy AppsInToss` workflow from the default branch and set `release_tag` to the tag you want to deploy. The workflow file comes from the selected branch, while the app source is checked out from `release_tag`.
 
 ## Version Formula
 
