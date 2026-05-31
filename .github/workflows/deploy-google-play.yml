@@ -1,4 +1,4 @@
-name: Build Google Play
+name: Deploy Google Play
 
 on:
   workflow_dispatch:

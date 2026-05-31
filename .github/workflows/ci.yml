@@ -4,9 +4,31 @@ on:
   pull_request:
     branches:
       - main
+    paths-ignore:
+      - '**.md'
+      - '**.png'
+      - '**.jpg'
+      - '**.jpeg'
+      - '**.wav'
+      - '**.gitkeep'
+      - 'assets/**'
+      - 'docs/**'
+      - 'play-store/**'
+      - '.github/workflows/deploy-*.yml'
   push:
     branches-ignore:
       - main
+    paths-ignore:
+      - '**.md'
+      - '**.png'
+      - '**.jpg'
+      - '**.jpeg'
+      - '**.wav'
+      - '**.gitkeep'
+      - 'assets/**'
+      - 'docs/**'
+      - 'play-store/**'
+      - '.github/workflows/deploy-*.yml'
   workflow_dispatch:
 
 permissions:
