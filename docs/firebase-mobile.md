@@ -1,10 +1,35 @@
-# Firebase 모바일 운영 기능
+# Firebase 운영 기능
 
-이 저장소는 초기 Firebase 범위를 `apps/mobile`의 Android/iOS 운영 기능으로 제한합니다.
+Firebase project는 `.firebaserc`의 `happy-farm-tycoon`을 기본값으로 사용합니다.
 
-- 사용: Analytics, Crashlytics, Remote Config
+- Mobile: Analytics, Crashlytics, Remote Config
+- AppsInToss: Firebase Web App 등록 완료. AIT target은 Firebase Web SDK를 `apps/ait/src/firebaseWeb/*`에서만 import합니다.
 - 미사용: Firestore, Cloud Functions, Authentication
-- AIT: native Firebase SDK를 직접 붙이지 않고, 필요 시 별도 HTTPS API 경유로 검토합니다.
+
+## Firebase 앱 등록
+
+현재 Firebase project에 등록된 client app은 다음과 같습니다.
+
+```text
+Android release: com.seorilabs.happyfarm
+Android debug: com.seorilabs.happyfarm.debug
+Web AppsInToss: 행복한 농장 타이쿤 (AppsInToss)
+```
+
+AppsInToss Web App SDK config:
+
+```text
+projectId = happy-farm-tycoon
+appId = 1:1874344437:web:a34abb444eae2baa6c48bc
+authDomain = happy-farm-tycoon.firebaseapp.com
+storageBucket = happy-farm-tycoon.firebasestorage.app
+messagingSenderId = 1874344437
+measurementId = G-LQQQQZHG1V
+```
+
+Firebase Web API key는 service credential이 아니며, AIT 실기기 smoke test를 위해 client config를 `apps/ait/src/firebaseWeb/app.ts`에 고정했습니다. 서비스 계정 JSON, Admin SDK credential, private key는 앱에 넣지 않습니다.
+
+AIT 앱 시작 시 `firebase/app`으로 Web App을 초기화하고, `firebase/analytics`의 `isSupported()`가 true인 환경에서만 Analytics를 초기화합니다. 지원되는 경우 `ait_firebase_initialized` smoke event와 FarmGame 이벤트를 Firebase Analytics로 전송합니다. dev bundle에서는 DebugView 확인을 위해 `debug_mode=1`을 함께 붙입니다. AppsInToss 실기기에서 Analytics 지원이 false이거나 초기화가 실패하면 게임은 계속 no-op analytics로 동작합니다.
 
 ## 설정 파일
 
@@ -28,7 +53,7 @@ pnpm check:firebase:android
 
 ## Remote Config 기본 키
 
-Remote Config 템플릿은 repo root의 `remoteconfig.template.json`으로 관리하고, Firebase project는 `.firebaserc`의 `happy-farm-tycoon`을 기본값으로 사용합니다.
+Remote Config 템플릿은 repo root의 `remoteconfig.template.json`으로 관리합니다.
 
 ```text
 analytics_collection_enabled = true
@@ -42,7 +67,9 @@ force_update_url = ""
 remote_balance_enabled = false
 ```
 
-광고는 `mobile_ads_global_enabled=true`이고 현재 앱의 release `buildNumber`가 `mobile_ads_enabled_max_build_number` 이하일 때만 초기화합니다. 내부 테스트에서 검증 중인 새 릴리즈는 이 값을 올리기 전까지 광고를 로드하지 않습니다.
+모바일 광고는 `mobile_ads_global_enabled=true`이고 현재 앱의 release `buildNumber`가 `mobile_ads_enabled_max_build_number` 이하일 때만 초기화합니다. 내부 테스트에서 검증 중인 새 릴리즈는 이 값을 올리기 전까지 광고를 로드하지 않습니다.
+
+AppsInToss 보상형 광고는 AppsInToss 광고 그룹 ID가 발급된 뒤 `apps/ait`의 광고 설정에 반영합니다. Firebase Remote Config를 AIT 런타임에서 직접 읽는 구조는 아직 사용하지 않습니다.
 
 게임 경제, gold, 저장 데이터는 계속 로컬 권위 상태이며 서버 신뢰값으로 쓰지 않습니다.
 
@@ -58,6 +85,15 @@ firebase deploy --only remoteconfig --project happy-farm-tycoon
 pnpm --dir apps/mobile typecheck
 pnpm --dir apps/mobile test --watchAll=false
 pnpm --dir apps/mobile build:android
+```
+
+AIT Firebase Web SDK 검증:
+
+```bash
+pnpm --dir apps/ait typecheck
+pnpm --dir apps/ait lint
+pnpm --dir apps/ait test
+pnpm --dir apps/ait build
 ```
 
 Analytics DebugView 확인:

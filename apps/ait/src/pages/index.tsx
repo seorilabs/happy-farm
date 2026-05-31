@@ -1,5 +1,6 @@
 import { createRoute } from '@granite-js/react-native';
 import React from 'react';
+import { appsInTossFarmAnalytics } from '../firebaseWeb';
 import FarmGame from '../farm/FarmGame';
 import { useFullScreenAd } from '../farm/platform/fullScreenAd';
 import {
@@ -24,6 +25,11 @@ const appsInTossPersistence = {
 
 function Page() {
   return (
-    <FarmGame persistence={appsInTossPersistence} useInterstitialAd={useFullScreenAd} useRewardedAd={useFullScreenAd} />
+    <FarmGame
+      analytics={appsInTossFarmAnalytics}
+      persistence={appsInTossPersistence}
+      useInterstitialAd={useFullScreenAd}
+      useRewardedAd={useFullScreenAd}
+    />
   );
 }
