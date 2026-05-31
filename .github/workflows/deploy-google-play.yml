@@ -1,23 +1,23 @@
-name: Build Google Play AAB
+name: Build Google Play
 
 on:
   workflow_dispatch:
     inputs:
       send_to_google_play:
-        description: "AAB 빌드 후 Google Play 내부 테스트에 올림"
+        description: 'AAB 빌드 후 Google Play 내부 테스트에 올림'
         required: false
         default: false
         type: boolean
       after_upload:
-        description: "업로드 후 처리: 초안으로 둘지, 내부 테스터에게 보낼지"
+        description: '업로드 후 처리: 초안으로 둘지, 내부 테스터에게 보낼지'
         required: false
-        default: "초안만 만들기"
+        default: '초안만 만들기'
         type: choice
         options:
           - 초안만 만들기
           - 내부 테스터에게 배포하기
       review_later_in_console:
-        description: "검토 제출은 자동으로 하지 않고 Play Console에서 나중에 처리"
+        description: '검토 제출은 자동으로 하지 않고 Play Console에서 나중에 처리'
         required: false
         default: false
         type: boolean
@@ -27,12 +27,12 @@ permissions:
   id-token: write
 
 concurrency:
-  group: google-play-aab-${{ github.ref }}
+  group: happy-farm-google-play-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   build-aab:
-    name: Build signed Android App Bundle
+    name: Signed Android App Bundle
     runs-on: ubuntu-latest
     timeout-minutes: 35
 
@@ -40,57 +40,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6
-        with:
-          version: 11.3.0
-          run_install: false
+      - name: Setup pnpm workspace
+        uses: ./.github/actions/setup-pnpm-workspace
 
-      - name: Setup Node
-        uses: actions/setup-node@v6
-        with:
-          node-version: 24
-          cache: pnpm
-
-      - name: Setup Java
-        uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: "17"
-
-      - name: Prepare Android SDK
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          sdkmanager_bin="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
-
-          if [ ! -x "$sdkmanager_bin" ]; then
-            echo "sdkmanager not found at $sdkmanager_bin" >&2
-            find "$ANDROID_HOME/cmdline-tools" -maxdepth 3 -type f -name sdkmanager >&2 || true
-            exit 1
-          fi
-
-          echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
-
-          set +o pipefail
-          yes 2>/dev/null | "$sdkmanager_bin" --licenses >/dev/null
-          licenses_status="${PIPESTATUS[1]}"
-          set -o pipefail
-
-          if [ "$licenses_status" -ne 0 ]; then
-            exit "$licenses_status"
-          fi
-
-          "$sdkmanager_bin" \
-            "platform-tools" \
-            "platforms;android-36" \
-            "build-tools;36.0.0" \
-            "ndk;27.1.12297006" \
-            "cmdline-tools;latest"
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      - name: Setup Android build
+        uses: ./.github/actions/setup-android-build
 
       - name: Typecheck mobile app
         run: pnpm --dir apps/mobile typecheck
@@ -227,9 +181,9 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: happy-farm-google-play-aab-v${{ steps.play-version.outputs.version_code }}-${{ github.sha }}
-          path: apps/mobile/android/app/build/outputs/bundle/release/app-release.aab
           if-no-files-found: error
           retention-days: 14
+          path: apps/mobile/android/app/build/outputs/bundle/release/app-release.aab
 
       - name: Upload AAB to Google Play internal track
         if: ${{ inputs.send_to_google_play }}

@@ -1,6 +1,9 @@
-name: CI
+name: Validate
 
 on:
+  pull_request:
+    branches:
+      - main
   push:
     branches-ignore:
       - main
@@ -10,12 +13,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
+  group: happy-farm-validate-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   validate:
-    name: Lint, Typecheck, Test, Build
+    name: AIT workspace checks
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -23,20 +26,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 11.3.0
-          run_install: false
-
-      - name: Setup Node
-        uses: actions/setup-node@v6
-        with:
-          node-version: 24
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      - name: Setup pnpm workspace
+        uses: ./.github/actions/setup-pnpm-workspace
 
       - name: Lint
         run: pnpm lint
@@ -53,7 +44,7 @@ jobs:
       - name: Upload build artifact
         uses: actions/upload-artifact@v7
         with:
-          name: happy-farm-ci-${{ github.sha }}
+          name: happy-farm-ait-${{ github.sha }}
           if-no-files-found: error
           retention-days: 14
-          path: "apps/ait/*.ait"
+          path: 'apps/ait/*.ait'

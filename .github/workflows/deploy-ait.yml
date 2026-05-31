@@ -1,14 +1,14 @@
-name: Deploy Apps in Toss
+name: Deploy AppsInToss
 
 on:
   workflow_dispatch:
     inputs:
       memo:
-        description: "앱인토스 배포 메모 (선택, 최대 1000자)"
+        description: '앱인토스 배포 메모 (선택, 최대 1000자)'
         required: false
         type: string
       create_release_tag:
-        description: "앱인토스 배포 성공 후 릴리즈 태그 생성"
+        description: '앱인토스 배포 성공 후 릴리즈 태그 생성'
         required: false
         default: true
         type: boolean
@@ -22,7 +22,7 @@ concurrency:
 
 jobs:
   deploy:
-    name: Build and Deploy
+    name: AIT artifact deploy
     runs-on: ubuntu-latest
     timeout-minutes: 25
     environment: apps-in-toss
@@ -38,20 +38,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6
-        with:
-          version: 11.3.0
-          run_install: false
-
-      - name: Setup Node
-        uses: actions/setup-node@v6
-        with:
-          node-version: 24
-          cache: pnpm
-
       - name: Check required config
+        shell: bash
         run: |
+          set -euo pipefail
+
           if [ -z "$APPS_IN_TOSS_API_KEY" ]; then
             echo "APPS_IN_TOSS_API_KEY secret is required." >&2
             exit 1
@@ -99,8 +90,8 @@ jobs:
             echo "message=Happy Farm AppsInToss deploy #$GITHUB_RUN_NUMBER ($short_sha)"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      - name: Setup pnpm workspace
+        uses: ./.github/actions/setup-pnpm-workspace
 
       - name: Lint
         run: pnpm lint
@@ -120,10 +111,13 @@ jobs:
           name: happy-farm-deploy-${{ github.sha }}
           if-no-files-found: error
           retention-days: 30
-          path: "apps/ait/*.ait"
+          path: 'apps/ait/*.ait'
 
       - name: Deploy to Apps in Toss
+        shell: bash
         run: |
+          set -euo pipefail
+
           memo="$APPS_IN_TOSS_INPUT_MEMO"
 
           if [ -z "$memo" ]; then

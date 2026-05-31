@@ -122,7 +122,7 @@ release signing 상태:
 workflow:
 
 ```bash
-.github/workflows/build-google-play.yml
+.github/workflows/deploy-google-play.yml
 ```
 
 이 workflow는 수동 실행(`workflow_dispatch`) 전용입니다.
@@ -183,8 +183,8 @@ python3 -m pip install --user google-api-python-client google-auth
 수동 실행 예:
 
 ```bash
-gh workflow run build-google-play.yml -f send_to_google_play=false
-gh workflow run build-google-play.yml -f send_to_google_play=true -f after_upload='초안만 만들기'
+gh workflow run deploy-google-play.yml -f send_to_google_play=false
+gh workflow run deploy-google-play.yml -f send_to_google_play=true -f after_upload='초안만 만들기'
 ```
 
 `review_later_in_console`은 기본값 `false`입니다. 이 값을 켜면 검토 제출을 자동으로 하지 않고 Play Console에서 나중에 처리하도록 요청합니다. 현재 이 앱은 내부 API 값인 `changesNotSentForReview=true`를 API commit에서 거부하므로, 필요한 경우에만 명시적으로 켭니다. 업로드 스크립트는 이 거부 응답을 받으면 해당 플래그 없이 commit을 재시도합니다.
