@@ -837,21 +837,25 @@ export default function FarmGame({
       <Sheet activeSheet={activeSheet} onClose={closeSheet}>
         {activeSheet?.type === 'shop' ? (
           <View>
-            <Text style={styles.sheetSectionTitle}>광고 보상</Text>
-            <AdRewardCard
-              title={`광고 보고 ${formatMoney(REWARDED_GOLD_AMOUNT)}G 받기`}
-              desc={rewardedGoldLimit.allowed ? '10분에 최대 3회 받을 수 있어요.' : rewardedGoldLimit.reason}
-              cta={rewardedAd.isAdReady && rewardedGoldLimit.allowed ? '받기' : '대기'}
-              disabled={!rewardedAd.isAdReady || !rewardedGoldLimit.allowed}
-              onPress={() => void rewardGoldFromAd()}
-            />
-            <AdRewardCard
-              title="광고 보고 밭 1칸 열기"
-              desc={rewardedGoldLimit.allowed ? '개간 비용 없이 작물을 심을 공간을 늘려요.' : rewardedGoldLimit.reason}
-              cta={rewardedAd.isAdReady && rewardedGoldLimit.allowed ? '열기' : '대기'}
-              disabled={!rewardedAd.isAdReady || !rewardedGoldLimit.allowed || gameState.unlockedPlotCount >= MAX_PLOTS}
-              onPress={() => void rewardFreePlotFromAd()}
-            />
+            {rewardedAd.isAdSupported ? (
+              <>
+                <Text style={styles.sheetSectionTitle}>광고 보상</Text>
+                <AdRewardCard
+                  title={`광고 보고 ${formatMoney(REWARDED_GOLD_AMOUNT)}G 받기`}
+                  desc={rewardedGoldLimit.allowed ? '10분에 최대 3회 받을 수 있어요.' : rewardedGoldLimit.reason}
+                  cta={rewardedAd.isAdReady && rewardedGoldLimit.allowed ? '받기' : '대기'}
+                  disabled={!rewardedAd.isAdReady || !rewardedGoldLimit.allowed}
+                  onPress={() => void rewardGoldFromAd()}
+                />
+                <AdRewardCard
+                  title="광고 보고 밭 1칸 열기"
+                  desc={rewardedGoldLimit.allowed ? '개간 비용 없이 작물을 심을 공간을 늘려요.' : rewardedGoldLimit.reason}
+                  cta={rewardedAd.isAdReady && rewardedGoldLimit.allowed ? '열기' : '대기'}
+                  disabled={!rewardedAd.isAdReady || !rewardedGoldLimit.allowed || gameState.unlockedPlotCount >= MAX_PLOTS}
+                  onPress={() => void rewardFreePlotFromAd()}
+                />
+              </>
+            ) : null}
 
             <Text style={styles.sheetSectionTitle}>영토 확장</Text>
             <ShopPlotRow

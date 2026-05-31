@@ -134,6 +134,7 @@ workflow:
 - `versionName`: `docs/release-versioning.md` 기준의 SemVer numeric core, 예: `1.2672.1`
 - `versionCode`: 업로드 실행 시 Play API에서 기존 bundle/track의 최댓값을 조회해 `+1`로 자동 주입
 - `send_to_google_play=false`: Play API 조회 없이 `GITHUB_RUN_NUMBER * 100 + GITHUB_RUN_ATTEMPT` 값을 빌드 artifact용 fallback `versionCode`로 주입
+- 내부 테스트 빌드는 `MOBILE_BUILD_CHANNEL=internal`로 `apps/mobile/src/buildChannel.ts`를 생성하며, 이 채널에서는 AdMob SDK 초기화와 광고 로드를 하지 않습니다.
 
 필수 GitHub Actions secrets:
 

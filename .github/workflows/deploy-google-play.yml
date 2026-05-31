@@ -38,6 +38,7 @@ jobs:
     environment: google-play
     env:
       RELEASE_MAJOR_VERSION: 1
+      MOBILE_BUILD_CHANNEL: internal
 
     steps:
       - name: Checkout
@@ -49,6 +50,9 @@ jobs:
       - name: Resolve release version
         id: release-version
         run: node scripts/resolve-release-version.mjs --github-output --github-step-summary --quiet
+
+      - name: Set mobile build channel
+        run: node scripts/write-mobile-build-channel.mjs --channel "$MOBILE_BUILD_CHANNEL"
 
       - name: Setup Android build
         uses: ./.github/actions/setup-android-build

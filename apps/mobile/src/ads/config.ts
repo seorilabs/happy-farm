@@ -1,6 +1,8 @@
 import { Platform } from 'react-native';
 import { TestIds } from 'react-native-google-mobile-ads';
 
+import { isInternalTestBuild } from '../buildChannel';
+
 const PRODUCTION_REWARDED_AD_UNIT_IDS = {
   android: 'ca-app-pub-2444587584524186/8369038667',
   ios: '',
@@ -11,6 +13,10 @@ function getProductionRewardedAdUnitId() {
 }
 
 export function getRewardedAdUnitId() {
+  if (isInternalTestBuild) {
+    return null;
+  }
+
   if (__DEV__) {
     return TestIds.REWARDED;
   }

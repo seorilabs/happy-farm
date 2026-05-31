@@ -4,7 +4,9 @@
 
 import React from 'react';
 import ReactTestRenderer from 'react-test-renderer';
+import { RewardedAd } from 'react-native-google-mobile-ads';
 import App from '../App';
+import { isInternalTestBuild } from '../src/buildChannel';
 
 jest.mock('../src/audio/assets/harvest_coin.wav', () => 1);
 jest.mock('../src/audio/assets/farm_bgm_loop.wav', () => 2);
@@ -21,6 +23,7 @@ jest.mock('react-native-sound', () => {
     static setCategory = jest.fn();
 
     play = jest.fn(() => this);
+    pause = jest.fn(() => this);
     release = jest.fn(() => this);
     setCurrentTime = jest.fn(() => this);
     setNumberOfLoops = jest.fn(() => this);
@@ -106,6 +109,13 @@ test('renders correctly', async () => {
     renderer = ReactTestRenderer.create(<App />);
     await Promise.resolve();
   });
+
+  const createRewardedAd = RewardedAd.createForAdRequest as jest.Mock;
+  if (isInternalTestBuild) {
+    expect(createRewardedAd).not.toHaveBeenCalled();
+  } else {
+    expect(createRewardedAd).toHaveBeenCalled();
+  }
 
   ReactTestRenderer.act(() => {
     renderer?.unmount();
