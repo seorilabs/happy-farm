@@ -2,11 +2,12 @@ import { useEffect, useMemo, useRef } from 'react';
 import Sound from 'react-native-sound';
 
 import type { FarmGameAudio } from '../../../ait/src/farm/FarmGame';
-import farmBgmLoopSound from './assets/farm_bgm_loop.wav';
-import harvestCoinSound from './assets/harvest_coin.wav';
+
+const farmBgmLoopSound = 'farm_bgm_loop.wav';
+const harvestCoinSound = 'harvest_coin.wav';
 
 function loadSound(
-  asset: number,
+  asset: string,
   volume: number,
   onReady?: (sound: Sound) => void,
 ) {
