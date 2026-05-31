@@ -21,7 +21,7 @@ function loadSound(
     onReady?.(sound);
   };
 
-  sound = new Sound(asset, error => {
+  sound = new Sound(asset, Sound.MAIN_BUNDLE, error => {
     if (error != null) {
       console.warn('Failed to load farm audio asset.', error);
       return;
@@ -61,7 +61,7 @@ export function useMobileFarmAudio(): FarmGameAudio {
   const bgmEnabledRef = useRef(false);
 
   useEffect(() => {
-    Sound.setCategory('Ambient', true);
+    Sound.setCategory('Playback', true);
 
     harvestSoundRef.current = loadSound(harvestCoinSound, 0.85);
     bgmSoundRef.current = loadSound(farmBgmLoopSound, 0.16, sound => {

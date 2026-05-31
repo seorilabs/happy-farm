@@ -17,6 +17,7 @@ jest.mock('@react-native-async-storage/async-storage', () => ({
 
 jest.mock('react-native-sound', () => {
   class MockSound {
+    static MAIN_BUNDLE = '';
     static setCategory = jest.fn();
 
     play = jest.fn(() => this);
@@ -29,7 +30,7 @@ jest.mock('react-native-sound', () => {
       return this;
     });
 
-    constructor(_asset: number, callback?: (error?: unknown) => void) {
+    constructor(_asset: string, _basePath?: string, callback?: (error?: unknown) => void) {
       void Promise.resolve().then(() => callback?.());
     }
 

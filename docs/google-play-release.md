@@ -131,8 +131,9 @@ workflow:
 - `send_to_google_play=true`: Google Play Developer API로 내부 테스트 트랙에 업로드
 - `after_upload=초안만 만들기`: 첫 자동화 검증용 초안 릴리스 생성
 - `after_upload=내부 테스터에게 배포하기`: 내부 테스터에게 배포 가능한 릴리스 생성
+- `versionName`: `docs/release-versioning.md` 기준의 SemVer numeric core, 예: `1.2672.1`
 - `versionCode`: 업로드 실행 시 Play API에서 기존 bundle/track의 최댓값을 조회해 `+1`로 자동 주입
-- `send_to_google_play=false`: Play API 조회 없이 `GITHUB_RUN_NUMBER * 100 + GITHUB_RUN_ATTEMPT` 값을 빌드 artifact용 fallback으로 주입
+- `send_to_google_play=false`: Play API 조회 없이 `GITHUB_RUN_NUMBER * 100 + GITHUB_RUN_ATTEMPT` 값을 빌드 artifact용 fallback `versionCode`로 주입
 
 필수 GitHub Actions secrets:
 

@@ -62,8 +62,8 @@ export const REWARDED_GOLD_MAX_USES_PER_WINDOW = balance.ads.rewardedGoldMaxUses
 export const REWARDED_GOLD_DAILY_LIMIT = balance.ads.rewardedGoldDailyLimit;
 export const HARVEST_BONUS_MULTIPLIER = balance.ads.harvestBonusMultiplier;
 export const HARVEST_BONUS_AD_COOLDOWN_MS = balance.ads.harvestBonusAdCooldownMs;
+export const HARVEST_BONUS_BOOST_DURATION_MS = balance.ads.harvestBonusBoostDurationMs;
 export const HARVEST_BONUS_AD_DAILY_LIMIT = balance.ads.harvestBonusAdDailyLimit;
-export const HARVEST_BONUS_NUDGE_DECLINE_SKIP_HARVESTS = balance.ads.harvestBonusNudgeDeclineSkipHarvests;
 export const GROWTH_AD_MIN_REMAINING_MS = balance.ads.growthAdMinRemainingMs;
 export const GROWTH_AD_MAX_SKIP_MS = balance.ads.growthAdMaxSkipMs;
 export const GROWTH_AD_COOLDOWN_MS = balance.ads.growthAdCooldownMs;
@@ -153,12 +153,16 @@ export function createInitialAdUsage(now = Date.now()): GameState['adUsage'] {
     rewardedGoldTimestamps: [],
     rewardedGoldDailyCount: 0,
     growthAd: { lastUsedAt: null, dailyCount: 0 },
-    harvestBonusAd: { lastUsedAt: null, dailyCount: 0 },
+    harvestBonusAd: { lastUsedAt: null, lastPromptedAt: null, boostEndsAt: null, dailyCount: 0 },
   };
 }
 
 function isFinitePastTimestamp(value: unknown, now: number): value is number {
   return typeof value === 'number' && Number.isFinite(value) && value <= now;
+}
+
+function isFiniteTimestamp(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
 }
 
 function normalizeDailyCount(value: unknown, isSameDay: boolean) {
@@ -191,6 +195,12 @@ export function normalizeAdUsage(
       lastUsedAt: isFinitePastTimestamp(adUsage?.harvestBonusAd?.lastUsedAt, now)
         ? adUsage.harvestBonusAd.lastUsedAt
         : null,
+      lastPromptedAt: isFinitePastTimestamp(adUsage?.harvestBonusAd?.lastPromptedAt, now)
+        ? adUsage.harvestBonusAd.lastPromptedAt
+        : null,
+      boostEndsAt: isFiniteTimestamp(adUsage?.harvestBonusAd?.boostEndsAt)
+        ? adUsage.harvestBonusAd.boostEndsAt
+        : null,
       dailyCount: normalizeDailyCount(adUsage?.harvestBonusAd?.dailyCount, isSameDay),
     },
   };
@@ -199,7 +209,11 @@ export function normalizeAdUsage(
 function formatDuration(ms: number) {
   const seconds = Math.max(1, Math.ceil(ms / 1000));
   if (seconds < 60) return `${seconds}초`;
-  return `${Math.ceil(seconds / 60)}분`;
+  const minutes = Math.ceil(seconds / 60);
+  if (minutes < 60) return `${minutes}분`;
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  return remainingMinutes === 0 ? `${hours}시간` : `${hours}시간 ${remainingMinutes}분`;
 }
 
 export function getRewardedAdLimitStatus(gameState: GameState, type: RewardedAdType, now = Date.now()) {
@@ -239,6 +253,49 @@ export function getRewardedAdLimitStatus(gameState: GameState, type: RewardedAdT
   return { allowed: true, reason: '' };
 }
 
+export function getHarvestBonusPromptStatus(gameState: GameState, now = Date.now()) {
+  const adUsage = normalizeAdUsage(gameState.adUsage, now);
+  const { lastPromptedAt } = adUsage.harvestBonusAd;
+
+  if (lastPromptedAt != null && now - lastPromptedAt < HARVEST_BONUS_AD_COOLDOWN_MS) {
+    return {
+      allowed: false,
+      reason: `${formatDuration(HARVEST_BONUS_AD_COOLDOWN_MS - (now - lastPromptedAt))} 후 다시 제안돼요.`,
+    };
+  }
+
+  return { allowed: true, reason: '' };
+}
+
+export function getHarvestBonusBoostStatus(gameState: GameState, now = Date.now()) {
+  const adUsage = normalizeAdUsage(gameState.adUsage, now);
+  const { boostEndsAt } = adUsage.harvestBonusAd;
+  const remainingMs = boostEndsAt == null ? 0 : Math.max(0, boostEndsAt - now);
+  const active = remainingMs > 0;
+
+  return {
+    active,
+    multiplier: active ? HARVEST_BONUS_MULTIPLIER : 1,
+    remainingMs,
+    endsAt: active ? boostEndsAt : null,
+  };
+}
+
+export function recordHarvestBonusAdPrompt(
+  gameState: GameState,
+  now = Date.now()
+): GameState['adUsage'] {
+  const adUsage = normalizeAdUsage(gameState.adUsage, now);
+
+  return {
+    ...adUsage,
+    harvestBonusAd: {
+      ...adUsage.harvestBonusAd,
+      lastPromptedAt: now,
+    },
+  };
+}
+
 export function recordRewardedAdUsage(
   gameState: GameState,
   type: RewardedAdType,
@@ -268,6 +325,8 @@ export function recordRewardedAdUsage(
     ...adUsage,
     harvestBonusAd: {
       lastUsedAt: now,
+      lastPromptedAt: now,
+      boostEndsAt: now + HARVEST_BONUS_BOOST_DURATION_MS,
       dailyCount: adUsage.harvestBonusAd.dailyCount + 1,
     },
   };

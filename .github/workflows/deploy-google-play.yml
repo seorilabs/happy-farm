@@ -36,6 +36,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 35
     environment: google-play
+    env:
+      RELEASE_MAJOR_VERSION: 1
 
     steps:
       - name: Checkout
@@ -43,6 +45,10 @@ jobs:
 
       - name: Setup pnpm workspace
         uses: ./.github/actions/setup-pnpm-workspace
+
+      - name: Resolve release version
+        id: release-version
+        run: node scripts/resolve-release-version.mjs --github-output --github-step-summary --quiet
 
       - name: Setup Android build
         uses: ./.github/actions/setup-android-build
@@ -152,7 +158,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          fallback_version_code=$((GITHUB_RUN_NUMBER * 100 + GITHUB_RUN_ATTEMPT))
+          fallback_version_code="${{ steps.release-version.outputs.google_play_fallback_version_code }}"
           version_code="$fallback_version_code"
 
           if [ "${{ inputs.send_to_google_play }}" = "true" ]; then
@@ -176,12 +182,13 @@ jobs:
         working-directory: apps/mobile/android
         env:
           GOOGLE_PLAY_VERSION_CODE: ${{ steps.play-version.outputs.version_code }}
-        run: ./gradlew :app:bundleRelease --no-daemon -PversionCodeOverride="$GOOGLE_PLAY_VERSION_CODE"
+          GOOGLE_PLAY_VERSION_NAME: ${{ steps.release-version.outputs.version_name }}
+        run: ./gradlew :app:bundleRelease --no-daemon -PversionCodeOverride="$GOOGLE_PLAY_VERSION_CODE" -PversionNameOverride="$GOOGLE_PLAY_VERSION_NAME"
 
       - name: Upload AAB artifact
         uses: actions/upload-artifact@v7
         with:
-          name: happy-farm-google-play-aab-v${{ steps.play-version.outputs.version_code }}-${{ github.sha }}
+          name: happy-farm-google-play-v${{ steps.release-version.outputs.version_name }}-code${{ steps.play-version.outputs.version_code }}-${{ github.sha }}
           if-no-files-found: error
           retention-days: 14
           path: apps/mobile/android/app/build/outputs/bundle/release/app-release.aab

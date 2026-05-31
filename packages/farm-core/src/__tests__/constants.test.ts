@@ -6,6 +6,9 @@ import {
   DEFAULT_GOLD,
   FARM_AREAS,
   GROWTH_AD_COOLDOWN_MS,
+  HARVEST_BONUS_AD_COOLDOWN_MS,
+  HARVEST_BONUS_BOOST_DURATION_MS,
+  HARVEST_BONUS_MULTIPLIER,
   INITIAL_AREA_KEYS,
   INITIAL_PLOTS,
   MAX_PLOTS,
@@ -15,6 +18,8 @@ import {
   createInitialAdUsage,
   createInitialState,
   formatMoney,
+  getHarvestBonusBoostStatus,
+  getHarvestBonusPromptStatus,
   getPlotCost,
   getProfitMultiplier,
   getRewardedAdLimitStatus,
@@ -22,6 +27,7 @@ import {
   getUpgradeCost,
   migrateLoadedState,
   normalizeAdUsage,
+  recordHarvestBonusAdPrompt,
   recordRewardedAdUsage,
 } from '../constants';
 import type { CropKey, GameState } from '../types';
@@ -133,7 +139,12 @@ describe('farm save migration', () => {
         rewardedGoldTimestamps: [NOW - 1000, NOW - REWARDED_GOLD_WINDOW_MS - 1, NOW + 1000, Number.NaN],
         rewardedGoldDailyCount: 99,
         growthAd: { lastUsedAt: NOW + 1000, dailyCount: 9 },
-        harvestBonusAd: { lastUsedAt: NOW - 1000, dailyCount: 3 },
+        harvestBonusAd: {
+          lastUsedAt: NOW - 1000,
+          lastPromptedAt: NOW - 2000,
+          boostEndsAt: NOW + HARVEST_BONUS_BOOST_DURATION_MS,
+          dailyCount: 3,
+        },
       },
       plots: [
         { id: 999, cropType: 'ghost_crop', startTime: 'bad', state: 9 },
@@ -165,7 +176,12 @@ describe('farm save migration', () => {
       rewardedGoldTimestamps: [NOW - 1000],
       rewardedGoldDailyCount: 0,
       growthAd: { lastUsedAt: null, dailyCount: 0 },
-      harvestBonusAd: { lastUsedAt: NOW - 1000, dailyCount: 0 },
+      harvestBonusAd: {
+        lastUsedAt: NOW - 1000,
+        lastPromptedAt: NOW - 2000,
+        boostEndsAt: NOW + HARVEST_BONUS_BOOST_DURATION_MS,
+        dailyCount: 0,
+      },
     });
   });
 
@@ -226,7 +242,12 @@ describe('farm ad limits', () => {
         rewardedGoldTimestamps: [NOW - 1, NOW + 1, NOW - REWARDED_GOLD_WINDOW_MS - 1, Number.NaN],
         rewardedGoldDailyCount: -5,
         growthAd: { lastUsedAt: NOW + 1, dailyCount: Number.NaN },
-        harvestBonusAd: { lastUsedAt: NOW - 1, dailyCount: 2 },
+        harvestBonusAd: {
+          lastUsedAt: NOW - 1,
+          lastPromptedAt: NOW + 1,
+          boostEndsAt: Number.NaN,
+          dailyCount: 2,
+        },
       },
       NOW
     );
@@ -234,6 +255,37 @@ describe('farm ad limits', () => {
     expect(adUsage.rewardedGoldTimestamps).toEqual([NOW - 1]);
     expect(adUsage.rewardedGoldDailyCount).toBe(0);
     expect(adUsage.growthAd).toEqual({ lastUsedAt: null, dailyCount: 0 });
-    expect(adUsage.harvestBonusAd).toEqual({ lastUsedAt: NOW - 1, dailyCount: 2 });
+    expect(adUsage.harvestBonusAd).toEqual({
+      lastUsedAt: NOW - 1,
+      lastPromptedAt: null,
+      boostEndsAt: null,
+      dailyCount: 2,
+    });
+  });
+
+  test('harvest bonus prompt uses a long exposure cooldown', () => {
+    let state: GameState = { ...createInitialState(), adUsage: createInitialAdUsage(NOW) };
+
+    expect(getHarvestBonusPromptStatus(state, NOW).allowed).toBe(true);
+
+    state = { ...state, adUsage: recordHarvestBonusAdPrompt(state, NOW) };
+
+    const blocked = getHarvestBonusPromptStatus(state, NOW + 1);
+    expect(blocked.allowed).toBe(false);
+    expect(blocked.reason).toContain('12시간');
+    expect(getHarvestBonusPromptStatus(state, NOW + HARVEST_BONUS_AD_COOLDOWN_MS + 1).allowed).toBe(true);
+  });
+
+  test('harvest bonus ad activates a timed reward multiplier', () => {
+    const state: GameState = {
+      ...createInitialState(),
+      adUsage: recordRewardedAdUsage(createInitialState(), 'harvestBonusAd', NOW),
+    };
+
+    const activeBoost = getHarvestBonusBoostStatus(state, NOW + 1);
+    expect(activeBoost.active).toBe(true);
+    expect(activeBoost.multiplier).toBe(HARVEST_BONUS_MULTIPLIER);
+    expect(activeBoost.remainingMs).toBe(HARVEST_BONUS_BOOST_DURATION_MS - 1);
+    expect(getHarvestBonusBoostStatus(state, NOW + HARVEST_BONUS_BOOST_DURATION_MS + 1).active).toBe(false);
   });
 });

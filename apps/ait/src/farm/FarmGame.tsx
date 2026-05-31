@@ -21,8 +21,8 @@ import {
   FARM_AREAS,
   GROWTH_AD_MAX_SKIP_MS,
   GROWTH_AD_MIN_REMAINING_MS,
+  HARVEST_BONUS_BOOST_DURATION_MS,
   HARVEST_BONUS_MULTIPLIER,
-  HARVEST_BONUS_NUDGE_DECLINE_SKIP_HARVESTS,
   INTERSTITIAL_MILESTONE_COOLDOWN_MS,
   MAX_PLOTS,
   REWARDED_GOLD_AMOUNT,
@@ -39,12 +39,15 @@ import {
   formatMoney,
   getAreaUnlockRequirementText,
   getGameAnalyticsContext,
+  getHarvestBonusBoostStatus,
+  getHarvestBonusPromptStatus,
   getPlotCost,
   getProfitMultiplier,
   getRewardedAdLimitStatus,
   getSpeedMultiplier,
   getUpgradeCost,
   isAreaUnlocked,
+  recordHarvestBonusAdPrompt,
   recordRewardedAdUsage,
 } from '../../../../packages/farm-core/src';
 
@@ -103,7 +106,7 @@ type ActiveSheet =
   | { type: 'shop' }
   | { type: 'settings' }
   | { type: 'growthAd'; plotIndex: number; cropName: string; remainingMs: number }
-  | { type: 'harvestBonus'; amount: number }
+  | { type: 'harvestBonus' }
   | { type: 'resetConfirm' }
   | null;
 
@@ -201,8 +204,6 @@ export default function FarmGame({
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastInterstitialShownAtRef = useRef(0);
-  const harvestBonusHarvestCountRef = useRef(0);
-  const harvestBonusNudgeAvailableAtHarvestRef = useRef(1);
   const sessionStartedAtRef = useRef(Date.now());
   const gameStartTrackedRef = useRef(false);
   const firstSeedSelectedRef = useRef(false);
@@ -230,23 +231,9 @@ export default function FarmGame({
       toastTimerRef.current = null;
     }, 1800);
   }, []);
-  const deferHarvestBonusNudge = useCallback(() => {
-    harvestBonusNudgeAvailableAtHarvestRef.current =
-      harvestBonusHarvestCountRef.current + HARVEST_BONUS_NUDGE_DECLINE_SKIP_HARVESTS + 1;
-  }, []);
-
-  const dismissHarvestBonusNudge = useCallback(() => {
-    deferHarvestBonusNudge();
-    setActiveSheet(null);
-  }, [deferHarvestBonusNudge]);
-
   const closeSheet = useCallback(() => {
-    if (activeSheet?.type === 'harvestBonus') {
-      dismissHarvestBonusNudge();
-      return;
-    }
     setActiveSheet(null);
-  }, [activeSheet, dismissHarvestBonusNudge]);
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -381,6 +368,7 @@ export default function FarmGame({
   const rewardedGoldLimit = useMemo(() => getRewardedAdLimitStatus(gameState, 'rewardedGold'), [gameState, tick]);
   const growthAdLimit = useMemo(() => getRewardedAdLimitStatus(gameState, 'growthAd'), [gameState, tick]);
   const harvestBonusAdLimit = useMemo(() => getRewardedAdLimitStatus(gameState, 'harvestBonusAd'), [gameState, tick]);
+  const harvestBonusBoost = useMemo(() => getHarvestBonusBoostStatus(gameState), [gameState, tick]);
 
   useEffect(() => {
     let updated = false;
@@ -579,8 +567,10 @@ export default function FarmGame({
     if (plot == null || plot.state !== 2 || plot.cropType == null) {
       return;
     }
+    const now = Date.now();
     const crop = getCrop(plot.cropType);
-    const finalPrice = Math.floor(crop.sell * profitMult);
+    const currentHarvestBoost = getHarvestBonusBoostStatus(gameState, now);
+    const finalPrice = Math.floor(crop.sell * profitMult * currentHarvestBoost.multiplier);
     const isFirstMeaningfulHarvest = gameState.harvestedCropKeys.length === 0;
     const isFirstCropHarvest = !gameState.harvestedCropKeys.includes(plot.cropType);
 
@@ -602,12 +592,19 @@ export default function FarmGame({
       isFirstCropHarvest,
       context: analyticsContext(),
     });
-    toast(`+${formatMoney(finalPrice)}G 수확했어요.`);
-    harvestBonusHarvestCountRef.current += 1;
+    toast(
+      currentHarvestBoost.active
+        ? `+${formatMoney(finalPrice)}G 수확했어요. ×${currentHarvestBoost.multiplier} 부스트 적용`
+        : `+${formatMoney(finalPrice)}G 수확했어요.`
+    );
     const canShowHarvestBonusNudge =
-      harvestBonusHarvestCountRef.current >= harvestBonusNudgeAvailableAtHarvestRef.current;
-    if (rewardedAd.isAdReady && harvestBonusAdLimit.allowed && canShowHarvestBonusNudge) {
-      setActiveSheet({ type: 'harvestBonus', amount: finalPrice });
+      rewardedAd.isAdReady &&
+      getRewardedAdLimitStatus(gameState, 'harvestBonusAd', now).allowed &&
+      getHarvestBonusPromptStatus(gameState, now).allowed &&
+      !currentHarvestBoost.active;
+    if (canShowHarvestBonusNudge) {
+      setGameState((state) => ({ ...state, adUsage: recordHarvestBonusAdPrompt(state, now) }));
+      setActiveSheet({ type: 'harvestBonus' });
     }
     Vibration.vibrate(50);
     if (gameSettings.soundEffectsEnabled && audio.isSupported) {
@@ -685,12 +682,10 @@ export default function FarmGame({
     });
   }
 
-  async function doubleHarvestWithAd(amount: number) {
-    const bonus = amount * (HARVEST_BONUS_MULTIPLIER - 1);
-    await showRewardedAd('harvestBonusAd', bonus, () => {
-      setGameState((state) => ({ ...state, gold: state.gold + bonus }));
+  async function activateHarvestBonusWithAd() {
+    await showRewardedAd('harvestBonusAd', HARVEST_BONUS_MULTIPLIER, () => {
       setActiveSheet(null);
-      toast(`보너스 ${formatMoney(bonus)}G를 받았어요.`);
+      toast(`${formatRemainingTime(HARVEST_BONUS_BOOST_DURATION_MS)} 동안 수확 보상이 ${HARVEST_BONUS_MULTIPLIER}배예요.`);
     });
   }
 
@@ -746,6 +741,15 @@ export default function FarmGame({
               <Text style={styles.label}>성장속도</Text>
               <Text style={styles.speedStat}>×{speedMult.toFixed(1)}</Text>
             </View>
+            {harvestBonusBoost.active ? (
+              <View>
+                <Text style={styles.label}>수확부스트</Text>
+                <Text style={styles.boostStat}>×{harvestBonusBoost.multiplier.toFixed(1)}</Text>
+                <Text style={styles.boostRemaining} numberOfLines={1}>
+                  {formatRemainingTime(harvestBonusBoost.remainingMs)}
+                </Text>
+              </View>
+            ) : null}
           </View>
         </View>
       </View>
@@ -934,13 +938,13 @@ export default function FarmGame({
             <SheetAction
               label={
                 harvestBonusAdLimit.allowed
-                  ? `광고 보고 이번 수확 ${HARVEST_BONUS_MULTIPLIER}배 받기`
+                  ? `광고 보고 ${formatRemainingTime(HARVEST_BONUS_BOOST_DURATION_MS)} 동안 수확 ${HARVEST_BONUS_MULTIPLIER}배`
                   : harvestBonusAdLimit.reason
               }
               disabled={!rewardedAd.isAdReady || !harvestBonusAdLimit.allowed}
-              onPress={() => void doubleHarvestWithAd(activeSheet.amount)}
+              onPress={() => void activateHarvestBonusWithAd()}
             />
-            <SheetAction label="괜찮아요" secondary onPress={dismissHarvestBonusNudge} />
+            <SheetAction label="괜찮아요" secondary onPress={() => setActiveSheet(null)} />
           </View>
         ) : null}
 
@@ -1223,7 +1227,7 @@ function getSheetDescription(activeSheet: ActiveSheet) {
     return `${activeSheet.cropName}이(가) 다 자랄 때까지 약 ${formatRemainingTime(activeSheet.remainingMs)} 남았어요.`;
   }
   if (activeSheet?.type === 'harvestBonus') {
-    return `광고를 보면 이번 수확 보상을 ${HARVEST_BONUS_MULTIPLIER}배로 받을 수 있어요.`;
+    return `광고를 보면 ${formatRemainingTime(HARVEST_BONUS_BOOST_DURATION_MS)} 동안 수확 보상이 ${HARVEST_BONUS_MULTIPLIER}배로 올라가요.`;
   }
   if (activeSheet?.type === 'settings') {
     return '사운드와 농장 기록을 관리해요.';
@@ -1694,6 +1698,7 @@ const styles = StyleSheet.create({
   },
   statList: {
     flexDirection: 'row',
+    alignItems: 'flex-start',
     gap: 14,
   },
   profitStat: {
@@ -1707,6 +1712,20 @@ const styles = StyleSheet.create({
     marginTop: 2,
     color: '#2f7de1',
     fontSize: 14,
+    fontWeight: '900',
+    textAlign: 'right',
+  },
+  boostStat: {
+    marginTop: 2,
+    color: '#b54708',
+    fontSize: 14,
+    fontWeight: '900',
+    textAlign: 'right',
+  },
+  boostRemaining: {
+    marginTop: 1,
+    color: '#8a4b0f',
+    fontSize: 10,
     fontWeight: '900',
     textAlign: 'right',
   },

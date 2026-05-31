@@ -5,8 +5,8 @@ import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react
 import {
   CROPS,
   FARM_AREAS,
+  HARVEST_BONUS_AD_COOLDOWN_MS,
   HARVEST_BONUS_MULTIPLIER,
-  HARVEST_BONUS_NUDGE_DECLINE_SKIP_HARVESTS,
   MAX_PLOTS,
   createInitialState,
   formatMoney,
@@ -53,6 +53,24 @@ function createLateGameState(): GameState {
       startTime: NOW - 10_000,
       state: 2,
     })),
+  };
+}
+
+function createReadyHarvestState(): GameState {
+  const base = createInitialState();
+
+  return {
+    ...base,
+    plots: base.plots.map((plot, index) =>
+      index < 2
+        ? {
+            ...plot,
+            cropType: 'carrot',
+            startTime: NOW - 10_000,
+            state: 2 as const,
+          }
+        : plot
+    ),
   };
 }
 
@@ -181,10 +199,10 @@ describe('FarmGame UI flow', () => {
     expect(playHarvest).toHaveBeenCalledTimes(1);
   });
 
-  test('spaces out harvest bonus nudges after the player declines one', async () => {
+  test('spaces out harvest bonus nudges by time after the player declines one', async () => {
     const lateGame = createLateGameState();
     const rewardedAd = createReadyRewardedAd();
-    const harvestBonusCta = `광고 보고 이번 수확 ${HARVEST_BONUS_MULTIPLIER}배 받기`;
+    const harvestBonusCta = `광고 보고 30분 동안 수확 ${HARVEST_BONUS_MULTIPLIER}배`;
     const screen = await renderGame(lateGame, { useRewardedAd: () => rewardedAd });
 
     await waitFor(() => expect(screen.getByText(`${formatMoney(lateGame.gold)}G`)).toBeTruthy());
@@ -197,13 +215,45 @@ describe('FarmGame UI flow', () => {
 
     expect(screen.queryByText(harvestBonusCta)).toBeNull();
 
-    for (let index = 0; index < HARVEST_BONUS_NUDGE_DECLINE_SKIP_HARVESTS; index += 1) {
-      fireEvent.press(screen.getAllByText('GET')[0]!);
-      expect(screen.queryByText(harvestBonusCta)).toBeNull();
-    }
+    fireEvent.press(screen.getAllByText('GET')[0]!);
+
+    expect(screen.queryByText(harvestBonusCta)).toBeNull();
+
+    jest.setSystemTime(NOW + HARVEST_BONUS_AD_COOLDOWN_MS + 1);
 
     fireEvent.press(screen.getAllByText('GET')[0]!);
 
     expect(screen.getByText(harvestBonusCta)).toBeTruthy();
+  });
+
+  test('turns the harvest bonus ad into a 30 minute reward boost', async () => {
+    const readyHarvestState = createReadyHarvestState();
+    const rewardedAd = createReadyRewardedAd();
+    const harvestBonusCta = `광고 보고 30분 동안 수확 ${HARVEST_BONUS_MULTIPLIER}배`;
+    const carrot = CROPS.carrot;
+    if (carrot == null) {
+      throw new Error('FarmGame tests require carrot balance data.');
+    }
+    const carrotRevenue = carrot.sell;
+    const screen = await renderGame(readyHarvestState, { useRewardedAd: () => rewardedAd });
+
+    await waitFor(() => expect(screen.getByText(`${formatMoney(readyHarvestState.gold)}G`)).toBeTruthy());
+
+    fireEvent.press(screen.getAllByText('GET')[0]!);
+
+    expect(screen.getByText(`${formatMoney(readyHarvestState.gold + carrotRevenue)}G`)).toBeTruthy();
+    expect(screen.getByText(harvestBonusCta)).toBeTruthy();
+
+    await act(async () => {
+      fireEvent.press(screen.getByText(harvestBonusCta));
+      await Promise.resolve();
+    });
+
+    expect(screen.getByText('수확부스트')).toBeTruthy();
+    expect(screen.getByText(`×${HARVEST_BONUS_MULTIPLIER.toFixed(1)}`)).toBeTruthy();
+
+    fireEvent.press(screen.getAllByText('GET')[0]!);
+
+    expect(screen.getByText(`${formatMoney(readyHarvestState.gold + carrotRevenue * 3)}G`)).toBeTruthy();
   });
 });

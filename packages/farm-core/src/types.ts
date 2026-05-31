@@ -23,6 +23,8 @@ export type AdUsage = {
   };
   harvestBonusAd: {
     lastUsedAt: number | null;
+    lastPromptedAt: number | null;
+    boostEndsAt: number | null;
     dailyCount: number;
   };
 };

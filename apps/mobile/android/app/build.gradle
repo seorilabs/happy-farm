@@ -45,6 +45,13 @@ def resolveVersionCode = { int defaultValue ->
     }
     return parsedValue
 }
+def resolveVersionName = { String defaultValue ->
+    def rawValue = (project.findProperty("versionNameOverride") ?: System.getenv("RELEASE_VERSION_NAME") ?: System.getenv("GOOGLE_PLAY_VERSION_NAME") ?: defaultValue).toString()
+    if (!(rawValue ==~ /(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)/)) {
+        throw new GradleException("versionName must be a SemVer-compatible numeric core, got: ${rawValue}")
+    }
+    return rawValue
+}
 
 /**
  * This is the configuration block to customize your React Native Android app.
@@ -128,7 +135,7 @@ android {
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode resolveVersionCode(2)
-        versionName "1.0.1"
+        versionName resolveVersionName("1.0.1")
     }
     signingConfigs {
         debug {

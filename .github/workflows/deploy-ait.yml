@@ -33,6 +33,7 @@ jobs:
       APPS_IN_TOSS_API_KEY: ${{ secrets.APPS_IN_TOSS_API_KEY }}
       APPS_IN_TOSS_INPUT_MEMO: ${{ github.event.inputs.memo || '' }}
       CREATE_RELEASE_TAG_INPUT: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.create_release_tag != 'false' }}
+      RELEASE_MAJOR_VERSION: 1
 
     steps:
       - name: Checkout
@@ -93,6 +94,10 @@ jobs:
       - name: Setup pnpm workspace
         uses: ./.github/actions/setup-pnpm-workspace
 
+      - name: Resolve release version
+        id: release-version
+        run: node scripts/resolve-release-version.mjs --github-output --github-step-summary --quiet
+
       - name: Lint
         run: pnpm lint
 
@@ -108,20 +113,24 @@ jobs:
       - name: Upload build artifact
         uses: actions/upload-artifact@v7
         with:
-          name: happy-farm-deploy-${{ github.sha }}
+          name: happy-farm-ait-v${{ steps.release-version.outputs.version_name }}-${{ github.sha }}
           if-no-files-found: error
           retention-days: 30
           path: 'apps/ait/*.ait'
 
       - name: Deploy to Apps in Toss
         shell: bash
+        env:
+          RELEASE_VERSION_NAME: ${{ steps.release-version.outputs.version_name }}
         run: |
           set -euo pipefail
 
           memo="$APPS_IN_TOSS_INPUT_MEMO"
 
           if [ -z "$memo" ]; then
-            memo="GitHub Actions ${GITHUB_REF_NAME}@${GITHUB_SHA::7}"
+            memo="v${RELEASE_VERSION_NAME} GitHub Actions ${GITHUB_REF_NAME}@${GITHUB_SHA::7}"
+          else
+            memo="v${RELEASE_VERSION_NAME} ${memo}"
           fi
 
           pnpm deploy -- --api-key "$APPS_IN_TOSS_API_KEY" --memo "$memo"

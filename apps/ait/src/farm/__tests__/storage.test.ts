@@ -80,7 +80,7 @@ describe('farm storage', () => {
           rewardedGoldTimestamps: [],
           rewardedGoldDailyCount: 0,
           growthAd: { lastUsedAt: null, dailyCount: 0 },
-          harvestBonusAd: { lastUsedAt: null, dailyCount: 0 },
+          harvestBonusAd: { lastUsedAt: null, lastPromptedAt: null, boostEndsAt: null, dailyCount: 0 },
         },
         upgrades: { speed: 1, profit: 1 },
         plots: [],
