@@ -28,6 +28,8 @@ pnpm check:firebase:android
 
 ## Remote Config 기본 키
 
+Remote Config 템플릿은 repo root의 `remoteconfig.template.json`으로 관리하고, Firebase project는 `.firebaserc`의 `happy-farm-tycoon`을 기본값으로 사용합니다.
+
 ```text
 analytics_collection_enabled = true
 crashlytics_collection_enabled = true
@@ -39,6 +41,12 @@ remote_balance_enabled = false
 ```
 
 현재 Remote Config는 초기화와 collection flag 적용까지만 수행합니다. 게임 경제, gold, 저장 데이터는 계속 로컬 권위 상태이며 서버 신뢰값으로 쓰지 않습니다.
+
+배포:
+
+```bash
+firebase deploy --only remoteconfig --project happy-farm-tycoon
+```
 
 ## 검증
 
