@@ -1,41 +1,73 @@
 # Release Versioning
 
-Happy Farm uses one SemVer-compatible release version across Google Play, Apple App Store, and AppsInToss.
+Happy Farm uses release git tags as the source of truth for Google Play, Apple App Store, and AppsInToss versions.
 
-## Version Formula
+## Release Tag
 
-```text
-<major>.<github_run_number>.<github_run_attempt>
-```
-
-Current major version:
+Release tags use numeric SemVer:
 
 ```text
-1
+v<major>.<minor>.<patch>
 ```
 
 Example:
 
 ```text
-1.2672.1
+v1.27.0
 ```
 
-This format keeps the SemVer numeric core valid: three non-negative integer identifiers with no leading zeroes.
+The deploy workflows must run from a release tag. If a non-tag build needs to ship, create a release or hotfix tag first.
+
+## Version Formula
+
+For tag `v<major>.<minor>.<patch>`:
+
+```text
+versionName = <major>.<minor>.<patch>
+buildNumber = major * 1_000_000 + minor * 1_000 + patch
+```
+
+Examples:
+
+| Tag       | versionName | buildNumber |
+| --------- | ----------- | ----------- |
+| `v1.27.0` | `1.27.0`    | `1027000`   |
+| `v1.27.1` | `1.27.1`    | `1027001`   |
+| `v1.28.0` | `1.28.0`    | `1028000`   |
+
+`minor` and `patch` must each be below `1000` so the computed build number stays monotonic and compatible with Google Play's `versionCode` integer limit.
 
 ## Market Mapping
 
-| Target          | Field                         | Value                                                                                                                    |
-| --------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| Google Play     | `versionName`                 | `1.<GITHUB_RUN_NUMBER>.<GITHUB_RUN_ATTEMPT>`                                                                             |
-| Google Play     | `versionCode`                 | Uploads use Play max existing `versionCode + 1`; artifact-only builds use `GITHUB_RUN_NUMBER * 100 + GITHUB_RUN_ATTEMPT` |
-| Apple App Store | `CFBundleShortVersionString`  | `1.<GITHUB_RUN_NUMBER>.<GITHUB_RUN_ATTEMPT>`                                                                             |
-| Apple App Store | `CFBundleVersion`             | `GITHUB_RUN_NUMBER * 100 + GITHUB_RUN_ATTEMPT`                                                                           |
-| AppsInToss      | `.ait` artifact / deploy memo | `v1.<GITHUB_RUN_NUMBER>.<GITHUB_RUN_ATTEMPT>`                                                                            |
+| Target          | Field                         | Value                                      |
+| --------------- | ----------------------------- | ------------------------------------------ |
+| Google Play     | `versionName`                 | `<major>.<minor>.<patch>`                  |
+| Google Play     | `versionCode`                 | `buildNumber`                              |
+| Apple App Store | `CFBundleShortVersionString`  | `<major>.<minor>.<patch>`                  |
+| Apple App Store | `CFBundleVersion`             | `buildNumber`                              |
+| AppsInToss      | `.ait` artifact / deploy memo | `v<major>.<minor>.<patch>`                 |
+| Runtime policy  | release identity              | `releaseTag`, `versionName`, `buildNumber` |
 
-`scripts/resolve-release-version.mjs` is the shared source for these computed values.
+`scripts/resolve-release-version.mjs` is the shared source for these computed values. During deploy it also writes `packages/farm-core/src/releaseInfo.ts`, so the runtime can identify its own release.
+
+## Release Tag Creation
+
+Use the `Create Release Tag` GitHub Actions workflow, or run locally:
+
+```bash
+pnpm release:next-tag -- --bump minor
+pnpm release:next-tag -- --bump patch
+pnpm release:next-tag -- --tag v1.27.1
+```
 
 ## Local Check
 
 ```bash
-RELEASE_MAJOR_VERSION=1 GITHUB_RUN_NUMBER=2672 GITHUB_RUN_ATTEMPT=1 pnpm release:version
+pnpm release:version -- --tag v1.27.0
+```
+
+To generate runtime release info locally:
+
+```bash
+pnpm release:version -- --tag v1.27.0 --write-release-info
 ```

@@ -14,6 +14,8 @@ import { recordNonFatalError } from './crashlytics';
 export const MOBILE_REMOTE_CONFIG_DEFAULTS = {
   analytics_collection_enabled: true,
   crashlytics_collection_enabled: true,
+  mobile_ads_global_enabled: false,
+  mobile_ads_enabled_max_build_number: 0,
   rewarded_ads_enabled: true,
   interstitial_ads_enabled: true,
   minimum_supported_version_code: 1,

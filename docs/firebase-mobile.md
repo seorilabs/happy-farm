@@ -33,6 +33,8 @@ Remote Config 템플릿은 repo root의 `remoteconfig.template.json`으로 관�
 ```text
 analytics_collection_enabled = true
 crashlytics_collection_enabled = true
+mobile_ads_global_enabled = false
+mobile_ads_enabled_max_build_number = 0
 rewarded_ads_enabled = true
 interstitial_ads_enabled = true
 minimum_supported_version_code = 1
@@ -40,7 +42,9 @@ force_update_url = ""
 remote_balance_enabled = false
 ```
 
-현재 Remote Config는 초기화와 collection flag 적용까지만 수행합니다. 게임 경제, gold, 저장 데이터는 계속 로컬 권위 상태이며 서버 신뢰값으로 쓰지 않습니다.
+광고는 `mobile_ads_global_enabled=true`이고 현재 앱의 release `buildNumber`가 `mobile_ads_enabled_max_build_number` 이하일 때만 초기화합니다. 내부 테스트에서 검증 중인 새 릴리즈는 이 값을 올리기 전까지 광고를 로드하지 않습니다.
+
+게임 경제, gold, 저장 데이터는 계속 로컬 권위 상태이며 서버 신뢰값으로 쓰지 않습니다.
 
 배포:
 

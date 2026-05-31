@@ -69,16 +69,12 @@ Play Console에서 직접 확인해야 하는 항목:
 - 타겟 연령 및 앱 콘텐츠
 - Data safety
 - IARC 콘텐츠 등급
-- 한국 배포 시 GRAC 등급 판단
+- 한국 배포 시 GRAC 등급 판단: 별도 진행 불필요로 확인
 - production access
 
 ## 현재 blocker
 
-- `contentDeclarations.contentRating`: 확정 필요
-- `contentDeclarations.targetAudience`: 확정 필요
-- `contentDeclarations.dataSafety`: 확정 필요
-- `contentDeclarations.koreaGameRating`: 확정 필요
-- game UI 기반 실제 스크린샷 없음
+- Play Console production access
 
 ## 검증 명령
 

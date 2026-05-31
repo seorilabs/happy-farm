@@ -125,16 +125,17 @@ workflow:
 .github/workflows/deploy-google-play.yml
 ```
 
-이 workflow는 수동 실행(`workflow_dispatch`) 전용입니다.
+이 workflow는 릴리즈 태그(`vX.Y.Z`)에서 실행합니다. 태그 push로 자동 실행되면 signed AAB를 만들고 Google Play 내부 테스트 트랙에 draft release로 업로드합니다. 수동 실행(`workflow_dispatch`)도 가능하지만 반드시 릴리즈 태그 ref에서 실행해야 합니다.
 
-- 기본 실행: signed AAB를 빌드하고 artifact로 보관
-- `send_to_google_play=true`: Google Play Developer API로 내부 테스트 트랙에 업로드
+- 태그 push 실행: signed AAB 빌드 후 Google Play 내부 테스트 트랙에 초안 업로드
+- 수동 실행 + `send_to_google_play=false`: 같은 릴리즈 태그로 signed AAB만 빌드하고 artifact로 보관
+- 수동 실행 + `send_to_google_play=true`: Google Play Developer API로 내부 테스트 트랙에 업로드
 - `after_upload=초안만 만들기`: 첫 자동화 검증용 초안 릴리스 생성
 - `after_upload=내부 테스터에게 배포하기`: 내부 테스터에게 배포 가능한 릴리스 생성
-- `versionName`: `docs/release-versioning.md` 기준의 SemVer numeric core, 예: `1.2672.1`
-- `versionCode`: 업로드 실행 시 Play API에서 기존 bundle/track의 최댓값을 조회해 `+1`로 자동 주입
-- `send_to_google_play=false`: Play API 조회 없이 `GITHUB_RUN_NUMBER * 100 + GITHUB_RUN_ATTEMPT` 값을 빌드 artifact용 fallback `versionCode`로 주입
-- 내부 테스트 빌드는 `MOBILE_BUILD_CHANNEL=internal`로 `apps/mobile/src/buildChannel.ts`를 생성하며, 이 채널에서는 AdMob SDK 초기화와 광고 로드를 하지 않습니다.
+- `versionName`: `docs/release-versioning.md` 기준의 태그 SemVer numeric core, 예: `v1.27.0` -> `1.27.0`
+- `versionCode`: 릴리즈 태그에서 계산한 `buildNumber`, 예: `v1.27.0` -> `1027000`
+- 업로드 실행 시 Play API에서 기존 max `versionCode + 1`보다 작은 태그 buildNumber는 실패 처리합니다.
+- 광고 활성화는 빌드 채널이 아니라 런타임 release info와 Remote Config 정책으로 제어합니다.
 
 필수 GitHub Actions secrets:
 
@@ -185,8 +186,9 @@ python3 -m pip install --user google-api-python-client google-auth
 수동 실행 예:
 
 ```bash
-gh workflow run deploy-google-play.yml -f send_to_google_play=false
-gh workflow run deploy-google-play.yml -f send_to_google_play=true -f after_upload='초안만 만들기'
+gh workflow run create-release-tag.yml -f bump=minor
+gh workflow run deploy-google-play.yml --ref v1.27.0 -f send_to_google_play=false
+gh workflow run deploy-google-play.yml --ref v1.27.0 -f send_to_google_play=true -f after_upload='초안만 만들기'
 ```
 
 `review_later_in_console`은 기본값 `false`입니다. 이 값을 켜면 검토 제출을 자동으로 하지 않고 Play Console에서 나중에 처리하도록 요청합니다. 현재 이 앱은 내부 API 값인 `changesNotSentForReview=true`를 API commit에서 거부하므로, 필요한 경우에만 명시적으로 켭니다. 업로드 스크립트는 이 거부 응답을 받으면 해당 플래그 없이 commit을 재시도합니다.

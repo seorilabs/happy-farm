@@ -25,12 +25,12 @@
     }
   },
   "contentDeclarations": {
-    "contentRating": "확정 필요",
-    "targetAudience": "확정 필요",
-    "dataSafety": "확정 필요",
+    "contentRating": "completed_in_play_console",
+    "targetAudience": "completed_in_play_console",
+    "dataSafety": "completed_in_play_console",
     "ads": "yes",
     "koreaDistribution": "yes",
-    "koreaGameRating": "확정 필요"
+    "koreaGameRating": "not_required"
   },
   "assets": {
     "playIcon": "play-store/assets/icon-512.png",

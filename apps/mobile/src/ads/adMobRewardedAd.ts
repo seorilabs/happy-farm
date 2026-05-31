@@ -3,6 +3,7 @@ import mobileAds, { AdEventType, RewardedAd, RewardedAdEventType } from 'react-n
 
 import type { RewardedAdReward, RewardedAdShowResult } from '../../../../packages/farm-core/src';
 import { getRewardedAdUnitId } from './config';
+import { useMobileAdsEnabled } from './policy';
 
 type PendingShow = {
   settled: boolean;
@@ -30,7 +31,8 @@ function normalizeError(payload: unknown) {
 }
 
 export function useAdMobRewardedAd() {
-  const adUnitId = getRewardedAdUnitId();
+  const adsEnabled = useMobileAdsEnabled('rewarded');
+  const adUnitId = adsEnabled ? getRewardedAdUnitId() : null;
   const adRef = useRef<RewardedAd | null>(null);
   const pendingShowRef = useRef<PendingShow | null>(null);
   const [isAdReady, setIsAdReady] = useState(false);

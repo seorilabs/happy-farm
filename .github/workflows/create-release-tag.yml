@@ -1,0 +1,74 @@
+name: Create Release Tag
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: '다음 릴리즈 태그 증가 방식'
+        required: true
+        default: minor
+        type: choice
+        options:
+          - minor
+          - patch
+          - major
+      release_tag:
+        description: '직접 지정할 릴리즈 태그 (선택, 예: v1.2.3)'
+        required: false
+        type: string
+      dry_run:
+        description: '태그를 푸시하지 않고 계산만 확인'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+concurrency:
+  group: happy-farm-create-release-tag
+  cancel-in-progress: false
+
+jobs:
+  create-release-tag:
+    name: Create release tag
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Resolve next release tag
+        id: release
+        shell: bash
+        env:
+          BUMP: ${{ inputs.bump }}
+          RELEASE_TAG_INPUT: ${{ inputs.release_tag }}
+        run: |
+          set -euo pipefail
+
+          args=(--github-output --github-step-summary)
+          if [ -n "$RELEASE_TAG_INPUT" ]; then
+            args+=(--tag "$RELEASE_TAG_INPUT")
+          else
+            args+=(--bump "$BUMP")
+          fi
+
+          node scripts/resolve-next-release-tag.mjs "${args[@]}"
+
+      - name: Create and push tag
+        if: ${{ !inputs.dry_run }}
+        env:
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+          VERSION_NAME: ${{ steps.release.outputs.version_name }}
+          BUILD_NUMBER: ${{ steps.release.outputs.build_number }}
+        run: |
+          set -euo pipefail
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$RELEASE_TAG" "$GITHUB_SHA" -m "Happy Farm $RELEASE_TAG ($VERSION_NAME, build $BUILD_NUMBER)"
+          git push origin "refs/tags/$RELEASE_TAG"

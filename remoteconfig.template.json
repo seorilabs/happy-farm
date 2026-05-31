@@ -14,6 +14,20 @@
       "description": "Enable Firebase Crashlytics collection for the mobile app.",
       "valueType": "BOOLEAN"
     },
+    "mobile_ads_global_enabled": {
+      "defaultValue": {
+        "value": "false"
+      },
+      "description": "Global kill switch for mobile ads. Keep false until a release build is approved for ads.",
+      "valueType": "BOOLEAN"
+    },
+    "mobile_ads_enabled_max_build_number": {
+      "defaultValue": {
+        "value": "0"
+      },
+      "description": "Highest release buildNumber allowed to load mobile ads.",
+      "valueType": "NUMBER"
+    },
     "rewarded_ads_enabled": {
       "defaultValue": {
         "value": "true"

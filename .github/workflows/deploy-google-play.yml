@@ -1,6 +1,9 @@
 name: Deploy Google Play
 
 on:
+  push:
+    tags:
+      - 'v*.*.*'
   workflow_dispatch:
     inputs:
       send_to_google_play:
@@ -27,7 +30,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: happy-farm-google-play-${{ github.ref }}
+  group: happy-farm-google-play-${{ github.ref_name }}
   cancel-in-progress: true
 
 jobs:
@@ -37,8 +40,7 @@ jobs:
     timeout-minutes: 35
     environment: google-play
     env:
-      RELEASE_MAJOR_VERSION: 1
-      MOBILE_BUILD_CHANNEL: internal
+      SHOULD_UPLOAD_TO_GOOGLE_PLAY: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.send_to_google_play) }}
 
     steps:
       - name: Checkout
@@ -49,10 +51,7 @@ jobs:
 
       - name: Resolve release version
         id: release-version
-        run: node scripts/resolve-release-version.mjs --github-output --github-step-summary --quiet
-
-      - name: Set mobile build channel
-        run: node scripts/write-mobile-build-channel.mjs --channel "$MOBILE_BUILD_CHANNEL"
+        run: node scripts/resolve-release-version.mjs --github-output --github-step-summary --write-release-info --quiet
 
       - name: Setup Android build
         uses: ./.github/actions/setup-android-build
@@ -124,7 +123,7 @@ jobs:
           node scripts/check-firebase-android-config.mjs
 
       - name: Validate Google Play WIF config
-        if: ${{ inputs.send_to_google_play }}
+        if: env.SHOULD_UPLOAD_TO_GOOGLE_PLAY == 'true'
         shell: bash
         env:
           GOOGLE_WORKLOAD_IDENTITY_PROVIDER: ${{ vars.GOOGLE_WORKLOAD_IDENTITY_PROVIDER }}
@@ -143,7 +142,7 @@ jobs:
           fi
 
       - name: Authenticate to Google Cloud
-        if: ${{ inputs.send_to_google_play }}
+        if: env.SHOULD_UPLOAD_TO_GOOGLE_PLAY == 'true'
         uses: google-github-actions/auth@v3
         with:
           workload_identity_provider: ${{ vars.GOOGLE_WORKLOAD_IDENTITY_PROVIDER }}
@@ -151,22 +150,26 @@ jobs:
           create_credentials_file: true
 
       - name: Install Google Play API client
-        if: ${{ inputs.send_to_google_play }}
+        if: env.SHOULD_UPLOAD_TO_GOOGLE_PLAY == 'true'
         run: |
           python3 -m pip install --upgrade pip
           python3 -m pip install google-api-python-client google-auth
 
-      - name: Resolve Google Play version code
+      - name: Validate Google Play version code
         id: play-version
         shell: bash
+        env:
+          GOOGLE_PLAY_VERSION_CODE: ${{ steps.release-version.outputs.google_play_version_code }}
         run: |
           set -euo pipefail
 
-          fallback_version_code="${{ steps.release-version.outputs.google_play_fallback_version_code }}"
-          version_code="$fallback_version_code"
-
-          if [ "${{ inputs.send_to_google_play }}" = "true" ]; then
-            version_code="$(python3 scripts/upload-google-play-internal.py --print-next-version-code)"
+          version_code="$GOOGLE_PLAY_VERSION_CODE"
+          if [ "$SHOULD_UPLOAD_TO_GOOGLE_PLAY" = "true" ]; then
+            next_play_version_code="$(python3 scripts/upload-google-play-internal.py --print-next-version-code)"
+            if [ "$version_code" -lt "$next_play_version_code" ]; then
+              echo "Release tag versionCode $version_code is lower than the next available Google Play versionCode $next_play_version_code." >&2
+              exit 1
+            fi
           fi
 
           if ! [[ "$version_code" =~ ^[0-9]+$ ]]; then
@@ -176,11 +179,7 @@ jobs:
 
           echo "version_code=$version_code" >> "$GITHUB_OUTPUT"
           echo "versionCode=$version_code" >> "$GITHUB_STEP_SUMMARY"
-          if [ "${{ inputs.send_to_google_play }}" = "true" ]; then
-            echo "versionCodeSource=Google Play max existing versionCode + 1" >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "versionCodeSource=GitHub run number fallback" >> "$GITHUB_STEP_SUMMARY"
-          fi
+          echo "versionCodeSource=Release tag buildNumber" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Build signed Android AAB
         working-directory: apps/mobile/android
@@ -198,12 +197,15 @@ jobs:
           path: apps/mobile/android/app/build/outputs/bundle/release/app-release.aab
 
       - name: Upload AAB to Google Play internal track
-        if: ${{ inputs.send_to_google_play }}
+        if: env.SHOULD_UPLOAD_TO_GOOGLE_PLAY == 'true'
         shell: bash
+        env:
+          AFTER_UPLOAD: ${{ github.event_name == 'push' && '초안만 만들기' || inputs.after_upload }}
+          REVIEW_LATER_IN_CONSOLE: ${{ github.event_name == 'workflow_dispatch' && inputs.review_later_in_console || false }}
         run: |
           set -euo pipefail
 
-          case "${{ inputs.after_upload }}" in
+          case "$AFTER_UPLOAD" in
             "초안만 만들기")
               release_status="draft"
               ;;
@@ -211,13 +213,13 @@ jobs:
               release_status="completed"
               ;;
             *)
-              echo "Unsupported after_upload input: ${{ inputs.after_upload }}" >&2
+              echo "Unsupported after_upload input: $AFTER_UPLOAD" >&2
               exit 1
               ;;
           esac
 
           args=(--release-status "$release_status")
-          if [ "${{ inputs.review_later_in_console }}" = "true" ]; then
+          if [ "$REVIEW_LATER_IN_CONSOLE" = "true" ]; then
             args+=(--changes-not-sent-for-review)
           fi
 
