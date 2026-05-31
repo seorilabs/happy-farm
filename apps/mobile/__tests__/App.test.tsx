@@ -6,11 +6,47 @@ import React from 'react';
 import ReactTestRenderer from 'react-test-renderer';
 import App from '../App';
 
+jest.mock('../src/audio/assets/harvest_coin.wav', () => 1);
+jest.mock('../src/audio/assets/farm_bgm_loop.wav', () => 2);
+
 jest.mock('@react-native-async-storage/async-storage', () => ({
   getItem: jest.fn(() => Promise.resolve(null)),
   setItem: jest.fn(() => Promise.resolve()),
   removeItem: jest.fn(() => Promise.resolve()),
 }));
+
+jest.mock('react-native-sound', () => {
+  class MockSound {
+    static setCategory = jest.fn();
+
+    play = jest.fn(() => this);
+    release = jest.fn(() => this);
+    setCurrentTime = jest.fn(() => this);
+    setNumberOfLoops = jest.fn(() => this);
+    setVolume = jest.fn(() => this);
+    stop = jest.fn((callback?: () => void) => {
+      callback?.();
+      return this;
+    });
+
+    constructor(_asset: number, callback?: (error?: unknown) => void) {
+      void Promise.resolve().then(() => callback?.());
+    }
+
+    isLoaded() {
+      return true;
+    }
+
+    isPlaying() {
+      return false;
+    }
+  }
+
+  return {
+    __esModule: true,
+    default: MockSound,
+  };
+});
 
 jest.mock('@react-native-firebase/app', () => ({
   getApps: jest.fn(() => []),

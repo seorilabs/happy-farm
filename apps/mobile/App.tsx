@@ -4,11 +4,16 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import FarmGame from '../ait/src/farm/FarmGame';
 import { useAdMobRewardedAd } from './src/ads/adMobRewardedAd';
-import { initializeMobileFirebaseServices, mobileFarmAnalytics } from './src/firebase';
+import { useMobileFarmAudio } from './src/audio/farmAudio';
+import {
+  initializeMobileFirebaseServices,
+  mobileFarmAnalytics,
+} from './src/firebase';
 import { mobileFarmPersistence } from './src/storage/farmPersistence';
 
 function App() {
   const isDarkMode = useColorScheme() === 'dark';
+  const farmAudio = useMobileFarmAudio();
 
   useEffect(() => {
     void initializeMobileFirebaseServices();
@@ -19,6 +24,8 @@ function App() {
       <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
       <FarmGame
         analytics={mobileFarmAnalytics}
+        audio={farmAudio}
+        market="mobile"
         persistence={mobileFarmPersistence}
         useRewardedAd={useAdMobRewardedAd}
       />

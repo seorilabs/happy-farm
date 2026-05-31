@@ -146,6 +146,41 @@ describe('FarmGame UI flow', () => {
     expect(screen.getByText('현재 24칸 · 작물을 심을 공간을 1칸 늘려요')).toBeTruthy();
   });
 
+  test('keeps reset behind the settings sheet', async () => {
+    const screen = await renderGame(null);
+
+    await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+
+    expect(screen.queryByText('농장 기록 초기화')).toBeNull();
+
+    fireEvent.press(screen.getByLabelText('설정'));
+
+    expect(screen.getByText('설정')).toBeTruthy();
+    expect(screen.getByText('농장 기록 초기화')).toBeTruthy();
+
+    fireEvent.press(screen.getByText('농장 기록 초기화'));
+
+    expect(screen.getByText('새로 시작하기')).toBeTruthy();
+  });
+
+  test('plays the harvest sound when audio is supported', async () => {
+    const lateGame = createLateGameState();
+    const playHarvest = jest.fn();
+    const screen = await renderGame(lateGame, {
+      audio: {
+        isSupported: true,
+        playHarvest,
+        setBackgroundMusicEnabled: jest.fn(),
+      },
+    });
+
+    await waitFor(() => expect(screen.getByText(`${formatMoney(lateGame.gold)}G`)).toBeTruthy());
+
+    fireEvent.press(screen.getAllByText('GET')[0]!);
+
+    expect(playHarvest).toHaveBeenCalledTimes(1);
+  });
+
   test('spaces out harvest bonus nudges after the player declines one', async () => {
     const lateGame = createLateGameState();
     const rewardedAd = createReadyRewardedAd();

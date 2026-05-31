@@ -48,6 +48,8 @@ import {
   recordRewardedAdUsage,
 } from '../../../../packages/farm-core/src';
 
+import { DEFAULT_FARM_GAME_SETTINGS, normalizeFarmGameSettings, type FarmGameSettings } from './gameSettings';
+
 const REWARDED_AD_GROUP_ID = '';
 const INTERSTITIAL_AD_GROUP_ID = '';
 const RESET_CONFIRM_TEXT = '초기화';
@@ -99,6 +101,7 @@ const FIRST_AREA = getFirstArea();
 
 type ActiveSheet =
   | { type: 'shop' }
+  | { type: 'settings' }
   | { type: 'growthAd'; plotIndex: number; cropName: string; remainingMs: number }
   | { type: 'harvestBonus'; amount: number }
   | { type: 'resetConfirm' }
@@ -108,26 +111,44 @@ export type FarmGamePersistence = {
   readPersistedGameState: () => Promise<GameState>;
   writePersistedGameState: (gameState: GameState) => Promise<void>;
   removePersistedGameState: () => Promise<void>;
+  readPersistedGameSettings?: () => Promise<FarmGameSettings>;
+  writePersistedGameSettings?: (settings: FarmGameSettings) => Promise<void>;
 };
 
 type UseFarmAd = (adGroupId: string) => RewardedAdController;
 type FarmAnalytics = ReturnType<typeof createFarmAnalytics>;
+type FarmGameMarket = 'appsInToss' | 'mobile';
+
+export type FarmGameAudio = {
+  isSupported: boolean;
+  playHarvest: () => void | Promise<void>;
+  setBackgroundMusicEnabled: (enabled: boolean) => void | Promise<void>;
+};
 
 export type FarmGameProps = {
   persistence?: FarmGamePersistence;
   analytics?: FarmAnalytics;
   useRewardedAd?: UseFarmAd;
   useInterstitialAd?: UseFarmAd;
+  audio?: FarmGameAudio;
+  market?: FarmGameMarket;
 };
 
 type GetAnalyticsContext = (state?: GameState) => GameAnalyticsContext;
 type ToolKey = 'harvest' | CropKey;
 
 const defaultFarmAnalytics = createFarmAnalytics();
+const defaultFarmAudio: FarmGameAudio = {
+  isSupported: false,
+  playHarvest: () => undefined,
+  setBackgroundMusicEnabled: () => undefined,
+};
 const defaultPersistence: FarmGamePersistence = {
   readPersistedGameState: async () => createInitialState(),
   writePersistedGameState: async () => undefined,
   removePersistedGameState: async () => undefined,
+  readPersistedGameSettings: async () => DEFAULT_FARM_GAME_SETTINGS,
+  writePersistedGameSettings: async () => undefined,
 };
 
 function useUnsupportedAd(): RewardedAdController {
@@ -167,12 +188,16 @@ export default function FarmGame({
   analytics = defaultFarmAnalytics,
   useRewardedAd = useUnsupportedAd,
   useInterstitialAd = useUnsupportedAd,
+  audio = defaultFarmAudio,
+  market = 'appsInToss',
 }: FarmGameProps = {}) {
   const insets = useFarmSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
   const [activeSheet, setActiveSheet] = useState<ActiveSheet>(null);
   const [resetConfirmText, setResetConfirmText] = useState('');
   const [isSaveLoaded, setIsSaveLoaded] = useState(false);
+  const [isSettingsLoaded, setIsSettingsLoaded] = useState(false);
+  const [gameSettings, setGameSettings] = useState<FarmGameSettings>(DEFAULT_FARM_GAME_SETTINGS);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastInterstitialShownAtRef = useRef(0);
@@ -184,6 +209,7 @@ export default function FarmGame({
   const rewardedAd = useRewardedAd(REWARDED_AD_GROUP_ID);
   const interstitialAd = useInterstitialAd(INTERSTITIAL_AD_GROUP_ID);
   const farmAnalytics = analytics;
+  const isMobileMarket = market === 'mobile';
 
   const [gameState, setGameState] = useState<GameState>(() => createInitialState());
   const [selectedTool, setSelectedTool] = useState<ToolKey>('harvest');
@@ -194,19 +220,16 @@ export default function FarmGame({
     return Math.max(48, Math.floor(availableWidth / PLOT_COLUMNS));
   }, [windowWidth]);
 
-  const toast = useCallback(
-    (message: string) => {
-      if (toastTimerRef.current != null) {
-        clearTimeout(toastTimerRef.current);
-      }
-      setToastMessage(message);
-      toastTimerRef.current = setTimeout(() => {
-        setToastMessage(null);
-        toastTimerRef.current = null;
-      }, 1800);
-    },
-    []
-  );
+  const toast = useCallback((message: string) => {
+    if (toastTimerRef.current != null) {
+      clearTimeout(toastTimerRef.current);
+    }
+    setToastMessage(message);
+    toastTimerRef.current = setTimeout(() => {
+      setToastMessage(null);
+      toastTimerRef.current = null;
+    }, 1800);
+  }, []);
   const deferHarvestBonusNudge = useCallback(() => {
     harvestBonusNudgeAvailableAtHarvestRef.current =
       harvestBonusHarvestCountRef.current + HARVEST_BONUS_NUDGE_DECLINE_SKIP_HARVESTS + 1;
@@ -258,11 +281,45 @@ export default function FarmGame({
   }, [persistence]);
 
   useEffect(() => {
+    let cancelled = false;
+
+    async function loadSavedSettings() {
+      const savedSettings = await persistence.readPersistedGameSettings?.();
+      if (cancelled) {
+        return;
+      }
+      setGameSettings(normalizeFarmGameSettings(savedSettings));
+      setIsSettingsLoaded(true);
+    }
+
+    void loadSavedSettings();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [persistence]);
+
+  useEffect(() => {
     if (!isSaveLoaded) {
       return;
     }
     void persistence.writePersistedGameState(gameState);
   }, [gameState, isSaveLoaded, persistence]);
+
+  useEffect(() => {
+    if (!isSettingsLoaded) {
+      return;
+    }
+    void persistence.writePersistedGameSettings?.(gameSettings);
+  }, [gameSettings, isSettingsLoaded, persistence]);
+
+  useEffect(() => {
+    void audio.setBackgroundMusicEnabled(gameSettings.backgroundMusicEnabled && audio.isSupported);
+
+    return () => {
+      void audio.setBackgroundMusicEnabled(false);
+    };
+  }, [audio, gameSettings.backgroundMusicEnabled]);
 
   useEffect(() => {
     if (!isSaveLoaded || gameStartTrackedRef.current) {
@@ -354,9 +411,17 @@ export default function FarmGame({
     setActiveSheet({ type: 'shop' });
   }
 
+  function openSettings() {
+    setActiveSheet({ type: 'settings' });
+  }
+
   function openResetConfirm() {
     setResetConfirmText('');
     setActiveSheet({ type: 'resetConfirm' });
+  }
+
+  function updateGameSettings(nextSettings: Partial<FarmGameSettings>) {
+    setGameSettings((settings) => normalizeFarmGameSettings({ ...settings, ...nextSettings }));
   }
 
   function selectArea(area: AreaKey) {
@@ -389,7 +454,11 @@ export default function FarmGame({
     }
 
     if (!rewardedAd.isAdReady) {
-      farmAnalytics.trackAdRewardFailed(type, rewardedAd.isAdSupported ? 'not_ready' : 'unsupported', analyticsContext());
+      farmAnalytics.trackAdRewardFailed(
+        type,
+        rewardedAd.isAdSupported ? 'not_ready' : 'unsupported',
+        analyticsContext()
+      );
       toast(
         rewardedAd.isAdSupported
           ? '광고를 준비하는 중이에요. 잠시 후 다시 시도해 주세요.'
@@ -541,6 +610,9 @@ export default function FarmGame({
       setActiveSheet({ type: 'harvestBonus', amount: finalPrice });
     }
     Vibration.vibrate(50);
+    if (gameSettings.soundEffectsEnabled && audio.isSupported) {
+      void audio.playHarvest();
+    }
   }
 
   function handlePlotClick(index: number) {
@@ -636,8 +708,8 @@ export default function FarmGame({
   return (
     <View style={styles.root}>
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
-        <View style={styles.headerTop}>
-          <View style={styles.titleGroup}>
+        <View style={[styles.headerTop, isMobileMarket && styles.mobileHeaderTop]}>
+          <View style={[styles.titleGroup, isMobileMarket && styles.mobileTitleGroup]}>
             <Text style={styles.homeIcon}>🏡</Text>
             <View>
               <Text style={styles.title}>행복 농장</Text>
@@ -649,13 +721,8 @@ export default function FarmGame({
             <Pressable style={styles.shopButton} onPress={openShop}>
               <Text style={styles.shopButtonText}>🏪 상점</Text>
             </Pressable>
-            <Pressable
-              accessibilityLabel="게임 초기화"
-              hitSlop={8}
-              style={styles.resetButton}
-              onPress={openResetConfirm}
-            >
-              <Text style={styles.resetButtonText}>↻</Text>
+            <Pressable accessibilityLabel="설정" hitSlop={8} style={styles.settingsButton} onPress={openSettings}>
+              <Text style={styles.settingsButtonText}>⚙</Text>
             </Pressable>
           </View>
         </View>
@@ -821,6 +888,33 @@ export default function FarmGame({
               onDone={toast}
               onMilestone={() => void maybeShowMilestoneAd()}
             />
+          </View>
+        ) : null}
+
+        {activeSheet?.type === 'settings' ? (
+          <View>
+            <Text style={styles.sheetSectionTitle}>사운드</Text>
+            <SettingToggle
+              label="효과음"
+              desc={
+                audio.isSupported
+                  ? '수확할 때 골드 획득음을 재생해요.'
+                  : '현재 환경에서는 사운드 재생을 지원하지 않아요.'
+              }
+              value={gameSettings.soundEffectsEnabled && audio.isSupported}
+              disabled={!audio.isSupported}
+              onPress={() => updateGameSettings({ soundEffectsEnabled: !gameSettings.soundEffectsEnabled })}
+            />
+            <SettingToggle
+              label="배경음악"
+              desc={audio.isSupported ? '농장 배경 루프를 재생해요.' : '현재 환경에서는 사운드 재생을 지원하지 않아요.'}
+              value={gameSettings.backgroundMusicEnabled && audio.isSupported}
+              disabled={!audio.isSupported}
+              onPress={() => updateGameSettings({ backgroundMusicEnabled: !gameSettings.backgroundMusicEnabled })}
+            />
+
+            <Text style={styles.sheetSectionTitle}>게임 데이터</Text>
+            <SheetAction label="농장 기록 초기화" danger onPress={openResetConfirm} />
           </View>
         ) : null}
 
@@ -1001,10 +1095,7 @@ function Sheet({
     outputRange: [1, 0],
     extrapolate: 'clamp',
   });
-  const shouldHandleSheetDrag = useCallback(
-    (dy: number, dx: number) => dy > 4 && Math.abs(dy) > Math.abs(dx),
-    []
-  );
+  const shouldHandleSheetDrag = useCallback((dy: number, dx: number) => dy > 4 && Math.abs(dy) > Math.abs(dx), []);
   const closeSheetWithAnimation = useCallback(() => {
     if (isClosingRef.current) {
       return;
@@ -1029,8 +1120,7 @@ function Sheet({
       PanResponder.create({
         onStartShouldSetPanResponder: () => true,
         onStartShouldSetPanResponderCapture: () => true,
-        onMoveShouldSetPanResponder: (_, gestureState) =>
-          shouldHandleSheetDrag(gestureState.dy, gestureState.dx),
+        onMoveShouldSetPanResponder: (_, gestureState) => shouldHandleSheetDrag(gestureState.dy, gestureState.dx),
         onMoveShouldSetPanResponderCapture: (_, gestureState) =>
           shouldHandleSheetDrag(gestureState.dy, gestureState.dx),
         onPanResponderTerminationRequest: () => false,
@@ -1119,6 +1209,9 @@ function getSheetTitle(activeSheet: ActiveSheet) {
   if (activeSheet?.type === 'harvestBonus') {
     return '수확 보너스';
   }
+  if (activeSheet?.type === 'settings') {
+    return '설정';
+  }
   if (activeSheet?.type === 'resetConfirm') {
     return '새로 시작하기';
   }
@@ -1131,6 +1224,9 @@ function getSheetDescription(activeSheet: ActiveSheet) {
   }
   if (activeSheet?.type === 'harvestBonus') {
     return `광고를 보면 이번 수확 보상을 ${HARVEST_BONUS_MULTIPLIER}배로 받을 수 있어요.`;
+  }
+  if (activeSheet?.type === 'settings') {
+    return '사운드와 농장 기록을 관리해요.';
   }
   if (activeSheet?.type === 'resetConfirm') {
     return `정말 초기화하려면 '${RESET_CONFIRM_TEXT}'를 입력해야 해요.`;
@@ -1416,6 +1512,32 @@ function ShopCard({
   );
 }
 
+function SettingToggle({
+  label,
+  desc,
+  value,
+  disabled,
+  onPress,
+}: {
+  label: string;
+  desc: string;
+  value: boolean;
+  disabled?: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable disabled={disabled} style={[styles.settingRow, disabled && styles.disabledCard]} onPress={onPress}>
+      <View style={styles.settingTextGroup}>
+        <Text style={styles.settingTitle}>{label}</Text>
+        <Text style={styles.settingDesc}>{desc}</Text>
+      </View>
+      <View style={[styles.toggleTrack, value && styles.activeToggleTrack]}>
+        <View style={[styles.toggleThumb, value && styles.activeToggleThumb]} />
+      </View>
+    </Pressable>
+  );
+}
+
 function SheetAction({
   label,
   disabled,
@@ -1463,12 +1585,18 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-start',
     gap: 12,
   },
+  mobileHeaderTop: {
+    justifyContent: 'space-between',
+  },
   titleGroup: {
     minWidth: 0,
     flexShrink: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+  },
+  mobileTitleGroup: {
+    flex: 1,
   },
   homeIcon: {
     fontSize: 26,
@@ -1508,7 +1636,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '800',
   },
-  resetButton: {
+  settingsButton: {
     width: 34,
     height: 34,
     alignItems: 'center',
@@ -1516,9 +1644,9 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: '#edf2f7',
   },
-  resetButtonText: {
+  settingsButtonText: {
     color: '#4a5568',
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '800',
   },
   statsPanel: {
@@ -1907,6 +2035,55 @@ const styles = StyleSheet.create({
   },
   profitPrice: {
     backgroundColor: '#bf7a00',
+  },
+  settingRow: {
+    minHeight: 70,
+    marginBottom: 10,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#d0d5dd',
+    borderRadius: 8,
+    backgroundColor: '#ffffff',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  settingTextGroup: {
+    flex: 1,
+    minWidth: 0,
+  },
+  settingTitle: {
+    color: '#253126',
+    fontSize: 16,
+    fontWeight: '900',
+  },
+  settingDesc: {
+    marginTop: 3,
+    color: '#667085',
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '600',
+  },
+  toggleTrack: {
+    width: 48,
+    height: 28,
+    borderRadius: 14,
+    padding: 3,
+    backgroundColor: '#d0d5dd',
+    justifyContent: 'center',
+  },
+  activeToggleTrack: {
+    backgroundColor: '#2f7de1',
+  },
+  toggleThumb: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#ffffff',
+  },
+  activeToggleThumb: {
+    alignSelf: 'flex-end',
   },
   sheetAction: {
     minHeight: 48,
