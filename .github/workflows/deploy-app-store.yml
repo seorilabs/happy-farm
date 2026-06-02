@@ -181,7 +181,6 @@ jobs:
           security list-keychains -d user -s "$keychain_path"
 
           profile_plist="$signing_dir/app-store-profile.plist"
-          profile_json="$signing_dir/app-store-profile.json"
           security cms -D -i "$profile_path" > "$profile_plist"
 
           profile_uuid="$(plutil -extract UUID raw -o - "$profile_plist")"
@@ -195,17 +194,24 @@ jobs:
             profile_has_devices="true"
           fi
 
-          plutil -convert json -o "$profile_json" "$profile_plist"
-          profile_cert_fingerprints="$(PROFILE_JSON="$profile_json" node -e '
-            const crypto = require("crypto");
-            const fs = require("fs");
-            const profile = JSON.parse(fs.readFileSync(process.env.PROFILE_JSON, "utf8"));
-            const fingerprints = (profile.DeveloperCertificates || []).map((certificate) => {
-              const der = Buffer.from(certificate, "base64");
-              return crypto.createHash("sha1").update(der).digest("hex").toUpperCase();
-            });
-            process.stdout.write([...new Set(fingerprints)].sort().join(" "));
-          ')"
+          profile_cert_fingerprints=""
+          profile_cert_index=0
+          while true; do
+            profile_cert_path="$signing_dir/profile-cert-$profile_cert_index.cer"
+            if ! plutil -extract "DeveloperCertificates.$profile_cert_index" raw -o "$profile_cert_path" "$profile_plist" 2>/dev/null; then
+              break
+            fi
+
+            if [ -s "$profile_cert_path" ]; then
+              profile_cert_fingerprint="$(openssl x509 -inform DER -in "$profile_cert_path" -noout -fingerprint -sha1 2>/dev/null | sed 's/^sha1 Fingerprint=//;s/://g' | tr '[:lower:]' '[:upper:]')"
+              if [ -n "$profile_cert_fingerprint" ]; then
+                profile_cert_fingerprints="$profile_cert_fingerprints $profile_cert_fingerprint"
+              fi
+            fi
+
+            profile_cert_index=$((profile_cert_index + 1))
+          done
+          profile_cert_fingerprints="$(echo "$profile_cert_fingerprints" | tr ' ' '\n' | awk 'NF' | sort -u | tr '\n' ' ' | sed 's/[[:space:]]*$//')"
           imported_cert_fingerprints="$(security find-certificate -a -Z -c "Apple Distribution" "$keychain_path" | awk '/SHA-1 hash:/{print $3}' | sort -u | tr '\n' ' ' | sed 's/[[:space:]]*$//')"
           profile_cert_match="false"
           for imported_cert_fingerprint in $imported_cert_fingerprints; do
