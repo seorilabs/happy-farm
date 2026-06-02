@@ -180,8 +180,115 @@ jobs:
           security default-keychain -s "$keychain_path"
           security list-keychains -d user -s "$keychain_path"
 
-          profile_uuid="$(security cms -D -i "$profile_path" | plutil -extract UUID raw -o - -)"
-          profile_name="$(security cms -D -i "$profile_path" | plutil -extract Name raw -o - -)"
+          profile_plist="$signing_dir/app-store-profile.plist"
+          profile_json="$signing_dir/app-store-profile.json"
+          security cms -D -i "$profile_path" > "$profile_plist"
+
+          profile_uuid="$(plutil -extract UUID raw -o - "$profile_plist")"
+          profile_name="$(plutil -extract Name raw -o - "$profile_plist")"
+          profile_team_identifier="$(plutil -extract TeamIdentifier.0 raw -o - "$profile_plist")"
+          profile_app_identifier="$(plutil -extract Entitlements.application-identifier raw -o - "$profile_plist")"
+          profile_get_task_allow="$(plutil -extract Entitlements.get-task-allow raw -o - "$profile_plist")"
+          profile_provisions_all_devices="$(plutil -extract ProvisionsAllDevices raw -o - "$profile_plist" 2>/dev/null || true)"
+          profile_has_devices="false"
+          if /usr/libexec/PlistBuddy -c 'Print :ProvisionedDevices' "$profile_plist" >/dev/null 2>&1; then
+            profile_has_devices="true"
+          fi
+
+          plutil -convert json -o "$profile_json" "$profile_plist"
+          profile_cert_fingerprints="$(PROFILE_JSON="$profile_json" node -e '
+            const crypto = require("crypto");
+            const fs = require("fs");
+            const profile = JSON.parse(fs.readFileSync(process.env.PROFILE_JSON, "utf8"));
+            const fingerprints = (profile.DeveloperCertificates || []).map((certificate) => {
+              const der = Buffer.from(certificate, "base64");
+              return crypto.createHash("sha1").update(der).digest("hex").toUpperCase();
+            });
+            process.stdout.write([...new Set(fingerprints)].sort().join(" "));
+          ')"
+          imported_cert_fingerprints="$(security find-certificate -a -Z -c "Apple Distribution" "$keychain_path" | awk '/SHA-1 hash:/{print $3}' | sort -u | tr '\n' ' ' | sed 's/[[:space:]]*$//')"
+          profile_cert_match="false"
+          for imported_cert_fingerprint in $imported_cert_fingerprints; do
+            for profile_cert_fingerprint in $profile_cert_fingerprints; do
+              if [ "$imported_cert_fingerprint" = "$profile_cert_fingerprint" ]; then
+                profile_cert_match="true"
+              fi
+            done
+          done
+
+          profile_type="app-store"
+          if [ "$profile_get_task_allow" = "true" ]; then
+            profile_type="development"
+          elif [ "$profile_has_devices" = "true" ]; then
+            profile_type="ad-hoc"
+          elif [ "$profile_provisions_all_devices" = "true" ]; then
+            profile_type="enterprise"
+          fi
+
+          expected_app_identifier="$APPLE_TEAM_ID.$IOS_BUNDLE_ID"
+          wildcard_app_identifier="$APPLE_TEAM_ID.*"
+          profile_bundle_match="false"
+          if [ "$profile_app_identifier" = "$expected_app_identifier" ] || [ "$profile_app_identifier" = "$wildcard_app_identifier" ]; then
+            profile_bundle_match="true"
+          fi
+
+          profile_team_match="false"
+          if [ "$profile_team_identifier" = "$APPLE_TEAM_ID" ]; then
+            profile_team_match="true"
+          fi
+
+          echo "Provisioning profile diagnostics:"
+          echo "  name: $profile_name"
+          echo "  uuid: $profile_uuid"
+          echo "  inferred type: $profile_type"
+          echo "  team matches APPLE_TEAM_ID: $profile_team_match"
+          echo "  bundle matches IOS_BUNDLE_ID: $profile_bundle_match"
+          echo "  get-task-allow: $profile_get_task_allow"
+          echo "  has provisioned devices: $profile_has_devices"
+          echo "  provisions all devices: ${profile_provisions_all_devices:-false}"
+          echo "  profile contains imported Apple Distribution certificate: $profile_cert_match"
+          echo "Imported signing identities:"
+          security find-identity -v -p codesigning "$keychain_path"
+
+          {
+            echo "### App Store signing profile"
+            echo ""
+            echo "- name: $profile_name"
+            echo "- uuid: $profile_uuid"
+            echo "- inferred type: $profile_type"
+            echo "- team matches APPLE_TEAM_ID: $profile_team_match"
+            echo "- bundle matches IOS_BUNDLE_ID: $profile_bundle_match"
+            echo "- get-task-allow: $profile_get_task_allow"
+            echo "- has provisioned devices: $profile_has_devices"
+            echo "- provisions all devices: ${profile_provisions_all_devices:-false}"
+            echo "- profile contains imported Apple Distribution certificate: $profile_cert_match"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$profile_team_match" != "true" ]; then
+            echo "Provisioning profile team does not match APPLE_TEAM_ID." >&2
+            exit 1
+          fi
+
+          if [ "$profile_bundle_match" != "true" ]; then
+            echo "Provisioning profile bundle does not match IOS_BUNDLE_ID=$IOS_BUNDLE_ID." >&2
+            exit 1
+          fi
+
+          if [ "$profile_get_task_allow" != "false" ]; then
+            echo "App Store provisioning profile must have get-task-allow=false." >&2
+            exit 1
+          fi
+
+          if [ "$profile_has_devices" = "true" ] || [ "$profile_provisions_all_devices" = "true" ]; then
+            echo "App Store provisioning profile must not include devices or provision all devices." >&2
+            exit 1
+          fi
+
+          if [ "$profile_cert_match" != "true" ]; then
+            echo "Provisioning profile does not include the imported Apple Distribution certificate." >&2
+            exit 1
+          fi
+
           profiles_dir="$HOME/Library/MobileDevice/Provisioning Profiles"
           mkdir -p "$profiles_dir"
           cp "$profile_path" "$profiles_dir/$profile_uuid.mobileprovision"
@@ -199,6 +306,34 @@ jobs:
       - name: Validate App Store readiness
         continue-on-error: true
         run: pnpm check:app-store -- --json
+
+      - name: Show resolved iOS signing settings
+        shell: bash
+        env:
+          APPLE_MARKETING_VERSION: ${{ steps.release-version.outputs.apple_marketing_version }}
+          APPLE_BUILD_NUMBER: ${{ steps.release-version.outputs.apple_build_number }}
+          KEYCHAIN_PATH: ${{ steps.signing.outputs.keychain_path }}
+          RESOLVED_IOS_PROFILE_NAME: ${{ steps.signing.outputs.profile_name }}
+        run: |
+          set -euo pipefail
+
+          xcodebuild -workspace "$IOS_WORKSPACE" \
+            -scheme "$IOS_SCHEME" \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -showBuildSettings \
+            MARKETING_VERSION="$APPLE_MARKETING_VERSION" \
+            CURRENT_PROJECT_VERSION="$APPLE_BUILD_NUMBER" \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_IDENTITY="Apple Distribution" \
+            IOS_PROVISIONING_PROFILE_NAME="$RESOLVED_IOS_PROFILE_NAME" \
+            OTHER_CODE_SIGN_FLAGS="--keychain $KEYCHAIN_PATH" \
+            | awk '
+              /Build settings for action build and target HappyFarmMobile:/ { in_app_target = 1; print; next }
+              /Build settings for action build and target / { in_app_target = 0 }
+              in_app_target && /CODE_SIGN|DEVELOPMENT_TEAM|PRODUCT_BUNDLE_IDENTIFIER|PROVISIONING_PROFILE|IOS_PROVISIONING_PROFILE_NAME|SDKROOT/ { print }
+            '
 
       - name: Archive iOS app
         id: archive
