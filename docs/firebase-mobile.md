@@ -58,18 +58,17 @@ Remote Config 템플릿은 repo root의 `remoteconfig.template.json`으로 관�
 ```text
 analytics_collection_enabled = true
 crashlytics_collection_enabled = true
-mobile_ads_global_enabled = false
-mobile_ads_enabled_max_build_number = 0
-rewarded_ads_enabled = true
-interstitial_ads_enabled = true
+mobile_ads_global_enabled = true
 minimum_supported_version_code = 1
 force_update_url = ""
 remote_balance_enabled = false
 ```
 
-모바일 광고는 `mobile_ads_global_enabled=true`이고 현재 앱의 release `buildNumber`가 `mobile_ads_enabled_max_build_number` 이하일 때만 초기화합니다. 내부 테스트에서 검증 중인 새 릴리즈는 이 값을 올리기 전까지 광고를 로드하지 않습니다.
+광고는 Google Play, App Store, AppsInToss 모두 `mobile_ads_global_enabled` 하나로만 제어합니다. `true`이면 각 타깃이 연결한 광고 형식이 로드되고, `false`이면 광고를 로드하지 않습니다. 버전별 또는 광고 형식별 노출 제어는 운영 부담을 줄이기 위해 사용하지 않습니다.
 
-AppsInToss 보상형 광고는 AppsInToss 광고 그룹 ID가 발급된 뒤 `apps/ait`의 광고 설정에 반영합니다. Firebase Remote Config를 AIT 런타임에서 직접 읽는 구조는 아직 사용하지 않습니다.
+`mobile_ads_enabled_max_build_number`, `rewarded_ads_enabled`, `interstitial_ads_enabled`는 이전 모바일 빌드 호환용 legacy key입니다. 새 빌드는 이 값을 읽지 않으며, 운영 중에는 변경하지 않습니다.
+
+AppsInToss 보상형 광고는 AppsInToss 광고 그룹 ID가 발급된 뒤 `apps/ait`의 광고 설정에 반영합니다. AIT도 Firebase Web Remote Config에서 `mobile_ads_global_enabled`를 읽습니다.
 
 게임 경제, gold, 저장 데이터는 계속 로컬 권위 상태이며 서버 신뢰값으로 쓰지 않습니다.
 

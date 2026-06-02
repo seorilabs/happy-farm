@@ -7,6 +7,7 @@ pnpm lint
 pnpm typecheck
 pnpm test
 pnpm build
+pnpm check:app-store
 ```
 
 ## 기능 확인
@@ -35,3 +36,22 @@ curl -sS --max-time 60 -o /tmp/happy-farm-android.bundle -w 'android %{http_code
 ```text
 intoss://happy-farm/
 ```
+
+## App Store 확인
+
+```bash
+pnpm --dir apps/mobile typecheck
+pnpm --dir apps/mobile test --watchAll=false
+xcodebuild -list -project apps/mobile/ios/HappyFarmMobile.xcodeproj
+pnpm check:app-store
+```
+
+App Store GitHub Actions archive/upload smoke:
+
+```bash
+gh workflow run deploy-app-store.yml --ref develop -f release_tag=v1.0.0 -f upload_to_app_store=true
+```
+
+- iPhone portrait에서 앱 진입, 작물 심기, 수확, 상점, 저장 복원이 동작한다.
+- iPad 지원을 유지할 경우 iPad 화면에서 레이아웃과 screenshot을 별도로 확인한다.
+- TestFlight 내부 테스트에서는 BGM/SFX, 앱 background/foreground 전환, Firebase 초기화, 광고 보상 노출 여부를 확인한다.

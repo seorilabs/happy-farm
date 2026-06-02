@@ -3,7 +3,7 @@
   "displayName": "행복 농장 타이쿤",
   "react-native-google-mobile-ads": {
     "android_app_id": "ca-app-pub-2444587584524186~8839811958",
-    "ios_app_id": "ca-app-pub-3940256099942544~1458002511",
+    "ios_app_id": "ca-app-pub-2444587584524186~5266256811",
     "delay_app_measurement_init": true,
     "optimize_initialization": true,
     "optimize_ad_loading": true

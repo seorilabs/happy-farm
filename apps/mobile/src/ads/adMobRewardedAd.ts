@@ -31,7 +31,7 @@ function normalizeError(payload: unknown) {
 }
 
 export function useAdMobRewardedAd() {
-  const adsEnabled = useMobileAdsEnabled('rewarded');
+  const adsEnabled = useMobileAdsEnabled();
   const adUnitId = adsEnabled ? getRewardedAdUnitId() : null;
   const adRef = useRef<RewardedAd | null>(null);
   const pendingShowRef = useRef<PendingShow | null>(null);

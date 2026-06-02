@@ -1,30 +1,12 @@
 import { useEffect, useState } from 'react';
 
-import { RELEASE_INFO } from '../../../../packages/farm-core/src';
-import {
-  getRemoteBoolean,
-  getRemoteNumber,
-  initializeMobileRemoteConfig,
-} from '../firebase/remoteConfig';
+import { getRemoteBoolean, initializeMobileRemoteConfig } from '../firebase/remoteConfig';
 
-export type MobileAdKind = 'rewarded' | 'interstitial';
-
-function isMobileAdsEnabledByPolicy(kind: MobileAdKind) {
-  const buildNumber = RELEASE_INFO.buildNumber;
-  const featureEnabled =
-    kind === 'rewarded'
-      ? getRemoteBoolean('rewarded_ads_enabled')
-      : getRemoteBoolean('interstitial_ads_enabled');
-
-  return (
-    buildNumber > 0 &&
-    getRemoteBoolean('mobile_ads_global_enabled') &&
-    featureEnabled &&
-    buildNumber <= getRemoteNumber('mobile_ads_enabled_max_build_number')
-  );
+function isMobileAdsEnabledByPolicy() {
+  return getRemoteBoolean('mobile_ads_global_enabled');
 }
 
-export function useMobileAdsEnabled(kind: MobileAdKind) {
+export function useMobileAdsEnabled() {
   const [isEnabled, setIsEnabled] = useState(false);
 
   useEffect(() => {
@@ -33,7 +15,7 @@ export function useMobileAdsEnabled(kind: MobileAdKind) {
     async function loadPolicy() {
       await initializeMobileRemoteConfig();
       if (!cancelled) {
-        setIsEnabled(isMobileAdsEnabledByPolicy(kind));
+        setIsEnabled(isMobileAdsEnabledByPolicy());
       }
     }
 
@@ -42,7 +24,7 @@ export function useMobileAdsEnabled(kind: MobileAdKind) {
     return () => {
       cancelled = true;
     };
-  }, [kind]);
+  }, []);
 
   return isEnabled;
 }

@@ -16,30 +16,30 @@
     },
     "mobile_ads_global_enabled": {
       "defaultValue": {
-        "value": "false"
+        "value": "true"
       },
-      "description": "Global kill switch for mobile ads. Keep false until a release build is approved for ads.",
+      "description": "Global kill switch for ads across release targets.",
       "valueType": "BOOLEAN"
     },
     "mobile_ads_enabled_max_build_number": {
       "defaultValue": {
-        "value": "0"
+        "value": "2100000000"
       },
-      "description": "Highest release buildNumber allowed to load mobile ads.",
+      "description": "Legacy compatibility for previously built mobile apps. New builds ignore this key.",
       "valueType": "NUMBER"
     },
     "rewarded_ads_enabled": {
       "defaultValue": {
         "value": "true"
       },
-      "description": "Feature flag for rewarded ads in the mobile app.",
+      "description": "Legacy compatibility for previously built mobile apps. New builds ignore this key.",
       "valueType": "BOOLEAN"
     },
     "interstitial_ads_enabled": {
       "defaultValue": {
         "value": "true"
       },
-      "description": "Feature flag for interstitial ads in the mobile app.",
+      "description": "Legacy compatibility for previously built mobile apps. New builds ignore this key.",
       "valueType": "BOOLEAN"
     },
     "minimum_supported_version_code": {

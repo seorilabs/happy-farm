@@ -53,7 +53,7 @@ import {
 
 import { DEFAULT_FARM_GAME_SETTINGS, normalizeFarmGameSettings, type FarmGameSettings } from './gameSettings';
 
-const REWARDED_AD_GROUP_ID = '';
+const REWARDED_AD_GROUP_ID = 'ait.v2.live.6fc77adf3f034cd6';
 const INTERSTITIAL_AD_GROUP_ID = '';
 const RESET_CONFIRM_TEXT = '초기화';
 const PLOT_COLUMNS = 4;

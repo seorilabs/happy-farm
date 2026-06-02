@@ -12,6 +12,7 @@
 - 아이콘 URL: `https://placehold.co/600x600/2F8747/FFFFFF.png?text=HF` (확정 필요)
 - Firebase Web App: `행복한 농장 타이쿤 (AppsInToss)` / `1:1874344437:web:a34abb444eae2baa6c48bc`
 - Firebase Web SDK: `apps/ait/src/firebaseWeb/*`에서 `firebase/app`, `firebase/analytics` import
+- 보상형 광고 그룹 ID: `ait.v2.live.6fc77adf3f034cd6`
 
 ## 설명 초안
 
@@ -23,7 +24,6 @@
 - 썸네일, 스크린샷 이미지
 - 고객지원 이메일 또는 문의 URL
 - 개인정보 처리방침 URL 필요 여부
-- 보상형 광고 그룹 ID (신청 완료, ID 발급 대기)
 - 전면형 광고 그룹 ID
 
 ## 보상형 광고 등록값

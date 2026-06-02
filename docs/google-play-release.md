@@ -135,7 +135,7 @@ workflow:
 - `versionName`: `docs/release-versioning.md` 기준의 태그 SemVer numeric core, 예: `v1.27.0` -> `1.27.0`
 - `versionCode`: 릴리즈 태그에서 계산한 `buildNumber`, 예: `v1.27.0` -> `1027000`
 - 업로드 실행 시 Play API에서 기존 max `versionCode + 1`보다 작은 태그 buildNumber는 실패 처리합니다.
-- 광고 활성화는 빌드 채널이 아니라 런타임 release info와 Remote Config 정책으로 제어합니다.
+- 광고 활성화는 빌드 채널이나 버전 번호가 아니라 Remote Config의 `mobile_ads_global_enabled` 하나로 제어합니다.
 
 필수 GitHub Actions secrets:
 
