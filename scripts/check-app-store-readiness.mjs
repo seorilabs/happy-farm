@@ -130,6 +130,12 @@ function getTargetBuildSettings(contents, configName, bundleId) {
   );
 }
 
+function hasManualTargetProvisioningStyle(contents) {
+  return /TargetAttributes = \{[\s\S]*?13B07F861A680F5B00A75B9A = \{[\s\S]*?ProvisioningStyle = Manual;[\s\S]*?\};[\s\S]*?\};/.test(
+    contents
+  );
+}
+
 function plistValue(contents, key) {
   const match = contents.match(new RegExp(`<key>${key}</key>\\s*<string>([^<]*)</string>`));
   return match?.[1] ?? null;
@@ -518,6 +524,12 @@ if (config == null) {
         warn('Xcode Release signing style이 Manual이 아닙니다.', releaseSigningStyle ?? 'missing');
       } else {
         pass('Xcode Release signing style이 Manual입니다.');
+      }
+
+      if (hasManualTargetProvisioningStyle(pbxContents)) {
+        pass('Xcode target provisioning style이 Manual입니다.');
+      } else {
+        fail('Xcode target provisioning style이 Manual이 아닙니다.', 'TargetAttributes ProvisioningStyle 확인 필요');
       }
     }
 
