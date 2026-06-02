@@ -181,12 +181,14 @@ jobs:
           security list-keychains -d user -s "$keychain_path"
 
           profile_uuid="$(security cms -D -i "$profile_path" | plutil -extract UUID raw -o - -)"
+          profile_name="$(security cms -D -i "$profile_path" | plutil -extract Name raw -o - -)"
           profiles_dir="$HOME/Library/MobileDevice/Provisioning Profiles"
           mkdir -p "$profiles_dir"
           cp "$profile_path" "$profiles_dir/$profile_uuid.mobileprovision"
 
           echo "keychain_path=$keychain_path" >> "$GITHUB_OUTPUT"
           echo "profile_uuid=$profile_uuid" >> "$GITHUB_OUTPUT"
+          echo "profile_name=$profile_name" >> "$GITHUB_OUTPUT"
 
       - name: Install CocoaPods
         working-directory: apps/mobile/ios
@@ -205,6 +207,7 @@ jobs:
           APPLE_MARKETING_VERSION: ${{ steps.release-version.outputs.apple_marketing_version }}
           APPLE_BUILD_NUMBER: ${{ steps.release-version.outputs.apple_build_number }}
           KEYCHAIN_PATH: ${{ steps.signing.outputs.keychain_path }}
+          RESOLVED_IOS_PROFILE_NAME: ${{ steps.signing.outputs.profile_name }}
         run: |
           set -euo pipefail
 
@@ -221,6 +224,7 @@ jobs:
             DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
             CODE_SIGN_STYLE=Manual \
             CODE_SIGN_IDENTITY="Apple Distribution" \
+            IOS_PROVISIONING_PROFILE_NAME="$RESOLVED_IOS_PROFILE_NAME" \
             OTHER_CODE_SIGN_FLAGS="--keychain $KEYCHAIN_PATH"
 
           app_info_plist="$archive_path/Products/Applications/HappyFarmMobile.app/Info.plist"
@@ -287,6 +291,7 @@ jobs:
           APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
           APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
           APP_STORE_CONNECT_API_KEY_PATH: ${{ steps.app-store-api-key.outputs.api_key_path }}
+          RESOLVED_IOS_PROFILE_NAME: ${{ steps.signing.outputs.profile_name }}
         run: |
           set -euo pipefail
 
@@ -313,7 +318,7 @@ jobs:
             <key>provisioningProfiles</key>
             <dict>
               <key>${IOS_BUNDLE_ID}</key>
-              <string>${IOS_PROVISIONING_PROFILE_NAME}</string>
+              <string>${RESOLVED_IOS_PROFILE_NAME}</string>
             </dict>
             <key>stripSwiftSymbols</key>
             <true/>

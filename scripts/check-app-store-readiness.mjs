@@ -509,11 +509,16 @@ if (config == null) {
         pass('Xcode Release signing certificate가 Apple Distribution입니다.', effectiveReleaseCodeSignIdentity);
       }
 
+      const profileUsesCiVariable = releaseProfile === '$(IOS_PROVISIONING_PROFILE_NAME)';
       if (isConcrete(expectedProfile) && releaseProfile !== expectedProfile) {
-        fail(
-          'Xcode Release provisioning profile이 App Store config와 다릅니다.',
-          `${expectedProfile} != ${releaseProfile}`
-        );
+        if (profileUsesCiVariable) {
+          pass('Xcode Release provisioning profile이 CI profile name 변수를 사용합니다.', releaseProfile);
+        } else {
+          fail(
+            'Xcode Release provisioning profile이 App Store config와 다릅니다.',
+            `${expectedProfile} != ${releaseProfile}`
+          );
+        }
       } else if (!isConcrete(releaseProfile)) {
         fail('Xcode Release provisioning profile이 설정되지 않았습니다.', 'App Store provisioning profile 필요');
       } else {

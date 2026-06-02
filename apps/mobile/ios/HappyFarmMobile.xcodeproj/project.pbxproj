@@ -361,7 +361,7 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.seorilabs.happyfarm;
 				PRODUCT_NAME = HappyFarmMobile;
-				PROVISIONING_PROFILE_SPECIFIER = "AppStore Happy Farm Profile";
+				PROVISIONING_PROFILE_SPECIFIER = "$(IOS_PROVISIONING_PROFILE_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
