@@ -7,10 +7,10 @@ import { getAppsInTossFirebaseApp } from './app';
 const ADS_ENABLED_KEY = 'mobile_ads_global_enabled';
 const CONFIG_FETCH_TIMEOUT_MS = 10_000;
 const DEV_MINIMUM_FETCH_INTERVAL_MS = 5 * 60 * 1000;
-const RELEASE_MINIMUM_FETCH_INTERVAL_MS = 12 * 60 * 60 * 1000;
+const RELEASE_MINIMUM_FETCH_INTERVAL_MS = 15 * 60 * 1000;
 
 const APPS_IN_TOSS_REMOTE_CONFIG_DEFAULTS: Record<typeof ADS_ENABLED_KEY, boolean> = {
-  [ADS_ENABLED_KEY]: false,
+  [ADS_ENABLED_KEY]: true,
 };
 
 type AppsInTossRemoteConfigInitResult =

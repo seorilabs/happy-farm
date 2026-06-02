@@ -110,9 +110,11 @@ test('renders correctly', async () => {
   });
 
   const createRewardedAd = RewardedAd.createForAdRequest as jest.Mock;
-  expect(createRewardedAd).not.toHaveBeenCalled();
+  expect(createRewardedAd).toHaveBeenCalledWith('test-rewarded', {
+    requestNonPersonalizedAdsOnly: true,
+  });
 
-  ReactTestRenderer.act(() => {
+  await ReactTestRenderer.act(async () => {
     renderer?.unmount();
   });
 });

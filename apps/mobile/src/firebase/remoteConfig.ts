@@ -14,7 +14,7 @@ import { recordNonFatalError } from './crashlytics';
 export const MOBILE_REMOTE_CONFIG_DEFAULTS = {
   analytics_collection_enabled: true,
   crashlytics_collection_enabled: true,
-  mobile_ads_global_enabled: false,
+  mobile_ads_global_enabled: true,
   minimum_supported_version_code: 1,
   force_update_url: '',
   remote_balance_enabled: false,
@@ -24,7 +24,7 @@ export type MobileRemoteConfigKey = keyof typeof MOBILE_REMOTE_CONFIG_DEFAULTS;
 
 const CONFIG_FETCH_TIMEOUT_MS = 10_000;
 const DEV_MINIMUM_FETCH_INTERVAL_MS = 5 * 60 * 1000;
-const RELEASE_MINIMUM_FETCH_INTERVAL_MS = 12 * 60 * 60 * 1000;
+const RELEASE_MINIMUM_FETCH_INTERVAL_MS = 15 * 60 * 1000;
 
 function isDevBuild() {
   return typeof __DEV__ !== 'undefined' && __DEV__;

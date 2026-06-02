@@ -4,6 +4,7 @@ import mobileAds, { AdEventType, RewardedAd, RewardedAdEventType } from 'react-n
 import type { RewardedAdReward, RewardedAdShowResult } from '../../../../packages/farm-core/src';
 import { getRewardedAdUnitId } from './config';
 import { useMobileAdsEnabled } from './policy';
+import { recordNonFatalError } from '../firebase/crashlytics';
 
 type PendingShow = {
   settled: boolean;
@@ -66,7 +67,11 @@ export function useAdMobRewardedAd() {
       return;
     }
 
-    void mobileAds().initialize();
+    void mobileAds()
+      .initialize()
+      .catch((error: unknown) => {
+        recordNonFatalError(error, 'ads:initialize');
+      });
 
     const rewardedAd = RewardedAd.createForAdRequest(adUnitId, {
       requestNonPersonalizedAdsOnly: true,
@@ -92,8 +97,10 @@ export function useAdMobRewardedAd() {
       }
 
       if (type === AdEventType.ERROR) {
+        const errorMessage = normalizeError(payload) ?? 'unknown rewarded ad error';
+        recordNonFatalError(new Error(errorMessage), 'ads:rewarded:error');
         setIsAdReady(false);
-        finishPendingShow({ status: 'failed', error: normalizeError(payload) });
+        finishPendingShow({ status: 'failed', error: errorMessage });
       }
     });
 
