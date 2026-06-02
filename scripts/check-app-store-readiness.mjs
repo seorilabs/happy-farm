@@ -91,13 +91,19 @@ function readText(path) {
   }
 }
 
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 function parsePbxValue(contents, key) {
-  const match = contents.match(new RegExp(`${key}\\s*=\\s*([^;]+);`));
+  const escapedKey = escapeRegExp(key);
+  const match = contents.match(new RegExp(`"?${escapedKey}"?\\s*=\\s*([^;]+);`));
   return match?.[1]?.replace(/^"|"$/g, '').trim() ?? null;
 }
 
 function parseBuildSettingValue(contents, key) {
-  const match = contents.match(new RegExp(`${key}\\s*=\\s*([^;]+);`));
+  const escapedKey = escapeRegExp(key);
+  const match = contents.match(new RegExp(`"?${escapedKey}"?\\s*=\\s*([^;]+);`));
   return match?.[1]?.replace(/^"|"$/g, '').trim() ?? null;
 }
 
@@ -476,17 +482,25 @@ if (config == null) {
       fail('Xcode Release build settings를 찾지 못했습니다.', 'HappyFarmMobile target');
     } else {
       const releaseCodeSignIdentity = parseBuildSettingValue(releaseSettings, 'CODE_SIGN_IDENTITY');
+      const releaseSdkCodeSignIdentity = parseBuildSettingValue(
+        releaseSettings,
+        'CODE_SIGN_IDENTITY[sdk=iphoneos*]'
+      );
       const releaseProfile = parseBuildSettingValue(releaseSettings, 'PROVISIONING_PROFILE_SPECIFIER');
       const releaseSigningStyle = parseBuildSettingValue(releaseSettings, 'CODE_SIGN_STYLE');
       const expectedProfile = config.signing?.releaseProvisioningProfile;
+      const effectiveReleaseCodeSignIdentity = releaseSdkCodeSignIdentity ?? releaseCodeSignIdentity;
 
-      if (typeof releaseCodeSignIdentity !== 'string' || !releaseCodeSignIdentity.includes('Apple Distribution')) {
+      if (
+        typeof effectiveReleaseCodeSignIdentity !== 'string' ||
+        !effectiveReleaseCodeSignIdentity.includes('Apple Distribution')
+      ) {
         fail(
           'Xcode Release signing certificate가 Apple Distribution이 아닙니다.',
-          releaseCodeSignIdentity ?? 'missing'
+          effectiveReleaseCodeSignIdentity ?? 'missing'
         );
       } else {
-        pass('Xcode Release signing certificate가 Apple Distribution입니다.', releaseCodeSignIdentity);
+        pass('Xcode Release signing certificate가 Apple Distribution입니다.', effectiveReleaseCodeSignIdentity);
       }
 
       if (isConcrete(expectedProfile) && releaseProfile !== expectedProfile) {
