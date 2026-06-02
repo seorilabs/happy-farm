@@ -26,7 +26,7 @@ concurrency:
 jobs:
   archive-upload:
     name: iOS archive and upload
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 60
     environment: app-store
 
@@ -62,6 +62,20 @@ jobs:
 
       - name: Setup pnpm workspace
         uses: ./.github/actions/setup-pnpm-workspace
+
+      - name: Verify Xcode SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          xcodebuild -version
+          sdk_version="$(xcrun --sdk iphoneos --show-sdk-version)"
+          echo "iphoneos SDK: $sdk_version"
+
+          if ! [[ "$sdk_version" =~ ^26\. ]]; then
+            echo "App Store Connect requires iOS 26 SDK or later. Current iphoneos SDK: $sdk_version" >&2
+            exit 1
+          fi
 
       - name: Setup Ruby and CocoaPods
         uses: ruby/setup-ruby@v1
