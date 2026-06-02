@@ -27,8 +27,8 @@
 | 수출 규정/암호화         | 비면제 암호화 사용 안 함            |
 | 디지털 서비스법(DSA)     | 거래자                              |
 | 라우팅 앱 적용 범위 파일 | 해당 없음                           |
-| 버전                     | `1.0`                               |
-| 빌드 번호                | `1`                                 |
+| 버전                     | 릴리즈 태그 기준, 예: `v1.1.1` -> `1.1.1` |
+| 빌드 번호                | 릴리즈 태그 기준, 예: `v1.1.1` -> `1001001` |
 | 저작권                   | `2026 Seorilabs`                    |
 | 고객지원 이메일          | `cs@seorilabs.com`                  |
 | 지원 URL                 | `https://www.seorilabs.com/support` |
@@ -36,7 +36,7 @@
 | 개인정보 처리방침 URL    | `https://www.seorilabs.com/privacy` |
 | 심사 연락처 이름         | Seorilabs Support                   |
 | 심사 연락처 이메일       | `cs@seorilabs.com`                  |
-| 심사 연락처 전화번호     | 확정 필요                           |
+| 심사 연락처 전화번호     | App Store Connect에만 저장          |
 
 ## 스토어 문구
 
@@ -64,7 +64,7 @@
 
 - 로그인 필요: 아니오
 - 테스트 계정: 없음
-- 연락처: Seorilabs Support / `cs@seorilabs.com` / 전화번호 확정 필요
+- 연락처: Seorilabs Support / `cs@seorilabs.com` / 전화번호는 App Store Connect에만 저장
 - 메모:
 
 ```text
@@ -89,15 +89,11 @@ app-store/screenshots/ipad-13/ipad-2.png
 
 현재 `apps/mobile` Xcode target은 iPhone과 iPad를 모두 지원하므로 iPad 13형 스크린샷도 필요합니다. Apple Watch 앱은 없으므로 Apple Watch 스크린샷은 해당 없습니다.
 
-## 확정 필요
+## 남은 운영 확인
 
-- App Store Connect 앱 개인정보 상세 답변
-- 연령 등급 설문 결과
-- 심사 연락처 전화번호
 - 마케팅 URL 사용 여부와 실제 URL
 - DSA 제품 페이지 표시용 전화번호
-- Apple Team ID 정합성: `app-store/app-store.config.json`과 Xcode `DEVELOPMENT_TEAM` 값 확인
-- App Store archive/upload 자동화 workflow
+- App Store Connect에서 새 CI 업로드 build processing 완료와 선택 여부 확인
 
 ## 콘텐츠 권한 답변 근거
 
@@ -142,7 +138,7 @@ App Store Connect의 `대략적인 위치` 사용 목적은 다음만 선택합�
 
 근거: AdMob 광고 SDK는 광고 타깃팅 또는 광고 측정 목적으로 앱에서 수집된 데이터와 타사 데이터를 결합할 수 있는 타사 SDK에 해당합니다.
 
-제출 전 확인: 이 답변을 유지하면 App Tracking Transparency/IDFA 동의 흐름 또는 비개인화 광고 제한 여부를 별도로 확정해야 합니다.
+운영 확인: 이 답변은 App Store 심사 통과 기준입니다. App Tracking Transparency/IDFA 또는 비개인화 광고 정책을 바꾸면 App Store Connect 답변과 `PrivacyInfo.xcprivacy`를 함께 재검토합니다.
 
 선택하지 않습니다.
 
@@ -159,7 +155,7 @@ EU 포함 전세계 배포를 목표로 하고, iOS 앱은 AdMob 광고 수익�
 디지털 서비스법에 따른 거래자임
 ```
 
-조직 계정 기준으로 D-U-N-S 번호와 연결된 주소가 표시되고, App Store 제품 페이지 표시용 전화번호와 이메일을 제공해야 합니다. 이메일은 `cs@seorilabs.com`을 사용하고, 표시용 전화번호는 확정 필요입니다.
+조직 계정 기준으로 D-U-N-S 번호와 연결된 주소가 표시되고, App Store 제품 페이지 표시용 전화번호와 이메일을 제공해야 합니다. 이메일은 `cs@seorilabs.com`을 사용하고, 표시용 전화번호는 App Store Connect에만 저장합니다.
 
 ## 검증
 

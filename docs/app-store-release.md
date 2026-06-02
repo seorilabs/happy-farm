@@ -15,18 +15,19 @@
 - Xcode scheme: `HappyFarmMobile`
 - Apple Developer Team ID: `HCDUXX4Z3X`
 
-App Store Connect 등록 화면에 복사할 값은 `docs/app-store-registration.md`를 기준으로 관리합니다. 제출 준비 상태는 `pnpm check:app-store`로 확인합니다. 초기 상태에서는 실패하는 것이 정상이며, 실패 항목이 App Store Connect 입력값, iOS signing, 심사용 자산, 개인정보 답변의 남은 blocker입니다.
+App Store Connect 등록 화면에 복사할 값은 `docs/app-store-registration.md`를 기준으로 관리합니다. 제출 준비 상태는 `pnpm check:app-store`로 확인합니다. App Store 심사는 수동 입력값 기준으로 통과했고, GitHub Actions archive/upload는 `v1.1.1` 기준으로 성공했습니다.
 
 ```bash
 pnpm check:app-store
 pnpm check:app-store -- --json
 ```
 
-## 현재 blocker
+## 현재 상태
 
-- App Store archive용 Apple Distribution signing 설정이 아직 없습니다.
-- App Store Connect 앱 개인정보 답변이 `확정 필요` 상태입니다.
-- 연령 등급 설문 결과가 `확정 필요` 상태입니다.
+- App Store archive용 Apple Distribution signing 설정은 완료됐습니다.
+- GitHub Actions `Deploy App Store` run `26832379683`에서 `v1.1.1 / 1001001` archive/upload가 성공했습니다.
+- CI runner는 `macos-26`을 사용하며, `Verify Xcode SDK` 단계에서 `iphoneos SDK 26.x`가 아니면 실패시킵니다.
+- App Store Connect 앱 개인정보 답변, 연령 등급, 심사 연락처 전화번호는 콘솔에 입력된 값으로 심사 통과를 확인했습니다. 전화번호 원문은 repo에 저장하지 않습니다.
 - iOS Firebase 설정 파일 `GoogleService-Info.plist`는 gitignore 대상이며, 로컬 또는 CI secret으로 복원해야 합니다.
 - App Store Connect 지원 URL/개인정보 처리방침 URL은 제출 전 실제 접속과 연락처 노출을 다시 확인해야 합니다.
 - App Store Connect Team ID와 Xcode `DEVELOPMENT_TEAM` 값이 일치해야 합니다.
@@ -111,9 +112,9 @@ apps/mobile/ios/HappyFarmMobile/GoogleService-Info.plist
 디지털 서비스법에 따른 거래자임
 ```
 
-조직 계정에서는 D-U-N-S 주소가 표시되고, 제품 페이지 표시용 전화번호와 이메일을 제공해야 합니다. 이메일은 `cs@seorilabs.com`, 전화번호는 확정 필요입니다.
+조직 계정에서는 D-U-N-S 주소가 표시되고, 제품 페이지 표시용 전화번호와 이메일을 제공해야 합니다. 이메일은 `cs@seorilabs.com`을 사용하고, 전화번호 원문은 App Store Connect에만 저장합니다.
 
-앱 개인정보의 `대략적인 위치`는 AdMob/Firebase 기준으로 수집됨으로 보고, 사용 목적은 `타사 광고`와 `분석`만 선택합니다. 게임 기능 자체는 위치를 사용하지 않으므로 `앱 기능`, `제품 개인 맞춤화`, `개발자의 광고 또는 마케팅`, `기타 목적`은 선택하지 않습니다. 추적 목적 사용 여부는 AdMob 광고 SDK가 타깃 광고 또는 광고 측정 목적으로 타사 데이터와 결합될 수 있으므로 `예`로 답변합니다. 이 답변을 유지하면 App Tracking Transparency/IDFA 동의 흐름 또는 비개인화 광고 제한 여부를 제출 전 확정해야 합니다.
+앱 개인정보의 `대략적인 위치`는 AdMob/Firebase 기준으로 수집됨으로 보고, 사용 목적은 `타사 광고`와 `분석`만 선택합니다. 게임 기능 자체는 위치를 사용하지 않으므로 `앱 기능`, `제품 개인 맞춤화`, `개발자의 광고 또는 마케팅`, `기타 목적`은 선택하지 않습니다. 추적 목적 사용 여부는 AdMob 광고 SDK가 타깃 광고 또는 광고 측정 목적으로 타사 데이터와 결합될 수 있으므로 `예`로 답변합니다. 이 답변은 App Store 심사 통과 기준이며, App Tracking Transparency/IDFA 또는 비개인화 광고 정책을 바꾸면 App Store Connect 답변과 `PrivacyInfo.xcprivacy`를 함께 재검토합니다.
 
 ## 4단계: App Store 등록 문구
 
@@ -178,13 +179,19 @@ Apple 공식 도움말 기준으로 build upload에는 Account Holder, Admin, Ap
 App Store archive/upload는 `.github/workflows/deploy-app-store.yml`에서 처리합니다. workflow는 `vX.Y.Z` 릴리즈 태그를 source of truth로 사용하고, `scripts/resolve-release-version.mjs --write-release-info`로 런타임 `RELEASE_INFO`를 먼저 쓴 뒤 archive합니다.
 
 ```bash
-gh workflow run deploy-app-store.yml --ref develop -f release_tag=v1.0.0 -f upload_to_app_store=true
+gh workflow run deploy-app-store.yml --ref develop -f release_tag=v1.1.1 -f upload_to_app_store=true
 ```
+
+운영 기준:
+
+- workflow logic은 default branch(`develop`)에서 읽고, 앱 소스는 `release_tag`로 고정합니다.
+- `GITHUB_TOKEN`으로 생성한 tag push는 downstream tag-push workflow를 자동 실행하지 않을 수 있으므로, release tag 생성 후 수동 dispatch로 `release_tag`를 명시합니다.
+- App Store Connect의 SDK validation을 통과하려면 Xcode 26/iOS 26 SDK가 필요합니다. 이 repo의 workflow는 `macos-26` runner를 사용합니다.
 
 workflow가 자동으로 주입하는 값:
 
-- `CFBundleShortVersionString`: 릴리즈 태그의 SemVer core, 예: `v1.0.0` -> `1.0.0`
-- `CFBundleVersion`: 공통 buildNumber, 예: `v1.0.0` -> `1000000`
+- `CFBundleShortVersionString`: 릴리즈 태그의 SemVer core, 예: `v1.1.1` -> `1.1.1`
+- `CFBundleVersion`: 공통 buildNumber, 예: `v1.1.1` -> `1001001`
 - 런타임 `RELEASE_INFO`: 같은 태그와 buildNumber
 
 GitHub-hosted macOS runner에서 실행되므로 public repository는 표준 runner 무료 사용 범위에 들어갑니다. private repository에서는 GitHub plan의 included minutes를 사용하며, quota를 넘기면 billing 설정에 따라 차단 또는 과금됩니다.

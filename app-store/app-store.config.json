@@ -12,8 +12,8 @@
   "marketingUrl": "확정 필요",
   "copyright": "2026 Seorilabs",
   "version": {
-    "versionNumber": "1.0.0",
-    "buildNumber": "1000000",
+    "versionNumber": "1.1.1",
+    "buildNumber": "1001001",
     "releaseSetting": "release_tag"
   },
   "versioning": {
@@ -54,7 +54,8 @@
     "ads": "yes",
     "contentRights": "yes_third_party_content_with_rights",
     "contentRightsNotes": "앱 자체의 게임 이미지/문구/오디오는 자체 제작 또는 프로젝트 자산이며, AdMob 보상형 광고를 통해 타사 광고 콘텐츠가 표시될 수 있으므로 필요한 권한이 있는 타사 콘텐츠 표시로 답변합니다.",
-    "ageRating": "확정 필요",
+    "ageRating": "completed_in_app_store_connect",
+    "ageRatingNotes": "App Store Connect에서 심사 통과 기준으로 완료됨. 세부 설문값은 repo에 저장하지 않습니다.",
     "gameCenter": "no",
     "containsUserGeneratedContent": "no",
     "requiresSignIn": "no",
@@ -73,8 +74,8 @@
     "status": "trader",
     "answer": "디지털 서비스법에 따른 거래자임",
     "displayContactEmail": "cs@seorilabs.com",
-    "displayContactPhone": "확정 필요",
-    "notes": "EU 포함 전세계 배포를 목표로 하고, AdMob 광고 수익화가 있으며, Seori Labs 조직 계정으로 배포하므로 DSA 거래자로 답변합니다. 조직 계정은 D-U-N-S 주소가 표시되고 App Store 제품 페이지 표시용 전화번호와 이메일을 제공해야 합니다."
+    "displayContactPhone": "stored_in_app_store_connect",
+    "notes": "EU 포함 전세계 배포를 목표로 하고, AdMob 광고 수익화가 있으며, Seori Labs 조직 계정으로 배포하므로 DSA 거래자로 답변합니다. 조직 계정은 D-U-N-S 주소가 표시되고 App Store 제품 페이지 표시용 전화번호와 이메일을 제공해야 합니다. 전화번호 원문은 repo에 저장하지 않습니다."
   },
   "ads": {
     "provider": "AdMob",
@@ -82,7 +83,7 @@
     "iosRewardedAdUnitId": "ca-app-pub-2444587584524186/5623525630"
   },
   "appPrivacy": {
-    "status": "확정 필요",
+    "status": "completed",
     "privacyPolicyUrl": "https://www.seorilabs.com/privacy",
     "tracking": "yes",
     "privacyManifest": "apps/mobile/ios/HappyFarmMobile/PrivacyInfo.xcprivacy",
@@ -100,10 +101,10 @@
         "notes": "AdMob SDK가 IP 주소를 통해 기기의 대략적인 위치를 추정할 수 있고, 광고 성능/타사 광고 및 분석 목적으로 사용될 수 있으므로 타사 광고와 분석을 선택합니다. 게임 기능 자체는 위치를 사용하지 않습니다."
       }
     },
-    "draftNotes": [
-      "Firebase Analytics, Firebase Crashlytics, Firebase Remote Config, AdMob SDK 사용 여부를 App Store Connect 앱 개인정보 답변에 반영해야 합니다.",
-      "현재 iOS 광고 로딩은 Remote Config와 iOS 광고 단위 ID에 의해 비활성화될 수 있지만, SDK 포함 여부와 실제 수집 데이터 기준으로 최종 답변해야 합니다.",
-      "추적 목적 사용을 예로 유지할 경우 App Tracking Transparency/IDFA 동의 흐름 또는 비개인화 광고 제한 여부를 제출 전 확정해야 합니다."
+    "notes": [
+      "App Store Connect 앱 개인정보 답변은 심사 통과 기준으로 완료됨.",
+      "Firebase Analytics, Firebase Crashlytics, Firebase Remote Config, AdMob SDK 구성 변경 시 App Store Connect 앱 개인정보 답변을 재검토합니다.",
+      "tracking=yes 기준을 유지합니다. IDFA/ATT 또는 비개인화 광고 정책을 바꾸면 콘솔 답변과 PrivacyInfo.xcprivacy를 함께 확인합니다."
     ]
   },
   "review": {
@@ -114,7 +115,8 @@
     "contactFirstName": "Seorilabs",
     "contactLastName": "Support",
     "contactEmail": "cs@seorilabs.com",
-    "contactPhone": "확정 필요"
+    "contactPhone": "stored_in_app_store_connect",
+    "contactPhoneNotes": "App Store Connect 심사 연락처 전화번호 원문은 repo에 저장하지 않습니다."
   },
   "testFlight": {
     "betaAppDescription": "행복 농장 타이쿤 iOS 내부 테스트 빌드입니다. 작물 심기, 수확, 상점 업그레이드, 저장 복원, 오디오, 광고 보상 노출 여부를 확인합니다.",
