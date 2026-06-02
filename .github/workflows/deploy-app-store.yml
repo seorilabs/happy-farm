@@ -218,6 +218,7 @@ jobs:
             -archivePath "$archive_path" \
             MARKETING_VERSION="$APPLE_MARKETING_VERSION" \
             CURRENT_PROJECT_VERSION="$APPLE_BUILD_NUMBER" \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
             OTHER_CODE_SIGN_FLAGS="--keychain $KEYCHAIN_PATH"
 
           app_info_plist="$archive_path/Products/Applications/HappyFarmMobile.app/Info.plist"
