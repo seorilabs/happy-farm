@@ -12,9 +12,13 @@
   "marketingUrl": "확정 필요",
   "copyright": "2026 Seorilabs",
   "version": {
-    "versionNumber": "1.1.1",
-    "buildNumber": "1001001",
-    "releaseSetting": "release_tag"
+    "versionNumber": "1.1.2",
+    "buildNumber": "1001002",
+    "releaseSetting": "release_tag",
+    "releaseNotes": {
+      "ko-KR": "배경음악과 수확 효과음 재생 안정성을 개선했습니다. 광고 보상 설정이 더 안정적으로 반영되도록 개선했고, 구역 해금에 필요한 현재 연구 레벨을 화면에서 바로 확인할 수 있게 했습니다.",
+      "en-US": "Improved background music and harvest sound playback reliability. Improved rewarded ad setting refresh, and added a visible research level indicator for area unlock progress."
+    }
   },
   "versioning": {
     "source": "release_tag",

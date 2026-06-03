@@ -16,13 +16,27 @@
 - 고객지원 이메일: `cs@seorilabs.com`
 - 개인정보 처리방침 URL: `https://www.seorilabs.com/privacy`
 - 첫 목표 트랙: `internal`
-- 릴리스 이름: `0.1.0-internal`
+- 릴리스 이름: `1.1.2`
 
 ## 스토어 문구
 
 - 앱 이름: `행복 농장 타이쿤`
 - 짧은 설명: `작물을 심고 수확하며 농장을 확장하는 방치형 농장 게임`
 - 전체 설명: 작은 밭에서 시작해 작물을 심고, 성장 시간을 기다린 뒤 수확해 골드를 모으는 농장 타이쿤 게임입니다. 골드로 밭을 넓히고 성장 속도와 판매 수익을 업그레이드하며, 조건을 채우면 새 구역을 순서대로 열 수 있습니다.
+
+## 릴리스 노트
+
+### ko-KR
+
+```text
+배경음악과 수확 효과음 재생 안정성을 개선했습니다. 광고 보상 설정이 더 안정적으로 반영되도록 개선했고, 구역 해금에 필요한 현재 연구 레벨을 화면에서 바로 확인할 수 있게 했습니다.
+```
+
+### en-US
+
+```text
+Improved background music and harvest sound playback reliability. Improved rewarded ad setting refresh, and added a visible research level indicator for area unlock progress.
+```
 
 ## 이미지 경로
 
