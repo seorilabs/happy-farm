@@ -41,6 +41,7 @@ import {
   getGameAnalyticsContext,
   getHarvestBonusBoostStatus,
   getHarvestBonusPromptStatus,
+  getMinUpgradeLevel,
   getPlotCost,
   getProfitMultiplier,
   getRewardedAdLimitStatus,
@@ -347,6 +348,10 @@ export default function FarmGame({
 
   const speedMult = useMemo(() => getSpeedMultiplier(gameState.upgrades.speed), [gameState.upgrades.speed]);
   const profitMult = useMemo(() => getProfitMultiplier(gameState.upgrades.profit), [gameState.upgrades.profit]);
+  const researchLevel = useMemo(
+    () => getMinUpgradeLevel(gameState),
+    [gameState.upgrades.profit, gameState.upgrades.speed]
+  );
   const visibleCropKeys = useMemo(
     () =>
       isAreaUnlocked(gameState, selectedArea)
@@ -730,6 +735,10 @@ export default function FarmGame({
               <Text style={styles.money} numberOfLines={1}>
                 {formatMoney(gameState.gold)}G
               </Text>
+              <View style={styles.assetMetaRow}>
+                <Text style={styles.researchBadge}>연구 Lv.{researchLevel}</Text>
+                <Text style={styles.assetMetaText}>구역 해금 기준</Text>
+              </View>
             </View>
           </View>
           <View style={styles.statList}>
@@ -878,6 +887,9 @@ export default function FarmGame({
             />
 
             <Text style={styles.sheetSectionTitle}>농업 연구소</Text>
+            <Text style={styles.researchSummary}>
+              {`현재 연구 Lv.${researchLevel} · 성장속도 Lv.${gameState.upgrades.speed} / 수익률 Lv.${gameState.upgrades.profit}`}
+            </Text>
             <ShopUpgradeRow
               kind="speed"
               gameState={gameState}
@@ -1700,6 +1712,30 @@ const styles = StyleSheet.create({
     fontSize: 21,
     fontWeight: '900',
   },
+  assetMetaRow: {
+    marginTop: 5,
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  researchBadge: {
+    overflow: 'hidden',
+    borderRadius: 8,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    color: '#ffffff',
+    backgroundColor: '#6f57d9',
+    fontSize: 11,
+    fontWeight: '900',
+  },
+  assetMetaText: {
+    minWidth: 0,
+    flexShrink: 1,
+    color: '#667085',
+    fontSize: 11,
+    fontWeight: '800',
+  },
   statList: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -2005,6 +2041,14 @@ const styles = StyleSheet.create({
     color: '#667085',
     fontSize: 13,
     fontWeight: '900',
+  },
+  researchSummary: {
+    marginTop: -2,
+    marginBottom: 10,
+    color: '#344054',
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '800',
   },
   shopCard: {
     minHeight: 72,

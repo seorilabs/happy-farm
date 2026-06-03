@@ -113,6 +113,7 @@ describe('FarmGame UI flow', () => {
 
     await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
     expect(screen.getByText('50G')).toBeTruthy();
+    expect(screen.getByText('연구 Lv.1')).toBeTruthy();
     expect(screen.getAllByText('빈 밭')).toHaveLength(6);
     expect(screen.getByText('당근')).toBeTruthy();
 
@@ -162,6 +163,7 @@ describe('FarmGame UI flow', () => {
     expect(screen.getByText('농장 관리소')).toBeTruthy();
     expect(screen.getByText('모든 구역 해금 완료')).toBeTruthy();
     expect(screen.getByText('현재 24칸 · 작물을 심을 공간을 1칸 늘려요')).toBeTruthy();
+    expect(screen.getByText('현재 연구 Lv.42 · 성장속도 Lv.42 / 수익률 Lv.42')).toBeTruthy();
   });
 
   test('keeps reset behind the settings sheet', async () => {
