@@ -18,6 +18,7 @@ import {
   createInitialAdUsage,
   createInitialState,
   formatMoney,
+  getAreaUnlockRequirementText,
   getHarvestBonusBoostStatus,
   getHarvestBonusPromptStatus,
   getPlotCost,
@@ -122,6 +123,20 @@ describe('farm balance and model invariants', () => {
     expect(
       canUnlockArea({ ...unlockableState, unlockedAreas: [...unlockableState.unlockedAreas, nextArea!.key] }, nextArea!.key)
     ).toBe(false);
+  });
+
+  test('area unlock text shows the required research level without repeating the current level', () => {
+    const state: GameState = {
+      ...createInitialState(),
+      upgrades: { speed: 1, profit: 1 },
+    };
+    const area = FARM_AREAS.find((candidate) => candidate.unlock.requiredUpgradeLevel > 1);
+    expect(area).toBeDefined();
+
+    const text = getAreaUnlockRequirementText(state, area!.key);
+
+    expect(text).toContain(`연구 Lv.${area!.unlock.requiredUpgradeLevel} 필요`);
+    expect(text).not.toContain(`연구 Lv.1/${area!.unlock.requiredUpgradeLevel}`);
   });
 });
 

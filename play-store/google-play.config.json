@@ -7,10 +7,11 @@
   "privacyPolicyUrl": "https://www.seorilabs.com/privacy",
   "targetTrack": "internal",
   "release": {
-    "name": "0.1.0-internal",
+    "name": "1.1.2",
     "aabPath": "apps/mobile/android/app/build/outputs/bundle/release/app-release.aab",
     "notes": {
-      "ko-KR": "초기 내부 테스트 빌드입니다."
+      "ko-KR": "배경음악과 수확 효과음 재생 안정성을 개선했습니다. 광고 보상 설정이 더 안정적으로 반영되도록 개선했고, 구역 해금에 필요한 현재 연구 레벨을 화면에서 바로 확인할 수 있게 했습니다.",
+      "en-US": "Improved background music and harvest sound playback reliability. Improved rewarded ad setting refresh, and added a visible research level indicator for area unlock progress."
     }
   },
   "storeListing": {

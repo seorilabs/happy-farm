@@ -27,8 +27,8 @@
 | 수출 규정/암호화         | 비면제 암호화 사용 안 함            |
 | 디지털 서비스법(DSA)     | 거래자                              |
 | 라우팅 앱 적용 범위 파일 | 해당 없음                           |
-| 버전                     | 릴리즈 태그 기준, 예: `v1.1.1` -> `1.1.1` |
-| 빌드 번호                | 릴리즈 태그 기준, 예: `v1.1.1` -> `1001001` |
+| 버전                     | 릴리즈 태그 기준, 예: `v1.1.2` -> `1.1.2` |
+| 빌드 번호                | 릴리즈 태그 기준, 예: `v1.1.2` -> `1001002` |
 | 저작권                   | `2026 Seorilabs`                    |
 | 고객지원 이메일          | `cs@seorilabs.com`                  |
 | 지원 URL                 | `https://www.seorilabs.com/support` |
@@ -58,6 +58,16 @@
 
 ```text
 작물,수확,농사,성장,방치형,타이쿤,시뮬레이션,게임
+```
+
+### 이번 버전에서 업그레이드된 사항
+
+```text
+배경음악과 수확 효과음 재생 안정성을 개선했습니다. 광고 보상 설정이 더 안정적으로 반영되도록 개선했고, 구역 해금에 필요한 현재 연구 레벨을 화면에서 바로 확인할 수 있게 했습니다.
+```
+
+```text
+Improved background music and harvest sound playback reliability. Improved rewarded ad setting refresh, and added a visible research level indicator for area unlock progress.
 ```
 
 ## 앱 심사 정보

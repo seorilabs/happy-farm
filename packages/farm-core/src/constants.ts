@@ -138,7 +138,7 @@ export function getAreaUnlockRequirementText(gameState: GameState, areaKey: Area
   const parts = [
     `${formatMoney(area.unlock.cost)}G`,
     `수확 작물 ${gameState.harvestedCropKeys.length}/${area.unlock.requiredHarvestedCropCount}종`,
-    `연구 Lv.${getMinUpgradeLevel(gameState)}/${area.unlock.requiredUpgradeLevel}`,
+    `연구 Lv.${area.unlock.requiredUpgradeLevel} 필요`,
   ];
   return parts.join(' · ');
 }

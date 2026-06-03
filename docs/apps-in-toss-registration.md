@@ -16,7 +16,21 @@
 
 ## 설명 초안
 
-사용자는 작은 밭에서 작물을 심고, 성장 시간을 기다린 뒤 수확해 골드를 얻습니다. 골드로 밭을 넓히고 성장 속도와 판매 수익을 업그레이드하며, 조건을 채우면 채소 밭, 과일 밭, 과수원, 온실 같은 새 구역을 순서대로 열 수 있습니다.
+사용자는 작은 밭에서 작물을 심고, 성장 시간을 기다린 뒤 수확해 골드를 얻습니다. 골드로 밭을 넓히고 성장 속도와 판매 수익을 업그레이드하며, 조건을 채우면 채소 밭, 풍요 밭, 과수원, 온실 같은 새 구역을 순서대로 열 수 있습니다.
+
+## 업데이트 노트 후보
+
+### ko-KR
+
+```text
+배경음악과 수확 효과음 재생 안정성을 개선했습니다. 광고 보상 설정이 더 안정적으로 반영되도록 개선했고, 구역 해금에 필요한 현재 연구 레벨을 화면에서 바로 확인할 수 있게 했습니다.
+```
+
+### en-US
+
+```text
+Improved background music and harvest sound playback reliability. Improved rewarded ad setting refresh, and added a visible research level indicator for area unlock progress.
+```
 
 ## 출시 전 확정 필요
 

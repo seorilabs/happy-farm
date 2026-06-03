@@ -12,7 +12,7 @@
   "areas": [
     { "key": "starter_field", "name": "초보 밭", "target": "0~10분", "description": "짧은 성장 시간으로 심기-수확 재미를 학습시키는 구역", "unlock": { "cost": 0, "requiredHarvestedCropCount": 0, "requiredUpgradeLevel": 1 } },
     { "key": "vegetable_field", "name": "채소 밭", "target": "10~30분", "description": "초반 이후 작물 다양성을 체감시키는 구역", "unlock": { "cost": 300, "requiredHarvestedCropCount": 4, "requiredUpgradeLevel": 1 } },
-    { "key": "fruit_field", "name": "과일 밭", "target": "30분~2시간", "description": "재방문과 광고 보상이 의미 있어지는 중반 구역", "unlock": { "cost": 15000, "requiredHarvestedCropCount": 10, "requiredUpgradeLevel": 3 } },
+    { "key": "fruit_field", "name": "풍요 밭", "target": "30분~2시간", "description": "과일과 꽃 작물로 재방문과 광고 보상이 의미 있어지는 중반 구역", "unlock": { "cost": 15000, "requiredHarvestedCropCount": 10, "requiredUpgradeLevel": 3 } },
     { "key": "orchard", "name": "과수원", "target": "2시간~1일", "description": "긴 성장 시간과 큰 보상을 제공하는 장기 작물 구역", "unlock": { "cost": 500000, "requiredHarvestedCropCount": 16, "requiredUpgradeLevel": 8 } },
     { "key": "greenhouse", "name": "온실", "target": "1~3일", "description": "희귀 작물과 자동화 업그레이드의 명분이 되는 구역", "unlock": { "cost": 15000000, "requiredHarvestedCropCount": 20, "requiredUpgradeLevel": 12 } },
     { "key": "mystic_field", "name": "신비 밭", "target": "3~7일", "description": "최상위 작물과 컬렉션 목표를 제공하는 구역", "unlock": { "cost": 400000000, "requiredHarvestedCropCount": 24, "requiredUpgradeLevel": 18 } },
