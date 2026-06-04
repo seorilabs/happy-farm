@@ -6,6 +6,7 @@ buildscript {
         targetSdkVersion = 36
         ndkVersion = "27.1.12297006"
         kotlinVersion = "2.1.20"
+        googleMobileAdsVersion = "25.2.0"
     }
     repositories {
         google()
@@ -21,3 +22,17 @@ buildscript {
 }
 
 apply plugin: "com.facebook.react.rootproject"
+
+allprojects {
+    configurations.configureEach {
+        resolutionStrategy.eachDependency { details ->
+            if (
+                details.requested.group == "com.google.android.gms" &&
+                details.requested.name in ["play-services-ads", "play-services-ads-api"]
+            ) {
+                details.useVersion rootProject.ext.googleMobileAdsVersion
+                details.because("Use the latest stable Google Mobile Ads SDK for Android 15 edge-to-edge compatibility warnings.")
+            }
+        }
+    }
+}

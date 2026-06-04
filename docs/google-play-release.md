@@ -67,6 +67,22 @@ python3 /Users/syous/.codex/skills/google-play-store-registration/scripts/valida
 
 Google 공식 문서 기준으로, Google Play 제출에는 Android App Bundle을 만들고 release bundle은 개인 키로 서명되어야 합니다.
 
+### Android 15 edge-to-edge 지원 중단 API 경고
+
+2026-06-04 확인 기준 Play Console의 1.0.0 경고는 Android 15 edge-to-edge 변경사항과 관련된 `Window.getStatusBarColor`, `Window.setStatusBarColor`, `Window.setNavigationBarColor`, `LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES`, `LAYOUT_IN_DISPLAY_CUTOUT_MODE_DEFAULT` 사용입니다.
+
+현재 앱 코드 대응:
+
+- `apps/mobile/App.tsx`에서 RN `StatusBar` 컴포넌트를 제거해 앱 JS가 `StatusBarModule.setColor` 경로를 호출하지 않게 했습니다.
+- `apps/mobile/android/build.gradle`에서 Google Mobile Ads SDK를 현재 Kotlin `2.1.20` 빌드와 호환되는 stable인 `25.2.0`으로 강제합니다.
+- `FarmGame`은 `react-native-safe-area-context`의 top/bottom inset을 실제 UI padding에 반영합니다.
+
+남는 범위:
+
+- `com.facebook.react:react-android:0.85.0` AAR 내부에는 `StatusBarModule`과 `WindowUtilKt`의 deprecated API 참조가 남아 있습니다.
+- RN `0.85.3` patch source도 같은 참조를 유지하므로 단순 RN patch 업데이트만으로는 이 경고가 완전히 사라진다고 볼 수 없습니다.
+- 새 AAB 업로드 후 Play Console 경고가 계속 남으면 RN upstream 수정 또는 repo-local patched `react-android` AAR 전략을 별도 작업으로 진행해야 합니다.
+
 release signing 상태:
 
 - release build는 `apps/mobile/android/key.properties`를 통해 upload key를 읽습니다.

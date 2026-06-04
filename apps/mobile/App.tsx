@@ -1,5 +1,4 @@
 import React, { useEffect } from 'react';
-import { StatusBar, useColorScheme } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import FarmGame from '../ait/src/farm/FarmGame';
@@ -12,7 +11,6 @@ import {
 import { mobileFarmPersistence } from './src/storage/farmPersistence';
 
 function App() {
-  const isDarkMode = useColorScheme() === 'dark';
   const farmAudio = useMobileFarmAudio();
 
   useEffect(() => {
@@ -21,7 +19,6 @@ function App() {
 
   return (
     <SafeAreaProvider>
-      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
       <FarmGame
         analytics={mobileFarmAnalytics}
         audio={farmAudio}
