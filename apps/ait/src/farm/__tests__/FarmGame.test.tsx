@@ -115,9 +115,14 @@ describe('FarmGame UI flow', () => {
     expect(screen.getByText('50G')).toBeTruthy();
     expect(screen.getByText('연구 Lv.1')).toBeTruthy();
     expect(screen.getByText(/생산성 약 /)).toBeTruthy();
+    expect(screen.queryByText('새 구역 조건')).toBeNull();
     expect(screen.getAllByText('빈 밭')).toHaveLength(6);
     expect(screen.getByText('당근')).toBeTruthy();
     expect(screen.getByText('효율 +40%')).toBeTruthy();
+
+    fireEvent.press(screen.getByText(/채소 밭/));
+    expect(screen.getByText('채소 밭 열기 조건')).toBeTruthy();
+    fireEvent.press(screen.getByText('초보 밭'));
 
     fireEvent.press(screen.getByText('당근'));
     expect(screen.getByText('당근 심기 · 10G · 투자효율 +40%')).toBeTruthy();
@@ -168,6 +173,28 @@ describe('FarmGame UI flow', () => {
     expect(screen.getByText('모든 구역 열기 완료')).toBeTruthy();
     expect(screen.getByText('현재 24칸 · 작물을 심을 공간을 1칸 늘려요')).toBeTruthy();
     expect(screen.getByText('현재 연구 Lv.42 · 성장속도 Lv.42 / 수익률 Lv.42')).toBeTruthy();
+  });
+
+  test('closes the shop sheet after a rewarded gold ad so the farm remains tappable', async () => {
+    const rewardedAd = createReadyRewardedAd();
+    const screen = await renderGame(null, { useRewardedAd: () => rewardedAd });
+
+    await waitFor(() => expect(screen.getByText('50G')).toBeTruthy());
+
+    fireEvent.press(screen.getByText('🏪 상점'));
+    expect(screen.getByText('농장 관리소')).toBeTruthy();
+
+    await act(async () => {
+      fireEvent.press(screen.getByText('받기'));
+      await Promise.resolve();
+    });
+
+    expect(rewardedAd.showAd).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText('농장 관리소')).toBeNull();
+    expect(screen.getByText(`${formatMoney(50 + 100)}G`)).toBeTruthy();
+
+    fireEvent.press(screen.getByText('당근'));
+    expect(screen.getByText('당근 심기 · 10G · 투자효율 +40%')).toBeTruthy();
   });
 
   test('keeps reset behind the settings sheet', async () => {
@@ -255,7 +282,7 @@ describe('FarmGame UI flow', () => {
       await Promise.resolve();
     });
 
-    expect(screen.getByText('수확부스트')).toBeTruthy();
+    expect(screen.getByText('부스트')).toBeTruthy();
     expect(screen.getByText(`×${HARVEST_BONUS_MULTIPLIER.toFixed(1)}`)).toBeTruthy();
 
     fireEvent.press(screen.getAllByText('GET')[0]!);
