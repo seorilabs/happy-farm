@@ -6,7 +6,7 @@ on:
       bump:
         description: '다음 릴리즈 태그 증가 방식'
         required: true
-        default: minor
+        default: patch
         type: choice
         options:
           - minor
