@@ -40,7 +40,7 @@ concurrency:
 
 jobs:
   validate:
-    name: AIT workspace checks
+    name: Workspace checks
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -57,16 +57,11 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
-      - name: Test
+      - name: Test shared core and AIT app
         run: pnpm test
 
-      - name: Build AIT artifact
-        run: pnpm build
+      - name: Typecheck mobile app
+        run: pnpm --dir apps/mobile typecheck
 
-      - name: Upload build artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: happy-farm-ait-${{ github.sha }}
-          if-no-files-found: error
-          retention-days: 14
-          path: 'apps/ait/*.ait'
+      - name: Test mobile app
+        run: pnpm --dir apps/mobile test --watchAll=false
