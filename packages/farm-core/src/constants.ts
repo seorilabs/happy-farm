@@ -70,6 +70,29 @@ export const GROWTH_AD_COOLDOWN_MS = balance.ads.growthAdCooldownMs;
 export const GROWTH_AD_DAILY_LIMIT = balance.ads.growthAdDailyLimit;
 export const INTERSTITIAL_MILESTONE_COOLDOWN_MS = balance.ads.interstitialMilestoneCooldownMs;
 export const INITIAL_AREA_KEYS = FARM_AREAS.filter((area) => area.unlock.cost === 0).map((area) => area.key);
+const MS_PER_HOUR = 60 * 60 * 1000;
+
+export type CropEconomyEstimate = {
+  cropKey: CropKey;
+  harvestValue: number;
+  netProfit: number;
+  roiPercent: number;
+  netProfitPerHour: number;
+};
+
+export type FarmProductivityEstimate = {
+  bestCropKey: CropKey | null;
+  plotCount: number;
+  netProfitPerHour: number;
+};
+
+function getKnownCrop(cropKey: CropKey) {
+  const crop = CROPS[cropKey];
+  if (crop == null) {
+    throw new Error(`Unknown crop: ${cropKey}`);
+  }
+  return crop;
+}
 
 export function formatMoney(amount: number) {
   if (!Number.isFinite(amount)) return '0';
@@ -111,6 +134,67 @@ export function getSpeedMultiplier(speedLevel: number) {
 
 export function getProfitMultiplier(profitLevel: number) {
   return 1 + (profitLevel - 1) * balance.economy.upgradeStep;
+}
+
+export function getCropEconomyEstimate(
+  cropKey: CropKey,
+  {
+    speedMultiplier,
+    profitMultiplier,
+    harvestMultiplier = 1,
+  }: {
+    speedMultiplier: number;
+    profitMultiplier: number;
+    harvestMultiplier?: number;
+  }
+): CropEconomyEstimate {
+  const crop = getKnownCrop(cropKey);
+  const safeSpeedMultiplier = Number.isFinite(speedMultiplier) && speedMultiplier > 0 ? speedMultiplier : 1;
+  const safeProfitMultiplier = Number.isFinite(profitMultiplier) && profitMultiplier > 0 ? profitMultiplier : 1;
+  const safeHarvestMultiplier = Number.isFinite(harvestMultiplier) && harvestMultiplier > 0 ? harvestMultiplier : 1;
+  const harvestValue = Math.floor(crop.sell * safeProfitMultiplier * safeHarvestMultiplier);
+  const netProfit = harvestValue - crop.cost;
+  const effectiveGrowTime = Math.max(1, crop.growTime / safeSpeedMultiplier);
+
+  return {
+    cropKey,
+    harvestValue,
+    netProfit,
+    roiPercent: (netProfit / crop.cost) * 100,
+    netProfitPerHour: (netProfit / effectiveGrowTime) * MS_PER_HOUR,
+  };
+}
+
+export function getFarmProductivityEstimate(
+  gameState: GameState,
+  {
+    speedMultiplier,
+    profitMultiplier,
+    harvestMultiplier = 1,
+  }: {
+    speedMultiplier: number;
+    profitMultiplier: number;
+    harvestMultiplier?: number;
+  }
+): FarmProductivityEstimate {
+  const unlockedCropKeys = (Object.keys(CROPS) as CropKey[]).filter((cropKey) =>
+    isAreaUnlocked(gameState, getKnownCrop(cropKey).area)
+  );
+  const bestCrop = unlockedCropKeys
+    .map((cropKey) =>
+      getCropEconomyEstimate(cropKey, {
+        speedMultiplier,
+        profitMultiplier,
+        harvestMultiplier,
+      })
+    )
+    .sort((a, b) => b.netProfitPerHour - a.netProfitPerHour)[0];
+
+  return {
+    bestCropKey: bestCrop?.cropKey ?? null,
+    plotCount: gameState.unlockedPlotCount,
+    netProfitPerHour: (bestCrop?.netProfitPerHour ?? 0) * gameState.unlockedPlotCount,
+  };
 }
 
 export function isAreaUnlocked(gameState: GameState, areaKey: AreaKey) {
