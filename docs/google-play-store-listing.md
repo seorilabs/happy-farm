@@ -16,7 +16,7 @@
 - 고객지원 이메일: `cs@seorilabs.com`
 - 개인정보 처리방침 URL: `https://www.seorilabs.com/privacy`
 - 첫 목표 트랙: `internal`
-- 릴리스 이름: `1.1.2`
+- 릴리스 이름: `1.1.4`
 
 ## 스토어 문구
 
@@ -29,13 +29,13 @@
 ### ko-KR
 
 ```text
-배경음악과 수확 효과음 재생 안정성을 개선했습니다. 광고 보상 설정이 더 안정적으로 반영되도록 개선했고, 구역 해금에 필요한 현재 연구 레벨을 화면에서 바로 확인할 수 있게 했습니다.
+새 구역을 여는 표현을 더 쉬운 용어로 바꾸고, 현재 농장의 예상 생산성을 시간당 골드로 볼 수 있게 했습니다. 작물 선택 화면에는 작물별 투자효율을 추가해 어떤 작물을 심을지 더 쉽게 판단할 수 있습니다.
 ```
 
 ### en-US
 
 ```text
-Improved background music and harvest sound playback reliability. Improved rewarded ad setting refresh, and added a visible research level indicator for area unlock progress.
+Updated area-opening copy to simpler wording, added an estimated gold-per-hour productivity readout, and added crop efficiency indicators to help players choose what to plant.
 ```
 
 ## 이미지 경로

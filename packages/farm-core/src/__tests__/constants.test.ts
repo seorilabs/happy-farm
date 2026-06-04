@@ -19,6 +19,8 @@ import {
   createInitialState,
   formatMoney,
   getAreaUnlockRequirementText,
+  getCropEconomyEstimate,
+  getFarmProductivityEstimate,
   getHarvestBonusBoostStatus,
   getHarvestBonusPromptStatus,
   getPlotCost,
@@ -137,6 +139,26 @@ describe('farm balance and model invariants', () => {
 
     expect(text).toContain(`연구 Lv.${area!.unlock.requiredUpgradeLevel} 필요`);
     expect(text).not.toContain(`연구 Lv.1/${area!.unlock.requiredUpgradeLevel}`);
+  });
+
+  test('crop economy estimates expose ROI and hourly productivity', () => {
+    const carrotEstimate = getCropEconomyEstimate('carrot', { speedMultiplier: 1, profitMultiplier: 1 });
+    const carrot = CROPS.carrot;
+    if (carrot == null) {
+      throw new Error('Farm balance must include carrot.');
+    }
+
+    expect(carrotEstimate.harvestValue).toBe(carrot.sell);
+    expect(carrotEstimate.netProfit).toBe(carrot.sell - carrot.cost);
+    expect(carrotEstimate.roiPercent).toBe(40);
+    expect(carrotEstimate.netProfitPerHour).toBe(7200);
+
+    const state = createInitialState();
+    const productivity = getFarmProductivityEstimate(state, { speedMultiplier: 1, profitMultiplier: 1 });
+
+    expect(productivity.bestCropKey).not.toBeNull();
+    expect(productivity.plotCount).toBe(state.unlockedPlotCount);
+    expect(productivity.netProfitPerHour).toBeGreaterThan(0);
   });
 });
 

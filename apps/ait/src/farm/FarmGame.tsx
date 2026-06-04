@@ -38,6 +38,8 @@ import {
   createInitialState,
   formatMoney,
   getAreaUnlockRequirementText,
+  getCropEconomyEstimate,
+  getFarmProductivityEstimate,
   getGameAnalyticsContext,
   getHarvestBonusBoostStatus,
   getHarvestBonusPromptStatus,
@@ -50,6 +52,7 @@ import {
   isAreaUnlocked,
   recordHarvestBonusAdPrompt,
   recordRewardedAdUsage,
+  type CropEconomyEstimate,
 } from '../../../../packages/farm-core/src';
 
 import { DEFAULT_FARM_GAME_SETTINGS, normalizeFarmGameSettings, type FarmGameSettings } from './gameSettings';
@@ -99,6 +102,26 @@ function getRemainingGrowthDuration(startTime: number, growTime: number, speedMu
 
   const elapsed = Math.max(0, now - startTime) * speedMult;
   return Math.max(0, (growTime - elapsed) / speedMult);
+}
+
+function formatSignedPercent(value: number) {
+  const rounded = Math.round(value);
+  return `${rounded >= 0 ? '+' : ''}${rounded.toLocaleString()}%`;
+}
+
+function formatHourlyGold(value: number) {
+  return `${formatMoney(Math.max(0, value))}G/시간`;
+}
+
+function getCropEconomy(
+  cropEconomyByKey: Record<CropKey, CropEconomyEstimate>,
+  cropKey: CropKey
+): CropEconomyEstimate {
+  const estimate = cropEconomyByKey[cropKey];
+  if (estimate == null) {
+    throw new Error(`Missing crop economy estimate: ${cropKey}`);
+  }
+  return estimate;
 }
 
 const FIRST_AREA = getFirstArea();
@@ -374,6 +397,30 @@ export default function FarmGame({
   const growthAdLimit = useMemo(() => getRewardedAdLimitStatus(gameState, 'growthAd'), [gameState, tick]);
   const harvestBonusAdLimit = useMemo(() => getRewardedAdLimitStatus(gameState, 'harvestBonusAd'), [gameState, tick]);
   const harvestBonusBoost = useMemo(() => getHarvestBonusBoostStatus(gameState), [gameState, tick]);
+  const farmProductivity = useMemo(
+    () =>
+      getFarmProductivityEstimate(gameState, {
+        speedMultiplier: speedMult,
+        profitMultiplier: profitMult,
+        harvestMultiplier: harvestBonusBoost.multiplier,
+      }),
+    [gameState, harvestBonusBoost.multiplier, profitMult, speedMult]
+  );
+  const cropEconomyByKey = useMemo(
+    () =>
+      (Object.keys(CROPS) as CropKey[]).reduce(
+        (acc, cropKey) => {
+          acc[cropKey] = getCropEconomyEstimate(cropKey, {
+            speedMultiplier: speedMult,
+            profitMultiplier: profitMult,
+            harvestMultiplier: harvestBonusBoost.multiplier,
+          });
+          return acc;
+        },
+        {} as Record<CropKey, CropEconomyEstimate>
+      ),
+    [harvestBonusBoost.multiplier, profitMult, speedMult]
+  );
 
   useEffect(() => {
     let updated = false;
@@ -544,7 +591,7 @@ export default function FarmGame({
   function plantCrop(index: number, cropKey: CropKey) {
     const crop = getCrop(cropKey);
     if (!isAreaUnlocked(gameState, crop.area)) {
-      toast('구역을 먼저 해금해 주세요.');
+      toast('구역을 먼저 열어 주세요.');
       return;
     }
     if (gameState.gold < crop.cost) {
@@ -696,14 +743,16 @@ export default function FarmGame({
 
   const toolHint = useMemo(() => {
     if (!selectedAreaUnlocked) {
-      return `${selectedAreaMeta.name} 해금 필요 · ${getAreaUnlockRequirementText(gameState, selectedArea)}`;
+      return `${selectedAreaMeta.name} 열기 필요 · ${getAreaUnlockRequirementText(gameState, selectedArea)}`;
     }
     if (selectedTool === 'harvest') {
       return '밭을 눌러 수확할 수 있어요.';
     }
     const crop = getCrop(selectedTool);
-    return `${crop.name} 심기 · ${formatMoney(crop.cost)}G`;
-  }, [gameState, selectedArea, selectedAreaMeta.name, selectedAreaUnlocked, selectedTool]);
+    return `${crop.name} 심기 · ${formatMoney(crop.cost)}G · 투자효율 ${formatSignedPercent(
+      getCropEconomy(cropEconomyByKey, selectedTool).roiPercent
+    )}`;
+  }, [cropEconomyByKey, gameState, selectedArea, selectedAreaMeta.name, selectedAreaUnlocked, selectedTool]);
 
   return (
     <View style={styles.root}>
@@ -737,8 +786,11 @@ export default function FarmGame({
               </Text>
               <View style={styles.assetMetaRow}>
                 <Text style={styles.researchBadge}>연구 Lv.{researchLevel}</Text>
-                <Text style={styles.assetMetaText}>구역 해금 기준</Text>
+                <Text style={styles.assetMetaText}>새 구역 조건</Text>
               </View>
+              <Text style={styles.productivityText} numberOfLines={1}>
+                생산성 약 {formatHourlyGold(farmProductivity.netProfitPerHour)}
+              </Text>
             </View>
           </View>
           <View style={styles.statList}>
@@ -822,13 +874,14 @@ export default function FarmGame({
                 icon={crop.icon}
                 name={crop.name}
                 cost={formatMoney(crop.cost)}
+                roi={`효율 ${formatSignedPercent(getCropEconomy(cropEconomyByKey, key).roiPercent)}`}
                 onPress={() => selectCrop(key)}
               />
             );
           })}
           {!selectedAreaUnlocked ? (
             <Pressable style={styles.lockedNotice} onPress={openShop}>
-              <Text style={styles.lockedNoticeTitle}>{selectedAreaMeta.name} 해금 필요</Text>
+              <Text style={styles.lockedNoticeTitle}>{selectedAreaMeta.name} 열기 필요</Text>
               <Text style={styles.lockedNoticeDesc} numberOfLines={2}>
                 {getAreaUnlockRequirementText(gameState, selectedArea)}
               </Text>
@@ -876,7 +929,7 @@ export default function FarmGame({
               onMilestone={() => void maybeShowMilestoneAd()}
             />
 
-            <Text style={styles.sheetSectionTitle}>구역 해금</Text>
+            <Text style={styles.sheetSectionTitle}>새 구역 열기</Text>
             <ShopAreaUnlockRows
               gameState={gameState}
               setGameState={setGameState}
@@ -1267,12 +1320,14 @@ function ToolButton({
   icon,
   name,
   cost,
+  roi,
   onPress,
 }: {
   active: boolean;
   icon: string;
   name: string;
   cost?: string;
+  roi?: string;
   onPress: () => void;
 }) {
   return (
@@ -1282,6 +1337,7 @@ function ToolButton({
         {name}
       </Text>
       {cost != null ? <Text style={styles.toolCost}>{cost}</Text> : null}
+      {roi != null ? <Text style={styles.toolRoi}>{roi}</Text> : null}
     </Pressable>
   );
 }
@@ -1386,7 +1442,7 @@ function ShopAreaUnlockRows({
   if (lockedAreas.length === 0) {
     return (
       <ShopCard
-        title="모든 구역 해금 완료"
+        title="모든 구역 열기 완료"
         desc="이제 모든 작물을 선택할 수 있어요."
         price="완료"
         disabled
@@ -1416,7 +1472,7 @@ function ShopAreaUnlockRows({
                 return;
               }
               if (!canUnlockArea(gameState, area.key)) {
-                onDone('아직 구역 해금 조건이 부족해요.');
+                onDone('아직 구역을 열 조건이 부족해요.');
                 return;
               }
 
@@ -1736,6 +1792,12 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '800',
   },
+  productivityText: {
+    marginTop: 4,
+    color: '#247241',
+    fontSize: 12,
+    fontWeight: '900',
+  },
   statList: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -1941,8 +2003,8 @@ const styles = StyleSheet.create({
     paddingBottom: 4,
   },
   toolButton: {
-    width: 68,
-    height: 76,
+    width: 82,
+    height: 88,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#d0d5dd',
@@ -1966,6 +2028,11 @@ const styles = StyleSheet.create({
   },
   toolCost: {
     color: '#8f5c00',
+    fontSize: 10,
+    fontWeight: '900',
+  },
+  toolRoi: {
+    color: '#247241',
     fontSize: 10,
     fontWeight: '900',
   },

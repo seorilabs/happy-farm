@@ -27,8 +27,8 @@
 | 수출 규정/암호화         | 비면제 암호화 사용 안 함            |
 | 디지털 서비스법(DSA)     | 거래자                              |
 | 라우팅 앱 적용 범위 파일 | 해당 없음                           |
-| 버전                     | 릴리즈 태그 기준, 예: `v1.1.2` -> `1.1.2` |
-| 빌드 번호                | 릴리즈 태그 기준, 예: `v1.1.2` -> `1001002` |
+| 버전                     | 릴리즈 태그 기준, 예: `v1.1.4` -> `1.1.4` |
+| 빌드 번호                | 릴리즈 태그 기준, 예: `v1.1.4` -> `1001004` |
 | 저작권                   | `2026 Seorilabs`                    |
 | 고객지원 이메일          | `cs@seorilabs.com`                  |
 | 지원 URL                 | `https://www.seorilabs.com/support` |
@@ -63,11 +63,11 @@
 ### 이번 버전에서 업그레이드된 사항
 
 ```text
-배경음악과 수확 효과음 재생 안정성을 개선했습니다. 광고 보상 설정이 더 안정적으로 반영되도록 개선했고, 구역 해금에 필요한 현재 연구 레벨을 화면에서 바로 확인할 수 있게 했습니다.
+새 구역을 여는 표현을 더 쉬운 용어로 바꾸고, 현재 농장의 예상 생산성을 시간당 골드로 볼 수 있게 했습니다. 작물 선택 화면에는 작물별 투자효율을 추가해 어떤 작물을 심을지 더 쉽게 판단할 수 있습니다.
 ```
 
 ```text
-Improved background music and harvest sound playback reliability. Improved rewarded ad setting refresh, and added a visible research level indicator for area unlock progress.
+Updated area-opening copy to simpler wording, added an estimated gold-per-hour productivity readout, and added crop efficiency indicators to help players choose what to plant.
 ```
 
 ## 앱 심사 정보
@@ -78,7 +78,7 @@ Improved background music and harvest sound playback reliability. Improved rewar
 - 메모:
 
 ```text
-로그인 없이 바로 시작 가능한 농장 타이쿤 게임입니다. 앱 진입 후 빈 밭을 누르고 씨앗을 선택하면 작물을 심을 수 있으며, 성장 시간이 지난 뒤 수확해 골드를 얻습니다. 상점에서 밭 개간, 구역 해금, 성장 속도/판매 수익 업그레이드를 확인할 수 있습니다. 선택형 보상 광고는 운영 설정에 따라 노출되지 않을 수 있습니다.
+로그인 없이 바로 시작 가능한 농장 타이쿤 게임입니다. 앱 진입 후 빈 밭을 누르고 씨앗을 선택하면 작물을 심을 수 있으며, 성장 시간이 지난 뒤 수확해 골드를 얻습니다. 상점에서 밭 개간, 새 구역 열기, 성장 속도/판매 수익 업그레이드를 확인할 수 있습니다. 선택형 보상 광고는 운영 설정에 따라 노출되지 않을 수 있습니다.
 ```
 
 ## 스크린샷과 미리보기
