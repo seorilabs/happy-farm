@@ -8,6 +8,8 @@ import { recordNonFatalError } from '../firebase/crashlytics';
 
 type PendingShow = {
   settled: boolean;
+  rewardEarned: boolean;
+  reward?: RewardedAdReward;
   resolve: (result: RewardedAdShowResult) => void;
 };
 
@@ -85,13 +87,22 @@ export function useAdMobRewardedAd() {
       }
 
       if (type === RewardedAdEventType.EARNED_REWARD) {
-        finishPendingShow({ status: 'earned', reward: normalizeReward(payload) });
+        // iOS can emit the reward before the full-screen ad is dismissed.
+        // Resolve only after CLOSED so React Native modal cleanup runs after native ad teardown.
+        const pendingShow = pendingShowRef.current;
+        if (pendingShow != null && !pendingShow.settled) {
+          pendingShow.rewardEarned = true;
+          pendingShow.reward = normalizeReward(payload);
+        }
         return;
       }
 
       if (type === AdEventType.CLOSED) {
         setIsAdReady(false);
-        finishPendingShow({ status: 'dismissed' });
+        const pendingShow = pendingShowRef.current;
+        finishPendingShow(
+          pendingShow?.rewardEarned ? { status: 'earned', reward: pendingShow.reward } : { status: 'dismissed' }
+        );
         rewardedAd.load();
         return;
       }
@@ -126,7 +137,7 @@ export function useAdMobRewardedAd() {
     }
 
     return new Promise<RewardedAdShowResult>((resolve) => {
-      pendingShowRef.current = { settled: false, resolve };
+      pendingShowRef.current = { settled: false, rewardEarned: false, resolve };
       setIsAdReady(false);
 
       void rewardedAd.show().catch((error: unknown) => {
