@@ -508,10 +508,19 @@ export default function FarmGame({
     }
 
     farmAnalytics.trackAdRewardClick(type, analyticsContext());
-    const result = await rewardedAd.showAd();
+    let result: RewardedAdShowResult;
+    try {
+      result = await rewardedAd.showAd();
+    } catch {
+      setActiveSheet(null);
+      farmAnalytics.trackAdRewardFailed(type, 'show_ad_threw', analyticsContext());
+      toast('광고를 표시하지 못했어요.');
+      return false;
+    }
 
     if (result.status === 'earned') {
       const rewardedAt = Date.now();
+      setActiveSheet(null);
       onReward();
       farmAnalytics.trackAdRewardCompleted({
         type,
@@ -525,6 +534,7 @@ export default function FarmGame({
       return true;
     }
 
+    setActiveSheet(null);
     farmAnalytics.trackAdRewardFailed(type, getAdFailureReason(result), analyticsContext());
     toast(result.status === 'dismissed' ? '광고 보상이 완료되지 않았어요.' : '광고를 표시하지 못했어요.');
 
@@ -743,7 +753,7 @@ export default function FarmGame({
 
   const toolHint = useMemo(() => {
     if (!selectedAreaUnlocked) {
-      return `${selectedAreaMeta.name} 열기 필요 · ${getAreaUnlockRequirementText(gameState, selectedArea)}`;
+      return `${selectedAreaMeta.name} 열기 조건 · ${getAreaUnlockRequirementText(gameState, selectedArea)}`;
     }
     if (selectedTool === 'harvest') {
       return '밭을 눌러 수확할 수 있어요.';
@@ -784,33 +794,29 @@ export default function FarmGame({
               <Text style={styles.money} numberOfLines={1}>
                 {formatMoney(gameState.gold)}G
               </Text>
-              <View style={styles.assetMetaRow}>
-                <Text style={styles.researchBadge}>연구 Lv.{researchLevel}</Text>
-                <Text style={styles.assetMetaText}>새 구역 조건</Text>
-              </View>
-              <Text style={styles.productivityText} numberOfLines={1}>
-                생산성 약 {formatHourlyGold(farmProductivity.netProfitPerHour)}
-              </Text>
             </View>
           </View>
-          <View style={styles.statList}>
-            <View>
-              <Text style={styles.label}>수익률</Text>
-              <Text style={styles.profitStat}>×{profitMult.toFixed(1)}</Text>
-            </View>
-            <View>
-              <Text style={styles.label}>성장속도</Text>
-              <Text style={styles.speedStat}>×{speedMult.toFixed(1)}</Text>
-            </View>
-            {harvestBonusBoost.active ? (
-              <View>
-                <Text style={styles.label}>수확부스트</Text>
-                <Text style={styles.boostStat}>×{harvestBonusBoost.multiplier.toFixed(1)}</Text>
-                <Text style={styles.boostRemaining} numberOfLines={1}>
-                  {formatRemainingTime(harvestBonusBoost.remainingMs)}
-                </Text>
+          <View style={styles.summaryColumn}>
+            <Text style={styles.researchBadge}>연구 Lv.{researchLevel}</Text>
+            <Text style={styles.productivityText} numberOfLines={1}>
+              생산성 약 {formatHourlyGold(farmProductivity.netProfitPerHour)}
+            </Text>
+            <View style={styles.statList}>
+              <View style={styles.compactStat}>
+                <Text style={styles.label}>수익</Text>
+                <Text style={styles.profitStat}>×{profitMult.toFixed(1)}</Text>
               </View>
-            ) : null}
+              <View style={styles.compactStat}>
+                <Text style={styles.label}>성장</Text>
+                <Text style={styles.speedStat}>×{speedMult.toFixed(1)}</Text>
+              </View>
+              {harvestBonusBoost.active ? (
+                <View style={styles.compactStat}>
+                  <Text style={styles.label}>부스트</Text>
+                  <Text style={styles.boostStat}>×{harvestBonusBoost.multiplier.toFixed(1)}</Text>
+                </View>
+              ) : null}
+            </View>
           </View>
         </View>
       </View>
@@ -881,7 +887,7 @@ export default function FarmGame({
           })}
           {!selectedAreaUnlocked ? (
             <Pressable style={styles.lockedNotice} onPress={openShop}>
-              <Text style={styles.lockedNoticeTitle}>{selectedAreaMeta.name} 열기 필요</Text>
+              <Text style={styles.lockedNoticeTitle}>{selectedAreaMeta.name} 열기 조건</Text>
               <Text style={styles.lockedNoticeDesc} numberOfLines={2}>
                 {getAreaUnlockRequirementText(gameState, selectedArea)}
               </Text>
@@ -1650,7 +1656,7 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingHorizontal: 16,
-    paddingBottom: 12,
+    paddingBottom: 8,
     backgroundColor: '#ffffff',
     borderBottomWidth: 1,
     borderBottomColor: '#d9e7ce',
@@ -1726,33 +1732,34 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   statsPanel: {
-    marginTop: 12,
-    padding: 12,
+    marginTop: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 9,
     borderWidth: 1,
     borderColor: '#f1d98a',
     borderRadius: 8,
     backgroundColor: '#fff8d8',
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'stretch',
     justifyContent: 'space-between',
-    gap: 12,
+    gap: 10,
   },
   assetRow: {
     minWidth: 0,
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 9,
   },
   coinIcon: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     overflow: 'hidden',
     backgroundColor: '#f6c343',
     textAlign: 'center',
-    lineHeight: 34,
-    fontSize: 18,
+    lineHeight: 30,
+    fontSize: 17,
   },
   assetTextGroup: {
     minWidth: 0,
@@ -1765,15 +1772,14 @@ const styles = StyleSheet.create({
   },
   money: {
     color: '#7a4b00',
-    fontSize: 21,
+    fontSize: 24,
     fontWeight: '900',
   },
-  assetMetaRow: {
-    marginTop: 5,
-    minWidth: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
+  summaryColumn: {
+    flexShrink: 0,
+    maxWidth: '48%',
+    alignItems: 'flex-end',
+    justifyContent: 'center',
   },
   researchBadge: {
     overflow: 'hidden',
@@ -1785,42 +1791,37 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '900',
   },
-  assetMetaText: {
-    minWidth: 0,
-    flexShrink: 1,
-    color: '#667085',
-    fontSize: 11,
-    fontWeight: '800',
-  },
   productivityText: {
-    marginTop: 4,
+    marginTop: 3,
     color: '#247241',
     fontSize: 12,
     fontWeight: '900',
+    textAlign: 'right',
   },
   statList: {
+    marginTop: 3,
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 14,
+    alignItems: 'center',
+    gap: 9,
+  },
+  compactStat: {
+    alignItems: 'flex-end',
   },
   profitStat: {
-    marginTop: 2,
     color: '#247241',
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '900',
     textAlign: 'right',
   },
   speedStat: {
-    marginTop: 2,
     color: '#2f7de1',
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '900',
     textAlign: 'right',
   },
   boostStat: {
-    marginTop: 2,
     color: '#b54708',
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '900',
     textAlign: 'right',
   },

@@ -8,11 +8,13 @@ import {
   HARVEST_BONUS_AD_COOLDOWN_MS,
   HARVEST_BONUS_MULTIPLIER,
   MAX_PLOTS,
+  createFarmAnalytics,
   createInitialState,
   formatMoney,
   type CropKey,
   type GameState,
   type RewardedAdController,
+  type RewardedAdShowResult,
 } from '../../../../../packages/farm-core/src';
 
 const NOW = Date.parse('2026-05-27T03:00:00.000Z');
@@ -74,6 +76,35 @@ function createReadyHarvestState(): GameState {
   };
 }
 
+function createGrowingCropState(): GameState {
+  const base = createInitialState();
+
+  return {
+    ...base,
+    gold: 100,
+    plots: base.plots.map((plot, index) =>
+      index === 0
+        ? {
+            ...plot,
+            cropType: 'wheat',
+            startTime: NOW,
+            state: 1 as const,
+          }
+        : plot
+    ),
+  };
+}
+
+function createShopReadyState(): GameState {
+  const base = createInitialState();
+
+  return {
+    ...base,
+    gold: 10_000,
+    harvestedCropKeys: getCropKeys().slice(0, 5),
+  };
+}
+
 async function renderGame(savedState: GameState | null, props: Partial<React.ComponentProps<typeof FarmGame>> = {}) {
   mockPersistence.readPersistedGameState.mockResolvedValueOnce(savedState ?? createInitialState());
 
@@ -86,11 +117,25 @@ async function renderGame(savedState: GameState | null, props: Partial<React.Com
   return view;
 }
 
-function createReadyRewardedAd(): RewardedAdController {
+function createRewardedAd(result: RewardedAdShowResult): RewardedAdController {
   return {
     isAdReady: true,
     isAdSupported: true,
-    showAd: jest.fn(async () => ({ status: 'earned' as const })),
+    showAd: jest.fn(async () => result),
+  };
+}
+
+function createReadyRewardedAd() {
+  return createRewardedAd({ status: 'earned' });
+}
+
+function createThrowingRewardedAd(error = new Error('sdk dynamic failure message')): RewardedAdController {
+  return {
+    isAdReady: true,
+    isAdSupported: true,
+    showAd: jest.fn(async () => {
+      throw error;
+    }),
   };
 }
 
@@ -115,9 +160,14 @@ describe('FarmGame UI flow', () => {
     expect(screen.getByText('50G')).toBeTruthy();
     expect(screen.getByText('연구 Lv.1')).toBeTruthy();
     expect(screen.getByText(/생산성 약 /)).toBeTruthy();
+    expect(screen.queryByText('새 구역 조건')).toBeNull();
     expect(screen.getAllByText('빈 밭')).toHaveLength(6);
     expect(screen.getByText('당근')).toBeTruthy();
     expect(screen.getByText('효율 +40%')).toBeTruthy();
+
+    fireEvent.press(screen.getByText(/채소 밭/));
+    expect(screen.getByText('채소 밭 열기 조건')).toBeTruthy();
+    fireEvent.press(screen.getByText('초보 밭'));
 
     fireEvent.press(screen.getByText('당근'));
     expect(screen.getByText('당근 심기 · 10G · 투자효율 +40%')).toBeTruthy();
@@ -168,6 +218,126 @@ describe('FarmGame UI flow', () => {
     expect(screen.getByText('모든 구역 열기 완료')).toBeTruthy();
     expect(screen.getByText('현재 24칸 · 작물을 심을 공간을 1칸 늘려요')).toBeTruthy();
     expect(screen.getByText('현재 연구 Lv.42 · 성장속도 Lv.42 / 수익률 Lv.42')).toBeTruthy();
+  });
+
+  test('supports core shop management purchases', async () => {
+    const shopReadyState = createShopReadyState();
+    const screen = await renderGame(shopReadyState);
+
+    await waitFor(() => expect(screen.getByText(`${formatMoney(shopReadyState.gold)}G`)).toBeTruthy());
+
+    fireEvent.press(screen.getByText('🏪 상점'));
+
+    fireEvent.press(screen.getByText('밭 개간하기'));
+    expect(screen.getByText('현재 7칸 · 작물을 심을 공간을 1칸 늘려요')).toBeTruthy();
+
+    fireEvent.press(screen.getByText('🧪 고속 성장 비료'));
+    expect(screen.getByText('현재 연구 Lv.1 · 성장속도 Lv.2 / 수익률 Lv.1')).toBeTruthy();
+
+    fireEvent.press(screen.getByText('🚛 판로 개척'));
+    expect(screen.getByText('현재 연구 Lv.2 · 성장속도 Lv.2 / 수익률 Lv.2')).toBeTruthy();
+
+    fireEvent.press(screen.getByText('채소 밭 열기'));
+    expect(screen.queryByText('채소 밭 열기')).toBeNull();
+  });
+
+  test('closes the shop sheet after a rewarded gold ad so the farm remains tappable', async () => {
+    const rewardedAd = createReadyRewardedAd();
+    const screen = await renderGame(null, { useRewardedAd: () => rewardedAd });
+
+    await waitFor(() => expect(screen.getByText('50G')).toBeTruthy());
+
+    fireEvent.press(screen.getByText('🏪 상점'));
+    expect(screen.getByText('농장 관리소')).toBeTruthy();
+
+    fireEvent.press(screen.getByText('받기'));
+
+    await waitFor(() => expect(rewardedAd.showAd).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.queryByText('농장 관리소')).toBeNull());
+    await waitFor(() => expect(screen.getByText(`${formatMoney(50 + 100)}G`)).toBeTruthy());
+
+    fireEvent.press(screen.getByText('당근'));
+    expect(screen.getByText('당근 심기 · 10G · 투자효율 +40%')).toBeTruthy();
+  });
+
+  test('closes the shop sheet after a free plot ad reward', async () => {
+    const rewardedAd = createReadyRewardedAd();
+    const screen = await renderGame(null, { useRewardedAd: () => rewardedAd });
+
+    await waitFor(() => expect(screen.getByText('50G')).toBeTruthy());
+
+    fireEvent.press(screen.getByText('🏪 상점'));
+    expect(screen.getByText('농장 관리소')).toBeTruthy();
+
+    fireEvent.press(screen.getByText('열기'));
+
+    await waitFor(() => expect(rewardedAd.showAd).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.queryByText('농장 관리소')).toBeNull());
+
+    fireEvent.press(screen.getByText('🏪 상점'));
+    expect(screen.getByText('현재 7칸 · 작물을 심을 공간을 1칸 늘려요')).toBeTruthy();
+  });
+
+  test('closes the current sheet when a rewarded ad is dismissed without reward', async () => {
+    const rewardedAd = createRewardedAd({ status: 'dismissed' });
+    const screen = await renderGame(null, { useRewardedAd: () => rewardedAd });
+
+    await waitFor(() => expect(screen.getByText('50G')).toBeTruthy());
+
+    fireEvent.press(screen.getByText('🏪 상점'));
+
+    fireEvent.press(screen.getByText('받기'));
+
+    await waitFor(() => expect(rewardedAd.showAd).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.queryByText('농장 관리소')).toBeNull());
+    expect(screen.getByText('50G')).toBeTruthy();
+
+    fireEvent.press(screen.getByText('당근'));
+    expect(screen.getByText('당근 심기 · 10G · 투자효율 +40%')).toBeTruthy();
+  });
+
+  test('normalizes thrown rewarded ad failures and closes the active sheet', async () => {
+    const rewardedAd = createThrowingRewardedAd(new Error('sdk request failed with dynamic token 123'));
+    const track = jest.fn();
+    const screen = await renderGame(null, {
+      analytics: createFarmAnalytics(track),
+      useRewardedAd: () => rewardedAd,
+    });
+
+    await waitFor(() => expect(screen.getByText('50G')).toBeTruthy());
+
+    fireEvent.press(screen.getByText('🏪 상점'));
+    fireEvent.press(screen.getByText('받기'));
+
+    await waitFor(() => expect(rewardedAd.showAd).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.queryByText('농장 관리소')).toBeNull());
+
+    expect(track).toHaveBeenCalledWith(
+      'ad_reward_failed',
+      expect.objectContaining({
+        ad_type: 'rewardedGold',
+        reason: 'show_ad_threw',
+      })
+    );
+    expect(screen.getByText('50G')).toBeTruthy();
+  });
+
+  test('closes the growth ad sheet after completing crop growth', async () => {
+    const rewardedAd = createReadyRewardedAd();
+    const screen = await renderGame(createGrowingCropState(), { useRewardedAd: () => rewardedAd });
+
+    await waitFor(() => expect(screen.getByText('100G')).toBeTruthy());
+
+    fireEvent.press(screen.getByText('당근'));
+    fireEvent.press(screen.getByText('🌱'));
+
+    expect(screen.getByText('즉시 성장')).toBeTruthy();
+
+    fireEvent.press(screen.getByText('광고 보고 바로 성장시키기'));
+
+    await waitFor(() => expect(rewardedAd.showAd).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.queryByText('즉시 성장')).toBeNull());
+    await waitFor(() => expect(screen.getByText('GET')).toBeTruthy());
   });
 
   test('keeps reset behind the settings sheet', async () => {
@@ -250,12 +420,11 @@ describe('FarmGame UI flow', () => {
     expect(screen.getByText(`${formatMoney(readyHarvestState.gold + carrotRevenue)}G`)).toBeTruthy();
     expect(screen.getByText(harvestBonusCta)).toBeTruthy();
 
-    await act(async () => {
-      fireEvent.press(screen.getByText(harvestBonusCta));
-      await Promise.resolve();
-    });
+    fireEvent.press(screen.getByText(harvestBonusCta));
 
-    expect(screen.getByText('수확부스트')).toBeTruthy();
+    await waitFor(() => expect(rewardedAd.showAd).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.queryByText('수확 보너스')).toBeNull());
+    await waitFor(() => expect(screen.getByText('부스트')).toBeTruthy());
     expect(screen.getByText(`×${HARVEST_BONUS_MULTIPLIER.toFixed(1)}`)).toBeTruthy();
 
     fireEvent.press(screen.getAllByText('GET')[0]!);
