@@ -1472,7 +1472,7 @@ function ShopAreaUnlockRows({
                 return;
               }
               if (!canUnlockArea(gameState, area.key)) {
-                onDone('아직 구역을 열 조건이 부족해요.');
+                onDone('아직 구역을 열기 위한 조건이 부족해요.');
                 return;
               }
 

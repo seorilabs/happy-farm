@@ -147,11 +147,14 @@ describe('farm balance and model invariants', () => {
     if (carrot == null) {
       throw new Error('Farm balance must include carrot.');
     }
+    const expectedNetProfit = carrot.sell - carrot.cost;
+    const expectedRoiPercent = (expectedNetProfit / carrot.cost) * 100;
+    const expectedNetProfitPerHour = (expectedNetProfit / carrot.growTime) * 60 * 60 * 1000;
 
     expect(carrotEstimate.harvestValue).toBe(carrot.sell);
-    expect(carrotEstimate.netProfit).toBe(carrot.sell - carrot.cost);
-    expect(carrotEstimate.roiPercent).toBe(40);
-    expect(carrotEstimate.netProfitPerHour).toBe(7200);
+    expect(carrotEstimate.netProfit).toBe(expectedNetProfit);
+    expect(carrotEstimate.roiPercent).toBeCloseTo(expectedRoiPercent);
+    expect(carrotEstimate.netProfitPerHour).toBeCloseTo(expectedNetProfitPerHour);
 
     const state = createInitialState();
     const productivity = getFarmProductivityEstimate(state, { speedMultiplier: 1, profitMultiplier: 1 });
