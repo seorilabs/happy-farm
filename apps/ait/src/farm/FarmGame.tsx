@@ -511,9 +511,9 @@ export default function FarmGame({
     let result: RewardedAdShowResult;
     try {
       result = await rewardedAd.showAd();
-    } catch (error) {
+    } catch {
       setActiveSheet(null);
-      farmAnalytics.trackAdRewardFailed(type, error instanceof Error ? error.message : 'failed_to_show', analyticsContext());
+      farmAnalytics.trackAdRewardFailed(type, 'show_ad_threw', analyticsContext());
       toast('광고를 표시하지 못했어요.');
       return false;
     }
