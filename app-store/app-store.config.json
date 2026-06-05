@@ -31,19 +31,24 @@
   },
   "storeListing": {
     "appName": {
-      "ko-KR": "행복 농장 타이쿤"
+      "ko-KR": "행복 농장 타이쿤",
+      "en-US": "Happy Farm Tycoon"
     },
     "subtitle": {
-      "ko-KR": "작물을 키우는 방치형 농장"
+      "ko-KR": "작물을 키우는 방치형 농장",
+      "en-US": "Idle crop-growing farm"
     },
     "promotionalText": {
-      "ko-KR": "작물을 심고 수확해 골드를 모으세요. 밭을 넓히고 성장 속도와 판매 수익을 업그레이드하는 가벼운 방치형 농장 타이쿤입니다."
+      "ko-KR": "작물을 심고 수확해 골드를 모으세요. 밭을 넓히고 성장 속도와 판매 수익을 업그레이드하는 가벼운 방치형 농장 타이쿤입니다.",
+      "en-US": "Plant crops, harvest gold, clear new plots, and upgrade your growth speed and sale profit in a light idle farm tycoon."
     },
     "description": {
-      "ko-KR": "행복 농장 타이쿤은 작은 밭에서 시작해 작물을 심고, 성장 시간을 기다린 뒤 수확해 골드를 모으는 농장 성장 게임입니다.\n\n감자, 딸기, 수박처럼 단계별 작물을 키우고 수확 수익으로 밭을 개간하세요. 성장 속도와 판매 수익을 업그레이드하면 같은 시간에도 더 빠르게 농장이 커집니다.\n\n새 구역을 열면 재배 공간과 목표가 늘어나고, 저장된 진행 상황은 다음 접속 때 이어집니다. 짧게 확인해도 보상이 쌓이는 가벼운 방치형 플레이에 맞췄습니다.\n\n로그인 없이 바로 시작할 수 있으며, 복잡한 경쟁이나 과금 압박 없이 농장이 커지는 흐름에 집중합니다."
+      "ko-KR": "행복 농장 타이쿤은 작은 밭에서 시작해 작물을 심고, 성장 시간을 기다린 뒤 수확해 골드를 모으는 농장 성장 게임입니다.\n\n감자, 딸기, 수박처럼 단계별 작물을 키우고 수확 수익으로 밭을 개간하세요. 성장 속도와 판매 수익을 업그레이드하면 같은 시간에도 더 빠르게 농장이 커집니다.\n\n새 구역을 열면 재배 공간과 목표가 늘어나고, 저장된 진행 상황은 다음 접속 때 이어집니다. 짧게 확인해도 보상이 쌓이는 가벼운 방치형 플레이에 맞췄습니다.\n\n로그인 없이 바로 시작할 수 있으며, 복잡한 경쟁이나 과금 압박 없이 농장이 커지는 흐름에 집중합니다.",
+      "en-US": "Happy Farm Tycoon is a light farm growth game where you start with a small field, plant crops, wait for them to grow, and harvest gold.\n\nGrow step-by-step crops such as potatoes, strawberries, and watermelons, then use your harvest profit to clear more plots. Upgrade growth speed and sale profit to make your farm expand faster in the same amount of time.\n\nOpen new areas to unlock more planting space and longer-term goals. Your progress is saved on this device so you can continue your farm on the next visit.\n\nYou can start right away without signing in. The game focuses on a simple, low-pressure farm expansion loop without complex competition."
     },
     "keywords": {
-      "ko-KR": "작물,수확,농사,성장,방치형,타이쿤,시뮬레이션,게임"
+      "ko-KR": "작물,수확,농사,성장,방치형,타이쿤,시뮬레이션,게임",
+      "en-US": "farm,crops,harvest,idle,tycoon,growth,simulation,game"
     }
   },
   "categories": {

@@ -8,9 +8,9 @@ export default defineConfig({
     appsInToss({
       appType: 'game',
       brand: {
-        displayName: '행복 농장 타이쿤',
+        displayName: '행복한 농장 타이쿤',
         primaryColor: '#2F8747',
-        icon: 'https://placehold.co/600x600/2F8747/FFFFFF.png?text=HF',
+        icon: 'https://static.toss.im/appsintoss/38345/7cb5596a-ee72-43c3-b899-7d3a494b0602.png',
       },
       permissions: [],
     }),

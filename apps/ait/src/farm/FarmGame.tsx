@@ -36,8 +36,14 @@ import {
   canUnlockArea,
   createFarmAnalytics,
   createInitialState,
+  DEFAULT_LOCALE,
+  formatHourlyGold,
   formatMoney,
+  formatRemainingTime,
+  formatSignedPercent,
+  getAreaLabel,
   getAreaUnlockRequirementText,
+  getCropLabel,
   getCropEconomyEstimate,
   getFarmProductivityEstimate,
   getGameAnalyticsContext,
@@ -50,16 +56,18 @@ import {
   getSpeedMultiplier,
   getUpgradeCost,
   isAreaUnlocked,
+  normalizeLocale,
   recordHarvestBonusAdPrompt,
   recordRewardedAdUsage,
   type CropEconomyEstimate,
+  type SupportedLocale,
 } from '../../../../packages/farm-core/src';
 
 import { DEFAULT_FARM_GAME_SETTINGS, normalizeFarmGameSettings, type FarmGameSettings } from './gameSettings';
+import { getFarmMessages, type FarmMessages } from './i18n';
 
 const REWARDED_AD_GROUP_ID = 'ait.v2.live.6fc77adf3f034cd6';
 const INTERSTITIAL_AD_GROUP_ID = '';
-const RESET_CONFIRM_TEXT = '초기화';
 const PLOT_COLUMNS = 4;
 const PLOT_GAP = 10;
 const MAIN_HORIZONTAL_PADDING = 16;
@@ -104,19 +112,7 @@ function getRemainingGrowthDuration(startTime: number, growTime: number, speedMu
   return Math.max(0, (growTime - elapsed) / speedMult);
 }
 
-function formatSignedPercent(value: number) {
-  const rounded = Math.round(value);
-  return `${rounded >= 0 ? '+' : ''}${rounded.toLocaleString()}%`;
-}
-
-function formatHourlyGold(value: number) {
-  return `${formatMoney(Math.max(0, value))}G/시간`;
-}
-
-function getCropEconomy(
-  cropEconomyByKey: Record<CropKey, CropEconomyEstimate>,
-  cropKey: CropKey
-): CropEconomyEstimate {
+function getCropEconomy(cropEconomyByKey: Record<CropKey, CropEconomyEstimate>, cropKey: CropKey): CropEconomyEstimate {
   const estimate = cropEconomyByKey[cropKey];
   if (estimate == null) {
     throw new Error(`Missing crop economy estimate: ${cropKey}`);
@@ -129,7 +125,7 @@ const FIRST_AREA = getFirstArea();
 type ActiveSheet =
   | { type: 'shop' }
   | { type: 'settings' }
-  | { type: 'growthAd'; plotIndex: number; cropName: string; remainingMs: number }
+  | { type: 'growthAd'; plotIndex: number; cropKey: CropKey; remainingMs: number }
   | { type: 'harvestBonus' }
   | { type: 'resetConfirm' }
   | null;
@@ -138,7 +134,7 @@ export type FarmGamePersistence = {
   readPersistedGameState: () => Promise<GameState>;
   writePersistedGameState: (gameState: GameState) => Promise<void>;
   removePersistedGameState: () => Promise<void>;
-  readPersistedGameSettings?: () => Promise<FarmGameSettings>;
+  readPersistedGameSettings?: () => Promise<Partial<FarmGameSettings> | null | undefined>;
   writePersistedGameSettings?: (settings: FarmGameSettings) => Promise<void>;
 };
 
@@ -159,6 +155,7 @@ export type FarmGameProps = {
   useInterstitialAd?: UseFarmAd;
   audio?: FarmGameAudio;
   market?: FarmGameMarket;
+  preferredLocale?: SupportedLocale;
 };
 
 type GetAnalyticsContext = (state?: GameState) => GameAnalyticsContext;
@@ -174,7 +171,7 @@ const defaultPersistence: FarmGamePersistence = {
   readPersistedGameState: async () => createInitialState(),
   writePersistedGameState: async () => undefined,
   removePersistedGameState: async () => undefined,
-  readPersistedGameSettings: async () => DEFAULT_FARM_GAME_SETTINGS,
+  readPersistedGameSettings: async () => null,
   writePersistedGameSettings: async () => undefined,
 };
 
@@ -217,6 +214,7 @@ export default function FarmGame({
   useInterstitialAd = useUnsupportedAd,
   audio = defaultFarmAudio,
   market = 'appsInToss',
+  preferredLocale = DEFAULT_LOCALE,
 }: FarmGameProps = {}) {
   const insets = useFarmSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
@@ -235,6 +233,11 @@ export default function FarmGame({
   const interstitialAd = useInterstitialAd(INTERSTITIAL_AD_GROUP_ID);
   const farmAnalytics = analytics;
   const isMobileMarket = market === 'mobile';
+  const locale = normalizeLocale(gameSettings.locale);
+  const messages = useMemo(() => getFarmMessages(locale), [locale]);
+  const resetConfirmValue = messages.resetConfirmText;
+  const getLocalizedCropName = useCallback((cropKey: CropKey) => getCropLabel(cropKey, locale).name, [locale]);
+  const getLocalizedAreaLabel = useCallback((areaKey: AreaKey) => getAreaLabel(areaKey, locale), [locale]);
 
   const [gameState, setGameState] = useState<GameState>(() => createInitialState());
   const [selectedTool, setSelectedTool] = useState<ToolKey>('harvest');
@@ -299,7 +302,7 @@ export default function FarmGame({
       if (cancelled) {
         return;
       }
-      setGameSettings(normalizeFarmGameSettings(savedSettings));
+      setGameSettings(normalizeFarmGameSettings(savedSettings, preferredLocale));
       setIsSettingsLoaded(true);
     }
 
@@ -308,7 +311,7 @@ export default function FarmGame({
     return () => {
       cancelled = true;
     };
-  }, [persistence]);
+  }, [persistence, preferredLocale]);
 
   useEffect(() => {
     if (!isSaveLoaded) {
@@ -341,8 +344,8 @@ export default function FarmGame({
     const context = analyticsContext();
     farmAnalytics.trackGameStart(context);
     farmAnalytics.trackFarmScreen(context);
-    toast('농장 기록을 불러왔어요.');
-  }, [analyticsContext, isSaveLoaded, toast]);
+    toast(messages.saveLoadedToast);
+  }, [analyticsContext, isSaveLoaded, messages.saveLoadedToast, toast]);
 
   useEffect(() => {
     if (activeSheet?.type !== 'resetConfirm') {
@@ -391,11 +394,20 @@ export default function FarmGame({
       {} as Record<AreaKey, number>
     );
   }, []);
-  const selectedAreaMeta = FARM_AREAS.find((area) => area.key === selectedArea) ?? FIRST_AREA;
+  const selectedAreaLabel = getLocalizedAreaLabel(selectedArea);
   const selectedAreaUnlocked = isAreaUnlocked(gameState, selectedArea);
-  const rewardedGoldLimit = useMemo(() => getRewardedAdLimitStatus(gameState, 'rewardedGold'), [gameState, tick]);
-  const growthAdLimit = useMemo(() => getRewardedAdLimitStatus(gameState, 'growthAd'), [gameState, tick]);
-  const harvestBonusAdLimit = useMemo(() => getRewardedAdLimitStatus(gameState, 'harvestBonusAd'), [gameState, tick]);
+  const rewardedGoldLimit = useMemo(
+    () => getRewardedAdLimitStatus(gameState, 'rewardedGold', Date.now(), locale),
+    [gameState, locale, tick]
+  );
+  const growthAdLimit = useMemo(
+    () => getRewardedAdLimitStatus(gameState, 'growthAd', Date.now(), locale),
+    [gameState, locale, tick]
+  );
+  const harvestBonusAdLimit = useMemo(
+    () => getRewardedAdLimitStatus(gameState, 'harvestBonusAd', Date.now(), locale),
+    [gameState, locale, tick]
+  );
   const harvestBonusBoost = useMemo(() => getHarvestBonusBoostStatus(gameState), [gameState, tick]);
   const farmProductivity = useMemo(
     () =>
@@ -474,7 +486,7 @@ export default function FarmGame({
   function selectCrop(cropKey: CropKey) {
     const crop = getCrop(cropKey);
     if (!isAreaUnlocked(gameState, crop.area)) {
-      toast('아직 열리지 않은 구역의 작물이에요.');
+      toast(messages.lockedCropToast);
       return;
     }
 
@@ -486,7 +498,7 @@ export default function FarmGame({
   }
 
   async function showRewardedAd(type: RewardedAdType, rewardValue: number, onReward: () => void) {
-    const limit = getRewardedAdLimitStatus(gameState, type);
+    const limit = getRewardedAdLimitStatus(gameState, type, Date.now(), locale);
     if (!limit.allowed) {
       farmAnalytics.trackAdLimitBlocked(type, limit.reason, analyticsContext());
       toast(limit.reason);
@@ -499,11 +511,7 @@ export default function FarmGame({
         rewardedAd.isAdSupported ? 'not_ready' : 'unsupported',
         analyticsContext()
       );
-      toast(
-        rewardedAd.isAdSupported
-          ? '광고를 준비하는 중이에요. 잠시 후 다시 시도해 주세요.'
-          : '현재 환경에서는 광고를 사용할 수 없어요.'
-      );
+      toast(rewardedAd.isAdSupported ? messages.adPreparingToast : messages.adUnsupportedToast);
       return false;
     }
 
@@ -514,7 +522,7 @@ export default function FarmGame({
     } catch {
       setActiveSheet(null);
       farmAnalytics.trackAdRewardFailed(type, 'show_ad_threw', analyticsContext());
-      toast('광고를 표시하지 못했어요.');
+      toast(messages.adFailedToast);
       return false;
     }
 
@@ -536,7 +544,7 @@ export default function FarmGame({
 
     setActiveSheet(null);
     farmAnalytics.trackAdRewardFailed(type, getAdFailureReason(result), analyticsContext());
-    toast(result.status === 'dismissed' ? '광고 보상이 완료되지 않았어요.' : '광고를 표시하지 못했어요.');
+    toast(result.status === 'dismissed' ? messages.adDismissedToast : messages.adFailedToast);
 
     return false;
   }
@@ -558,13 +566,13 @@ export default function FarmGame({
   async function rewardGoldFromAd(amount = REWARDED_GOLD_AMOUNT) {
     await showRewardedAd('rewardedGold', amount, () => {
       setGameState((state) => ({ ...state, gold: state.gold + amount }));
-      toast(`${formatMoney(amount)}G를 받았어요.`);
+      toast(messages.receivedGoldToast(formatMoney(amount, locale)));
     });
   }
 
   async function rewardFreePlotFromAd() {
     if (gameState.unlockedPlotCount >= MAX_PLOTS) {
-      toast('이미 모든 밭을 열었어요.');
+      toast(messages.allPlotsUnlockedToast);
       return;
     }
 
@@ -581,13 +589,13 @@ export default function FarmGame({
         });
         return { ...state, unlockedPlotCount: state.unlockedPlotCount + 1 };
       });
-      toast('광고 보상으로 밭을 1칸 열었어요.');
+      toast(messages.rewardedPlotToast);
     });
   }
 
   async function confirmReset() {
-    if (resetConfirmText !== RESET_CONFIRM_TEXT) {
-      toast(`계속하려면 '${RESET_CONFIRM_TEXT}'를 입력해 주세요.`);
+    if (resetConfirmText !== resetConfirmValue) {
+      toast(messages.resetInputRequiredToast(resetConfirmValue));
       return;
     }
     await persistence.removePersistedGameState();
@@ -595,17 +603,17 @@ export default function FarmGame({
     setSelectedArea(FIRST_AREA.key);
     setSelectedTool('harvest');
     setActiveSheet(null);
-    toast('농장을 새로 시작했어요.');
+    toast(messages.resetDoneToast);
   }
 
   function plantCrop(index: number, cropKey: CropKey) {
     const crop = getCrop(cropKey);
     if (!isAreaUnlocked(gameState, crop.area)) {
-      toast('구역을 먼저 열어 주세요.');
+      toast(messages.areaFirstToast);
       return;
     }
     if (gameState.gold < crop.cost) {
-      toast('자금이 부족해요.');
+      toast(messages.insufficientGoldToast);
       return;
     }
 
@@ -656,8 +664,8 @@ export default function FarmGame({
     });
     toast(
       currentHarvestBoost.active
-        ? `+${formatMoney(finalPrice)}G 수확했어요. ×${currentHarvestBoost.multiplier} 부스트 적용`
-        : `+${formatMoney(finalPrice)}G 수확했어요.`
+        ? messages.harvestedBoostToast(formatMoney(finalPrice, locale), currentHarvestBoost.multiplier)
+        : messages.harvestedToast(formatMoney(finalPrice, locale))
     );
     const canShowHarvestBonusNudge =
       rewardedAd.isAdReady &&
@@ -709,7 +717,7 @@ export default function FarmGame({
             setActiveSheet({
               type: 'growthAd',
               plotIndex: index,
-              cropName: crop.name,
+              cropKey: plot.cropType,
               remainingMs,
             });
           } else {
@@ -717,14 +725,14 @@ export default function FarmGame({
             toast(growthAdLimit.reason);
           }
         } else {
-          toast('아직 자라는 중이에요.');
+          toast(messages.growingToast);
         }
       }
       return;
     }
 
     if (plot.state === 0) {
-      toast('아래에서 씨앗을 선택해 주세요.');
+      toast(messages.selectSeedToast);
     }
   }
 
@@ -740,29 +748,49 @@ export default function FarmGame({
         return { ...state, plots: next };
       });
       setActiveSheet(null);
-      toast('작물이 바로 자랐어요.');
+      toast(messages.growthDoneToast);
     });
   }
 
   async function activateHarvestBonusWithAd() {
     await showRewardedAd('harvestBonusAd', HARVEST_BONUS_MULTIPLIER, () => {
       setActiveSheet(null);
-      toast(`${formatRemainingTime(HARVEST_BONUS_BOOST_DURATION_MS)} 동안 수확 보상이 ${HARVEST_BONUS_MULTIPLIER}배예요.`);
+      toast(
+        messages.harvestBonusActivatedToast(
+          formatRemainingTime(HARVEST_BONUS_BOOST_DURATION_MS, locale),
+          HARVEST_BONUS_MULTIPLIER
+        )
+      );
     });
   }
 
   const toolHint = useMemo(() => {
     if (!selectedAreaUnlocked) {
-      return `${selectedAreaMeta.name} 열기 조건 · ${getAreaUnlockRequirementText(gameState, selectedArea)}`;
+      return messages.lockedAreaHint(
+        selectedAreaLabel.name,
+        getAreaUnlockRequirementText(gameState, selectedArea, locale)
+      );
     }
     if (selectedTool === 'harvest') {
-      return '밭을 눌러 수확할 수 있어요.';
+      return messages.harvestHint;
     }
     const crop = getCrop(selectedTool);
-    return `${crop.name} 심기 · ${formatMoney(crop.cost)}G · 투자효율 ${formatSignedPercent(
-      getCropEconomy(cropEconomyByKey, selectedTool).roiPercent
-    )}`;
-  }, [cropEconomyByKey, gameState, selectedArea, selectedAreaMeta.name, selectedAreaUnlocked, selectedTool]);
+    return messages.plantHint(
+      getLocalizedCropName(selectedTool),
+      formatMoney(crop.cost, locale),
+      formatSignedPercent(getCropEconomy(cropEconomyByKey, selectedTool).roiPercent, locale)
+    );
+  }, [
+    cropEconomyByKey,
+    gameState,
+    getLocalizedCropName,
+    locale,
+    messages,
+    selectedArea,
+    selectedAreaLabel.name,
+    selectedAreaUnlocked,
+    selectedTool,
+  ]);
 
   return (
     <View style={styles.root}>
@@ -771,16 +799,21 @@ export default function FarmGame({
           <View style={[styles.titleGroup, isMobileMarket && styles.mobileTitleGroup]}>
             <Text style={styles.homeIcon}>🏡</Text>
             <View>
-              <Text style={styles.title}>행복 농장</Text>
-              <Text style={styles.subtitle}>Tycoon</Text>
+              <Text style={styles.title}>{messages.appTitle}</Text>
+              <Text style={styles.subtitle}>{messages.appSubtitle}</Text>
             </View>
           </View>
 
           <View style={styles.headerActions}>
             <Pressable style={styles.shopButton} onPress={openShop}>
-              <Text style={styles.shopButtonText}>🏪 상점</Text>
+              <Text style={styles.shopButtonText}>{messages.shopButton}</Text>
             </Pressable>
-            <Pressable accessibilityLabel="설정" hitSlop={8} style={styles.settingsButton} onPress={openSettings}>
+            <Pressable
+              accessibilityLabel={messages.settingsAccessibilityLabel}
+              hitSlop={8}
+              style={styles.settingsButton}
+              onPress={openSettings}
+            >
               <Text style={styles.settingsButtonText}>⚙</Text>
             </Pressable>
           </View>
@@ -790,29 +823,29 @@ export default function FarmGame({
           <View style={styles.assetRow}>
             <Text style={styles.coinIcon}>💰</Text>
             <View style={styles.assetTextGroup}>
-              <Text style={styles.label}>보유 자산</Text>
+              <Text style={styles.label}>{messages.assetLabel}</Text>
               <Text style={styles.money} numberOfLines={1}>
-                {formatMoney(gameState.gold)}G
+                {formatMoney(gameState.gold, locale)}G
               </Text>
             </View>
           </View>
           <View style={styles.summaryColumn}>
-            <Text style={styles.researchBadge}>연구 Lv.{researchLevel}</Text>
+            <Text style={styles.researchBadge}>{messages.researchBadge(researchLevel)}</Text>
             <Text style={styles.productivityText} numberOfLines={1}>
-              생산성 약 {formatHourlyGold(farmProductivity.netProfitPerHour)}
+              {messages.productivity(formatHourlyGold(farmProductivity.netProfitPerHour, locale))}
             </Text>
             <View style={styles.statList}>
               <View style={styles.compactStat}>
-                <Text style={styles.label}>수익</Text>
+                <Text style={styles.label}>{messages.profitLabel}</Text>
                 <Text style={styles.profitStat}>×{profitMult.toFixed(1)}</Text>
               </View>
               <View style={styles.compactStat}>
-                <Text style={styles.label}>성장</Text>
+                <Text style={styles.label}>{messages.growthLabel}</Text>
                 <Text style={styles.speedStat}>×{speedMult.toFixed(1)}</Text>
               </View>
               {harvestBonusBoost.active ? (
                 <View style={styles.compactStat}>
-                  <Text style={styles.label}>부스트</Text>
+                  <Text style={styles.label}>{messages.boostLabel}</Text>
                   <Text style={styles.boostStat}>×{harvestBonusBoost.multiplier.toFixed(1)}</Text>
                 </View>
               ) : null}
@@ -830,6 +863,7 @@ export default function FarmGame({
               unlocked={index < gameState.unlockedPlotCount}
               speedMult={speedMult}
               tileSize={plotTileSize}
+              messages={messages}
               onPress={() => handlePlotClick(index)}
             />
           ))}
@@ -838,7 +872,7 @@ export default function FarmGame({
 
       <View style={[styles.toolStrip, { paddingBottom: insets.bottom + 10 }]}>
         <View style={styles.toolHeader}>
-          <Text style={styles.toolLabel}>도구 선택</Text>
+          <Text style={styles.toolLabel}>{messages.toolLabel}</Text>
           <Text style={styles.toolHint} numberOfLines={1}>
             {toolHint}
           </Text>
@@ -848,6 +882,7 @@ export default function FarmGame({
           {FARM_AREAS.map((area) => {
             const unlocked = isAreaUnlocked(gameState, area.key);
             const active = selectedArea === area.key;
+            const areaLabel = getLocalizedAreaLabel(area.key);
             return (
               <Pressable
                 key={area.key}
@@ -856,9 +891,9 @@ export default function FarmGame({
               >
                 <Text style={[styles.areaTabName, active && styles.activeAreaTabName]}>
                   {!unlocked ? '🔒 ' : ''}
-                  {area.name}
+                  {areaLabel.name}
                 </Text>
-                <Text style={styles.areaTabCount}>{areaCropCounts[area.key]}종</Text>
+                <Text style={styles.areaTabCount}>{messages.areaCropCount(areaCropCounts[area.key] ?? 0)}</Text>
               </Pressable>
             );
           })}
@@ -868,7 +903,7 @@ export default function FarmGame({
           <ToolButton
             active={selectedTool === 'harvest'}
             icon="🖐️"
-            name="수확"
+            name={messages.harvestTool}
             onPress={() => setSelectedTool('harvest')}
           />
           {visibleCropKeys.map((key) => {
@@ -878,18 +913,18 @@ export default function FarmGame({
                 key={key}
                 active={selectedTool === key}
                 icon={crop.icon}
-                name={crop.name}
-                cost={formatMoney(crop.cost)}
-                roi={`효율 ${formatSignedPercent(getCropEconomy(cropEconomyByKey, key).roiPercent)}`}
+                name={getLocalizedCropName(key)}
+                cost={formatMoney(crop.cost, locale)}
+                roi={messages.roi(formatSignedPercent(getCropEconomy(cropEconomyByKey, key).roiPercent, locale))}
                 onPress={() => selectCrop(key)}
               />
             );
           })}
           {!selectedAreaUnlocked ? (
             <Pressable style={styles.lockedNotice} onPress={openShop}>
-              <Text style={styles.lockedNoticeTitle}>{selectedAreaMeta.name} 열기 조건</Text>
+              <Text style={styles.lockedNoticeTitle}>{messages.lockedAreaTitle(selectedAreaLabel.name)}</Text>
               <Text style={styles.lockedNoticeDesc} numberOfLines={2}>
-                {getAreaUnlockRequirementText(gameState, selectedArea)}
+                {getAreaUnlockRequirementText(gameState, selectedArea, locale)}
               </Text>
             </Pressable>
           ) : null}
@@ -902,32 +937,47 @@ export default function FarmGame({
         </View>
       ) : null}
 
-      <Sheet activeSheet={activeSheet} onClose={closeSheet}>
+      <Sheet
+        activeSheet={activeSheet}
+        description={getSheetDescription(activeSheet, messages, locale, getLocalizedCropName)}
+        title={getSheetTitle(activeSheet, messages)}
+        onClose={closeSheet}
+      >
         {activeSheet?.type === 'shop' ? (
           <View>
             {rewardedAd.isAdSupported ? (
               <>
-                <Text style={styles.sheetSectionTitle}>광고 보상</Text>
+                <Text style={styles.sheetSectionTitle}>{messages.adRewardsSection}</Text>
                 <AdRewardCard
-                  title={`광고 보고 ${formatMoney(REWARDED_GOLD_AMOUNT)}G 받기`}
-                  desc={rewardedGoldLimit.allowed ? '10분에 최대 3회 받을 수 있어요.' : rewardedGoldLimit.reason}
-                  cta={rewardedAd.isAdReady && rewardedGoldLimit.allowed ? '받기' : '대기'}
+                  title={messages.rewardedGoldTitle(formatMoney(REWARDED_GOLD_AMOUNT, locale))}
+                  desc={rewardedGoldLimit.allowed ? messages.rewardedGoldReadyDesc : rewardedGoldLimit.reason}
+                  cta={
+                    rewardedAd.isAdReady && rewardedGoldLimit.allowed
+                      ? messages.rewardReceiveCta
+                      : messages.rewardWaitCta
+                  }
                   disabled={!rewardedAd.isAdReady || !rewardedGoldLimit.allowed}
                   onPress={() => void rewardGoldFromAd()}
                 />
                 <AdRewardCard
-                  title="광고 보고 밭 1칸 열기"
-                  desc={rewardedGoldLimit.allowed ? '개간 비용 없이 작물을 심을 공간을 늘려요.' : rewardedGoldLimit.reason}
-                  cta={rewardedAd.isAdReady && rewardedGoldLimit.allowed ? '열기' : '대기'}
-                  disabled={!rewardedAd.isAdReady || !rewardedGoldLimit.allowed || gameState.unlockedPlotCount >= MAX_PLOTS}
+                  title={messages.rewardedPlotTitle}
+                  desc={rewardedGoldLimit.allowed ? messages.rewardedPlotReadyDesc : rewardedGoldLimit.reason}
+                  cta={
+                    rewardedAd.isAdReady && rewardedGoldLimit.allowed ? messages.rewardOpenCta : messages.rewardWaitCta
+                  }
+                  disabled={
+                    !rewardedAd.isAdReady || !rewardedGoldLimit.allowed || gameState.unlockedPlotCount >= MAX_PLOTS
+                  }
                   onPress={() => void rewardFreePlotFromAd()}
                 />
               </>
             ) : null}
 
-            <Text style={styles.sheetSectionTitle}>영토 확장</Text>
+            <Text style={styles.sheetSectionTitle}>{messages.territorySection}</Text>
             <ShopPlotRow
               gameState={gameState}
+              locale={locale}
+              messages={messages}
               setGameState={setGameState}
               getAnalyticsContext={analyticsContext}
               analytics={farmAnalytics}
@@ -935,9 +985,11 @@ export default function FarmGame({
               onMilestone={() => void maybeShowMilestoneAd()}
             />
 
-            <Text style={styles.sheetSectionTitle}>새 구역 열기</Text>
+            <Text style={styles.sheetSectionTitle}>{messages.areaUnlockSection}</Text>
             <ShopAreaUnlockRows
               gameState={gameState}
+              locale={locale}
+              messages={messages}
               setGameState={setGameState}
               getAnalyticsContext={analyticsContext}
               analytics={farmAnalytics}
@@ -945,13 +997,15 @@ export default function FarmGame({
               onMilestone={() => void maybeShowMilestoneAd()}
             />
 
-            <Text style={styles.sheetSectionTitle}>농업 연구소</Text>
+            <Text style={styles.sheetSectionTitle}>{messages.researchSection}</Text>
             <Text style={styles.researchSummary}>
-              {`현재 연구 Lv.${researchLevel} · 성장속도 Lv.${gameState.upgrades.speed} / 수익률 Lv.${gameState.upgrades.profit}`}
+              {messages.researchSummary(researchLevel, gameState.upgrades.speed, gameState.upgrades.profit)}
             </Text>
             <ShopUpgradeRow
               kind="speed"
               gameState={gameState}
+              locale={locale}
+              messages={messages}
               setGameState={setGameState}
               getAnalyticsContext={analyticsContext}
               analytics={farmAnalytics}
@@ -961,6 +1015,8 @@ export default function FarmGame({
             <ShopUpgradeRow
               kind="profit"
               gameState={gameState}
+              locale={locale}
+              messages={messages}
               setGameState={setGameState}
               getAnalyticsContext={analyticsContext}
               analytics={farmAnalytics}
@@ -972,39 +1028,43 @@ export default function FarmGame({
 
         {activeSheet?.type === 'settings' ? (
           <View>
-            <Text style={styles.sheetSectionTitle}>사운드</Text>
+            <Text style={styles.sheetSectionTitle}>{messages.soundSection}</Text>
             <SettingToggle
-              label="효과음"
-              desc={
-                audio.isSupported
-                  ? '수확할 때 골드 획득음을 재생해요.'
-                  : '현재 환경에서는 사운드 재생을 지원하지 않아요.'
-              }
+              label={messages.soundEffectsLabel}
+              desc={audio.isSupported ? messages.soundEffectsEnabledDesc : messages.soundUnsupportedDesc}
               value={gameSettings.soundEffectsEnabled && audio.isSupported}
               disabled={!audio.isSupported}
               onPress={() => updateGameSettings({ soundEffectsEnabled: !gameSettings.soundEffectsEnabled })}
             />
             <SettingToggle
-              label="배경음악"
-              desc={audio.isSupported ? '농장 배경 루프를 재생해요.' : '현재 환경에서는 사운드 재생을 지원하지 않아요.'}
+              label={messages.backgroundMusicLabel}
+              desc={audio.isSupported ? messages.backgroundMusicDesc : messages.soundUnsupportedDesc}
               value={gameSettings.backgroundMusicEnabled && audio.isSupported}
               disabled={!audio.isSupported}
               onPress={() => updateGameSettings({ backgroundMusicEnabled: !gameSettings.backgroundMusicEnabled })}
             />
 
-            <Text style={styles.sheetSectionTitle}>게임 데이터</Text>
-            <SheetAction label="농장 기록 초기화" danger onPress={openResetConfirm} />
+            <Text style={styles.sheetSectionTitle}>{messages.languageSection}</Text>
+            <SheetAction
+              label={messages.languageSwitchLabel}
+              secondary
+              onPress={() => updateGameSettings({ locale: locale === 'ko-KR' ? 'en-US' : 'ko-KR' })}
+            />
+            <Text style={styles.settingDesc}>{messages.languageDesc}</Text>
+
+            <Text style={styles.sheetSectionTitle}>{messages.gameDataSection}</Text>
+            <SheetAction label={messages.resetFarmAction} danger onPress={openResetConfirm} />
           </View>
         ) : null}
 
         {activeSheet?.type === 'growthAd' ? (
           <View>
             <SheetAction
-              label={growthAdLimit.allowed ? '광고 보고 바로 성장시키기' : growthAdLimit.reason}
+              label={growthAdLimit.allowed ? messages.growthAdAction : growthAdLimit.reason}
               disabled={!rewardedAd.isAdReady || !growthAdLimit.allowed}
               onPress={() => void completeGrowthWithAd(activeSheet.plotIndex)}
             />
-            <SheetAction label="그냥 기다릴게요" secondary onPress={() => setActiveSheet(null)} />
+            <SheetAction label={messages.waitAction} secondary onPress={() => setActiveSheet(null)} />
           </View>
         ) : null}
 
@@ -1013,37 +1073,38 @@ export default function FarmGame({
             <SheetAction
               label={
                 harvestBonusAdLimit.allowed
-                  ? `광고 보고 ${formatRemainingTime(HARVEST_BONUS_BOOST_DURATION_MS)} 동안 수확 ${HARVEST_BONUS_MULTIPLIER}배`
+                  ? messages.harvestBonusAction(
+                      formatRemainingTime(HARVEST_BONUS_BOOST_DURATION_MS, locale),
+                      HARVEST_BONUS_MULTIPLIER
+                    )
                   : harvestBonusAdLimit.reason
               }
               disabled={!rewardedAd.isAdReady || !harvestBonusAdLimit.allowed}
               onPress={() => void activateHarvestBonusWithAd()}
             />
-            <SheetAction label="괜찮아요" secondary onPress={() => setActiveSheet(null)} />
+            <SheetAction label={messages.declineAction} secondary onPress={() => setActiveSheet(null)} />
           </View>
         ) : null}
 
         {activeSheet?.type === 'resetConfirm' ? (
           <View>
-            <Text style={styles.resetWarning}>
-              새로 시작하면 현재 골드, 밭, 업그레이드, 심은 작물 기록이 이 기기 저장소에서 삭제돼요.
-            </Text>
+            <Text style={styles.resetWarning}>{messages.resetWarning}</Text>
             <TextInput
-              accessibilityLabel="초기화 확인 문구"
+              accessibilityLabel={messages.resetInputAccessibilityLabel}
               autoCapitalize="none"
               autoCorrect={false}
-              placeholder={`${RESET_CONFIRM_TEXT} 입력`}
+              placeholder={messages.resetInputPlaceholder(resetConfirmValue)}
               style={styles.resetInput}
               value={resetConfirmText}
               onChangeText={setResetConfirmText}
             />
             <SheetAction
-              label="농장 기록 삭제하고 새로 시작"
+              label={messages.resetDeleteAction}
               danger
-              disabled={resetConfirmText !== RESET_CONFIRM_TEXT}
+              disabled={resetConfirmText !== resetConfirmValue}
               onPress={() => void confirmReset()}
             />
-            <SheetAction label="계속 이어서 할게요" secondary onPress={() => setActiveSheet(null)} />
+            <SheetAction label={messages.resetKeepAction} secondary onPress={() => setActiveSheet(null)} />
           </View>
         ) : null}
       </Sheet>
@@ -1056,12 +1117,14 @@ function PlotCell({
   unlocked,
   speedMult,
   tileSize,
+  messages,
   onPress,
 }: {
   plot: GameState['plots'][number];
   unlocked: boolean;
   speedMult: number;
   tileSize: number;
+  messages: FarmMessages;
   onPress: () => void;
 }) {
   const tileSizeStyle = { width: tileSize, height: tileSize };
@@ -1077,7 +1140,7 @@ function PlotCell({
   if (plot.state === 0) {
     return (
       <Pressable style={[styles.plotTile, tileSizeStyle, styles.emptyPlot]} onPress={onPress}>
-        <Text style={styles.emptyPlotText}>빈 밭</Text>
+        <Text style={styles.emptyPlotText}>{messages.emptyPlot}</Text>
       </Pressable>
     );
   }
@@ -1096,7 +1159,7 @@ function PlotCell({
     >
       {plot.state === 2 ? (
         <View style={styles.harvestBadge}>
-          <Text style={styles.harvestBadgeText}>GET</Text>
+          <Text style={styles.harvestBadgeText}>{messages.readyBadge}</Text>
         </View>
       ) : null}
       {plot.state === 1 && crop != null && plot.startTime != null ? (
@@ -1156,10 +1219,14 @@ function GrowthProgressBar({
 function Sheet({
   activeSheet,
   children,
+  description,
+  title,
   onClose,
 }: {
   activeSheet: ActiveSheet;
   children: React.ReactNode;
+  description: string;
+  title: string;
   onClose: () => void;
 }) {
   const dragYRef = useRef<Animated.Value | null>(null);
@@ -1269,8 +1336,8 @@ function Sheet({
         <Animated.View style={[styles.sheet, { transform: [{ translateY: dragY }] }]}>
           <View style={styles.sheetDragArea} {...panResponder.panHandlers}>
             <View style={styles.sheetHandle} />
-            <Text style={styles.sheetTitle}>{getSheetTitle(activeSheet)}</Text>
-            <Text style={styles.sheetDescription}>{getSheetDescription(activeSheet)}</Text>
+            <Text style={styles.sheetTitle}>{title}</Text>
+            <Text style={styles.sheetDescription}>{description}</Text>
           </View>
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.sheetContent}>
             {children}
@@ -1281,44 +1348,47 @@ function Sheet({
   );
 }
 
-function getSheetTitle(activeSheet: ActiveSheet) {
+function getSheetTitle(activeSheet: ActiveSheet, messages: FarmMessages) {
   if (activeSheet?.type === 'growthAd') {
-    return '즉시 성장';
+    return messages.sheetTitleGrowthAd;
   }
   if (activeSheet?.type === 'harvestBonus') {
-    return '수확 보너스';
+    return messages.sheetTitleHarvestBonus;
   }
   if (activeSheet?.type === 'settings') {
-    return '설정';
+    return messages.sheetTitleSettings;
   }
   if (activeSheet?.type === 'resetConfirm') {
-    return '새로 시작하기';
+    return messages.sheetTitleResetConfirm;
   }
-  return '농장 관리소';
+  return messages.sheetTitleShop;
 }
 
-function getSheetDescription(activeSheet: ActiveSheet) {
+function getSheetDescription(
+  activeSheet: ActiveSheet,
+  messages: FarmMessages,
+  locale: SupportedLocale,
+  getLocalizedCropName: (cropKey: CropKey) => string
+) {
   if (activeSheet?.type === 'growthAd') {
-    return `${activeSheet.cropName}이(가) 다 자랄 때까지 약 ${formatRemainingTime(activeSheet.remainingMs)} 남았어요.`;
+    return messages.sheetDescriptionGrowthAd(
+      getLocalizedCropName(activeSheet.cropKey),
+      formatRemainingTime(activeSheet.remainingMs, locale)
+    );
   }
   if (activeSheet?.type === 'harvestBonus') {
-    return `광고를 보면 ${formatRemainingTime(HARVEST_BONUS_BOOST_DURATION_MS)} 동안 수확 보상이 ${HARVEST_BONUS_MULTIPLIER}배로 올라가요.`;
+    return messages.sheetDescriptionHarvestBonus(
+      formatRemainingTime(HARVEST_BONUS_BOOST_DURATION_MS, locale),
+      HARVEST_BONUS_MULTIPLIER
+    );
   }
   if (activeSheet?.type === 'settings') {
-    return '사운드와 농장 기록을 관리해요.';
+    return messages.sheetDescriptionSettings;
   }
   if (activeSheet?.type === 'resetConfirm') {
-    return `정말 초기화하려면 '${RESET_CONFIRM_TEXT}'를 입력해야 해요.`;
+    return messages.sheetDescriptionResetConfirm(messages.resetConfirmText);
   }
-  return '광고 보상과 업그레이드로 농장을 빠르게 키워보세요.';
-}
-
-function formatRemainingTime(ms: number) {
-  const seconds = Math.ceil(ms / 1000);
-  if (seconds < 60) {
-    return `${seconds}초`;
-  }
-  return `${Math.ceil(seconds / 60)}분`;
+  return messages.sheetDescriptionShop;
 }
 
 function ToolButton({
@@ -1378,6 +1448,8 @@ function AdRewardCard({
 
 function ShopPlotRow({
   gameState,
+  locale,
+  messages,
   setGameState,
   getAnalyticsContext,
   analytics,
@@ -1385,6 +1457,8 @@ function ShopPlotRow({
   onMilestone,
 }: {
   gameState: GameState;
+  locale: SupportedLocale;
+  messages: FarmMessages;
   setGameState: React.Dispatch<React.SetStateAction<GameState>>;
   getAnalyticsContext: GetAnalyticsContext;
   analytics: FarmAnalytics;
@@ -1397,17 +1471,17 @@ function ShopPlotRow({
 
   return (
     <ShopCard
-      title="밭 개간하기"
-      desc={`현재 ${gameState.unlockedPlotCount}칸 · 작물을 심을 공간을 1칸 늘려요`}
-      price={isMax ? '완료' : `${formatMoney(cost)}G`}
+      title={messages.shopPlotTitle}
+      desc={messages.shopPlotDesc(gameState.unlockedPlotCount)}
+      price={isMax ? messages.completePrice : `${formatMoney(cost, locale)}G`}
       disabled={isMax || !canBuy}
       onPress={() => {
         if (isMax) {
-          onDone('더 이상 확장할 수 없어요.');
+          onDone(messages.noMoreExpansionToast);
           return;
         }
         if (gameState.gold < cost) {
-          onDone('자금이 부족해요.');
+          onDone(messages.insufficientGoldToast);
           return;
         }
         setGameState((state) => ({
@@ -1421,7 +1495,7 @@ function ShopPlotRow({
           nextPlotCount: gameState.unlockedPlotCount + 1,
           context: getAnalyticsContext(gameState),
         });
-        onDone('밭을 넓혔어요.');
+        onDone(messages.plotExpandedToast);
         onMilestone();
       }}
     />
@@ -1430,6 +1504,8 @@ function ShopPlotRow({
 
 function ShopAreaUnlockRows({
   gameState,
+  locale,
+  messages,
   setGameState,
   getAnalyticsContext,
   analytics,
@@ -1437,6 +1513,8 @@ function ShopAreaUnlockRows({
   onMilestone,
 }: {
   gameState: GameState;
+  locale: SupportedLocale;
+  messages: FarmMessages;
   setGameState: React.Dispatch<React.SetStateAction<GameState>>;
   getAnalyticsContext: GetAnalyticsContext;
   analytics: FarmAnalytics;
@@ -1448,9 +1526,9 @@ function ShopAreaUnlockRows({
   if (lockedAreas.length === 0) {
     return (
       <ShopCard
-        title="모든 구역 열기 완료"
-        desc="이제 모든 작물을 선택할 수 있어요."
-        price="완료"
+        title={messages.allAreasUnlockedTitle}
+        desc={messages.allAreasUnlockedDesc}
+        price={messages.completePrice}
         disabled
         onPress={() => undefined}
       />
@@ -1462,23 +1540,24 @@ function ShopAreaUnlockRows({
       {lockedAreas.map((area, index) => {
         const isNextArea = index === 0;
         const canBuy = isNextArea && canUnlockArea(gameState, area.key);
-        const requirementText = getAreaUnlockRequirementText(gameState, area.key);
+        const areaLabel = getAreaLabel(area.key, locale);
+        const requirementText = getAreaUnlockRequirementText(gameState, area.key, locale);
 
         return (
           <ShopCard
             key={area.key}
-            title={`${area.name} 열기`}
-            desc={`${area.target} · ${requirementText}`}
-            price={`${formatMoney(area.unlock.cost)}G`}
+            title={messages.areaOpenTitle(areaLabel.name)}
+            desc={`${areaLabel.target} · ${requirementText}`}
+            price={`${formatMoney(area.unlock.cost, locale)}G`}
             disabled={!canBuy}
             onPress={() => {
               analytics.trackAreaUnlockClicked(area.key, getAnalyticsContext(gameState));
               if (!isNextArea) {
-                onDone('앞 구역부터 차례대로 열어 주세요.');
+                onDone(messages.previousAreaRequiredToast);
                 return;
               }
               if (!canUnlockArea(gameState, area.key)) {
-                onDone('아직 구역을 열기 위한 조건이 부족해요.');
+                onDone(messages.areaRequirementsMissingToast);
                 return;
               }
 
@@ -1497,7 +1576,7 @@ function ShopAreaUnlockRows({
                 cost: area.unlock.cost,
                 context: getAnalyticsContext(gameState),
               });
-              onDone(`${area.name}을(를) 열었어요.`);
+              onDone(messages.areaOpenedToast(areaLabel.name));
               onMilestone();
             }}
           />
@@ -1510,6 +1589,8 @@ function ShopAreaUnlockRows({
 function ShopUpgradeRow({
   kind,
   gameState,
+  locale,
+  messages,
   setGameState,
   getAnalyticsContext,
   analytics,
@@ -1518,6 +1599,8 @@ function ShopUpgradeRow({
 }: {
   kind: 'speed' | 'profit';
   gameState: GameState;
+  locale: SupportedLocale;
+  messages: FarmMessages;
   setGameState: React.Dispatch<React.SetStateAction<GameState>>;
   getAnalyticsContext: GetAnalyticsContext;
   analytics: FarmAnalytics;
@@ -1526,20 +1609,20 @@ function ShopUpgradeRow({
 }) {
   const level = gameState.upgrades[kind];
   const cost = getUpgradeCost(kind, level);
-  const title = kind === 'speed' ? '🧪 고속 성장 비료' : '🚛 판로 개척';
-  const desc = kind === 'speed' ? '작물 성장 속도 +10%' : '판매 수익 +10%';
+  const title = kind === 'speed' ? messages.speedUpgradeTitle : messages.profitUpgradeTitle;
+  const desc = kind === 'speed' ? messages.speedUpgradeDesc : messages.profitUpgradeDesc;
   const disabled = gameState.gold < cost;
 
   return (
     <ShopCard
       title={title}
-      desc={`${desc} · Lv. ${level}`}
-      price={`${formatMoney(cost)}G`}
+      desc={messages.upgradeDescWithLevel(desc, level)}
+      price={`${formatMoney(cost, locale)}G`}
       priceTone={kind}
       disabled={disabled}
       onPress={() => {
         if (disabled) {
-          onDone('자금이 부족해요.');
+          onDone(messages.insufficientGoldToast);
           return;
         }
         setGameState((state) => ({
@@ -1553,7 +1636,7 @@ function ShopUpgradeRow({
           nextLevel: level + 1,
           context: getAnalyticsContext(gameState),
         });
-        onDone('연구를 완료했어요.');
+        onDone(messages.researchCompletedToast);
         onMilestone();
       }}
     />

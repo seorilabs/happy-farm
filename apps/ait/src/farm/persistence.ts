@@ -40,12 +40,17 @@ export function createFarmPersistence(storage: KeyValueStorage) {
       try {
         const raw = await storage.getItem(FARM_GAME_SETTINGS_KEY);
         if (raw == null) {
-          return normalizeFarmGameSettings(null);
+          return null;
         }
 
-        return normalizeFarmGameSettings(JSON.parse(raw) as Partial<FarmGameSettings>);
+        const parsed = JSON.parse(raw) as unknown;
+        if (typeof parsed !== 'object' || parsed == null) {
+          return null;
+        }
+
+        return parsed as Partial<FarmGameSettings>;
       } catch {
-        return normalizeFarmGameSettings(null);
+        return null;
       }
     },
 

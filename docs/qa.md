@@ -6,9 +6,20 @@
 pnpm lint
 pnpm typecheck
 pnpm test
+pnpm check:i18n
 pnpm build
 pnpm check:app-store
 ```
+
+## i18n 확인
+
+i18n 계획과 변경 체크리스트는 `docs/i18n-plan.md`를 기준으로 한다.
+
+- 새 사용자-facing 문자열은 locale catalog에 추가한다.
+- `ko-KR`과 `en-US`를 함께 갱신한다.
+- crop/area label, 금액, 시간, 광고 제한 사유가 locale-aware 경로를 타는지 확인한다.
+- 긴 `en-US` 문구가 버튼, 바텀시트, 하단 tool strip, 한 줄 텍스트에서 넘치지 않는지 확인한다.
+- store listing, release note, screenshot text에 영향이 있으면 Play/App Store/AppsInToss 문서와 config를 함께 갱신한다.
 
 ## 기능 확인
 

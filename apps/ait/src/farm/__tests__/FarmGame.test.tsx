@@ -28,6 +28,8 @@ const mockPersistence = {
   readPersistedGameState: jest.fn<Promise<GameState>, []>(),
   writePersistedGameState: jest.fn<Promise<void>, [GameState]>(),
   removePersistedGameState: jest.fn<Promise<void>, []>(),
+  readPersistedGameSettings: jest.fn(),
+  writePersistedGameSettings: jest.fn(),
 };
 
 function getCropKeys() {
@@ -105,8 +107,13 @@ function createShopReadyState(): GameState {
   };
 }
 
-async function renderGame(savedState: GameState | null, props: Partial<React.ComponentProps<typeof FarmGame>> = {}) {
+async function renderGame(
+  savedState: GameState | null,
+  props: Partial<React.ComponentProps<typeof FarmGame>> = {},
+  savedSettings: unknown = null
+) {
   mockPersistence.readPersistedGameState.mockResolvedValueOnce(savedState ?? createInitialState());
+  mockPersistence.readPersistedGameSettings.mockResolvedValueOnce(savedSettings);
 
   const view = render(<FarmGame persistence={mockPersistence} {...props} />);
   await act(async () => {
@@ -146,6 +153,8 @@ describe('FarmGame UI flow', () => {
     mockPersistence.readPersistedGameState.mockReset();
     mockPersistence.writePersistedGameState.mockResolvedValue(undefined);
     mockPersistence.removePersistedGameState.mockResolvedValue(undefined);
+    mockPersistence.readPersistedGameSettings.mockReset();
+    mockPersistence.writePersistedGameSettings.mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -188,6 +197,37 @@ describe('FarmGame UI flow', () => {
 
     expect(screen.getByText('54G')).toBeTruthy();
     expect(screen.getAllByText('빈 밭')).toHaveLength(6);
+  });
+
+  test('renders the shared farm UI in English when the saved locale is en-US', async () => {
+    const screen = await renderGame(null, {}, { locale: 'en-US' });
+
+    await waitFor(() => expect(screen.getByText('Happy Farm')).toBeTruthy());
+    expect(screen.getByText('Research Lv.1')).toBeTruthy();
+    expect(screen.getByText(/About /)).toBeTruthy();
+    expect(screen.getAllByText('Empty')).toHaveLength(6);
+    expect(screen.getByText('Carrot')).toBeTruthy();
+
+    fireEvent.press(screen.getByText(/Vegetable Field/));
+    expect(screen.getByText('Vegetable Field requirements')).toBeTruthy();
+    fireEvent.press(screen.getByText('Starter Field'));
+
+    fireEvent.press(screen.getByText('Carrot'));
+    expect(screen.getByText('Plant Carrot · 10G · ROI +40%')).toBeTruthy();
+  });
+
+  test('uses the preferred locale when no saved locale exists', async () => {
+    const screen = await renderGame(null, { preferredLocale: 'en-US' }, null);
+
+    await waitFor(() => expect(screen.getByText('Happy Farm')).toBeTruthy());
+    expect(screen.getByText('Research Lv.1')).toBeTruthy();
+  });
+
+  test('uses the preferred locale when legacy settings do not include a locale', async () => {
+    const screen = await renderGame(null, { preferredLocale: 'en-US' }, { soundEffectsEnabled: false });
+
+    await waitFor(() => expect(screen.getByText('Happy Farm')).toBeTruthy());
+    expect(screen.getByText('Research Lv.1')).toBeTruthy();
   });
 
   test('renders a late-game save without overflowing critical one-line UI text', async () => {

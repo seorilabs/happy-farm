@@ -14,6 +14,7 @@
     "check:play": "node scripts/check-google-play-readiness.mjs",
     "check:app-store": "node scripts/check-app-store-readiness.mjs",
     "check:firebase:android": "node scripts/check-firebase-android-config.mjs",
+    "check:i18n": "node scripts/check-i18n.mjs",
     "release:version": "node scripts/resolve-release-version.mjs",
     "release:next-tag": "node scripts/resolve-next-release-tag.mjs",
     "test": "jest --passWithNoTests",

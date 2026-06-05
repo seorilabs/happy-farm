@@ -10,41 +10,53 @@
 
 ## 등록 화면 입력값
 
-| 항목                     | 입력값                              |
-| ------------------------ | ----------------------------------- |
-| Platform                 | iOS                                 |
-| 앱 이름                  | 행복 농장 타이쿤                    |
-| 기본 언어                | Korean (`ko-KR`)                    |
-| Bundle ID                | `com.seorilabs.happyfarm`           |
-| SKU                      | `happy-farm-ios`                    |
-| 앱 유형                  | 게임                                |
-| 가격                     | 무료                                |
-| 카테고리                 | Games                               |
-| 게임 하위 카테고리       | Simulation, Casual                  |
-| Game Center              | 사용 안 함                          |
-| 로그인 필요              | 아니오                              |
-| 콘텐츠 권한              | 예, 타사 콘텐츠 표시 및 권한 있음   |
-| 수출 규정/암호화         | 비면제 암호화 사용 안 함            |
-| 디지털 서비스법(DSA)     | 거래자                              |
-| 라우팅 앱 적용 범위 파일 | 해당 없음                           |
-| 버전                     | 릴리즈 태그 기준, 예: `v1.1.4` -> `1.1.4` |
+| 항목                     | 입력값                                      |
+| ------------------------ | ------------------------------------------- |
+| Platform                 | iOS                                         |
+| 앱 이름                  | 행복 농장 타이쿤                            |
+| 기본 언어                | Korean (`ko-KR`)                            |
+| Bundle ID                | `com.seorilabs.happyfarm`                   |
+| SKU                      | `happy-farm-ios`                            |
+| 앱 유형                  | 게임                                        |
+| 가격                     | 무료                                        |
+| 카테고리                 | Games                                       |
+| 게임 하위 카테고리       | Simulation, Casual                          |
+| Game Center              | 사용 안 함                                  |
+| 로그인 필요              | 아니오                                      |
+| 콘텐츠 권한              | 예, 타사 콘텐츠 표시 및 권한 있음           |
+| 수출 규정/암호화         | 비면제 암호화 사용 안 함                    |
+| 디지털 서비스법(DSA)     | 거래자                                      |
+| 라우팅 앱 적용 범위 파일 | 해당 없음                                   |
+| 버전                     | 릴리즈 태그 기준, 예: `v1.1.4` -> `1.1.4`   |
 | 빌드 번호                | 릴리즈 태그 기준, 예: `v1.1.4` -> `1001004` |
-| 저작권                   | `2026 Seorilabs`                    |
-| 고객지원 이메일          | `cs@seorilabs.com`                  |
-| 지원 URL                 | `https://www.seorilabs.com/support` |
-| 마케팅 URL               | 확정 필요                           |
-| 개인정보 처리방침 URL    | `https://www.seorilabs.com/privacy` |
-| 심사 연락처 이름         | Seorilabs Support                   |
-| 심사 연락처 이메일       | `cs@seorilabs.com`                  |
-| 심사 연락처 전화번호     | App Store Connect에만 저장          |
+| 저작권                   | `2026 Seorilabs`                            |
+| 고객지원 이메일          | `cs@seorilabs.com`                          |
+| 지원 URL                 | `https://www.seorilabs.com/support`         |
+| 마케팅 URL               | 확정 필요                                   |
+| 개인정보 처리방침 URL    | `https://www.seorilabs.com/privacy`         |
+| 심사 연락처 이름         | Seorilabs Support                           |
+| 심사 연락처 이메일       | `cs@seorilabs.com`                          |
+| 심사 연락처 전화번호     | App Store Connect에만 저장                  |
 
 ## 스토어 문구
 
-### 프로모션 텍스트
+### ko-KR
+
+앱 이름: `행복 농장 타이쿤`
+
+부제: `작물을 키우는 방치형 농장`
+
+키워드:
+
+```text
+작물,수확,농사,성장,방치형,타이쿤,시뮬레이션,게임
+```
+
+#### 프로모션 텍스트
 
 작물을 심고 수확해 골드를 모으세요. 밭을 넓히고 성장 속도와 판매 수익을 업그레이드하는 가벼운 방치형 농장 타이쿤입니다.
 
-### 설명
+#### 설명
 
 행복 농장 타이쿤은 작은 밭에서 시작해 작물을 심고, 성장 시간을 기다린 뒤 수확해 골드를 모으는 농장 성장 게임입니다.
 
@@ -54,11 +66,31 @@
 
 로그인 없이 바로 시작할 수 있으며, 복잡한 경쟁이나 과금 압박 없이 농장이 커지는 흐름에 집중합니다.
 
-### 키워드
+### en-US
+
+App name: `Happy Farm Tycoon`
+
+Subtitle: `Idle crop-growing farm`
+
+Keywords:
 
 ```text
-작물,수확,농사,성장,방치형,타이쿤,시뮬레이션,게임
+farm,crops,harvest,idle,tycoon,growth,simulation,game
 ```
+
+#### Promotional Text
+
+Plant crops, harvest gold, clear new plots, and upgrade your growth speed and sale profit in a light idle farm tycoon.
+
+#### Description
+
+Happy Farm Tycoon is a light farm growth game where you start with a small field, plant crops, wait for them to grow, and harvest gold.
+
+Grow step-by-step crops such as potatoes, strawberries, and watermelons, then use your harvest profit to clear more plots. Upgrade growth speed and sale profit to make your farm expand faster in the same amount of time.
+
+Open new areas to unlock more planting space and longer-term goals. Your progress is saved on this device so you can continue your farm on the next visit.
+
+You can start right away without signing in. The game focuses on a simple, low-pressure farm expansion loop without complex competition.
 
 ### 이번 버전에서 업그레이드된 사항
 
@@ -96,6 +128,8 @@ app-store/screenshots/iphone-6.5/iphone-2.png
 app-store/screenshots/ipad-13/ipad-1.png
 app-store/screenshots/ipad-13/ipad-2.png
 ```
+
+2026-06-05 기준 screenshot은 `en_US` iPhone 17 Pro Max, iPad Pro 13-inch 시뮬레이터에서 실제 앱 화면으로 재생성했습니다. iPhone 6.5형 파일은 iPhone 6.9형 실캡처를 `1284x2778` 규격으로 리사이즈/크롭한 자산입니다.
 
 현재 `apps/mobile` Xcode target은 iPhone과 iPad를 모두 지원하므로 iPad 13형 스크린샷도 필요합니다. Apple Watch 앱은 없으므로 Apple Watch 스크린샷은 해당 없습니다.
 

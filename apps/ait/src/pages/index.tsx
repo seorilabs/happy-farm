@@ -2,6 +2,7 @@ import { createRoute } from '@granite-js/react-native';
 import React from 'react';
 import { appsInTossFarmAnalytics } from '../firebaseWeb';
 import FarmGame from '../farm/FarmGame';
+import { detectRuntimeLocale } from '../farm/i18n';
 import { useFullScreenAd } from '../farm/platform/fullScreenAd';
 import {
   readPersistedGameSettings,
@@ -28,6 +29,7 @@ function Page() {
     <FarmGame
       analytics={appsInTossFarmAnalytics}
       persistence={appsInTossPersistence}
+      preferredLocale={detectRuntimeLocale()}
       useInterstitialAd={useFullScreenAd}
       useRewardedAd={useFullScreenAd}
     />

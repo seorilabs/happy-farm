@@ -1,5 +1,12 @@
 import type { AreaKey, CropKey, GameState, PlotState } from './types';
 import balance from './balance.json';
+import {
+  DEFAULT_LOCALE,
+  formatDuration,
+  formatMoney as formatMoneyForLocale,
+  getCoreMessages,
+  type SupportedLocale,
+} from './i18n';
 
 export type RewardedAdType = 'rewardedGold' | 'growthAd' | 'harvestBonusAd';
 
@@ -94,27 +101,8 @@ function getKnownCrop(cropKey: CropKey) {
   return crop;
 }
 
-export function formatMoney(amount: number) {
-  if (!Number.isFinite(amount)) return '0';
-
-  const units = [
-    { value: 1e20, suffix: '해' },
-    { value: 1e16, suffix: '경' },
-    { value: 1e12, suffix: '조' },
-    { value: 1e8, suffix: '억' },
-    { value: 1e4, suffix: '만' },
-  ];
-  const absAmount = Math.abs(amount);
-
-  for (const unit of units) {
-    if (absAmount >= unit.value) {
-      const scaled = amount / unit.value;
-      const fractionDigits = Math.abs(scaled) >= 100 ? 0 : Math.abs(scaled) >= 10 ? 1 : 2;
-      return `${scaled.toFixed(fractionDigits).replace(/\.0+$|(\.\d*[1-9])0+$/, '$1')}${unit.suffix}`;
-    }
-  }
-
-  return Math.floor(amount).toLocaleString();
+export function formatMoney(amount: number, locale: SupportedLocale = DEFAULT_LOCALE) {
+  return formatMoneyForLocale(amount, locale);
 }
 
 export function getPlotCost(unlockedPlotCount: number) {
@@ -215,14 +203,19 @@ export function canUnlockArea(gameState: GameState, areaKey: AreaKey) {
   );
 }
 
-export function getAreaUnlockRequirementText(gameState: GameState, areaKey: AreaKey) {
+export function getAreaUnlockRequirementText(
+  gameState: GameState,
+  areaKey: AreaKey,
+  locale: SupportedLocale = DEFAULT_LOCALE
+) {
   const area = FARM_AREAS.find((candidate) => candidate.key === areaKey);
   if (area == null) return '';
 
+  const messages = getCoreMessages(locale);
   const parts = [
-    `${formatMoney(area.unlock.cost)}G`,
-    `수확 작물 ${gameState.harvestedCropKeys.length}/${area.unlock.requiredHarvestedCropCount}종`,
-    `연구 Lv.${area.unlock.requiredUpgradeLevel} 필요`,
+    `${formatMoney(area.unlock.cost, locale)}G`,
+    messages.harvestedCropRequirement(gameState.harvestedCropKeys.length, area.unlock.requiredHarvestedCropCount),
+    messages.researchLevelRequired(area.unlock.requiredUpgradeLevel),
   ];
   return parts.join(' · ');
 }
@@ -282,30 +275,24 @@ export function normalizeAdUsage(
       lastPromptedAt: isFinitePastTimestamp(adUsage?.harvestBonusAd?.lastPromptedAt, now)
         ? adUsage.harvestBonusAd.lastPromptedAt
         : null,
-      boostEndsAt: isFiniteTimestamp(adUsage?.harvestBonusAd?.boostEndsAt)
-        ? adUsage.harvestBonusAd.boostEndsAt
-        : null,
+      boostEndsAt: isFiniteTimestamp(adUsage?.harvestBonusAd?.boostEndsAt) ? adUsage.harvestBonusAd.boostEndsAt : null,
       dailyCount: normalizeDailyCount(adUsage?.harvestBonusAd?.dailyCount, isSameDay),
     },
   };
 }
 
-function formatDuration(ms: number) {
-  const seconds = Math.max(1, Math.ceil(ms / 1000));
-  if (seconds < 60) return `${seconds}초`;
-  const minutes = Math.ceil(seconds / 60);
-  if (minutes < 60) return `${minutes}분`;
-  const hours = Math.floor(minutes / 60);
-  const remainingMinutes = minutes % 60;
-  return remainingMinutes === 0 ? `${hours}시간` : `${hours}시간 ${remainingMinutes}분`;
-}
-
-export function getRewardedAdLimitStatus(gameState: GameState, type: RewardedAdType, now = Date.now()) {
+export function getRewardedAdLimitStatus(
+  gameState: GameState,
+  type: RewardedAdType,
+  now = Date.now(),
+  locale: SupportedLocale = DEFAULT_LOCALE
+) {
   const adUsage = normalizeAdUsage(gameState.adUsage, now);
+  const messages = getCoreMessages(locale);
 
   if (type === 'rewardedGold') {
     if (adUsage.rewardedGoldDailyCount >= REWARDED_GOLD_DAILY_LIMIT) {
-      return { allowed: false, reason: '오늘 이용 가능한 횟수를 모두 사용했어요.' };
+      return { allowed: false, reason: messages.adDailyLimitReached };
     }
 
     if (adUsage.rewardedGoldTimestamps.length >= REWARDED_GOLD_MAX_USES_PER_WINDOW) {
@@ -313,7 +300,7 @@ export function getRewardedAdLimitStatus(gameState: GameState, type: RewardedAdT
       const remainingMs = REWARDED_GOLD_WINDOW_MS - (now - oldestTimestamp);
       return {
         allowed: false,
-        reason: `${formatDuration(remainingMs)} 후 다시 받을 수 있어요.`,
+        reason: messages.rewardedGoldCooldown(formatDuration(remainingMs, locale)),
       };
     }
     return { allowed: true, reason: '' };
@@ -324,27 +311,34 @@ export function getRewardedAdLimitStatus(gameState: GameState, type: RewardedAdT
   const usage = type === 'growthAd' ? adUsage.growthAd : adUsage.harvestBonusAd;
 
   if (usage.dailyCount >= limit) {
-    return { allowed: false, reason: '오늘 이용 가능한 횟수를 모두 사용했어요.' };
+    return { allowed: false, reason: messages.adDailyLimitReached };
   }
 
   if (usage.lastUsedAt != null && now - usage.lastUsedAt < cooldownMs) {
     return {
       allowed: false,
-      reason: `${formatDuration(cooldownMs - (now - usage.lastUsedAt))} 후 다시 사용할 수 있어요.`,
+      reason: messages.adCooldown(formatDuration(cooldownMs - (now - usage.lastUsedAt), locale)),
     };
   }
 
   return { allowed: true, reason: '' };
 }
 
-export function getHarvestBonusPromptStatus(gameState: GameState, now = Date.now()) {
+export function getHarvestBonusPromptStatus(
+  gameState: GameState,
+  now = Date.now(),
+  locale: SupportedLocale = DEFAULT_LOCALE
+) {
   const adUsage = normalizeAdUsage(gameState.adUsage, now);
+  const messages = getCoreMessages(locale);
   const { lastPromptedAt } = adUsage.harvestBonusAd;
 
   if (lastPromptedAt != null && now - lastPromptedAt < HARVEST_BONUS_AD_COOLDOWN_MS) {
     return {
       allowed: false,
-      reason: `${formatDuration(HARVEST_BONUS_AD_COOLDOWN_MS - (now - lastPromptedAt))} 후 다시 제안돼요.`,
+      reason: messages.harvestBonusPromptCooldown(
+        formatDuration(HARVEST_BONUS_AD_COOLDOWN_MS - (now - lastPromptedAt), locale)
+      ),
     };
   }
 
@@ -365,10 +359,7 @@ export function getHarvestBonusBoostStatus(gameState: GameState, now = Date.now(
   };
 }
 
-export function recordHarvestBonusAdPrompt(
-  gameState: GameState,
-  now = Date.now()
-): GameState['adUsage'] {
+export function recordHarvestBonusAdPrompt(gameState: GameState, now = Date.now()): GameState['adUsage'] {
   const adUsage = normalizeAdUsage(gameState.adUsage, now);
 
   return {
@@ -473,7 +464,10 @@ function normalizeUnlockedPlotCount(value: unknown, fallback: number) {
   return Math.min(MAX_PLOTS, Math.max(INITIAL_PLOTS, Math.floor(value)));
 }
 
-function normalizePlot(plot: Partial<GameState['plots'][number]> | undefined, index: number): GameState['plots'][number] {
+function normalizePlot(
+  plot: Partial<GameState['plots'][number]> | undefined,
+  index: number
+): GameState['plots'][number] {
   const cropType = isKnownCropKey(plot?.cropType) ? plot.cropType : null;
   const startTime = typeof plot?.startTime === 'number' && Number.isFinite(plot.startTime) ? plot.startTime : null;
   const canKeepCropState = cropType != null;

@@ -13,7 +13,8 @@ on:
       - '**.gitkeep'
       - 'assets/**'
       - 'docs/**'
-      - 'play-store/**'
+      - 'play-store/assets/**'
+      - 'play-store/screenshots/**'
       - '.github/workflows/deploy-*.yml'
   push:
     branches-ignore:
@@ -27,7 +28,8 @@ on:
       - '**.gitkeep'
       - 'assets/**'
       - 'docs/**'
-      - 'play-store/**'
+      - 'play-store/assets/**'
+      - 'play-store/screenshots/**'
       - '.github/workflows/deploy-*.yml'
   workflow_dispatch:
 
@@ -59,6 +61,9 @@ jobs:
 
       - name: Test shared core and AIT app
         run: pnpm test
+
+      - name: Check i18n coverage
+        run: pnpm check:i18n
 
       - name: Typecheck mobile app
         run: pnpm --dir apps/mobile typecheck

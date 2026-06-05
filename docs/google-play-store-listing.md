@@ -20,9 +20,17 @@
 
 ## 스토어 문구
 
+### ko-KR
+
 - 앱 이름: `행복 농장 타이쿤`
 - 짧은 설명: `작물을 심고 수확하며 농장을 확장하는 방치형 농장 게임`
 - 전체 설명: 작은 밭에서 시작해 작물을 심고, 성장 시간을 기다린 뒤 수확해 골드를 모으는 농장 타이쿤 게임입니다. 골드로 밭을 넓히고 성장 속도와 판매 수익을 업그레이드하며, 조건을 채우면 새 구역을 순서대로 열 수 있습니다.
+
+### en-US
+
+- App name: `Happy Farm Tycoon`
+- Short description: `Plant, harvest, and expand your cozy idle farm`
+- Full description: Start with a small field, plant crops, wait for them to grow, and harvest gold in a cozy farm tycoon game. Use gold to clear more plots, improve growth speed and sale profit, and unlock new areas in order as your farm expands.
 
 ## 릴리스 노트
 
@@ -53,7 +61,7 @@ Updated area-opening copy to simpler wording, added an estimated gold-per-hour p
   - `play-store/screenshots/tablet-10/tablet-10-1.png`
   - `play-store/screenshots/tablet-10/tablet-10-2.png`
 
-현재 `apps/mobile/App.tsx`는 전체 게임 플레이 UI가 아니라 소개형 shell입니다. Play 스크린샷은 게임 UI 포팅 후 실제 앱 화면을 캡처해서 채워야 합니다.
+현재 `apps/mobile/App.tsx`는 AIT와 같은 게임 플레이 UI를 사용합니다. 기존 Play 스크린샷은 마케팅형 이미지로 남아 있으므로, 글로벌 공개 전에는 Android 영문 화면 캡처 또는 영문 마케팅형 이미지로 교체해야 합니다.
 
 ## API 자동화 범위
 
