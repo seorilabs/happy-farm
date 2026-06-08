@@ -81,6 +81,7 @@ describe('farm storage', () => {
         unlockedPlotCount: 6,
         unlockedAreas: ['starter_field'],
         harvestedCropKeys: [],
+        claimedCollectionRewards: [],
         adUsage: {
           dailyKey: '2026-05-27',
           rewardedGoldTimestamps: [],

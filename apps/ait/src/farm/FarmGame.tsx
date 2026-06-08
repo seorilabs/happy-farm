@@ -18,6 +18,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
   CROPS,
+  COLLECTION_FULL_REWARD_KEY,
   FARM_AREAS,
   GROWTH_AD_MAX_SKIP_MS,
   GROWTH_AD_MIN_REMAINING_MS,
@@ -27,6 +28,7 @@ import {
   MAX_PLOTS,
   REWARDED_GOLD_AMOUNT,
   type AreaKey,
+  type CollectionRewardKey,
   type CropKey,
   type GameAnalyticsContext,
   type GameState,
@@ -34,6 +36,7 @@ import {
   type RewardedAdShowResult,
   type RewardedAdType,
   canUnlockArea,
+  claimCollectionReward,
   createFarmAnalytics,
   createInitialState,
   DEFAULT_LOCALE,
@@ -43,6 +46,7 @@ import {
   formatSignedPercent,
   getAreaLabel,
   getAreaUnlockRequirementText,
+  getCollectionSummary,
   getCropLabel,
   getCropEconomyEstimate,
   getFarmProductivityEstimate,
@@ -56,6 +60,7 @@ import {
   getSpeedMultiplier,
   getUpgradeCost,
   isAreaUnlocked,
+  isCropDiscovered,
   normalizeLocale,
   recordHarvestBonusAdPrompt,
   recordRewardedAdUsage,
@@ -119,6 +124,7 @@ const FIRST_AREA = getFirstArea();
 
 type ActiveSheet =
   | { type: 'shop' }
+  | { type: 'collection' }
   | { type: 'settings' }
   | { type: 'growthAd'; plotIndex: number; cropKey: CropKey; remainingMs: number }
   | { type: 'harvestBonus' }
@@ -360,6 +366,9 @@ export default function FarmGame({
     if (activeSheet?.type === 'harvestBonus') {
       farmAnalytics.trackAdRewardImpression('harvestBonusAd', 'harvest_bonus_sheet', analyticsContext());
     }
+    if (activeSheet?.type === 'collection') {
+      farmAnalytics.trackCollectionScreen(analyticsContext());
+    }
   }, [activeSheet, analyticsContext]);
 
   useEffect(() => {
@@ -389,6 +398,8 @@ export default function FarmGame({
       {} as Record<AreaKey, number>
     );
   }, []);
+  const collectionSummary = useMemo(() => getCollectionSummary(gameState), [gameState]);
+  const claimableCollectionCount = collectionSummary.claimableCount;
   const selectedAreaLabel = getLocalizedAreaLabel(selectedArea);
   const selectedAreaUnlocked = isAreaUnlocked(gameState, selectedArea);
   const rewardedGoldLimit = useMemo(
@@ -456,6 +467,25 @@ export default function FarmGame({
 
   function openShop() {
     setActiveSheet({ type: 'shop' });
+  }
+
+  function openCollection() {
+    setActiveSheet({ type: 'collection' });
+  }
+
+  function claimCollectionRewardByKey(rewardKey: CollectionRewardKey) {
+    const preview = claimCollectionReward(gameState, rewardKey);
+    if (preview == null) {
+      return;
+    }
+    // Re-evaluate inside the updater so a double tap cannot award the reward twice.
+    setGameState((state) => claimCollectionReward(state, rewardKey)?.state ?? state);
+    farmAnalytics.trackCollectionRewardClaimed({
+      rewardKey,
+      rewardValue: preview.awardedGold,
+      context: analyticsContext(),
+    });
+    toast(messages.collectionRewardClaimedToast(formatMoney(preview.awardedGold, locale)));
   }
 
   function openSettings() {
@@ -804,6 +834,19 @@ export default function FarmGame({
               <Text style={styles.shopButtonText}>{messages.shopButton}</Text>
             </Pressable>
             <Pressable
+              accessibilityLabel={messages.collectionButtonAccessibilityLabel}
+              hitSlop={8}
+              style={styles.settingsButton}
+              onPress={openCollection}
+            >
+              <Text style={styles.settingsButtonText}>📖</Text>
+              {claimableCollectionCount > 0 ? (
+                <View style={styles.collectionBadge}>
+                  <Text style={styles.collectionBadgeText}>{claimableCollectionCount}</Text>
+                </View>
+              ) : null}
+            </Pressable>
+            <Pressable
               accessibilityLabel={messages.settingsAccessibilityLabel}
               hitSlop={8}
               style={styles.settingsButton}
@@ -934,7 +977,7 @@ export default function FarmGame({
 
       <Sheet
         activeSheet={activeSheet}
-        description={getSheetDescription(activeSheet, messages, locale, getLocalizedCropName)}
+        description={getSheetDescription(activeSheet, messages, locale, getLocalizedCropName, gameState)}
         title={getSheetTitle(activeSheet, messages)}
         onClose={closeSheet}
       >
@@ -1018,6 +1061,71 @@ export default function FarmGame({
               onDone={toast}
               onMilestone={() => void maybeShowMilestoneAd()}
             />
+          </View>
+        ) : null}
+
+        {activeSheet?.type === 'collection' ? (
+          <View>
+            {collectionSummary.areas.map((area) => {
+              const areaLabel = getLocalizedAreaLabel(area.areaKey);
+              return (
+                <View key={area.areaKey} style={styles.collectionArea}>
+                  <View style={styles.collectionAreaHeader}>
+                    <Text style={styles.collectionAreaName} numberOfLines={1}>
+                      {areaLabel.name}
+                    </Text>
+                    <Text style={[styles.collectionAreaProgress, area.completed && styles.collectionAreaProgressDone]}>
+                      {area.completed ? messages.collectionCompletedBadge : `${area.discoveredCount}/${area.totalCount}`}
+                    </Text>
+                  </View>
+                  <View style={styles.collectionGrid}>
+                    {area.cropKeys.map((cropKey) => {
+                      const discovered = isCropDiscovered(gameState, cropKey);
+                      const crop = getCrop(cropKey);
+                      return (
+                        <View
+                          key={cropKey}
+                          style={[styles.collectionCell, !discovered && styles.collectionCellLocked]}
+                        >
+                          <Text style={styles.collectionCellIcon}>{discovered ? crop.icon : '❓'}</Text>
+                          <Text style={styles.collectionCellName} numberOfLines={1}>
+                            {discovered ? getLocalizedCropName(cropKey) : '???'}
+                          </Text>
+                          {discovered ? (
+                            <Text style={styles.collectionCellValue} numberOfLines={1}>
+                              {formatMoney(crop.sell, locale)}G
+                            </Text>
+                          ) : null}
+                        </View>
+                      );
+                    })}
+                  </View>
+                  {area.rewardClaimed ? (
+                    <Text style={styles.collectionClaimedLabel}>{messages.collectionClaimedLabel}</Text>
+                  ) : area.rewardClaimable ? (
+                    <SheetAction
+                      label={messages.collectionClaimAction(formatMoney(area.reward, locale))}
+                      onPress={() => claimCollectionRewardByKey(area.areaKey)}
+                    />
+                  ) : null}
+                </View>
+              );
+            })}
+
+            <Text style={styles.sheetSectionTitle}>{messages.collectionFullTitle}</Text>
+            <View style={styles.collectionArea}>
+              <Text style={styles.collectionFullDesc}>
+                {messages.collectionFullDesc(collectionSummary.discoveredCount, collectionSummary.totalCount)}
+              </Text>
+              {collectionSummary.fullRewardClaimed ? (
+                <Text style={styles.collectionClaimedLabel}>{messages.collectionClaimedLabel}</Text>
+              ) : collectionSummary.fullRewardClaimable ? (
+                <SheetAction
+                  label={messages.collectionClaimAction(formatMoney(collectionSummary.fullReward, locale))}
+                  onPress={() => claimCollectionRewardByKey(COLLECTION_FULL_REWARD_KEY)}
+                />
+              ) : null}
+            </View>
           </View>
         ) : null}
 
@@ -1360,6 +1468,9 @@ function getSheetTitle(activeSheet: ActiveSheet, messages: FarmMessages) {
   if (activeSheet?.type === 'resetConfirm') {
     return messages.sheetTitleResetConfirm;
   }
+  if (activeSheet?.type === 'collection') {
+    return messages.sheetTitleCollection;
+  }
   return messages.sheetTitleShop;
 }
 
@@ -1367,8 +1478,13 @@ function getSheetDescription(
   activeSheet: ActiveSheet,
   messages: FarmMessages,
   locale: SupportedLocale,
-  getLocalizedCropName: (cropKey: CropKey) => string
+  getLocalizedCropName: (cropKey: CropKey) => string,
+  gameState: GameState
 ) {
+  if (activeSheet?.type === 'collection') {
+    const summary = getCollectionSummary(gameState);
+    return messages.sheetDescriptionCollection(summary.discoveredCount, summary.totalCount);
+  }
   if (activeSheet?.type === 'growthAd') {
     return messages.sheetDescriptionGrowthAd(
       getLocalizedCropName(activeSheet.cropKey),
@@ -2345,6 +2461,100 @@ const styles = StyleSheet.create({
     color: '#253126',
     backgroundColor: '#ffffff',
     fontSize: 16,
+    fontWeight: '700',
+  },
+  collectionBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    minWidth: 18,
+    height: 18,
+    paddingHorizontal: 4,
+    borderRadius: 9,
+    backgroundColor: '#e5484d',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  collectionBadgeText: {
+    color: '#ffffff',
+    fontSize: 10,
+    fontWeight: '900',
+  },
+  collectionArea: {
+    marginBottom: 14,
+  },
+  collectionAreaHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginBottom: 8,
+  },
+  collectionAreaName: {
+    minWidth: 0,
+    flexShrink: 1,
+    color: '#253126',
+    fontSize: 15,
+    fontWeight: '900',
+  },
+  collectionAreaProgress: {
+    flexShrink: 0,
+    color: '#7b8794',
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  collectionAreaProgressDone: {
+    color: '#247241',
+  },
+  collectionGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  collectionCell: {
+    width: 72,
+    minHeight: 72,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+    borderWidth: 1,
+    borderColor: '#d0d5dd',
+    borderRadius: 8,
+    backgroundColor: '#ffffff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 2,
+  },
+  collectionCellLocked: {
+    borderColor: '#e1e5ea',
+    backgroundColor: '#f1f3f5',
+  },
+  collectionCellIcon: {
+    fontSize: 26,
+    lineHeight: 30,
+  },
+  collectionCellName: {
+    maxWidth: '100%',
+    color: '#344054',
+    fontSize: 11,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+  collectionCellValue: {
+    maxWidth: '100%',
+    color: '#8f5c00',
+    fontSize: 10,
+    fontWeight: '900',
+  },
+  collectionClaimedLabel: {
+    marginTop: 8,
+    color: '#7b8794',
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  collectionFullDesc: {
+    color: '#344054',
+    fontSize: 14,
+    lineHeight: 20,
     fontWeight: '700',
   },
 });

@@ -1,4 +1,5 @@
-import type { AreaKey, CropKey, GameState, PlotState } from './types';
+import type { AreaKey, CollectionRewardKey, CropKey, GameState, PlotState } from './types';
+import { COLLECTION_FULL_REWARD_KEY } from './types';
 import balance from './balance.json';
 import {
   DEFAULT_LOCALE,
@@ -78,6 +79,129 @@ export const GROWTH_AD_DAILY_LIMIT = balance.ads.growthAdDailyLimit;
 export const INTERSTITIAL_MILESTONE_COOLDOWN_MS = balance.ads.interstitialMilestoneCooldownMs;
 export const INITIAL_AREA_KEYS = FARM_AREAS.filter((area) => area.unlock.cost === 0).map((area) => area.key);
 const MS_PER_HOUR = 60 * 60 * 1000;
+
+export const COLLECTION_AREA_REWARDS = balance.collection.areaCompletionReward as Record<AreaKey, number>;
+export const COLLECTION_FULL_REWARD = balance.collection.fullCompletionReward as number;
+
+const CROP_KEYS_BY_AREA: Record<AreaKey, CropKey[]> = FARM_AREAS.reduce(
+  (acc, area) => {
+    acc[area.key] = (Object.keys(CROPS) as CropKey[]).filter((cropKey) => getKnownCrop(cropKey).area === area.key);
+    return acc;
+  },
+  {} as Record<AreaKey, CropKey[]>
+);
+
+export function getAreaCropKeys(areaKey: AreaKey): CropKey[] {
+  return CROP_KEYS_BY_AREA[areaKey] ?? [];
+}
+
+export function isCropDiscovered(gameState: GameState, cropKey: CropKey): boolean {
+  return gameState.harvestedCropKeys.includes(cropKey);
+}
+
+export type AreaCollectionStatus = {
+  areaKey: AreaKey;
+  cropKeys: CropKey[];
+  totalCount: number;
+  discoveredCount: number;
+  completed: boolean;
+  reward: number;
+  rewardClaimed: boolean;
+  rewardClaimable: boolean;
+};
+
+export type CollectionSummary = {
+  areas: AreaCollectionStatus[];
+  totalCount: number;
+  discoveredCount: number;
+  allDiscovered: boolean;
+  fullReward: number;
+  fullRewardClaimed: boolean;
+  fullRewardClaimable: boolean;
+  claimableCount: number;
+};
+
+export function getCollectionSummary(gameState: GameState): CollectionSummary {
+  const claimed = gameState.claimedCollectionRewards;
+  let discoveredCount = 0;
+  let totalCount = 0;
+  let claimableCount = 0;
+
+  const areas: AreaCollectionStatus[] = FARM_AREAS.map((area) => {
+    const cropKeys = getAreaCropKeys(area.key);
+    const areaDiscoveredCount = cropKeys.filter((cropKey) => isCropDiscovered(gameState, cropKey)).length;
+    const completed = cropKeys.length > 0 && areaDiscoveredCount === cropKeys.length;
+    const reward = COLLECTION_AREA_REWARDS[area.key] ?? 0;
+    const rewardClaimed = claimed.includes(area.key);
+    const rewardClaimable = completed && !rewardClaimed && reward > 0;
+
+    if (rewardClaimable) claimableCount += 1;
+    discoveredCount += areaDiscoveredCount;
+    totalCount += cropKeys.length;
+
+    return {
+      areaKey: area.key,
+      cropKeys,
+      totalCount: cropKeys.length,
+      discoveredCount: areaDiscoveredCount,
+      completed,
+      reward,
+      rewardClaimed,
+      rewardClaimable,
+    };
+  });
+
+  const allDiscovered = totalCount > 0 && discoveredCount === totalCount;
+  const fullRewardClaimed = claimed.includes(COLLECTION_FULL_REWARD_KEY);
+  const fullRewardClaimable = allDiscovered && !fullRewardClaimed && COLLECTION_FULL_REWARD > 0;
+  if (fullRewardClaimable) claimableCount += 1;
+
+  return {
+    areas,
+    totalCount,
+    discoveredCount,
+    allDiscovered,
+    fullReward: COLLECTION_FULL_REWARD,
+    fullRewardClaimed,
+    fullRewardClaimable,
+    claimableCount,
+  };
+}
+
+export function getClaimableCollectionRewardCount(gameState: GameState): number {
+  return getCollectionSummary(gameState).claimableCount;
+}
+
+export function claimCollectionReward(
+  gameState: GameState,
+  rewardKey: CollectionRewardKey
+): { state: GameState; awardedGold: number } | null {
+  const summary = getCollectionSummary(gameState);
+
+  if (rewardKey === COLLECTION_FULL_REWARD_KEY) {
+    if (!summary.fullRewardClaimable) return null;
+    return {
+      state: {
+        ...gameState,
+        gold: gameState.gold + summary.fullReward,
+        claimedCollectionRewards: [...gameState.claimedCollectionRewards, rewardKey],
+      },
+      awardedGold: summary.fullReward,
+    };
+  }
+
+  const area = summary.areas.find((candidate) => candidate.areaKey === rewardKey);
+  if (area == null || !area.rewardClaimable) return null;
+
+  return {
+    state: {
+      ...gameState,
+      gold: gameState.gold + area.reward,
+      claimedCollectionRewards: [...gameState.claimedCollectionRewards, rewardKey],
+    },
+    awardedGold: area.reward,
+  };
+}
 
 export type CropEconomyEstimate = {
   cropKey: CropKey;
@@ -413,6 +537,7 @@ export function createInitialState(): GameState {
     unlockedPlotCount: INITIAL_PLOTS,
     unlockedAreas: INITIAL_AREA_KEYS,
     harvestedCropKeys: [],
+    claimedCollectionRewards: [],
     adUsage: createInitialAdUsage(),
     upgrades: { speed: 1, profit: 1 },
     plots: Array.from({ length: MAX_PLOTS }, (_, i) => ({
@@ -444,6 +569,19 @@ function uniqueKnownCrops(value: unknown, fallback: CropKey[]) {
     return fallback;
   }
   return value.filter(isKnownCropKey).filter((cropKey, index, items) => items.indexOf(cropKey) === index);
+}
+
+function isKnownCollectionRewardKey(value: unknown): value is CollectionRewardKey {
+  return value === COLLECTION_FULL_REWARD_KEY || isKnownAreaKey(value);
+}
+
+function uniqueKnownCollectionRewards(value: unknown, fallback: CollectionRewardKey[]) {
+  if (!Array.isArray(value)) {
+    return fallback;
+  }
+  return value
+    .filter(isKnownCollectionRewardKey)
+    .filter((rewardKey, index, items) => items.indexOf(rewardKey) === index);
 }
 
 function normalizeGold(value: unknown, fallback: number) {
@@ -494,6 +632,10 @@ export function migrateLoadedState(loaded: Partial<GameState>, base: GameState):
     unlockedPlotCount: normalizeUnlockedPlotCount(loaded.unlockedPlotCount, base.unlockedPlotCount),
     unlockedAreas: uniqueKnownAreas(loaded.unlockedAreas, base.unlockedAreas),
     harvestedCropKeys: uniqueKnownCrops(loaded.harvestedCropKeys, base.harvestedCropKeys),
+    claimedCollectionRewards: uniqueKnownCollectionRewards(
+      loaded.claimedCollectionRewards,
+      base.claimedCollectionRewards
+    ),
     adUsage: normalizeAdUsage(loaded.adUsage),
     upgrades: {
       speed: normalizeUpgradeLevel(loadedUpgrades.speed, base.upgrades.speed),

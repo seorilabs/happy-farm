@@ -195,5 +195,21 @@ export function createFarmAnalytics(track: TrackGameEvent = noopTrackGameEvent) 
         ...context,
       });
     },
+
+    trackCollectionScreen: (context: GameAnalyticsContext) => {
+      track('collection_screen', context);
+    },
+
+    trackCollectionRewardClaimed: (params: {
+      rewardKey: string;
+      rewardValue: number;
+      context: GameAnalyticsContext;
+    }) => {
+      track('collection_reward_claimed', {
+        reward_key: params.rewardKey,
+        reward_value: params.rewardValue,
+        ...params.context,
+      });
+    },
   };
 }
