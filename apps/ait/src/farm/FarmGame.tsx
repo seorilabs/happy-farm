@@ -1188,9 +1188,9 @@ function GrowthProgressBar({
 
     // Animate only across a single game tick. Driving a native animation over
     // the full remaining grow time made React Native precompute one frame per
-    // 60fps step of that duration: legend-tier crops (e.g. 세계수, growTime 5d)
-    // generated millions of frames, freezing the JS thread and crashing the
-    // app the moment such a crop was planted or its save was reloaded.
+    // 60fps step of that duration: legend-tier crops (e.g. world_tree, growTime
+    // 5 days) generated millions of frames, freezing the JS thread and crashing
+    // the app the moment such a crop was planted or its save was reloaded.
     const animation = Animated.timing(progressScale, {
       toValue: targetRatio,
       duration: PROGRESS_ANIMATION_DURATION_MS,
