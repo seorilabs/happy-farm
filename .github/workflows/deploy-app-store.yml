@@ -379,13 +379,9 @@ jobs:
             echo "- CFBundleVersion: $actual_build_number"
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Upload xcarchive artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: happy-farm-app-store-archive-v${{ steps.archive.outputs.marketing_version }}-build${{ steps.archive.outputs.build_number }}-${{ github.sha }}
-          if-no-files-found: error
-          retention-days: 7
-          path: ${{ steps.archive.outputs.archive_path }}
+      # xcarchive는 아래 단계에서 App Store Connect로 바로 업로드하므로 GitHub
+      # 아티팩트로는 보관하지 않는다(스토리지 절약). dSYM이 필요하면 App Store
+      # Connect 또는 Crashlytics에서 받는다.
 
       - name: Prepare App Store Connect API key
         if: env.SHOULD_UPLOAD_TO_APP_STORE == 'true'
