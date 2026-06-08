@@ -23,7 +23,9 @@ jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
 }));
 
-const FarmGame = jest.requireActual('../FarmGame').default as typeof import('../FarmGame').default;
+const farmGameModule = jest.requireActual('../FarmGame') as typeof import('../FarmGame');
+const FarmGame = farmGameModule.default;
+const { GAME_TICK_INTERVAL_MS } = farmGameModule;
 const mockPersistence = {
   readPersistedGameState: jest.fn<Promise<GameState>, []>(),
   writePersistedGameState: jest.fn<Promise<void>, [GameState]>(),
@@ -89,6 +91,26 @@ function createGrowingCropState(): GameState {
         ? {
             ...plot,
             cropType: 'wheat',
+            startTime: NOW,
+            state: 1 as const,
+          }
+        : plot
+    ),
+  };
+}
+
+function createGrowingLongCropState(cropKey: CropKey): GameState {
+  const base = createInitialState();
+
+  return {
+    ...base,
+    unlockedAreas: FARM_AREAS.map((area) => area.key),
+    upgrades: { speed: 42, profit: 42 },
+    plots: base.plots.map((plot, index) =>
+      index === 0
+        ? {
+            ...plot,
+            cropType: cropKey,
             startTime: NOW,
             state: 1 as const,
           }
@@ -378,6 +400,36 @@ describe('FarmGame UI flow', () => {
     await waitFor(() => expect(rewardedAd.showAd).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(screen.queryByText('즉시 성장')).toBeNull());
     await waitFor(() => expect(screen.getByText('GET')).toBeTruthy());
+  });
+
+  test('never drives the growth bar with a full-grow-time animation (legend crops crashed iOS)', async () => {
+    // Regression: GrowthProgressBar used to run a single Animated.timing spanning
+    // the entire remaining grow time. React Native precomputes one frame per 60fps
+    // step of an animation's duration, so a freshly planted 세계수 (growTime 5 days)
+    // produced ~7.4M frames, froze the JS thread and crashed the app on iOS the
+    // moment the crop was planted or its save was reloaded. The bar must instead
+    // step forward each game tick, keeping every animation short.
+    const reactNative = jest.requireActual('react-native') as typeof import('react-native');
+    const { Animated, Easing } = reactNative;
+    const timingSpy = jest.spyOn(Animated, 'timing');
+
+    try {
+      await renderGame(createGrowingLongCropState('world_tree'));
+
+      // Only inspect the growth bar's own timings (linear easing toward a [0,1]
+      // ratio). Other animations like sheet transitions are intentionally ignored
+      // so this stays specific to the fix and won't break if they change.
+      const growthBarDurations = timingSpy.mock.calls
+        .map((call) => call[1])
+        .filter((config) => config?.easing === Easing.linear && Number(config?.toValue) <= 1)
+        .map((config) => config?.duration ?? 0);
+
+      expect(growthBarDurations.length).toBeGreaterThan(0);
+      // 세계수 spanned ~1.23e8 ms before the fix; now every animation is tick-sized.
+      expect(Math.max(...growthBarDurations)).toBeLessThanOrEqual(GAME_TICK_INTERVAL_MS);
+    } finally {
+      timingSpy.mockRestore();
+    }
   });
 
   test('keeps reset behind the settings sheet', async () => {

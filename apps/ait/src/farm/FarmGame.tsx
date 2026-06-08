@@ -71,7 +71,11 @@ const INTERSTITIAL_AD_GROUP_ID = '';
 const PLOT_COLUMNS = 4;
 const PLOT_GAP = 10;
 const MAIN_HORIZONTAL_PADDING = 16;
-const MIN_PROGRESS_ANIMATION_DURATION_MS = 80;
+// Game tick: drives idle re-renders so time-based UI (growth, cooldowns) advances.
+// The growth bar animates one tick at a time, so its duration is tied to this value
+// rather than hardcoded separately.
+export const GAME_TICK_INTERVAL_MS = 250;
+const PROGRESS_ANIMATION_DURATION_MS = GAME_TICK_INTERVAL_MS;
 const SHEET_DISMISS_DRAG_DISTANCE = 96;
 const SHEET_DISMISS_VELOCITY = 1.1;
 const SHEET_DISMISS_TRANSLATE_Y = 520;
@@ -101,15 +105,6 @@ function getGrowthProgressRatio(startTime: number, growTime: number, speedMult: 
 
   const elapsed = Math.max(0, now - startTime) * speedMult;
   return Math.min(Math.max(elapsed / growTime, 0), 1);
-}
-
-function getRemainingGrowthDuration(startTime: number, growTime: number, speedMult: number, now = Date.now()) {
-  if (growTime <= 0 || speedMult <= 0) {
-    return 0;
-  }
-
-  const elapsed = Math.max(0, now - startTime) * speedMult;
-  return Math.max(0, (growTime - elapsed) / speedMult);
 }
 
 function getCropEconomy(cropEconomyByKey: Record<CropKey, CropEconomyEstimate>, cropKey: CropKey): CropEconomyEstimate {
@@ -368,7 +363,7 @@ export default function FarmGame({
   }, [activeSheet, analyticsContext]);
 
   useEffect(() => {
-    const id = setInterval(() => setTick((value) => (value + 1) % 1_000_000), 250);
+    const id = setInterval(() => setTick((value) => (value + 1) % 1_000_000), GAME_TICK_INTERVAL_MS);
     return () => clearInterval(id);
   }, []);
 
@@ -1184,30 +1179,34 @@ function GrowthProgressBar({
     progressScaleRef.current = new Animated.Value(getGrowthProgressRatio(startTime, growTime, speedMult));
   }
   const progressScale = progressScaleRef.current;
+  // Recomputed on every parent re-render (the 250ms game tick), so the bar
+  // advances in small steps instead of one animation spanning the whole grow time.
+  const targetRatio = getGrowthProgressRatio(startTime, growTime, speedMult);
 
   useEffect(() => {
-    const currentRatio = getGrowthProgressRatio(startTime, growTime, speedMult);
-    const remainingDuration = getRemainingGrowthDuration(startTime, growTime, speedMult);
-
-    progressScale.stopAnimation();
-    progressScale.setValue(currentRatio);
-
-    if (currentRatio >= 1 || remainingDuration <= 0) {
+    if (targetRatio >= 1) {
+      progressScale.stopAnimation();
       progressScale.setValue(1);
       return undefined;
     }
 
-    Animated.timing(progressScale, {
-      toValue: 1,
-      duration: Math.max(MIN_PROGRESS_ANIMATION_DURATION_MS, remainingDuration),
+    // Animate only across a single game tick. Driving a native animation over
+    // the full remaining grow time made React Native precompute one frame per
+    // 60fps step of that duration: legend-tier crops (e.g. world_tree, growTime
+    // 5 days) generated millions of frames, freezing the JS thread and crashing
+    // the app the moment such a crop was planted or its save was reloaded.
+    const animation = Animated.timing(progressScale, {
+      toValue: targetRatio,
+      duration: PROGRESS_ANIMATION_DURATION_MS,
       easing: Easing.linear,
       useNativeDriver: true,
-    }).start();
+    });
+    animation.start();
 
     return () => {
-      progressScale.stopAnimation();
+      animation.stop();
     };
-  }, [growTime, progressScale, speedMult, startTime]);
+  }, [progressScale, targetRatio]);
 
   return (
     <View style={styles.progressTrack}>

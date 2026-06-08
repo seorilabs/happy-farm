@@ -193,7 +193,7 @@ jobs:
         with:
           name: happy-farm-google-play-v${{ steps.release-version.outputs.version_name }}-code${{ steps.play-version.outputs.version_code }}-${{ github.sha }}
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 5
           path: apps/mobile/android/app/build/outputs/bundle/release/app-release.aab
 
       - name: Upload AAB to Google Play internal track

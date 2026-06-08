@@ -1,0 +1,85 @@
+name: Cleanup Artifacts
+
+# 수동으로 실행해 오래된(또는 전체) 워크플로 아티팩트를 삭제한다.
+# Actions/Packages 스토리지 쿼터(아티팩트만 집계, 로그/캐시는 별도)를 비우는 용도.
+on:
+  workflow_dispatch:
+    inputs:
+      older_than_days:
+        description: '이 일수보다 오래된 아티팩트를 삭제 (0이면 전체 삭제)'
+        required: true
+        default: '7'
+      dry_run:
+        description: '실제 삭제 없이 대상만 출력'
+        type: boolean
+        default: true
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: cleanup-artifacts
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    name: Delete old artifacts
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Delete artifacts
+        uses: actions/github-script@v7
+        env:
+          OLDER_THAN_DAYS: ${{ inputs.older_than_days }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        with:
+          script: |
+            const days = Number(process.env.OLDER_THAN_DAYS);
+            const dryRun = process.env.DRY_RUN === 'true';
+            if (!Number.isFinite(days) || days < 0) {
+              core.setFailed(`older_than_days 값이 올바르지 않습니다: ${process.env.OLDER_THAN_DAYS}`);
+              return;
+            }
+
+            const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+            const { owner, repo } = context.repo;
+            const artifacts = await github.paginate(
+              github.rest.actions.listArtifactsForRepo,
+              { owner, repo, per_page: 100 },
+            );
+
+            let deleted = 0;
+            let kept = 0;
+            let freedBytes = 0;
+            for (const artifact of artifacts) {
+              const createdAt = new Date(artifact.created_at).getTime();
+              const isTarget = days === 0 || createdAt < cutoff;
+              if (!isTarget) {
+                kept += 1;
+                continue;
+              }
+
+              const sizeMb = (artifact.size_in_bytes / 1024 / 1024).toFixed(1);
+              core.info(
+                `${dryRun ? '[dry-run] 삭제 예정' : '삭제'}: ${artifact.name} (${sizeMb} MB, 생성 ${artifact.created_at})`,
+              );
+              freedBytes += artifact.size_in_bytes;
+              deleted += 1;
+
+              if (!dryRun) {
+                await github.rest.actions.deleteArtifact({
+                  owner,
+                  repo,
+                  artifact_id: artifact.id,
+                });
+              }
+            }
+
+            const freedMb = (freedBytes / 1024 / 1024).toFixed(1);
+            await core.summary
+              .addHeading(dryRun ? 'Cleanup (dry-run)' : 'Cleanup 완료')
+              .addRaw(
+                `대상 ${dryRun ? '예정' : '삭제'}: ${deleted}개 · 유지: ${kept}개 · 확보: ${freedMb} MB`,
+              )
+              .write();

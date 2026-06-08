@@ -81,7 +81,7 @@ jobs:
         with:
           name: happy-farm-ait-v${{ steps.release-version.outputs.version_name }}-${{ github.sha }}
           if-no-files-found: error
-          retention-days: 30
+          retention-days: 7
           path: 'apps/ait/*.ait'
 
       - name: Deploy to Apps in Toss
