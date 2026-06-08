@@ -410,15 +410,23 @@ describe('FarmGame UI flow', () => {
     // moment the crop was planted or its save was reloaded. The bar must instead
     // step forward each game tick, keeping every animation short.
     const reactNative = jest.requireActual('react-native') as typeof import('react-native');
-    const timingSpy = jest.spyOn(reactNative.Animated, 'timing');
+    const { Animated, Easing } = reactNative;
+    const timingSpy = jest.spyOn(Animated, 'timing');
 
     try {
       await renderGame(createGrowingLongCropState('world_tree'));
 
-      expect(timingSpy).toHaveBeenCalled();
-      const durations = timingSpy.mock.calls.map((call) => call[1]?.duration ?? 0);
+      // Only inspect the growth bar's own timings (linear easing toward a [0,1]
+      // ratio). Other animations like sheet transitions are intentionally ignored
+      // so this stays specific to the fix and won't break if they change.
+      const growthBarDurations = timingSpy.mock.calls
+        .map((call) => call[1])
+        .filter((config) => config?.easing === Easing.linear && Number(config?.toValue) <= 1)
+        .map((config) => config?.duration ?? 0);
+
+      expect(growthBarDurations.length).toBeGreaterThan(0);
       // 세계수 spanned ~1.23e8 ms before the fix; now every animation is tick-sized.
-      expect(Math.max(...durations)).toBeLessThanOrEqual(GAME_TICK_INTERVAL_MS);
+      expect(Math.max(...growthBarDurations)).toBeLessThanOrEqual(GAME_TICK_INTERVAL_MS);
     } finally {
       timingSpy.mockRestore();
     }
