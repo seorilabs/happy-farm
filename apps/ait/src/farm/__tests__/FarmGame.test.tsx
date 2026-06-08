@@ -97,6 +97,26 @@ function createGrowingCropState(): GameState {
   };
 }
 
+function createGrowingLongCropState(cropKey: CropKey): GameState {
+  const base = createInitialState();
+
+  return {
+    ...base,
+    unlockedAreas: FARM_AREAS.map((area) => area.key),
+    upgrades: { speed: 42, profit: 42 },
+    plots: base.plots.map((plot, index) =>
+      index === 0
+        ? {
+            ...plot,
+            cropType: cropKey,
+            startTime: NOW,
+            state: 1 as const,
+          }
+        : plot
+    ),
+  };
+}
+
 function createShopReadyState(): GameState {
   const base = createInitialState();
 
@@ -378,6 +398,28 @@ describe('FarmGame UI flow', () => {
     await waitFor(() => expect(rewardedAd.showAd).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(screen.queryByText('즉시 성장')).toBeNull());
     await waitFor(() => expect(screen.getByText('GET')).toBeTruthy());
+  });
+
+  test('never drives the growth bar with a full-grow-time animation (legend crops crashed iOS)', async () => {
+    // Regression: GrowthProgressBar used to run a single Animated.timing spanning
+    // the entire remaining grow time. React Native precomputes one frame per 60fps
+    // step of an animation's duration, so a freshly planted 세계수 (growTime 5 days)
+    // produced ~7.4M frames, froze the JS thread and crashed the app on iOS the
+    // moment the crop was planted or its save was reloaded. The bar must instead
+    // step forward each game tick, keeping every animation short.
+    const reactNative = jest.requireActual('react-native') as typeof import('react-native');
+    const timingSpy = jest.spyOn(reactNative.Animated, 'timing');
+
+    try {
+      await renderGame(createGrowingLongCropState('world_tree'));
+
+      expect(timingSpy).toHaveBeenCalled();
+      const durations = timingSpy.mock.calls.map((call) => call[1]?.duration ?? 0);
+      // 세계수 spanned ~1.23e8 ms before the fix; a tick-sized animation is ~250ms.
+      expect(Math.max(...durations)).toBeLessThanOrEqual(250);
+    } finally {
+      timingSpy.mockRestore();
+    }
   });
 
   test('keeps reset behind the settings sheet', async () => {
