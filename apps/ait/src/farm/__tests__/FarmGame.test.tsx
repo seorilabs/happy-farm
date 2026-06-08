@@ -23,7 +23,9 @@ jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
 }));
 
-const FarmGame = jest.requireActual('../FarmGame').default as typeof import('../FarmGame').default;
+const farmGameModule = jest.requireActual('../FarmGame') as typeof import('../FarmGame');
+const FarmGame = farmGameModule.default;
+const { GAME_TICK_INTERVAL_MS } = farmGameModule;
 const mockPersistence = {
   readPersistedGameState: jest.fn<Promise<GameState>, []>(),
   writePersistedGameState: jest.fn<Promise<void>, [GameState]>(),
@@ -415,8 +417,8 @@ describe('FarmGame UI flow', () => {
 
       expect(timingSpy).toHaveBeenCalled();
       const durations = timingSpy.mock.calls.map((call) => call[1]?.duration ?? 0);
-      // 세계수 spanned ~1.23e8 ms before the fix; a tick-sized animation is ~250ms.
-      expect(Math.max(...durations)).toBeLessThanOrEqual(250);
+      // 세계수 spanned ~1.23e8 ms before the fix; now every animation is tick-sized.
+      expect(Math.max(...durations)).toBeLessThanOrEqual(GAME_TICK_INTERVAL_MS);
     } finally {
       timingSpy.mockRestore();
     }

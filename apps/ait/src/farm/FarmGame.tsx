@@ -71,7 +71,11 @@ const INTERSTITIAL_AD_GROUP_ID = '';
 const PLOT_COLUMNS = 4;
 const PLOT_GAP = 10;
 const MAIN_HORIZONTAL_PADDING = 16;
-const PROGRESS_ANIMATION_DURATION_MS = 250;
+// Game tick: drives idle re-renders so time-based UI (growth, cooldowns) advances.
+// The growth bar animates one tick at a time, so its duration is tied to this value
+// rather than hardcoded separately.
+export const GAME_TICK_INTERVAL_MS = 250;
+const PROGRESS_ANIMATION_DURATION_MS = GAME_TICK_INTERVAL_MS;
 const SHEET_DISMISS_DRAG_DISTANCE = 96;
 const SHEET_DISMISS_VELOCITY = 1.1;
 const SHEET_DISMISS_TRANSLATE_Y = 520;
@@ -359,7 +363,7 @@ export default function FarmGame({
   }, [activeSheet, analyticsContext]);
 
   useEffect(() => {
-    const id = setInterval(() => setTick((value) => (value + 1) % 1_000_000), 250);
+    const id = setInterval(() => setTick((value) => (value + 1) % 1_000_000), GAME_TICK_INTERVAL_MS);
     return () => clearInterval(id);
   }, []);
 
