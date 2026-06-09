@@ -230,6 +230,7 @@ export default function FarmGame({
   const sessionStartedAtRef = useRef(Date.now());
   const gameStartTrackedRef = useRef(false);
   const firstSeedSelectedRef = useRef(false);
+  const claimedRewardKeysRef = useRef<Set<CollectionRewardKey>>(new Set());
   const rewardedAd = useRewardedAd(REWARDED_AD_GROUP_ID);
   const interstitialAd = useInterstitialAd(INTERSTITIAL_AD_GROUP_ID);
   const farmAnalytics = analytics;
@@ -474,11 +475,17 @@ export default function FarmGame({
   }
 
   function claimCollectionRewardByKey(rewardKey: CollectionRewardKey) {
+    // A fast double tap re-enters with the same (pre-render) gameState, so guard
+    // synchronously: the gold is already idempotent inside the updater, but the
+    // toast/analytics side-effects below must fire exactly once per claim.
+    if (claimedRewardKeysRef.current.has(rewardKey)) {
+      return;
+    }
     const preview = claimCollectionReward(gameState, rewardKey);
     if (preview == null) {
       return;
     }
-    // Re-evaluate inside the updater so a double tap cannot award the reward twice.
+    claimedRewardKeysRef.current.add(rewardKey);
     setGameState((state) => claimCollectionReward(state, rewardKey)?.state ?? state);
     farmAnalytics.trackCollectionRewardClaimed({
       rewardKey,
@@ -624,6 +631,7 @@ export default function FarmGame({
       return;
     }
     await persistence.removePersistedGameState();
+    claimedRewardKeysRef.current.clear();
     setGameState(createInitialState());
     setSelectedArea(FIRST_AREA.key);
     setSelectedTool('harvest');
