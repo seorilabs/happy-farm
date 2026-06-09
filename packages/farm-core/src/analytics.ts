@@ -1,4 +1,4 @@
-import type { AreaKey, CropKey, GameState } from './types';
+import type { AreaKey, CollectionRewardKey, CropKey, GameState } from './types';
 import type { RewardedAdType } from './constants';
 
 export type AnalyticsValue = string | number | boolean;
@@ -201,7 +201,7 @@ export function createFarmAnalytics(track: TrackGameEvent = noopTrackGameEvent) 
     },
 
     trackCollectionRewardClaimed: (params: {
-      rewardKey: string;
+      rewardKey: CollectionRewardKey;
       rewardValue: number;
       context: GameAnalyticsContext;
     }) => {

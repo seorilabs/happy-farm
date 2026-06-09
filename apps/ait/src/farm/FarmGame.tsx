@@ -47,6 +47,7 @@ import {
   getAreaLabel,
   getAreaUnlockRequirementText,
   getCollectionSummary,
+  type CollectionSummary,
   getCropLabel,
   getCropEconomyEstimate,
   getFarmProductivityEstimate,
@@ -985,7 +986,7 @@ export default function FarmGame({
 
       <Sheet
         activeSheet={activeSheet}
-        description={getSheetDescription(activeSheet, messages, locale, getLocalizedCropName, gameState)}
+        description={getSheetDescription(activeSheet, messages, locale, getLocalizedCropName, collectionSummary)}
         title={getSheetTitle(activeSheet, messages)}
         onClose={closeSheet}
       >
@@ -1487,11 +1488,10 @@ function getSheetDescription(
   messages: FarmMessages,
   locale: SupportedLocale,
   getLocalizedCropName: (cropKey: CropKey) => string,
-  gameState: GameState
+  collectionSummary: CollectionSummary
 ) {
   if (activeSheet?.type === 'collection') {
-    const summary = getCollectionSummary(gameState);
-    return messages.sheetDescriptionCollection(summary.discoveredCount, summary.totalCount);
+    return messages.sheetDescriptionCollection(collectionSummary.discoveredCount, collectionSummary.totalCount);
   }
   if (activeSheet?.type === 'growthAd') {
     return messages.sheetDescriptionGrowthAd(
