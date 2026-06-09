@@ -74,7 +74,7 @@ Google 공식 문서 기준으로, Google Play 제출에는 Android App Bundle�
 현재 앱 코드 대응:
 
 - `apps/mobile/App.tsx`에서 RN `StatusBar` 컴포넌트를 제거해 앱 JS가 `StatusBarModule.setColor` 경로를 호출하지 않게 했습니다.
-- `apps/mobile/android/build.gradle`에서 Google Mobile Ads SDK를 현재 Kotlin `2.1.20` 빌드와 호환되는 stable인 `25.2.0`으로 강제합니다.
+- `apps/mobile/android/build.gradle`에서 Kotlin Gradle Plugin `2.3.21`과 Google Maven 기준 최신 stable Google Mobile Ads SDK `25.3.0`을 명시합니다.
 - `FarmGame`은 `react-native-safe-area-context`의 top/bottom inset을 실제 UI padding에 반영합니다.
 
 남는 범위:
