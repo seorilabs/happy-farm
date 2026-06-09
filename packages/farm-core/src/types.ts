@@ -4,6 +4,10 @@ export type CropKey = (typeof balance.crops)[number]['key'];
 
 export type AreaKey = (typeof balance.areas)[number]['key'];
 
+export const COLLECTION_FULL_REWARD_KEY = 'all';
+
+export type CollectionRewardKey = AreaKey | typeof COLLECTION_FULL_REWARD_KEY;
+
 export type PlotState = 0 | 1 | 2;
 
 export type Plot = {
@@ -35,6 +39,7 @@ export type GameState = {
   unlockedPlotCount: number;
   unlockedAreas: AreaKey[];
   harvestedCropKeys: CropKey[];
+  claimedCollectionRewards: CollectionRewardKey[];
   adUsage: AdUsage;
   upgrades: { speed: number; profit: number };
 };

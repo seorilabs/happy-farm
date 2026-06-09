@@ -1,4 +1,4 @@
-import type { AreaKey, CropKey, GameState } from './types';
+import type { AreaKey, CollectionRewardKey, CropKey, GameState } from './types';
 import type { RewardedAdType } from './constants';
 
 export type AnalyticsValue = string | number | boolean;
@@ -193,6 +193,22 @@ export function createFarmAnalytics(track: TrackGameEvent = noopTrackGameEvent) 
         ad_type: type,
         blocked_reason: reason,
         ...context,
+      });
+    },
+
+    trackCollectionScreen: (context: GameAnalyticsContext) => {
+      track('collection_screen', context);
+    },
+
+    trackCollectionRewardClaimed: (params: {
+      rewardKey: CollectionRewardKey;
+      rewardValue: number;
+      context: GameAnalyticsContext;
+    }) => {
+      track('collection_reward_claimed', {
+        reward_key: params.rewardKey,
+        reward_value: params.rewardValue,
+        ...params.context,
       });
     },
   };

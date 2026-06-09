@@ -113,6 +113,17 @@ const KO_FARM_MESSAGES = {
   lockedAreaHint: (areaName: string, requirement: string) => `${areaName} 열기 조건 · ${requirement}`,
   harvestHint: '밭을 눌러 수확할 수 있어요.',
   plantHint: (cropName: string, cost: string, roi: string) => `${cropName} 심기 · ${cost}G · 투자효율 ${roi}`,
+  collectionButtonAccessibilityLabel: '작물 도감',
+  sheetTitleCollection: '작물 도감',
+  sheetDescriptionCollection: (discovered: number, total: number) =>
+    `수확한 작물을 모아보세요 · ${discovered}/${total}종 발견`,
+  collectionCompletedBadge: '완성 ✓',
+  collectionClaimAction: (amount: string) => `완성 보상 ${amount}G 받기`,
+  collectionClaimedLabel: '보상 받음 ✓',
+  collectionFullTitle: '전체 도감',
+  collectionFullDesc: (discovered: number, total: number) =>
+    `모든 작물 ${discovered}/${total}종을 모으면 큰 보상을 받아요.`,
+  collectionRewardClaimedToast: (amount: string) => `+${amount}G 도감 보상을 받았어요.`,
 };
 
 export type FarmMessages = typeof KO_FARM_MESSAGES;
@@ -220,6 +231,15 @@ const EN_FARM_MESSAGES: FarmMessages = {
   lockedAreaHint: (areaName, requirement) => `${areaName} requirements · ${requirement}`,
   harvestHint: 'Tap a plot to harvest.',
   plantHint: (cropName, cost, roi) => `Plant ${cropName} · ${cost}G · ROI ${roi}`,
+  collectionButtonAccessibilityLabel: 'Crop Collection',
+  sheetTitleCollection: 'Crop Collection',
+  sheetDescriptionCollection: (discovered, total) => `Collect every crop you harvest · ${discovered}/${total} discovered`,
+  collectionCompletedBadge: 'Done ✓',
+  collectionClaimAction: (amount) => `Claim ${amount}G`,
+  collectionClaimedLabel: 'Claimed ✓',
+  collectionFullTitle: 'Full Collection',
+  collectionFullDesc: (discovered, total) => `Collect all ${total} crops (${discovered}/${total}) for a big reward.`,
+  collectionRewardClaimedToast: (amount) => `Claimed +${amount}G from your collection.`,
 };
 
 const FARM_MESSAGES: Record<SupportedLocale, FarmMessages> = {
