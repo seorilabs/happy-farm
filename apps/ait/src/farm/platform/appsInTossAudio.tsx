@@ -27,15 +27,23 @@ function keepPlaybackOnAudioFocusChange() {
   // focus changes; pause/resume is driven only by props and app visibility.
 }
 
+// Two players share this hook, so failure logs must name the URI to make
+// on-device diagnosis (404, blocked host, codec) possible.
+function createPlaybackFailureWarning(uri: string) {
+  return (error: unknown) => {
+    console.warn(`Failed to play farm audio source: ${uri}`, error);
+  };
+}
+
+const warnBackgroundMusicFailure = createPlaybackFailureWarning(FARM_AUDIO_SOURCES.backgroundMusic);
+const warnHarvestCoinFailure = createPlaybackFailureWarning(FARM_AUDIO_SOURCES.harvestCoin);
+
 export function useAppsInTossFarmAudio(): { audio: FarmGameAudio; audioElement: React.ReactNode } {
   const harvestPlayerRef = useRef<VideoRef | null>(null);
   const [backgroundMusicEnabled, setBackgroundMusicEnabled] = useState(false);
   const [harvestPlaying, setHarvestPlaying] = useState(false);
 
   const stopHarvestPlayback = useCallback(() => setHarvestPlaying(false), []);
-  const warnPlaybackFailure = useCallback((error: unknown) => {
-    console.warn('Failed to play farm audio source.', error);
-  }, []);
 
   const audio = useMemo<FarmGameAudio>(
     () => ({
@@ -55,7 +63,7 @@ export function useAppsInTossFarmAudio(): { audio: FarmGameAudio; audioElement: 
         {...audioFocusProps}
         ignoreSilentSwitch="ignore"
         onAudioFocusChanged={keepPlaybackOnAudioFocusChange}
-        onError={warnPlaybackFailure}
+        onError={warnBackgroundMusicFailure}
         paused={!backgroundMusicEnabled}
         repeat
         source={{ uri: FARM_AUDIO_SOURCES.backgroundMusic }}
@@ -68,7 +76,7 @@ export function useAppsInTossFarmAudio(): { audio: FarmGameAudio; audioElement: 
         ignoreSilentSwitch="ignore"
         onAudioFocusChanged={keepPlaybackOnAudioFocusChange}
         onEnd={stopHarvestPlayback}
-        onError={warnPlaybackFailure}
+        onError={warnHarvestCoinFailure}
         paused={!harvestPlaying}
         source={{ uri: FARM_AUDIO_SOURCES.harvestCoin }}
         style={styles.hiddenPlayer}
