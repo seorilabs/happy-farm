@@ -14,6 +14,19 @@
 - Firebase Web SDK: `apps/ait/src/firebaseWeb/*`에서 `firebase/app`, `firebase/analytics` import
 - 보상형 광고 그룹 ID: `ait.v2.live.6fc77adf3f034cd6`
 
+## 사운드 리소스 호스팅
+
+앱인토스(Granite) 런타임은 `require()` 기반 번들 로컬 리소스를 지원하지 않아 BGM/효과음을 원격 URI로 스트리밍한다.
+
+- 파일 위치: `web/audio/` (모바일 앱 `apps/mobile/src/audio/assets/`와 동일한 wav 파일)
+- 코드 참조: `apps/ait/src/farm/platform/appsInTossAudio.tsx`의 `FARM_AUDIO_SOURCES`
+- 서빙 URL: `https://happy-farm-tycoon.web.app/audio/<파일명>` (Firebase Hosting)
+- 배포(파일 추가/변경 시 1회):
+
+```bash
+npx firebase-tools deploy --only hosting --project happy-farm-tycoon
+```
+
 ## 설명 초안
 
 ### ko-KR
