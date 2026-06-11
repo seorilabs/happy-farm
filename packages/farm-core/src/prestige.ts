@@ -7,9 +7,12 @@ import type {
   PrestigeSkillKey,
   RegionArchetypeKey,
 } from './types';
-// Function-level circular imports (constants/modifiers also reference this
-// module). Nothing here is used during module initialization, so the cycle is
-// safe under CJS module loading (jest/metro).
+// NOTE: module-level import cycle — constants.ts imports this module's
+// normalizers while we import constants/modifiers here. The cycle is safe
+// only because no side of it reads the other's exports during module
+// initialization (all cross-module references happen inside functions called
+// after init), which CJS loading (jest/metro) tolerates. Keep any new
+// top-level code in these modules free of cross-module reads.
 import { createInitialState } from './constants';
 import { getFarmHourlyProductivity } from './modifiers';
 

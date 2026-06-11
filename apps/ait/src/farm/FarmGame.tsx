@@ -272,7 +272,7 @@ export default function FarmGame({
   // Double-tap guard for confirmPrestige: the state updater is idempotent,
   // but the toast/analytics must fire exactly once per graduated level.
   const prestigedLevelsRef = useRef<Set<number>>(new Set());
-  const autoHarvestSummaryRef = useRef({ harvestedCount: 0, replantedCount: 0, lastFlushedAt: 0 });
+  const autoHarvestSummaryRef = useRef({ harvestedCount: 0, replantedCount: 0, windowStartedAt: 0 });
   const rewardedAd = useRewardedAd(REWARDED_AD_GROUP_ID);
   const interstitialAd = useInterstitialAd(INTERSTITIAL_AD_GROUP_ID);
   const farmAnalytics = analytics;
@@ -519,19 +519,26 @@ export default function FarmGame({
     // Automation shares the manual harvest pipeline but stays silent: no
     // toast/vibration/sound, and no per-crop analytics from the tick loop.
     const automation = runAutomationTick(next, { now });
+    const summary = autoHarvestSummaryRef.current;
     if (automation.harvestedCount > 0) {
       next = automation.state;
-      const summary = autoHarvestSummaryRef.current;
+      if (summary.harvestedCount === 0 && summary.replantedCount === 0) {
+        // First accumulation opens a fresh batching window.
+        summary.windowStartedAt = now;
+      }
       summary.harvestedCount += automation.harvestedCount;
       summary.replantedCount += automation.replantedCount;
-      if (now - summary.lastFlushedAt >= AUTO_HARVEST_SUMMARY_INTERVAL_MS) {
-        farmAnalytics.trackAutoHarvestSummary({
-          harvestedCount: summary.harvestedCount,
-          replantedCount: summary.replantedCount,
-          context: analyticsContext(),
-        });
-        autoHarvestSummaryRef.current = { harvestedCount: 0, replantedCount: 0, lastFlushedAt: now };
-      }
+    }
+    // Flush is decoupled from harvest occurrence so a pending batch still goes
+    // out (one interval later) when automation stops harvesting or is toggled
+    // off mid-window.
+    if (summary.harvestedCount > 0 && now - summary.windowStartedAt >= AUTO_HARVEST_SUMMARY_INTERVAL_MS) {
+      farmAnalytics.trackAutoHarvestSummary({
+        harvestedCount: summary.harvestedCount,
+        replantedCount: summary.replantedCount,
+        context: analyticsContext(),
+      });
+      autoHarvestSummaryRef.current = { harvestedCount: 0, replantedCount: 0, windowStartedAt: now };
     }
 
     if (next !== gameState) {
