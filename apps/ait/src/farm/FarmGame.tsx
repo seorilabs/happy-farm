@@ -119,6 +119,8 @@ const MAIN_HORIZONTAL_PADDING = 16;
 // The growth bar animates one tick at a time, so its duration is tied to this value
 // rather than hardcoded separately.
 export const GAME_TICK_INTERVAL_MS = 250;
+// Auto-harvest analytics are batched into one summary event per interval.
+const AUTO_HARVEST_SUMMARY_INTERVAL_MS = 60_000;
 const PROGRESS_ANIMATION_DURATION_MS = GAME_TICK_INTERVAL_MS;
 const SHEET_DISMISS_DRAG_DISTANCE = 96;
 const SHEET_DISMISS_VELOCITY = 1.1;
@@ -266,6 +268,7 @@ export default function FarmGame({
   const firstSeedSelectedRef = useRef(false);
   const claimedRewardKeysRef = useRef<Set<CollectionRewardKey>>(new Set());
   const claimedAchievementKeysRef = useRef<Set<string>>(new Set());
+  const autoHarvestSummaryRef = useRef({ harvestedCount: 0, replantedCount: 0, lastFlushedAt: 0 });
   const rewardedAd = useRewardedAd(REWARDED_AD_GROUP_ID);
   const interstitialAd = useInterstitialAd(INTERSTITIAL_AD_GROUP_ID);
   const farmAnalytics = analytics;
@@ -514,6 +517,17 @@ export default function FarmGame({
     const automation = runAutomationTick(next, { now });
     if (automation.harvestedCount > 0) {
       next = automation.state;
+      const summary = autoHarvestSummaryRef.current;
+      summary.harvestedCount += automation.harvestedCount;
+      summary.replantedCount += automation.replantedCount;
+      if (now - summary.lastFlushedAt >= AUTO_HARVEST_SUMMARY_INTERVAL_MS) {
+        farmAnalytics.trackAutoHarvestSummary({
+          harvestedCount: summary.harvestedCount,
+          replantedCount: summary.replantedCount,
+          context: analyticsContext(),
+        });
+        autoHarvestSummaryRef.current = { harvestedCount: 0, replantedCount: 0, lastFlushedAt: now };
+      }
     }
 
     if (next !== gameState) {
@@ -567,6 +581,12 @@ export default function FarmGame({
     }
     claimedAchievementKeysRef.current.add(guardKey);
     setGameState((state) => claimNextAchievementTier(state, trackKey)?.state ?? state);
+    farmAnalytics.trackAchievementClaimed({
+      trackKey,
+      tier: preview.claimedTier,
+      starsAwarded: preview.starsAwarded,
+      context: analyticsContext(),
+    });
     toast(messages.achievementClaimedToast(preview.starsAwarded));
   }
 
@@ -596,6 +616,7 @@ export default function FarmGame({
       return;
     }
     setGameState((state) => unlockNode(state, nodeKey) ?? state);
+    farmAnalytics.trackResearchNodeUnlocked({ nodeKey, context: analyticsContext() });
     toast(messages.researchNodeUnlockedToast(getResearchNodeLabel(nodeKey, locale).name));
   }
 
@@ -605,6 +626,7 @@ export default function FarmGame({
       return;
     }
     setGameState((state) => breedCrop(state, cropKey) ?? state);
+    farmAnalytics.trackBreedUnlocked({ cropKey, context: analyticsContext() });
     toast(messages.bredToast(getLocalizedCropName(cropKey)));
   }
 
@@ -619,6 +641,11 @@ export default function FarmGame({
       return;
     }
     setGameState((state) => collectChainIncome(state, now)?.state ?? state);
+    farmAnalytics.trackChainCollected({
+      collectedGold: collected.collectedGold,
+      farmCount: gameState.chainFarms.length,
+      context: analyticsContext(),
+    });
     toast(messages.chainCollectedToast(formatMoney(collected.collectedGold, locale)));
   }
 
@@ -637,6 +664,12 @@ export default function FarmGame({
     setSelectedArea(FIRST_AREA.key);
     setSelectedTool('harvest');
     setActiveSheet(null);
+    farmAnalytics.trackPrestige({
+      archetype: prestigeArchetype,
+      starsAwarded: result.starsAwarded,
+      chainGoldPerHour: result.chainFarm.goldPerHour,
+      context: analyticsContext(),
+    });
     toast(
       messages.prestigeDoneToast(getRegionArchetypeLabel(prestigeArchetype, locale).name, result.starsAwarded)
     );
@@ -648,6 +681,11 @@ export default function FarmGame({
       return;
     }
     setGameState((state) => buySkill(state, skillKey) ?? state);
+    farmAnalytics.trackPrestigeSkillPurchased({
+      skillKey,
+      nextLevel: (gameState.prestige.skills[skillKey] ?? 0) + 1,
+      context: analyticsContext(),
+    });
     toast(messages.skillPurchasedToast(getPrestigeSkillLabel(skillKey, locale).name));
   }
 
