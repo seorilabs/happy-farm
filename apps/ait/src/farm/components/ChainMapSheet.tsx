@@ -68,10 +68,12 @@ export function ChainMapSheet({
         <Text style={styles.chainEmptyDesc}>{messages.chainEmptyDesc}</Text>
       ) : (
         <>
-          {gameState.chainFarms.map((farm) => {
+          {gameState.chainFarms.map((farm, index) => {
             const farmArchetype = getRegionArchetype(farm.archetype);
             return (
-              <View key={farm.id} style={styles.chainFarmRow}>
+              // Normalized legacy saves may carry duplicate farm ids, so the
+              // key must include the index.
+              <View key={`${farm.id}-${index}`} style={styles.chainFarmRow}>
                 <Text style={styles.chainFarmTitle}>
                   {farmArchetype.icon} {messages.farmNumberLabel(farm.id + 1)} ·{' '}
                   {getRegionArchetypeLabel(farm.archetype, locale).name}

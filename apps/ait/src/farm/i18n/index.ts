@@ -141,7 +141,7 @@ const KO_FARM_MESSAGES = {
   prestigeRequirementLabel: (cost: string) => `전설 구역 도감 완성 · ${cost}G 필요`,
   prestigeAction: (stars: number) => `개척 준비하기 (★${stars})`,
   prestigeWarning:
-    '개척하면 골드·밭·구역·연구 레벨이 초기화되고, 지금 농장은 체인에 들어가 자동으로 수익을 만들어요. 도감·마스터리·연구 포인트·명성·업적은 모두 유지돼요.',
+    '개척하면 골드·밭·구역·성장/수익 업그레이드가 초기화되고, 지금 농장은 체인에 들어가 자동으로 수익을 만들어요. 도감·마스터리·연구소(RP·연구·교배)·명성·업적은 모두 유지돼요.',
   regionChoiceSection: '지역 선택',
   prestigeConfirmAction: (stars: number) => `개척하고 ★${stars} 받기`,
   prestigeCancelAction: '다음에 할게요',
@@ -326,7 +326,7 @@ const EN_FARM_MESSAGES: FarmMessages = {
   prestigeRequirementLabel: (cost) => `Complete the Legend Field collection · ${cost}G required`,
   prestigeAction: (stars) => `Prepare to pioneer (★${stars})`,
   prestigeWarning:
-    'Pioneering resets gold, plots, areas, and research levels. This farm joins your chain and earns gold automatically. Collection, mastery, RP, prestige, and achievements all carry over.',
+    'Pioneering resets gold, plots, areas, and growth/profit upgrades. This farm joins your chain and earns gold automatically. Collection, mastery, the lab (RP, research, breeds), prestige, and achievements all carry over.',
   regionChoiceSection: 'Choose a Region',
   prestigeConfirmAction: (stars) => `Pioneer and earn ★${stars}`,
   prestigeCancelAction: 'Maybe later',

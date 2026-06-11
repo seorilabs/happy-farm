@@ -94,6 +94,7 @@ import {
   isAreaUnlocked,
   isCropPlantable,
   isPlotGrowthComplete,
+  isTitleUnlocked,
   normalizeLocale,
   performHarvest,
   recordHarvestBonusAdPrompt,
@@ -268,6 +269,9 @@ export default function FarmGame({
   const firstSeedSelectedRef = useRef(false);
   const claimedRewardKeysRef = useRef<Set<CollectionRewardKey>>(new Set());
   const claimedAchievementKeysRef = useRef<Set<string>>(new Set());
+  // Double-tap guard for confirmPrestige: the state updater is idempotent,
+  // but the toast/analytics must fire exactly once per graduated level.
+  const prestigedLevelsRef = useRef<Set<number>>(new Set());
   const autoHarvestSummaryRef = useRef({ harvestedCount: 0, replantedCount: 0, lastFlushedAt: 0 });
   const rewardedAd = useRewardedAd(REWARDED_AD_GROUP_ID);
   const interstitialAd = useInterstitialAd(INTERSTITIAL_AD_GROUP_ID);
@@ -591,6 +595,10 @@ export default function FarmGame({
   }
 
   function selectTitle(titleKey: TitleKey | null) {
+    // setActiveTitle ignores locked titles; only toast when the change is real.
+    if (titleKey != null && !isTitleUnlocked(gameState, titleKey)) {
+      return;
+    }
     setGameState((state) => setActiveTitle(state, titleKey));
     toast(
       titleKey == null
@@ -655,11 +663,16 @@ export default function FarmGame({
 
   function confirmPrestige() {
     const now = Date.now();
+    const guardLevel = gameState.prestige.level;
+    if (prestigedLevelsRef.current.has(guardLevel)) {
+      return;
+    }
     const result = prestigeFarm(gameState, prestigeArchetype, now);
     if (result == null) {
       setActiveSheet(null);
       return;
     }
+    prestigedLevelsRef.current.add(guardLevel);
     setGameState((state) => prestigeFarm(state, prestigeArchetype, now)?.state ?? state);
     setSelectedArea(FIRST_AREA.key);
     setSelectedTool('harvest');
@@ -831,6 +844,7 @@ export default function FarmGame({
     await persistence.removePersistedGameState();
     claimedRewardKeysRef.current.clear();
     claimedAchievementKeysRef.current.clear();
+    prestigedLevelsRef.current.clear();
     setGameState(createInitialState());
     setSelectedArea(FIRST_AREA.key);
     setSelectedTool('harvest');
