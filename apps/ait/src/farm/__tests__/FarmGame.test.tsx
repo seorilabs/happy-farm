@@ -456,6 +456,26 @@ describe('FarmGame UI flow', () => {
     expect(screen.getByText('🥉')).toBeTruthy();
   });
 
+  test('auto-harvests and replants through the game tick when automation is unlocked', async () => {
+    const base = createReadyHarvestState();
+    const state: GameState = {
+      ...base,
+      research: { ...base.research, unlockedNodes: ['auto_harvest', 'auto_replant'] },
+      automationSettings: { autoHarvestEnabled: true, autoReplantEnabled: true, donationModeEnabled: false },
+    };
+    const carrot = CROPS.carrot!;
+    // Two ready carrots are harvested and replanted by the automation tick.
+    const expectedGold = state.gold + carrot.sell * 2 - carrot.cost * 2;
+    const screen = await renderGame(state);
+
+    await act(async () => {
+      jest.advanceTimersByTime(GAME_TICK_INTERVAL_MS + 50);
+    });
+
+    await waitFor(() => expect(screen.getByText(`${formatMoney(expectedGold)}G`)).toBeTruthy());
+    expect(screen.queryByText('GET')).toBeNull();
+  });
+
   test('keeps reset behind the settings sheet', async () => {
     const screen = await renderGame(null);
 

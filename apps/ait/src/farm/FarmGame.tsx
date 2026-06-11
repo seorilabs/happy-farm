@@ -17,13 +17,22 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
+  BREEDING_RECIPES,
   CROPS,
   FARM_AREAS,
+  RESEARCH_NODES,
+  breedCrop,
+  canUnlockNode,
   claimNextAchievementTier,
+  getBreedingRecipeStatus,
   getClaimableAchievementCount,
+  getResearchNodeLabel,
   getTitleLabel,
+  runAutomationTick,
   setActiveTitle,
+  unlockNode,
   type AchievementTrackKey,
+  type ResearchNodeKey,
   type TitleKey,
   GROWTH_AD_MAX_SKIP_MS,
   GROWTH_AD_MIN_REMAINING_MS,
@@ -84,6 +93,7 @@ import { DEFAULT_FARM_GAME_SETTINGS, normalizeFarmGameSettings, type FarmGameSet
 import { getFarmMessages, type FarmMessages } from './i18n';
 import { AchievementsSheet } from './components/AchievementsSheet';
 import { CollectionSheet } from './components/CollectionSheet';
+import { LabSheet } from './components/LabSheet';
 import { AdRewardCard, SettingToggle, SheetAction, ShopCard, sheetPartStyles } from './components/SheetParts';
 
 const REWARDED_AD_GROUP_ID = 'ait.v2.live.6fc77adf3f034cd6';
@@ -132,6 +142,7 @@ type ActiveSheet =
   | { type: 'shop' }
   | { type: 'collection' }
   | { type: 'achievements' }
+  | { type: 'lab' }
   | { type: 'settings' }
   | { type: 'growthAd'; plotIndex: number; cropKey: CropKey; remainingMs: number }
   | { type: 'harvestBonus' }
@@ -410,6 +421,12 @@ export default function FarmGame({
   const collectionSummary = useMemo(() => getCollectionSummary(gameState), [gameState]);
   const claimableCollectionCount = collectionSummary.claimableCount;
   const claimableAchievementCount = useMemo(() => getClaimableAchievementCount(gameState), [gameState]);
+  const labActionableCount = useMemo(
+    () =>
+      RESEARCH_NODES.filter((node) => canUnlockNode(gameState, node.key)).length +
+      BREEDING_RECIPES.filter((recipe) => getBreedingRecipeStatus(gameState, recipe).breedable).length,
+    [gameState]
+  );
   const selectedAreaLabel = getLocalizedAreaLabel(selectedArea);
   const selectedAreaUnlocked = isAreaUnlocked(gameState, selectedArea);
   const rewardedGoldLimit = useMemo(
@@ -451,23 +468,35 @@ export default function FarmGame({
   );
 
   useEffect(() => {
-    let updated = false;
     const now = Date.now();
-    const nextPlots = gameState.plots.map((plot) => {
-      if (plot.id >= gameState.unlockedPlotCount) {
+    let next = gameState;
+
+    let growthUpdated = false;
+    const grownPlots = next.plots.map((plot) => {
+      if (plot.id >= next.unlockedPlotCount) {
         return plot;
       }
-      if (plot.cropType == null || !isPlotGrowthComplete(gameState, plot, now)) {
+      if (plot.cropType == null || !isPlotGrowthComplete(next, plot, now)) {
         return plot;
       }
       const crop = getCrop(plot.cropType);
-      updated = true;
+      growthUpdated = true;
       farmAnalytics.trackCropReady(plot.cropType, crop.area, crop.tier, analyticsContext());
       return { ...plot, state: 2 as const };
     });
+    if (growthUpdated) {
+      next = { ...next, plots: grownPlots };
+    }
 
-    if (updated) {
-      setGameState((state) => ({ ...state, plots: nextPlots }));
+    // Automation shares the manual harvest pipeline but stays silent: no
+    // toast/vibration/sound, and no per-crop analytics from the tick loop.
+    const automation = runAutomationTick(next, { now });
+    if (automation.harvestedCount > 0) {
+      next = automation.state;
+    }
+
+    if (next !== gameState) {
+      setGameState(() => next);
     }
   }, [analyticsContext, gameState, speedMult, tick]);
 
@@ -527,6 +556,35 @@ export default function FarmGame({
         ? messages.titleUnequippedToast
         : messages.titleEquippedToast(getTitleLabel(titleKey, locale).name)
     );
+  }
+
+  function openLab() {
+    setActiveSheet({ type: 'lab' });
+  }
+
+  function toggleAutomation(key: keyof GameState['automationSettings']) {
+    setGameState((state) => ({
+      ...state,
+      automationSettings: { ...state.automationSettings, [key]: !state.automationSettings[key] },
+    }));
+  }
+
+  function unlockResearchNode(nodeKey: ResearchNodeKey) {
+    if (!canUnlockNode(gameState, nodeKey)) {
+      toast(messages.insufficientRpToast);
+      return;
+    }
+    setGameState((state) => unlockNode(state, nodeKey) ?? state);
+    toast(messages.researchNodeUnlockedToast(getResearchNodeLabel(nodeKey, locale).name));
+  }
+
+  function breedHybrid(cropKey: CropKey) {
+    if (breedCrop(gameState, cropKey) == null) {
+      toast(messages.insufficientRpToast);
+      return;
+    }
+    setGameState((state) => breedCrop(state, cropKey) ?? state);
+    toast(messages.bredToast(getLocalizedCropName(cropKey)));
   }
 
   function openSettings() {
@@ -955,6 +1013,12 @@ export default function FarmGame({
             onPress={openCollection}
           />
           <NavButton
+            label={messages.labButton}
+            badge={labActionableCount}
+            accessibilityLabel={messages.labButtonAccessibilityLabel}
+            onPress={openLab}
+          />
+          <NavButton
             label={messages.achievementsButton}
             badge={claimableAchievementCount}
             accessibilityLabel={messages.achievementsButtonAccessibilityLabel}
@@ -1142,6 +1206,17 @@ export default function FarmGame({
             messages={messages}
             collectionSummary={collectionSummary}
             onClaimReward={claimCollectionRewardByKey}
+          />
+        ) : null}
+
+        {activeSheet?.type === 'lab' ? (
+          <LabSheet
+            gameState={gameState}
+            locale={locale}
+            messages={messages}
+            onToggleAutomation={toggleAutomation}
+            onUnlockNode={unlockResearchNode}
+            onBreed={breedHybrid}
           />
         ) : null}
 
@@ -1499,6 +1574,9 @@ function getSheetTitle(activeSheet: ActiveSheet, messages: FarmMessages) {
   if (activeSheet?.type === 'achievements') {
     return messages.sheetTitleAchievements;
   }
+  if (activeSheet?.type === 'lab') {
+    return messages.sheetTitleLab;
+  }
   if (activeSheet?.type === 'harvestBonus') {
     return messages.sheetTitleHarvestBonus;
   }
@@ -1526,6 +1604,9 @@ function getSheetDescription(
   }
   if (activeSheet?.type === 'achievements') {
     return messages.sheetDescriptionAchievements;
+  }
+  if (activeSheet?.type === 'lab') {
+    return messages.sheetDescriptionLab;
   }
   if (activeSheet?.type === 'growthAd') {
     return messages.sheetDescriptionGrowthAd(

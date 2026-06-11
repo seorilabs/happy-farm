@@ -1,5 +1,5 @@
 import type { CropKey, GameState, Plot } from './types';
-import { CROPS } from './constants';
+import { CROPS, isAreaUnlocked } from './constants';
 import { getCropModifiers } from './modifiers';
 import {
   getCropHarvestCount,
@@ -9,7 +9,7 @@ import {
   type MasteryRank,
   type MutationKind,
 } from './mastery';
-import { getDonationRp } from './research';
+import { getDonationRp, isCropPlantable, isNodeUnlocked } from './research';
 
 export type HarvestOptions = {
   now?: number;
@@ -157,4 +157,79 @@ export function performHarvest(gameState: GameState, plotIndex: number, options:
     isNewMutationDiscovery,
     newMasteryRank,
   };
+}
+
+// Pure planting helper shared by the manual planting path and auto-replant.
+export function performPlant(gameState: GameState, plotIndex: number, cropKey: CropKey, now = Date.now()): GameState | null {
+  const crop = getKnownCrop(cropKey);
+  if (!isAreaUnlocked(gameState, crop.area) || !isCropPlantable(gameState, cropKey)) {
+    return null;
+  }
+  if (gameState.gold < crop.cost) {
+    return null;
+  }
+  const plot = gameState.plots[plotIndex];
+  if (plot == null || plot.id >= gameState.unlockedPlotCount || plot.state !== 0) {
+    return null;
+  }
+
+  const nextPlots = [...gameState.plots];
+  nextPlots[plotIndex] = { ...plot, cropType: cropKey, startTime: now, state: 1 };
+  return { ...gameState, gold: gameState.gold - crop.cost, plots: nextPlots };
+}
+
+export type AutomationTickResult = {
+  state: GameState;
+  harvestedCount: number;
+  replantedCount: number;
+  goldGained: number;
+  rpGained: number;
+};
+
+// Harvests every ready plot (and replants the same crop) when the matching
+// research nodes are unlocked and the player toggles are on. Intentionally
+// side-effect free: callers must not toast/vibrate per crop here.
+export function runAutomationTick(gameState: GameState, options: HarvestOptions = {}): AutomationTickResult {
+  const now = options.now ?? Date.now();
+  const rng = options.rng ?? Math.random;
+  const result: AutomationTickResult = {
+    state: gameState,
+    harvestedCount: 0,
+    replantedCount: 0,
+    goldGained: 0,
+    rpGained: 0,
+  };
+
+  const autoHarvest = gameState.automationSettings.autoHarvestEnabled && isNodeUnlocked(gameState, 'auto_harvest');
+  if (!autoHarvest) {
+    return result;
+  }
+  const autoReplant = gameState.automationSettings.autoReplantEnabled && isNodeUnlocked(gameState, 'auto_replant');
+
+  for (let plotIndex = 0; plotIndex < result.state.plots.length; plotIndex += 1) {
+    const plot = result.state.plots[plotIndex];
+    if (plot == null || plot.id >= result.state.unlockedPlotCount || plot.state !== 2 || plot.cropType == null) {
+      continue;
+    }
+
+    const cropKey = plot.cropType;
+    const outcome = performHarvest(result.state, plotIndex, { now, rng });
+    if (outcome == null) {
+      continue;
+    }
+    result.state = outcome.state;
+    result.harvestedCount += 1;
+    result.goldGained += outcome.goldGained;
+    result.rpGained += outcome.rpGained;
+
+    if (autoReplant) {
+      const replanted = performPlant(result.state, plotIndex, cropKey, now);
+      if (replanted != null) {
+        result.state = replanted;
+        result.replantedCount += 1;
+      }
+    }
+  }
+
+  return result;
 }

@@ -24,7 +24,7 @@ import {
   claimCollectionReward,
   migrateLoadedState,
 } from '../constants';
-import { performHarvest } from '../harvest';
+import { performHarvest, runAutomationTick } from '../harvest';
 import { COLLECTION_FULL_REWARD_KEY, type CropKey, type GameState } from '../types';
 
 function getRecipe(cropKey: string) {
@@ -176,6 +176,69 @@ describe('breeding', () => {
 
   test('regular crops are always plantable once their area opens', () => {
     expect(isCropPlantable(createInitialState(), 'carrot')).toBe(true);
+  });
+});
+
+describe('automation tick', () => {
+  function readyState(): GameState {
+    const base = createInitialState();
+    return {
+      ...base,
+      plots: base.plots.map((plot, index) =>
+        index < 2 ? { ...plot, cropType: 'carrot' as const, startTime: 0, state: 2 as const } : plot
+      ),
+    };
+  }
+
+  test('does nothing without the node or the toggle', () => {
+    const noNode: GameState = {
+      ...readyState(),
+      automationSettings: { autoHarvestEnabled: true, autoReplantEnabled: false, donationModeEnabled: false },
+    };
+    expect(runAutomationTick(noNode, { now: 1000, rng: () => 0.999 }).harvestedCount).toBe(0);
+
+    const noToggle: GameState = {
+      ...readyState(),
+      research: { ...readyState().research, unlockedNodes: ['auto_harvest'] },
+    };
+    expect(runAutomationTick(noToggle, { now: 1000, rng: () => 0.999 }).harvestedCount).toBe(0);
+  });
+
+  test('harvests every ready plot and replants the same crop', () => {
+    const base = readyState();
+    const state: GameState = {
+      ...base,
+      research: { ...base.research, unlockedNodes: ['auto_harvest', 'auto_replant'] },
+      automationSettings: { autoHarvestEnabled: true, autoReplantEnabled: true, donationModeEnabled: false },
+    };
+
+    const result = runAutomationTick(state, { now: 1000, rng: () => 0.999 });
+    const carrot = CROPS.carrot!;
+
+    expect(result.harvestedCount).toBe(2);
+    expect(result.replantedCount).toBe(2);
+    expect(result.goldGained).toBe(carrot.sell * 2);
+    expect(result.state.gold).toBe(state.gold + carrot.sell * 2 - carrot.cost * 2);
+    expect(result.state.plots[0]!.state).toBe(1);
+    expect(result.state.plots[0]!.cropType).toBe('carrot');
+    expect(result.state.lifetimeStats.totalHarvests).toBe(2);
+  });
+
+  test('skips replanting when gold runs out but keeps harvesting', () => {
+    const base = readyState();
+    const state: GameState = {
+      ...base,
+      gold: 0,
+      automationSettings: { autoHarvestEnabled: true, autoReplantEnabled: true, donationModeEnabled: true },
+      research: { ...base.research, unlockedNodes: ['auto_harvest', 'auto_replant'] },
+    };
+
+    // Donation mode yields RP, not gold, so replanting stays unaffordable.
+    const result = runAutomationTick(state, { now: 1000, rng: () => 0.999 });
+    expect(result.harvestedCount).toBe(2);
+    expect(result.replantedCount).toBe(0);
+    expect(result.rpGained).toBeGreaterThanOrEqual(2);
+    expect(result.state.plots[0]!.state).toBe(0);
   });
 });
 
