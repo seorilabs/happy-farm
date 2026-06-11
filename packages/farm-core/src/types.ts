@@ -8,6 +8,27 @@ export type MasteryRankKey = (typeof balance.mastery.ranks)[number]['key'];
 
 export type MutationKey = (typeof balance.mutations.kinds)[number]['key'];
 
+export type AchievementTrackKey = (typeof balance.achievements.tracks)[number]['key'];
+
+export type TitleKey = (typeof balance.achievements.titles)[number]['key'];
+
+export type LifetimeStats = {
+  totalHarvests: number;
+  totalGoldEarned: number;
+  mutationsFound: number;
+  prestigeCount: number;
+  researchPointsEarned: number;
+  breedsUnlocked: number;
+};
+
+// Permanent cross-farm progression. Stars are earned from achievements and
+// farm graduations, and spent on prestige skills.
+export type PrestigeProgress = {
+  level: number;
+  stars: number;
+  totalStarsEarned: number;
+};
+
 export const COLLECTION_FULL_REWARD_KEY = 'all';
 
 export type CollectionRewardKey = AreaKey | typeof COLLECTION_FULL_REWARD_KEY;
@@ -48,6 +69,10 @@ export type GameState = {
   upgrades: { speed: number; profit: number };
   harvestCounts: Partial<Record<CropKey, number>>;
   mutationsDiscovered: Partial<Record<CropKey, MutationKey[]>>;
+  lifetimeStats: LifetimeStats;
+  claimedAchievements: string[];
+  activeTitle: TitleKey | null;
+  prestige: PrestigeProgress;
 };
 
 // Prestige reset boundary. Farm-layer fields are wiped when the player
@@ -66,6 +91,10 @@ export const META_LAYER_KEYS = [
   'adUsage',
   'harvestCounts',
   'mutationsDiscovered',
+  'lifetimeStats',
+  'claimedAchievements',
+  'activeTitle',
+  'prestige',
 ] as const satisfies readonly (keyof GameState)[];
 
 export type FarmLayerKey = (typeof FARM_LAYER_KEYS)[number];

@@ -85,6 +85,25 @@
     },
     "fullCompletionReward": 100000000000
   },
+  "achievements": {
+    "agentPurpose": "Endless milestone tracks over lifetime stats. Tier N threshold = base * growth^(N-1); every claimed tier pays prestige stars. Titles unlock when the referenced track tier is claimed.",
+    "tracks": [
+      { "key": "harvest_total", "icon": "🌾", "stat": "totalHarvests", "base": 100, "growth": 3, "starsPerTier": 1 },
+      { "key": "gold_earned", "icon": "💰", "stat": "totalGoldEarned", "base": 100000, "growth": 10, "starsPerTier": 1 },
+      { "key": "mutation_hunter", "icon": "✨", "stat": "mutationsFound", "base": 5, "growth": 3, "starsPerTier": 1 },
+      { "key": "prestige_pioneer", "icon": "🗺️", "stat": "prestigeCount", "base": 1, "growth": 2, "starsPerTier": 2 },
+      { "key": "research_devotee", "icon": "🔬", "stat": "researchPointsEarned", "base": 100000, "growth": 8, "starsPerTier": 1 },
+      { "key": "breed_collector", "icon": "🧬", "stat": "breedsUnlocked", "base": 1, "growth": 2, "starsPerTier": 2 }
+    ],
+    "titles": [
+      { "key": "harvest_master", "icon": "🌾", "track": "harvest_total", "tier": 5 },
+      { "key": "gold_baron", "icon": "💰", "track": "gold_earned", "tier": 5 },
+      { "key": "mutation_seeker", "icon": "✨", "track": "mutation_hunter", "tier": 4 },
+      { "key": "frontier_legend", "icon": "🗺️", "track": "prestige_pioneer", "tier": 3 },
+      { "key": "lab_director", "icon": "🔬", "track": "research_devotee", "tier": 4 },
+      { "key": "gene_artisan", "icon": "🧬", "track": "breed_collector", "tier": 3 }
+    ]
+  },
   "crops": [
     { "key": "carrot", "name": "당근", "cost": 10, "sell": 14, "growTime": 2000, "icon": "🥕", "tier": 1, "area": "starter_field" },
     { "key": "wheat", "name": "밀", "cost": 25, "sell": 38, "growTime": 4000, "icon": "🌾", "tier": 1, "area": "starter_field" },

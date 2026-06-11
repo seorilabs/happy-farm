@@ -1,6 +1,13 @@
 import type { AreaKey, CollectionRewardKey, CropKey, GameState, PlotState } from './types';
 import { COLLECTION_FULL_REWARD_KEY } from './types';
 import { getHarvestedCropKeysInSync, normalizeHarvestCounts, normalizeMutationsDiscovered } from './mastery';
+import {
+  createInitialLifetimeStats,
+  normalizeActiveTitle,
+  normalizeClaimedAchievements,
+  normalizeLifetimeStats,
+} from './achievements';
+import { createInitialPrestigeProgress, normalizePrestigeProgress } from './prestige';
 import balance from './balance.json';
 import {
   DEFAULT_LOCALE,
@@ -543,6 +550,10 @@ export function createInitialState(): GameState {
     upgrades: { speed: 1, profit: 1 },
     harvestCounts: {},
     mutationsDiscovered: {},
+    lifetimeStats: createInitialLifetimeStats(),
+    claimedAchievements: [],
+    activeTitle: null,
+    prestige: createInitialPrestigeProgress(),
     plots: Array.from({ length: MAX_PLOTS }, (_, i) => ({
       id: i,
       cropType: null,
@@ -655,6 +666,18 @@ export function migrateLoadedState(loaded: Partial<GameState>, base: GameState):
   merged.harvestCounts = normalizeHarvestCounts(loaded.harvestCounts, merged.harvestedCropKeys);
   merged.harvestedCropKeys = getHarvestedCropKeysInSync(merged.harvestedCropKeys, merged.harvestCounts);
   merged.mutationsDiscovered = normalizeMutationsDiscovered(loaded.mutationsDiscovered);
+
+  merged.lifetimeStats = normalizeLifetimeStats(loaded.lifetimeStats);
+  // Lifetime totals can never trail what the save already proves happened.
+  const provenHarvests = Object.values(merged.harvestCounts).reduce<number>(
+    (sum, count) => sum + (typeof count === 'number' ? count : 0),
+    0
+  );
+  merged.lifetimeStats.totalHarvests = Math.max(merged.lifetimeStats.totalHarvests, provenHarvests);
+  merged.claimedAchievements = normalizeClaimedAchievements(loaded.claimedAchievements);
+  merged.activeTitle = normalizeActiveTitle(loaded.activeTitle, merged.claimedAchievements);
+  merged.prestige = normalizePrestigeProgress(loaded.prestige);
+  merged.lifetimeStats.prestigeCount = Math.max(merged.lifetimeStats.prestigeCount, merged.prestige.level);
 
   if (merged.unlockedAreas.length === 0) merged.unlockedAreas = INITIAL_AREA_KEYS;
   return merged;

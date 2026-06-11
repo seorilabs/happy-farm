@@ -117,6 +117,12 @@ export function performHarvest(gameState: GameState, plotIndex: number, options:
     harvestedCropKeys,
     harvestCounts,
     mutationsDiscovered,
+    lifetimeStats: {
+      ...gameState.lifetimeStats,
+      totalHarvests: gameState.lifetimeStats.totalHarvests + 1,
+      totalGoldEarned: gameState.lifetimeStats.totalGoldEarned + goldGained,
+      mutationsFound: gameState.lifetimeStats.mutationsFound + (mutation != null ? 1 : 0),
+    },
   };
 
   const nextMastery = getMasteryStatus(nextState, cropKey);

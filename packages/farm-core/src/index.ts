@@ -1,9 +1,11 @@
+export * from './achievements';
 export * from './analytics';
 export * from './ads';
 export * from './constants';
 export * from './harvest';
 export * from './mastery';
 export * from './modifiers';
+export * from './prestige';
 export {
   DEFAULT_LOCALE,
   SUPPORTED_LOCALES,
@@ -11,6 +13,7 @@ export {
   formatHourlyGold,
   formatRemainingTime,
   formatSignedPercent,
+  getAchievementTrackLabel,
   getAreaLabel,
   getAreaLabels,
   getCoreMessages,
@@ -18,6 +21,7 @@ export {
   getCropLabels,
   getMasteryRankLabel,
   getMutationLabel,
+  getTitleLabel,
   normalizeLocale,
   type SupportedLocale,
 } from './i18n';

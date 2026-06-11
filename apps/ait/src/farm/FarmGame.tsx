@@ -19,6 +19,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   CROPS,
   FARM_AREAS,
+  claimNextAchievementTier,
+  getClaimableAchievementCount,
+  getTitleLabel,
+  setActiveTitle,
+  type AchievementTrackKey,
+  type TitleKey,
   GROWTH_AD_MAX_SKIP_MS,
   GROWTH_AD_MIN_REMAINING_MS,
   HARVEST_BONUS_BOOST_DURATION_MS,
@@ -75,6 +81,7 @@ import {
 
 import { DEFAULT_FARM_GAME_SETTINGS, normalizeFarmGameSettings, type FarmGameSettings } from './gameSettings';
 import { getFarmMessages, type FarmMessages } from './i18n';
+import { AchievementsSheet } from './components/AchievementsSheet';
 import { CollectionSheet } from './components/CollectionSheet';
 import { AdRewardCard, SettingToggle, SheetAction, ShopCard, sheetPartStyles } from './components/SheetParts';
 
@@ -123,6 +130,7 @@ const FIRST_AREA = getFirstArea();
 type ActiveSheet =
   | { type: 'shop' }
   | { type: 'collection' }
+  | { type: 'achievements' }
   | { type: 'settings' }
   | { type: 'growthAd'; plotIndex: number; cropKey: CropKey; remainingMs: number }
   | { type: 'harvestBonus' }
@@ -229,6 +237,7 @@ export default function FarmGame({
   const gameStartTrackedRef = useRef(false);
   const firstSeedSelectedRef = useRef(false);
   const claimedRewardKeysRef = useRef<Set<CollectionRewardKey>>(new Set());
+  const claimedAchievementKeysRef = useRef<Set<string>>(new Set());
   const rewardedAd = useRewardedAd(REWARDED_AD_GROUP_ID);
   const interstitialAd = useInterstitialAd(INTERSTITIAL_AD_GROUP_ID);
   const farmAnalytics = analytics;
@@ -399,6 +408,7 @@ export default function FarmGame({
   }, []);
   const collectionSummary = useMemo(() => getCollectionSummary(gameState), [gameState]);
   const claimableCollectionCount = collectionSummary.claimableCount;
+  const claimableAchievementCount = useMemo(() => getClaimableAchievementCount(gameState), [gameState]);
   const selectedAreaLabel = getLocalizedAreaLabel(selectedArea);
   const selectedAreaUnlocked = isAreaUnlocked(gameState, selectedArea);
   const rewardedGoldLimit = useMemo(
@@ -487,6 +497,35 @@ export default function FarmGame({
       context: analyticsContext(),
     });
     toast(messages.collectionRewardClaimedToast(formatMoney(preview.awardedGold, locale)));
+  }
+
+  function openAchievements() {
+    setActiveSheet({ type: 'achievements' });
+  }
+
+  function claimAchievement(trackKey: AchievementTrackKey) {
+    const preview = claimNextAchievementTier(gameState, trackKey);
+    if (preview == null) {
+      return;
+    }
+    // Same double-tap guard pattern as collection rewards: state updates are
+    // idempotent, but the toast must fire exactly once per claimed tier.
+    const guardKey = `${trackKey}:${preview.claimedTier}`;
+    if (claimedAchievementKeysRef.current.has(guardKey)) {
+      return;
+    }
+    claimedAchievementKeysRef.current.add(guardKey);
+    setGameState((state) => claimNextAchievementTier(state, trackKey)?.state ?? state);
+    toast(messages.achievementClaimedToast(preview.starsAwarded));
+  }
+
+  function selectTitle(titleKey: TitleKey | null) {
+    setGameState((state) => setActiveTitle(state, titleKey));
+    toast(
+      titleKey == null
+        ? messages.titleUnequippedToast
+        : messages.titleEquippedToast(getTitleLabel(titleKey, locale).name)
+    );
   }
 
   function openSettings() {
@@ -626,6 +665,7 @@ export default function FarmGame({
     }
     await persistence.removePersistedGameState();
     claimedRewardKeysRef.current.clear();
+    claimedAchievementKeysRef.current.clear();
     setGameState(createInitialState());
     setSelectedArea(FIRST_AREA.key);
     setSelectedTool('harvest');
@@ -837,27 +877,19 @@ export default function FarmGame({
             <Text style={styles.homeIcon}>🏡</Text>
             <View>
               <Text style={styles.title}>{messages.appTitle}</Text>
-              <Text style={styles.subtitle}>{messages.appSubtitle}</Text>
+              <View style={styles.subtitleRow}>
+                <Text style={styles.subtitle}>{messages.appSubtitle}</Text>
+                {gameState.activeTitle != null ? (
+                  <Text style={styles.titleBadge} numberOfLines={1}>
+                    {getTitleLabel(gameState.activeTitle, locale).name}
+                  </Text>
+                ) : null}
+              </View>
             </View>
           </View>
 
           <View style={styles.headerActions}>
-            <Pressable style={styles.shopButton} onPress={openShop}>
-              <Text style={styles.shopButtonText}>{messages.shopButton}</Text>
-            </Pressable>
-            <Pressable
-              accessibilityLabel={messages.collectionButtonAccessibilityLabel}
-              hitSlop={8}
-              style={styles.settingsButton}
-              onPress={openCollection}
-            >
-              <Text style={styles.settingsButtonText}>📖</Text>
-              {claimableCollectionCount > 0 ? (
-                <View style={styles.collectionBadge}>
-                  <Text style={styles.collectionBadgeText}>{claimableCollectionCount}</Text>
-                </View>
-              ) : null}
-            </Pressable>
+            <Text style={styles.starsChip}>★ {gameState.prestige.stars}</Text>
             <Pressable
               accessibilityLabel={messages.settingsAccessibilityLabel}
               hitSlop={8}
@@ -902,6 +934,22 @@ export default function FarmGame({
             </View>
           </View>
         </View>
+
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.navRow}>
+          <NavButton label={messages.shopButton} onPress={openShop} />
+          <NavButton
+            label={messages.collectionButton}
+            badge={claimableCollectionCount}
+            accessibilityLabel={messages.collectionButtonAccessibilityLabel}
+            onPress={openCollection}
+          />
+          <NavButton
+            label={messages.achievementsButton}
+            badge={claimableAchievementCount}
+            accessibilityLabel={messages.achievementsButtonAccessibilityLabel}
+            onPress={openAchievements}
+          />
+        </ScrollView>
       </View>
 
       <ScrollView contentContainerStyle={styles.mainContent} style={styles.main}>
@@ -1086,6 +1134,16 @@ export default function FarmGame({
           />
         ) : null}
 
+        {activeSheet?.type === 'achievements' ? (
+          <AchievementsSheet
+            gameState={gameState}
+            locale={locale}
+            messages={messages}
+            onClaim={claimAchievement}
+            onSelectTitle={selectTitle}
+          />
+        ) : null}
+
         {activeSheet?.type === 'settings' ? (
           <View>
             <Text style={styles.sheetSectionTitle}>{messages.soundSection}</Text>
@@ -1169,6 +1227,29 @@ export default function FarmGame({
         ) : null}
       </Sheet>
     </View>
+  );
+}
+
+function NavButton({
+  label,
+  badge,
+  accessibilityLabel,
+  onPress,
+}: {
+  label: string;
+  badge?: number;
+  accessibilityLabel?: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable accessibilityLabel={accessibilityLabel} style={styles.navButton} onPress={onPress}>
+      <Text style={styles.navButtonText}>{label}</Text>
+      {badge != null && badge > 0 ? (
+        <View style={styles.collectionBadge}>
+          <Text style={styles.collectionBadgeText}>{badge}</Text>
+        </View>
+      ) : null}
+    </Pressable>
   );
 }
 
@@ -1404,6 +1485,9 @@ function getSheetTitle(activeSheet: ActiveSheet, messages: FarmMessages) {
   if (activeSheet?.type === 'growthAd') {
     return messages.sheetTitleGrowthAd;
   }
+  if (activeSheet?.type === 'achievements') {
+    return messages.sheetTitleAchievements;
+  }
   if (activeSheet?.type === 'harvestBonus') {
     return messages.sheetTitleHarvestBonus;
   }
@@ -1428,6 +1512,9 @@ function getSheetDescription(
 ) {
   if (activeSheet?.type === 'collection') {
     return messages.sheetDescriptionCollection(collectionSummary.discoveredCount, collectionSummary.totalCount);
+  }
+  if (activeSheet?.type === 'achievements') {
+    return messages.sheetDescriptionAchievements;
   }
   if (activeSheet?.type === 'growthAd') {
     return messages.sheetDescriptionGrowthAd(
@@ -1731,15 +1818,46 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
   },
-  shopButton: {
+  subtitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  titleBadge: {
+    marginTop: 2,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 8,
+    overflow: 'hidden',
+    color: '#6f57d9',
+    backgroundColor: '#efeafd',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  starsChip: {
+    minHeight: 34,
+    overflow: 'hidden',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    lineHeight: 34,
+    color: '#8a4b0f',
+    backgroundColor: '#fff3d6',
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  navRow: {
+    gap: 8,
+    paddingTop: 8,
+  },
+  navButton: {
     minHeight: 34,
     justifyContent: 'center',
     borderRadius: 8,
     paddingHorizontal: 12,
-    backgroundColor: '#2f7de1',
+    backgroundColor: '#edf2f7',
   },
-  shopButtonText: {
-    color: '#ffffff',
+  navButtonText: {
+    color: '#344054',
     fontSize: 13,
     fontWeight: '800',
   },

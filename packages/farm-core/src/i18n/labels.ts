@@ -1,4 +1,4 @@
-import type { AreaKey, CropKey, MasteryRankKey, MutationKey } from '../types';
+import type { AchievementTrackKey, AreaKey, CropKey, MasteryRankKey, MutationKey, TitleKey } from '../types';
 import { DEFAULT_LOCALE, type SupportedLocale } from './locales';
 
 type CropLabel = {
@@ -191,6 +191,52 @@ const EN_MUTATION_LABELS = {
   rainbow: { name: 'Rainbow' },
 } satisfies Record<MutationKey, SimpleLabel>;
 
+const KO_ACHIEVEMENT_TRACK_LABELS = {
+  harvest_total: { name: '누적 수확' },
+  gold_earned: { name: '누적 골드' },
+  mutation_hunter: { name: '변이 발견' },
+  prestige_pioneer: { name: '농장 개척' },
+  research_devotee: { name: '연구 공헌' },
+  breed_collector: { name: '신품종 교배' },
+} satisfies Record<AchievementTrackKey, SimpleLabel>;
+
+const EN_ACHIEVEMENT_TRACK_LABELS = {
+  harvest_total: { name: 'Total Harvests' },
+  gold_earned: { name: 'Gold Earned' },
+  mutation_hunter: { name: 'Mutations Found' },
+  prestige_pioneer: { name: 'Farms Pioneered' },
+  research_devotee: { name: 'Research Points' },
+  breed_collector: { name: 'New Breeds' },
+} satisfies Record<AchievementTrackKey, SimpleLabel>;
+
+const KO_TITLE_LABELS = {
+  harvest_master: { name: '수확의 달인' },
+  gold_baron: { name: '황금 부농' },
+  mutation_seeker: { name: '변이 사냥꾼' },
+  frontier_legend: { name: '개척의 전설' },
+  lab_director: { name: '연구소장' },
+  gene_artisan: { name: '교배 장인' },
+} satisfies Record<TitleKey, SimpleLabel>;
+
+const EN_TITLE_LABELS = {
+  harvest_master: { name: 'Master Harvester' },
+  gold_baron: { name: 'Gold Baron' },
+  mutation_seeker: { name: 'Mutation Hunter' },
+  frontier_legend: { name: 'Frontier Legend' },
+  lab_director: { name: 'Lab Director' },
+  gene_artisan: { name: 'Gene Artisan' },
+} satisfies Record<TitleKey, SimpleLabel>;
+
+const ACHIEVEMENT_TRACK_LABELS: Record<SupportedLocale, Record<AchievementTrackKey, SimpleLabel>> = {
+  'ko-KR': KO_ACHIEVEMENT_TRACK_LABELS,
+  'en-US': EN_ACHIEVEMENT_TRACK_LABELS,
+};
+
+const TITLE_LABELS: Record<SupportedLocale, Record<TitleKey, SimpleLabel>> = {
+  'ko-KR': KO_TITLE_LABELS,
+  'en-US': EN_TITLE_LABELS,
+};
+
 const MASTERY_RANK_LABELS: Record<SupportedLocale, Record<MasteryRankKey, SimpleLabel>> = {
   'ko-KR': KO_MASTERY_RANK_LABELS,
   'en-US': EN_MASTERY_RANK_LABELS,
@@ -243,6 +289,27 @@ export function getMutationLabel(mutationKey: MutationKey, locale: SupportedLoca
   const label = labels[mutationKey] ?? MUTATION_LABELS[DEFAULT_LOCALE][mutationKey];
   if (label == null) {
     throw new Error(`Missing mutation label: ${mutationKey}`);
+  }
+  return label;
+}
+
+export function getAchievementTrackLabel(
+  trackKey: AchievementTrackKey,
+  locale: SupportedLocale = DEFAULT_LOCALE
+): SimpleLabel {
+  const labels = ACHIEVEMENT_TRACK_LABELS[locale] ?? ACHIEVEMENT_TRACK_LABELS[DEFAULT_LOCALE];
+  const label = labels[trackKey] ?? ACHIEVEMENT_TRACK_LABELS[DEFAULT_LOCALE][trackKey];
+  if (label == null) {
+    throw new Error(`Missing achievement track label: ${trackKey}`);
+  }
+  return label;
+}
+
+export function getTitleLabel(titleKey: TitleKey, locale: SupportedLocale = DEFAULT_LOCALE): SimpleLabel {
+  const labels = TITLE_LABELS[locale] ?? TITLE_LABELS[DEFAULT_LOCALE];
+  const label = labels[titleKey] ?? TITLE_LABELS[DEFAULT_LOCALE][titleKey];
+  if (label == null) {
+    throw new Error(`Missing title label: ${titleKey}`);
   }
   return label;
 }
