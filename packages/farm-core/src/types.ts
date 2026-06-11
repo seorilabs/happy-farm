@@ -43,3 +43,34 @@ export type GameState = {
   adUsage: AdUsage;
   upgrades: { speed: number; profit: number };
 };
+
+// Prestige reset boundary. Farm-layer fields are wiped when the player
+// graduates a farm; meta-layer fields persist across every farm forever.
+export const FARM_LAYER_KEYS = [
+  'gold',
+  'plots',
+  'unlockedPlotCount',
+  'unlockedAreas',
+  'upgrades',
+] as const satisfies readonly (keyof GameState)[];
+
+export const META_LAYER_KEYS = [
+  'harvestedCropKeys',
+  'claimedCollectionRewards',
+  'adUsage',
+] as const satisfies readonly (keyof GameState)[];
+
+export type FarmLayerKey = (typeof FARM_LAYER_KEYS)[number];
+export type MetaLayerKey = (typeof META_LAYER_KEYS)[number];
+
+type UnpartitionedGameStateKey = Exclude<keyof GameState, FarmLayerKey | MetaLayerKey>;
+type DoublyPartitionedGameStateKey = FarmLayerKey & MetaLayerKey;
+
+// Compile-time guard: every GameState field must be classified into exactly one
+// layer. Adding a field without deciding its prestige-reset behavior is a bug.
+export const GAME_STATE_LAYER_PARTITION_OK: [UnpartitionedGameStateKey, DoublyPartitionedGameStateKey] extends [
+  never,
+  never,
+]
+  ? true
+  : { unpartitioned: UnpartitionedGameStateKey; doublyPartitioned: DoublyPartitionedGameStateKey } = true;

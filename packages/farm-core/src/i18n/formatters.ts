@@ -1,6 +1,7 @@
 import { DEFAULT_LOCALE, type SupportedLocale } from './locales';
 
 const KOREAN_MONEY_UNITS = [
+  { value: 1e24, suffix: '자' },
   { value: 1e20, suffix: '해' },
   { value: 1e16, suffix: '경' },
   { value: 1e12, suffix: '조' },
@@ -9,6 +10,10 @@ const KOREAN_MONEY_UNITS = [
 ] as const;
 
 const ENGLISH_MONEY_UNITS = [
+  { value: 1e24, suffix: 'Sp' },
+  { value: 1e21, suffix: 'Sx' },
+  { value: 1e18, suffix: 'Qi' },
+  { value: 1e15, suffix: 'Qa' },
   { value: 1e12, suffix: 'T' },
   { value: 1e9, suffix: 'B' },
   { value: 1e6, suffix: 'M' },

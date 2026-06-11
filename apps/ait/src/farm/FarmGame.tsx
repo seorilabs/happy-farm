@@ -56,13 +56,17 @@ import {
   getHarvestBonusPromptStatus,
   getMinUpgradeLevel,
   getPlotCost,
+  getPlotGrowthRatio,
+  getPlotRemainingGrowthMs,
   getProfitMultiplier,
   getRewardedAdLimitStatus,
   getSpeedMultiplier,
   getUpgradeCost,
   isAreaUnlocked,
   isCropDiscovered,
+  isPlotGrowthComplete,
   normalizeLocale,
+  performHarvest,
   recordHarvestBonusAdPrompt,
   recordRewardedAdUsage,
   type CropEconomyEstimate,
@@ -102,15 +106,6 @@ function getCrop(cropKey: CropKey) {
     throw new Error(`Unknown crop: ${cropKey}`);
   }
   return crop;
-}
-
-function getGrowthProgressRatio(startTime: number, growTime: number, speedMult: number, now = Date.now()) {
-  if (growTime <= 0 || speedMult <= 0) {
-    return 1;
-  }
-
-  const elapsed = Math.max(0, now - startTime) * speedMult;
-  return Math.min(Math.max(elapsed / growTime, 0), 1);
 }
 
 function getCropEconomy(cropEconomyByKey: Record<CropKey, CropEconomyEstimate>, cropKey: CropKey): CropEconomyEstimate {
@@ -449,23 +444,19 @@ export default function FarmGame({
       if (plot.id >= gameState.unlockedPlotCount) {
         return plot;
       }
-      if (plot.state !== 1 || plot.cropType == null || plot.startTime == null) {
+      if (plot.cropType == null || !isPlotGrowthComplete(gameState, plot, now)) {
         return plot;
       }
       const crop = getCrop(plot.cropType);
-      const elapsed = (now - plot.startTime) * speedMult;
-      if (elapsed >= crop.growTime) {
-        updated = true;
-        farmAnalytics.trackCropReady(plot.cropType, crop.area, crop.tier, analyticsContext());
-        return { ...plot, state: 2 as const };
-      }
-      return plot;
+      updated = true;
+      farmAnalytics.trackCropReady(plot.cropType, crop.area, crop.tier, analyticsContext());
+      return { ...plot, state: 2 as const };
     });
 
     if (updated) {
       setGameState((state) => ({ ...state, plots: nextPlots }));
     }
-  }, [analyticsContext, gameState.plots, gameState.unlockedPlotCount, speedMult, tick]);
+  }, [analyticsContext, gameState, speedMult, tick]);
 
   function openShop() {
     setActiveSheet({ type: 'shop' });
@@ -667,45 +658,34 @@ export default function FarmGame({
   }
 
   function harvestCrop(index: number) {
-    const plot = gameState.plots[index];
-    if (plot == null || plot.state !== 2 || plot.cropType == null) {
+    const now = Date.now();
+    const outcome = performHarvest(gameState, index, { now });
+    if (outcome == null) {
       return;
     }
-    const now = Date.now();
-    const crop = getCrop(plot.cropType);
-    const currentHarvestBoost = getHarvestBonusBoostStatus(gameState, now);
-    const finalPrice = Math.floor(crop.sell * profitMult * currentHarvestBoost.multiplier);
-    const isFirstMeaningfulHarvest = gameState.harvestedCropKeys.length === 0;
-    const isFirstCropHarvest = !gameState.harvestedCropKeys.includes(plot.cropType);
+    const crop = getCrop(outcome.cropKey);
 
-    setGameState((state) => {
-      const next = [...state.plots];
-      next[index] = { id: index, cropType: null, startTime: null, state: 0 };
-      const harvestedCropKeys = state.harvestedCropKeys.includes(plot.cropType as CropKey)
-        ? state.harvestedCropKeys
-        : [...state.harvestedCropKeys, plot.cropType as CropKey];
-      return { ...state, gold: state.gold + finalPrice, plots: next, harvestedCropKeys };
-    });
+    setGameState((state) => performHarvest(state, index, { now })?.state ?? state);
 
     farmAnalytics.trackCropHarvested({
-      cropKey: plot.cropType,
+      cropKey: outcome.cropKey,
       areaKey: crop.area,
       cropTier: crop.tier,
-      revenue: finalPrice,
-      isFirstMeaningfulHarvest,
-      isFirstCropHarvest,
+      revenue: outcome.goldGained,
+      isFirstMeaningfulHarvest: outcome.isFirstMeaningfulHarvest,
+      isFirstCropHarvest: outcome.isNewCropDiscovery,
       context: analyticsContext(),
     });
     toast(
-      currentHarvestBoost.active
-        ? messages.harvestedBoostToast(formatMoney(finalPrice, locale), currentHarvestBoost.multiplier)
-        : messages.harvestedToast(formatMoney(finalPrice, locale))
+      outcome.boostActive
+        ? messages.harvestedBoostToast(formatMoney(outcome.goldGained, locale), outcome.boostMultiplier)
+        : messages.harvestedToast(formatMoney(outcome.goldGained, locale))
     );
     const canShowHarvestBonusNudge =
       rewardedAd.isAdReady &&
       getRewardedAdLimitStatus(gameState, 'harvestBonusAd', now).allowed &&
       getHarvestBonusPromptStatus(gameState, now).allowed &&
-      !currentHarvestBoost.active;
+      !outcome.boostActive;
     if (canShowHarvestBonusNudge) {
       setGameState((state) => ({ ...state, adUsage: recordHarvestBonusAdPrompt(state, now) }));
       setActiveSheet({ type: 'harvestBonus' });
@@ -739,8 +719,7 @@ export default function FarmGame({
       }
 
       if (plot.state === 1 && plot.cropType != null && plot.startTime != null) {
-        const crop = getCrop(plot.cropType);
-        const remainingMs = Math.max(0, crop.growTime - (Date.now() - plot.startTime) * speedMult);
+        const remainingMs = getPlotRemainingGrowthMs(gameState, plot);
 
         if (
           remainingMs >= GROWTH_AD_MIN_REMAINING_MS &&
@@ -908,7 +887,7 @@ export default function FarmGame({
               key={plot.id}
               plot={plot}
               unlocked={index < gameState.unlockedPlotCount}
-              speedMult={speedMult}
+              progressRatio={getPlotGrowthRatio(gameState, plot)}
               tileSize={plotTileSize}
               messages={messages}
               onPress={() => handlePlotClick(index)}
@@ -1227,14 +1206,14 @@ export default function FarmGame({
 function PlotCell({
   plot,
   unlocked,
-  speedMult,
+  progressRatio,
   tileSize,
   messages,
   onPress,
 }: {
   plot: GameState['plots'][number];
   unlocked: boolean;
-  speedMult: number;
+  progressRatio: number;
   tileSize: number;
   messages: FarmMessages;
   onPress: () => void;
@@ -1258,10 +1237,6 @@ function PlotCell({
   }
 
   const crop = plot.cropType != null ? getCrop(plot.cropType) : null;
-  const progressRatio =
-    plot.state === 1 && crop != null && plot.startTime != null
-      ? getGrowthProgressRatio(plot.startTime, crop.growTime, speedMult)
-      : 1;
   const icon = plot.state === 2 ? (crop?.icon ?? '🌱') : progressRatio > 0.5 ? '🌿' : '🌱';
 
   return (
@@ -1275,30 +1250,22 @@ function PlotCell({
         </View>
       ) : null}
       {plot.state === 1 && crop != null && plot.startTime != null ? (
-        <GrowthProgressBar growTime={crop.growTime} speedMult={speedMult} startTime={plot.startTime} />
+        <GrowthProgressBar progressRatio={progressRatio} />
       ) : null}
       <Text style={plot.state === 2 ? styles.readyCropIcon : styles.cropIcon}>{icon}</Text>
     </Pressable>
   );
 }
 
-function GrowthProgressBar({
-  growTime,
-  speedMult,
-  startTime,
-}: {
-  growTime: number;
-  speedMult: number;
-  startTime: number;
-}) {
+function GrowthProgressBar({ progressRatio }: { progressRatio: number }) {
   const progressScaleRef = useRef<Animated.Value | null>(null);
   if (progressScaleRef.current == null) {
-    progressScaleRef.current = new Animated.Value(getGrowthProgressRatio(startTime, growTime, speedMult));
+    progressScaleRef.current = new Animated.Value(progressRatio);
   }
   const progressScale = progressScaleRef.current;
   // Recomputed on every parent re-render (the 250ms game tick), so the bar
   // advances in small steps instead of one animation spanning the whole grow time.
-  const targetRatio = getGrowthProgressRatio(startTime, growTime, speedMult);
+  const targetRatio = progressRatio;
 
   useEffect(() => {
     if (targetRatio >= 1) {
