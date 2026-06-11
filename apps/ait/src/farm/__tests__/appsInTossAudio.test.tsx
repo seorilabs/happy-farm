@@ -9,7 +9,7 @@ type RecordedVideoProps = {
   source?: { uri?: string; shouldCache?: boolean };
   paused?: boolean;
   repeat?: boolean;
-  style?: { width?: number; height?: number; opacity?: number };
+  style?: { left?: number; top?: number; width?: number; height?: number; opacity?: number };
   volume?: number;
   onEnd?: () => void;
   onAudioFocusChanged?: (event: { hasAudioFocus: boolean }) => void;
@@ -82,7 +82,7 @@ describe('useAppsInTossFarmAudio', () => {
     expect(bgm.repeat).toBe(true);
     expect(bgm.paused).toBe(true);
     expect(bgm.source?.shouldCache).toBe(true);
-    expect(bgm.style).toEqual(expect.objectContaining({ width: 1, height: 1, opacity: 0 }));
+    expect(bgm.style).toEqual(expect.objectContaining({ left: -10000, top: -10000, width: 1, height: 1, opacity: 0 }));
     expect(bgm.onAudioFocusChanged).toBeDefined();
 
     const harvest = latestPropsFor(FARM_AUDIO_SOURCES.harvestCoin);
@@ -92,16 +92,19 @@ describe('useAppsInTossFarmAudio', () => {
 
   test('toggles background music playback through the FarmGame audio contract', () => {
     const audio = renderFarmAudio();
+    const initialSource = latestPropsFor(FARM_AUDIO_SOURCES.backgroundMusic).source;
 
     act(() => {
       void audio.setBackgroundMusicEnabled(true);
     });
     expect(latestPropsFor(FARM_AUDIO_SOURCES.backgroundMusic).paused).toBe(false);
+    expect(latestPropsFor(FARM_AUDIO_SOURCES.backgroundMusic).source).toBe(initialSource);
 
     act(() => {
       void audio.setBackgroundMusicEnabled(false);
     });
     expect(latestPropsFor(FARM_AUDIO_SOURCES.backgroundMusic).paused).toBe(true);
+    expect(latestPropsFor(FARM_AUDIO_SOURCES.backgroundMusic).source).toBe(initialSource);
   });
 
   test('plays the harvest sound from the start and pauses the player when it ends', () => {

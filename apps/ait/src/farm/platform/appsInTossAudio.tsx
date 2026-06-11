@@ -13,15 +13,19 @@ export const FARM_AUDIO_SOURCES = {
   harvestCoin: 'https://happy-farm-tycoon.web.app/audio/harvest_coin.wav',
 } as const;
 
+const FARM_AUDIO_VIDEO_SOURCES = {
+  backgroundMusic: {
+    uri: FARM_AUDIO_SOURCES.backgroundMusic,
+    shouldCache: true,
+  },
+  harvestCoin: {
+    uri: FARM_AUDIO_SOURCES.harvestCoin,
+    shouldCache: true,
+  },
+} as const;
+
 const BACKGROUND_MUSIC_VOLUME = 0.16;
 const HARVEST_VOLUME = 0.85;
-
-function createAudioSource(uri: string) {
-  return {
-    uri,
-    shouldCache: true,
-  };
-}
 
 // On Android every player must opt out of audio focus: otherwise starting the
 // harvest SFX takes focus away from the BGM player and ExoPlayer pauses it, so
@@ -73,7 +77,7 @@ export function useAppsInTossFarmAudio(): { audio: FarmGameAudio; audioElement: 
         onError={warnBackgroundMusicFailure}
         paused={!backgroundMusicEnabled}
         repeat
-        source={createAudioSource(FARM_AUDIO_SOURCES.backgroundMusic)}
+        source={FARM_AUDIO_VIDEO_SOURCES.backgroundMusic}
         style={styles.hiddenPlayer}
         volume={BACKGROUND_MUSIC_VOLUME}
       />
@@ -85,7 +89,7 @@ export function useAppsInTossFarmAudio(): { audio: FarmGameAudio; audioElement: 
         onEnd={stopHarvestPlayback}
         onError={warnHarvestCoinFailure}
         paused={!harvestPlaying}
-        source={createAudioSource(FARM_AUDIO_SOURCES.harvestCoin)}
+        source={FARM_AUDIO_VIDEO_SOURCES.harvestCoin}
         style={styles.hiddenPlayer}
         volume={HARVEST_VOLUME}
       />
@@ -101,6 +105,8 @@ const styles = StyleSheet.create({
   // Granite video player reliably attaches in the AppsInToss runtime.
   hiddenPlayer: {
     position: 'absolute',
+    left: -10000,
+    top: -10000,
     width: 1,
     height: 1,
     opacity: 0,
