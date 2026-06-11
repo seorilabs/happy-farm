@@ -289,6 +289,25 @@ describe('FarmGame UI flow', () => {
     expect(screen.getByText('현재 연구 Lv.42 · 성장속도 Lv.42 / 수익률 Lv.42')).toBeTruthy();
   });
 
+  test('anchors sheet drag gestures to the visible handle hit target', async () => {
+    const screen = await renderGame(null);
+
+    await waitFor(() => expect(screen.getByText('50G')).toBeTruthy());
+
+    fireEvent.press(screen.getByText('🏪 상점'));
+
+    const dragHandle = screen.getByTestId('sheet-drag-handle');
+    expect(dragHandle.props.style).toEqual(
+      expect.objectContaining({
+        height: 36,
+        justifyContent: 'flex-start',
+        paddingTop: 10,
+      })
+    );
+    expect(typeof dragHandle.props.onStartShouldSetResponder).toBe('function');
+    expect(typeof dragHandle.props.onMoveShouldSetResponder).toBe('function');
+  });
+
   test('supports core shop management purchases', async () => {
     const shopReadyState = createShopReadyState();
     const screen = await renderGame(shopReadyState);
