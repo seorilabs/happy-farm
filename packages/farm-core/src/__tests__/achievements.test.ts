@@ -137,7 +137,14 @@ describe('achievement save migration', () => {
 
   test('keeps only well-formed claim keys and validates the active title', () => {
     expect(
-      normalizeClaimedAchievements(['harvest_total:1', 'harvest_total:1', 'ghost_track:1', 'harvest_total:zero', 42])
+      normalizeClaimedAchievements([
+        'harvest_total:1',
+        'harvest_total:1',
+        'ghost_track:1',
+        'harvest_total:zero',
+        'harvest_total:1:extra',
+        42,
+      ])
     ).toEqual(['harvest_total:1']);
 
     const title = ACHIEVEMENT_TITLES[0]!;

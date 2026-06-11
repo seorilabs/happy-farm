@@ -168,7 +168,12 @@ export function normalizeClaimedAchievements(value: unknown): string[] {
   return value
     .filter((entry): entry is string => typeof entry === 'string')
     .filter((entry) => {
-      const [trackKey, rawTier] = entry.split(':');
+      // Claim keys are exactly `track:tier`; reject extra segments outright.
+      const segments = entry.split(':');
+      if (segments.length !== 2) {
+        return false;
+      }
+      const [trackKey, rawTier] = segments;
       const tier = Number(rawTier);
       return (
         ACHIEVEMENT_TRACKS.some((track) => track.key === trackKey) && Number.isInteger(tier) && tier >= 1

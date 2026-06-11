@@ -875,6 +875,11 @@ export default function FarmGame({
       toast(messages.insufficientGoldToast);
       return;
     }
+    // Remaining failure modes (occupied/locked plot) are silent; only track
+    // analytics for plants that actually succeed.
+    if (performPlant(gameState, index, cropKey, now) == null) {
+      return;
+    }
 
     setGameState((state) => performPlant(state, index, cropKey, now) ?? state);
     farmAnalytics.trackCropPlanted(cropKey, crop.area, crop.tier, cost, analyticsContext());
