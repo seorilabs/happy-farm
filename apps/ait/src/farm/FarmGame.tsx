@@ -20,18 +20,32 @@ import {
   BREEDING_RECIPES,
   CROPS,
   FARM_AREAS,
+  REGION_ARCHETYPES,
   RESEARCH_NODES,
   breedCrop,
+  buySkill,
+  canPrestige,
   canUnlockNode,
   claimNextAchievementTier,
+  collectChainIncome,
   getBreedingRecipeStatus,
+  getChainIncome,
   getClaimableAchievementCount,
+  getCropModifiers,
+  getCropPurchaseCost,
+  getFarmHourlyProductivity,
+  getPrestigeSkillLabel,
+  getRegionArchetypeLabel,
   getResearchNodeLabel,
   getTitleLabel,
+  performPlant,
+  prestigeFarm,
   runAutomationTick,
   setActiveTitle,
   unlockNode,
   type AchievementTrackKey,
+  type PrestigeSkillKey,
+  type RegionArchetypeKey,
   type ResearchNodeKey,
   type TitleKey,
   GROWTH_AD_MAX_SKIP_MS,
@@ -64,7 +78,6 @@ import {
   type CollectionSummary,
   getCropLabel,
   getCropEconomyEstimate,
-  getFarmProductivityEstimate,
   getGameAnalyticsContext,
   getHarvestBonusBoostStatus,
   getHarvestBonusPromptStatus,
@@ -92,6 +105,7 @@ import {
 import { DEFAULT_FARM_GAME_SETTINGS, normalizeFarmGameSettings, type FarmGameSettings } from './gameSettings';
 import { getFarmMessages, type FarmMessages } from './i18n';
 import { AchievementsSheet } from './components/AchievementsSheet';
+import { ChainMapSheet, PrestigeConfirmSheet } from './components/ChainMapSheet';
 import { CollectionSheet } from './components/CollectionSheet';
 import { LabSheet } from './components/LabSheet';
 import { AdRewardCard, SettingToggle, SheetAction, ShopCard, sheetPartStyles } from './components/SheetParts';
@@ -143,6 +157,8 @@ type ActiveSheet =
   | { type: 'collection' }
   | { type: 'achievements' }
   | { type: 'lab' }
+  | { type: 'map' }
+  | { type: 'prestigeConfirm' }
   | { type: 'settings' }
   | { type: 'growthAd'; plotIndex: number; cropKey: CropKey; remainingMs: number }
   | { type: 'harvestBonus' }
@@ -263,6 +279,9 @@ export default function FarmGame({
   const [gameState, setGameState] = useState<GameState>(() => createInitialState());
   const [selectedTool, setSelectedTool] = useState<ToolKey>('harvest');
   const [selectedArea, setSelectedArea] = useState<AreaKey>(FIRST_AREA.key);
+  const [prestigeArchetype, setPrestigeArchetype] = useState<RegionArchetypeKey>(
+    REGION_ARCHETYPES[0]?.key ?? 'plains'
+  );
   const [tick, setTick] = useState(0);
   const plotTileSize = useMemo(() => {
     const availableWidth = windowWidth - MAIN_HORIZONTAL_PADDING * 2 - PLOT_GAP * (PLOT_COLUMNS - 1);
@@ -443,28 +462,30 @@ export default function FarmGame({
   );
   const harvestBonusBoost = useMemo(() => getHarvestBonusBoostStatus(gameState), [gameState, tick]);
   const farmProductivity = useMemo(
-    () =>
-      getFarmProductivityEstimate(gameState, {
-        speedMultiplier: speedMult,
-        profitMultiplier: profitMult,
-        harvestMultiplier: harvestBonusBoost.multiplier,
-      }),
-    [gameState, harvestBonusBoost.multiplier, profitMult, speedMult]
+    () => getFarmHourlyProductivity(gameState),
+    [gameState, harvestBonusBoost.multiplier]
   );
   const cropEconomyByKey = useMemo(
     () =>
       (Object.keys(CROPS) as CropKey[]).reduce(
         (acc, cropKey) => {
+          const modifiers = getCropModifiers(gameState, cropKey);
           acc[cropKey] = getCropEconomyEstimate(cropKey, {
-            speedMultiplier: speedMult,
-            profitMultiplier: profitMult,
-            harvestMultiplier: harvestBonusBoost.multiplier,
+            speedMultiplier: modifiers.speedMultiplier,
+            profitMultiplier: modifiers.profitMultiplier,
+            harvestMultiplier: modifiers.harvestMultiplier,
+            costMultiplier: modifiers.cropCostMultiplier,
           });
           return acc;
         },
         {} as Record<CropKey, CropEconomyEstimate>
       ),
-    [harvestBonusBoost.multiplier, profitMult, speedMult]
+    [gameState, harvestBonusBoost.multiplier]
+  );
+  const chainIncome = useMemo(() => getChainIncome(gameState), [gameState, tick]);
+  const mapActionableCount = useMemo(
+    () => (chainIncome.accruedGold > 0 ? 1 : 0) + (canPrestige(gameState).allowed ? 1 : 0),
+    [chainIncome.accruedGold, gameState]
   );
 
   useEffect(() => {
@@ -585,6 +606,49 @@ export default function FarmGame({
     }
     setGameState((state) => breedCrop(state, cropKey) ?? state);
     toast(messages.bredToast(getLocalizedCropName(cropKey)));
+  }
+
+  function openMap() {
+    setActiveSheet({ type: 'map' });
+  }
+
+  function collectChain() {
+    const now = Date.now();
+    const collected = collectChainIncome(gameState, now);
+    if (collected == null) {
+      return;
+    }
+    setGameState((state) => collectChainIncome(state, now)?.state ?? state);
+    toast(messages.chainCollectedToast(formatMoney(collected.collectedGold, locale)));
+  }
+
+  function openPrestigeConfirm() {
+    setActiveSheet({ type: 'prestigeConfirm' });
+  }
+
+  function confirmPrestige() {
+    const now = Date.now();
+    const result = prestigeFarm(gameState, prestigeArchetype, now);
+    if (result == null) {
+      setActiveSheet(null);
+      return;
+    }
+    setGameState((state) => prestigeFarm(state, prestigeArchetype, now)?.state ?? state);
+    setSelectedArea(FIRST_AREA.key);
+    setSelectedTool('harvest');
+    setActiveSheet(null);
+    toast(
+      messages.prestigeDoneToast(getRegionArchetypeLabel(prestigeArchetype, locale).name, result.starsAwarded)
+    );
+  }
+
+  function purchaseSkill(skillKey: PrestigeSkillKey) {
+    if (buySkill(gameState, skillKey) == null) {
+      toast(messages.insufficientStarsToast);
+      return;
+    }
+    setGameState((state) => buySkill(state, skillKey) ?? state);
+    toast(messages.skillPurchasedToast(getPrestigeSkillLabel(skillKey, locale).name));
   }
 
   function openSettings() {
@@ -746,24 +810,15 @@ export default function FarmGame({
       toast(messages.breedRequiredToast);
       return;
     }
-    if (gameState.gold < crop.cost) {
+    const now = Date.now();
+    const cost = getCropPurchaseCost(gameState, cropKey, now);
+    if (gameState.gold < cost) {
       toast(messages.insufficientGoldToast);
       return;
     }
 
-    setGameState((state) => {
-      if (state.gold < crop.cost) {
-        return state;
-      }
-      const plot = state.plots[index];
-      if (plot == null || plot.id >= state.unlockedPlotCount || plot.state !== 0) {
-        return state;
-      }
-      const next = [...state.plots];
-      next[index] = { ...plot, cropType: cropKey, startTime: Date.now(), state: 1 };
-      return { ...state, gold: state.gold - crop.cost, plots: next };
-    });
-    farmAnalytics.trackCropPlanted(cropKey, crop.area, crop.tier, crop.cost, analyticsContext());
+    setGameState((state) => performPlant(state, index, cropKey, now) ?? state);
+    farmAnalytics.trackCropPlanted(cropKey, crop.area, crop.tier, cost, analyticsContext());
   }
 
   function harvestCrop(index: number) {
@@ -920,10 +975,9 @@ export default function FarmGame({
     if (selectedTool === 'harvest') {
       return messages.harvestHint;
     }
-    const crop = getCrop(selectedTool);
     return messages.plantHint(
       getLocalizedCropName(selectedTool),
-      formatMoney(crop.cost, locale),
+      formatMoney(getCropPurchaseCost(gameState, selectedTool), locale),
       formatSignedPercent(getCropEconomy(cropEconomyByKey, selectedTool).roiPercent, locale)
     );
   }, [
@@ -1019,6 +1073,12 @@ export default function FarmGame({
             onPress={openLab}
           />
           <NavButton
+            label={messages.mapButton}
+            badge={mapActionableCount}
+            accessibilityLabel={messages.mapButtonAccessibilityLabel}
+            onPress={openMap}
+          />
+          <NavButton
             label={messages.achievementsButton}
             badge={claimableAchievementCount}
             accessibilityLabel={messages.achievementsButtonAccessibilityLabel}
@@ -1087,7 +1147,7 @@ export default function FarmGame({
                 active={selectedTool === key}
                 icon={crop.icon}
                 name={getLocalizedCropName(key)}
-                cost={formatMoney(crop.cost, locale)}
+                cost={formatMoney(getCropPurchaseCost(gameState, key), locale)}
                 roi={messages.roi(formatSignedPercent(getCropEconomy(cropEconomyByKey, key).roiPercent, locale))}
                 onPress={() => selectCrop(key)}
               />
@@ -1217,6 +1277,30 @@ export default function FarmGame({
             onToggleAutomation={toggleAutomation}
             onUnlockNode={unlockResearchNode}
             onBreed={breedHybrid}
+          />
+        ) : null}
+
+        {activeSheet?.type === 'map' ? (
+          <ChainMapSheet
+            gameState={gameState}
+            locale={locale}
+            messages={messages}
+            now={Date.now()}
+            onCollectChain={collectChain}
+            onOpenPrestigeConfirm={openPrestigeConfirm}
+            onBuySkill={purchaseSkill}
+          />
+        ) : null}
+
+        {activeSheet?.type === 'prestigeConfirm' ? (
+          <PrestigeConfirmSheet
+            gameState={gameState}
+            locale={locale}
+            messages={messages}
+            selectedArchetype={prestigeArchetype}
+            onSelectArchetype={setPrestigeArchetype}
+            onConfirm={confirmPrestige}
+            onCancel={openMap}
           />
         ) : null}
 
@@ -1577,6 +1661,12 @@ function getSheetTitle(activeSheet: ActiveSheet, messages: FarmMessages) {
   if (activeSheet?.type === 'lab') {
     return messages.sheetTitleLab;
   }
+  if (activeSheet?.type === 'map') {
+    return messages.sheetTitleMap;
+  }
+  if (activeSheet?.type === 'prestigeConfirm') {
+    return messages.sheetTitlePrestigeConfirm;
+  }
   if (activeSheet?.type === 'harvestBonus') {
     return messages.sheetTitleHarvestBonus;
   }
@@ -1607,6 +1697,12 @@ function getSheetDescription(
   }
   if (activeSheet?.type === 'lab') {
     return messages.sheetDescriptionLab;
+  }
+  if (activeSheet?.type === 'map') {
+    return messages.sheetDescriptionMap;
+  }
+  if (activeSheet?.type === 'prestigeConfirm') {
+    return messages.sheetDescriptionPrestigeConfirm;
   }
   if (activeSheet?.type === 'growthAd') {
     return messages.sheetDescriptionGrowthAd(

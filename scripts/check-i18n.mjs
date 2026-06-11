@@ -52,6 +52,7 @@ assertNoHangul('apps/ait/src/farm/components/SheetParts.tsx');
 assertNoHangul('apps/ait/src/farm/components/CollectionSheet.tsx');
 assertNoHangul('apps/ait/src/farm/components/AchievementsSheet.tsx');
 assertNoHangul('apps/ait/src/farm/components/LabSheet.tsx');
+assertNoHangul('apps/ait/src/farm/components/ChainMapSheet.tsx');
 assertNoHangul('packages/farm-core/src/constants.ts');
 assertNoHangul('packages/farm-core/src/achievements.ts');
 assertNoHangul('packages/farm-core/src/prestige.ts');

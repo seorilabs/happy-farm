@@ -11,7 +11,9 @@ import {
   createFarmAnalytics,
   createInitialState,
   formatMoney,
+  getAreaCropKeys,
   getMasteryThresholds,
+  getPrestigeCost,
   type CropKey,
   type GameState,
   type RewardedAdController,
@@ -474,6 +476,37 @@ describe('FarmGame UI flow', () => {
 
     await waitFor(() => expect(screen.getByText(`${formatMoney(expectedGold)}G`)).toBeTruthy());
     expect(screen.queryByText('GET')).toBeNull();
+  });
+
+  test('pioneers a new region, resets the farm layer, and starts a chain farm', async () => {
+    const base = createInitialState();
+    const legendCrops = getAreaCropKeys('legend_field');
+    const state: GameState = {
+      ...base,
+      gold: getPrestigeCost(0),
+      harvestedCropKeys: [...legendCrops],
+      harvestCounts: Object.fromEntries(legendCrops.map((cropKey) => [cropKey, 2])),
+    };
+    const screen = await renderGame(state);
+
+    await waitFor(() => expect(screen.getByText('★ 0')).toBeTruthy());
+
+    fireEvent.press(screen.getByText('🗺️ 개척'));
+    expect(screen.getByText(/1호 농장/)).toBeTruthy();
+
+    fireEvent.press(screen.getByText(/개척 준비하기/));
+    expect(screen.getByText('지역 선택')).toBeTruthy();
+
+    fireEvent.press(screen.getByText(/설원/));
+    fireEvent.press(screen.getByText(/개척하고 ★3 받기/));
+
+    await waitFor(() => expect(screen.getByText('★ 3')).toBeTruthy());
+    expect(screen.getByText('50G')).toBeTruthy();
+
+    fireEvent.press(screen.getByText('🗺️ 개척'));
+    // The graduated farm is now part of the chain; the active farm is #2.
+    expect(screen.getByText(/2호 농장/)).toBeTruthy();
+    expect(screen.getByText(/1호 농장 · 평원/)).toBeTruthy();
   });
 
   test('keeps reset behind the settings sheet', async () => {

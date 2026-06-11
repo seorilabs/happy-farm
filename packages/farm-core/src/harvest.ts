@@ -1,6 +1,6 @@
 import type { CropKey, GameState, Plot } from './types';
 import { CROPS, isAreaUnlocked } from './constants';
-import { getCropModifiers } from './modifiers';
+import { getCropModifiers, getCropPurchaseCost } from './modifiers';
 import {
   getCropHarvestCount,
   getMasteryStatus,
@@ -160,12 +160,14 @@ export function performHarvest(gameState: GameState, plotIndex: number, options:
 }
 
 // Pure planting helper shared by the manual planting path and auto-replant.
+// Seed prices include the region cost multiplier.
 export function performPlant(gameState: GameState, plotIndex: number, cropKey: CropKey, now = Date.now()): GameState | null {
   const crop = getKnownCrop(cropKey);
   if (!isAreaUnlocked(gameState, crop.area) || !isCropPlantable(gameState, cropKey)) {
     return null;
   }
-  if (gameState.gold < crop.cost) {
+  const cost = getCropPurchaseCost(gameState, cropKey, now);
+  if (gameState.gold < cost) {
     return null;
   }
   const plot = gameState.plots[plotIndex];
@@ -175,7 +177,7 @@ export function performPlant(gameState: GameState, plotIndex: number, cropKey: C
 
   const nextPlots = [...gameState.plots];
   nextPlots[plotIndex] = { ...plot, cropType: cropKey, startTime: now, state: 1 };
-  return { ...gameState, gold: gameState.gold - crop.cost, plots: nextPlots };
+  return { ...gameState, gold: gameState.gold - cost, plots: nextPlots };
 }
 
 export type AutomationTickResult = {
