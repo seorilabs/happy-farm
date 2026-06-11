@@ -7,7 +7,7 @@ import {
   normalizeClaimedAchievements,
   normalizeLifetimeStats,
 } from './achievements';
-import { createInitialPrestigeProgress, normalizePrestigeProgress } from './prestige';
+import { createInitialPrestigeProgress, normalizeChainFarms, normalizePrestigeProgress } from './prestige';
 import {
   createInitialAutomationSettings,
   createInitialResearchState,
@@ -275,25 +275,29 @@ export function getCropEconomyEstimate(
     speedMultiplier,
     profitMultiplier,
     harvestMultiplier = 1,
+    costMultiplier = 1,
   }: {
     speedMultiplier: number;
     profitMultiplier: number;
     harvestMultiplier?: number;
+    costMultiplier?: number;
   }
 ): CropEconomyEstimate {
   const crop = getKnownCrop(cropKey);
   const safeSpeedMultiplier = Number.isFinite(speedMultiplier) && speedMultiplier > 0 ? speedMultiplier : 1;
   const safeProfitMultiplier = Number.isFinite(profitMultiplier) && profitMultiplier > 0 ? profitMultiplier : 1;
   const safeHarvestMultiplier = Number.isFinite(harvestMultiplier) && harvestMultiplier > 0 ? harvestMultiplier : 1;
+  const safeCostMultiplier = Number.isFinite(costMultiplier) && costMultiplier > 0 ? costMultiplier : 1;
+  const effectiveCost = Math.floor(crop.cost * safeCostMultiplier);
   const harvestValue = Math.floor(crop.sell * safeProfitMultiplier * safeHarvestMultiplier);
-  const netProfit = harvestValue - crop.cost;
+  const netProfit = harvestValue - effectiveCost;
   const effectiveGrowTime = Math.max(1, crop.growTime / safeSpeedMultiplier);
 
   return {
     cropKey,
     harvestValue,
     netProfit,
-    roiPercent: (netProfit / crop.cost) * 100,
+    roiPercent: (netProfit / Math.max(1, effectiveCost)) * 100,
     netProfitPerHour: (netProfit / effectiveGrowTime) * MS_PER_HOUR,
   };
 }
@@ -571,6 +575,7 @@ export function createInitialState(): GameState {
     claimedAchievements: [],
     activeTitle: null,
     prestige: createInitialPrestigeProgress(),
+    chainFarms: [],
     research: createInitialResearchState(),
     automationSettings: createInitialAutomationSettings(),
     plots: Array.from({ length: MAX_PLOTS }, (_, i) => ({
@@ -697,6 +702,7 @@ export function migrateLoadedState(loaded: Partial<GameState>, base: GameState):
   merged.activeTitle = normalizeActiveTitle(loaded.activeTitle, merged.claimedAchievements);
   merged.prestige = normalizePrestigeProgress(loaded.prestige);
   merged.lifetimeStats.prestigeCount = Math.max(merged.lifetimeStats.prestigeCount, merged.prestige.level);
+  merged.chainFarms = normalizeChainFarms(loaded.chainFarms);
 
   merged.research = normalizeResearchState(loaded.research);
   merged.lifetimeStats.researchPointsEarned = Math.max(

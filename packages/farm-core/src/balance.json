@@ -87,6 +87,32 @@
     },
     "fullCompletionReward": 100000000000
   },
+  "regions": {
+    "agentPurpose": "Prestige (farm chain) data. Graduating requires the legend_field collection plus gold (costBase * costGrowth^level). The old farm becomes a chain farm paying incomeRatio of its snapshot productivity. Crop sell AND cost scale by scalePerLevel^level (ROI-preserving inflation); archetypes vary growth time vs sale price.",
+    "graduation": {
+      "requiredAreaCollection": "legend_field",
+      "costBase": 100000000000,
+      "costGrowth": 6,
+      "starsBase": 3
+    },
+    "scalePerLevel": 6,
+    "chain": { "incomeRatio": 0.5, "offlineCapMs": 28800000 },
+    "archetypes": [
+      { "key": "plains", "icon": "🌾", "growTimeMult": 1, "sellMult": 1 },
+      { "key": "highlands", "icon": "⛰️", "growTimeMult": 1.25, "sellMult": 1.35 },
+      { "key": "desert", "icon": "🏜️", "growTimeMult": 0.8, "sellMult": 0.85 },
+      { "key": "tundra", "icon": "🏔️", "growTimeMult": 1.5, "sellMult": 1.7 },
+      { "key": "volcano", "icon": "🌋", "growTimeMult": 0.65, "sellMult": 0.72 }
+    ]
+  },
+  "prestigeSkills": [
+    { "key": "starting_capital", "icon": "💼", "baseCost": 1, "costGrowth": 1.5, "maxLevel": 10, "effectPerLevel": 100000 },
+    { "key": "global_profit", "icon": "📈", "baseCost": 2, "costGrowth": 1.6, "maxLevel": 20, "effectPerLevel": 0.1 },
+    { "key": "global_speed", "icon": "⚡", "baseCost": 2, "costGrowth": 1.6, "maxLevel": 20, "effectPerLevel": 0.05 },
+    { "key": "chain_yield", "icon": "🚚", "baseCost": 3, "costGrowth": 1.7, "maxLevel": 10, "effectPerLevel": 0.2 },
+    { "key": "offline_cap", "icon": "⏰", "baseCost": 4, "costGrowth": 2, "maxLevel": 4, "effectPerLevel": 14400000 },
+    { "key": "ad_amplifier", "icon": "📺", "baseCost": 3, "costGrowth": 2, "maxLevel": 4, "effectPerLevel": 0.5 }
+  ],
   "research": {
     "agentPurpose": "Research points (RP) come from donating harvests instead of selling them (rate vs final sale value). Nodes unlock automation, breeding, and the donation amplifier; node costs are RP.",
     "donationRpRate": 0.05,

@@ -4,6 +4,8 @@ import type {
   CropKey,
   MasteryRankKey,
   MutationKey,
+  PrestigeSkillKey,
+  RegionArchetypeKey,
   ResearchNodeKey,
   TitleKey,
 } from '../types';
@@ -238,6 +240,50 @@ const EN_MUTATION_LABELS = {
   rainbow: { name: 'Rainbow' },
 } satisfies Record<MutationKey, SimpleLabel>;
 
+const KO_REGION_ARCHETYPE_LABELS = {
+  plains: { name: '평원' },
+  highlands: { name: '고원' },
+  desert: { name: '사막' },
+  tundra: { name: '설원' },
+  volcano: { name: '화산섬' },
+} satisfies Record<RegionArchetypeKey, SimpleLabel>;
+
+const EN_REGION_ARCHETYPE_LABELS = {
+  plains: { name: 'Plains' },
+  highlands: { name: 'Highlands' },
+  desert: { name: 'Desert' },
+  tundra: { name: 'Tundra' },
+  volcano: { name: 'Volcanic Isle' },
+} satisfies Record<RegionArchetypeKey, SimpleLabel>;
+
+const REGION_ARCHETYPE_LABELS: Record<SupportedLocale, Record<RegionArchetypeKey, SimpleLabel>> = {
+  'ko-KR': KO_REGION_ARCHETYPE_LABELS,
+  'en-US': EN_REGION_ARCHETYPE_LABELS,
+};
+
+const KO_PRESTIGE_SKILL_LABELS = {
+  starting_capital: { name: '시작 자금', description: '개척 후 시작 골드가 레벨당 10만G 늘어나요.' },
+  global_profit: { name: '전역 판로', description: '모든 판매 수익이 레벨당 10% 늘어나요.' },
+  global_speed: { name: '전역 성장', description: '모든 작물이 레벨당 5% 더 빨리 자라요.' },
+  chain_yield: { name: '체인 운영', description: '운영 농장 수익이 레벨당 20% 늘어나요.' },
+  offline_cap: { name: '야간 창고', description: '오프라인 수익 누적 상한이 레벨당 4시간 늘어나요.' },
+  ad_amplifier: { name: '광고 증폭', description: '수확 부스트 배수가 레벨당 0.5 늘어나요.' },
+} satisfies Record<PrestigeSkillKey, DescribedLabel>;
+
+const EN_PRESTIGE_SKILL_LABELS = {
+  starting_capital: { name: 'Seed Capital', description: '+100K starting gold per level after pioneering.' },
+  global_profit: { name: 'Global Markets', description: '+10% sale profit per level, everywhere.' },
+  global_speed: { name: 'Global Growth', description: 'All crops grow 5% faster per level.' },
+  chain_yield: { name: 'Chain Operations', description: '+20% chain farm income per level.' },
+  offline_cap: { name: 'Night Warehouse', description: '+4h offline income cap per level.' },
+  ad_amplifier: { name: 'Ad Amplifier', description: '+0.5 harvest boost multiplier per level.' },
+} satisfies Record<PrestigeSkillKey, DescribedLabel>;
+
+const PRESTIGE_SKILL_LABELS: Record<SupportedLocale, Record<PrestigeSkillKey, DescribedLabel>> = {
+  'ko-KR': KO_PRESTIGE_SKILL_LABELS,
+  'en-US': EN_PRESTIGE_SKILL_LABELS,
+};
+
 const KO_RESEARCH_NODE_LABELS = {
   auto_harvest: { name: '자동 수확', description: '다 자란 작물을 자동으로 수확해요.' },
   auto_replant: { name: '자동 파종', description: '수확한 자리에 같은 작물을 자동으로 심어요.' },
@@ -357,6 +403,30 @@ export function getMutationLabel(mutationKey: MutationKey, locale: SupportedLoca
   const label = labels[mutationKey] ?? MUTATION_LABELS[DEFAULT_LOCALE][mutationKey];
   if (label == null) {
     throw new Error(`Missing mutation label: ${mutationKey}`);
+  }
+  return label;
+}
+
+export function getRegionArchetypeLabel(
+  archetypeKey: RegionArchetypeKey,
+  locale: SupportedLocale = DEFAULT_LOCALE
+): SimpleLabel {
+  const labels = REGION_ARCHETYPE_LABELS[locale] ?? REGION_ARCHETYPE_LABELS[DEFAULT_LOCALE];
+  const label = labels[archetypeKey] ?? REGION_ARCHETYPE_LABELS[DEFAULT_LOCALE][archetypeKey];
+  if (label == null) {
+    throw new Error(`Missing region archetype label: ${archetypeKey}`);
+  }
+  return label;
+}
+
+export function getPrestigeSkillLabel(
+  skillKey: PrestigeSkillKey,
+  locale: SupportedLocale = DEFAULT_LOCALE
+): DescribedLabel {
+  const labels = PRESTIGE_SKILL_LABELS[locale] ?? PRESTIGE_SKILL_LABELS[DEFAULT_LOCALE];
+  const label = labels[skillKey] ?? PRESTIGE_SKILL_LABELS[DEFAULT_LOCALE][skillKey];
+  if (label == null) {
+    throw new Error(`Missing prestige skill label: ${skillKey}`);
   }
   return label;
 }

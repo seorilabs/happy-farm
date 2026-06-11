@@ -166,7 +166,7 @@ describe('achievement save migration', () => {
       {
         harvestCounts: { carrot: 200 },
         claimedAchievements: ['harvest_total:1'],
-        prestige: { level: 2, stars: 5, totalStarsEarned: 9 },
+        prestige: { level: 2, stars: 5, totalStarsEarned: 9, skills: {}, currentRegionArchetype: 'plains' },
       },
       createInitialState()
     );

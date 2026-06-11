@@ -22,6 +22,8 @@ export {
   getCropLabels,
   getMasteryRankLabel,
   getMutationLabel,
+  getPrestigeSkillLabel,
+  getRegionArchetypeLabel,
   getResearchNodeLabel,
   getTitleLabel,
   normalizeLocale,

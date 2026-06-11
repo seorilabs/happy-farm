@@ -38,12 +38,27 @@ export type LifetimeStats = {
   breedsUnlocked: number;
 };
 
+export type RegionArchetypeKey = (typeof balance.regions.archetypes)[number]['key'];
+
+export type PrestigeSkillKey = (typeof balance.prestigeSkills)[number]['key'];
+
 // Permanent cross-farm progression. Stars are earned from achievements and
 // farm graduations, and spent on prestige skills.
 export type PrestigeProgress = {
   level: number;
   stars: number;
   totalStarsEarned: number;
+  skills: Partial<Record<PrestigeSkillKey, number>>;
+  currentRegionArchetype: RegionArchetypeKey;
+};
+
+// A graduated farm that keeps paying gold per hour based on the productivity
+// snapshot taken at graduation time.
+export type ChainFarm = {
+  id: number;
+  archetype: RegionArchetypeKey;
+  goldPerHour: number;
+  lastCollectedAt: number;
 };
 
 export const COLLECTION_FULL_REWARD_KEY = 'all';
@@ -90,6 +105,7 @@ export type GameState = {
   claimedAchievements: string[];
   activeTitle: TitleKey | null;
   prestige: PrestigeProgress;
+  chainFarms: ChainFarm[];
   research: ResearchState;
   automationSettings: AutomationSettings;
 };
@@ -114,6 +130,7 @@ export const META_LAYER_KEYS = [
   'claimedAchievements',
   'activeTitle',
   'prestige',
+  'chainFarms',
   'research',
   'automationSettings',
 ] as const satisfies readonly (keyof GameState)[];
