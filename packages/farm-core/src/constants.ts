@@ -1,5 +1,6 @@
 import type { AreaKey, CollectionRewardKey, CropKey, GameState, PlotState } from './types';
 import { COLLECTION_FULL_REWARD_KEY } from './types';
+import { getHarvestedCropKeysInSync, normalizeHarvestCounts, normalizeMutationsDiscovered } from './mastery';
 import balance from './balance.json';
 import {
   DEFAULT_LOCALE,
@@ -540,6 +541,8 @@ export function createInitialState(): GameState {
     claimedCollectionRewards: [],
     adUsage: createInitialAdUsage(),
     upgrades: { speed: 1, profit: 1 },
+    harvestCounts: {},
+    mutationsDiscovered: {},
     plots: Array.from({ length: MAX_PLOTS }, (_, i) => ({
       id: i,
       cropType: null,
@@ -645,6 +648,13 @@ export function migrateLoadedState(loaded: Partial<GameState>, base: GameState):
 
   const plots = Array.isArray(loaded.plots) ? loaded.plots : base.plots;
   merged.plots = Array.from({ length: MAX_PLOTS }, (_, index) => normalizePlot(plots[index], index));
+
+  // Mastery counters and the discovery list must stay in sync both ways:
+  // pre-mastery saves seed counts from discoveries, and counted crops are
+  // always part of the collection.
+  merged.harvestCounts = normalizeHarvestCounts(loaded.harvestCounts, merged.harvestedCropKeys);
+  merged.harvestedCropKeys = getHarvestedCropKeysInSync(merged.harvestedCropKeys, merged.harvestCounts);
+  merged.mutationsDiscovered = normalizeMutationsDiscovered(loaded.mutationsDiscovered);
 
   if (merged.unlockedAreas.length === 0) merged.unlockedAreas = INITIAL_AREA_KEYS;
   return merged;

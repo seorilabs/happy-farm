@@ -1,9 +1,18 @@
 import type { CropKey, GameState, Plot } from './types';
 import { CROPS } from './constants';
-import { getGlobalModifiers } from './modifiers';
+import { getCropModifiers } from './modifiers';
+import {
+  getCropHarvestCount,
+  getMasteryStatus,
+  isMutationDiscovered,
+  rollMutation,
+  type MasteryRank,
+  type MutationKind,
+} from './mastery';
 
 export type HarvestOptions = {
   now?: number;
+  rng?: () => number;
 };
 
 export type HarvestOutcome = {
@@ -14,6 +23,9 @@ export type HarvestOutcome = {
   boostMultiplier: number;
   isNewCropDiscovery: boolean;
   isFirstMeaningfulHarvest: boolean;
+  mutation: MutationKind | null;
+  isNewMutationDiscovery: boolean;
+  newMasteryRank: MasteryRank | null;
 };
 
 function getKnownCrop(cropKey: CropKey) {
@@ -33,7 +45,7 @@ export function getPlotGrowthRatio(gameState: GameState, plot: Plot, now = Date.
   }
 
   const crop = getKnownCrop(plot.cropType);
-  const { speedMultiplier } = getGlobalModifiers(gameState, now);
+  const { speedMultiplier } = getCropModifiers(gameState, plot.cropType, now);
   if (crop.growTime <= 0 || speedMultiplier <= 0) {
     return 1;
   }
@@ -50,7 +62,7 @@ export function getPlotRemainingGrowthMs(gameState: GameState, plot: Plot, now =
   }
 
   const crop = getKnownCrop(plot.cropType);
-  const { speedMultiplier } = getGlobalModifiers(gameState, now);
+  const { speedMultiplier } = getCropModifiers(gameState, plot.cropType, now);
   return Math.max(0, crop.growTime - (now - plot.startTime) * speedMultiplier);
 }
 
@@ -59,9 +71,12 @@ export function isPlotGrowthComplete(gameState: GameState, plot: Plot, now = Dat
 }
 
 // The single harvest pipeline. Every harvest path (manual tap, automation)
-// must go through here so collection/discovery side effects stay consistent.
+// must go through here so mastery counters, mutation rolls, and collection
+// side effects stay consistent. The mutation roll consumes exactly one rng()
+// call; pass a fixed-roll rng to replay an outcome inside a state updater.
 export function performHarvest(gameState: GameState, plotIndex: number, options: HarvestOptions = {}): HarvestOutcome | null {
   const now = options.now ?? Date.now();
+  const rng = options.rng ?? Math.random;
   const plot = gameState.plots[plotIndex];
   if (plot == null || plot.state !== 2 || plot.cropType == null) {
     return null;
@@ -69,8 +84,10 @@ export function performHarvest(gameState: GameState, plotIndex: number, options:
 
   const cropKey = plot.cropType;
   const crop = getKnownCrop(cropKey);
-  const modifiers = getGlobalModifiers(gameState, now);
-  const goldGained = Math.floor(crop.sell * modifiers.profitMultiplier * modifiers.harvestMultiplier);
+  const modifiers = getCropModifiers(gameState, cropKey, now);
+  const mutation = rollMutation(gameState, cropKey, rng());
+  const mutationMultiplier = mutation?.sellMultiplier ?? 1;
+  const goldGained = Math.floor(crop.sell * modifiers.profitMultiplier * modifiers.harvestMultiplier * mutationMultiplier);
 
   const nextPlots = [...gameState.plots];
   nextPlots[plotIndex] = { id: plot.id, cropType: null, startTime: null, state: 0 };
@@ -79,18 +96,42 @@ export function performHarvest(gameState: GameState, plotIndex: number, options:
   const isNewCropDiscovery = !gameState.harvestedCropKeys.includes(cropKey);
   const harvestedCropKeys = isNewCropDiscovery ? [...gameState.harvestedCropKeys, cropKey] : gameState.harvestedCropKeys;
 
+  const previousRankIndex = getMasteryStatus(gameState, cropKey).rankIndex;
+  const harvestCounts = {
+    ...gameState.harvestCounts,
+    [cropKey]: getCropHarvestCount(gameState, cropKey) + 1,
+  };
+
+  const isNewMutationDiscovery = mutation != null && !isMutationDiscovered(gameState, cropKey, mutation.key);
+  const mutationsDiscovered = isNewMutationDiscovery
+    ? {
+        ...gameState.mutationsDiscovered,
+        [cropKey]: [...(gameState.mutationsDiscovered[cropKey] ?? []), mutation.key],
+      }
+    : gameState.mutationsDiscovered;
+
+  const nextState: GameState = {
+    ...gameState,
+    gold: gameState.gold + goldGained,
+    plots: nextPlots,
+    harvestedCropKeys,
+    harvestCounts,
+    mutationsDiscovered,
+  };
+
+  const nextMastery = getMasteryStatus(nextState, cropKey);
+  const newMasteryRank = nextMastery.rankIndex > previousRankIndex ? nextMastery.rank : null;
+
   return {
-    state: {
-      ...gameState,
-      gold: gameState.gold + goldGained,
-      plots: nextPlots,
-      harvestedCropKeys,
-    },
+    state: nextState,
     cropKey,
     goldGained,
     boostActive: modifiers.harvestMultiplier > 1,
     boostMultiplier: modifiers.harvestMultiplier,
     isNewCropDiscovery,
     isFirstMeaningfulHarvest,
+    mutation,
+    isNewMutationDiscovery,
+    newMasteryRank,
   };
 }

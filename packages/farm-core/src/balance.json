@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "agentPurpose": "Canonical balance data for the farm-game runtime and simulation scripts. Agents should modify this file first, run npm run sim:balance, then update Obsidian balance notes with findings.",
   "goals": {
     "firstMinute": "Teach plant-grow-harvest with carrot/wheat.",
@@ -43,6 +43,34 @@
     "growthAdCooldownMs": 600000,
     "growthAdDailyLimit": 3,
     "interstitialMilestoneCooldownMs": 180000
+  },
+  "mastery": {
+    "agentPurpose": "Crop mastery ranks. Cumulative harvest counts per crop reach tier-based thresholds and grant permanent per-crop sell/speed bonuses. Thresholds are indexed by crop tier so slow late-game crops rank up in fewer harvests.",
+    "ranks": [
+      { "key": "bronze", "icon": "🥉", "sellBonus": 0.05, "speedBonus": 0 },
+      { "key": "silver", "icon": "🥈", "sellBonus": 0.1, "speedBonus": 0.05 },
+      { "key": "gold", "icon": "🥇", "sellBonus": 0.2, "speedBonus": 0.1 },
+      { "key": "prism", "icon": "💠", "sellBonus": 0.35, "speedBonus": 0.15 }
+    ],
+    "thresholdsByTier": {
+      "1": [10, 100, 1000, 5000],
+      "2": [10, 80, 600, 3000],
+      "3": [8, 60, 400, 2000],
+      "4": [8, 40, 250, 1200],
+      "5": [6, 30, 150, 700],
+      "6": [5, 20, 80, 350],
+      "7": [4, 12, 40, 150],
+      "8": [3, 8, 25, 80],
+      "9": [2, 5, 15, 30],
+      "10": [2, 4, 8, 15]
+    }
+  },
+  "mutations": {
+    "agentPurpose": "Rare harvest mutations. Each kind unlocks at a minimum mastery rank, gains chance per rank above it, and multiplies the final sale price. Discoveries are recorded per crop in the collection.",
+    "kinds": [
+      { "key": "golden", "icon": "✨", "sellMultiplier": 5, "baseChance": 0.02, "chancePerRankAboveMin": 0.005, "minRank": "bronze" },
+      { "key": "rainbow", "icon": "🌈", "sellMultiplier": 25, "baseChance": 0.002, "chancePerRankAboveMin": 0.001, "minRank": "silver" }
+    ]
   },
   "collection": {
     "agentPurpose": "Crop collection (도감) completion rewards. One-time gold payouts per area and for full completion. Roughly half the next area unlock cost for progression areas; tune via sim before shipping.",

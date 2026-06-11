@@ -659,13 +659,17 @@ export default function FarmGame({
 
   function harvestCrop(index: number) {
     const now = Date.now();
-    const outcome = performHarvest(gameState, index, { now });
+    // One shared roll keeps the previewed outcome (toast/analytics) identical
+    // to the outcome replayed inside the state updater.
+    const roll = Math.random();
+    const rng = () => roll;
+    const outcome = performHarvest(gameState, index, { now, rng });
     if (outcome == null) {
       return;
     }
     const crop = getCrop(outcome.cropKey);
 
-    setGameState((state) => performHarvest(state, index, { now })?.state ?? state);
+    setGameState((state) => performHarvest(state, index, { now, rng })?.state ?? state);
 
     farmAnalytics.trackCropHarvested({
       cropKey: outcome.cropKey,

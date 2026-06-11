@@ -14,6 +14,17 @@ export function createFarmPersistence(storage: KeyValueStorage) {
           return base;
         }
 
+        // Keep a one-time snapshot of the raw save before migration touches
+        // it, so a migration bug never destroys the only copy.
+        try {
+          const backupKey = `${SAVE_KEY}.backup`;
+          if ((await storage.getItem(backupKey)) == null) {
+            await storage.setItem(backupKey, raw);
+          }
+        } catch {
+          // Backup failures must not block loading.
+        }
+
         return migrateLoadedState(JSON.parse(raw) as Partial<GameState>, base);
       } catch {
         return base;

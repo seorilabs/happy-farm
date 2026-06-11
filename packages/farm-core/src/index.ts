@@ -2,6 +2,7 @@ export * from './analytics';
 export * from './ads';
 export * from './constants';
 export * from './harvest';
+export * from './mastery';
 export * from './modifiers';
 export {
   DEFAULT_LOCALE,

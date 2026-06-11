@@ -4,6 +4,10 @@ export type CropKey = (typeof balance.crops)[number]['key'];
 
 export type AreaKey = (typeof balance.areas)[number]['key'];
 
+export type MasteryRankKey = (typeof balance.mastery.ranks)[number]['key'];
+
+export type MutationKey = (typeof balance.mutations.kinds)[number]['key'];
+
 export const COLLECTION_FULL_REWARD_KEY = 'all';
 
 export type CollectionRewardKey = AreaKey | typeof COLLECTION_FULL_REWARD_KEY;
@@ -42,6 +46,8 @@ export type GameState = {
   claimedCollectionRewards: CollectionRewardKey[];
   adUsage: AdUsage;
   upgrades: { speed: number; profit: number };
+  harvestCounts: Partial<Record<CropKey, number>>;
+  mutationsDiscovered: Partial<Record<CropKey, MutationKey[]>>;
 };
 
 // Prestige reset boundary. Farm-layer fields are wiped when the player
@@ -58,6 +64,8 @@ export const META_LAYER_KEYS = [
   'harvestedCropKeys',
   'claimedCollectionRewards',
   'adUsage',
+  'harvestCounts',
+  'mutationsDiscovered',
 ] as const satisfies readonly (keyof GameState)[];
 
 export type FarmLayerKey = (typeof FARM_LAYER_KEYS)[number];
