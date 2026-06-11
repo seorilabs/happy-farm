@@ -82,7 +82,16 @@ AIT build가 pnpm workspace bare package import에 민감하므로, 현재 방�
 - formatter test: `formatMoney`, duration, ad limit reason이 locale별 expectation을 만족하는지 확인
 - store config test: Play/App Store locale map에 필수 locale이 있는지 확인
 
-`pnpm check:i18n`은 현재 `FarmGame.tsx`, `packages/farm-core/src/constants.ts`의 한글 하드코딩과 Play/App Store 필수 locale map을 검사한다. locale catalog의 key set 일치는 TypeScript typecheck가 잡는다.
+`pnpm check:i18n`은 현재 `FarmGame.tsx`, `apps/ait/src/farm/components/*`(SheetParts, CollectionSheet, AchievementsSheet, LabSheet, ChainMapSheet), `packages/farm-core/src`의 로직 모듈(constants, types, harvest, mastery, modifiers, achievements, prestige, research)의 한글 하드코딩과 Play/App Store 필수 locale map을 검사한다. locale catalog의 key set 일치는 TypeScript typecheck가 잡는다.
+
+## 엔드게임 시스템 라벨 카탈로그
+
+엔드게임 4종 시스템(마스터리/변이, 업적/칭호, 연구/교배, 개척/체인)의 라벨은 전부 `packages/farm-core/src/i18n/labels.ts`에 있다.
+
+- crop label: 교배 신품종 12종 포함 (`satisfies Record<CropKey, …>`로 누락 시 컴파일 에러)
+- area label: `hybrid_greenhouse` 포함
+- `getMasteryRankLabel`, `getMutationLabel`, `getResearchNodeLabel`, `getRegionArchetypeLabel`, `getPrestigeSkillLabel`, `getAchievementTrackLabel`, `getTitleLabel`
+- 시트 문구/토스트는 `apps/ait/src/farm/i18n/index.ts`의 `FarmMessages`에 ko/en 동시 정의
 
 ## 검증 명령
 

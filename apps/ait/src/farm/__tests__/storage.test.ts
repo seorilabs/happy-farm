@@ -1,6 +1,6 @@
 /// <reference types="jest" />
 
-import { MAX_PLOTS, SAVE_KEY } from '../../../../../packages/farm-core/src';
+import { MAX_PLOTS, SAVE_KEY, createInitialState } from '../../../../../packages/farm-core/src';
 import { FARM_GAME_SETTINGS_KEY } from '../gameSettings';
 import { createFarmPersistence } from '../persistence';
 
@@ -76,22 +76,7 @@ describe('farm storage', () => {
     mockStorage.removeItem.mockRejectedValueOnce(new Error('unavailable'));
 
     await expect(
-      writePersistedGameState({
-        gold: 1,
-        unlockedPlotCount: 6,
-        unlockedAreas: ['starter_field'],
-        harvestedCropKeys: [],
-        claimedCollectionRewards: [],
-        adUsage: {
-          dailyKey: '2026-05-27',
-          rewardedGoldTimestamps: [],
-          rewardedGoldDailyCount: 0,
-          growthAd: { lastUsedAt: null, dailyCount: 0 },
-          harvestBonusAd: { lastUsedAt: null, lastPromptedAt: null, boostEndsAt: null, dailyCount: 0 },
-        },
-        upgrades: { speed: 1, profit: 1 },
-        plots: [],
-      })
+      writePersistedGameState({ ...createInitialState(), gold: 1, plots: [] })
     ).resolves.toBeUndefined();
     await expect(removePersistedGameState()).resolves.toBeUndefined();
   });

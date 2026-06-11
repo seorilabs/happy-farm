@@ -48,7 +48,19 @@ requireLocaleMap('app-store', 'storeListing.keywords', appStoreConfig.storeListi
 requireLocaleMap('app-store', 'version.releaseNotes', appStoreConfig.version?.releaseNotes);
 
 assertNoHangul('apps/ait/src/farm/FarmGame.tsx');
+assertNoHangul('apps/ait/src/farm/components/SheetParts.tsx');
+assertNoHangul('apps/ait/src/farm/components/CollectionSheet.tsx');
+assertNoHangul('apps/ait/src/farm/components/AchievementsSheet.tsx');
+assertNoHangul('apps/ait/src/farm/components/LabSheet.tsx');
+assertNoHangul('apps/ait/src/farm/components/ChainMapSheet.tsx');
 assertNoHangul('packages/farm-core/src/constants.ts');
+assertNoHangul('packages/farm-core/src/achievements.ts');
+assertNoHangul('packages/farm-core/src/prestige.ts');
+assertNoHangul('packages/farm-core/src/research.ts');
+assertNoHangul('packages/farm-core/src/types.ts');
+assertNoHangul('packages/farm-core/src/harvest.ts');
+assertNoHangul('packages/farm-core/src/mastery.ts');
+assertNoHangul('packages/farm-core/src/modifiers.ts');
 
 const result = {
   status: failures.length > 0 ? 'fail' : 'pass',

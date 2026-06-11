@@ -17,9 +17,38 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
+  BREEDING_RECIPES,
   CROPS,
-  COLLECTION_FULL_REWARD_KEY,
   FARM_AREAS,
+  REGION_ARCHETYPES,
+  RESEARCH_NODES,
+  breedCrop,
+  buySkill,
+  canPrestige,
+  canUnlockNode,
+  claimNextAchievementTier,
+  collectChainIncome,
+  getBreedingRecipeStatus,
+  getChainIncome,
+  getClaimableAchievementCount,
+  getCropModifiers,
+  getCropPurchaseCost,
+  getFarmHourlyProductivity,
+  getGlobalModifiers,
+  getPrestigeSkillLabel,
+  getRegionArchetypeLabel,
+  getResearchNodeLabel,
+  getTitleLabel,
+  performPlant,
+  prestigeFarm,
+  runAutomationTick,
+  setActiveTitle,
+  unlockNode,
+  type AchievementTrackKey,
+  type PrestigeSkillKey,
+  type RegionArchetypeKey,
+  type ResearchNodeKey,
+  type TitleKey,
   GROWTH_AD_MAX_SKIP_MS,
   GROWTH_AD_MIN_REMAINING_MS,
   HARVEST_BONUS_BOOST_DURATION_MS,
@@ -50,19 +79,23 @@ import {
   type CollectionSummary,
   getCropLabel,
   getCropEconomyEstimate,
-  getFarmProductivityEstimate,
   getGameAnalyticsContext,
   getHarvestBonusBoostStatus,
   getHarvestBonusPromptStatus,
+  getMasteryRankLabel,
   getMinUpgradeLevel,
+  getMutationLabel,
   getPlotCost,
-  getProfitMultiplier,
+  getPlotGrowthRatio,
+  getPlotRemainingGrowthMs,
   getRewardedAdLimitStatus,
-  getSpeedMultiplier,
   getUpgradeCost,
   isAreaUnlocked,
-  isCropDiscovered,
+  isCropPlantable,
+  isPlotGrowthComplete,
+  isTitleUnlocked,
   normalizeLocale,
+  performHarvest,
   recordHarvestBonusAdPrompt,
   recordRewardedAdUsage,
   type CropEconomyEstimate,
@@ -71,6 +104,11 @@ import {
 
 import { DEFAULT_FARM_GAME_SETTINGS, normalizeFarmGameSettings, type FarmGameSettings } from './gameSettings';
 import { getFarmMessages, type FarmMessages } from './i18n';
+import { AchievementsSheet } from './components/AchievementsSheet';
+import { ChainMapSheet, PrestigeConfirmSheet } from './components/ChainMapSheet';
+import { CollectionSheet } from './components/CollectionSheet';
+import { LabSheet } from './components/LabSheet';
+import { AdRewardCard, SettingToggle, SheetAction, ShopCard, sheetPartStyles } from './components/SheetParts';
 
 const REWARDED_AD_GROUP_ID = 'ait.v2.live.6fc77adf3f034cd6';
 const INTERSTITIAL_AD_GROUP_ID = '';
@@ -81,6 +119,8 @@ const MAIN_HORIZONTAL_PADDING = 16;
 // The growth bar animates one tick at a time, so its duration is tied to this value
 // rather than hardcoded separately.
 export const GAME_TICK_INTERVAL_MS = 250;
+// Auto-harvest analytics are batched into one summary event per interval.
+const AUTO_HARVEST_SUMMARY_INTERVAL_MS = 60_000;
 const PROGRESS_ANIMATION_DURATION_MS = GAME_TICK_INTERVAL_MS;
 const SHEET_DISMISS_DRAG_DISTANCE = 96;
 const SHEET_DISMISS_VELOCITY = 1.1;
@@ -104,13 +144,10 @@ function getCrop(cropKey: CropKey) {
   return crop;
 }
 
-function getGrowthProgressRatio(startTime: number, growTime: number, speedMult: number, now = Date.now()) {
-  if (growTime <= 0 || speedMult <= 0) {
-    return 1;
-  }
-
-  const elapsed = Math.max(0, now - startTime) * speedMult;
-  return Math.min(Math.max(elapsed / growTime, 0), 1);
+// Region scaling can push multipliers far past the upgrade range, so switch
+// to a whole-number display once a decimal stops being informative.
+function formatStatMultiplier(value: number) {
+  return value >= 100 ? `×${Math.round(value).toLocaleString()}` : `×${value.toFixed(1)}`;
 }
 
 function getCropEconomy(cropEconomyByKey: Record<CropKey, CropEconomyEstimate>, cropKey: CropKey): CropEconomyEstimate {
@@ -126,6 +163,10 @@ const FIRST_AREA = getFirstArea();
 type ActiveSheet =
   | { type: 'shop' }
   | { type: 'collection' }
+  | { type: 'achievements' }
+  | { type: 'lab' }
+  | { type: 'map' }
+  | { type: 'prestigeConfirm' }
   | { type: 'settings' }
   | { type: 'growthAd'; plotIndex: number; cropKey: CropKey; remainingMs: number }
   | { type: 'harvestBonus' }
@@ -232,6 +273,11 @@ export default function FarmGame({
   const gameStartTrackedRef = useRef(false);
   const firstSeedSelectedRef = useRef(false);
   const claimedRewardKeysRef = useRef<Set<CollectionRewardKey>>(new Set());
+  const claimedAchievementKeysRef = useRef<Set<string>>(new Set());
+  // Double-tap guard for confirmPrestige: the state updater is idempotent,
+  // but the toast/analytics must fire exactly once per graduated level.
+  const prestigedLevelsRef = useRef<Set<number>>(new Set());
+  const autoHarvestSummaryRef = useRef({ harvestedCount: 0, replantedCount: 0, windowStartedAt: 0 });
   const rewardedAd = useRewardedAd(REWARDED_AD_GROUP_ID);
   const interstitialAd = useInterstitialAd(INTERSTITIAL_AD_GROUP_ID);
   const farmAnalytics = analytics;
@@ -245,6 +291,9 @@ export default function FarmGame({
   const [gameState, setGameState] = useState<GameState>(() => createInitialState());
   const [selectedTool, setSelectedTool] = useState<ToolKey>('harvest');
   const [selectedArea, setSelectedArea] = useState<AreaKey>(FIRST_AREA.key);
+  const [prestigeArchetype, setPrestigeArchetype] = useState<RegionArchetypeKey>(
+    REGION_ARCHETYPES[0]?.key ?? 'plains'
+  );
   const [tick, setTick] = useState(0);
   const plotTileSize = useMemo(() => {
     const availableWidth = windowWidth - MAIN_HORIZONTAL_PADDING * 2 - PLOT_GAP * (PLOT_COLUMNS - 1);
@@ -378,8 +427,10 @@ export default function FarmGame({
     return () => clearInterval(id);
   }, []);
 
-  const speedMult = useMemo(() => getSpeedMultiplier(gameState.upgrades.speed), [gameState.upgrades.speed]);
-  const profitMult = useMemo(() => getProfitMultiplier(gameState.upgrades.profit), [gameState.upgrades.profit]);
+  // Header stats show the full modifier stack (upgrades, mastery-independent
+  // prestige skills, region scaling) so the display matches the actual math;
+  // the ad boost stays on its own line.
+  const globalModifiers = useMemo(() => getGlobalModifiers(gameState), [gameState]);
   const researchLevel = useMemo(
     () => getMinUpgradeLevel(gameState),
     [gameState.upgrades.profit, gameState.upgrades.speed]
@@ -402,6 +453,13 @@ export default function FarmGame({
   }, []);
   const collectionSummary = useMemo(() => getCollectionSummary(gameState), [gameState]);
   const claimableCollectionCount = collectionSummary.claimableCount;
+  const claimableAchievementCount = useMemo(() => getClaimableAchievementCount(gameState), [gameState]);
+  const labActionableCount = useMemo(
+    () =>
+      RESEARCH_NODES.filter((node) => canUnlockNode(gameState, node.key)).length +
+      BREEDING_RECIPES.filter((recipe) => getBreedingRecipeStatus(gameState, recipe).breedable).length,
+    [gameState]
+  );
   const selectedAreaLabel = getLocalizedAreaLabel(selectedArea);
   const selectedAreaUnlocked = isAreaUnlocked(gameState, selectedArea);
   const rewardedGoldLimit = useMemo(
@@ -418,54 +476,82 @@ export default function FarmGame({
   );
   const harvestBonusBoost = useMemo(() => getHarvestBonusBoostStatus(gameState), [gameState, tick]);
   const farmProductivity = useMemo(
-    () =>
-      getFarmProductivityEstimate(gameState, {
-        speedMultiplier: speedMult,
-        profitMultiplier: profitMult,
-        harvestMultiplier: harvestBonusBoost.multiplier,
-      }),
-    [gameState, harvestBonusBoost.multiplier, profitMult, speedMult]
+    () => getFarmHourlyProductivity(gameState),
+    [gameState, harvestBonusBoost.multiplier]
   );
   const cropEconomyByKey = useMemo(
     () =>
       (Object.keys(CROPS) as CropKey[]).reduce(
         (acc, cropKey) => {
+          const modifiers = getCropModifiers(gameState, cropKey);
           acc[cropKey] = getCropEconomyEstimate(cropKey, {
-            speedMultiplier: speedMult,
-            profitMultiplier: profitMult,
-            harvestMultiplier: harvestBonusBoost.multiplier,
+            speedMultiplier: modifiers.speedMultiplier,
+            profitMultiplier: modifiers.profitMultiplier,
+            harvestMultiplier: modifiers.harvestMultiplier,
+            costMultiplier: modifiers.cropCostMultiplier,
           });
           return acc;
         },
         {} as Record<CropKey, CropEconomyEstimate>
       ),
-    [harvestBonusBoost.multiplier, profitMult, speedMult]
+    [gameState, harvestBonusBoost.multiplier]
+  );
+  const chainIncome = useMemo(() => getChainIncome(gameState), [gameState, tick]);
+  const mapActionableCount = useMemo(
+    () => (chainIncome.accruedGold > 0 ? 1 : 0) + (canPrestige(gameState).allowed ? 1 : 0),
+    [chainIncome.accruedGold, gameState]
   );
 
   useEffect(() => {
-    let updated = false;
     const now = Date.now();
-    const nextPlots = gameState.plots.map((plot) => {
-      if (plot.id >= gameState.unlockedPlotCount) {
+    let next = gameState;
+
+    let growthUpdated = false;
+    const grownPlots = next.plots.map((plot) => {
+      if (plot.id >= next.unlockedPlotCount) {
         return plot;
       }
-      if (plot.state !== 1 || plot.cropType == null || plot.startTime == null) {
+      if (plot.cropType == null || !isPlotGrowthComplete(next, plot, now)) {
         return plot;
       }
       const crop = getCrop(plot.cropType);
-      const elapsed = (now - plot.startTime) * speedMult;
-      if (elapsed >= crop.growTime) {
-        updated = true;
-        farmAnalytics.trackCropReady(plot.cropType, crop.area, crop.tier, analyticsContext());
-        return { ...plot, state: 2 as const };
-      }
-      return plot;
+      growthUpdated = true;
+      farmAnalytics.trackCropReady(plot.cropType, crop.area, crop.tier, analyticsContext());
+      return { ...plot, state: 2 as const };
     });
-
-    if (updated) {
-      setGameState((state) => ({ ...state, plots: nextPlots }));
+    if (growthUpdated) {
+      next = { ...next, plots: grownPlots };
     }
-  }, [analyticsContext, gameState.plots, gameState.unlockedPlotCount, speedMult, tick]);
+
+    // Automation shares the manual harvest pipeline but stays silent: no
+    // toast/vibration/sound, and no per-crop analytics from the tick loop.
+    const automation = runAutomationTick(next, { now });
+    const summary = autoHarvestSummaryRef.current;
+    if (automation.harvestedCount > 0) {
+      next = automation.state;
+      if (summary.harvestedCount === 0 && summary.replantedCount === 0) {
+        // First accumulation opens a fresh batching window.
+        summary.windowStartedAt = now;
+      }
+      summary.harvestedCount += automation.harvestedCount;
+      summary.replantedCount += automation.replantedCount;
+    }
+    // Flush is decoupled from harvest occurrence so a pending batch still goes
+    // out (one interval later) when automation stops harvesting or is toggled
+    // off mid-window.
+    if (summary.harvestedCount > 0 && now - summary.windowStartedAt >= AUTO_HARVEST_SUMMARY_INTERVAL_MS) {
+      farmAnalytics.trackAutoHarvestSummary({
+        harvestedCount: summary.harvestedCount,
+        replantedCount: summary.replantedCount,
+        context: analyticsContext(),
+      });
+      autoHarvestSummaryRef.current = { harvestedCount: 0, replantedCount: 0, windowStartedAt: now };
+    }
+
+    if (next !== gameState) {
+      setGameState(() => next);
+    }
+  }, [analyticsContext, gameState, tick]);
 
   function openShop() {
     setActiveSheet({ type: 'shop' });
@@ -496,6 +582,143 @@ export default function FarmGame({
     toast(messages.collectionRewardClaimedToast(formatMoney(preview.awardedGold, locale)));
   }
 
+  function openAchievements() {
+    setActiveSheet({ type: 'achievements' });
+  }
+
+  function claimAchievement(trackKey: AchievementTrackKey) {
+    const preview = claimNextAchievementTier(gameState, trackKey);
+    if (preview == null) {
+      return;
+    }
+    // Same double-tap guard pattern as collection rewards: state updates are
+    // idempotent, but the toast must fire exactly once per claimed tier.
+    const guardKey = `${trackKey}:${preview.claimedTier}`;
+    if (claimedAchievementKeysRef.current.has(guardKey)) {
+      return;
+    }
+    claimedAchievementKeysRef.current.add(guardKey);
+    setGameState((state) => claimNextAchievementTier(state, trackKey)?.state ?? state);
+    farmAnalytics.trackAchievementClaimed({
+      trackKey,
+      tier: preview.claimedTier,
+      starsAwarded: preview.starsAwarded,
+      context: analyticsContext(),
+    });
+    toast(messages.achievementClaimedToast(preview.starsAwarded));
+  }
+
+  function selectTitle(titleKey: TitleKey | null) {
+    // setActiveTitle ignores locked titles; only toast when the change is real.
+    if (titleKey != null && !isTitleUnlocked(gameState, titleKey)) {
+      return;
+    }
+    setGameState((state) => setActiveTitle(state, titleKey));
+    toast(
+      titleKey == null
+        ? messages.titleUnequippedToast
+        : messages.titleEquippedToast(getTitleLabel(titleKey, locale).name)
+    );
+  }
+
+  function openLab() {
+    setActiveSheet({ type: 'lab' });
+  }
+
+  function toggleAutomation(key: keyof GameState['automationSettings']) {
+    setGameState((state) => ({
+      ...state,
+      automationSettings: { ...state.automationSettings, [key]: !state.automationSettings[key] },
+    }));
+  }
+
+  function unlockResearchNode(nodeKey: ResearchNodeKey) {
+    if (!canUnlockNode(gameState, nodeKey)) {
+      toast(messages.insufficientRpToast);
+      return;
+    }
+    setGameState((state) => unlockNode(state, nodeKey) ?? state);
+    farmAnalytics.trackResearchNodeUnlocked({ nodeKey, context: analyticsContext() });
+    toast(messages.researchNodeUnlockedToast(getResearchNodeLabel(nodeKey, locale).name));
+  }
+
+  function breedHybrid(cropKey: CropKey) {
+    if (breedCrop(gameState, cropKey) == null) {
+      toast(messages.insufficientRpToast);
+      return;
+    }
+    setGameState((state) => breedCrop(state, cropKey) ?? state);
+    farmAnalytics.trackBreedUnlocked({ cropKey, context: analyticsContext() });
+    toast(messages.bredToast(getLocalizedCropName(cropKey)));
+  }
+
+  function openMap() {
+    setActiveSheet({ type: 'map' });
+  }
+
+  function collectChain() {
+    const now = Date.now();
+    const collected = collectChainIncome(gameState, now);
+    if (collected == null) {
+      return;
+    }
+    setGameState((state) => collectChainIncome(state, now)?.state ?? state);
+    farmAnalytics.trackChainCollected({
+      collectedGold: collected.collectedGold,
+      farmCount: gameState.chainFarms.length,
+      context: analyticsContext(),
+    });
+    toast(messages.chainCollectedToast(formatMoney(collected.collectedGold, locale)));
+  }
+
+  function openPrestigeConfirm() {
+    setActiveSheet({ type: 'prestigeConfirm' });
+  }
+
+  function confirmPrestige() {
+    const now = Date.now();
+    const guardLevel = gameState.prestige.level;
+    if (prestigedLevelsRef.current.has(guardLevel)) {
+      return;
+    }
+    const result = prestigeFarm(gameState, prestigeArchetype, now);
+    if (result == null) {
+      setActiveSheet(null);
+      return;
+    }
+    prestigedLevelsRef.current.add(guardLevel);
+    // Drop any pending auto-harvest batch so old-farm counts never flush
+    // under the new farm's analytics context.
+    autoHarvestSummaryRef.current = { harvestedCount: 0, replantedCount: 0, windowStartedAt: 0 };
+    setGameState((state) => prestigeFarm(state, prestigeArchetype, now)?.state ?? state);
+    setSelectedArea(FIRST_AREA.key);
+    setSelectedTool('harvest');
+    setActiveSheet(null);
+    farmAnalytics.trackPrestige({
+      archetype: prestigeArchetype,
+      starsAwarded: result.starsAwarded,
+      chainGoldPerHour: result.chainFarm.goldPerHour,
+      context: analyticsContext(),
+    });
+    toast(
+      messages.prestigeDoneToast(getRegionArchetypeLabel(prestigeArchetype, locale).name, result.starsAwarded)
+    );
+  }
+
+  function purchaseSkill(skillKey: PrestigeSkillKey) {
+    if (buySkill(gameState, skillKey) == null) {
+      toast(messages.insufficientStarsToast);
+      return;
+    }
+    setGameState((state) => buySkill(state, skillKey) ?? state);
+    farmAnalytics.trackPrestigeSkillPurchased({
+      skillKey,
+      nextLevel: (gameState.prestige.skills[skillKey] ?? 0) + 1,
+      context: analyticsContext(),
+    });
+    toast(messages.skillPurchasedToast(getPrestigeSkillLabel(skillKey, locale).name));
+  }
+
   function openSettings() {
     setActiveSheet({ type: 'settings' });
   }
@@ -520,6 +743,10 @@ export default function FarmGame({
     const crop = getCrop(cropKey);
     if (!isAreaUnlocked(gameState, crop.area)) {
       toast(messages.lockedCropToast);
+      return;
+    }
+    if (!isCropPlantable(gameState, cropKey)) {
+      toast(messages.breedRequiredToast);
       return;
     }
 
@@ -633,6 +860,9 @@ export default function FarmGame({
     }
     await persistence.removePersistedGameState();
     claimedRewardKeysRef.current.clear();
+    claimedAchievementKeysRef.current.clear();
+    prestigedLevelsRef.current.clear();
+    autoHarvestSummaryRef.current = { harvestedCount: 0, replantedCount: 0, windowStartedAt: 0 };
     setGameState(createInitialState());
     setSelectedArea(FIRST_AREA.key);
     setSelectedTool('harvest');
@@ -646,66 +876,79 @@ export default function FarmGame({
       toast(messages.areaFirstToast);
       return;
     }
-    if (gameState.gold < crop.cost) {
-      toast(messages.insufficientGoldToast);
-      return;
-    }
-
-    setGameState((state) => {
-      if (state.gold < crop.cost) {
-        return state;
-      }
-      const plot = state.plots[index];
-      if (plot == null || plot.id >= state.unlockedPlotCount || plot.state !== 0) {
-        return state;
-      }
-      const next = [...state.plots];
-      next[index] = { ...plot, cropType: cropKey, startTime: Date.now(), state: 1 };
-      return { ...state, gold: state.gold - crop.cost, plots: next };
-    });
-    farmAnalytics.trackCropPlanted(cropKey, crop.area, crop.tier, crop.cost, analyticsContext());
-  }
-
-  function harvestCrop(index: number) {
-    const plot = gameState.plots[index];
-    if (plot == null || plot.state !== 2 || plot.cropType == null) {
+    if (!isCropPlantable(gameState, cropKey)) {
+      toast(messages.breedRequiredToast);
       return;
     }
     const now = Date.now();
-    const crop = getCrop(plot.cropType);
-    const currentHarvestBoost = getHarvestBonusBoostStatus(gameState, now);
-    const finalPrice = Math.floor(crop.sell * profitMult * currentHarvestBoost.multiplier);
-    const isFirstMeaningfulHarvest = gameState.harvestedCropKeys.length === 0;
-    const isFirstCropHarvest = !gameState.harvestedCropKeys.includes(plot.cropType);
+    const cost = getCropPurchaseCost(gameState, cropKey, now);
+    if (gameState.gold < cost) {
+      toast(messages.insufficientGoldToast);
+      return;
+    }
+    // Remaining failure modes (occupied/locked plot) are silent; only track
+    // analytics for plants that actually succeed.
+    if (performPlant(gameState, index, cropKey, now) == null) {
+      return;
+    }
 
-    setGameState((state) => {
-      const next = [...state.plots];
-      next[index] = { id: index, cropType: null, startTime: null, state: 0 };
-      const harvestedCropKeys = state.harvestedCropKeys.includes(plot.cropType as CropKey)
-        ? state.harvestedCropKeys
-        : [...state.harvestedCropKeys, plot.cropType as CropKey];
-      return { ...state, gold: state.gold + finalPrice, plots: next, harvestedCropKeys };
-    });
+    setGameState((state) => performPlant(state, index, cropKey, now) ?? state);
+    farmAnalytics.trackCropPlanted(cropKey, crop.area, crop.tier, cost, analyticsContext());
+  }
+
+  function harvestCrop(index: number) {
+    const now = Date.now();
+    // One shared roll keeps the previewed outcome (toast/analytics) identical
+    // to the outcome replayed inside the state updater.
+    const roll = Math.random();
+    const rng = () => roll;
+    const outcome = performHarvest(gameState, index, { now, rng });
+    if (outcome == null) {
+      return;
+    }
+    const crop = getCrop(outcome.cropKey);
+
+    setGameState((state) => performHarvest(state, index, { now, rng })?.state ?? state);
 
     farmAnalytics.trackCropHarvested({
-      cropKey: plot.cropType,
+      cropKey: outcome.cropKey,
       areaKey: crop.area,
       cropTier: crop.tier,
-      revenue: finalPrice,
-      isFirstMeaningfulHarvest,
-      isFirstCropHarvest,
+      revenue: outcome.goldGained,
+      isFirstMeaningfulHarvest: outcome.isFirstMeaningfulHarvest,
+      isFirstCropHarvest: outcome.isNewCropDiscovery,
       context: analyticsContext(),
     });
-    toast(
-      currentHarvestBoost.active
-        ? messages.harvestedBoostToast(formatMoney(finalPrice, locale), currentHarvestBoost.multiplier)
-        : messages.harvestedToast(formatMoney(finalPrice, locale))
-    );
+    if (outcome.newMasteryRank != null) {
+      toast(
+        messages.masteryRankUpToast(
+          getLocalizedCropName(outcome.cropKey),
+          getMasteryRankLabel(outcome.newMasteryRank.key, locale).name,
+          outcome.newMasteryRank.icon
+        )
+      );
+    } else if (outcome.donated) {
+      toast(messages.donatedToast(formatMoney(outcome.rpGained, locale)));
+    } else if (outcome.mutation != null) {
+      toast(
+        messages.mutationHarvestedToast(
+          getMutationLabel(outcome.mutation.key, locale).name,
+          outcome.mutation.icon,
+          formatMoney(outcome.goldGained, locale)
+        )
+      );
+    } else {
+      toast(
+        outcome.boostActive
+          ? messages.harvestedBoostToast(formatMoney(outcome.goldGained, locale), outcome.boostMultiplier)
+          : messages.harvestedToast(formatMoney(outcome.goldGained, locale))
+      );
+    }
     const canShowHarvestBonusNudge =
       rewardedAd.isAdReady &&
       getRewardedAdLimitStatus(gameState, 'harvestBonusAd', now).allowed &&
       getHarvestBonusPromptStatus(gameState, now).allowed &&
-      !currentHarvestBoost.active;
+      !outcome.boostActive;
     if (canShowHarvestBonusNudge) {
       setGameState((state) => ({ ...state, adUsage: recordHarvestBonusAdPrompt(state, now) }));
       setActiveSheet({ type: 'harvestBonus' });
@@ -739,8 +982,7 @@ export default function FarmGame({
       }
 
       if (plot.state === 1 && plot.cropType != null && plot.startTime != null) {
-        const crop = getCrop(plot.cropType);
-        const remainingMs = Math.max(0, crop.growTime - (Date.now() - plot.startTime) * speedMult);
+        const remainingMs = getPlotRemainingGrowthMs(gameState, plot);
 
         if (
           remainingMs >= GROWTH_AD_MIN_REMAINING_MS &&
@@ -808,10 +1050,9 @@ export default function FarmGame({
     if (selectedTool === 'harvest') {
       return messages.harvestHint;
     }
-    const crop = getCrop(selectedTool);
     return messages.plantHint(
       getLocalizedCropName(selectedTool),
-      formatMoney(crop.cost, locale),
+      formatMoney(getCropPurchaseCost(gameState, selectedTool), locale),
       formatSignedPercent(getCropEconomy(cropEconomyByKey, selectedTool).roiPercent, locale)
     );
   }, [
@@ -834,27 +1075,19 @@ export default function FarmGame({
             <Text style={styles.homeIcon}>🏡</Text>
             <View>
               <Text style={styles.title}>{messages.appTitle}</Text>
-              <Text style={styles.subtitle}>{messages.appSubtitle}</Text>
+              <View style={styles.subtitleRow}>
+                <Text style={styles.subtitle}>{messages.appSubtitle}</Text>
+                {gameState.activeTitle != null ? (
+                  <Text style={styles.titleBadge} numberOfLines={1}>
+                    {getTitleLabel(gameState.activeTitle, locale).name}
+                  </Text>
+                ) : null}
+              </View>
             </View>
           </View>
 
           <View style={styles.headerActions}>
-            <Pressable style={styles.shopButton} onPress={openShop}>
-              <Text style={styles.shopButtonText}>{messages.shopButton}</Text>
-            </Pressable>
-            <Pressable
-              accessibilityLabel={messages.collectionButtonAccessibilityLabel}
-              hitSlop={8}
-              style={styles.settingsButton}
-              onPress={openCollection}
-            >
-              <Text style={styles.settingsButtonText}>📖</Text>
-              {claimableCollectionCount > 0 ? (
-                <View style={styles.collectionBadge}>
-                  <Text style={styles.collectionBadgeText}>{claimableCollectionCount}</Text>
-                </View>
-              ) : null}
-            </Pressable>
+            <Text style={styles.starsChip}>★ {gameState.prestige.stars}</Text>
             <Pressable
               accessibilityLabel={messages.settingsAccessibilityLabel}
               hitSlop={8}
@@ -884,11 +1117,11 @@ export default function FarmGame({
             <View style={styles.statList}>
               <View style={styles.compactStat}>
                 <Text style={styles.label}>{messages.profitLabel}</Text>
-                <Text style={styles.profitStat}>×{profitMult.toFixed(1)}</Text>
+                <Text style={styles.profitStat}>{formatStatMultiplier(globalModifiers.profitMultiplier)}</Text>
               </View>
               <View style={styles.compactStat}>
                 <Text style={styles.label}>{messages.growthLabel}</Text>
-                <Text style={styles.speedStat}>×{speedMult.toFixed(1)}</Text>
+                <Text style={styles.speedStat}>{formatStatMultiplier(globalModifiers.speedMultiplier)}</Text>
               </View>
               {harvestBonusBoost.active ? (
                 <View style={styles.compactStat}>
@@ -899,6 +1132,34 @@ export default function FarmGame({
             </View>
           </View>
         </View>
+
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.navRow}>
+          <NavButton label={messages.shopButton} onPress={openShop} />
+          <NavButton
+            label={messages.collectionButton}
+            badge={claimableCollectionCount}
+            accessibilityLabel={messages.collectionButtonAccessibilityLabel}
+            onPress={openCollection}
+          />
+          <NavButton
+            label={messages.labButton}
+            badge={labActionableCount}
+            accessibilityLabel={messages.labButtonAccessibilityLabel}
+            onPress={openLab}
+          />
+          <NavButton
+            label={messages.mapButton}
+            badge={mapActionableCount}
+            accessibilityLabel={messages.mapButtonAccessibilityLabel}
+            onPress={openMap}
+          />
+          <NavButton
+            label={messages.achievementsButton}
+            badge={claimableAchievementCount}
+            accessibilityLabel={messages.achievementsButtonAccessibilityLabel}
+            onPress={openAchievements}
+          />
+        </ScrollView>
       </View>
 
       <ScrollView contentContainerStyle={styles.mainContent} style={styles.main}>
@@ -908,7 +1169,7 @@ export default function FarmGame({
               key={plot.id}
               plot={plot}
               unlocked={index < gameState.unlockedPlotCount}
-              speedMult={speedMult}
+              progressRatio={getPlotGrowthRatio(gameState, plot)}
               tileSize={plotTileSize}
               messages={messages}
               onPress={() => handlePlotClick(index)}
@@ -961,7 +1222,7 @@ export default function FarmGame({
                 active={selectedTool === key}
                 icon={crop.icon}
                 name={getLocalizedCropName(key)}
-                cost={formatMoney(crop.cost, locale)}
+                cost={formatMoney(getCropPurchaseCost(gameState, key), locale)}
                 roi={messages.roi(formatSignedPercent(getCropEconomy(cropEconomyByKey, key).roiPercent, locale))}
                 onPress={() => selectCrop(key)}
               />
@@ -1074,68 +1335,58 @@ export default function FarmGame({
         ) : null}
 
         {activeSheet?.type === 'collection' ? (
-          <View>
-            {collectionSummary.areas.map((area) => {
-              const areaLabel = getLocalizedAreaLabel(area.areaKey);
-              return (
-                <View key={area.areaKey} style={styles.collectionArea}>
-                  <View style={styles.collectionAreaHeader}>
-                    <Text style={styles.collectionAreaName} numberOfLines={1}>
-                      {areaLabel.name}
-                    </Text>
-                    <Text style={[styles.collectionAreaProgress, area.completed && styles.collectionAreaProgressDone]}>
-                      {area.completed ? messages.collectionCompletedBadge : `${area.discoveredCount}/${area.totalCount}`}
-                    </Text>
-                  </View>
-                  <View style={styles.collectionGrid}>
-                    {area.cropKeys.map((cropKey) => {
-                      const discovered = isCropDiscovered(gameState, cropKey);
-                      const crop = getCrop(cropKey);
-                      return (
-                        <View
-                          key={cropKey}
-                          style={[styles.collectionCell, !discovered && styles.collectionCellLocked]}
-                        >
-                          <Text style={styles.collectionCellIcon}>{discovered ? crop.icon : '❓'}</Text>
-                          <Text style={styles.collectionCellName} numberOfLines={1}>
-                            {discovered ? getLocalizedCropName(cropKey) : '???'}
-                          </Text>
-                          {discovered ? (
-                            <Text style={styles.collectionCellValue} numberOfLines={1}>
-                              {formatMoney(crop.sell, locale)}G
-                            </Text>
-                          ) : null}
-                        </View>
-                      );
-                    })}
-                  </View>
-                  {area.rewardClaimed ? (
-                    <Text style={styles.collectionClaimedLabel}>{messages.collectionClaimedLabel}</Text>
-                  ) : area.rewardClaimable ? (
-                    <SheetAction
-                      label={messages.collectionClaimAction(formatMoney(area.reward, locale))}
-                      onPress={() => claimCollectionRewardByKey(area.areaKey)}
-                    />
-                  ) : null}
-                </View>
-              );
-            })}
+          <CollectionSheet
+            gameState={gameState}
+            locale={locale}
+            messages={messages}
+            collectionSummary={collectionSummary}
+            onClaimReward={claimCollectionRewardByKey}
+          />
+        ) : null}
 
-            <Text style={styles.sheetSectionTitle}>{messages.collectionFullTitle}</Text>
-            <View style={styles.collectionArea}>
-              <Text style={styles.collectionFullDesc}>
-                {messages.collectionFullDesc(collectionSummary.discoveredCount, collectionSummary.totalCount)}
-              </Text>
-              {collectionSummary.fullRewardClaimed ? (
-                <Text style={styles.collectionClaimedLabel}>{messages.collectionClaimedLabel}</Text>
-              ) : collectionSummary.fullRewardClaimable ? (
-                <SheetAction
-                  label={messages.collectionClaimAction(formatMoney(collectionSummary.fullReward, locale))}
-                  onPress={() => claimCollectionRewardByKey(COLLECTION_FULL_REWARD_KEY)}
-                />
-              ) : null}
-            </View>
-          </View>
+        {activeSheet?.type === 'lab' ? (
+          <LabSheet
+            gameState={gameState}
+            locale={locale}
+            messages={messages}
+            onToggleAutomation={toggleAutomation}
+            onUnlockNode={unlockResearchNode}
+            onBreed={breedHybrid}
+          />
+        ) : null}
+
+        {activeSheet?.type === 'map' ? (
+          <ChainMapSheet
+            gameState={gameState}
+            locale={locale}
+            messages={messages}
+            now={Date.now()}
+            onCollectChain={collectChain}
+            onOpenPrestigeConfirm={openPrestigeConfirm}
+            onBuySkill={purchaseSkill}
+          />
+        ) : null}
+
+        {activeSheet?.type === 'prestigeConfirm' ? (
+          <PrestigeConfirmSheet
+            gameState={gameState}
+            locale={locale}
+            messages={messages}
+            selectedArchetype={prestigeArchetype}
+            onSelectArchetype={setPrestigeArchetype}
+            onConfirm={confirmPrestige}
+            onCancel={openMap}
+          />
+        ) : null}
+
+        {activeSheet?.type === 'achievements' ? (
+          <AchievementsSheet
+            gameState={gameState}
+            locale={locale}
+            messages={messages}
+            onClaim={claimAchievement}
+            onSelectTitle={selectTitle}
+          />
         ) : null}
 
         {activeSheet?.type === 'settings' ? (
@@ -1162,7 +1413,7 @@ export default function FarmGame({
               secondary
               onPress={() => updateGameSettings({ locale: locale === 'ko-KR' ? 'en-US' : 'ko-KR' })}
             />
-            <Text style={styles.settingDesc}>{messages.languageDesc}</Text>
+            <Text style={sheetPartStyles.settingDesc}>{messages.languageDesc}</Text>
 
             <Text style={styles.sheetSectionTitle}>{messages.gameDataSection}</Text>
             <SheetAction label={messages.resetFarmAction} danger onPress={openResetConfirm} />
@@ -1224,17 +1475,40 @@ export default function FarmGame({
   );
 }
 
+function NavButton({
+  label,
+  badge,
+  accessibilityLabel,
+  onPress,
+}: {
+  label: string;
+  badge?: number;
+  accessibilityLabel?: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable accessibilityLabel={accessibilityLabel} style={styles.navButton} onPress={onPress}>
+      <Text style={styles.navButtonText}>{label}</Text>
+      {badge != null && badge > 0 ? (
+        <View style={styles.collectionBadge}>
+          <Text style={styles.collectionBadgeText}>{badge}</Text>
+        </View>
+      ) : null}
+    </Pressable>
+  );
+}
+
 function PlotCell({
   plot,
   unlocked,
-  speedMult,
+  progressRatio,
   tileSize,
   messages,
   onPress,
 }: {
   plot: GameState['plots'][number];
   unlocked: boolean;
-  speedMult: number;
+  progressRatio: number;
   tileSize: number;
   messages: FarmMessages;
   onPress: () => void;
@@ -1258,10 +1532,6 @@ function PlotCell({
   }
 
   const crop = plot.cropType != null ? getCrop(plot.cropType) : null;
-  const progressRatio =
-    plot.state === 1 && crop != null && plot.startTime != null
-      ? getGrowthProgressRatio(plot.startTime, crop.growTime, speedMult)
-      : 1;
   const icon = plot.state === 2 ? (crop?.icon ?? '🌱') : progressRatio > 0.5 ? '🌿' : '🌱';
 
   return (
@@ -1275,30 +1545,22 @@ function PlotCell({
         </View>
       ) : null}
       {plot.state === 1 && crop != null && plot.startTime != null ? (
-        <GrowthProgressBar growTime={crop.growTime} speedMult={speedMult} startTime={plot.startTime} />
+        <GrowthProgressBar progressRatio={progressRatio} />
       ) : null}
       <Text style={plot.state === 2 ? styles.readyCropIcon : styles.cropIcon}>{icon}</Text>
     </Pressable>
   );
 }
 
-function GrowthProgressBar({
-  growTime,
-  speedMult,
-  startTime,
-}: {
-  growTime: number;
-  speedMult: number;
-  startTime: number;
-}) {
+function GrowthProgressBar({ progressRatio }: { progressRatio: number }) {
   const progressScaleRef = useRef<Animated.Value | null>(null);
   if (progressScaleRef.current == null) {
-    progressScaleRef.current = new Animated.Value(getGrowthProgressRatio(startTime, growTime, speedMult));
+    progressScaleRef.current = new Animated.Value(progressRatio);
   }
   const progressScale = progressScaleRef.current;
   // Recomputed on every parent re-render (the 250ms game tick), so the bar
   // advances in small steps instead of one animation spanning the whole grow time.
-  const targetRatio = getGrowthProgressRatio(startTime, growTime, speedMult);
+  const targetRatio = progressRatio;
 
   useEffect(() => {
     if (targetRatio >= 1) {
@@ -1468,6 +1730,18 @@ function getSheetTitle(activeSheet: ActiveSheet, messages: FarmMessages) {
   if (activeSheet?.type === 'growthAd') {
     return messages.sheetTitleGrowthAd;
   }
+  if (activeSheet?.type === 'achievements') {
+    return messages.sheetTitleAchievements;
+  }
+  if (activeSheet?.type === 'lab') {
+    return messages.sheetTitleLab;
+  }
+  if (activeSheet?.type === 'map') {
+    return messages.sheetTitleMap;
+  }
+  if (activeSheet?.type === 'prestigeConfirm') {
+    return messages.sheetTitlePrestigeConfirm;
+  }
   if (activeSheet?.type === 'harvestBonus') {
     return messages.sheetTitleHarvestBonus;
   }
@@ -1492,6 +1766,18 @@ function getSheetDescription(
 ) {
   if (activeSheet?.type === 'collection') {
     return messages.sheetDescriptionCollection(collectionSummary.discoveredCount, collectionSummary.totalCount);
+  }
+  if (activeSheet?.type === 'achievements') {
+    return messages.sheetDescriptionAchievements;
+  }
+  if (activeSheet?.type === 'lab') {
+    return messages.sheetDescriptionLab;
+  }
+  if (activeSheet?.type === 'map') {
+    return messages.sheetDescriptionMap;
+  }
+  if (activeSheet?.type === 'prestigeConfirm') {
+    return messages.sheetDescriptionPrestigeConfirm;
   }
   if (activeSheet?.type === 'growthAd') {
     return messages.sheetDescriptionGrowthAd(
@@ -1537,34 +1823,6 @@ function ToolButton({
       </Text>
       {cost != null ? <Text style={styles.toolCost}>{cost}</Text> : null}
       {roi != null ? <Text style={styles.toolRoi}>{roi}</Text> : null}
-    </Pressable>
-  );
-}
-
-function AdRewardCard({
-  title,
-  desc,
-  cta,
-  disabled,
-  onPress,
-}: {
-  title: string;
-  desc: string;
-  cta: string;
-  disabled: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      disabled={disabled}
-      style={[styles.shopCard, styles.adCard, disabled && styles.disabledCard]}
-      onPress={onPress}
-    >
-      <View style={styles.shopTextGroup}>
-        <Text style={styles.shopTitle}>{title}</Text>
-        <Text style={styles.shopDesc}>{desc}</Text>
-      </View>
-      <Text style={styles.shopPrice}>{cta}</Text>
     </Pressable>
   );
 }
@@ -1645,6 +1903,9 @@ function ShopAreaUnlockRows({
   onMilestone: () => void;
 }) {
   const lockedAreas = FARM_AREAS.filter((area) => !isAreaUnlocked(gameState, area.key));
+  // Gated areas (research-unlocked) sit outside the sequential progression.
+  const sequentialAreas = lockedAreas.filter((area) => area.unlock.gate == null);
+  const gatedAreas = lockedAreas.filter((area) => area.unlock.gate != null);
 
   if (lockedAreas.length === 0) {
     return (
@@ -1658,53 +1919,55 @@ function ShopAreaUnlockRows({
     );
   }
 
+  const renderAreaCard = (area: (typeof FARM_AREAS)[number], isNextArea: boolean) => {
+    const canBuy = isNextArea && canUnlockArea(gameState, area.key);
+    const areaLabel = getAreaLabel(area.key, locale);
+    const requirementText = getAreaUnlockRequirementText(gameState, area.key, locale);
+
+    return (
+      <ShopCard
+        key={area.key}
+        title={messages.areaOpenTitle(areaLabel.name)}
+        desc={`${areaLabel.target} · ${requirementText}`}
+        price={`${formatMoney(area.unlock.cost, locale)}G`}
+        disabled={!canBuy}
+        onPress={() => {
+          analytics.trackAreaUnlockClicked(area.key, getAnalyticsContext(gameState));
+          if (!isNextArea) {
+            onDone(messages.previousAreaRequiredToast);
+            return;
+          }
+          if (!canUnlockArea(gameState, area.key)) {
+            onDone(messages.areaRequirementsMissingToast);
+            return;
+          }
+
+          setGameState((state) => {
+            if (!canUnlockArea(state, area.key)) {
+              return state;
+            }
+            return {
+              ...state,
+              gold: state.gold - area.unlock.cost,
+              unlockedAreas: [...state.unlockedAreas, area.key],
+            };
+          });
+          analytics.trackAreaUnlocked({
+            areaKey: area.key,
+            cost: area.unlock.cost,
+            context: getAnalyticsContext(gameState),
+          });
+          onDone(messages.areaOpenedToast(areaLabel.name));
+          onMilestone();
+        }}
+      />
+    );
+  };
+
   return (
     <>
-      {lockedAreas.map((area, index) => {
-        const isNextArea = index === 0;
-        const canBuy = isNextArea && canUnlockArea(gameState, area.key);
-        const areaLabel = getAreaLabel(area.key, locale);
-        const requirementText = getAreaUnlockRequirementText(gameState, area.key, locale);
-
-        return (
-          <ShopCard
-            key={area.key}
-            title={messages.areaOpenTitle(areaLabel.name)}
-            desc={`${areaLabel.target} · ${requirementText}`}
-            price={`${formatMoney(area.unlock.cost, locale)}G`}
-            disabled={!canBuy}
-            onPress={() => {
-              analytics.trackAreaUnlockClicked(area.key, getAnalyticsContext(gameState));
-              if (!isNextArea) {
-                onDone(messages.previousAreaRequiredToast);
-                return;
-              }
-              if (!canUnlockArea(gameState, area.key)) {
-                onDone(messages.areaRequirementsMissingToast);
-                return;
-              }
-
-              setGameState((state) => {
-                if (!canUnlockArea(state, area.key)) {
-                  return state;
-                }
-                return {
-                  ...state,
-                  gold: state.gold - area.unlock.cost,
-                  unlockedAreas: [...state.unlockedAreas, area.key],
-                };
-              });
-              analytics.trackAreaUnlocked({
-                areaKey: area.key,
-                cost: area.unlock.cost,
-                context: getAnalyticsContext(gameState),
-              });
-              onDone(messages.areaOpenedToast(areaLabel.name));
-              onMilestone();
-            }}
-          />
-        );
-      })}
+      {sequentialAreas.map((area, index) => renderAreaCard(area, index === 0))}
+      {gatedAreas.map((area) => renderAreaCard(area, true))}
     </>
   );
 }
@@ -1766,95 +2029,6 @@ function ShopUpgradeRow({
   );
 }
 
-function ShopCard({
-  title,
-  desc,
-  price,
-  disabled,
-  priceTone,
-  onPress,
-}: {
-  title: string;
-  desc: string;
-  price: string;
-  disabled?: boolean;
-  priceTone?: 'speed' | 'profit';
-  onPress: () => void;
-}) {
-  return (
-    <Pressable disabled={disabled} style={[styles.shopCard, disabled && styles.disabledCard]} onPress={onPress}>
-      <View style={styles.shopTextGroup}>
-        <Text style={styles.shopTitle}>{title}</Text>
-        <Text style={styles.shopDesc}>{desc}</Text>
-      </View>
-      <Text
-        style={[
-          styles.shopPrice,
-          priceTone === 'speed' && styles.speedPrice,
-          priceTone === 'profit' && styles.profitPrice,
-        ]}
-      >
-        {price}
-      </Text>
-    </Pressable>
-  );
-}
-
-function SettingToggle({
-  label,
-  desc,
-  value,
-  disabled,
-  onPress,
-}: {
-  label: string;
-  desc: string;
-  value: boolean;
-  disabled?: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable disabled={disabled} style={[styles.settingRow, disabled && styles.disabledCard]} onPress={onPress}>
-      <View style={styles.settingTextGroup}>
-        <Text style={styles.settingTitle}>{label}</Text>
-        <Text style={styles.settingDesc}>{desc}</Text>
-      </View>
-      <View style={[styles.toggleTrack, value && styles.activeToggleTrack]}>
-        <View style={[styles.toggleThumb, value && styles.activeToggleThumb]} />
-      </View>
-    </Pressable>
-  );
-}
-
-function SheetAction({
-  label,
-  disabled,
-  secondary,
-  danger,
-  onPress,
-}: {
-  label: string;
-  disabled?: boolean;
-  secondary?: boolean;
-  danger?: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      disabled={disabled}
-      style={[
-        styles.sheetAction,
-        secondary && styles.secondarySheetAction,
-        danger && styles.dangerSheetAction,
-        disabled && styles.disabledCard,
-      ]}
-      onPress={onPress}
-    >
-      <Text style={[styles.sheetActionText, secondary && styles.secondarySheetActionText]}>{label}</Text>
-    </Pressable>
-  );
-}
-
 const styles = StyleSheet.create({
   root: {
     flex: 1,
@@ -1912,15 +2086,46 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
   },
-  shopButton: {
+  subtitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  titleBadge: {
+    marginTop: 2,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 8,
+    overflow: 'hidden',
+    color: '#6f57d9',
+    backgroundColor: '#efeafd',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  starsChip: {
+    minHeight: 34,
+    overflow: 'hidden',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    lineHeight: 34,
+    color: '#8a4b0f',
+    backgroundColor: '#fff3d6',
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  navRow: {
+    gap: 8,
+    paddingTop: 8,
+  },
+  navButton: {
     minHeight: 34,
     justifyContent: 'center',
     borderRadius: 8,
     paddingHorizontal: 12,
-    backgroundColor: '#2f7de1',
+    backgroundColor: '#edf2f7',
   },
-  shopButtonText: {
-    color: '#ffffff',
+  navButtonText: {
+    color: '#344054',
     fontSize: 13,
     fontWeight: '800',
   },
@@ -2324,132 +2529,6 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     fontWeight: '800',
   },
-  shopCard: {
-    minHeight: 72,
-    marginBottom: 10,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: '#d0d5dd',
-    borderRadius: 8,
-    backgroundColor: '#ffffff',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  adCard: {
-    borderColor: '#aad8b1',
-    backgroundColor: '#f0fbf0',
-  },
-  disabledCard: {
-    opacity: 0.45,
-  },
-  shopTextGroup: {
-    flex: 1,
-    minWidth: 0,
-  },
-  shopTitle: {
-    color: '#253126',
-    fontSize: 16,
-    fontWeight: '900',
-  },
-  shopDesc: {
-    marginTop: 3,
-    color: '#667085',
-    fontSize: 13,
-    lineHeight: 18,
-    fontWeight: '600',
-  },
-  shopPrice: {
-    flexShrink: 0,
-    overflow: 'hidden',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    color: '#ffffff',
-    backgroundColor: '#2f8747',
-    fontSize: 13,
-    fontWeight: '900',
-  },
-  speedPrice: {
-    backgroundColor: '#2f7de1',
-  },
-  profitPrice: {
-    backgroundColor: '#bf7a00',
-  },
-  settingRow: {
-    minHeight: 70,
-    marginBottom: 10,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: '#d0d5dd',
-    borderRadius: 8,
-    backgroundColor: '#ffffff',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  settingTextGroup: {
-    flex: 1,
-    minWidth: 0,
-  },
-  settingTitle: {
-    color: '#253126',
-    fontSize: 16,
-    fontWeight: '900',
-  },
-  settingDesc: {
-    marginTop: 3,
-    color: '#667085',
-    fontSize: 13,
-    lineHeight: 18,
-    fontWeight: '600',
-  },
-  toggleTrack: {
-    width: 48,
-    height: 28,
-    borderRadius: 14,
-    padding: 3,
-    backgroundColor: '#d0d5dd',
-    justifyContent: 'center',
-  },
-  activeToggleTrack: {
-    backgroundColor: '#2f7de1',
-  },
-  toggleThumb: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: '#ffffff',
-  },
-  activeToggleThumb: {
-    alignSelf: 'flex-end',
-  },
-  sheetAction: {
-    minHeight: 48,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    marginTop: 8,
-    backgroundColor: '#2f7de1',
-  },
-  secondarySheetAction: {
-    backgroundColor: '#edf2f7',
-  },
-  dangerSheetAction: {
-    backgroundColor: '#e5484d',
-  },
-  sheetActionText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '900',
-    textAlign: 'center',
-  },
-  secondarySheetActionText: {
-    color: '#344054',
-  },
   resetWarning: {
     marginBottom: 12,
     padding: 12,
@@ -2487,82 +2566,5 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 10,
     fontWeight: '900',
-  },
-  collectionArea: {
-    marginBottom: 14,
-  },
-  collectionAreaHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-    marginBottom: 8,
-  },
-  collectionAreaName: {
-    minWidth: 0,
-    flexShrink: 1,
-    color: '#253126',
-    fontSize: 15,
-    fontWeight: '900',
-  },
-  collectionAreaProgress: {
-    flexShrink: 0,
-    color: '#7b8794',
-    fontSize: 13,
-    fontWeight: '900',
-  },
-  collectionAreaProgressDone: {
-    color: '#247241',
-  },
-  collectionGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  collectionCell: {
-    width: 72,
-    minHeight: 72,
-    paddingVertical: 8,
-    paddingHorizontal: 4,
-    borderWidth: 1,
-    borderColor: '#d0d5dd',
-    borderRadius: 8,
-    backgroundColor: '#ffffff',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 2,
-  },
-  collectionCellLocked: {
-    borderColor: '#e1e5ea',
-    backgroundColor: '#f1f3f5',
-  },
-  collectionCellIcon: {
-    fontSize: 26,
-    lineHeight: 30,
-  },
-  collectionCellName: {
-    maxWidth: '100%',
-    color: '#344054',
-    fontSize: 11,
-    fontWeight: '800',
-    textAlign: 'center',
-  },
-  collectionCellValue: {
-    maxWidth: '100%',
-    color: '#8f5c00',
-    fontSize: 10,
-    fontWeight: '900',
-  },
-  collectionClaimedLabel: {
-    marginTop: 8,
-    color: '#7b8794',
-    fontSize: 13,
-    fontWeight: '900',
-  },
-  collectionFullDesc: {
-    color: '#344054',
-    fontSize: 14,
-    lineHeight: 20,
-    fontWeight: '700',
   },
 });

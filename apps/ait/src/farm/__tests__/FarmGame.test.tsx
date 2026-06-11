@@ -11,6 +11,9 @@ import {
   createFarmAnalytics,
   createInitialState,
   formatMoney,
+  getAreaCropKeys,
+  getMasteryThresholds,
+  getPrestigeCost,
   type CropKey,
   type GameState,
   type RewardedAdController,
@@ -167,6 +170,10 @@ function createThrowingRewardedAd(error = new Error('sdk dynamic failure message
     }),
   };
 }
+
+// Rendering the full farm tree is heavy; the first test additionally pays the
+// module-loading warmup, which can exceed jest's 5s default on slow CI runners.
+jest.setTimeout(15000);
 
 describe('FarmGame UI flow', () => {
   beforeEach(() => {
@@ -430,6 +437,80 @@ describe('FarmGame UI flow', () => {
     } finally {
       timingSpy.mockRestore();
     }
+  });
+
+  test('announces mastery rank-ups and shows mastery progress in the collection', async () => {
+    const thresholds = getMasteryThresholds('carrot');
+    const firstThreshold = thresholds[0]!;
+    const base = createReadyHarvestState();
+    const state: GameState = {
+      ...base,
+      harvestedCropKeys: ['carrot'],
+      harvestCounts: { carrot: firstThreshold - 1 },
+    };
+    const screen = await renderGame(state);
+
+    await waitFor(() => expect(screen.getByText('50G')).toBeTruthy());
+
+    fireEvent.press(screen.getAllByText('GET')[0]!);
+
+    expect(screen.getByText(/숙련도가 브론즈 등급/)).toBeTruthy();
+
+    fireEvent.press(screen.getByLabelText('작물 도감'));
+
+    expect(screen.getByText(`${firstThreshold}/${thresholds[1]}`)).toBeTruthy();
+    expect(screen.getByText('🥉')).toBeTruthy();
+  });
+
+  test('auto-harvests and replants through the game tick when automation is unlocked', async () => {
+    const base = createReadyHarvestState();
+    const state: GameState = {
+      ...base,
+      research: { ...base.research, unlockedNodes: ['auto_harvest', 'auto_replant'] },
+      automationSettings: { autoHarvestEnabled: true, autoReplantEnabled: true, donationModeEnabled: false },
+    };
+    const carrot = CROPS.carrot!;
+    // Two ready carrots are harvested and replanted by the automation tick.
+    const expectedGold = state.gold + carrot.sell * 2 - carrot.cost * 2;
+    const screen = await renderGame(state);
+
+    await act(async () => {
+      jest.advanceTimersByTime(GAME_TICK_INTERVAL_MS + 50);
+    });
+
+    await waitFor(() => expect(screen.getByText(`${formatMoney(expectedGold)}G`)).toBeTruthy());
+    expect(screen.queryByText('GET')).toBeNull();
+  });
+
+  test('pioneers a new region, resets the farm layer, and starts a chain farm', async () => {
+    const base = createInitialState();
+    const legendCrops = getAreaCropKeys('legend_field');
+    const state: GameState = {
+      ...base,
+      gold: getPrestigeCost(0),
+      harvestedCropKeys: [...legendCrops],
+      harvestCounts: Object.fromEntries(legendCrops.map((cropKey) => [cropKey, 2])),
+    };
+    const screen = await renderGame(state);
+
+    await waitFor(() => expect(screen.getByText('★ 0')).toBeTruthy());
+
+    fireEvent.press(screen.getByText('🗺️ 개척'));
+    expect(screen.getByText(/1호 농장/)).toBeTruthy();
+
+    fireEvent.press(screen.getByText(/개척 준비하기/));
+    expect(screen.getByText('지역 선택')).toBeTruthy();
+
+    fireEvent.press(screen.getByText(/설원/));
+    fireEvent.press(screen.getByText(/개척하고 ★3 받기/));
+
+    await waitFor(() => expect(screen.getByText('★ 3')).toBeTruthy());
+    expect(screen.getByText('50G')).toBeTruthy();
+
+    fireEvent.press(screen.getByText('🗺️ 개척'));
+    // The graduated farm is now part of the chain; the active farm is #2.
+    expect(screen.getByText(/2호 농장/)).toBeTruthy();
+    expect(screen.getByText(/1호 농장 · 평원/)).toBeTruthy();
   });
 
   test('keeps reset behind the settings sheet', async () => {

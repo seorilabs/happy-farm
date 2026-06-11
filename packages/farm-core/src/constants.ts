@@ -1,11 +1,27 @@
-import type { AreaKey, CollectionRewardKey, CropKey, GameState, PlotState } from './types';
+import type { AreaKey, CollectionRewardKey, CropKey, GameState, PlotState, ResearchNodeKey } from './types';
 import { COLLECTION_FULL_REWARD_KEY } from './types';
+import { getHarvestedCropKeysInSync, normalizeHarvestCounts, normalizeMutationsDiscovered } from './mastery';
+import {
+  createInitialLifetimeStats,
+  normalizeActiveTitle,
+  normalizeClaimedAchievements,
+  normalizeLifetimeStats,
+} from './achievements';
+import { createInitialPrestigeProgress, normalizeChainFarms, normalizePrestigeProgress } from './prestige';
+import {
+  createInitialAutomationSettings,
+  createInitialResearchState,
+  isCropPlantable,
+  normalizeAutomationSettings,
+  normalizeResearchState,
+} from './research';
 import balance from './balance.json';
 import {
   DEFAULT_LOCALE,
   formatDuration,
   formatMoney as formatMoneyForLocale,
   getCoreMessages,
+  getResearchNodeLabel,
   type SupportedLocale,
 } from './i18n';
 
@@ -20,6 +36,9 @@ export const FARM_AREAS = balance.areas as Array<{
     cost: number;
     requiredHarvestedCropCount: number;
     requiredUpgradeLevel: number;
+    // Research node that must be unlocked first. Gated areas sit outside the
+    // sequential area progression and never count as initially unlocked.
+    gate?: ResearchNodeKey;
   };
 }>;
 
@@ -77,7 +96,9 @@ export const GROWTH_AD_MAX_SKIP_MS = balance.ads.growthAdMaxSkipMs;
 export const GROWTH_AD_COOLDOWN_MS = balance.ads.growthAdCooldownMs;
 export const GROWTH_AD_DAILY_LIMIT = balance.ads.growthAdDailyLimit;
 export const INTERSTITIAL_MILESTONE_COOLDOWN_MS = balance.ads.interstitialMilestoneCooldownMs;
-export const INITIAL_AREA_KEYS = FARM_AREAS.filter((area) => area.unlock.cost === 0).map((area) => area.key);
+export const INITIAL_AREA_KEYS = FARM_AREAS.filter(
+  (area) => area.unlock.cost === 0 && area.unlock.gate == null
+).map((area) => area.key);
 const MS_PER_HOUR = 60 * 60 * 1000;
 
 export const COLLECTION_AREA_REWARDS = balance.collection.areaCompletionReward as Record<AreaKey, number>;
@@ -254,25 +275,29 @@ export function getCropEconomyEstimate(
     speedMultiplier,
     profitMultiplier,
     harvestMultiplier = 1,
+    costMultiplier = 1,
   }: {
     speedMultiplier: number;
     profitMultiplier: number;
     harvestMultiplier?: number;
+    costMultiplier?: number;
   }
 ): CropEconomyEstimate {
   const crop = getKnownCrop(cropKey);
   const safeSpeedMultiplier = Number.isFinite(speedMultiplier) && speedMultiplier > 0 ? speedMultiplier : 1;
   const safeProfitMultiplier = Number.isFinite(profitMultiplier) && profitMultiplier > 0 ? profitMultiplier : 1;
   const safeHarvestMultiplier = Number.isFinite(harvestMultiplier) && harvestMultiplier > 0 ? harvestMultiplier : 1;
+  const safeCostMultiplier = Number.isFinite(costMultiplier) && costMultiplier > 0 ? costMultiplier : 1;
+  const effectiveCost = Math.floor(crop.cost * safeCostMultiplier);
   const harvestValue = Math.floor(crop.sell * safeProfitMultiplier * safeHarvestMultiplier);
-  const netProfit = harvestValue - crop.cost;
+  const netProfit = harvestValue - effectiveCost;
   const effectiveGrowTime = Math.max(1, crop.growTime / safeSpeedMultiplier);
 
   return {
     cropKey,
     harvestValue,
     netProfit,
-    roiPercent: (netProfit / crop.cost) * 100,
+    roiPercent: (netProfit / Math.max(1, effectiveCost)) * 100,
     netProfitPerHour: (netProfit / effectiveGrowTime) * MS_PER_HOUR,
   };
 }
@@ -289,8 +314,8 @@ export function getFarmProductivityEstimate(
     harvestMultiplier?: number;
   }
 ): FarmProductivityEstimate {
-  const unlockedCropKeys = (Object.keys(CROPS) as CropKey[]).filter((cropKey) =>
-    isAreaUnlocked(gameState, getKnownCrop(cropKey).area)
+  const unlockedCropKeys = (Object.keys(CROPS) as CropKey[]).filter(
+    (cropKey) => isAreaUnlocked(gameState, getKnownCrop(cropKey).area) && isCropPlantable(gameState, cropKey)
   );
   const bestCrop = unlockedCropKeys
     .map((cropKey) =>
@@ -320,6 +345,7 @@ export function getMinUpgradeLevel(gameState: GameState) {
 export function canUnlockArea(gameState: GameState, areaKey: AreaKey) {
   const area = FARM_AREAS.find((candidate) => candidate.key === areaKey);
   if (area == null || isAreaUnlocked(gameState, areaKey)) return false;
+  if (area.unlock.gate != null && !gameState.research.unlockedNodes.includes(area.unlock.gate)) return false;
   return (
     gameState.gold >= area.unlock.cost &&
     gameState.harvestedCropKeys.length >= area.unlock.requiredHarvestedCropCount &&
@@ -341,6 +367,9 @@ export function getAreaUnlockRequirementText(
     messages.harvestedCropRequirement(gameState.harvestedCropKeys.length, area.unlock.requiredHarvestedCropCount),
     messages.researchLevelRequired(area.unlock.requiredUpgradeLevel),
   ];
+  if (area.unlock.gate != null) {
+    parts.push(messages.researchNodeRequired(getResearchNodeLabel(area.unlock.gate, locale).name));
+  }
   return parts.join(' · ');
 }
 
@@ -540,6 +569,15 @@ export function createInitialState(): GameState {
     claimedCollectionRewards: [],
     adUsage: createInitialAdUsage(),
     upgrades: { speed: 1, profit: 1 },
+    harvestCounts: {},
+    mutationsDiscovered: {},
+    lifetimeStats: createInitialLifetimeStats(),
+    claimedAchievements: [],
+    activeTitle: null,
+    prestige: createInitialPrestigeProgress(),
+    chainFarms: [],
+    research: createInitialResearchState(),
+    automationSettings: createInitialAutomationSettings(),
     plots: Array.from({ length: MAX_PLOTS }, (_, i) => ({
       id: i,
       cropType: null,
@@ -645,6 +683,42 @@ export function migrateLoadedState(loaded: Partial<GameState>, base: GameState):
 
   const plots = Array.isArray(loaded.plots) ? loaded.plots : base.plots;
   merged.plots = Array.from({ length: MAX_PLOTS }, (_, index) => normalizePlot(plots[index], index));
+
+  // Mastery counters and the discovery list must stay in sync both ways:
+  // pre-mastery saves seed counts from discoveries, and counted crops are
+  // always part of the collection.
+  merged.harvestCounts = normalizeHarvestCounts(loaded.harvestCounts, merged.harvestedCropKeys);
+  merged.harvestedCropKeys = getHarvestedCropKeysInSync(merged.harvestedCropKeys, merged.harvestCounts);
+  merged.mutationsDiscovered = normalizeMutationsDiscovered(loaded.mutationsDiscovered);
+
+  merged.lifetimeStats = normalizeLifetimeStats(loaded.lifetimeStats);
+  // Lifetime totals can never trail what the save already proves happened.
+  const provenHarvests = Object.values(merged.harvestCounts).reduce<number>(
+    (sum, count) => sum + (typeof count === 'number' ? count : 0),
+    0
+  );
+  merged.lifetimeStats.totalHarvests = Math.max(merged.lifetimeStats.totalHarvests, provenHarvests);
+  merged.claimedAchievements = normalizeClaimedAchievements(loaded.claimedAchievements);
+  merged.activeTitle = normalizeActiveTitle(loaded.activeTitle, merged.claimedAchievements);
+  merged.prestige = normalizePrestigeProgress(loaded.prestige);
+  merged.lifetimeStats.prestigeCount = Math.max(merged.lifetimeStats.prestigeCount, merged.prestige.level);
+  merged.chainFarms = normalizeChainFarms(loaded.chainFarms);
+
+  merged.research = normalizeResearchState(loaded.research);
+  merged.lifetimeStats.researchPointsEarned = Math.max(
+    merged.lifetimeStats.researchPointsEarned,
+    merged.research.totalPointsEarned
+  );
+  merged.lifetimeStats.breedsUnlocked = Math.max(
+    merged.lifetimeStats.breedsUnlocked,
+    merged.research.unlockedBreeds.length
+  );
+  merged.automationSettings = normalizeAutomationSettings(loaded.automationSettings);
+  // A gated area must never stay unlocked without its research node.
+  merged.unlockedAreas = merged.unlockedAreas.filter((areaKey) => {
+    const area = FARM_AREAS.find((candidate) => candidate.key === areaKey);
+    return area?.unlock.gate == null || merged.research.unlockedNodes.includes(area.unlock.gate);
+  });
 
   if (merged.unlockedAreas.length === 0) merged.unlockedAreas = INITIAL_AREA_KEYS;
   return merged;
