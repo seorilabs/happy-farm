@@ -126,6 +126,7 @@ const SHEET_DISMISS_DRAG_DISTANCE = 96;
 const SHEET_DISMISS_VELOCITY = 1.1;
 const SHEET_DISMISS_TRANSLATE_Y = 520;
 const SHEET_ANIMATION_DURATION_MS = 180;
+const SHEET_DRAG_HIT_TARGET_HEIGHT = 36;
 const EMPTY_SAFE_AREA_INSETS = { top: 0, right: 0, bottom: 0, left: 0 };
 
 function getFirstArea() {
@@ -1712,11 +1713,11 @@ function Sheet({
           <Pressable style={StyleSheet.absoluteFillObject} onPress={closeSheetWithAnimation} />
         </Animated.View>
         <Animated.View style={[styles.sheet, { transform: [{ translateY: dragY }] }]}>
-          <View style={styles.sheetDragArea} {...panResponder.panHandlers}>
+          <View testID="sheet-drag-handle" style={styles.sheetDragArea} {...panResponder.panHandlers}>
             <View style={styles.sheetHandle} />
-            <Text style={styles.sheetTitle}>{title}</Text>
-            <Text style={styles.sheetDescription}>{description}</Text>
           </View>
+          <Text style={styles.sheetTitle}>{title}</Text>
+          <Text style={styles.sheetDescription}>{description}</Text>
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.sheetContent}>
             {children}
           </ScrollView>
@@ -2481,24 +2482,24 @@ const styles = StyleSheet.create({
     maxHeight: '86%',
     borderTopLeftRadius: 8,
     borderTopRightRadius: 8,
-    paddingTop: 10,
+    paddingTop: 0,
     paddingHorizontal: 20,
     backgroundColor: '#ffffff',
   },
   sheetDragArea: {
     marginHorizontal: -20,
-    paddingHorizontal: 20,
-    paddingBottom: 10,
+    height: SHEET_DRAG_HIT_TARGET_HEIGHT,
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    paddingTop: 10,
   },
   sheetHandle: {
-    alignSelf: 'center',
     width: 36,
     height: 4,
     borderRadius: 2,
     backgroundColor: '#d0d5dd',
   },
   sheetTitle: {
-    marginTop: 14,
     color: '#253126',
     fontSize: 21,
     fontWeight: '900',
