@@ -14,6 +14,7 @@ import {
   getRegionArchetype,
   getRegionArchetypeLabel,
   getSkillCost,
+  getSkillEffect,
   getSkillLevel,
   type GameState,
   type PrestigeSkillKey,
@@ -49,6 +50,9 @@ export function ChainMapSheet({
   const regionName = getRegionArchetypeLabel(archetype.key, locale).name;
   const chainIncome = getChainIncome(gameState, now);
   const prestigeCheck = canPrestige(gameState);
+  // Displayed per-farm income must match what getChainIncome actually pays,
+  // including the chain_yield skill multiplier.
+  const chainYieldMultiplier = 1 + getSkillEffect(gameState, 'chain_yield');
 
   return (
     <View>
@@ -78,7 +82,9 @@ export function ChainMapSheet({
                   {farmArchetype.icon} {messages.farmNumberLabel(farm.id + 1)} ·{' '}
                   {getRegionArchetypeLabel(farm.archetype, locale).name}
                 </Text>
-                <Text style={styles.chainFarmIncome}>{formatHourlyGold(farm.goldPerHour, locale)}</Text>
+                <Text style={styles.chainFarmIncome}>
+                  {formatHourlyGold(Math.floor(farm.goldPerHour * chainYieldMultiplier), locale)}
+                </Text>
               </View>
             );
           })}
