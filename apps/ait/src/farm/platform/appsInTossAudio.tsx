@@ -16,6 +16,13 @@ export const FARM_AUDIO_SOURCES = {
 const BACKGROUND_MUSIC_VOLUME = 0.16;
 const HARVEST_VOLUME = 0.85;
 
+function createAudioSource(uri: string) {
+  return {
+    uri,
+    shouldCache: true,
+  };
+}
+
 // On Android every player must opt out of audio focus: otherwise starting the
 // harvest SFX takes focus away from the BGM player and ExoPlayer pauses it, so
 // only one sound survives. iOS mixes AVPlayer instances natively and the
@@ -66,7 +73,7 @@ export function useAppsInTossFarmAudio(): { audio: FarmGameAudio; audioElement: 
         onError={warnBackgroundMusicFailure}
         paused={!backgroundMusicEnabled}
         repeat
-        source={{ uri: FARM_AUDIO_SOURCES.backgroundMusic }}
+        source={createAudioSource(FARM_AUDIO_SOURCES.backgroundMusic)}
         style={styles.hiddenPlayer}
         volume={BACKGROUND_MUSIC_VOLUME}
       />
@@ -78,7 +85,7 @@ export function useAppsInTossFarmAudio(): { audio: FarmGameAudio; audioElement: 
         onEnd={stopHarvestPlayback}
         onError={warnHarvestCoinFailure}
         paused={!harvestPlaying}
-        source={{ uri: FARM_AUDIO_SOURCES.harvestCoin }}
+        source={createAudioSource(FARM_AUDIO_SOURCES.harvestCoin)}
         style={styles.hiddenPlayer}
         volume={HARVEST_VOLUME}
       />
@@ -90,11 +97,12 @@ export function useAppsInTossFarmAudio(): { audio: FarmGameAudio; audioElement: 
 
 const styles = StyleSheet.create({
   // Players stay mounted so the remote sources stay buffered, but they must
-  // never affect layout or touch handling.
+  // never affect layout or touch handling. Keep the native view non-zero so the
+  // Granite video player reliably attaches in the AppsInToss runtime.
   hiddenPlayer: {
     position: 'absolute',
-    width: 0,
-    height: 0,
+    width: 1,
+    height: 1,
     opacity: 0,
   },
 });

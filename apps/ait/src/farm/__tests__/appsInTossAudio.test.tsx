@@ -6,9 +6,10 @@ import { act, cleanup, render } from '@testing-library/react-native';
 import type { FarmGameAudio } from '../FarmGame';
 
 type RecordedVideoProps = {
-  source?: { uri?: string };
+  source?: { uri?: string; shouldCache?: boolean };
   paused?: boolean;
   repeat?: boolean;
+  style?: { width?: number; height?: number; opacity?: number };
   volume?: number;
   onEnd?: () => void;
   onAudioFocusChanged?: (event: { hasAudioFocus: boolean }) => void;
@@ -80,10 +81,13 @@ describe('useAppsInTossFarmAudio', () => {
     const bgm = latestPropsFor(FARM_AUDIO_SOURCES.backgroundMusic);
     expect(bgm.repeat).toBe(true);
     expect(bgm.paused).toBe(true);
+    expect(bgm.source?.shouldCache).toBe(true);
+    expect(bgm.style).toEqual(expect.objectContaining({ width: 1, height: 1, opacity: 0 }));
     expect(bgm.onAudioFocusChanged).toBeDefined();
 
     const harvest = latestPropsFor(FARM_AUDIO_SOURCES.harvestCoin);
     expect(harvest.paused).toBe(true);
+    expect(harvest.source?.shouldCache).toBe(true);
   });
 
   test('toggles background music playback through the FarmGame audio contract', () => {
