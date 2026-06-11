@@ -16,7 +16,8 @@
     { "key": "orchard", "name": "과수원", "target": "2시간~1일", "description": "긴 성장 시간과 큰 보상을 제공하는 장기 작물 구역", "unlock": { "cost": 500000, "requiredHarvestedCropCount": 16, "requiredUpgradeLevel": 8 } },
     { "key": "greenhouse", "name": "온실", "target": "1~3일", "description": "희귀 작물과 자동화 업그레이드의 명분이 되는 구역", "unlock": { "cost": 15000000, "requiredHarvestedCropCount": 20, "requiredUpgradeLevel": 12 } },
     { "key": "mystic_field", "name": "신비 밭", "target": "3~7일", "description": "최상위 작물과 컬렉션 목표를 제공하는 구역", "unlock": { "cost": 400000000, "requiredHarvestedCropCount": 24, "requiredUpgradeLevel": 18 } },
-    { "key": "legend_field", "name": "전설 구역", "target": "7일 이상", "description": "프레스티지와 시즌 운영의 장기 목표 구역", "unlock": { "cost": 25000000000, "requiredHarvestedCropCount": 26, "requiredUpgradeLevel": 24 } }
+    { "key": "legend_field", "name": "전설 구역", "target": "7일 이상", "description": "프레스티지와 시즌 운영의 장기 목표 구역", "unlock": { "cost": 25000000000, "requiredHarvestedCropCount": 26, "requiredUpgradeLevel": 24 } },
+    { "key": "hybrid_greenhouse", "name": "교배 온실", "target": "연구 해금", "description": "연구로 해금한 신품종을 재배하는 특수 구역", "unlock": { "cost": 5000000, "requiredHarvestedCropCount": 20, "requiredUpgradeLevel": 10, "gate": "breeding_lab" } }
   ],
   "economy": {
     "defaultGold": 50,
@@ -81,9 +82,39 @@
       "orchard": 7000000,
       "greenhouse": 200000000,
       "mystic_field": 12000000000,
-      "legend_field": 50000000000
+      "legend_field": 50000000000,
+      "hybrid_greenhouse": 25000000000
     },
     "fullCompletionReward": 100000000000
+  },
+  "research": {
+    "agentPurpose": "Research points (RP) come from donating harvests instead of selling them (rate vs final sale value). Nodes unlock automation, breeding, and the donation amplifier; node costs are RP.",
+    "donationRpRate": 0.05,
+    "donationAmplifierBonus": 0.5,
+    "nodes": [
+      { "key": "auto_harvest", "cost": 50000, "requires": null },
+      { "key": "auto_replant", "cost": 250000, "requires": "auto_harvest" },
+      { "key": "breeding_lab", "cost": 1000000, "requires": null },
+      { "key": "breeding_advanced", "cost": 50000000, "requires": "breeding_lab" },
+      { "key": "donation_amplifier", "cost": 5000000, "requires": null }
+    ]
+  },
+  "breeding": {
+    "agentPurpose": "Crossbreeding recipes. Hybrid stats follow cost=(parents cost sum)*1.5, sell=(parents sell sum)*1.8, growTime=max(parents)*0.8, tier 10. Both parents must be discovered; advanced recipes need the breeding_advanced node.",
+    "recipes": [
+      { "crop": "crystalberry", "parents": ["strawberry", "melon"], "rpCost": 17000, "advanced": false },
+      { "crop": "sun_grape", "parents": ["grape", "sunflower"], "rpCost": 29000, "advanced": false },
+      { "crop": "royal_potato", "parents": ["potato", "pumpkin"], "rpCost": 35000, "advanced": false },
+      { "crop": "frost_blueberry", "parents": ["blueberry", "watermelon"], "rpCost": 13500, "advanced": false },
+      { "crop": "ember_pepper", "parents": ["pepper", "cactus"], "rpCost": 4500000, "advanced": false },
+      { "crop": "cloud_rice", "parents": ["rice", "bamboo"], "rpCost": 7500000, "advanced": false },
+      { "crop": "prism_melon", "parents": ["melon", "crystal_flower"], "rpCost": 22000000, "advanced": true },
+      { "crop": "dragon_mango", "parents": ["mango", "ginseng"], "rpCost": 13500000, "advanced": true },
+      { "crop": "star_pineapple", "parents": ["pineapple", "starfruit"], "rpCost": 135000000, "advanced": true },
+      { "crop": "moon_peach", "parents": ["peach", "moonflower"], "rpCost": 360000000, "advanced": true },
+      { "crop": "aurora_kiwi", "parents": ["kiwi", "rainbow_tree"], "rpCost": 1350000000, "advanced": true },
+      { "crop": "sacred_rice", "parents": ["rice", "world_tree"], "rpCost": 4500000000, "advanced": true }
+    ]
   },
   "achievements": {
     "agentPurpose": "Endless milestone tracks over lifetime stats. Tier N threshold = base * growth^(N-1); every claimed tier pays prestige stars. Titles unlock when the referenced track tier is claimed.",
@@ -139,6 +170,18 @@
     { "key": "starfruit", "name": "별빛열매", "cost": 50000000, "sell": 150000000, "growTime": 43200000, "icon": "⭐", "tier": 8, "area": "legend_field" },
     { "key": "moonflower", "name": "달빛꽃", "cost": 120000000, "sell": 400000000, "growTime": 86400000, "icon": "🌙", "tier": 8, "area": "legend_field" },
     { "key": "rainbow_tree", "name": "무지개나무", "cost": 400000000, "sell": 1500000000, "growTime": 345600000, "icon": "🌈", "tier": 9, "area": "legend_field" },
-    { "key": "world_tree", "name": "세계수", "cost": 1200000000, "sell": 5000000000, "growTime": 432000000, "icon": "🌳", "tier": 9, "area": "legend_field" }
+    { "key": "world_tree", "name": "세계수", "cost": 1200000000, "sell": 5000000000, "growTime": 432000000, "icon": "🌳", "tier": 9, "area": "legend_field" },
+    { "key": "crystalberry", "name": "수정베리", "cost": 14400, "sell": 34830, "growTime": 168000, "icon": "🍬", "tier": 10, "area": "hybrid_greenhouse" },
+    { "key": "sun_grape", "name": "태양포도", "cost": 23250, "sell": 57600, "growTime": 224000, "icon": "🌞", "tier": 10, "area": "hybrid_greenhouse" },
+    { "key": "royal_potato", "name": "왕실감자", "cost": 27082, "sell": 70348, "growTime": 192000, "icon": "👑", "tier": 10, "area": "hybrid_greenhouse" },
+    { "key": "frost_blueberry", "name": "서리블루베리", "cost": 11475, "sell": 26910, "growTime": 120000, "icon": "❄️", "tier": 10, "area": "hybrid_greenhouse" },
+    { "key": "ember_pepper", "name": "불꽃고추", "cost": 2400780, "sell": 9001584, "growTime": 2880000, "icon": "🔥", "tier": 10, "area": "hybrid_greenhouse" },
+    { "key": "cloud_rice", "name": "구름쌀", "cost": 3901650, "sell": 15123510, "growTime": 5760000, "icon": "☁️", "tier": 10, "area": "hybrid_greenhouse" },
+    { "key": "prism_melon", "name": "프리즘멜론", "cost": 10812000, "sell": 45029520, "growTime": 11520000, "icon": "🔮", "tier": 10, "area": "hybrid_greenhouse" },
+    { "key": "dragon_mango", "name": "용옥망고", "cost": 6697500, "sell": 26874000, "growTime": 8640000, "icon": "🐉", "tier": 10, "area": "hybrid_greenhouse" },
+    { "key": "star_pineapple", "name": "별빛파인애플", "cost": 75390000, "sell": 271260000, "growTime": 34560000, "icon": "🌠", "tier": 10, "area": "hybrid_greenhouse" },
+    { "key": "moon_peach", "name": "달빛복숭아", "cost": 180100500, "sell": 720291600, "growTime": 69120000, "icon": "🌝", "tier": 10, "area": "hybrid_greenhouse" },
+    { "key": "aurora_kiwi", "name": "오로라키위", "cost": 600975000, "sell": 2703330000, "growTime": 276480000, "icon": "🌌", "tier": 10, "area": "hybrid_greenhouse" },
+    { "key": "sacred_rice", "name": "신성한쌀", "cost": 1800001650, "sell": 9000003510, "growTime": 345600000, "icon": "🕊️", "tier": 10, "area": "hybrid_greenhouse" }
   ]
 }

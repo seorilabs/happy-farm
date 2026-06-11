@@ -6,6 +6,7 @@ export * from './harvest';
 export * from './mastery';
 export * from './modifiers';
 export * from './prestige';
+export * from './research';
 export {
   DEFAULT_LOCALE,
   SUPPORTED_LOCALES,
@@ -21,6 +22,7 @@ export {
   getCropLabels,
   getMasteryRankLabel,
   getMutationLabel,
+  getResearchNodeLabel,
   getTitleLabel,
   normalizeLocale,
   type SupportedLocale,

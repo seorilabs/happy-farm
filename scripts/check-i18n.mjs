@@ -54,6 +54,7 @@ assertNoHangul('apps/ait/src/farm/components/AchievementsSheet.tsx');
 assertNoHangul('packages/farm-core/src/constants.ts');
 assertNoHangul('packages/farm-core/src/achievements.ts');
 assertNoHangul('packages/farm-core/src/prestige.ts');
+assertNoHangul('packages/farm-core/src/research.ts');
 assertNoHangul('packages/farm-core/src/types.ts');
 assertNoHangul('packages/farm-core/src/harvest.ts');
 assertNoHangul('packages/farm-core/src/mastery.ts');

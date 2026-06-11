@@ -70,6 +70,7 @@ import {
   getSpeedMultiplier,
   getUpgradeCost,
   isAreaUnlocked,
+  isCropPlantable,
   isPlotGrowthComplete,
   normalizeLocale,
   performHarvest,
@@ -554,6 +555,10 @@ export default function FarmGame({
       toast(messages.lockedCropToast);
       return;
     }
+    if (!isCropPlantable(gameState, cropKey)) {
+      toast(messages.breedRequiredToast);
+      return;
+    }
 
     const isFirstSeedSelection = !firstSeedSelectedRef.current;
     firstSeedSelectedRef.current = true;
@@ -679,6 +684,10 @@ export default function FarmGame({
       toast(messages.areaFirstToast);
       return;
     }
+    if (!isCropPlantable(gameState, cropKey)) {
+      toast(messages.breedRequiredToast);
+      return;
+    }
     if (gameState.gold < crop.cost) {
       toast(messages.insufficientGoldToast);
       return;
@@ -730,6 +739,8 @@ export default function FarmGame({
           outcome.newMasteryRank.icon
         )
       );
+    } else if (outcome.donated) {
+      toast(messages.donatedToast(formatMoney(outcome.rpGained, locale)));
     } else if (outcome.mutation != null) {
       toast(
         messages.mutationHarvestedToast(
@@ -1640,6 +1651,9 @@ function ShopAreaUnlockRows({
   onMilestone: () => void;
 }) {
   const lockedAreas = FARM_AREAS.filter((area) => !isAreaUnlocked(gameState, area.key));
+  // Gated areas (research-unlocked) sit outside the sequential progression.
+  const sequentialAreas = lockedAreas.filter((area) => area.unlock.gate == null);
+  const gatedAreas = lockedAreas.filter((area) => area.unlock.gate != null);
 
   if (lockedAreas.length === 0) {
     return (
@@ -1653,53 +1667,55 @@ function ShopAreaUnlockRows({
     );
   }
 
+  const renderAreaCard = (area: (typeof FARM_AREAS)[number], isNextArea: boolean) => {
+    const canBuy = isNextArea && canUnlockArea(gameState, area.key);
+    const areaLabel = getAreaLabel(area.key, locale);
+    const requirementText = getAreaUnlockRequirementText(gameState, area.key, locale);
+
+    return (
+      <ShopCard
+        key={area.key}
+        title={messages.areaOpenTitle(areaLabel.name)}
+        desc={`${areaLabel.target} · ${requirementText}`}
+        price={`${formatMoney(area.unlock.cost, locale)}G`}
+        disabled={!canBuy}
+        onPress={() => {
+          analytics.trackAreaUnlockClicked(area.key, getAnalyticsContext(gameState));
+          if (!isNextArea) {
+            onDone(messages.previousAreaRequiredToast);
+            return;
+          }
+          if (!canUnlockArea(gameState, area.key)) {
+            onDone(messages.areaRequirementsMissingToast);
+            return;
+          }
+
+          setGameState((state) => {
+            if (!canUnlockArea(state, area.key)) {
+              return state;
+            }
+            return {
+              ...state,
+              gold: state.gold - area.unlock.cost,
+              unlockedAreas: [...state.unlockedAreas, area.key],
+            };
+          });
+          analytics.trackAreaUnlocked({
+            areaKey: area.key,
+            cost: area.unlock.cost,
+            context: getAnalyticsContext(gameState),
+          });
+          onDone(messages.areaOpenedToast(areaLabel.name));
+          onMilestone();
+        }}
+      />
+    );
+  };
+
   return (
     <>
-      {lockedAreas.map((area, index) => {
-        const isNextArea = index === 0;
-        const canBuy = isNextArea && canUnlockArea(gameState, area.key);
-        const areaLabel = getAreaLabel(area.key, locale);
-        const requirementText = getAreaUnlockRequirementText(gameState, area.key, locale);
-
-        return (
-          <ShopCard
-            key={area.key}
-            title={messages.areaOpenTitle(areaLabel.name)}
-            desc={`${areaLabel.target} · ${requirementText}`}
-            price={`${formatMoney(area.unlock.cost, locale)}G`}
-            disabled={!canBuy}
-            onPress={() => {
-              analytics.trackAreaUnlockClicked(area.key, getAnalyticsContext(gameState));
-              if (!isNextArea) {
-                onDone(messages.previousAreaRequiredToast);
-                return;
-              }
-              if (!canUnlockArea(gameState, area.key)) {
-                onDone(messages.areaRequirementsMissingToast);
-                return;
-              }
-
-              setGameState((state) => {
-                if (!canUnlockArea(state, area.key)) {
-                  return state;
-                }
-                return {
-                  ...state,
-                  gold: state.gold - area.unlock.cost,
-                  unlockedAreas: [...state.unlockedAreas, area.key],
-                };
-              });
-              analytics.trackAreaUnlocked({
-                areaKey: area.key,
-                cost: area.unlock.cost,
-                context: getAnalyticsContext(gameState),
-              });
-              onDone(messages.areaOpenedToast(areaLabel.name));
-              onMilestone();
-            }}
-          />
-        );
-      })}
+      {sequentialAreas.map((area, index) => renderAreaCard(area, index === 0))}
+      {gatedAreas.map((area) => renderAreaCard(area, true))}
     </>
   );
 }

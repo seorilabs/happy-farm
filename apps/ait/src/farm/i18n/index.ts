@@ -103,6 +103,8 @@ const KO_FARM_MESSAGES = {
   resetInputRequiredToast: (confirmText: string) => `계속하려면 '${confirmText}'를 입력해 주세요.`,
   resetDoneToast: '농장을 새로 시작했어요.',
   areaFirstToast: '구역을 먼저 열어 주세요.',
+  breedRequiredToast: '교배 연구로 먼저 해금해야 하는 작물이에요.',
+  donatedToast: (rp: string) => `연구에 헌납했어요. +${rp}RP`,
   harvestedToast: (amount: string) => `+${amount}G 수확했어요.`,
   harvestedBoostToast: (amount: string, multiplier: number) => `+${amount}G 수확했어요. ×${multiplier} 부스트 적용`,
   masteryRankUpToast: (cropName: string, rankName: string, rankIcon: string) =>
@@ -243,6 +245,8 @@ const EN_FARM_MESSAGES: FarmMessages = {
   resetInputRequiredToast: (confirmText) => `Type '${confirmText}' to continue.`,
   resetDoneToast: 'Started a new farm.',
   areaFirstToast: 'Open the area first.',
+  breedRequiredToast: 'Unlock this crop through breeding research first.',
+  donatedToast: (rp) => `Donated to research. +${rp}RP`,
   harvestedToast: (amount) => `Harvested +${amount}G.`,
   harvestedBoostToast: (amount, multiplier) => `Harvested +${amount}G with ${multiplier}x boost.`,
   masteryRankUpToast: (cropName, rankName, rankIcon) => `${rankIcon} ${cropName} mastery reached ${rankName}!`,

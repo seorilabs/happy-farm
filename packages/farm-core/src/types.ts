@@ -8,6 +8,23 @@ export type MasteryRankKey = (typeof balance.mastery.ranks)[number]['key'];
 
 export type MutationKey = (typeof balance.mutations.kinds)[number]['key'];
 
+export type ResearchNodeKey = (typeof balance.research.nodes)[number]['key'];
+
+export type BreedingRecipeKey = (typeof balance.breeding.recipes)[number]['crop'];
+
+export type ResearchState = {
+  points: number;
+  totalPointsEarned: number;
+  unlockedNodes: ResearchNodeKey[];
+  unlockedBreeds: CropKey[];
+};
+
+export type AutomationSettings = {
+  autoHarvestEnabled: boolean;
+  autoReplantEnabled: boolean;
+  donationModeEnabled: boolean;
+};
+
 export type AchievementTrackKey = (typeof balance.achievements.tracks)[number]['key'];
 
 export type TitleKey = (typeof balance.achievements.titles)[number]['key'];
@@ -73,6 +90,8 @@ export type GameState = {
   claimedAchievements: string[];
   activeTitle: TitleKey | null;
   prestige: PrestigeProgress;
+  research: ResearchState;
+  automationSettings: AutomationSettings;
 };
 
 // Prestige reset boundary. Farm-layer fields are wiped when the player
@@ -95,6 +114,8 @@ export const META_LAYER_KEYS = [
   'claimedAchievements',
   'activeTitle',
   'prestige',
+  'research',
+  'automationSettings',
 ] as const satisfies readonly (keyof GameState)[];
 
 export type FarmLayerKey = (typeof FARM_LAYER_KEYS)[number];

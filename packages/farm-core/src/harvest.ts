@@ -9,6 +9,7 @@ import {
   type MasteryRank,
   type MutationKind,
 } from './mastery';
+import { getDonationRp } from './research';
 
 export type HarvestOptions = {
   now?: number;
@@ -19,6 +20,8 @@ export type HarvestOutcome = {
   state: GameState;
   cropKey: CropKey;
   goldGained: number;
+  rpGained: number;
+  donated: boolean;
   boostActive: boolean;
   boostMultiplier: number;
   isNewCropDiscovery: boolean;
@@ -87,7 +90,13 @@ export function performHarvest(gameState: GameState, plotIndex: number, options:
   const modifiers = getCropModifiers(gameState, cropKey, now);
   const mutation = rollMutation(gameState, cropKey, rng());
   const mutationMultiplier = mutation?.sellMultiplier ?? 1;
-  const goldGained = Math.floor(crop.sell * modifiers.profitMultiplier * modifiers.harvestMultiplier * mutationMultiplier);
+  const saleValue = Math.floor(crop.sell * modifiers.profitMultiplier * modifiers.harvestMultiplier * mutationMultiplier);
+
+  // Donation mode converts the full sale value (mutations included) into
+  // research points instead of gold.
+  const donated = gameState.automationSettings.donationModeEnabled;
+  const goldGained = donated ? 0 : saleValue;
+  const rpGained = donated ? getDonationRp(gameState, saleValue) : 0;
 
   const nextPlots = [...gameState.plots];
   nextPlots[plotIndex] = { id: plot.id, cropType: null, startTime: null, state: 0 };
@@ -117,11 +126,17 @@ export function performHarvest(gameState: GameState, plotIndex: number, options:
     harvestedCropKeys,
     harvestCounts,
     mutationsDiscovered,
+    research: {
+      ...gameState.research,
+      points: gameState.research.points + rpGained,
+      totalPointsEarned: gameState.research.totalPointsEarned + rpGained,
+    },
     lifetimeStats: {
       ...gameState.lifetimeStats,
       totalHarvests: gameState.lifetimeStats.totalHarvests + 1,
       totalGoldEarned: gameState.lifetimeStats.totalGoldEarned + goldGained,
       mutationsFound: gameState.lifetimeStats.mutationsFound + (mutation != null ? 1 : 0),
+      researchPointsEarned: gameState.lifetimeStats.researchPointsEarned + rpGained,
     },
   };
 
@@ -132,6 +147,8 @@ export function performHarvest(gameState: GameState, plotIndex: number, options:
     state: nextState,
     cropKey,
     goldGained,
+    rpGained,
+    donated,
     boostActive: modifiers.harvestMultiplier > 1,
     boostMultiplier: modifiers.harvestMultiplier,
     isNewCropDiscovery,

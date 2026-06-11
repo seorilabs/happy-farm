@@ -1,4 +1,12 @@
-import type { AchievementTrackKey, AreaKey, CropKey, MasteryRankKey, MutationKey, TitleKey } from '../types';
+import type {
+  AchievementTrackKey,
+  AreaKey,
+  CropKey,
+  MasteryRankKey,
+  MutationKey,
+  ResearchNodeKey,
+  TitleKey,
+} from '../types';
 import { DEFAULT_LOCALE, type SupportedLocale } from './locales';
 
 type CropLabel = {
@@ -13,6 +21,11 @@ type AreaLabel = {
 
 type SimpleLabel = {
   name: string;
+};
+
+type DescribedLabel = {
+  name: string;
+  description: string;
 };
 
 const KO_CROP_LABELS = {
@@ -51,6 +64,18 @@ const KO_CROP_LABELS = {
   moonflower: { name: '달빛꽃' },
   rainbow_tree: { name: '무지개나무' },
   world_tree: { name: '세계수' },
+  crystalberry: { name: '수정베리' },
+  sun_grape: { name: '태양포도' },
+  royal_potato: { name: '왕실감자' },
+  frost_blueberry: { name: '서리블루베리' },
+  ember_pepper: { name: '불꽃고추' },
+  cloud_rice: { name: '구름쌀' },
+  prism_melon: { name: '프리즘멜론' },
+  dragon_mango: { name: '용옥망고' },
+  star_pineapple: { name: '별빛파인애플' },
+  moon_peach: { name: '달빛복숭아' },
+  aurora_kiwi: { name: '오로라키위' },
+  sacred_rice: { name: '신성한쌀' },
 } satisfies Record<CropKey, CropLabel>;
 
 const EN_CROP_LABELS = {
@@ -89,6 +114,18 @@ const EN_CROP_LABELS = {
   moonflower: { name: 'Moonflower' },
   rainbow_tree: { name: 'Rainbow Tree' },
   world_tree: { name: 'World Tree' },
+  crystalberry: { name: 'Crystalberry' },
+  sun_grape: { name: 'Sun Grape' },
+  royal_potato: { name: 'Royal Potato' },
+  frost_blueberry: { name: 'Frost Blueberry' },
+  ember_pepper: { name: 'Ember Pepper' },
+  cloud_rice: { name: 'Cloud Rice' },
+  prism_melon: { name: 'Prism Melon' },
+  dragon_mango: { name: 'Dragon Mango' },
+  star_pineapple: { name: 'Star Pineapple' },
+  moon_peach: { name: 'Moon Peach' },
+  aurora_kiwi: { name: 'Aurora Kiwi' },
+  sacred_rice: { name: 'Sacred Rice' },
 } satisfies Record<CropKey, CropLabel>;
 
 const KO_AREA_LABELS = {
@@ -126,6 +163,11 @@ const KO_AREA_LABELS = {
     name: '전설 구역',
     target: '7일 이상',
     description: '프레스티지와 시즌 운영의 장기 목표 구역',
+  },
+  hybrid_greenhouse: {
+    name: '교배 온실',
+    target: '연구 해금',
+    description: '연구로 해금한 신품종을 재배하는 특수 구역',
   },
 } satisfies Record<AreaKey, AreaLabel>;
 
@@ -165,6 +207,11 @@ const EN_AREA_LABELS = {
     target: '7+ days',
     description: 'A prestige area for the longest lifecycle goals.',
   },
+  hybrid_greenhouse: {
+    name: 'Hybrid Greenhouse',
+    target: 'Research unlock',
+    description: 'A special area for crossbred crops unlocked through research.',
+  },
 } satisfies Record<AreaKey, AreaLabel>;
 
 const KO_MASTERY_RANK_LABELS = {
@@ -190,6 +237,27 @@ const EN_MUTATION_LABELS = {
   golden: { name: 'Golden' },
   rainbow: { name: 'Rainbow' },
 } satisfies Record<MutationKey, SimpleLabel>;
+
+const KO_RESEARCH_NODE_LABELS = {
+  auto_harvest: { name: '자동 수확', description: '다 자란 작물을 자동으로 수확해요.' },
+  auto_replant: { name: '자동 파종', description: '수확한 자리에 같은 작물을 자동으로 심어요.' },
+  breeding_lab: { name: '교배 연구', description: '두 작물을 교배해 신품종을 만들어요.' },
+  breeding_advanced: { name: '고급 교배', description: '희귀 작물 교배 조합을 해금해요.' },
+  donation_amplifier: { name: '헌납 증폭', description: '헌납으로 받는 연구 포인트가 50% 늘어나요.' },
+} satisfies Record<ResearchNodeKey, DescribedLabel>;
+
+const EN_RESEARCH_NODE_LABELS = {
+  auto_harvest: { name: 'Auto Harvest', description: 'Automatically harvests fully grown crops.' },
+  auto_replant: { name: 'Auto Replant', description: 'Replants the same crop after each harvest.' },
+  breeding_lab: { name: 'Breeding Lab', description: 'Crossbreed two crops into new varieties.' },
+  breeding_advanced: { name: 'Advanced Breeding', description: 'Unlocks rare crossbreeding combos.' },
+  donation_amplifier: { name: 'Donation Amplifier', description: 'Donations grant 50% more research points.' },
+} satisfies Record<ResearchNodeKey, DescribedLabel>;
+
+const RESEARCH_NODE_LABELS: Record<SupportedLocale, Record<ResearchNodeKey, DescribedLabel>> = {
+  'ko-KR': KO_RESEARCH_NODE_LABELS,
+  'en-US': EN_RESEARCH_NODE_LABELS,
+};
 
 const KO_ACHIEVEMENT_TRACK_LABELS = {
   harvest_total: { name: '누적 수확' },
@@ -289,6 +357,18 @@ export function getMutationLabel(mutationKey: MutationKey, locale: SupportedLoca
   const label = labels[mutationKey] ?? MUTATION_LABELS[DEFAULT_LOCALE][mutationKey];
   if (label == null) {
     throw new Error(`Missing mutation label: ${mutationKey}`);
+  }
+  return label;
+}
+
+export function getResearchNodeLabel(
+  nodeKey: ResearchNodeKey,
+  locale: SupportedLocale = DEFAULT_LOCALE
+): DescribedLabel {
+  const labels = RESEARCH_NODE_LABELS[locale] ?? RESEARCH_NODE_LABELS[DEFAULT_LOCALE];
+  const label = labels[nodeKey] ?? RESEARCH_NODE_LABELS[DEFAULT_LOCALE][nodeKey];
+  if (label == null) {
+    throw new Error(`Missing research node label: ${nodeKey}`);
   }
   return label;
 }
