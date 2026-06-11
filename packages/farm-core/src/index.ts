@@ -16,6 +16,8 @@ export {
   getCoreMessages,
   getCropLabel,
   getCropLabels,
+  getMasteryRankLabel,
+  getMutationLabel,
   normalizeLocale,
   type SupportedLocale,
 } from './i18n';

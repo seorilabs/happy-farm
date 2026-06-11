@@ -11,6 +11,7 @@ import {
   createFarmAnalytics,
   createInitialState,
   formatMoney,
+  getMasteryThresholds,
   type CropKey,
   type GameState,
   type RewardedAdController,
@@ -430,6 +431,29 @@ describe('FarmGame UI flow', () => {
     } finally {
       timingSpy.mockRestore();
     }
+  });
+
+  test('announces mastery rank-ups and shows mastery progress in the collection', async () => {
+    const thresholds = getMasteryThresholds('carrot');
+    const firstThreshold = thresholds[0]!;
+    const base = createReadyHarvestState();
+    const state: GameState = {
+      ...base,
+      harvestedCropKeys: ['carrot'],
+      harvestCounts: { carrot: firstThreshold - 1 },
+    };
+    const screen = await renderGame(state);
+
+    await waitFor(() => expect(screen.getByText('50G')).toBeTruthy());
+
+    fireEvent.press(screen.getAllByText('GET')[0]!);
+
+    expect(screen.getByText(/숙련도가 브론즈 등급/)).toBeTruthy();
+
+    fireEvent.press(screen.getByLabelText('작물 도감'));
+
+    expect(screen.getByText(`${firstThreshold}/${thresholds[1]}`)).toBeTruthy();
+    expect(screen.getByText('🥉')).toBeTruthy();
   });
 
   test('keeps reset behind the settings sheet', async () => {

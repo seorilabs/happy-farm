@@ -18,7 +18,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
   CROPS,
-  COLLECTION_FULL_REWARD_KEY,
   FARM_AREAS,
   GROWTH_AD_MAX_SKIP_MS,
   GROWTH_AD_MIN_REMAINING_MS,
@@ -54,7 +53,9 @@ import {
   getGameAnalyticsContext,
   getHarvestBonusBoostStatus,
   getHarvestBonusPromptStatus,
+  getMasteryRankLabel,
   getMinUpgradeLevel,
+  getMutationLabel,
   getPlotCost,
   getPlotGrowthRatio,
   getPlotRemainingGrowthMs,
@@ -63,7 +64,6 @@ import {
   getSpeedMultiplier,
   getUpgradeCost,
   isAreaUnlocked,
-  isCropDiscovered,
   isPlotGrowthComplete,
   normalizeLocale,
   performHarvest,
@@ -75,6 +75,8 @@ import {
 
 import { DEFAULT_FARM_GAME_SETTINGS, normalizeFarmGameSettings, type FarmGameSettings } from './gameSettings';
 import { getFarmMessages, type FarmMessages } from './i18n';
+import { CollectionSheet } from './components/CollectionSheet';
+import { AdRewardCard, SettingToggle, SheetAction, ShopCard, sheetPartStyles } from './components/SheetParts';
 
 const REWARDED_AD_GROUP_ID = 'ait.v2.live.6fc77adf3f034cd6';
 const INTERSTITIAL_AD_GROUP_ID = '';
@@ -680,11 +682,29 @@ export default function FarmGame({
       isFirstCropHarvest: outcome.isNewCropDiscovery,
       context: analyticsContext(),
     });
-    toast(
-      outcome.boostActive
-        ? messages.harvestedBoostToast(formatMoney(outcome.goldGained, locale), outcome.boostMultiplier)
-        : messages.harvestedToast(formatMoney(outcome.goldGained, locale))
-    );
+    if (outcome.newMasteryRank != null) {
+      toast(
+        messages.masteryRankUpToast(
+          getLocalizedCropName(outcome.cropKey),
+          getMasteryRankLabel(outcome.newMasteryRank.key, locale).name,
+          outcome.newMasteryRank.icon
+        )
+      );
+    } else if (outcome.mutation != null) {
+      toast(
+        messages.mutationHarvestedToast(
+          getMutationLabel(outcome.mutation.key, locale).name,
+          outcome.mutation.icon,
+          formatMoney(outcome.goldGained, locale)
+        )
+      );
+    } else {
+      toast(
+        outcome.boostActive
+          ? messages.harvestedBoostToast(formatMoney(outcome.goldGained, locale), outcome.boostMultiplier)
+          : messages.harvestedToast(formatMoney(outcome.goldGained, locale))
+      );
+    }
     const canShowHarvestBonusNudge =
       rewardedAd.isAdReady &&
       getRewardedAdLimitStatus(gameState, 'harvestBonusAd', now).allowed &&
@@ -1057,68 +1077,13 @@ export default function FarmGame({
         ) : null}
 
         {activeSheet?.type === 'collection' ? (
-          <View>
-            {collectionSummary.areas.map((area) => {
-              const areaLabel = getLocalizedAreaLabel(area.areaKey);
-              return (
-                <View key={area.areaKey} style={styles.collectionArea}>
-                  <View style={styles.collectionAreaHeader}>
-                    <Text style={styles.collectionAreaName} numberOfLines={1}>
-                      {areaLabel.name}
-                    </Text>
-                    <Text style={[styles.collectionAreaProgress, area.completed && styles.collectionAreaProgressDone]}>
-                      {area.completed ? messages.collectionCompletedBadge : `${area.discoveredCount}/${area.totalCount}`}
-                    </Text>
-                  </View>
-                  <View style={styles.collectionGrid}>
-                    {area.cropKeys.map((cropKey) => {
-                      const discovered = isCropDiscovered(gameState, cropKey);
-                      const crop = getCrop(cropKey);
-                      return (
-                        <View
-                          key={cropKey}
-                          style={[styles.collectionCell, !discovered && styles.collectionCellLocked]}
-                        >
-                          <Text style={styles.collectionCellIcon}>{discovered ? crop.icon : '❓'}</Text>
-                          <Text style={styles.collectionCellName} numberOfLines={1}>
-                            {discovered ? getLocalizedCropName(cropKey) : '???'}
-                          </Text>
-                          {discovered ? (
-                            <Text style={styles.collectionCellValue} numberOfLines={1}>
-                              {formatMoney(crop.sell, locale)}G
-                            </Text>
-                          ) : null}
-                        </View>
-                      );
-                    })}
-                  </View>
-                  {area.rewardClaimed ? (
-                    <Text style={styles.collectionClaimedLabel}>{messages.collectionClaimedLabel}</Text>
-                  ) : area.rewardClaimable ? (
-                    <SheetAction
-                      label={messages.collectionClaimAction(formatMoney(area.reward, locale))}
-                      onPress={() => claimCollectionRewardByKey(area.areaKey)}
-                    />
-                  ) : null}
-                </View>
-              );
-            })}
-
-            <Text style={styles.sheetSectionTitle}>{messages.collectionFullTitle}</Text>
-            <View style={styles.collectionArea}>
-              <Text style={styles.collectionFullDesc}>
-                {messages.collectionFullDesc(collectionSummary.discoveredCount, collectionSummary.totalCount)}
-              </Text>
-              {collectionSummary.fullRewardClaimed ? (
-                <Text style={styles.collectionClaimedLabel}>{messages.collectionClaimedLabel}</Text>
-              ) : collectionSummary.fullRewardClaimable ? (
-                <SheetAction
-                  label={messages.collectionClaimAction(formatMoney(collectionSummary.fullReward, locale))}
-                  onPress={() => claimCollectionRewardByKey(COLLECTION_FULL_REWARD_KEY)}
-                />
-              ) : null}
-            </View>
-          </View>
+          <CollectionSheet
+            gameState={gameState}
+            locale={locale}
+            messages={messages}
+            collectionSummary={collectionSummary}
+            onClaimReward={claimCollectionRewardByKey}
+          />
         ) : null}
 
         {activeSheet?.type === 'settings' ? (
@@ -1145,7 +1110,7 @@ export default function FarmGame({
               secondary
               onPress={() => updateGameSettings({ locale: locale === 'ko-KR' ? 'en-US' : 'ko-KR' })}
             />
-            <Text style={styles.settingDesc}>{messages.languageDesc}</Text>
+            <Text style={sheetPartStyles.settingDesc}>{messages.languageDesc}</Text>
 
             <Text style={styles.sheetSectionTitle}>{messages.gameDataSection}</Text>
             <SheetAction label={messages.resetFarmAction} danger onPress={openResetConfirm} />
@@ -1512,34 +1477,6 @@ function ToolButton({
   );
 }
 
-function AdRewardCard({
-  title,
-  desc,
-  cta,
-  disabled,
-  onPress,
-}: {
-  title: string;
-  desc: string;
-  cta: string;
-  disabled: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      disabled={disabled}
-      style={[styles.shopCard, styles.adCard, disabled && styles.disabledCard]}
-      onPress={onPress}
-    >
-      <View style={styles.shopTextGroup}>
-        <Text style={styles.shopTitle}>{title}</Text>
-        <Text style={styles.shopDesc}>{desc}</Text>
-      </View>
-      <Text style={styles.shopPrice}>{cta}</Text>
-    </Pressable>
-  );
-}
-
 function ShopPlotRow({
   gameState,
   locale,
@@ -1734,95 +1671,6 @@ function ShopUpgradeRow({
         onMilestone();
       }}
     />
-  );
-}
-
-function ShopCard({
-  title,
-  desc,
-  price,
-  disabled,
-  priceTone,
-  onPress,
-}: {
-  title: string;
-  desc: string;
-  price: string;
-  disabled?: boolean;
-  priceTone?: 'speed' | 'profit';
-  onPress: () => void;
-}) {
-  return (
-    <Pressable disabled={disabled} style={[styles.shopCard, disabled && styles.disabledCard]} onPress={onPress}>
-      <View style={styles.shopTextGroup}>
-        <Text style={styles.shopTitle}>{title}</Text>
-        <Text style={styles.shopDesc}>{desc}</Text>
-      </View>
-      <Text
-        style={[
-          styles.shopPrice,
-          priceTone === 'speed' && styles.speedPrice,
-          priceTone === 'profit' && styles.profitPrice,
-        ]}
-      >
-        {price}
-      </Text>
-    </Pressable>
-  );
-}
-
-function SettingToggle({
-  label,
-  desc,
-  value,
-  disabled,
-  onPress,
-}: {
-  label: string;
-  desc: string;
-  value: boolean;
-  disabled?: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable disabled={disabled} style={[styles.settingRow, disabled && styles.disabledCard]} onPress={onPress}>
-      <View style={styles.settingTextGroup}>
-        <Text style={styles.settingTitle}>{label}</Text>
-        <Text style={styles.settingDesc}>{desc}</Text>
-      </View>
-      <View style={[styles.toggleTrack, value && styles.activeToggleTrack]}>
-        <View style={[styles.toggleThumb, value && styles.activeToggleThumb]} />
-      </View>
-    </Pressable>
-  );
-}
-
-function SheetAction({
-  label,
-  disabled,
-  secondary,
-  danger,
-  onPress,
-}: {
-  label: string;
-  disabled?: boolean;
-  secondary?: boolean;
-  danger?: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      disabled={disabled}
-      style={[
-        styles.sheetAction,
-        secondary && styles.secondarySheetAction,
-        danger && styles.dangerSheetAction,
-        disabled && styles.disabledCard,
-      ]}
-      onPress={onPress}
-    >
-      <Text style={[styles.sheetActionText, secondary && styles.secondarySheetActionText]}>{label}</Text>
-    </Pressable>
   );
 }
 
@@ -2295,132 +2143,6 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     fontWeight: '800',
   },
-  shopCard: {
-    minHeight: 72,
-    marginBottom: 10,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: '#d0d5dd',
-    borderRadius: 8,
-    backgroundColor: '#ffffff',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  adCard: {
-    borderColor: '#aad8b1',
-    backgroundColor: '#f0fbf0',
-  },
-  disabledCard: {
-    opacity: 0.45,
-  },
-  shopTextGroup: {
-    flex: 1,
-    minWidth: 0,
-  },
-  shopTitle: {
-    color: '#253126',
-    fontSize: 16,
-    fontWeight: '900',
-  },
-  shopDesc: {
-    marginTop: 3,
-    color: '#667085',
-    fontSize: 13,
-    lineHeight: 18,
-    fontWeight: '600',
-  },
-  shopPrice: {
-    flexShrink: 0,
-    overflow: 'hidden',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    color: '#ffffff',
-    backgroundColor: '#2f8747',
-    fontSize: 13,
-    fontWeight: '900',
-  },
-  speedPrice: {
-    backgroundColor: '#2f7de1',
-  },
-  profitPrice: {
-    backgroundColor: '#bf7a00',
-  },
-  settingRow: {
-    minHeight: 70,
-    marginBottom: 10,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: '#d0d5dd',
-    borderRadius: 8,
-    backgroundColor: '#ffffff',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  settingTextGroup: {
-    flex: 1,
-    minWidth: 0,
-  },
-  settingTitle: {
-    color: '#253126',
-    fontSize: 16,
-    fontWeight: '900',
-  },
-  settingDesc: {
-    marginTop: 3,
-    color: '#667085',
-    fontSize: 13,
-    lineHeight: 18,
-    fontWeight: '600',
-  },
-  toggleTrack: {
-    width: 48,
-    height: 28,
-    borderRadius: 14,
-    padding: 3,
-    backgroundColor: '#d0d5dd',
-    justifyContent: 'center',
-  },
-  activeToggleTrack: {
-    backgroundColor: '#2f7de1',
-  },
-  toggleThumb: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: '#ffffff',
-  },
-  activeToggleThumb: {
-    alignSelf: 'flex-end',
-  },
-  sheetAction: {
-    minHeight: 48,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    marginTop: 8,
-    backgroundColor: '#2f7de1',
-  },
-  secondarySheetAction: {
-    backgroundColor: '#edf2f7',
-  },
-  dangerSheetAction: {
-    backgroundColor: '#e5484d',
-  },
-  sheetActionText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '900',
-    textAlign: 'center',
-  },
-  secondarySheetActionText: {
-    color: '#344054',
-  },
   resetWarning: {
     marginBottom: 12,
     padding: 12,
@@ -2458,82 +2180,5 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 10,
     fontWeight: '900',
-  },
-  collectionArea: {
-    marginBottom: 14,
-  },
-  collectionAreaHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-    marginBottom: 8,
-  },
-  collectionAreaName: {
-    minWidth: 0,
-    flexShrink: 1,
-    color: '#253126',
-    fontSize: 15,
-    fontWeight: '900',
-  },
-  collectionAreaProgress: {
-    flexShrink: 0,
-    color: '#7b8794',
-    fontSize: 13,
-    fontWeight: '900',
-  },
-  collectionAreaProgressDone: {
-    color: '#247241',
-  },
-  collectionGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  collectionCell: {
-    width: 72,
-    minHeight: 72,
-    paddingVertical: 8,
-    paddingHorizontal: 4,
-    borderWidth: 1,
-    borderColor: '#d0d5dd',
-    borderRadius: 8,
-    backgroundColor: '#ffffff',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 2,
-  },
-  collectionCellLocked: {
-    borderColor: '#e1e5ea',
-    backgroundColor: '#f1f3f5',
-  },
-  collectionCellIcon: {
-    fontSize: 26,
-    lineHeight: 30,
-  },
-  collectionCellName: {
-    maxWidth: '100%',
-    color: '#344054',
-    fontSize: 11,
-    fontWeight: '800',
-    textAlign: 'center',
-  },
-  collectionCellValue: {
-    maxWidth: '100%',
-    color: '#8f5c00',
-    fontSize: 10,
-    fontWeight: '900',
-  },
-  collectionClaimedLabel: {
-    marginTop: 8,
-    color: '#7b8794',
-    fontSize: 13,
-    fontWeight: '900',
-  },
-  collectionFullDesc: {
-    color: '#344054',
-    fontSize: 14,
-    lineHeight: 20,
-    fontWeight: '700',
   },
 });

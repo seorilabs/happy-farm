@@ -105,6 +105,10 @@ const KO_FARM_MESSAGES = {
   areaFirstToast: '구역을 먼저 열어 주세요.',
   harvestedToast: (amount: string) => `+${amount}G 수확했어요.`,
   harvestedBoostToast: (amount: string, multiplier: number) => `+${amount}G 수확했어요. ×${multiplier} 부스트 적용`,
+  masteryRankUpToast: (cropName: string, rankName: string, rankIcon: string) =>
+    `${rankIcon} ${cropName} 숙련도가 ${rankName} 등급이 됐어요!`,
+  mutationHarvestedToast: (mutationName: string, mutationIcon: string, amount: string) =>
+    `${mutationIcon} ${mutationName} 변이 수확! +${amount}G`,
   growingToast: '아직 자라는 중이에요.',
   selectSeedToast: '아래에서 씨앗을 선택해 주세요.',
   growthDoneToast: '작물이 바로 자랐어요.',
@@ -224,6 +228,9 @@ const EN_FARM_MESSAGES: FarmMessages = {
   areaFirstToast: 'Open the area first.',
   harvestedToast: (amount) => `Harvested +${amount}G.`,
   harvestedBoostToast: (amount, multiplier) => `Harvested +${amount}G with ${multiplier}x boost.`,
+  masteryRankUpToast: (cropName, rankName, rankIcon) => `${rankIcon} ${cropName} mastery reached ${rankName}!`,
+  mutationHarvestedToast: (mutationName, mutationIcon, amount) =>
+    `${mutationIcon} ${mutationName} mutation! +${amount}G`,
   growingToast: 'Still growing.',
   selectSeedToast: 'Select a seed below.',
   growthDoneToast: 'The crop grew instantly.',

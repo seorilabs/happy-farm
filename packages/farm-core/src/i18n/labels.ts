@@ -1,4 +1,4 @@
-import type { AreaKey, CropKey } from '../types';
+import type { AreaKey, CropKey, MasteryRankKey, MutationKey } from '../types';
 import { DEFAULT_LOCALE, type SupportedLocale } from './locales';
 
 type CropLabel = {
@@ -9,6 +9,10 @@ type AreaLabel = {
   name: string;
   target: string;
   description: string;
+};
+
+type SimpleLabel = {
+  name: string;
 };
 
 const KO_CROP_LABELS = {
@@ -163,6 +167,40 @@ const EN_AREA_LABELS = {
   },
 } satisfies Record<AreaKey, AreaLabel>;
 
+const KO_MASTERY_RANK_LABELS = {
+  bronze: { name: '브론즈' },
+  silver: { name: '실버' },
+  gold: { name: '골드' },
+  prism: { name: '프리즘' },
+} satisfies Record<MasteryRankKey, SimpleLabel>;
+
+const EN_MASTERY_RANK_LABELS = {
+  bronze: { name: 'Bronze' },
+  silver: { name: 'Silver' },
+  gold: { name: 'Gold' },
+  prism: { name: 'Prism' },
+} satisfies Record<MasteryRankKey, SimpleLabel>;
+
+const KO_MUTATION_LABELS = {
+  golden: { name: '황금' },
+  rainbow: { name: '무지개' },
+} satisfies Record<MutationKey, SimpleLabel>;
+
+const EN_MUTATION_LABELS = {
+  golden: { name: 'Golden' },
+  rainbow: { name: 'Rainbow' },
+} satisfies Record<MutationKey, SimpleLabel>;
+
+const MASTERY_RANK_LABELS: Record<SupportedLocale, Record<MasteryRankKey, SimpleLabel>> = {
+  'ko-KR': KO_MASTERY_RANK_LABELS,
+  'en-US': EN_MASTERY_RANK_LABELS,
+};
+
+const MUTATION_LABELS: Record<SupportedLocale, Record<MutationKey, SimpleLabel>> = {
+  'ko-KR': KO_MUTATION_LABELS,
+  'en-US': EN_MUTATION_LABELS,
+};
+
 const CROP_LABELS: Record<SupportedLocale, Record<CropKey, CropLabel>> = {
   'ko-KR': KO_CROP_LABELS,
   'en-US': EN_CROP_LABELS,
@@ -187,6 +225,24 @@ export function getAreaLabel(areaKey: AreaKey, locale: SupportedLocale = DEFAULT
   const label = labels[areaKey] ?? AREA_LABELS[DEFAULT_LOCALE][areaKey];
   if (label == null) {
     throw new Error(`Missing area label: ${areaKey}`);
+  }
+  return label;
+}
+
+export function getMasteryRankLabel(rankKey: MasteryRankKey, locale: SupportedLocale = DEFAULT_LOCALE): SimpleLabel {
+  const labels = MASTERY_RANK_LABELS[locale] ?? MASTERY_RANK_LABELS[DEFAULT_LOCALE];
+  const label = labels[rankKey] ?? MASTERY_RANK_LABELS[DEFAULT_LOCALE][rankKey];
+  if (label == null) {
+    throw new Error(`Missing mastery rank label: ${rankKey}`);
+  }
+  return label;
+}
+
+export function getMutationLabel(mutationKey: MutationKey, locale: SupportedLocale = DEFAULT_LOCALE): SimpleLabel {
+  const labels = MUTATION_LABELS[locale] ?? MUTATION_LABELS[DEFAULT_LOCALE];
+  const label = labels[mutationKey] ?? MUTATION_LABELS[DEFAULT_LOCALE][mutationKey];
+  if (label == null) {
+    throw new Error(`Missing mutation label: ${mutationKey}`);
   }
   return label;
 }
