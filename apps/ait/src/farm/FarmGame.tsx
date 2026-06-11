@@ -34,6 +34,7 @@ import {
   getCropModifiers,
   getCropPurchaseCost,
   getFarmHourlyProductivity,
+  getGlobalModifiers,
   getPrestigeSkillLabel,
   getRegionArchetypeLabel,
   getResearchNodeLabel,
@@ -87,9 +88,7 @@ import {
   getPlotCost,
   getPlotGrowthRatio,
   getPlotRemainingGrowthMs,
-  getProfitMultiplier,
   getRewardedAdLimitStatus,
-  getSpeedMultiplier,
   getUpgradeCost,
   isAreaUnlocked,
   isCropPlantable,
@@ -143,6 +142,12 @@ function getCrop(cropKey: CropKey) {
     throw new Error(`Unknown crop: ${cropKey}`);
   }
   return crop;
+}
+
+// Region scaling can push multipliers far past the upgrade range, so switch
+// to a whole-number display once a decimal stops being informative.
+function formatStatMultiplier(value: number) {
+  return value >= 100 ? `×${Math.round(value).toLocaleString()}` : `×${value.toFixed(1)}`;
 }
 
 function getCropEconomy(cropEconomyByKey: Record<CropKey, CropEconomyEstimate>, cropKey: CropKey): CropEconomyEstimate {
@@ -422,8 +427,10 @@ export default function FarmGame({
     return () => clearInterval(id);
   }, []);
 
-  const speedMult = useMemo(() => getSpeedMultiplier(gameState.upgrades.speed), [gameState.upgrades.speed]);
-  const profitMult = useMemo(() => getProfitMultiplier(gameState.upgrades.profit), [gameState.upgrades.profit]);
+  // Header stats show the full modifier stack (upgrades, mastery-independent
+  // prestige skills, region scaling) so the display matches the actual math;
+  // the ad boost stays on its own line.
+  const globalModifiers = useMemo(() => getGlobalModifiers(gameState), [gameState]);
   const researchLevel = useMemo(
     () => getMinUpgradeLevel(gameState),
     [gameState.upgrades.profit, gameState.upgrades.speed]
@@ -544,7 +551,7 @@ export default function FarmGame({
     if (next !== gameState) {
       setGameState(() => next);
     }
-  }, [analyticsContext, gameState, speedMult, tick]);
+  }, [analyticsContext, gameState, tick]);
 
   function openShop() {
     setActiveSheet({ type: 'shop' });
@@ -680,6 +687,9 @@ export default function FarmGame({
       return;
     }
     prestigedLevelsRef.current.add(guardLevel);
+    // Drop any pending auto-harvest batch so old-farm counts never flush
+    // under the new farm's analytics context.
+    autoHarvestSummaryRef.current = { harvestedCount: 0, replantedCount: 0, windowStartedAt: 0 };
     setGameState((state) => prestigeFarm(state, prestigeArchetype, now)?.state ?? state);
     setSelectedArea(FIRST_AREA.key);
     setSelectedTool('harvest');
@@ -852,6 +862,7 @@ export default function FarmGame({
     claimedRewardKeysRef.current.clear();
     claimedAchievementKeysRef.current.clear();
     prestigedLevelsRef.current.clear();
+    autoHarvestSummaryRef.current = { harvestedCount: 0, replantedCount: 0, windowStartedAt: 0 };
     setGameState(createInitialState());
     setSelectedArea(FIRST_AREA.key);
     setSelectedTool('harvest');
@@ -1106,11 +1117,11 @@ export default function FarmGame({
             <View style={styles.statList}>
               <View style={styles.compactStat}>
                 <Text style={styles.label}>{messages.profitLabel}</Text>
-                <Text style={styles.profitStat}>×{profitMult.toFixed(1)}</Text>
+                <Text style={styles.profitStat}>{formatStatMultiplier(globalModifiers.profitMultiplier)}</Text>
               </View>
               <View style={styles.compactStat}>
                 <Text style={styles.label}>{messages.growthLabel}</Text>
-                <Text style={styles.speedStat}>×{speedMult.toFixed(1)}</Text>
+                <Text style={styles.speedStat}>{formatStatMultiplier(globalModifiers.speedMultiplier)}</Text>
               </View>
               {harvestBonusBoost.active ? (
                 <View style={styles.compactStat}>
