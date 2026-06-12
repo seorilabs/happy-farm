@@ -1,23 +1,26 @@
-name: Build Google Play AAB
+name: Deploy Google Play
 
 on:
+  push:
+    tags:
+      - 'v*.*.*'
   workflow_dispatch:
     inputs:
       send_to_google_play:
-        description: "AAB 빌드 후 Google Play 내부 테스트에 올림"
+        description: 'AAB 빌드 후 Google Play 내부 테스트에 올림'
         required: false
         default: false
         type: boolean
       after_upload:
-        description: "업로드 후 처리: 초안으로 둘지, 내부 테스터에게 보낼지"
+        description: '업로드 후 처리: 초안으로 둘지, 내부 테스터에게 보낼지'
         required: false
-        default: "초안만 만들기"
+        default: '초안만 만들기'
         type: choice
         options:
           - 초안만 만들기
           - 내부 테스터에게 배포하기
       review_later_in_console:
-        description: "검토 제출은 자동으로 하지 않고 Play Console에서 나중에 처리"
+        description: '검토 제출은 자동으로 하지 않고 Play Console에서 나중에 처리'
         required: false
         default: false
         type: boolean
@@ -27,70 +30,31 @@ permissions:
   id-token: write
 
 concurrency:
-  group: google-play-aab-${{ github.ref }}
+  group: happy-farm-google-play-${{ github.ref_name }}
   cancel-in-progress: true
 
 jobs:
   build-aab:
-    name: Build signed Android App Bundle
+    name: Signed Android App Bundle
     runs-on: ubuntu-latest
     timeout-minutes: 35
+    environment: google-play
+    env:
+      SHOULD_UPLOAD_TO_GOOGLE_PLAY: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.send_to_google_play) }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6
-        with:
-          version: 11.3.0
-          run_install: false
+      - name: Setup pnpm workspace
+        uses: ./.github/actions/setup-pnpm-workspace
 
-      - name: Setup Node
-        uses: actions/setup-node@v6
-        with:
-          node-version: 24
-          cache: pnpm
+      - name: Resolve release version
+        id: release-version
+        run: node scripts/resolve-release-version.mjs --github-output --github-step-summary --write-release-info --quiet
 
-      - name: Setup Java
-        uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: "17"
-
-      - name: Prepare Android SDK
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          sdkmanager_bin="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
-
-          if [ ! -x "$sdkmanager_bin" ]; then
-            echo "sdkmanager not found at $sdkmanager_bin" >&2
-            find "$ANDROID_HOME/cmdline-tools" -maxdepth 3 -type f -name sdkmanager >&2 || true
-            exit 1
-          fi
-
-          echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
-
-          set +o pipefail
-          yes 2>/dev/null | "$sdkmanager_bin" --licenses >/dev/null
-          licenses_status="${PIPESTATUS[1]}"
-          set -o pipefail
-
-          if [ "$licenses_status" -ne 0 ]; then
-            exit "$licenses_status"
-          fi
-
-          "$sdkmanager_bin" \
-            "platform-tools" \
-            "platforms;android-36" \
-            "build-tools;36.0.0" \
-            "ndk;27.1.12297006" \
-            "cmdline-tools;latest"
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      - name: Setup Android build
+        uses: ./.github/actions/setup-android-build
 
       - name: Typecheck mobile app
         run: pnpm --dir apps/mobile typecheck
@@ -143,8 +107,23 @@ jobs:
           } > apps/mobile/android/key.properties
           chmod 600 apps/mobile/android/key.properties
 
+      - name: Restore Firebase Android config
+        shell: bash
+        env:
+          FIREBASE_ANDROID_GOOGLE_SERVICES_JSON_BASE64: ${{ secrets.FIREBASE_ANDROID_GOOGLE_SERVICES_JSON_BASE64 }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "$FIREBASE_ANDROID_GOOGLE_SERVICES_JSON_BASE64" ]; then
+            echo "FIREBASE_ANDROID_GOOGLE_SERVICES_JSON_BASE64 is not set; building without Firebase Android config."
+            exit 0
+          fi
+
+          printf '%s' "$FIREBASE_ANDROID_GOOGLE_SERVICES_JSON_BASE64" | base64 --decode > apps/mobile/android/app/google-services.json
+          node scripts/check-firebase-android-config.mjs
+
       - name: Validate Google Play WIF config
-        if: ${{ inputs.send_to_google_play }}
+        if: env.SHOULD_UPLOAD_TO_GOOGLE_PLAY == 'true'
         shell: bash
         env:
           GOOGLE_WORKLOAD_IDENTITY_PROVIDER: ${{ vars.GOOGLE_WORKLOAD_IDENTITY_PROVIDER }}
@@ -163,7 +142,7 @@ jobs:
           fi
 
       - name: Authenticate to Google Cloud
-        if: ${{ inputs.send_to_google_play }}
+        if: env.SHOULD_UPLOAD_TO_GOOGLE_PLAY == 'true'
         uses: google-github-actions/auth@v3
         with:
           workload_identity_provider: ${{ vars.GOOGLE_WORKLOAD_IDENTITY_PROVIDER }}
@@ -171,22 +150,26 @@ jobs:
           create_credentials_file: true
 
       - name: Install Google Play API client
-        if: ${{ inputs.send_to_google_play }}
+        if: env.SHOULD_UPLOAD_TO_GOOGLE_PLAY == 'true'
         run: |
           python3 -m pip install --upgrade pip
           python3 -m pip install google-api-python-client google-auth
 
-      - name: Resolve Google Play version code
+      - name: Validate Google Play version code
         id: play-version
         shell: bash
+        env:
+          GOOGLE_PLAY_VERSION_CODE: ${{ steps.release-version.outputs.google_play_version_code }}
         run: |
           set -euo pipefail
 
-          fallback_version_code=$((GITHUB_RUN_NUMBER * 100 + GITHUB_RUN_ATTEMPT))
-          version_code="$fallback_version_code"
-
-          if [ "${{ inputs.send_to_google_play }}" = "true" ]; then
-            version_code="$(python3 scripts/upload-google-play-internal.py --print-next-version-code)"
+          version_code="$GOOGLE_PLAY_VERSION_CODE"
+          if [ "$SHOULD_UPLOAD_TO_GOOGLE_PLAY" = "true" ]; then
+            next_play_version_code="$(python3 scripts/upload-google-play-internal.py --print-next-version-code)"
+            if [ "$version_code" -lt "$next_play_version_code" ]; then
+              echo "Release tag versionCode $version_code is lower than the next available Google Play versionCode $next_play_version_code." >&2
+              exit 1
+            fi
           fi
 
           if ! [[ "$version_code" =~ ^[0-9]+$ ]]; then
@@ -196,33 +179,33 @@ jobs:
 
           echo "version_code=$version_code" >> "$GITHUB_OUTPUT"
           echo "versionCode=$version_code" >> "$GITHUB_STEP_SUMMARY"
-          if [ "${{ inputs.send_to_google_play }}" = "true" ]; then
-            echo "versionCodeSource=Google Play max existing versionCode + 1" >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "versionCodeSource=GitHub run number fallback" >> "$GITHUB_STEP_SUMMARY"
-          fi
+          echo "versionCodeSource=Release tag buildNumber" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Build signed Android AAB
         working-directory: apps/mobile/android
         env:
           GOOGLE_PLAY_VERSION_CODE: ${{ steps.play-version.outputs.version_code }}
-        run: ./gradlew :app:bundleRelease --no-daemon -PversionCodeOverride="$GOOGLE_PLAY_VERSION_CODE"
+          GOOGLE_PLAY_VERSION_NAME: ${{ steps.release-version.outputs.version_name }}
+        run: ./gradlew :app:bundleRelease --no-daemon -PversionCodeOverride="$GOOGLE_PLAY_VERSION_CODE" -PversionNameOverride="$GOOGLE_PLAY_VERSION_NAME"
 
       - name: Upload AAB artifact
         uses: actions/upload-artifact@v7
         with:
-          name: happy-farm-google-play-aab-v${{ steps.play-version.outputs.version_code }}-${{ github.sha }}
-          path: apps/mobile/android/app/build/outputs/bundle/release/app-release.aab
+          name: happy-farm-google-play-v${{ steps.release-version.outputs.version_name }}-code${{ steps.play-version.outputs.version_code }}-${{ github.sha }}
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 5
+          path: apps/mobile/android/app/build/outputs/bundle/release/app-release.aab
 
       - name: Upload AAB to Google Play internal track
-        if: ${{ inputs.send_to_google_play }}
+        if: env.SHOULD_UPLOAD_TO_GOOGLE_PLAY == 'true'
         shell: bash
+        env:
+          AFTER_UPLOAD: ${{ github.event_name == 'push' && '초안만 만들기' || inputs.after_upload }}
+          REVIEW_LATER_IN_CONSOLE: ${{ github.event_name == 'workflow_dispatch' && inputs.review_later_in_console || false }}
         run: |
           set -euo pipefail
 
-          case "${{ inputs.after_upload }}" in
+          case "$AFTER_UPLOAD" in
             "초안만 만들기")
               release_status="draft"
               ;;
@@ -230,13 +213,13 @@ jobs:
               release_status="completed"
               ;;
             *)
-              echo "Unsupported after_upload input: ${{ inputs.after_upload }}" >&2
+              echo "Unsupported after_upload input: $AFTER_UPLOAD" >&2
               exit 1
               ;;
           esac
 
           args=(--release-status "$release_status")
-          if [ "${{ inputs.review_later_in_console }}" = "true" ]; then
+          if [ "$REVIEW_LATER_IN_CONSOLE" = "true" ]; then
             args+=(--changes-not-sent-for-review)
           fi
 

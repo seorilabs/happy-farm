@@ -1,0 +1,42 @@
+name: Setup Android build
+description: Install Java and the Android SDK packages required for release builds.
+
+runs:
+  using: composite
+  steps:
+    - name: Setup Java
+      uses: actions/setup-java@v5
+      with:
+        distribution: temurin
+        java-version: '17'
+
+    - name: Prepare Android SDK
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        sdkmanager_bin="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+
+        if [ ! -x "$sdkmanager_bin" ]; then
+          echo "sdkmanager not found at $sdkmanager_bin" >&2
+          find "$ANDROID_HOME/cmdline-tools" -maxdepth 3 -type f -name sdkmanager >&2 || true
+          exit 1
+        fi
+
+        echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
+
+        set +o pipefail
+        yes 2>/dev/null | "$sdkmanager_bin" --licenses >/dev/null
+        licenses_status="${PIPESTATUS[1]}"
+        set -o pipefail
+
+        if [ "$licenses_status" -ne 0 ]; then
+          exit "$licenses_status"
+        fi
+
+        "$sdkmanager_bin" \
+          "platform-tools" \
+          "platforms;android-36" \
+          "build-tools;36.0.0" \
+          "ndk;27.1.12297006" \
+          "cmdline-tools;latest"

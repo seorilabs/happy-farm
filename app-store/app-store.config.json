@@ -1,0 +1,183 @@
+{
+  "bundleId": "com.seorilabs.happyfarm",
+  "appleTeamId": "HCDUXX4Z3X",
+  "sku": "happy-farm-ios",
+  "primaryLanguage": "ko-KR",
+  "platform": "iOS",
+  "appType": "game",
+  "freeOrPaid": "free",
+  "contactEmail": "cs@seorilabs.com",
+  "privacyPolicyUrl": "https://www.seorilabs.com/privacy",
+  "supportUrl": "https://www.seorilabs.com/support",
+  "marketingUrl": "확정 필요",
+  "copyright": "2026 Seorilabs",
+  "version": {
+    "versionNumber": "1.1.4",
+    "buildNumber": "1001004",
+    "releaseSetting": "release_tag",
+    "releaseNotes": {
+      "ko-KR": "새 구역을 여는 표현을 더 쉬운 용어로 바꾸고, 현재 농장의 예상 생산성을 시간당 골드로 볼 수 있게 했습니다. 작물 선택 화면에는 작물별 투자효율을 추가해 어떤 작물을 심을지 더 쉽게 판단할 수 있습니다.",
+      "en-US": "Updated area-opening copy to simpler wording, added an estimated gold-per-hour productivity readout, and added crop efficiency indicators to help players choose what to plant."
+    }
+  },
+  "versioning": {
+    "source": "release_tag",
+    "marketingVersionField": "CFBundleShortVersionString",
+    "buildNumberField": "CFBundleVersion"
+  },
+  "signing": {
+    "releaseCertificate": "Apple Distribution: Seori Labs (HCDUXX4Z3X)",
+    "releaseProvisioningProfile": "AppStore Happy Farm Profile"
+  },
+  "storeListing": {
+    "appName": {
+      "ko-KR": "행복 농장 타이쿤",
+      "en-US": "Happy Farm Tycoon"
+    },
+    "subtitle": {
+      "ko-KR": "작물을 키우는 방치형 농장",
+      "en-US": "Idle crop-growing farm"
+    },
+    "promotionalText": {
+      "ko-KR": "작물을 심고 수확해 골드를 모으세요. 밭을 넓히고 성장 속도와 판매 수익을 업그레이드하는 가벼운 방치형 농장 타이쿤입니다.",
+      "en-US": "Plant crops, harvest gold, clear new plots, and upgrade your growth speed and sale profit in a light idle farm tycoon."
+    },
+    "description": {
+      "ko-KR": "행복 농장 타이쿤은 작은 밭에서 시작해 작물을 심고, 성장 시간을 기다린 뒤 수확해 골드를 모으는 농장 성장 게임입니다.\n\n감자, 딸기, 수박처럼 단계별 작물을 키우고 수확 수익으로 밭을 개간하세요. 성장 속도와 판매 수익을 업그레이드하면 같은 시간에도 더 빠르게 농장이 커집니다.\n\n새 구역을 열면 재배 공간과 목표가 늘어나고, 저장된 진행 상황은 다음 접속 때 이어집니다. 짧게 확인해도 보상이 쌓이는 가벼운 방치형 플레이에 맞췄습니다.\n\n로그인 없이 바로 시작할 수 있으며, 복잡한 경쟁이나 과금 압박 없이 농장이 커지는 흐름에 집중합니다.",
+      "en-US": "Happy Farm Tycoon is a light farm growth game where you start with a small field, plant crops, wait for them to grow, and harvest gold.\n\nGrow step-by-step crops such as potatoes, strawberries, and watermelons, then use your harvest profit to clear more plots. Upgrade growth speed and sale profit to make your farm expand faster in the same amount of time.\n\nOpen new areas to unlock more planting space and longer-term goals. Your progress is saved on this device so you can continue your farm on the next visit.\n\nYou can start right away without signing in. The game focuses on a simple, low-pressure farm expansion loop without complex competition."
+    },
+    "keywords": {
+      "ko-KR": "작물,수확,농사,성장,방치형,타이쿤,시뮬레이션,게임",
+      "en-US": "farm,crops,harvest,idle,tycoon,growth,simulation,game"
+    }
+  },
+  "categories": {
+    "primary": "Games",
+    "gameSubcategories": ["Simulation", "Casual"]
+  },
+  "platformVersionInformation": {
+    "routingAppCoverageFile": "not_applicable",
+    "routingAppCoverageReason": "농장 타이쿤 게임이며 지도/내비게이션 라우팅 앱이 아닙니다."
+  },
+  "contentDeclarations": {
+    "ads": "yes",
+    "contentRights": "yes_third_party_content_with_rights",
+    "contentRightsNotes": "앱 자체의 게임 이미지/문구/오디오는 자체 제작 또는 프로젝트 자산이며, AdMob 보상형 광고를 통해 타사 광고 콘텐츠가 표시될 수 있으므로 필요한 권한이 있는 타사 콘텐츠 표시로 답변합니다.",
+    "ageRating": "completed_in_app_store_connect",
+    "ageRatingNotes": "App Store Connect에서 심사 통과 기준으로 완료됨. 세부 설문값은 repo에 저장하지 않습니다.",
+    "gameCenter": "no",
+    "containsUserGeneratedContent": "no",
+    "requiresSignIn": "no",
+    "madeForKids": "no",
+    "koreaGameRating": "not_required"
+  },
+  "exportCompliance": {
+    "usesEncryption": true,
+    "usesNonExemptEncryption": false,
+    "documentationRequired": false,
+    "infoPlistKey": "ITSAppUsesNonExemptEncryption",
+    "answerNotes": "Firebase, AdMob, App Store Connect, HTTPS/TLS 등 Apple OS 또는 표준 SDK가 제공하는 통신 암호화만 사용하며 자체/비표준 암호화 알고리즘을 구현하지 않습니다. App Store Connect에서는 비면제 암호화를 사용하지 않음으로 답변합니다."
+  },
+  "digitalServicesAct": {
+    "euDistributionPlanned": true,
+    "status": "trader",
+    "answer": "디지털 서비스법에 따른 거래자임",
+    "displayContactEmail": "cs@seorilabs.com",
+    "displayContactPhone": "stored_in_app_store_connect",
+    "notes": "EU 포함 전세계 배포를 목표로 하고, AdMob 광고 수익화가 있으며, Seori Labs 조직 계정으로 배포하므로 DSA 거래자로 답변합니다. 조직 계정은 D-U-N-S 주소가 표시되고 App Store 제품 페이지 표시용 전화번호와 이메일을 제공해야 합니다. 전화번호 원문은 repo에 저장하지 않습니다."
+  },
+  "ads": {
+    "provider": "AdMob",
+    "iosAppId": "ca-app-pub-2444587584524186~5266256811",
+    "iosRewardedAdUnitId": "ca-app-pub-2444587584524186/5623525630"
+  },
+  "appPrivacy": {
+    "status": "completed",
+    "privacyPolicyUrl": "https://www.seorilabs.com/privacy",
+    "tracking": "yes",
+    "privacyManifest": "apps/mobile/ios/HappyFarmMobile/PrivacyInfo.xcprivacy",
+    "dataTypes": {
+      "approximateLocation": {
+        "collected": true,
+        "purposes": ["thirdPartyAdvertising", "analytics"],
+        "usedForTracking": true,
+        "notSelectedPurposes": [
+          "developersAdvertisingOrMarketing",
+          "productPersonalization",
+          "appFunctionality",
+          "otherPurposes"
+        ],
+        "notes": "AdMob SDK가 IP 주소를 통해 기기의 대략적인 위치를 추정할 수 있고, 광고 성능/타사 광고 및 분석 목적으로 사용될 수 있으므로 타사 광고와 분석을 선택합니다. 게임 기능 자체는 위치를 사용하지 않습니다."
+      }
+    },
+    "notes": [
+      "App Store Connect 앱 개인정보 답변은 심사 통과 기준으로 완료됨.",
+      "Firebase Analytics, Firebase Crashlytics, Firebase Remote Config, AdMob SDK 구성 변경 시 App Store Connect 앱 개인정보 답변을 재검토합니다.",
+      "tracking=yes 기준을 유지합니다. IDFA/ATT 또는 비개인화 광고 정책을 바꾸면 콘솔 답변과 PrivacyInfo.xcprivacy를 함께 확인합니다."
+    ]
+  },
+  "review": {
+    "signInRequired": false,
+    "username": "",
+    "password": "",
+    "notes": "로그인 없이 바로 시작 가능한 농장 타이쿤 게임입니다. 앱 진입 후 빈 밭을 누르고 씨앗을 선택하면 작물을 심을 수 있으며, 성장 시간이 지난 뒤 수확해 골드를 얻습니다. 상점에서 밭 개간, 새 구역 열기, 성장 속도/판매 수익 업그레이드를 확인할 수 있습니다. 선택형 보상 광고는 운영 설정에 따라 노출되지 않을 수 있습니다.",
+    "contactFirstName": "Seorilabs",
+    "contactLastName": "Support",
+    "contactEmail": "cs@seorilabs.com",
+    "contactPhone": "stored_in_app_store_connect",
+    "contactPhoneNotes": "App Store Connect 심사 연락처 전화번호 원문은 repo에 저장하지 않습니다."
+  },
+  "testFlight": {
+    "betaAppDescription": "행복 농장 타이쿤 iOS 내부 테스트 빌드입니다. 작물 심기, 수확, 상점 업그레이드, 저장 복원, 오디오, 광고 보상 노출 여부를 확인합니다.",
+    "feedbackEmail": "cs@seorilabs.com"
+  },
+  "assets": {
+    "appIcon1024": "app-store/assets/app-icon-1024.png",
+    "appPreviews": {
+      "iphone": [],
+      "ipad": []
+    },
+    "iphoneScreenshots69": [
+      "app-store/screenshots/iphone-6.9/iphone-1.png",
+      "app-store/screenshots/iphone-6.9/iphone-2.png"
+    ],
+    "iphoneScreenshots65": [
+      "app-store/screenshots/iphone-6.5/iphone-1.png",
+      "app-store/screenshots/iphone-6.5/iphone-2.png"
+    ],
+    "ipadScreenshots13": ["app-store/screenshots/ipad-13/ipad-1.png", "app-store/screenshots/ipad-13/ipad-2.png"],
+    "appleWatchScreenshots": []
+  },
+  "screenshotRequirements": {
+    "iphone": {
+      "preferred69Display": ["1260x2736", "1290x2796", "1320x2868"],
+      "accepted65Display": ["1242x2688", "1284x2778"],
+      "status": "captured",
+      "capturedDevice": "iPhone 17 Pro Max Simulator",
+      "capturedAt": "2026-06-01",
+      "notes": "6.9형 원본은 1320x2868로 캡처했고, 6.5형은 App Store Connect 1284x2778 슬롯용으로 동일 iOS 캡처본을 중앙 크롭/리사이즈했습니다."
+    },
+    "ipad": {
+      "required13Display": ["2064x2752", "2048x2732"],
+      "status": "captured",
+      "capturedDevice": "iPad Pro 13-inch (M5) Simulator",
+      "capturedAt": "2026-06-01"
+    },
+    "appleWatch": {
+      "required": false,
+      "status": "not_applicable"
+    }
+  },
+  "automation": {
+    "workflow": ".github/workflows/deploy-app-store.yml",
+    "appStoreConnectApiKeyIdSecret": "APP_STORE_CONNECT_API_KEY_ID",
+    "appStoreConnectIssuerIdSecret": "APP_STORE_CONNECT_ISSUER_ID",
+    "appStoreConnectPrivateKeyBase64Secret": "APP_STORE_CONNECT_PRIVATE_KEY_BASE64",
+    "appleTeamIdSecret": "APPLE_TEAM_ID",
+    "appleKeychainPasswordSecret": "APPLE_KEYCHAIN_PASSWORD",
+    "iosDistributionCertificateBase64Secret": "APPLE_DISTRIBUTION_CERTIFICATE_BASE64",
+    "iosDistributionCertificatePasswordSecret": "APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD",
+    "iosProvisioningProfileBase64Secret": "APPLE_PROVISIONING_PROFILE_BASE64",
+    "firebaseIosPlistBase64Secret": "FIREBASE_IOS_GOOGLE_SERVICE_INFO_PLIST_BASE64"
+  }
+}

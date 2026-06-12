@@ -25,3 +25,13 @@ android/key.properties
 play-store/secrets/
 play-store/service-account*.json
 gha-creds-*.json
+
+# Apple App Store / iOS release secrets
+*.p12
+*.mobileprovision
+AuthKey_*.p8
+app-store/secrets/
+
+# Firebase client config is restored from CI secrets for release builds.
+google-services.json
+GoogleService-Info.plist

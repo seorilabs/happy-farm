@@ -12,10 +12,15 @@
     "check:ait": "pnpm lint && pnpm typecheck && pnpm test && pnpm build",
     "check:mobile": "pnpm --dir apps/mobile typecheck && pnpm --dir apps/mobile test --watchAll=false && pnpm --dir apps/mobile build:android",
     "check:play": "node scripts/check-google-play-readiness.mjs",
+    "check:app-store": "node scripts/check-app-store-readiness.mjs",
+    "check:firebase:android": "node scripts/check-firebase-android-config.mjs",
+    "check:i18n": "node scripts/check-i18n.mjs",
+    "release:version": "node scripts/resolve-release-version.mjs",
+    "release:next-tag": "node scripts/resolve-next-release-tag.mjs",
     "test": "jest --passWithNoTests",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
-    "deploy": "pnpm --dir apps/ait deploy"
+    "deploy": "pnpm --dir apps/ait run deploy"
   },
   "dependencies": {
     "@apps-in-toss/framework": "^2.6.0",

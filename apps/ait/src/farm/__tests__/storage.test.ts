@@ -1,6 +1,7 @@
 /// <reference types="jest" />
 
-import { MAX_PLOTS, SAVE_KEY } from '../../../../../packages/farm-core/src';
+import { MAX_PLOTS, SAVE_KEY, createInitialState } from '../../../../../packages/farm-core/src';
+import { FARM_GAME_SETTINGS_KEY } from '../gameSettings';
 import { createFarmPersistence } from '../persistence';
 
 const mockStorage = {
@@ -8,8 +9,13 @@ const mockStorage = {
   setItem: jest.fn<Promise<void>, [string, string]>(),
   removeItem: jest.fn<Promise<void>, [string]>(),
 };
-const { readPersistedGameState, writePersistedGameState, removePersistedGameState } =
-  createFarmPersistence(mockStorage);
+const {
+  readPersistedGameState,
+  writePersistedGameState,
+  removePersistedGameState,
+  readPersistedGameSettings,
+  writePersistedGameSettings,
+} = createFarmPersistence(mockStorage);
 
 describe('farm storage', () => {
   beforeEach(() => {
@@ -70,22 +76,42 @@ describe('farm storage', () => {
     mockStorage.removeItem.mockRejectedValueOnce(new Error('unavailable'));
 
     await expect(
-      writePersistedGameState({
-        gold: 1,
-        unlockedPlotCount: 6,
-        unlockedAreas: ['starter_field'],
-        harvestedCropKeys: [],
-        adUsage: {
-          dailyKey: '2026-05-27',
-          rewardedGoldTimestamps: [],
-          rewardedGoldDailyCount: 0,
-          growthAd: { lastUsedAt: null, dailyCount: 0 },
-          harvestBonusAd: { lastUsedAt: null, dailyCount: 0 },
-        },
-        upgrades: { speed: 1, profit: 1 },
-        plots: [],
-      })
+      writePersistedGameState({ ...createInitialState(), gold: 1, plots: [] })
     ).resolves.toBeUndefined();
     await expect(removePersistedGameState()).resolves.toBeUndefined();
+  });
+
+  test('returns legacy settings without filling a default locale', async () => {
+    mockStorage.getItem.mockResolvedValueOnce(
+      JSON.stringify({
+        soundEffectsEnabled: false,
+        backgroundMusicEnabled: true,
+      })
+    );
+
+    const settings = await readPersistedGameSettings();
+
+    expect(mockStorage.getItem).toHaveBeenCalledWith(FARM_GAME_SETTINGS_KEY);
+    expect(settings).toEqual({
+      soundEffectsEnabled: false,
+      backgroundMusicEnabled: true,
+    });
+  });
+
+  test('normalizes settings before writing them', async () => {
+    await writePersistedGameSettings({
+      locale: 'en-US',
+      soundEffectsEnabled: false,
+      backgroundMusicEnabled: true,
+    });
+
+    expect(mockStorage.setItem).toHaveBeenCalledWith(
+      FARM_GAME_SETTINGS_KEY,
+      JSON.stringify({
+        locale: 'en-US',
+        soundEffectsEnabled: false,
+        backgroundMusicEnabled: true,
+      })
+    );
   });
 });

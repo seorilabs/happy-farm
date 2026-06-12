@@ -1,3 +1,1 @@
-import { createFarmAnalytics } from '../../../../../packages/farm-core/src';
-
-export const farmAnalytics = createFarmAnalytics();
+export { appsInTossFarmAnalytics as farmAnalytics } from '../../firebaseWeb';

@@ -16,13 +16,35 @@
 - 고객지원 이메일: `cs@seorilabs.com`
 - 개인정보 처리방침 URL: `https://www.seorilabs.com/privacy`
 - 첫 목표 트랙: `internal`
-- 릴리스 이름: `0.1.0-internal`
+- 릴리스 이름: `1.1.4`
 
 ## 스토어 문구
+
+### ko-KR
 
 - 앱 이름: `행복 농장 타이쿤`
 - 짧은 설명: `작물을 심고 수확하며 농장을 확장하는 방치형 농장 게임`
 - 전체 설명: 작은 밭에서 시작해 작물을 심고, 성장 시간을 기다린 뒤 수확해 골드를 모으는 농장 타이쿤 게임입니다. 골드로 밭을 넓히고 성장 속도와 판매 수익을 업그레이드하며, 조건을 채우면 새 구역을 순서대로 열 수 있습니다.
+
+### en-US
+
+- App name: `Happy Farm Tycoon`
+- Short description: `Plant, harvest, and expand your cozy idle farm`
+- Full description: Start with a small field, plant crops, wait for them to grow, and harvest gold in a cozy farm tycoon game. Use gold to clear more plots, improve growth speed and sale profit, and unlock new areas in order as your farm expands.
+
+## 릴리스 노트
+
+### ko-KR
+
+```text
+새 구역을 여는 표현을 더 쉬운 용어로 바꾸고, 현재 농장의 예상 생산성을 시간당 골드로 볼 수 있게 했습니다. 작물 선택 화면에는 작물별 투자효율을 추가해 어떤 작물을 심을지 더 쉽게 판단할 수 있습니다.
+```
+
+### en-US
+
+```text
+Updated area-opening copy to simpler wording, added an estimated gold-per-hour productivity readout, and added crop efficiency indicators to help players choose what to plant.
+```
 
 ## 이미지 경로
 
@@ -39,7 +61,7 @@
   - `play-store/screenshots/tablet-10/tablet-10-1.png`
   - `play-store/screenshots/tablet-10/tablet-10-2.png`
 
-현재 `apps/mobile/App.tsx`는 전체 게임 플레이 UI가 아니라 소개형 shell입니다. Play 스크린샷은 게임 UI 포팅 후 실제 앱 화면을 캡처해서 채워야 합니다.
+현재 `apps/mobile/App.tsx`는 AIT와 같은 게임 플레이 UI를 사용합니다. 기존 Play 스크린샷은 마케팅형 이미지로 남아 있으므로, 글로벌 공개 전에는 Android 영문 화면 캡처 또는 영문 마케팅형 이미지로 교체해야 합니다.
 
 ## API 자동화 범위
 
@@ -69,16 +91,12 @@ Play Console에서 직접 확인해야 하는 항목:
 - 타겟 연령 및 앱 콘텐츠
 - Data safety
 - IARC 콘텐츠 등급
-- 한국 배포 시 GRAC 등급 판단
+- 한국 배포 시 GRAC 등급 판단: 별도 진행 불필요로 확인
 - production access
 
 ## 현재 blocker
 
-- `contentDeclarations.contentRating`: 확정 필요
-- `contentDeclarations.targetAudience`: 확정 필요
-- `contentDeclarations.dataSafety`: 확정 필요
-- `contentDeclarations.koreaGameRating`: 확정 필요
-- game UI 기반 실제 스크린샷 없음
+- Play Console production access
 
 ## 검증 명령
 

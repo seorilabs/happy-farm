@@ -7,38 +7,39 @@
   "privacyPolicyUrl": "https://www.seorilabs.com/privacy",
   "targetTrack": "internal",
   "release": {
-    "name": "0.1.0-internal",
+    "name": "1.1.4",
     "aabPath": "apps/mobile/android/app/build/outputs/bundle/release/app-release.aab",
     "notes": {
-      "ko-KR": "초기 내부 테스트 빌드입니다."
+      "ko-KR": "새 구역을 여는 표현을 더 쉬운 용어로 바꾸고, 현재 농장의 예상 생산성을 시간당 골드로 볼 수 있게 했습니다. 작물 선택 화면에는 작물별 투자효율을 추가해 어떤 작물을 심을지 더 쉽게 판단할 수 있습니다.",
+      "en-US": "Updated area-opening copy to simpler wording, added an estimated gold-per-hour productivity readout, and added crop efficiency indicators to help players choose what to plant."
     }
   },
   "storeListing": {
     "appName": {
-      "ko-KR": "행복 농장 타이쿤"
+      "ko-KR": "행복 농장 타이쿤",
+      "en-US": "Happy Farm Tycoon"
     },
     "shortDescription": {
-      "ko-KR": "작물을 심고 수확하며 농장을 확장하는 방치형 농장 게임"
+      "ko-KR": "작물을 심고 수확하며 농장을 확장하는 방치형 농장 게임",
+      "en-US": "Plant, harvest, and expand your cozy idle farm"
     },
     "fullDescription": {
-      "ko-KR": "작은 밭에서 시작해 작물을 심고, 성장 시간을 기다린 뒤 수확해 골드를 모으는 농장 타이쿤 게임입니다. 골드로 밭을 넓히고 성장 속도와 판매 수익을 업그레이드하며, 조건을 채우면 새 구역을 순서대로 열 수 있습니다."
+      "ko-KR": "작은 밭에서 시작해 작물을 심고, 성장 시간을 기다린 뒤 수확해 골드를 모으는 농장 타이쿤 게임입니다. 골드로 밭을 넓히고 성장 속도와 판매 수익을 업그레이드하며, 조건을 채우면 새 구역을 순서대로 열 수 있습니다.",
+      "en-US": "Start with a small field, plant crops, wait for them to grow, and harvest gold in a cozy farm tycoon game. Use gold to clear more plots, improve growth speed and sale profit, and unlock new areas in order as your farm expands."
     }
   },
   "contentDeclarations": {
-    "contentRating": "확정 필요",
-    "targetAudience": "확정 필요",
-    "dataSafety": "확정 필요",
+    "contentRating": "completed_in_play_console",
+    "targetAudience": "completed_in_play_console",
+    "dataSafety": "completed_in_play_console",
     "ads": "yes",
     "koreaDistribution": "yes",
-    "koreaGameRating": "확정 필요"
+    "koreaGameRating": "not_required"
   },
   "assets": {
     "playIcon": "play-store/assets/icon-512.png",
     "featureGraphic": "play-store/assets/feature-graphic-1024x500.png",
-    "phoneScreenshots": [
-      "play-store/screenshots/phone/phone-1.png",
-      "play-store/screenshots/phone/phone-2.png"
-    ],
+    "phoneScreenshots": ["play-store/screenshots/phone/phone-1.png", "play-store/screenshots/phone/phone-2.png"],
     "sevenInchTabletScreenshots": [
       "play-store/screenshots/tablet-7/tablet-7-1.png",
       "play-store/screenshots/tablet-7/tablet-7-2.png"

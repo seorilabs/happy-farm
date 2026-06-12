@@ -1,0 +1,67 @@
+{
+  "parameters": {
+    "analytics_collection_enabled": {
+      "defaultValue": {
+        "value": "true"
+      },
+      "description": "Enable Firebase Analytics collection for the mobile app.",
+      "valueType": "BOOLEAN"
+    },
+    "crashlytics_collection_enabled": {
+      "defaultValue": {
+        "value": "true"
+      },
+      "description": "Enable Firebase Crashlytics collection for the mobile app.",
+      "valueType": "BOOLEAN"
+    },
+    "mobile_ads_global_enabled": {
+      "defaultValue": {
+        "value": "true"
+      },
+      "description": "Global kill switch for ads across release targets.",
+      "valueType": "BOOLEAN"
+    },
+    "mobile_ads_enabled_max_build_number": {
+      "defaultValue": {
+        "value": "2100000000"
+      },
+      "description": "Legacy compatibility for previously built mobile apps. New builds ignore this key.",
+      "valueType": "NUMBER"
+    },
+    "rewarded_ads_enabled": {
+      "defaultValue": {
+        "value": "true"
+      },
+      "description": "Legacy compatibility for previously built mobile apps. New builds ignore this key.",
+      "valueType": "BOOLEAN"
+    },
+    "interstitial_ads_enabled": {
+      "defaultValue": {
+        "value": "true"
+      },
+      "description": "Legacy compatibility for previously built mobile apps. New builds ignore this key.",
+      "valueType": "BOOLEAN"
+    },
+    "minimum_supported_version_code": {
+      "defaultValue": {
+        "value": "1"
+      },
+      "description": "Minimum Android versionCode allowed before showing a forced update flow.",
+      "valueType": "NUMBER"
+    },
+    "force_update_url": {
+      "defaultValue": {
+        "value": ""
+      },
+      "description": "Store URL used by a forced update flow when minimum_supported_version_code blocks the app.",
+      "valueType": "STRING"
+    },
+    "remote_balance_enabled": {
+      "defaultValue": {
+        "value": "false"
+      },
+      "description": "Reserved flag for future remote balance tuning. Do not use as an authoritative economy control.",
+      "valueType": "BOOLEAN"
+    }
+  }
+}

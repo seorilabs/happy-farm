@@ -43,6 +43,21 @@ const blockedNativePackagePaths = Object.entries(mobilePackageAliases).flatMap((
     .map((packagePath) => new RegExp(`^${escapePathForRegex(packagePath)}(?:[/\\\\].*)?$`));
 });
 
+const resolveMobileAlias = (moduleName) => {
+  for (const [packageName, mobilePackagePath] of Object.entries(mobilePackageAliases)) {
+    if (mobilePackagePath == null) {
+      continue;
+    }
+    if (moduleName === packageName) {
+      return mobilePackagePath;
+    }
+    if (moduleName.startsWith(`${packageName}/`)) {
+      return path.join(mobilePackagePath, moduleName.slice(packageName.length + 1));
+    }
+  }
+  return null;
+};
+
 const config = {
   watchFolders: [workspaceRoot],
   resolver: {
@@ -53,6 +68,10 @@ const config = {
       mobileNodeModules,
       workspaceNodeModules,
     ],
+    resolveRequest: (context, moduleName, platform) => {
+      const mobileAlias = resolveMobileAlias(moduleName);
+      return context.resolveRequest(context, mobileAlias ?? moduleName, platform);
+    },
   },
 };
 

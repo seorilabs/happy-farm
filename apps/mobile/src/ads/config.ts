@@ -3,7 +3,7 @@ import { TestIds } from 'react-native-google-mobile-ads';
 
 const PRODUCTION_REWARDED_AD_UNIT_IDS = {
   android: 'ca-app-pub-2444587584524186/8369038667',
-  ios: '',
+  ios: 'ca-app-pub-2444587584524186/5623525630',
 } as const;
 
 function getProductionRewardedAdUnitId() {

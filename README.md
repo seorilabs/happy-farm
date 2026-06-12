@@ -1,6 +1,6 @@
 # happy-farm
 
-AppsInToss Granite React Native 버전의 `행복 농장 타이쿤`입니다. 현재 repo는 멀티마켓 출시를 위해 `apps/ait`, `apps/mobile`, `packages/farm-core`를 둔 pnpm workspace 구조입니다.
+AppsInToss Granite React Native 버전의 `행복한 농장 타이쿤`입니다. 현재 repo는 멀티마켓 출시를 위해 `apps/ait`, `apps/mobile`, `packages/farm-core`를 둔 pnpm workspace 구조입니다.
 
 ## 구현 범위
 
@@ -20,10 +20,15 @@ pnpm test
 pnpm check:core
 pnpm check:ait
 pnpm check:mobile
+pnpm check:i18n
 pnpm build
 pnpm build:android
 pnpm check:play
 ```
+
+## i18n
+
+i18n 계획과 변경 지침은 `docs/i18n-plan.md`를 기준으로 관리합니다. 새 사용자-facing 문자열은 locale catalog에 추가하고, `ko-KR`과 `en-US`를 함께 갱신합니다.
 
 ## 브랜치/배포 전략
 
@@ -41,7 +46,7 @@ intoss://happy-farm/
 
 ## 출시 전 차단 사항
 
-- `apps/ait/granite.config.ts`의 `brand.icon`은 임시 HTTPS placeholder입니다. 콘솔 등록용 600x600 최종 아이콘 URL로 교체해야 합니다.
+- `apps/ait/granite.config.ts`의 `brand.icon`은 승인된 AppsInToss 콘솔 로고 URL로 설정했습니다.
 - 보상형/전면형 광고 그룹 ID를 `apps/ait/src/farm/FarmGame.tsx`에 연결해야 광고 보상이 활성화됩니다.
 - Google Play package name은 `com.seorilabs.happyfarm`으로 확정했습니다.
 - 고객지원 이메일은 `cs@seorilabs.com`, 개인정보 처리방침은 `https://www.seorilabs.com/privacy`로 확정했습니다.

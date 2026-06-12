@@ -2,6 +2,7 @@ import { loadFullScreenAd, showFullScreenAd } from '@apps-in-toss/framework';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type { RewardedAdController, RewardedAdShowResult } from '../../../../../packages/farm-core/src';
+import { useAppsInTossAdsEnabled } from '../../firebaseWeb/remoteConfig';
 
 function isFullScreenAdSupported() {
   try {
@@ -12,6 +13,7 @@ function isFullScreenAdSupported() {
 }
 
 export function useFullScreenAd(adGroupId: string): RewardedAdController {
+  const adsEnabled = useAppsInTossAdsEnabled();
   const [isLoaded, setIsLoaded] = useState(false);
   const [isSupported, setIsSupported] = useState(false);
   const unregisterLoadRef = useRef<(() => void) | null>(null);
@@ -22,7 +24,7 @@ export function useFullScreenAd(adGroupId: string): RewardedAdController {
     unregisterLoadRef.current = null;
     setIsLoaded(false);
 
-    if (adGroupId.length === 0 || !isFullScreenAdSupported()) {
+    if (!adsEnabled || adGroupId.length === 0 || !isFullScreenAdSupported()) {
       setIsSupported(false);
       return;
     }
@@ -45,7 +47,7 @@ export function useFullScreenAd(adGroupId: string): RewardedAdController {
       setIsLoaded(false);
       setIsSupported(false);
     }
-  }, [adGroupId]);
+  }, [adGroupId, adsEnabled]);
 
   useEffect(() => {
     loadAd();
@@ -57,7 +59,7 @@ export function useFullScreenAd(adGroupId: string): RewardedAdController {
 
   const showAd = useCallback(
     () => {
-      const supported = adGroupId.length > 0 && isFullScreenAdSupported();
+      const supported = adsEnabled && adGroupId.length > 0 && isFullScreenAdSupported();
       if (!supported || !isLoaded) {
         return Promise.resolve<RewardedAdShowResult>({ status: supported ? 'notReady' : 'unsupported' });
       }
@@ -102,8 +104,8 @@ export function useFullScreenAd(adGroupId: string): RewardedAdController {
         }
       });
     },
-    [adGroupId, isLoaded, loadAd]
+    [adGroupId, adsEnabled, isLoaded, loadAd]
   );
 
-  return { isAdReady: isSupported && isLoaded, isAdSupported: isSupported, showAd };
+  return { isAdReady: adsEnabled && isSupported && isLoaded, isAdSupported: adsEnabled && isSupported, showAd };
 }
