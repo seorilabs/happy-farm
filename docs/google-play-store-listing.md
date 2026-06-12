@@ -16,7 +16,7 @@
 - 고객지원 이메일: `cs@seorilabs.com`
 - 개인정보 처리방침 URL: `https://www.seorilabs.com/privacy`
 - 첫 목표 트랙: `internal`
-- 릴리스 이름: `1.1.4`
+- 릴리스 이름: `1.3.2`
 
 ## 스토어 문구
 
@@ -24,57 +24,88 @@
 
 - 앱 이름: `행복 농장 타이쿤`
 - 짧은 설명: `작물을 심고 수확하며 농장을 확장하는 방치형 농장 게임`
-- 전체 설명: 작은 밭에서 시작해 작물을 심고, 성장 시간을 기다린 뒤 수확해 골드를 모으는 농장 타이쿤 게임입니다. 골드로 밭을 넓히고 성장 속도와 판매 수익을 업그레이드하며, 조건을 채우면 새 구역을 순서대로 열 수 있습니다.
+- 전체 설명: 작은 밭에서 시작해 작물을 심고 수확하며 골드를 모으는 방치형 농장 타이쿤 게임입니다. 골드로 밭을 넓히고 성장 속도와 판매 수익을 업그레이드하세요.
+
+  작물 도감을 채우고, 연구소에서 자동 수확·자동 파종과 신품종 교배를 해금할 수 있습니다. 농장을 졸업시키면 새 지역을 개척하고 체인 농장이 오프라인 수익을 만들어 줍니다.
+
+  업적과 칭호, 마스터리와 희귀 변이 수확까지 이어지는 장기 성장 목표를 즐겨보세요.
 
 ### en-US
 
 - App name: `Happy Farm Tycoon`
-- Short description: `Plant, harvest, and expand your cozy idle farm`
-- Full description: Start with a small field, plant crops, wait for them to grow, and harvest gold in a cozy farm tycoon game. Use gold to clear more plots, improve growth speed and sale profit, and unlock new areas in order as your farm expands.
+- Short description: `Plant, harvest, research, and expand your idle farm`
+- Full description: Start with a small field, plant crops, harvest gold, and build a cozy idle farm tycoon. Spend gold to clear more plots and upgrade growth speed and sale profit.
+
+  Complete your crop collection, unlock auto harvest, auto replanting, and hybrid breeding in the Research Lab. Graduate a farm to pioneer a new region while chain farms keep producing offline income.
+
+  Keep growing through achievements, titles, crop mastery, and rare harvest mutations.
 
 ## 릴리스 노트
 
 ### ko-KR
 
 ```text
-새 구역을 여는 표현을 더 쉬운 용어로 바꾸고, 현재 농장의 예상 생산성을 시간당 골드로 볼 수 있게 했습니다. 작물 선택 화면에는 작물별 투자효율을 추가해 어떤 작물을 심을지 더 쉽게 판단할 수 있습니다.
+Android 내부 테스트 빌드를 다시 만들고, 무한 엔드게임 시스템(마스터리, 변이 도감, 연구소, 교배/자동화, 농장 체인 개척, 업적/칭호)이 Android bundle에 포함되도록 수정했습니다.
 ```
 
 ### en-US
 
 ```text
-Updated area-opening copy to simpler wording, added an estimated gold-per-hour productivity readout, and added crop efficiency indicators to help players choose what to plant.
+Rebuilt the Android internal test build so the endless endgame systems, including mastery, mutation collection, Research Lab, breeding, automation, farm-chain pioneering, achievements, and titles, are included in the Android bundle.
 ```
 
 ## 이미지 경로
 
 - 원본 앱 아이콘: `assets/행복농장앱아이콘_600x600.png`
 - Play 앱 아이콘: `play-store/assets/icon-512.png`
-- 피처 그래픽: `play-store/assets/feature-graphic-1024x500.png`
-- phone screenshot:
+- 피처 그래픽 기본값(ko-KR): `play-store/assets/feature-graphic-1024x500.png`
+- 피처 그래픽 ko-KR: `play-store/assets/ko-KR/feature-graphic-1024x500.png`
+- 피처 그래픽 en-US: `play-store/assets/en-US/feature-graphic-1024x500.png`
+- 기본 phone screenshot(ko-KR):
   - `play-store/screenshots/phone/phone-1.png`
   - `play-store/screenshots/phone/phone-2.png`
-- 7-inch tablet screenshot:
+- 기본 7-inch tablet screenshot(ko-KR):
   - `play-store/screenshots/tablet-7/tablet-7-1.png`
   - `play-store/screenshots/tablet-7/tablet-7-2.png`
-- 10-inch tablet screenshot:
+- 기본 10-inch tablet screenshot(ko-KR):
   - `play-store/screenshots/tablet-10/tablet-10-1.png`
   - `play-store/screenshots/tablet-10/tablet-10-2.png`
 
-현재 `apps/mobile/App.tsx`는 AIT와 같은 게임 플레이 UI를 사용합니다. 기존 Play 스크린샷은 마케팅형 이미지로 남아 있으므로, 글로벌 공개 전에는 Android 영문 화면 캡처 또는 영문 마케팅형 이미지로 교체해야 합니다.
+locale별 실제 Android 캡처 경로:
+
+- ko-KR phone:
+  - `play-store/screenshots/ko-KR/phone/phone-1.png`
+  - `play-store/screenshots/ko-KR/phone/phone-2.png`
+- ko-KR 7-inch tablet:
+  - `play-store/screenshots/ko-KR/tablet-7/tablet-7-1.png`
+  - `play-store/screenshots/ko-KR/tablet-7/tablet-7-2.png`
+- ko-KR 10-inch tablet:
+  - `play-store/screenshots/ko-KR/tablet-10/tablet-10-1.png`
+  - `play-store/screenshots/ko-KR/tablet-10/tablet-10-2.png`
+- en-US phone:
+  - `play-store/screenshots/en-US/phone/phone-1.png`
+  - `play-store/screenshots/en-US/phone/phone-2.png`
+- en-US 7-inch tablet:
+  - `play-store/screenshots/en-US/tablet-7/tablet-7-1.png`
+  - `play-store/screenshots/en-US/tablet-7/tablet-7-2.png`
+- en-US 10-inch tablet:
+  - `play-store/screenshots/en-US/tablet-10/tablet-10-1.png`
+  - `play-store/screenshots/en-US/tablet-10/tablet-10-2.png`
+
+현재 Play 스크린샷은 `com.seorilabs.happyfarm` Play 설치본 `1.3.2 / 1003002`를 Android 기기에서 실행해 캡처한 실제 게임 화면입니다. phone은 `1080x1920`, tablet 슬롯은 Android `wm size 1440x2560`으로 앱을 다시 렌더링해 캡처했습니다.
 
 ## API 자동화 범위
 
-2026-05-29에 Android Publisher API로 다음 항목을 적용하고 readback 검증까지 완료했습니다.
+2026-06-12에 Android Publisher API로 다음 항목을 적용하고 readback 검증까지 완료했습니다.
 
 - 기본 언어: `ko-KR`
 - 고객지원 이메일: `cs@seorilabs.com`
-- `ko-KR` title/short/full description
+- `ko-KR`, `en-US` title/short/full description
 - 앱 아이콘 1장
 - 피처 그래픽 1장
-- phone screenshot 2장
-- 7-inch tablet screenshot 2장
-- 10-inch tablet screenshot 2장
+- `ko-KR`, `en-US` phone screenshot 각 2장
+- `ko-KR`, `en-US` 7-inch tablet screenshot 각 2장
+- `ko-KR`, `en-US` 10-inch tablet screenshot 각 2장
 
 Android Publisher API로 자동 반영 가능한 항목:
 

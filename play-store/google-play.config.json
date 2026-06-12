@@ -7,11 +7,11 @@
   "privacyPolicyUrl": "https://www.seorilabs.com/privacy",
   "targetTrack": "internal",
   "release": {
-    "name": "1.1.4",
+    "name": "1.3.2",
     "aabPath": "apps/mobile/android/app/build/outputs/bundle/release/app-release.aab",
     "notes": {
-      "ko-KR": "새 구역을 여는 표현을 더 쉬운 용어로 바꾸고, 현재 농장의 예상 생산성을 시간당 골드로 볼 수 있게 했습니다. 작물 선택 화면에는 작물별 투자효율을 추가해 어떤 작물을 심을지 더 쉽게 판단할 수 있습니다.",
-      "en-US": "Updated area-opening copy to simpler wording, added an estimated gold-per-hour productivity readout, and added crop efficiency indicators to help players choose what to plant."
+      "ko-KR": "Android 내부 테스트 빌드를 다시 만들고, 무한 엔드게임 시스템(마스터리, 변이 도감, 연구소, 교배/자동화, 농장 체인 개척, 업적/칭호)이 Android bundle에 포함되도록 수정했습니다.",
+      "en-US": "Rebuilt the Android internal test build so the endless endgame systems, including mastery, mutation collection, Research Lab, breeding, automation, farm-chain pioneering, achievements, and titles, are included in the Android bundle."
     }
   },
   "storeListing": {
@@ -21,11 +21,11 @@
     },
     "shortDescription": {
       "ko-KR": "작물을 심고 수확하며 농장을 확장하는 방치형 농장 게임",
-      "en-US": "Plant, harvest, and expand your cozy idle farm"
+      "en-US": "Plant, harvest, research, and expand your idle farm"
     },
     "fullDescription": {
-      "ko-KR": "작은 밭에서 시작해 작물을 심고, 성장 시간을 기다린 뒤 수확해 골드를 모으는 농장 타이쿤 게임입니다. 골드로 밭을 넓히고 성장 속도와 판매 수익을 업그레이드하며, 조건을 채우면 새 구역을 순서대로 열 수 있습니다.",
-      "en-US": "Start with a small field, plant crops, wait for them to grow, and harvest gold in a cozy farm tycoon game. Use gold to clear more plots, improve growth speed and sale profit, and unlock new areas in order as your farm expands."
+      "ko-KR": "작은 밭에서 시작해 작물을 심고 수확하며 골드를 모으는 방치형 농장 타이쿤 게임입니다. 골드로 밭을 넓히고 성장 속도와 판매 수익을 업그레이드하세요.\n\n작물 도감을 채우고, 연구소에서 자동 수확·자동 파종과 신품종 교배를 해금할 수 있습니다. 농장을 졸업시키면 새 지역을 개척하고 체인 농장이 오프라인 수익을 만들어 줍니다.\n\n업적과 칭호, 마스터리와 희귀 변이 수확까지 이어지는 장기 성장 목표를 즐겨보세요.",
+      "en-US": "Start with a small field, plant crops, harvest gold, and build a cozy idle farm tycoon. Spend gold to clear more plots and upgrade growth speed and sale profit.\n\nComplete your crop collection, unlock auto harvest, auto replanting, and hybrid breeding in the Research Lab. Graduate a farm to pioneer a new region while chain farms keep producing offline income.\n\nKeep growing through achievements, titles, crop mastery, and rare harvest mutations."
     }
   },
   "contentDeclarations": {
@@ -48,6 +48,32 @@
       "play-store/screenshots/tablet-10/tablet-10-1.png",
       "play-store/screenshots/tablet-10/tablet-10-2.png"
     ]
+  },
+  "localizedAssets": {
+    "ko-KR": {
+      "featureGraphic": "play-store/assets/ko-KR/feature-graphic-1024x500.png",
+      "phoneScreenshots": ["play-store/screenshots/ko-KR/phone/phone-1.png", "play-store/screenshots/ko-KR/phone/phone-2.png"],
+      "sevenInchTabletScreenshots": [
+        "play-store/screenshots/ko-KR/tablet-7/tablet-7-1.png",
+        "play-store/screenshots/ko-KR/tablet-7/tablet-7-2.png"
+      ],
+      "tenInchTabletScreenshots": [
+        "play-store/screenshots/ko-KR/tablet-10/tablet-10-1.png",
+        "play-store/screenshots/ko-KR/tablet-10/tablet-10-2.png"
+      ]
+    },
+    "en-US": {
+      "featureGraphic": "play-store/assets/en-US/feature-graphic-1024x500.png",
+      "phoneScreenshots": ["play-store/screenshots/en-US/phone/phone-1.png", "play-store/screenshots/en-US/phone/phone-2.png"],
+      "sevenInchTabletScreenshots": [
+        "play-store/screenshots/en-US/tablet-7/tablet-7-1.png",
+        "play-store/screenshots/en-US/tablet-7/tablet-7-2.png"
+      ],
+      "tenInchTabletScreenshots": [
+        "play-store/screenshots/en-US/tablet-10/tablet-10-1.png",
+        "play-store/screenshots/en-US/tablet-10/tablet-10-2.png"
+      ]
+    }
   },
   "automation": {
     "developerApiAuth": "GitHub Actions OIDC + Google Cloud Workload Identity Federation",
