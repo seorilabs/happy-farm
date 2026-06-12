@@ -2,6 +2,8 @@ apply plugin: "com.android.application"
 apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
 
+import org.gradle.api.tasks.PathSensitivity
+
 def googleServicesConfigFile = file("google-services.json")
 if (googleServicesConfigFile.exists()) {
     apply plugin: "com.google.gms.google-services"
@@ -104,6 +106,35 @@ react {
 
     /* Autolinking */
     autolinkLibrariesWithApp()
+}
+
+def sharedJsBundleInputs = [
+    "aitSrc": file("$rootDir/../../ait/src"),
+    "farmCoreSrc": file("$rootDir/../../../packages/farm-core/src"),
+    "mobileApp": file("$rootDir/../App.tsx"),
+    "mobileIndex": file("$rootDir/../index.js"),
+    "mobileMetroConfig": file("$rootDir/../metro.config.js"),
+    "mobilePackageJson": file("$rootDir/../package.json"),
+    "workspacePackageJson": file("$rootDir/../../../package.json"),
+    "workspacePnpmLock": file("$rootDir/../../../pnpm-lock.yaml"),
+]
+
+afterEvaluate {
+    tasks.matching { task ->
+        task.name.startsWith("createBundle") && task.name.endsWith("JsAndAssets")
+    }.configureEach { task ->
+        sharedJsBundleInputs.each { inputName, inputPath ->
+            if (inputPath.isDirectory()) {
+                task.inputs.dir(inputPath)
+                    .withPathSensitivity(PathSensitivity.RELATIVE)
+                    .withPropertyName("happyFarmSharedJs.${inputName}")
+            } else if (inputPath.exists()) {
+                task.inputs.file(inputPath)
+                    .withPathSensitivity(PathSensitivity.RELATIVE)
+                    .withPropertyName("happyFarmSharedJs.${inputName}")
+            }
+        }
+    }
 }
 
 /**
