@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import {
   Animated,
+  AppState,
   Easing,
   KeyboardAvoidingView,
   Modal,
@@ -70,10 +71,13 @@ import {
   createFarmAnalytics,
   createInitialState,
   DEFAULT_LOCALE,
+  formatDuration,
   formatHourlyGold,
   formatMoney,
   formatRemainingTime,
   formatSignedPercent,
+  getReturnSummary,
+  type ReturnSummary,
   getAreaLabel,
   getAreaUnlockRequirementText,
   getCollectionSummary,
@@ -122,6 +126,10 @@ const MAIN_HORIZONTAL_PADDING = 16;
 export const GAME_TICK_INTERVAL_MS = 250;
 // Auto-harvest analytics are batched into one summary event per interval.
 const AUTO_HARVEST_SUMMARY_INTERVAL_MS = 60_000;
+// How often the active session refreshes its "last seen" timestamp so the
+// welcome-back recap measures the real away gap even if the app is killed
+// without firing a background event.
+const LAST_SEEN_HEARTBEAT_MS = 30_000;
 const PROGRESS_ANIMATION_DURATION_MS = GAME_TICK_INTERVAL_MS;
 // Fresh-plant sprout "bounce in" duration.
 const PLANT_POP_DURATION_MS = 320;
@@ -174,6 +182,7 @@ type ActiveSheet =
   | { type: 'settings' }
   | { type: 'growthAd'; plotIndex: number; cropKey: CropKey; remainingMs: number }
   | { type: 'harvestBonus' }
+  | { type: 'welcomeBack'; summary: ReturnSummary }
   | { type: 'resetConfirm' }
   | null;
 
@@ -183,6 +192,10 @@ export type FarmGamePersistence = {
   removePersistedGameState: () => Promise<void>;
   readPersistedGameSettings?: () => Promise<Partial<FarmGameSettings> | null | undefined>;
   writePersistedGameSettings?: (settings: FarmGameSettings) => Promise<void>;
+  // Optional so older host integrations keep working; when absent the
+  // welcome-back summary simply never triggers.
+  readLastSeenAt?: () => Promise<number | null>;
+  writeLastSeenAt?: (timestamp: number) => Promise<void>;
 };
 
 type UseFarmAd = (adGroupId: string) => RewardedAdController;
@@ -236,6 +249,8 @@ const defaultPersistence: FarmGamePersistence = {
   removePersistedGameState: async () => undefined,
   readPersistedGameSettings: async () => null,
   writePersistedGameSettings: async () => undefined,
+  readLastSeenAt: async () => null,
+  writeLastSeenAt: async () => undefined,
 };
 
 function useUnsupportedAd(): RewardedAdController {
@@ -398,11 +413,23 @@ export default function FarmGame({
 
     async function loadSavedGame() {
       const savedState = await persistence.readPersistedGameState();
+      const lastSeenAt = (await persistence.readLastSeenAt?.()) ?? null;
       if (cancelled) {
         return;
       }
       setGameState(savedState);
       setIsSaveLoaded(true);
+
+      // Greet returning players with a recap of what waited for them. Computed
+      // off the freshly loaded save (not React state, which hasn't committed
+      // yet) so the very first frame after a long absence shows the summary.
+      const now = Date.now();
+      const summary = getReturnSummary(savedState, lastSeenAt, now);
+      if (summary != null) {
+        setActiveSheet({ type: 'welcomeBack', summary });
+      }
+      // Mark "seen" immediately so a quick reload doesn't replay the recap.
+      void persistence.writeLastSeenAt?.(now);
     }
 
     void loadSavedGame();
@@ -437,6 +464,27 @@ export default function FarmGame({
     }
     void persistence.writePersistedGameState(gameState);
   }, [gameState, isSaveLoaded, persistence]);
+
+  // Keep the "last seen" timestamp fresh while the player is active so the
+  // welcome-back recap measures the real gap since they left — not the time
+  // since their last save-triggering action. A light heartbeat covers the
+  // common case; an app-background write captures the exact moment they leave.
+  useEffect(() => {
+    if (!isSaveLoaded) {
+      return;
+    }
+    const markSeen = () => void persistence.writeLastSeenAt?.(Date.now());
+    const heartbeat = setInterval(markSeen, LAST_SEEN_HEARTBEAT_MS);
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'background' || nextState === 'inactive') {
+        markSeen();
+      }
+    });
+    return () => {
+      clearInterval(heartbeat);
+      subscription.remove();
+    };
+  }, [isSaveLoaded, persistence]);
 
   useEffect(() => {
     if (!isSettingsLoaded) {
@@ -735,6 +783,16 @@ export default function FarmGame({
       context: analyticsContext(),
     });
     toast(messages.chainCollectedToast(formatMoney(collected.collectedGold, locale)));
+  }
+
+  // Closes the welcome-back recap. When passive income piled up while away we
+  // sweep it straight into the player's purse so the recap doubles as a
+  // one-tap collect — returning should feel like an instant reward, not a chore.
+  function dismissWelcomeBack(collectOffline: boolean) {
+    if (collectOffline) {
+      collectChain();
+    }
+    setActiveSheet(null);
   }
 
   function openPrestigeConfirm() {
@@ -1556,6 +1614,41 @@ export default function FarmGame({
           </View>
         ) : null}
 
+        {activeSheet?.type === 'welcomeBack' ? (
+          <View>
+            {activeSheet.summary.offlineGold > 0 ? (
+              <View style={styles.welcomeBackRow}>
+                <Text style={styles.welcomeBackIcon}>💰</Text>
+                <View style={styles.welcomeBackRowText}>
+                  <Text style={styles.welcomeBackRowLabel}>{messages.welcomeBackOfflineLabel}</Text>
+                  <Text style={styles.welcomeBackRowValue}>
+                    +{formatMoney(activeSheet.summary.offlineGold, locale)}G
+                  </Text>
+                </View>
+              </View>
+            ) : null}
+            {activeSheet.summary.readyCropCount > 0 ? (
+              <View style={styles.welcomeBackRow}>
+                <Text style={styles.welcomeBackIcon}>🧺</Text>
+                <View style={styles.welcomeBackRowText}>
+                  <Text style={styles.welcomeBackRowLabel}>{messages.welcomeBackReadyLabel}</Text>
+                  <Text style={styles.welcomeBackRowValue}>
+                    {messages.welcomeBackReadyValue(activeSheet.summary.readyCropCount)}
+                  </Text>
+                </View>
+              </View>
+            ) : null}
+            <SheetAction
+              label={
+                activeSheet.summary.offlineGold > 0
+                  ? messages.welcomeBackCollectAction(formatMoney(activeSheet.summary.offlineGold, locale))
+                  : messages.welcomeBackConfirmAction
+              }
+              onPress={() => dismissWelcomeBack(activeSheet.type === 'welcomeBack' && activeSheet.summary.offlineGold > 0)}
+            />
+          </View>
+        ) : null}
+
         {activeSheet?.type === 'resetConfirm' ? (
           <View>
             <Text style={styles.resetWarning}>{messages.resetWarning}</Text>
@@ -2062,6 +2155,9 @@ function getSheetTitle(activeSheet: ActiveSheet, messages: FarmMessages) {
   if (activeSheet?.type === 'harvestBonus') {
     return messages.sheetTitleHarvestBonus;
   }
+  if (activeSheet?.type === 'welcomeBack') {
+    return messages.sheetTitleWelcomeBack;
+  }
   if (activeSheet?.type === 'settings') {
     return messages.sheetTitleSettings;
   }
@@ -2107,6 +2203,9 @@ function getSheetDescription(
       formatRemainingTime(HARVEST_BONUS_BOOST_DURATION_MS, locale),
       HARVEST_BONUS_MULTIPLIER
     );
+  }
+  if (activeSheet?.type === 'welcomeBack') {
+    return messages.sheetDescriptionWelcomeBack(formatDuration(activeSheet.summary.awayMs, locale));
   }
   if (activeSheet?.type === 'settings') {
     return messages.sheetDescriptionSettings;
@@ -2883,6 +2982,34 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
     fontWeight: '700',
+  },
+  welcomeBackRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+    padding: 14,
+    borderRadius: 12,
+    backgroundColor: '#f3faf1',
+    borderWidth: 1,
+    borderColor: '#d6ecd0',
+  },
+  welcomeBackIcon: {
+    fontSize: 28,
+    marginRight: 14,
+  },
+  welcomeBackRowText: {
+    flex: 1,
+  },
+  welcomeBackRowLabel: {
+    color: '#5b6b58',
+    fontSize: 13,
+    fontWeight: '800',
+    marginBottom: 2,
+  },
+  welcomeBackRowValue: {
+    color: '#1f7a3d',
+    fontSize: 20,
+    fontWeight: '900',
   },
   resetInput: {
     minHeight: 48,

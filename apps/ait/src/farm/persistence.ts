@@ -3,6 +3,12 @@ import { createInitialState, migrateLoadedState, SAVE_KEY, type GameState } from
 import { FARM_GAME_SETTINGS_KEY, normalizeFarmGameSettings, type FarmGameSettings } from './gameSettings';
 import type { KeyValueStorage } from './platform/types';
 
+// Wall-clock timestamp (ms) of the player's last active moment, used to greet
+// returning players with an offline-progress summary. Stored separately from
+// the save blob so it can be refreshed cheaply (heartbeat / app background)
+// without rewriting the whole game state.
+export const LAST_SEEN_KEY = `${SAVE_KEY}.lastSeen`;
+
 export function createFarmPersistence(storage: KeyValueStorage) {
   return {
     async readPersistedGameState() {
@@ -68,6 +74,27 @@ export function createFarmPersistence(storage: KeyValueStorage) {
     async writePersistedGameSettings(settings: FarmGameSettings) {
       try {
         await storage.setItem(FARM_GAME_SETTINGS_KEY, JSON.stringify(normalizeFarmGameSettings(settings)));
+      } catch {
+        // Storage failures must not interrupt gameplay.
+      }
+    },
+
+    async readLastSeenAt(): Promise<number | null> {
+      try {
+        const raw = await storage.getItem(LAST_SEEN_KEY);
+        if (raw == null) {
+          return null;
+        }
+        const value = Number(raw);
+        return Number.isFinite(value) && value > 0 ? value : null;
+      } catch {
+        return null;
+      }
+    },
+
+    async writeLastSeenAt(timestamp: number) {
+      try {
+        await storage.setItem(LAST_SEEN_KEY, String(timestamp));
       } catch {
         // Storage failures must not interrupt gameplay.
       }
