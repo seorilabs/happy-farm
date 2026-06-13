@@ -254,11 +254,12 @@ type PendingFarmCommandEffect =
 
 // One-shot floating "+gold" feedback spawned at the tapped plot on a manual
 // harvest. Auto-harvest stays silent so the burst always maps to a finger tap.
+// Tone hierarchy: normal → special (mastery/boost) → golden (5× mutation) → rainbow (25× mutation)
 type HarvestPop = {
   id: number;
   index: number;
   label: string;
-  tone: 'normal' | 'special';
+  tone: 'normal' | 'special' | 'golden' | 'rainbow';
 };
 
 // Imperative handle so a harvest can fire a burst without lifting pop state into
@@ -584,11 +585,19 @@ export default function FarmGame({
       }
       const isSpecialHarvest = event.mutation != null || event.newMasteryRank != null || event.boostActive;
       if (event.goldGained > 0) {
-        harvestFxRef.current?.spawn(
-          event.plotIndex,
-          `+${formatMoney(event.goldGained, locale)}`,
-          isSpecialHarvest ? 'special' : 'normal'
-        );
+        const mutationKey = event.mutation?.key;
+        const harvestTone: HarvestPop['tone'] =
+          mutationKey === 'rainbow' ? 'rainbow' :
+          mutationKey === 'golden' ? 'golden' :
+          isSpecialHarvest ? 'special' :
+          'normal';
+        const harvestLabel =
+          mutationKey === 'rainbow'
+            ? `🌈 +${formatMoney(event.goldGained, locale)}`
+            : mutationKey === 'golden'
+              ? `✨ +${formatMoney(event.goldGained, locale)}`
+              : `+${formatMoney(event.goldGained, locale)}`;
+        harvestFxRef.current?.spawn(event.plotIndex, harvestLabel, harvestTone);
         pulseGold();
       }
       // A celebratory double-buzz marks rare moments (mutation, mastery rank-up,
@@ -2287,6 +2296,15 @@ const HarvestFxOverlay = React.forwardRef<HarvestFxHandle, { tileSize: number }>
   );
 });
 
+// Pop animation parameters per tone so rare mutations feel dramatically
+// different from a normal harvest without touching the shared progress driver.
+const HARVEST_POP_DURATION: Record<HarvestPop['tone'], number> = {
+  normal: 900,
+  special: 950,
+  golden: 1200,
+  rainbow: 1600,
+};
+
 function HarvestPopText({
   pop,
   tileSize,
@@ -2304,10 +2322,12 @@ function HarvestPopText({
   const onDoneRef = useRef(onDone);
   onDoneRef.current = onDone;
 
+  const duration = HARVEST_POP_DURATION[pop.tone];
+
   useEffect(() => {
     const animation = Animated.timing(progress, {
       toValue: 1,
-      duration: 900,
+      duration,
       easing: Easing.out(Easing.cubic),
       useNativeDriver: true,
     });
@@ -2317,22 +2337,41 @@ function HarvestPopText({
       }
     });
     return () => animation.stop();
-  }, [pop.id, progress]);
+  }, [pop.id, progress, duration]);
 
   const col = pop.index % PLOT_COLUMNS;
   const row = Math.floor(pop.index / PLOT_COLUMNS);
   const left = col * (tileSize + PLOT_GAP);
   const top = row * (tileSize + PLOT_GAP);
+
+  // Rainbow floats highest and has the most dramatic scale bounce.
+  // Golden is between normal and rainbow.
+  const floatDistance =
+    pop.tone === 'rainbow' ? tileSize * 0.9 :
+    pop.tone === 'golden' ? tileSize * 0.7 :
+    tileSize * 0.55;
+
   const translateY = progress.interpolate({
     inputRange: [0, 1],
-    outputRange: [tileSize * 0.2, -tileSize * 0.55],
+    outputRange: [tileSize * 0.2, -floatDistance],
   });
+
+  const scaleInputRange =
+    pop.tone === 'rainbow' ? [0, 0.2, 0.35, 0.55, 1] :
+    pop.tone === 'golden' ? [0, 0.28, 1] :
+    [0, 0.25, 1];
+  const scaleOutputRange =
+    pop.tone === 'rainbow' ? [0.3, 1.7, 1.3, 1.45, 1.1] :
+    pop.tone === 'golden' ? [0.45, 1.4, 1.1] :
+    [0.6, 1.15, 1];
+
   const scale = progress.interpolate({
-    inputRange: [0, 0.25, 1],
-    outputRange: [0.6, 1.15, 1],
+    inputRange: scaleInputRange,
+    outputRange: scaleOutputRange,
   });
+
   const opacity = progress.interpolate({
-    inputRange: [0, 0.12, 0.65, 1],
+    inputRange: [0, 0.1, 0.6, 1],
     outputRange: [0, 1, 1, 0],
   });
 
@@ -2342,6 +2381,8 @@ function HarvestPopText({
         style={[
           styles.harvestPopText,
           pop.tone === 'special' && styles.harvestPopTextSpecial,
+          pop.tone === 'golden' && styles.harvestPopTextGolden,
+          pop.tone === 'rainbow' && styles.harvestPopTextRainbow,
           { opacity, transform: [{ translateY }, { scale }] },
         ]}
       >
@@ -3090,6 +3131,23 @@ const styles = StyleSheet.create({
     fontSize: 22,
     textShadowColor: 'rgba(180, 83, 9, 0.95)',
     textShadowRadius: 4,
+  },
+  // Golden mutation (5×): saturated gold, noticeably larger than special.
+  harvestPopTextGolden: {
+    color: '#FFD700',
+    fontSize: 26,
+    textShadowColor: 'rgba(120, 60, 0, 0.95)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 6,
+  },
+  // Rainbow mutation (25×): vivid magenta that reads "rare" at a glance,
+  // much larger to command attention like a jackpot moment.
+  harvestPopTextRainbow: {
+    color: '#ff4dca',
+    fontSize: 32,
+    textShadowColor: 'rgba(80, 0, 100, 0.9)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 8,
   },
   toast: {
     position: 'absolute',
