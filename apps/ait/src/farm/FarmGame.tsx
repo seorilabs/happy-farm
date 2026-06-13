@@ -2048,9 +2048,6 @@ const PlotCell = React.memo(function PlotCell({
       {plot.state === 1 && crop != null && plot.startTime != null ? (
         <GrowthProgressBar progressRatio={progressRatio} />
       ) : null}
-      {plot.state === 1 && growingTimeLabel != null ? (
-        <Text style={styles.growingTimeText} numberOfLines={1}>{growingTimeLabel}</Text>
-      ) : null}
       {plot.state === 2 ? (
         <ReadyCropIcon icon={icon} phaseSeed={plot.id} />
       ) : (
@@ -2060,6 +2057,9 @@ const PlotCell = React.memo(function PlotCell({
           onPlantPulseDone={() => onPlantPulseDone(index)}
         />
       )}
+      {plot.state === 1 && growingTimeLabel != null ? (
+        <Text style={styles.growingTimeText} numberOfLines={1}>{growingTimeLabel}</Text>
+      ) : null}
     </Pressable>
   );
 });
