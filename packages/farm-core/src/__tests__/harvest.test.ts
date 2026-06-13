@@ -70,6 +70,24 @@ describe('performHarvestAll', () => {
     expect(batch.state.gold).toBe(sequential.gold);
   });
 
+  test('keys the mutation roll by plot index via rollFor', () => {
+    const ripe = withRipePlots(createInitialState(), [0, 1, 2]);
+    const seenIndices: number[] = [];
+    const rollFor = (plotIndex: number) => {
+      seenIndices.push(plotIndex);
+      return 0.999999;
+    };
+
+    const first = performHarvestAll(ripe, { now: 0, rollFor });
+    const second = performHarvestAll(ripe, { now: 0, rollFor });
+
+    // Each ripe plot draws its roll under its own index, so the same plot always
+    // gets the same value regardless of the surrounding ripe set.
+    expect(seenIndices).toEqual(expect.arrayContaining([0, 1, 2]));
+    expect(first.totalGoldGained).toBe(second.totalGoldGained);
+    expect(first.state.gold).toBe(second.state.gold);
+  });
+
   test('is a no-op when nothing is ripe', () => {
     const base = createInitialState();
     const result = performHarvestAll(base, { now: 0, rng: noMutationRng });

@@ -696,6 +696,12 @@ export default function FarmGame({
     [gameState, harvestBonusBoost.multiplier]
   );
   const readyPlotCount = useMemo(() => getReadyPlotCount(gameState), [gameState]);
+  // Blocks a second "Harvest All" tap until the ripe set actually changes,
+  // preventing a rapid double-tap from replaying the batch feedback.
+  const harvestAllInFlightRef = useRef(false);
+  useEffect(() => {
+    harvestAllInFlightRef.current = false;
+  }, [readyPlotCount]);
   const chainIncome = useMemo(() => getChainIncome(gameState), [gameState, tick]);
   const mapActionableCount = useMemo(
     () => (chainIncome.accruedGold > 0 ? 1 : 0) + (canPrestige(gameState).allowed ? 1 : 0),
@@ -1126,22 +1132,43 @@ export default function FarmGame({
   }
 
   function harvestAllCrops() {
-    const now = Date.now();
-    // Pre-roll one mutation roll per ripe plot so the previewed outcome (FX,
-    // toast, analytics) matches the state committed inside the updater — the
-    // same fixed-roll discipline the single-harvest path uses.
-    const rolls = Array.from({ length: getReadyPlotCount(gameState) }, () => Math.random());
-    const makeRng = () => {
-      let cursor = 0;
-      return () => rolls[cursor++] ?? Math.random();
-    };
-
-    const preview = performHarvestAll(gameState, { now, rng: makeRng() });
-    if (preview.harvestedCount === 0) {
+    // Re-entry guard: a fast double-tap before the batch re-renders (and the
+    // button disappears) would otherwise replay the FX/toast/pulse. The flag is
+    // cleared whenever the ripe set changes (see effect below), so the next
+    // distinct set stays harvestable.
+    if (harvestAllInFlightRef.current) {
       return;
     }
 
-    setGameState((state) => performHarvestAll(state, { now, rng: makeRng() }).state);
+    const now = Date.now();
+    // One stable roll per plot index — not a flat sequence. A plot keeps its
+    // roll no matter how the ripe set shifts between this preview and the
+    // committed update, so the on-screen FX can never claim a mutation the
+    // harvested state doesn't actually have.
+    const rollByPlot: Record<number, number> = {};
+    const rollFor = (plotIndex: number) => {
+      const existing = rollByPlot[plotIndex];
+      if (existing != null) {
+        return existing;
+      }
+      const roll = Math.random();
+      rollByPlot[plotIndex] = roll;
+      return roll;
+    };
+
+    const preview = performHarvestAll(gameState, { now, rollFor });
+    if (preview.harvestedCount === 0) {
+      return;
+    }
+    harvestAllInFlightRef.current = true;
+
+    setGameState((state) =>
+      // Commit the exact previewed state when nothing changed underneath us so
+      // the FX/toast match perfectly; otherwise recompute on the live state to
+      // avoid clobbering a concurrent tick. Per-plot rolls keep both paths
+      // consistent for any plot harvested in both.
+      state === gameState ? preview.state : performHarvestAll(state, { now, rollFor }).state
+    );
 
     // One floating "+gold" per harvested plot preserves the spatial reward; the
     // overlay self-caps concurrent pops, so a full grid stays cheap. The rest of

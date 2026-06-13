@@ -213,14 +213,24 @@ export type HarvestAllResult = {
   specialCount: number;
 };
 
+export type HarvestAllOptions = HarvestOptions & {
+  // Per-plot mutation roll keyed by plot index. When supplied, a given plot
+  // always consumes the same roll regardless of how many other plots are ripe,
+  // so a UI preview and the committed state update agree on that plot's outcome
+  // even if a concurrent growth/auto-harvest tick shifts the ripe set between
+  // the two calls. Falls back to the shared `rng` when omitted.
+  rollFor?: (plotIndex: number) => number;
+};
+
 // Manual "Harvest All": collects every ripe plot in one action through the
 // shared harvest pipeline so mastery, mutations, and collection side effects
 // stay identical to tapping each plot. Returns per-plot outcomes so the caller
 // can drive batched feedback (one toast/pulse/sound) and floating-gold FX.
 // Pure: the caller owns every UI side effect, just like performHarvest.
-export function performHarvestAll(gameState: GameState, options: HarvestOptions = {}): HarvestAllResult {
+export function performHarvestAll(gameState: GameState, options: HarvestAllOptions = {}): HarvestAllResult {
   const now = options.now ?? Date.now();
   const rng = options.rng ?? Math.random;
+  const { rollFor } = options;
 
   let state = gameState;
   const harvests: HarvestAllEntry[] = [];
@@ -232,7 +242,8 @@ export function performHarvestAll(gameState: GameState, options: HarvestOptions 
     if (!isPlotHarvestable(state, state.plots[plotIndex])) {
       continue;
     }
-    const outcome = performHarvest(state, plotIndex, { now, rng });
+    const plotRng = rollFor != null ? () => rollFor(plotIndex) : rng;
+    const outcome = performHarvest(state, plotIndex, { now, rng: plotRng });
     if (outcome == null) {
       continue;
     }
