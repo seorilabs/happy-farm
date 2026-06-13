@@ -1585,9 +1585,55 @@ function PlotCell({
       {plot.state === 1 && crop != null && plot.startTime != null ? (
         <GrowthProgressBar progressRatio={progressRatio} />
       ) : null}
-      <Text style={plot.state === 2 ? styles.readyCropIcon : styles.cropIcon}>{icon}</Text>
+      {plot.state === 2 ? (
+        <ReadyCropIcon icon={icon} phaseSeed={plot.id} />
+      ) : (
+        <Text style={styles.cropIcon}>{icon}</Text>
+      )}
     </Pressable>
   );
+}
+
+// Ripe crops gently pulse so harvestable plots draw the eye in a full grid,
+// reinforcing the "see ready -> tap" loop. Native-driven loop keeps it cheap
+// even with every plot ripe at once.
+function ReadyCropIcon({ icon, phaseSeed }: { icon: string; phaseSeed: number }) {
+  const pulseRef = useRef<Animated.Value | null>(null);
+  if (pulseRef.current == null) {
+    pulseRef.current = new Animated.Value(0);
+  }
+  const pulse = pulseRef.current;
+
+  useEffect(() => {
+    // Stagger each plot's pulse by a stable per-plot offset so a grid of ripe
+    // crops breathes organically instead of beating in robotic unison.
+    const startDelay = (phaseSeed % 7) * 90;
+    const animation = Animated.sequence([
+      Animated.delay(startDelay),
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulse, {
+            toValue: 1,
+            duration: 650,
+            easing: Easing.inOut(Easing.quad),
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulse, {
+            toValue: 0,
+            duration: 650,
+            easing: Easing.inOut(Easing.quad),
+            useNativeDriver: true,
+          }),
+        ])
+      ),
+    ]);
+    animation.start();
+    return () => animation.stop();
+  }, [pulse, phaseSeed]);
+
+  const scale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.14] });
+
+  return <Animated.Text style={[styles.readyCropIcon, { transform: [{ scale }] }]}>{icon}</Animated.Text>;
 }
 
 const HarvestFxOverlay = React.forwardRef<HarvestFxHandle, { tileSize: number }>(function HarvestFxOverlay(
