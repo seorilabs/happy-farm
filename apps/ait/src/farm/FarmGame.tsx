@@ -2001,7 +2001,14 @@ const PlotCell = React.memo(function PlotCell({
   }
 
   const crop = plot.cropType != null ? getCrop(plot.cropType) : null;
-  const icon = plot.state === 2 ? (crop?.icon ?? '🌱') : progressRatio > 0.5 ? '🌿' : '🌱';
+  // Reveal the actual crop icon at ≥65% growth so players can see what's
+  // ripening and feel anticipation before the harvest tap.
+  const icon =
+    plot.state === 2 || progressRatio >= 0.65
+      ? (crop?.icon ?? '🌿')
+      : progressRatio >= 0.3
+        ? '🌿'
+        : '🌱';
 
   return (
     <Pressable
