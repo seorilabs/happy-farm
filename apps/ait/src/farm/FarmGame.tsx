@@ -123,6 +123,8 @@ export const GAME_TICK_INTERVAL_MS = 250;
 // Auto-harvest analytics are batched into one summary event per interval.
 const AUTO_HARVEST_SUMMARY_INTERVAL_MS = 60_000;
 const PROGRESS_ANIMATION_DURATION_MS = GAME_TICK_INTERVAL_MS;
+// Fresh-plant sprout "bounce in" duration.
+const PLANT_POP_DURATION_MS = 320;
 const SHEET_DISMISS_DRAG_DISTANCE = 96;
 const SHEET_DISMISS_VELOCITY = 1.1;
 const SHEET_DISMISS_TRANSLATE_Y = 520;
@@ -286,6 +288,10 @@ export default function FarmGame({
   const [gameSettings, setGameSettings] = useState<FarmGameSettings>(DEFAULT_FARM_GAME_SETTINGS);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Per-plot "just planted" tokens. Bumped only on a manual plant so the fresh
+  // sprout bounces in (auto-replant and save-load stay silent). Keyed by index.
+  const [plantPulses, setPlantPulses] = useState<Record<number, number>>({});
+  const plantPulseTokenRef = useRef(0);
   const harvestFxRef = useRef<HarvestFxHandle>(null);
   const goldPulseRef = useRef<Animated.Value | null>(null);
   if (goldPulseRef.current == null) {
@@ -362,6 +368,16 @@ export default function FarmGame({
   }, [goldPulse]);
   const closeSheet = useCallback(() => {
     setActiveSheet(null);
+  }, []);
+  const clearPlantPulse = useCallback((index: number) => {
+    setPlantPulses((prev) => {
+      if (prev[index] == null) {
+        return prev;
+      }
+      const next = { ...prev };
+      delete next[index];
+      return next;
+    });
   }, []);
 
   useEffect(() => {
@@ -943,6 +959,12 @@ export default function FarmGame({
     }
 
     setGameState((state) => performPlant(state, index, cropKey, now) ?? state);
+    // Pop the fresh sprout in and give a light tap so planting feels as tactile
+    // as harvesting. Manual path only, so auto-replant stays silent.
+    plantPulseTokenRef.current += 1;
+    const token = plantPulseTokenRef.current;
+    setPlantPulses((prev) => ({ ...prev, [index]: token }));
+    Vibration.vibrate(15);
     farmAnalytics.trackCropPlanted(cropKey, crop.area, crop.tier, cost, analyticsContext());
   }
 
@@ -1136,6 +1158,13 @@ export default function FarmGame({
     selectedTool,
   ]);
 
+  // Stable, index-based press handler so memoized PlotCells keep referential
+  // equality across the 250ms tick and plant-pulse updates. handlePlotClick
+  // closes over fast-changing state, so route through a ref instead of a dep.
+  const handlePlotClickRef = useRef(handlePlotClick);
+  handlePlotClickRef.current = handlePlotClick;
+  const onPlotPress = useCallback((index: number) => handlePlotClickRef.current(index), []);
+
   return (
     <View style={styles.root}>
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
@@ -1241,12 +1270,15 @@ export default function FarmGame({
           {gameState.plots.map((plot, index) => (
             <PlotCell
               key={plot.id}
+              index={index}
               plot={plot}
               unlocked={index < gameState.unlockedPlotCount}
               progressRatio={getPlotGrowthRatio(gameState, plot)}
               tileSize={plotTileSize}
               messages={messages}
-              onPress={() => handlePlotClick(index)}
+              plantToken={plantPulses[index]}
+              onPlantPulseDone={clearPlantPulse}
+              onPress={onPlotPress}
             />
           ))}
           <HarvestFxOverlay ref={harvestFxRef} tileSize={plotTileSize} />
@@ -1573,26 +1605,36 @@ function NavButton({
   );
 }
 
-function PlotCell({
+// Memoized so a tick or a single plot's plant-pulse update never reconciles the
+// other (up to 24) plot subtrees. Relies on stable, index-based callbacks and
+// performPlant/performHarvest keeping untouched plot object refs intact.
+const PlotCell = React.memo(function PlotCell({
+  index,
   plot,
   unlocked,
   progressRatio,
   tileSize,
   messages,
+  plantToken,
+  onPlantPulseDone,
   onPress,
 }: {
+  index: number;
   plot: GameState['plots'][number];
   unlocked: boolean;
   progressRatio: number;
   tileSize: number;
   messages: FarmMessages;
-  onPress: () => void;
+  plantToken: number | undefined;
+  onPlantPulseDone: (index: number) => void;
+  onPress: (index: number) => void;
 }) {
   const tileSizeStyle = { width: tileSize, height: tileSize };
+  const handlePress = () => onPress(index);
 
   if (!unlocked) {
     return (
-      <Pressable style={[styles.plotTile, tileSizeStyle, styles.lockedPlot]} onPress={onPress}>
+      <Pressable style={[styles.plotTile, tileSizeStyle, styles.lockedPlot]} onPress={handlePress}>
         <Text style={styles.lockIcon}>🔒</Text>
       </Pressable>
     );
@@ -1600,7 +1642,7 @@ function PlotCell({
 
   if (plot.state === 0) {
     return (
-      <Pressable style={[styles.plotTile, tileSizeStyle, styles.emptyPlot]} onPress={onPress}>
+      <Pressable style={[styles.plotTile, tileSizeStyle, styles.emptyPlot]} onPress={handlePress}>
         <Text style={styles.emptyPlotText}>{messages.emptyPlot}</Text>
       </Pressable>
     );
@@ -1612,7 +1654,7 @@ function PlotCell({
   return (
     <Pressable
       style={[styles.plotTile, tileSizeStyle, plot.state === 2 ? styles.readyPlot : styles.growingPlot]}
-      onPress={onPress}
+      onPress={handlePress}
     >
       {plot.state === 2 ? (
         <View style={styles.harvestBadge}>
@@ -1625,11 +1667,15 @@ function PlotCell({
       {plot.state === 2 ? (
         <ReadyCropIcon icon={icon} phaseSeed={plot.id} />
       ) : (
-        <Text style={styles.cropIcon}>{icon}</Text>
+        <GrowingCropIcon
+          icon={icon}
+          plantToken={plantToken}
+          onPlantPulseDone={() => onPlantPulseDone(index)}
+        />
       )}
     </Pressable>
   );
-}
+});
 
 // Ripe crops gently pulse so harvestable plots draw the eye in a full grid,
 // reinforcing the "see ready -> tap" loop. Native-driven loop keeps it cheap
@@ -1671,6 +1717,56 @@ function ReadyCropIcon({ icon, phaseSeed }: { icon: string; phaseSeed: number })
   const scale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.14] });
 
   return <Animated.Text style={[styles.readyCropIcon, { transform: [{ scale }] }]}>{icon}</Animated.Text>;
+}
+
+// The growing-crop sprout. On a fresh manual plant (plantToken set), it bounces
+// in once so tapping an empty plot feels tactile. Auto-replant and save-load
+// pass no token, so reopening the app never re-pops every growing plot.
+function GrowingCropIcon({
+  icon,
+  plantToken,
+  onPlantPulseDone,
+}: {
+  icon: string;
+  plantToken: number | undefined;
+  onPlantPulseDone: () => void;
+}) {
+  const popRef = useRef<Animated.Value | null>(null);
+  if (popRef.current == null) {
+    popRef.current = new Animated.Value(1);
+  }
+  const pop = popRef.current;
+  const lastTokenRef = useRef<number | undefined>(undefined);
+  const onDoneRef = useRef(onPlantPulseDone);
+  onDoneRef.current = onPlantPulseDone;
+
+  useEffect(() => {
+    if (plantToken == null || plantToken === lastTokenRef.current) {
+      return undefined;
+    }
+    lastTokenRef.current = plantToken;
+    pop.setValue(0);
+    const animation = Animated.timing(pop, {
+      toValue: 1,
+      duration: PLANT_POP_DURATION_MS,
+      easing: Easing.out(Easing.back(2.2)),
+      useNativeDriver: true,
+    });
+    animation.start(({ finished }) => {
+      if (finished) {
+        // Clear the parent token so a later remount never re-triggers the pop.
+        onDoneRef.current();
+      }
+    });
+    return () => animation.stop();
+  }, [plantToken, pop]);
+
+  const scale = pop.interpolate({ inputRange: [0, 1], outputRange: [0.4, 1] });
+  const opacity = pop.interpolate({ inputRange: [0, 0.4, 1], outputRange: [0.2, 1, 1] });
+
+  return (
+    <Animated.Text style={[styles.cropIcon, { opacity, transform: [{ scale }] }]}>{icon}</Animated.Text>
+  );
 }
 
 const HarvestFxOverlay = React.forwardRef<HarvestFxHandle, { tileSize: number }>(function HarvestFxOverlay(
