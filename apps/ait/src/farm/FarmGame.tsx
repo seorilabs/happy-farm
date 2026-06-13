@@ -1575,14 +1575,16 @@ export default function FarmGame({
           />
           {visibleCropKeys.map((key) => {
             const crop = getCrop(key);
+            const cropCost = getCropPurchaseCost(gameState, key);
             return (
               <ToolButton
                 key={key}
                 active={selectedTool === key}
                 icon={crop.icon}
                 name={getLocalizedCropName(key)}
-                cost={formatMoney(getCropPurchaseCost(gameState, key), locale)}
+                cost={formatMoney(cropCost, locale)}
                 roi={messages.roi(formatSignedPercent(getCropEconomy(cropEconomyByKey, key).roiPercent, locale))}
+                affordable={gameState.gold >= cropCost}
                 onPress={() => selectCrop(key)}
               />
             );
@@ -2488,6 +2490,7 @@ function ToolButton({
   name,
   cost,
   roi,
+  affordable,
   onPress,
 }: {
   active: boolean;
@@ -2495,6 +2498,7 @@ function ToolButton({
   name: string;
   cost?: string;
   roi?: string;
+  affordable?: boolean;
   onPress: () => void;
 }) {
   return (
@@ -2503,7 +2507,9 @@ function ToolButton({
       <Text style={styles.toolName} numberOfLines={1}>
         {name}
       </Text>
-      {cost != null ? <Text style={styles.toolCost}>{cost}</Text> : null}
+      {cost != null ? (
+        <Text style={[styles.toolCost, affordable === false && styles.toolCostUnaffordable]}>{cost}</Text>
+      ) : null}
       {roi != null ? <Text style={styles.toolRoi}>{roi}</Text> : null}
     </Pressable>
   );
@@ -3172,6 +3178,9 @@ const styles = StyleSheet.create({
     color: '#8f5c00',
     fontSize: 10,
     fontWeight: '900',
+  },
+  toolCostUnaffordable: {
+    color: '#b42318',
   },
   toolRoi: {
     color: '#247241',
