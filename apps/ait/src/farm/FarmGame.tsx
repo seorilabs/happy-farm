@@ -258,7 +258,7 @@ type HarvestPop = {
   id: number;
   index: number;
   label: string;
-  tone: 'normal' | 'special';
+  tone: 'normal' | 'special' | 'golden' | 'rainbow';
 };
 
 // Imperative handle so a harvest can fire a burst without lifting pop state into
@@ -266,6 +266,12 @@ type HarvestPop = {
 // grid, keeping rapid tapping cheap on low-end devices.
 type HarvestFxHandle = {
   spawn: (index: number, label: string, tone: HarvestPop['tone']) => void;
+};
+
+// Imperative handle to fire the full-screen mutation flash overlay without
+// lifting flash state into FarmGame (avoids re-rendering the whole tree).
+type MutationFlashHandle = {
+  flash: (mutationKey: 'golden' | 'rainbow') => void;
 };
 
 const defaultFarmAnalytics = createFarmAnalytics();
@@ -341,6 +347,7 @@ export default function FarmGame({
   const [plantPulses, setPlantPulses] = useState<Record<number, number>>({});
   const plantPulseTokenRef = useRef(0);
   const harvestFxRef = useRef<HarvestFxHandle>(null);
+  const mutationFlashRef = useRef<MutationFlashHandle>(null);
   const goldPulseRef = useRef<Animated.Value | null>(null);
   if (goldPulseRef.current == null) {
     goldPulseRef.current = new Animated.Value(0);
@@ -583,13 +590,25 @@ export default function FarmGame({
         setActiveSheet({ type: 'harvestBonus' });
       }
       const isSpecialHarvest = event.mutation != null || event.newMasteryRank != null || event.boostActive;
+      const mutationKey = event.mutation?.key;
+      const popTone: HarvestPop['tone'] =
+        mutationKey === 'rainbow'
+          ? 'rainbow'
+          : mutationKey === 'golden'
+            ? 'golden'
+            : isSpecialHarvest
+              ? 'special'
+              : 'normal';
       if (event.goldGained > 0) {
         harvestFxRef.current?.spawn(
           event.plotIndex,
           `+${formatMoney(event.goldGained, locale)}`,
-          isSpecialHarvest ? 'special' : 'normal'
+          popTone
         );
         pulseGold();
+      }
+      if (event.mutation != null) {
+        mutationFlashRef.current?.flash(event.mutation.key as 'golden' | 'rainbow');
       }
       // A celebratory double-buzz marks rare moments (mutation, mastery rank-up,
       // active boost); ordinary harvests keep the light single tap. The pattern
@@ -1647,6 +1666,8 @@ export default function FarmGame({
         </View>
       ) : null}
 
+      <MutationFlashOverlay ref={mutationFlashRef} />
+
       {harvestCombo >= 2 ? (
         <View pointerEvents="none" style={styles.comboOverlay}>
           <ComboDisplay count={harvestCombo} messages={messages} />
@@ -2069,6 +2090,81 @@ function ComboDisplay({ count, messages }: { count: number; messages: FarmMessag
   );
 }
 
+// Full-screen flash overlay for rare mutation harvests. Two overlay layers
+// (golden and rainbow) driven independently so both can coexist without shared
+// state; native driver keeps the flash cheap even at the moment of a burst.
+const MutationFlashOverlay = React.forwardRef<MutationFlashHandle>(function MutationFlashOverlay(_, ref) {
+  const goldenOpacityRef = useRef<Animated.Value | null>(null);
+  if (goldenOpacityRef.current == null) {
+    goldenOpacityRef.current = new Animated.Value(0);
+  }
+  const goldenOpacity = goldenOpacityRef.current;
+
+  const rainbowOpacityRef = useRef<Animated.Value | null>(null);
+  if (rainbowOpacityRef.current == null) {
+    rainbowOpacityRef.current = new Animated.Value(0);
+  }
+  const rainbowOpacity = rainbowOpacityRef.current;
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      flash(mutationKey: 'golden' | 'rainbow') {
+        if (mutationKey === 'rainbow') {
+          rainbowOpacity.stopAnimation();
+          rainbowOpacity.setValue(0);
+          Animated.sequence([
+            Animated.timing(rainbowOpacity, {
+              toValue: 0.45,
+              duration: 150,
+              easing: Easing.out(Easing.quad),
+              useNativeDriver: true,
+            }),
+            Animated.delay(80),
+            Animated.timing(rainbowOpacity, {
+              toValue: 0,
+              duration: 600,
+              easing: Easing.in(Easing.quad),
+              useNativeDriver: true,
+            }),
+          ]).start();
+        } else {
+          goldenOpacity.stopAnimation();
+          goldenOpacity.setValue(0);
+          Animated.sequence([
+            Animated.timing(goldenOpacity, {
+              toValue: 0.36,
+              duration: 120,
+              easing: Easing.out(Easing.quad),
+              useNativeDriver: true,
+            }),
+            Animated.timing(goldenOpacity, {
+              toValue: 0,
+              duration: 400,
+              easing: Easing.in(Easing.quad),
+              useNativeDriver: true,
+            }),
+          ]).start();
+        }
+      },
+    }),
+    [goldenOpacity, rainbowOpacity]
+  );
+
+  return (
+    <>
+      <Animated.View
+        pointerEvents="none"
+        style={[styles.mutationFlash, { opacity: goldenOpacity, backgroundColor: '#fde68a' }]}
+      />
+      <Animated.View
+        pointerEvents="none"
+        style={[styles.mutationFlash, { opacity: rainbowOpacity, backgroundColor: '#c084fc' }]}
+      />
+    </>
+  );
+});
+
 // Memoized so a tick or a single plot's plant-pulse update never reconciles the
 // other (up to 24) plot subtrees. Relies on stable, index-based callbacks and
 // performPlant/performHarvest keeping untouched plot object refs intact.
@@ -2305,9 +2401,10 @@ function HarvestPopText({
   onDoneRef.current = onDone;
 
   useEffect(() => {
+    const dur = pop.tone === 'rainbow' ? 1400 : pop.tone === 'golden' ? 1100 : 900;
     const animation = Animated.timing(progress, {
       toValue: 1,
-      duration: 900,
+      duration: dur,
       easing: Easing.out(Easing.cubic),
       useNativeDriver: true,
     });
@@ -2317,24 +2414,31 @@ function HarvestPopText({
       }
     });
     return () => animation.stop();
-  }, [pop.id, progress]);
+  }, [pop.id, pop.tone, progress]);
 
   const col = pop.index % PLOT_COLUMNS;
   const row = Math.floor(pop.index / PLOT_COLUMNS);
   const left = col * (tileSize + PLOT_GAP);
   const top = row * (tileSize + PLOT_GAP);
+
+  const yTop =
+    pop.tone === 'rainbow' ? -tileSize * 0.95 : pop.tone === 'golden' ? -tileSize * 0.78 : -tileSize * 0.55;
+  const scaleMax = pop.tone === 'rainbow' ? 1.65 : pop.tone === 'golden' ? 1.45 : 1.15;
+
   const translateY = progress.interpolate({
     inputRange: [0, 1],
-    outputRange: [tileSize * 0.2, -tileSize * 0.55],
+    outputRange: [tileSize * 0.2, yTop],
   });
   const scale = progress.interpolate({
     inputRange: [0, 0.25, 1],
-    outputRange: [0.6, 1.15, 1],
+    outputRange: [0.4, scaleMax, 1],
   });
   const opacity = progress.interpolate({
-    inputRange: [0, 0.12, 0.65, 1],
+    inputRange: [0, 0.1, 0.6, 1],
     outputRange: [0, 1, 1, 0],
   });
+
+  const icon = pop.tone === 'rainbow' ? '🌈 ' : pop.tone === 'golden' ? '✨ ' : '';
 
   return (
     <View pointerEvents="none" style={[styles.harvestPop, { left, top, width: tileSize, height: tileSize }]}>
@@ -2342,10 +2446,12 @@ function HarvestPopText({
         style={[
           styles.harvestPopText,
           pop.tone === 'special' && styles.harvestPopTextSpecial,
+          pop.tone === 'golden' && styles.harvestPopTextGolden,
+          pop.tone === 'rainbow' && styles.harvestPopTextRainbow,
           { opacity, transform: [{ translateY }, { scale }] },
         ]}
       >
-        {pop.label}
+        {icon}{pop.label}
       </Animated.Text>
     </View>
   );
@@ -3090,6 +3196,26 @@ const styles = StyleSheet.create({
     fontSize: 22,
     textShadowColor: 'rgba(180, 83, 9, 0.95)',
     textShadowRadius: 4,
+  },
+  harvestPopTextGolden: {
+    color: '#fbbf24',
+    fontSize: 30,
+    textShadowColor: 'rgba(180, 83, 9, 0.95)',
+    textShadowRadius: 8,
+  },
+  harvestPopTextRainbow: {
+    color: '#c084fc',
+    fontSize: 38,
+    textShadowColor: 'rgba(109, 40, 217, 0.95)',
+    textShadowRadius: 10,
+  },
+  mutationFlash: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 8,
   },
   toast: {
     position: 'absolute',
