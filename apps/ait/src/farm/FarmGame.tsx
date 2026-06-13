@@ -1030,6 +1030,11 @@ export default function FarmGame({
     // Drop any pending auto-harvest batch so old-farm counts never flush
     // under the new farm's analytics context.
     autoHarvestSummaryRef.current = { harvestedCount: 0, replantedCount: 0, windowStartedAt: 0 };
+    if (comboTimerRef.current != null) {
+      clearTimeout(comboTimerRef.current);
+      comboTimerRef.current = null;
+    }
+    setHarvestCombo(0);
     setGameState((state) => prestigeFarm(state, prestigeArchetype, now)?.state ?? state);
     setSelectedArea(FIRST_AREA.key);
     setSelectedTool('harvest');
@@ -1203,6 +1208,11 @@ export default function FarmGame({
     claimedAchievementKeysRef.current.clear();
     prestigedLevelsRef.current.clear();
     autoHarvestSummaryRef.current = { harvestedCount: 0, replantedCount: 0, windowStartedAt: 0 };
+    if (comboTimerRef.current != null) {
+      clearTimeout(comboTimerRef.current);
+      comboTimerRef.current = null;
+    }
+    setHarvestCombo(0);
     setGameState(createInitialState());
     setSelectedArea(FIRST_AREA.key);
     setSelectedTool('harvest');
@@ -1997,8 +2007,10 @@ function HarvestAllButton({ label, onPress }: { label: string; onPress: () => vo
 }
 
 // Shows a growing streak counter when the player rapidly harvests multiple
-// plots in quick succession. Bounces in on each count update so the number
+// plots in quick succession. Punches out on each count update so the number
 // change is unmistakable; tiers escalate icon and color at 5× and 10×.
+// Animation: quick pop to 1.25× then spring back to 1.0, starting from
+// whatever scale the previous animation left — no snapping on rapid taps.
 function ComboDisplay({ count, messages }: { count: number; messages: FarmMessages }) {
   const scaleRef = useRef<Animated.Value | null>(null);
   if (scaleRef.current == null) {
@@ -2008,14 +2020,23 @@ function ComboDisplay({ count, messages }: { count: number; messages: FarmMessag
 
   useEffect(() => {
     scale.stopAnimation();
-    scale.setValue(0.6);
-    Animated.spring(scale, {
-      toValue: 1,
-      damping: 10,
-      stiffness: 260,
-      mass: 0.5,
-      useNativeDriver: true,
-    }).start();
+    const animation = Animated.sequence([
+      Animated.timing(scale, {
+        toValue: 1.25,
+        duration: 80,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
+      Animated.spring(scale, {
+        toValue: 1,
+        damping: 12,
+        stiffness: 240,
+        mass: 0.6,
+        useNativeDriver: true,
+      }),
+    ]);
+    animation.start();
+    return () => animation.stop();
   }, [scale, count]);
 
   useEffect(() => {
@@ -3452,8 +3473,13 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 0,
     right: 0,
-    top: '40%',
+    top: 0,
+    bottom: 0,
     alignItems: 'center',
+    justifyContent: 'center',
+    // Shift above true center so the combo sits over the plot grid,
+    // not the tool strip. paddingBottom lifts the visual center upward.
+    paddingBottom: 120,
     zIndex: 9,
   },
   comboDisplay: {
