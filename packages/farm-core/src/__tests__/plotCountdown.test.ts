@@ -50,6 +50,26 @@ describe('getPlotRemainingWallClockMs', () => {
     expect(Number.isInteger(remaining)).toBe(true);
   });
 
+  it('holds a stable remaining time when growth is frozen (speedMultiplier 0)', () => {
+    // speed level -9 -> getSpeedMultiplier = 1 + (-9 - 1) * 0.1 = 0, which freezes
+    // growth. This branch is unreachable in the shipped balance, but the fallback
+    // must report a fixed remaining that does NOT tick down with wall-clock time.
+    const state = plantedState(-9, 0);
+    const plot = state.plots[0]!;
+
+    expect(getPlotRemainingWallClockMs(state, plot, 0)).toBe(2000);
+    expect(getPlotRemainingWallClockMs(state, plot, 1000)).toBe(2000);
+    expect(getPlotRemainingWallClockMs(state, plot, 100000)).toBe(2000);
+  });
+
+  it('clamps to 0 once wall-clock elapsed passes the full grow duration', () => {
+    // speed level 11 -> multiplier 2, so the wall-clock duration is 1000ms; well
+    // past that the countdown must stay pinned at 0 rather than go negative.
+    const state = plantedState(11, 0);
+    const plot = state.plots[0]!;
+    expect(getPlotRemainingWallClockMs(state, plot, 5000)).toBe(0);
+  });
+
   it('returns 0 for empty and ready plots', () => {
     const emptyState = createInitialState();
     expect(getPlotRemainingWallClockMs(emptyState, emptyState.plots[0]!, 0)).toBe(0);
