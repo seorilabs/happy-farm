@@ -1,6 +1,7 @@
 /// <reference types="jest" />
 
 import React from 'react';
+import { Vibration } from 'react-native';
 import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react-native';
 import {
   CROPS,
@@ -228,6 +229,30 @@ describe('FarmGame UI flow', () => {
     expect(screen.getAllByText('빈 밭')).toHaveLength(6);
     // Harvesting spawns a floating "+gold" burst at the tapped plot (gained 14G).
     expect(screen.getByText('+14')).toBeTruthy();
+  });
+
+  test('pops a sprout and buzzes when a seed is planted on an empty plot', async () => {
+    const vibrateSpy = jest.spyOn(Vibration, 'vibrate').mockImplementation(() => undefined);
+    try {
+      const screen = await renderGame(null);
+
+      await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+      expect(screen.getAllByText('빈 밭')).toHaveLength(6);
+      // No sprout exists before the first plant.
+      expect(screen.queryByText('🌱')).toBeNull();
+
+      fireEvent.press(screen.getByText('초보 밭'));
+      fireEvent.press(screen.getByText('당근'));
+      fireEvent.press(screen.getAllByText('빈 밭')[0]!);
+
+      // The freshly planted plot now shows the growing sprout, and planting
+      // fires a light haptic so the action feels tactile.
+      expect(screen.getByText('🌱')).toBeTruthy();
+      expect(screen.getAllByText('빈 밭')).toHaveLength(5);
+      expect(vibrateSpy).toHaveBeenCalled();
+    } finally {
+      vibrateSpy.mockRestore();
+    }
   });
 
   test('renders the shared farm UI in English when the saved locale is en-US', async () => {
