@@ -78,16 +78,22 @@ export function getPlotRemainingWallClockMs(gameState: GameState, plot: Plot, no
     return 0;
   }
 
-  const remainingGrowthMs = getPlotRemainingGrowthMs(gameState, plot, now);
+  const crop = getKnownCrop(plot.cropType);
+  // Resolve the multiplier once (getCropModifiers is the hot part) and inline the
+  // remaining-growth math instead of calling getPlotRemainingGrowthMs, which would
+  // recompute the same modifiers a second time on every tile every tick.
   const { speedMultiplier } = getCropModifiers(gameState, plot.cropType, now);
-  // A non-positive multiplier means growth is frozen (paused/debuffed): fall
-  // back to the unscaled remaining so the timer never collapses to 0 and falsely
-  // signals "ready now". Round up so the countdown never under-reports.
+  const elapsed = now - plot.startTime;
+
   if (speedMultiplier <= 0) {
-    return Math.ceil(remainingGrowthMs);
+    // Growth is frozen (paused/debuffed). Dividing by zero is undefined and the
+    // raw grow-time remaining would jump to the full grow time, so fall back to
+    // the unscaled (1x) wall-clock remaining: it keeps ticking down continuously
+    // instead of snapping back to max. Round up so the timer never under-reports.
+    return Math.max(0, Math.ceil(crop.growTime - elapsed));
   }
 
-  return Math.ceil(remainingGrowthMs / speedMultiplier);
+  return Math.max(0, Math.ceil((crop.growTime - elapsed * speedMultiplier) / speedMultiplier));
 }
 
 export function isPlotGrowthComplete(gameState: GameState, plot: Plot, now = Date.now()): boolean {
