@@ -43,7 +43,7 @@ concurrency:
 jobs:
   validate:
     name: Workspace checks
-    runs-on: ubuntu-latest
+    runs-on: seorilabs-rpi-arm64
     timeout-minutes: 20
 
     steps:
