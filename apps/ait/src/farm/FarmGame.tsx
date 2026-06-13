@@ -287,6 +287,17 @@ export default function FarmGame({
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const harvestFxRef = useRef<HarvestFxHandle>(null);
+  const goldPulseRef = useRef<Animated.Value | null>(null);
+  if (goldPulseRef.current == null) {
+    goldPulseRef.current = new Animated.Value(0);
+  }
+  const goldPulse = goldPulseRef.current;
+  const goldPulseScaleRef = useRef<Animated.AnimatedInterpolation<number> | null>(null);
+  if (goldPulseScaleRef.current == null) {
+    goldPulseScaleRef.current = goldPulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.12] });
+  }
+  const goldPulseScale = goldPulseScaleRef.current;
+  useEffect(() => () => goldPulse.stopAnimation(), [goldPulse]);
   const lastInterstitialShownAtRef = useRef(0);
   const sessionStartedAtRef = useRef(Date.now());
   const gameStartTrackedRef = useRef(false);
@@ -329,6 +340,26 @@ export default function FarmGame({
       toastTimerRef.current = null;
     }, 1800);
   }, []);
+  // A quick "cha-ching" bump on the gold HUD when a harvest lands, so the eye
+  // links the floating "+gold" at the plot to the balance actually rising.
+  const pulseGold = useCallback(() => {
+    goldPulse.stopAnimation();
+    goldPulse.setValue(0);
+    Animated.sequence([
+      Animated.timing(goldPulse, {
+        toValue: 1,
+        duration: 120,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
+      Animated.timing(goldPulse, {
+        toValue: 0,
+        duration: 220,
+        easing: Easing.in(Easing.quad),
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [goldPulse]);
   const closeSheet = useCallback(() => {
     setActiveSheet(null);
   }, []);
@@ -980,6 +1011,7 @@ export default function FarmGame({
         `+${formatMoney(outcome.goldGained, locale)}`,
         isSpecialHarvest ? 'special' : 'normal'
       );
+      pulseGold();
     }
     // A celebratory double-buzz marks rare moments (mutation, mastery rank-up,
     // active boost); ordinary harvests keep the light single tap. The pattern
@@ -1138,13 +1170,18 @@ export default function FarmGame({
 
         <View style={styles.statsPanel}>
           <View style={styles.assetRow}>
-            <Text style={styles.coinIcon}>💰</Text>
-            <View style={styles.assetTextGroup}>
-              <Text style={styles.label}>{messages.assetLabel}</Text>
-              <Text style={styles.money} numberOfLines={1}>
-                {formatMoney(gameState.gold, locale)}G
-              </Text>
-            </View>
+            {/* The whole asset block scales as one unit (anchored left so it
+                grows into its own space, not into the panel border) for a
+                consistent "cha-ching" on harvest. */}
+            <Animated.View style={[styles.assetPulse, { transform: [{ scale: goldPulseScale }] }]}>
+              <Text style={styles.coinIcon}>💰</Text>
+              <View style={styles.assetTextGroup}>
+                <Text style={styles.label}>{messages.assetLabel}</Text>
+                <Text style={styles.money} numberOfLines={1}>
+                  {formatMoney(gameState.gold, locale)}G
+                </Text>
+              </View>
+            </Animated.View>
           </View>
           <View style={styles.summaryColumn}>
             <Text style={styles.researchBadge}>{messages.researchBadge(researchLevel)}</Text>
@@ -2345,6 +2382,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 9,
+  },
+  assetPulse: {
+    minWidth: 0,
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 9,
+    transformOrigin: 'left center',
   },
   coinIcon: {
     width: 30,
