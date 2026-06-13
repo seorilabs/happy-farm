@@ -27,6 +27,12 @@ function withChainFarm(goldPerHour: number, lastCollectedAt: number, base: GameS
 }
 
 describe('getReturnSummary', () => {
+  test('returns null when no game state is available', () => {
+    const lastSeen = NOW - 2 * MS_PER_HOUR;
+    expect(getReturnSummary(null, lastSeen, NOW)).toBeNull();
+    expect(getReturnSummary(undefined, lastSeen, NOW)).toBeNull();
+  });
+
   test('returns null without a prior session timestamp', () => {
     const state = withReadyCrop(0, createInitialState());
     expect(getReturnSummary(state, null, NOW)).toBeNull();

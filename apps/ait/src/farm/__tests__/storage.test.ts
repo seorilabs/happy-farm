@@ -2,7 +2,7 @@
 
 import { MAX_PLOTS, SAVE_KEY, createInitialState } from '../../../../../packages/farm-core/src';
 import { FARM_GAME_SETTINGS_KEY } from '../gameSettings';
-import { createFarmPersistence } from '../persistence';
+import { createFarmPersistence, LAST_SEEN_KEY } from '../persistence';
 
 const mockStorage = {
   getItem: jest.fn<Promise<string | null>, [string]>(),
@@ -15,6 +15,7 @@ const {
   removePersistedGameState,
   readPersistedGameSettings,
   writePersistedGameSettings,
+  readLastSeenAt,
 } = createFarmPersistence(mockStorage);
 
 describe('farm storage', () => {
@@ -79,6 +80,26 @@ describe('farm storage', () => {
       writePersistedGameState({ ...createInitialState(), gold: 1, plots: [] })
     ).resolves.toBeUndefined();
     await expect(removePersistedGameState()).resolves.toBeUndefined();
+  });
+
+  test('clears the away-timestamp when the farm is reset', async () => {
+    mockStorage.removeItem.mockResolvedValue(undefined);
+
+    await removePersistedGameState();
+
+    expect(mockStorage.removeItem).toHaveBeenCalledWith(SAVE_KEY);
+    expect(mockStorage.removeItem).toHaveBeenCalledWith(LAST_SEEN_KEY);
+  });
+
+  test('reads back a valid away-timestamp and rejects junk', async () => {
+    mockStorage.getItem.mockResolvedValueOnce('1748314800000');
+    expect(await readLastSeenAt()).toBe(1748314800000);
+
+    mockStorage.getItem.mockResolvedValueOnce('not-a-number');
+    expect(await readLastSeenAt()).toBeNull();
+
+    mockStorage.getItem.mockResolvedValueOnce(null);
+    expect(await readLastSeenAt()).toBeNull();
   });
 
   test('returns legacy settings without filling a default locale', async () => {

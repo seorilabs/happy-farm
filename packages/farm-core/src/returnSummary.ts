@@ -22,10 +22,13 @@ export type ReturnSummary = {
 // they only just left, this is their very first session, or no progress is
 // waiting. Pure and side-effect free so the decision can be unit tested.
 export function getReturnSummary(
-  gameState: GameState,
+  gameState: GameState | null | undefined,
   lastSeenAt: number | null | undefined,
   now = Date.now()
 ): ReturnSummary | null {
+  if (gameState == null) {
+    return null;
+  }
   if (lastSeenAt == null || !Number.isFinite(lastSeenAt) || lastSeenAt <= 0) {
     return null;
   }

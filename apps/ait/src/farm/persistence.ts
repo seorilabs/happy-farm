@@ -48,6 +48,9 @@ export function createFarmPersistence(storage: KeyValueStorage) {
     async removePersistedGameState() {
       try {
         await storage.removeItem(SAVE_KEY);
+        // Clear the away-timestamp too, so a farm reset can never surface a
+        // stale offline recap built from the previous save's session.
+        await storage.removeItem(LAST_SEEN_KEY);
       } catch {
         // Storage failures must not interrupt gameplay.
       }
