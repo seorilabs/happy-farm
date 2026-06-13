@@ -1158,6 +1158,13 @@ export default function FarmGame({
     selectedTool,
   ]);
 
+  // Stable, index-based press handler so memoized PlotCells keep referential
+  // equality across the 250ms tick and plant-pulse updates. handlePlotClick
+  // closes over fast-changing state, so route through a ref instead of a dep.
+  const handlePlotClickRef = useRef(handlePlotClick);
+  handlePlotClickRef.current = handlePlotClick;
+  const onPlotPress = useCallback((index: number) => handlePlotClickRef.current(index), []);
+
   return (
     <View style={styles.root}>
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
@@ -1263,14 +1270,15 @@ export default function FarmGame({
           {gameState.plots.map((plot, index) => (
             <PlotCell
               key={plot.id}
+              index={index}
               plot={plot}
               unlocked={index < gameState.unlockedPlotCount}
               progressRatio={getPlotGrowthRatio(gameState, plot)}
               tileSize={plotTileSize}
               messages={messages}
               plantToken={plantPulses[index]}
-              onPlantPulseDone={() => clearPlantPulse(index)}
-              onPress={() => handlePlotClick(index)}
+              onPlantPulseDone={clearPlantPulse}
+              onPress={onPlotPress}
             />
           ))}
           <HarvestFxOverlay ref={harvestFxRef} tileSize={plotTileSize} />
@@ -1597,7 +1605,11 @@ function NavButton({
   );
 }
 
-function PlotCell({
+// Memoized so a tick or a single plot's plant-pulse update never reconciles the
+// other (up to 24) plot subtrees. Relies on stable, index-based callbacks and
+// performPlant/performHarvest keeping untouched plot object refs intact.
+const PlotCell = React.memo(function PlotCell({
+  index,
   plot,
   unlocked,
   progressRatio,
@@ -1607,20 +1619,22 @@ function PlotCell({
   onPlantPulseDone,
   onPress,
 }: {
+  index: number;
   plot: GameState['plots'][number];
   unlocked: boolean;
   progressRatio: number;
   tileSize: number;
   messages: FarmMessages;
   plantToken: number | undefined;
-  onPlantPulseDone: () => void;
-  onPress: () => void;
+  onPlantPulseDone: (index: number) => void;
+  onPress: (index: number) => void;
 }) {
   const tileSizeStyle = { width: tileSize, height: tileSize };
+  const handlePress = () => onPress(index);
 
   if (!unlocked) {
     return (
-      <Pressable style={[styles.plotTile, tileSizeStyle, styles.lockedPlot]} onPress={onPress}>
+      <Pressable style={[styles.plotTile, tileSizeStyle, styles.lockedPlot]} onPress={handlePress}>
         <Text style={styles.lockIcon}>🔒</Text>
       </Pressable>
     );
@@ -1628,7 +1642,7 @@ function PlotCell({
 
   if (plot.state === 0) {
     return (
-      <Pressable style={[styles.plotTile, tileSizeStyle, styles.emptyPlot]} onPress={onPress}>
+      <Pressable style={[styles.plotTile, tileSizeStyle, styles.emptyPlot]} onPress={handlePress}>
         <Text style={styles.emptyPlotText}>{messages.emptyPlot}</Text>
       </Pressable>
     );
@@ -1640,7 +1654,7 @@ function PlotCell({
   return (
     <Pressable
       style={[styles.plotTile, tileSizeStyle, plot.state === 2 ? styles.readyPlot : styles.growingPlot]}
-      onPress={onPress}
+      onPress={handlePress}
     >
       {plot.state === 2 ? (
         <View style={styles.harvestBadge}>
@@ -1653,11 +1667,15 @@ function PlotCell({
       {plot.state === 2 ? (
         <ReadyCropIcon icon={icon} phaseSeed={plot.id} />
       ) : (
-        <GrowingCropIcon icon={icon} plantToken={plantToken} onPlantPulseDone={onPlantPulseDone} />
+        <GrowingCropIcon
+          icon={icon}
+          plantToken={plantToken}
+          onPlantPulseDone={() => onPlantPulseDone(index)}
+        />
       )}
     </Pressable>
   );
-}
+});
 
 // Ripe crops gently pulse so harvestable plots draw the eye in a full grid,
 // reinforcing the "see ready -> tap" loop. Native-driven loop keeps it cheap
