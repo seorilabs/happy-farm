@@ -69,6 +69,23 @@ export function getPlotRemainingGrowthMs(gameState: GameState, plot: Plot, now =
   return Math.max(0, crop.growTime - (now - plot.startTime) * speedMultiplier);
 }
 
+// Wall-clock milliseconds until this plot is harvestable, for the player-facing
+// plot countdown. Unlike getPlotRemainingGrowthMs (which stays on the raw
+// grow-time scale the ad skip window is defined against), this divides by the
+// active speed multiplier so the displayed timer matches real elapsed time.
+export function getPlotRemainingWallClockMs(gameState: GameState, plot: Plot, now = Date.now()): number {
+  if (plot.state !== 1 || plot.cropType == null || plot.startTime == null) {
+    return 0;
+  }
+
+  const { speedMultiplier } = getCropModifiers(gameState, plot.cropType, now);
+  if (speedMultiplier <= 0) {
+    return 0;
+  }
+
+  return getPlotRemainingGrowthMs(gameState, plot, now) / speedMultiplier;
+}
+
 export function isPlotGrowthComplete(gameState: GameState, plot: Plot, now = Date.now()): boolean {
   return plot.state === 1 && getPlotGrowthRatio(gameState, plot, now) >= 1;
 }
