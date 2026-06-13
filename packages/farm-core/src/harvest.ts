@@ -180,6 +180,92 @@ export function performPlant(gameState: GameState, plotIndex: number, cropKey: C
   return { ...gameState, gold: gameState.gold - cost, plots: nextPlots };
 }
 
+// True for a plot the player can harvest right now: unlocked and fully ripe.
+function isPlotHarvestable(gameState: GameState, plot: Plot | undefined): plot is Plot {
+  return (
+    plot != null && plot.id < gameState.unlockedPlotCount && plot.state === 2 && plot.cropType != null
+  );
+}
+
+// How many plots are ripe and waiting for a tap. Drives the manual
+// "Harvest All" affordance (only worth offering when several are ready).
+export function getReadyPlotCount(gameState: GameState): number {
+  let count = 0;
+  for (const plot of gameState.plots) {
+    if (isPlotHarvestable(gameState, plot)) {
+      count += 1;
+    }
+  }
+  return count;
+}
+
+export type HarvestAllEntry = {
+  plotIndex: number;
+  outcome: HarvestOutcome;
+};
+
+export type HarvestAllResult = {
+  state: GameState;
+  harvests: HarvestAllEntry[];
+  harvestedCount: number;
+  totalGoldGained: number;
+  totalRpGained: number;
+  specialCount: number;
+};
+
+export type HarvestAllOptions = HarvestOptions & {
+  // Per-plot mutation roll keyed by plot index. When supplied, a given plot
+  // always consumes the same roll regardless of how many other plots are ripe,
+  // so a UI preview and the committed state update agree on that plot's outcome
+  // even if a concurrent growth/auto-harvest tick shifts the ripe set between
+  // the two calls. Falls back to the shared `rng` when omitted.
+  rollFor?: (plotIndex: number) => number;
+};
+
+// Manual "Harvest All": collects every ripe plot in one action through the
+// shared harvest pipeline so mastery, mutations, and collection side effects
+// stay identical to tapping each plot. Returns per-plot outcomes so the caller
+// can drive batched feedback (one toast/pulse/sound) and floating-gold FX.
+// Pure: the caller owns every UI side effect, just like performHarvest.
+export function performHarvestAll(gameState: GameState, options: HarvestAllOptions = {}): HarvestAllResult {
+  const now = options.now ?? Date.now();
+  const rng = options.rng ?? Math.random;
+  const { rollFor } = options;
+
+  let state = gameState;
+  const harvests: HarvestAllEntry[] = [];
+  let totalGoldGained = 0;
+  let totalRpGained = 0;
+  let specialCount = 0;
+
+  for (let plotIndex = 0; plotIndex < state.plots.length; plotIndex += 1) {
+    if (!isPlotHarvestable(state, state.plots[plotIndex])) {
+      continue;
+    }
+    const plotRng = rollFor != null ? () => rollFor(plotIndex) : rng;
+    const outcome = performHarvest(state, plotIndex, { now, rng: plotRng });
+    if (outcome == null) {
+      continue;
+    }
+    state = outcome.state;
+    harvests.push({ plotIndex, outcome });
+    totalGoldGained += outcome.goldGained;
+    totalRpGained += outcome.rpGained;
+    if (outcome.mutation != null || outcome.newMasteryRank != null || outcome.boostActive) {
+      specialCount += 1;
+    }
+  }
+
+  return {
+    state,
+    harvests,
+    harvestedCount: harvests.length,
+    totalGoldGained,
+    totalRpGained,
+    specialCount,
+  };
+}
+
 export type AutomationTickResult = {
   state: GameState;
   harvestedCount: number;

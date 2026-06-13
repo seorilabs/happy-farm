@@ -529,6 +529,23 @@ describe('FarmGame UI flow', () => {
     expect(screen.getByText('🥉')).toBeTruthy();
   });
 
+  test('collects every ripe plot in one tap via the Harvest All shortcut', async () => {
+    const screen = await renderGame(createReadyHarvestState());
+
+    await waitFor(() => expect(screen.getByText('50G')).toBeTruthy());
+
+    // Two ripe carrots surface the batch shortcut in place of the tool hint.
+    expect(screen.getByText('🧺 모두 수확 2')).toBeTruthy();
+    fireEvent.press(screen.getByLabelText('🧺 모두 수확 2'));
+
+    // Both plots collected at once: +14G each, with a single batch toast.
+    await waitFor(() => expect(screen.getByText('78G')).toBeTruthy());
+    expect(screen.getByText(/한 번에 수확했어요/)).toBeTruthy();
+    // No ripe plots remain, so neither the GET badge nor the shortcut shows.
+    expect(screen.queryByText('GET')).toBeNull();
+    expect(screen.queryByText(/모두 수확/)).toBeNull();
+  });
+
   test('auto-harvests and replants through the game tick when automation is unlocked', async () => {
     const base = createReadyHarvestState();
     const state: GameState = {

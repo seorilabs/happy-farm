@@ -100,6 +100,8 @@ import {
   isPlotGrowthComplete,
   isTitleUnlocked,
   normalizeLocale,
+  performHarvestAll,
+  getReadyPlotCount,
   recordHarvestBonusAdPrompt,
   recordRewardedAdUsage,
   type CropHarvestedGameEvent,
@@ -135,6 +137,9 @@ const LAST_SEEN_HEARTBEAT_MS = 30_000;
 const PROGRESS_ANIMATION_DURATION_MS = GAME_TICK_INTERVAL_MS;
 // Fresh-plant sprout "bounce in" duration.
 const PLANT_POP_DURATION_MS = 320;
+// The "Harvest All" shortcut only appears once enough plots are ripe that
+// tapping each one becomes a chore; a single ripe plot is a quick one-tap.
+const HARVEST_ALL_MIN_COUNT = 2;
 const SHEET_DISMISS_DRAG_DISTANCE = 96;
 const SHEET_DISMISS_VELOCITY = 1.1;
 const SHEET_DISMISS_TRANSLATE_Y = 520;
@@ -231,6 +236,15 @@ type PendingFarmCommandEffect =
       event: CropHarvestedGameEvent;
       now: number;
       shouldShowHarvestBonusNudge: boolean;
+    }
+  | {
+      id: number;
+      type: 'harvestedAll';
+      fx: { plotIndex: number; goldGained: number; special: boolean }[];
+      totalGoldGained: number;
+      totalRpGained: number;
+      harvestedCount: number;
+      specialCount: number;
     };
 
 // One-shot floating "+gold" feedback spawned at the tapped plot on a manual
@@ -458,6 +472,53 @@ export default function FarmGame({
         setPlantPulses((prev) => ({ ...prev, [event.plotIndex]: token }));
         Vibration.vibrate(15);
         farmAnalytics.trackCropPlanted(event.cropKey, event.areaKey, event.cropTier, event.cost, analyticsContext());
+        continue;
+      }
+
+      if (effect.type === 'harvestedAll') {
+        // Release the guard up front so it resets even if feedback below throws,
+        // and on a no-op (drift cleared the plots) — the button can never stick.
+        harvestAllInFlightRef.current = false;
+        if (effect.harvestedCount > 0) {
+          // One floating "+gold" per harvested plot keeps the spatial reward;
+          // the overlay self-caps concurrent pops, so a full grid stays cheap.
+          // The HUD pulse, toast, sound, and haptic fire once for the whole
+          // batch instead of stacking dozens of buzzes and toasts.
+          for (const fx of effect.fx) {
+            if (fx.goldGained > 0) {
+              harvestFxRef.current?.spawn(
+                fx.plotIndex,
+                `+${formatMoney(fx.goldGained, locale)}`,
+                fx.special ? 'special' : 'normal'
+              );
+            }
+          }
+          // Donation mode converts the batch into research points; key the toast
+          // on RP earned (not "gold === 0") so a future zero-value crop still
+          // reads as a harvest rather than a donation.
+          if (effect.totalRpGained > 0) {
+            toast(messages.harvestAllDonatedToast(formatMoney(effect.totalRpGained, locale), effect.harvestedCount));
+          } else {
+            toast(messages.harvestAllToast(formatMoney(effect.totalGoldGained, locale), effect.harvestedCount));
+          }
+          if (effect.totalGoldGained > 0) {
+            pulseGold();
+          }
+          farmAnalytics.trackHarvestAll({
+            harvestedCount: effect.harvestedCount,
+            totalGold: effect.totalGoldGained,
+            specialCount: effect.specialCount,
+            context: analyticsContext(),
+          });
+          if (effect.specialCount > 0 && Platform.OS === 'android') {
+            Vibration.vibrate([0, 24, 36, 48]);
+          } else {
+            Vibration.vibrate(50);
+          }
+          if (gameSettings.soundEffectsEnabled && audio.isSupported) {
+            void audio.playHarvest();
+          }
+        }
         continue;
       }
 
@@ -738,6 +799,10 @@ export default function FarmGame({
       ),
     [gameState, harvestBonusBoost.multiplier]
   );
+  const readyPlotCount = useMemo(() => getReadyPlotCount(gameState), [gameState]);
+  // Blocks a second "Harvest All" tap until the in-flight batch finishes; the
+  // command drain effect releases it after each attempt (success or no-op).
+  const harvestAllInFlightRef = useRef(false);
   const chainIncome = useMemo(() => getChainIncome(gameState), [gameState, tick]);
   const mapActionableCount = useMemo(
     () => (chainIncome.accruedGold > 0 ? 1 : 0) + (canPrestige(gameState).allowed ? 1 : 0),
@@ -1177,6 +1242,59 @@ export default function FarmGame({
     setCommandEffectVersion((version) => version + 1);
   }
 
+  function harvestAllCrops() {
+    // Re-entry guard: a fast double-tap before the batch re-renders (and the
+    // button disappears) would otherwise replay the feedback. The drain effect
+    // clears the flag after every attempt, so the next ripe set stays harvestable.
+    if (harvestAllInFlightRef.current) {
+      return;
+    }
+
+    const now = Date.now();
+    const effectId = ++commandEffectIdRef.current;
+    // One stable roll per plot index — not a flat sequence. Built outside the
+    // updater so a StrictMode double-invoke reuses the same rolls, and keyed by
+    // index so a plot's outcome never shifts with the surrounding ripe set.
+    const rollByPlot: Record<number, number> = {};
+    const rollFor = (plotIndex: number) => {
+      const existing = rollByPlot[plotIndex];
+      if (existing != null) {
+        return existing;
+      }
+      const roll = Math.random();
+      rollByPlot[plotIndex] = roll;
+      return roll;
+    };
+
+    harvestAllInFlightRef.current = true;
+    setGameState((state) => {
+      // Compute on the authoritative committed state and queue the feedback from
+      // here, so the FX/toast/analytics always reflect exactly what was harvested
+      // even if a concurrent tick shifted the ripe set after this tap.
+      const result = performHarvestAll(state, { now, rollFor });
+      // Guard the queue against a StrictMode/concurrent double-invoke of this
+      // updater: keep at most one effect per id. (The drain loop also dedupes by
+      // id, so feedback never doubles either way — this just keeps the queue clean.)
+      if (!pendingCommandEffectsRef.current.some((pending) => pending.id === effectId)) {
+        pendingCommandEffectsRef.current.push({
+          id: effectId,
+          type: 'harvestedAll',
+          fx: result.harvests.map(({ plotIndex, outcome }) => ({
+            plotIndex,
+            goldGained: outcome.goldGained,
+            special: outcome.mutation != null || outcome.newMasteryRank != null || outcome.boostActive,
+          })),
+          totalGoldGained: result.totalGoldGained,
+          totalRpGained: result.totalRpGained,
+          harvestedCount: result.harvestedCount,
+          specialCount: result.specialCount,
+        });
+      }
+      return result.harvestedCount > 0 ? result.state : state;
+    });
+    setCommandEffectVersion((version) => version + 1);
+  }
+
   function handlePlotClick(index: number) {
     if (index >= gameState.unlockedPlotCount) {
       openShop();
@@ -1415,9 +1533,16 @@ export default function FarmGame({
       <View style={[styles.toolStrip, { paddingBottom: insets.bottom + 10 }]}>
         <View style={styles.toolHeader}>
           <Text style={styles.toolLabel}>{messages.toolLabel}</Text>
-          <Text style={styles.toolHint} numberOfLines={1}>
-            {toolHint}
-          </Text>
+          {readyPlotCount >= HARVEST_ALL_MIN_COUNT ? (
+            <HarvestAllButton
+              label={messages.harvestAllButton(readyPlotCount)}
+              onPress={harvestAllCrops}
+            />
+          ) : (
+            <Text style={styles.toolHint} numberOfLines={1}>
+              {toolHint}
+            </Text>
+          )}
         </View>
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.areaTabs}>
@@ -1763,6 +1888,71 @@ function NavButton({
           <Text style={styles.collectionBadgeText}>{badge}</Text>
         </View>
       ) : null}
+    </Pressable>
+  );
+}
+
+// Swaps in for the tool hint the moment a couple of plots ripen, turning a
+// row of individual taps into one satisfying batch harvest. It pops in and
+// breathes gently so the eye catches the call-to-action without nagging.
+function HarvestAllButton({ label, onPress }: { label: string; onPress: () => void }) {
+  const entranceRef = useRef<Animated.Value | null>(null);
+  if (entranceRef.current == null) {
+    entranceRef.current = new Animated.Value(0);
+  }
+  const entrance = entranceRef.current;
+  const pulseRef = useRef<Animated.Value | null>(null);
+  if (pulseRef.current == null) {
+    pulseRef.current = new Animated.Value(0);
+  }
+  const pulse = pulseRef.current;
+
+  useEffect(() => {
+    const animation = Animated.sequence([
+      Animated.timing(entrance, {
+        toValue: 1,
+        duration: 260,
+        easing: Easing.out(Easing.back(2.4)),
+        useNativeDriver: true,
+      }),
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulse, {
+            toValue: 1,
+            duration: 720,
+            easing: Easing.inOut(Easing.quad),
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulse, {
+            toValue: 0,
+            duration: 720,
+            easing: Easing.inOut(Easing.quad),
+            useNativeDriver: true,
+          }),
+        ])
+      ),
+    ]);
+    animation.start();
+    return () => animation.stop();
+  }, [entrance, pulse]);
+
+  const scale = Animated.multiply(
+    entrance.interpolate({ inputRange: [0, 1], outputRange: [0.7, 1] }),
+    pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.05] })
+  );
+
+  return (
+    <Pressable
+      accessibilityLabel={label}
+      hitSlop={6}
+      style={({ pressed }) => [pressed && styles.harvestAllButtonPressed]}
+      onPress={onPress}
+    >
+      <Animated.View style={[styles.harvestAllButton, { opacity: entrance, transform: [{ scale }] }]}>
+        <Text style={styles.harvestAllButtonText} numberOfLines={1}>
+          {label}
+        </Text>
+      </Animated.View>
     </Pressable>
   );
 }
@@ -2884,6 +3074,26 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '900',
     textAlign: 'right',
+  },
+  harvestAllButton: {
+    minHeight: 34,
+    justifyContent: 'center',
+    borderRadius: 999,
+    paddingHorizontal: 16,
+    backgroundColor: '#2e9e57',
+    shadowColor: '#1c5f37',
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
+  },
+  harvestAllButtonPressed: {
+    opacity: 0.85,
+  },
+  harvestAllButtonText: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '900',
   },
   areaTabs: {
     gap: 8,
