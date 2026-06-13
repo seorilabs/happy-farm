@@ -213,6 +213,25 @@ gh workflow run deploy-google-play.yml --ref v1.27.0 -f send_to_google_play=true
 
 참고: Google Play Developer API 문서 일부는 internal testing track 식별자를 `qa`로 설명하지만, Play API 예제와 기존 자동화에서는 `internal`도 사용됩니다. 업로드 스크립트는 `tracks.list` 결과를 확인해 `internal`/`qa`를 자동 보정합니다.
 
+### 로컬 AAB 업로드
+
+GitHub Actions를 사용할 수 없어 로컬에서 Google Play 내부 테스트용 AAB를 만들 때는 `pnpm build:android`만 직접 실행하지 않습니다. 릴리즈 태그 기반 런타임 정보가 빠지거나, `apps/ait`/`packages/farm-core`의 shared JS 변경을 Gradle incremental build가 놓치면 `versionCode`만 새 값이고 실제 앱 UI는 오래된 bundle이 들어갈 수 있습니다.
+
+로컬 빌드는 반드시 릴리즈 태그를 지정한 전용 명령을 사용합니다.
+
+```bash
+RELEASE_TAG=v1.27.0 pnpm release:android:aab
+python3 scripts/upload-google-play-internal.py --release-status completed
+```
+
+생성된 AAB가 최신 shared UI를 포함하는지 빠르게 확인합니다.
+
+```bash
+unzip -p apps/mobile/android/app/build/outputs/bundle/release/app-release.aab base/assets/index.android.bundle \
+  | strings \
+  | rg 'Collection|Research Lab|Pioneer|Achievements|v1\.27\.0'
+```
+
 ## 자동화 범위
 
 자동화 가능:

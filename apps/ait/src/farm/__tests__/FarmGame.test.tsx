@@ -261,6 +261,21 @@ describe('FarmGame UI flow', () => {
     }
   });
 
+  test('keeps rapid harvest state updates from overwriting each other', async () => {
+    const screen = await renderGame(createReadyHarvestState());
+
+    await waitFor(() => expect(screen.getByText('50G')).toBeTruthy());
+
+    const readyPlots = screen.getAllByText('GET');
+    await act(async () => {
+      fireEvent.press(readyPlots[0]!);
+      fireEvent.press(readyPlots[1]!);
+    });
+
+    await waitFor(() => expect(screen.getByText('78G')).toBeTruthy());
+    expect(screen.getAllByText('빈 밭')).toHaveLength(6);
+  });
+
   test('renders the shared farm UI in English when the saved locale is en-US', async () => {
     const screen = await renderGame(null, {}, { locale: 'en-US' });
 
