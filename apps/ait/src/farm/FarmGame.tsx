@@ -2480,8 +2480,10 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     alignItems: 'center',
+    // The floating number lives in a later-painted sibling cell than the row
+    // above it, so document order already draws it on top — no elevation needed
+    // (which would risk a stray Android shadow on this background-less layer).
     zIndex: 30,
-    elevation: 6,
   },
   floatingGainText: {
     fontSize: 15,
