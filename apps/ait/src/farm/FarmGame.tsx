@@ -91,7 +91,7 @@ import {
   getMinUpgradeLevel,
   getMutationLabel,
   getPlotCost,
-  getPlotGrowthRatio,
+  getPlotGrowthDisplay,
   getPlotRemainingGrowthMs,
   getRewardedAdLimitStatus,
   getUpgradeCost,
@@ -1512,20 +1512,28 @@ export default function FarmGame({
 
       <ScrollView contentContainerStyle={styles.mainContent} style={styles.main}>
         <View style={styles.plotGrid}>
-          {gameState.plots.map((plot, index) => (
-            <PlotCell
-              key={plot.id}
-              index={index}
-              plot={plot}
-              unlocked={index < gameState.unlockedPlotCount}
-              progressRatio={getPlotGrowthRatio(gameState, plot)}
-              tileSize={plotTileSize}
-              messages={messages}
-              plantToken={plantPulses[index]}
-              onPlantPulseDone={clearPlantPulse}
-              onPress={onPlotPress}
-            />
-          ))}
+          {gameState.plots.map((plot, index) => {
+            // Resolve growth ratio and countdown together so the crop modifiers
+            // are computed once per tile per tick instead of once for each.
+            const growth = getPlotGrowthDisplay(gameState, plot);
+            return (
+              <PlotCell
+                key={plot.id}
+                index={index}
+                plot={plot}
+                unlocked={index < gameState.unlockedPlotCount}
+                progressRatio={growth.growthRatio}
+                growthCountdown={
+                  plot.state === 1 ? formatDuration(growth.remainingWallClockMs, locale) : undefined
+                }
+                tileSize={plotTileSize}
+                messages={messages}
+                plantToken={plantPulses[index]}
+                onPlantPulseDone={clearPlantPulse}
+                onPress={onPlotPress}
+              />
+            );
+          })}
           <HarvestFxOverlay ref={harvestFxRef} tileSize={plotTileSize} />
         </View>
       </ScrollView>
@@ -1967,6 +1975,7 @@ const PlotCell = React.memo(function PlotCell({
   plot,
   unlocked,
   progressRatio,
+  growthCountdown,
   tileSize,
   messages,
   plantToken,
@@ -1977,6 +1986,7 @@ const PlotCell = React.memo(function PlotCell({
   plot: GameState['plots'][number];
   unlocked: boolean;
   progressRatio: number;
+  growthCountdown: string | undefined;
   tileSize: number;
   messages: FarmMessages;
   plantToken: number | undefined;
@@ -2023,7 +2033,16 @@ const PlotCell = React.memo(function PlotCell({
         </View>
       ) : null}
       {plot.state === 1 && crop != null && plot.startTime != null ? (
-        <GrowthProgressBar progressRatio={progressRatio} />
+        <>
+          {growthCountdown != null ? (
+            <View style={[styles.growthTimer, { maxWidth: Math.max(0, tileSize - 10) }]}>
+              <Text style={styles.growthTimerText} numberOfLines={1} ellipsizeMode="tail">
+                {growthCountdown}
+              </Text>
+            </View>
+          ) : null}
+          <GrowthProgressBar progressRatio={progressRatio} />
+        </>
       ) : null}
       {plot.state === 2 ? (
         <ReadyCropIcon icon={icon} phaseSeed={plot.id} />
@@ -3037,6 +3056,20 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 10,
     fontWeight: '900',
+  },
+  growthTimer: {
+    position: 'absolute',
+    top: 5,
+    left: 5,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 7,
+    backgroundColor: 'rgba(0, 0, 0, 0.42)',
+  },
+  growthTimerText: {
+    color: '#ffffff',
+    fontSize: 10,
+    fontWeight: '800',
   },
   progressTrack: {
     position: 'absolute',
