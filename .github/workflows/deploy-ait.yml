@@ -57,6 +57,8 @@ jobs:
 
       - name: Setup pnpm workspace
         uses: ./.github/actions/setup-pnpm-workspace
+        with:
+          install-command: pnpm --filter . --filter @happy-farm/ait... install --frozen-lockfile
 
       - name: Resolve release version
         id: release-version
@@ -65,16 +67,19 @@ jobs:
         run: node scripts/resolve-release-version.mjs --github-output --github-step-summary --write-release-info --quiet
 
       - name: Lint
-        run: pnpm lint
+        run: pnpm --dir apps/ait lint
 
       - name: Typecheck
-        run: pnpm typecheck
+        run: pnpm --dir apps/ait typecheck
 
-      - name: Test
-        run: pnpm test
+      - name: Test shared core
+        run: pnpm check:core
+
+      - name: Test AIT app
+        run: pnpm --dir apps/ait test
 
       - name: Build AIT artifact
-        run: pnpm build
+        run: pnpm --dir apps/ait build
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v7
