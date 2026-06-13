@@ -1585,9 +1585,49 @@ function PlotCell({
       {plot.state === 1 && crop != null && plot.startTime != null ? (
         <GrowthProgressBar progressRatio={progressRatio} />
       ) : null}
-      <Text style={plot.state === 2 ? styles.readyCropIcon : styles.cropIcon}>{icon}</Text>
+      {plot.state === 2 ? (
+        <ReadyCropIcon icon={icon} />
+      ) : (
+        <Text style={styles.cropIcon}>{icon}</Text>
+      )}
     </Pressable>
   );
+}
+
+// Ripe crops gently pulse so harvestable plots draw the eye in a full grid,
+// reinforcing the "see ready -> tap" loop. Native-driven loop keeps it cheap
+// even with every plot ripe at once.
+function ReadyCropIcon({ icon }: { icon: string }) {
+  const pulseRef = useRef<Animated.Value | null>(null);
+  if (pulseRef.current == null) {
+    pulseRef.current = new Animated.Value(0);
+  }
+  const pulse = pulseRef.current;
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, {
+          toValue: 1,
+          duration: 650,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulse, {
+          toValue: 0,
+          duration: 650,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [pulse]);
+
+  const scale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.14] });
+
+  return <Animated.Text style={[styles.readyCropIcon, { transform: [{ scale }] }]}>{icon}</Animated.Text>;
 }
 
 const HarvestFxOverlay = React.forwardRef<HarvestFxHandle, { tileSize: number }>(function HarvestFxOverlay(
