@@ -97,6 +97,8 @@ import {
   isTitleUnlocked,
   normalizeLocale,
   performHarvest,
+  performHarvestAll,
+  getReadyPlotCount,
   recordHarvestBonusAdPrompt,
   recordRewardedAdUsage,
   type CropEconomyEstimate,
@@ -125,6 +127,9 @@ const AUTO_HARVEST_SUMMARY_INTERVAL_MS = 60_000;
 const PROGRESS_ANIMATION_DURATION_MS = GAME_TICK_INTERVAL_MS;
 // Fresh-plant sprout "bounce in" duration.
 const PLANT_POP_DURATION_MS = 320;
+// The "Harvest All" shortcut only appears once enough plots are ripe that
+// tapping each one becomes a chore; a single ripe plot is a quick one-tap.
+const HARVEST_ALL_MIN_COUNT = 2;
 const SHEET_DISMISS_DRAG_DISTANCE = 96;
 const SHEET_DISMISS_VELOCITY = 1.1;
 const SHEET_DISMISS_TRANSLATE_Y = 520;
@@ -562,6 +567,7 @@ export default function FarmGame({
       ),
     [gameState, harvestBonusBoost.multiplier]
   );
+  const readyPlotCount = useMemo(() => getReadyPlotCount(gameState), [gameState]);
   const chainIncome = useMemo(() => getChainIncome(gameState), [gameState, tick]);
   const mapActionableCount = useMemo(
     () => (chainIncome.accruedGold > 0 ? 1 : 0) + (canPrestige(gameState).allowed ? 1 : 0),
@@ -1050,6 +1056,65 @@ export default function FarmGame({
     }
   }
 
+  function harvestAllCrops() {
+    const now = Date.now();
+    // Pre-roll one mutation roll per ripe plot so the previewed outcome (FX,
+    // toast, analytics) matches the state committed inside the updater — the
+    // same fixed-roll discipline the single-harvest path uses.
+    const rolls = Array.from({ length: getReadyPlotCount(gameState) }, () => Math.random());
+    const makeRng = () => {
+      let cursor = 0;
+      return () => rolls[cursor++] ?? Math.random();
+    };
+
+    const preview = performHarvestAll(gameState, { now, rng: makeRng() });
+    if (preview.harvestedCount === 0) {
+      return;
+    }
+
+    setGameState((state) => performHarvestAll(state, { now, rng: makeRng() }).state);
+
+    // One floating "+gold" per harvested plot preserves the spatial reward; the
+    // overlay self-caps concurrent pops, so a full grid stays cheap. The rest of
+    // the feedback (HUD pulse, toast, sound, haptic) fires once for the batch
+    // instead of stacking dozens of buzzes and toasts.
+    for (const { plotIndex, outcome } of preview.harvests) {
+      if (outcome.goldGained > 0) {
+        const isSpecial =
+          outcome.mutation != null || outcome.newMasteryRank != null || outcome.boostActive;
+        harvestFxRef.current?.spawn(
+          plotIndex,
+          `+${formatMoney(outcome.goldGained, locale)}`,
+          isSpecial ? 'special' : 'normal'
+        );
+      }
+    }
+
+    if (preview.totalGoldGained > 0) {
+      pulseGold();
+      toast(messages.harvestAllToast(formatMoney(preview.totalGoldGained, locale), preview.harvestedCount));
+    } else {
+      // Donation mode routes the whole batch into research points instead of gold.
+      toast(messages.harvestAllDonatedToast(formatMoney(preview.totalRpGained, locale), preview.harvestedCount));
+    }
+
+    farmAnalytics.trackHarvestAll({
+      harvestedCount: preview.harvestedCount,
+      totalGold: preview.totalGoldGained,
+      specialCount: preview.specialCount,
+      context: analyticsContext(),
+    });
+
+    if (preview.specialCount > 0 && Platform.OS === 'android') {
+      Vibration.vibrate([0, 24, 36, 48]);
+    } else {
+      Vibration.vibrate(50);
+    }
+    if (gameSettings.soundEffectsEnabled && audio.isSupported) {
+      void audio.playHarvest();
+    }
+  }
+
   function handlePlotClick(index: number) {
     if (index >= gameState.unlockedPlotCount) {
       openShop();
@@ -1288,9 +1353,16 @@ export default function FarmGame({
       <View style={[styles.toolStrip, { paddingBottom: insets.bottom + 10 }]}>
         <View style={styles.toolHeader}>
           <Text style={styles.toolLabel}>{messages.toolLabel}</Text>
-          <Text style={styles.toolHint} numberOfLines={1}>
-            {toolHint}
-          </Text>
+          {readyPlotCount >= HARVEST_ALL_MIN_COUNT ? (
+            <HarvestAllButton
+              label={messages.harvestAllButton(readyPlotCount)}
+              onPress={harvestAllCrops}
+            />
+          ) : (
+            <Text style={styles.toolHint} numberOfLines={1}>
+              {toolHint}
+            </Text>
+          )}
         </View>
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.areaTabs}>
@@ -1601,6 +1673,71 @@ function NavButton({
           <Text style={styles.collectionBadgeText}>{badge}</Text>
         </View>
       ) : null}
+    </Pressable>
+  );
+}
+
+// Swaps in for the tool hint the moment a couple of plots ripen, turning a
+// row of individual taps into one satisfying batch harvest. It pops in and
+// breathes gently so the eye catches the call-to-action without nagging.
+function HarvestAllButton({ label, onPress }: { label: string; onPress: () => void }) {
+  const entranceRef = useRef<Animated.Value | null>(null);
+  if (entranceRef.current == null) {
+    entranceRef.current = new Animated.Value(0);
+  }
+  const entrance = entranceRef.current;
+  const pulseRef = useRef<Animated.Value | null>(null);
+  if (pulseRef.current == null) {
+    pulseRef.current = new Animated.Value(0);
+  }
+  const pulse = pulseRef.current;
+
+  useEffect(() => {
+    const animation = Animated.sequence([
+      Animated.timing(entrance, {
+        toValue: 1,
+        duration: 260,
+        easing: Easing.out(Easing.back(2.4)),
+        useNativeDriver: true,
+      }),
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulse, {
+            toValue: 1,
+            duration: 720,
+            easing: Easing.inOut(Easing.quad),
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulse, {
+            toValue: 0,
+            duration: 720,
+            easing: Easing.inOut(Easing.quad),
+            useNativeDriver: true,
+          }),
+        ])
+      ),
+    ]);
+    animation.start();
+    return () => animation.stop();
+  }, [entrance, pulse]);
+
+  const scale = Animated.multiply(
+    entrance.interpolate({ inputRange: [0, 1], outputRange: [0.7, 1] }),
+    pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.05] })
+  );
+
+  return (
+    <Pressable
+      accessibilityLabel={label}
+      hitSlop={6}
+      style={({ pressed }) => [pressed && styles.harvestAllButtonPressed]}
+      onPress={onPress}
+    >
+      <Animated.View style={[styles.harvestAllButton, { opacity: entrance, transform: [{ scale }] }]}>
+        <Text style={styles.harvestAllButtonText} numberOfLines={1}>
+          {label}
+        </Text>
+      </Animated.View>
     </Pressable>
   );
 }
@@ -2716,6 +2853,26 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '900',
     textAlign: 'right',
+  },
+  harvestAllButton: {
+    minHeight: 34,
+    justifyContent: 'center',
+    borderRadius: 999,
+    paddingHorizontal: 16,
+    backgroundColor: '#2e9e57',
+    shadowColor: '#1c5f37',
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
+  },
+  harvestAllButtonPressed: {
+    opacity: 0.85,
+  },
+  harvestAllButtonText: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '900',
   },
   areaTabs: {
     gap: 8,
