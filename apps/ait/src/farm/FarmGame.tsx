@@ -145,6 +145,7 @@ const HARVEST_ALL_MIN_COUNT = 2;
 const COMBO_WINDOW_MS = 1500;
 const COMBO_GREAT_THRESHOLD = 5;
 const COMBO_LEGENDARY_THRESHOLD = 10;
+const MASTERY_RANK_UP_CELEBRATION_DURATION_MS = 2600;
 const SHEET_DISMISS_DRAG_DISTANCE = 96;
 const SHEET_DISMISS_VELOCITY = 1.1;
 const SHEET_DISMISS_TRANSLATE_Y = 520;
@@ -252,6 +253,14 @@ type PendingFarmCommandEffect =
       specialCount: number;
     };
 
+type MasteryRankUpNotice = {
+  cropIcon: string;
+  cropName: string;
+  rankKey: string;
+  rankIcon: string;
+  rankName: string;
+};
+
 // One-shot floating "+gold" feedback spawned at the tapped plot on a manual
 // harvest. Auto-harvest stays silent so the burst always maps to a finger tap.
 type HarvestPop = {
@@ -336,6 +345,8 @@ export default function FarmGame({
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [harvestCombo, setHarvestCombo] = useState(0);
   const comboTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [masteryRankUpNotice, setMasteryRankUpNotice] = useState<MasteryRankUpNotice | null>(null);
+  const masteryRankUpTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Per-plot "just planted" tokens. Bumped only on a manual plant so the fresh
   // sprout bounces in (auto-replant and save-load stay silent). Keyed by index.
   const [plantPulses, setPlantPulses] = useState<Record<number, number>>({});
@@ -428,6 +439,23 @@ export default function FarmGame({
       comboTimerRef.current = null;
     }, COMBO_WINDOW_MS);
   }, []);
+  const showMasteryRankUpCelebration = useCallback((notice: MasteryRankUpNotice) => {
+    if (masteryRankUpTimerRef.current != null) {
+      clearTimeout(masteryRankUpTimerRef.current);
+    }
+    setMasteryRankUpNotice(notice);
+    masteryRankUpTimerRef.current = setTimeout(() => {
+      setMasteryRankUpNotice(null);
+      masteryRankUpTimerRef.current = null;
+    }, MASTERY_RANK_UP_CELEBRATION_DURATION_MS);
+  }, []);
+  const dismissMasteryRankUpCelebration = useCallback(() => {
+    if (masteryRankUpTimerRef.current != null) {
+      clearTimeout(masteryRankUpTimerRef.current);
+      masteryRankUpTimerRef.current = null;
+    }
+    setMasteryRankUpNotice(null);
+  }, []);
   const closeSheet = useCallback(() => {
     setActiveSheet(null);
   }, []);
@@ -449,6 +477,9 @@ export default function FarmGame({
       }
       if (comboTimerRef.current != null) {
         clearTimeout(comboTimerRef.current);
+      }
+      if (masteryRankUpTimerRef.current != null) {
+        clearTimeout(masteryRankUpTimerRef.current);
       }
     };
   }, []);
@@ -554,13 +585,14 @@ export default function FarmGame({
         context: analyticsContext(),
       });
       if (event.newMasteryRank != null) {
-        toast(
-          messages.masteryRankUpToast(
-            getLocalizedCropName(event.cropKey),
-            getMasteryRankLabel(event.newMasteryRank.key, locale).name,
-            event.newMasteryRank.icon
-          )
-        );
+        const crop = getCrop(event.cropKey);
+        showMasteryRankUpCelebration({
+          cropIcon: crop.icon,
+          cropName: getLocalizedCropName(event.cropKey),
+          rankKey: event.newMasteryRank.key,
+          rankIcon: event.newMasteryRank.icon,
+          rankName: getMasteryRankLabel(event.newMasteryRank.key, locale).name,
+        });
       } else if (event.donated) {
         toast(messages.donatedToast(formatMoney(event.rpGained, locale)));
       } else if (event.mutation != null) {
@@ -617,6 +649,7 @@ export default function FarmGame({
     locale,
     messages,
     pulseGold,
+    showMasteryRankUpCelebration,
     toast,
   ]);
 
@@ -1653,6 +1686,14 @@ export default function FarmGame({
         </View>
       ) : null}
 
+      {masteryRankUpNotice != null ? (
+        <MasteryRankUpOverlay
+          notice={masteryRankUpNotice}
+          messages={messages}
+          onDismiss={dismissMasteryRankUpCelebration}
+        />
+      ) : null}
+
       <Sheet
         activeSheet={activeSheet}
         description={getSheetDescription(activeSheet, messages, locale, getLocalizedCropName, collectionSummary)}
@@ -2002,6 +2043,116 @@ function HarvestAllButton({ label, onPress }: { label: string; onPress: () => vo
           {label}
         </Text>
       </Animated.View>
+    </Pressable>
+  );
+}
+
+// Mastery rank-up celebration: full-screen overlay that marks the moment a crop
+// reaches a new mastery tier (Bronze → Silver → Gold → Prism). The card springs
+// in from below-center; the crop emoji bounces in first, then the rank badge
+// fades in with a slight delay so each element lands in sequence.
+// Auto-dismisses after MASTERY_RANK_UP_CELEBRATION_DURATION_MS; tapping anywhere
+// on the backdrop also dismisses it early.
+function MasteryRankUpOverlay({
+  notice,
+  messages,
+  onDismiss,
+}: {
+  notice: MasteryRankUpNotice;
+  messages: FarmMessages;
+  onDismiss: () => void;
+}) {
+  const backdropRef = useRef<Animated.Value | null>(null);
+  if (backdropRef.current == null) backdropRef.current = new Animated.Value(0);
+  const backdrop = backdropRef.current;
+
+  const cardScaleRef = useRef<Animated.Value | null>(null);
+  if (cardScaleRef.current == null) cardScaleRef.current = new Animated.Value(0.6);
+  const cardScale = cardScaleRef.current;
+
+  const cropScaleRef = useRef<Animated.Value | null>(null);
+  if (cropScaleRef.current == null) cropScaleRef.current = new Animated.Value(0.2);
+  const cropScale = cropScaleRef.current;
+
+  const rankEntranceRef = useRef<Animated.Value | null>(null);
+  if (rankEntranceRef.current == null) rankEntranceRef.current = new Animated.Value(0);
+  const rankEntrance = rankEntranceRef.current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(backdrop, {
+        toValue: 1,
+        duration: 200,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
+      Animated.spring(cardScale, {
+        toValue: 1,
+        damping: 15,
+        stiffness: 280,
+        mass: 0.8,
+        useNativeDriver: true,
+      }),
+      Animated.sequence([
+        Animated.delay(100),
+        Animated.spring(cropScale, {
+          toValue: 1,
+          damping: 9,
+          stiffness: 200,
+          mass: 0.5,
+          useNativeDriver: true,
+        }),
+      ]),
+      Animated.sequence([
+        Animated.delay(260),
+        Animated.spring(rankEntrance, {
+          toValue: 1,
+          damping: 12,
+          stiffness: 260,
+          useNativeDriver: true,
+        }),
+      ]),
+    ]).start();
+
+    return () => {
+      backdrop.stopAnimation();
+      cardScale.stopAnimation();
+      cropScale.stopAnimation();
+      rankEntrance.stopAnimation();
+    };
+  }, [backdrop, cardScale, cropScale, rankEntrance]);
+
+  const rankColor =
+    notice.rankKey === 'prism'
+      ? '#7c44ff'
+      : notice.rankKey === 'gold'
+        ? '#d4860a'
+        : notice.rankKey === 'silver'
+          ? '#5f7e99'
+          : '#9a6b3e';
+
+  const rankEntranceScale = rankEntrance.interpolate({ inputRange: [0, 1], outputRange: [0.4, 1] });
+
+  return (
+    <Pressable style={StyleSheet.absoluteFill} onPress={onDismiss}>
+      <Animated.View style={[styles.masteryBackdrop, { opacity: backdrop }]} />
+      <View style={styles.masteryCenter} pointerEvents="none">
+        <Animated.View style={[styles.masteryCard, { transform: [{ scale: cardScale }] }]}>
+          <Text style={styles.masteryTitle}>{messages.masteryRankUpTitle}</Text>
+          <Animated.Text style={[styles.masteryCropIcon, { transform: [{ scale: cropScale }] }]}>
+            {notice.cropIcon}
+          </Animated.Text>
+          <Animated.Text
+            style={[
+              styles.masteryRankBadge,
+              { color: rankColor, opacity: rankEntrance, transform: [{ scale: rankEntranceScale }] },
+            ]}
+          >
+            {notice.rankIcon} {notice.rankName}
+          </Animated.Text>
+          <Text style={styles.masteryCropName}>{notice.cropName}</Text>
+        </Animated.View>
+      </View>
     </Pressable>
   );
 }
@@ -3509,5 +3660,51 @@ const styles = StyleSheet.create({
   comboTextLegendary: {
     color: '#ffd23f',
     fontSize: 32,
+  },
+  masteryBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.58)',
+  },
+  masteryCenter: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingBottom: 80,
+  },
+  masteryCard: {
+    width: 268,
+    paddingHorizontal: 28,
+    paddingVertical: 28,
+    borderRadius: 20,
+    backgroundColor: '#ffffff',
+    alignItems: 'center',
+    gap: 6,
+    shadowColor: '#000000',
+    shadowOpacity: 0.28,
+    shadowRadius: 28,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 14,
+  },
+  masteryTitle: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: '#667085',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+  },
+  masteryCropIcon: {
+    fontSize: 68,
+    lineHeight: 76,
+    marginVertical: 2,
+  },
+  masteryRankBadge: {
+    fontSize: 30,
+    fontWeight: '900',
+  },
+  masteryCropName: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: '#344054',
+    marginTop: 4,
   },
 });

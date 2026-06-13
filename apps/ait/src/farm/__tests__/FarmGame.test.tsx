@@ -521,7 +521,8 @@ describe('FarmGame UI flow', () => {
 
     fireEvent.press(screen.getAllByText('GET')[0]!);
 
-    expect(screen.getByText(/숙련도가 브론즈 등급/)).toBeTruthy();
+    expect(screen.getByText('숙련도 달성!')).toBeTruthy();
+    expect(screen.getByText(/브론즈/)).toBeTruthy();
 
     fireEvent.press(screen.getByLabelText('작물 도감'));
 
