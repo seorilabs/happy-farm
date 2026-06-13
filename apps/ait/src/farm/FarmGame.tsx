@@ -140,6 +140,11 @@ const PLANT_POP_DURATION_MS = 320;
 // The "Harvest All" shortcut only appears once enough plots are ripe that
 // tapping each one becomes a chore; a single ripe plot is a quick one-tap.
 const HARVEST_ALL_MIN_COUNT = 2;
+// Harvest combo: the window (ms) within which consecutive manual harvests
+// build a streak counter. Tier thresholds gate icon/color escalation.
+const COMBO_WINDOW_MS = 1500;
+const COMBO_GREAT_THRESHOLD = 5;
+const COMBO_LEGENDARY_THRESHOLD = 10;
 const SHEET_DISMISS_DRAG_DISTANCE = 96;
 const SHEET_DISMISS_VELOCITY = 1.1;
 const SHEET_DISMISS_TRANSLATE_Y = 520;
@@ -329,6 +334,8 @@ export default function FarmGame({
   const [gameSettings, setGameSettings] = useState<FarmGameSettings>(DEFAULT_FARM_GAME_SETTINGS);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [harvestCombo, setHarvestCombo] = useState(0);
+  const comboTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Per-plot "just planted" tokens. Bumped only on a manual plant so the fresh
   // sprout bounces in (auto-replant and save-load stay silent). Keyed by index.
   const [plantPulses, setPlantPulses] = useState<Record<number, number>>({});
@@ -411,6 +418,16 @@ export default function FarmGame({
       }),
     ]).start();
   }, [goldPulse]);
+  const incrementCombo = useCallback((count: number) => {
+    if (comboTimerRef.current != null) {
+      clearTimeout(comboTimerRef.current);
+    }
+    setHarvestCombo((prev) => prev + count);
+    comboTimerRef.current = setTimeout(() => {
+      setHarvestCombo(0);
+      comboTimerRef.current = null;
+    }, COMBO_WINDOW_MS);
+  }, []);
   const closeSheet = useCallback(() => {
     setActiveSheet(null);
   }, []);
@@ -429,6 +446,9 @@ export default function FarmGame({
     return () => {
       if (toastTimerRef.current != null) {
         clearTimeout(toastTimerRef.current);
+      }
+      if (comboTimerRef.current != null) {
+        clearTimeout(comboTimerRef.current);
       }
     };
   }, []);
@@ -518,6 +538,7 @@ export default function FarmGame({
           if (gameSettings.soundEffectsEnabled && audio.isSupported) {
             void audio.playHarvest();
           }
+          incrementCombo(effect.harvestedCount);
         }
         continue;
       }
@@ -583,6 +604,7 @@ export default function FarmGame({
       if (gameSettings.soundEffectsEnabled && audio.isSupported) {
         void audio.playHarvest();
       }
+      incrementCombo(1);
     }
   }, [
     analyticsContext,
@@ -591,6 +613,7 @@ export default function FarmGame({
     farmAnalytics,
     gameSettings.soundEffectsEnabled,
     getLocalizedCropName,
+    incrementCombo,
     locale,
     messages,
     pulseGold,
@@ -1614,6 +1637,12 @@ export default function FarmGame({
         </View>
       ) : null}
 
+      {harvestCombo >= 2 ? (
+        <View pointerEvents="none" style={styles.comboOverlay}>
+          <ComboDisplay count={harvestCombo} messages={messages} />
+        </View>
+      ) : null}
+
       <Sheet
         activeSheet={activeSheet}
         description={getSheetDescription(activeSheet, messages, locale, getLocalizedCropName, collectionSummary)}
@@ -1964,6 +1993,58 @@ function HarvestAllButton({ label, onPress }: { label: string; onPress: () => vo
         </Text>
       </Animated.View>
     </Pressable>
+  );
+}
+
+// Shows a growing streak counter when the player rapidly harvests multiple
+// plots in quick succession. Bounces in on each count update so the number
+// change is unmistakable; tiers escalate icon and color at 5× and 10×.
+function ComboDisplay({ count, messages }: { count: number; messages: FarmMessages }) {
+  const scaleRef = useRef<Animated.Value | null>(null);
+  if (scaleRef.current == null) {
+    scaleRef.current = new Animated.Value(0.6);
+  }
+  const scale = scaleRef.current;
+
+  useEffect(() => {
+    scale.stopAnimation();
+    scale.setValue(0.6);
+    Animated.spring(scale, {
+      toValue: 1,
+      damping: 10,
+      stiffness: 260,
+      mass: 0.5,
+      useNativeDriver: true,
+    }).start();
+  }, [scale, count]);
+
+  useEffect(() => {
+    return () => scale.stopAnimation();
+  }, [scale]);
+
+  const tier =
+    count >= COMBO_LEGENDARY_THRESHOLD ? 'legendary' : count >= COMBO_GREAT_THRESHOLD ? 'great' : 'normal';
+  const icon = tier === 'legendary' ? '⚡' : tier === 'great' ? '🔥' : '🌾';
+
+  return (
+    <Animated.View
+      style={[
+        styles.comboDisplay,
+        tier === 'great' && styles.comboDisplayGreat,
+        tier === 'legendary' && styles.comboDisplayLegendary,
+        { transform: [{ scale }] },
+      ]}
+    >
+      <Text
+        style={[
+          styles.comboText,
+          tier === 'great' && styles.comboTextGreat,
+          tier === 'legendary' && styles.comboTextLegendary,
+        ]}
+      >
+        {icon} {messages.comboLabel(count)}
+      </Text>
+    </Animated.View>
   );
 }
 
@@ -3366,5 +3447,41 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 10,
     fontWeight: '900',
+  },
+  comboOverlay: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: '40%',
+    alignItems: 'center',
+    zIndex: 9,
+  },
+  comboDisplay: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 24,
+    backgroundColor: 'rgba(31, 41, 55, 0.88)',
+  },
+  comboDisplayGreat: {
+    backgroundColor: 'rgba(154, 52, 18, 0.92)',
+  },
+  comboDisplayLegendary: {
+    backgroundColor: 'rgba(120, 70, 0, 0.95)',
+  },
+  comboText: {
+    color: '#f7b733',
+    fontSize: 24,
+    fontWeight: '900',
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
+  comboTextGreat: {
+    color: '#ff8c42',
+    fontSize: 28,
+  },
+  comboTextLegendary: {
+    color: '#ffd23f',
+    fontSize: 32,
   },
 });
