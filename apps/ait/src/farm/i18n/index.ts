@@ -204,6 +204,12 @@ const KO_FARM_MESSAGES = {
   collectionFullDesc: (discovered: number, total: number) =>
     `모든 작물 ${discovered}/${total}종을 모으면 큰 보상을 받아요.`,
   collectionRewardClaimedToast: (amount: string) => `+${amount}G 도감 보상을 받았어요.`,
+  nextGoalGold: (areaName: string, needed: string) => `⬆️ ${areaName} 해금까지 ${needed}G 더`,
+  nextGoalHarvest: (areaName: string, current: number, total: number) =>
+    `🌾 ${areaName} 해금: 작물 종류 ${current}/${total} 수확 필요`,
+  nextGoalUpgrade: (areaName: string, current: number, total: number) =>
+    `🧪 ${areaName} 해금: 연구 Lv.${current}/${total} 필요`,
+  nextGoalReady: (areaName: string) => `🔓 ${areaName} 해금 준비 완료! 상점에서 열기`,
 };
 
 export type FarmMessages = typeof KO_FARM_MESSAGES;
@@ -398,6 +404,10 @@ const EN_FARM_MESSAGES: FarmMessages = {
   collectionFullTitle: 'Full Collection',
   collectionFullDesc: (discovered, total) => `Collect all ${total} crops (${discovered}/${total}) for a big reward.`,
   collectionRewardClaimedToast: (amount) => `Claimed +${amount}G from your collection.`,
+  nextGoalGold: (areaName, needed) => `⬆️ ${needed}G more to unlock ${areaName}`,
+  nextGoalHarvest: (areaName, current, total) => `🌾 Unlock ${areaName}: harvest ${current}/${total} crop types`,
+  nextGoalUpgrade: (areaName, current, total) => `🧪 Unlock ${areaName}: Research Lv.${current}/${total} required`,
+  nextGoalReady: (areaName) => `🔓 ${areaName} is ready to unlock! Open Shop`,
 };
 
 const FARM_MESSAGES: Record<SupportedLocale, FarmMessages> = {

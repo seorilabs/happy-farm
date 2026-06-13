@@ -210,7 +210,10 @@ describe('FarmGame UI flow', () => {
     expect(screen.getByText('당근')).toBeTruthy();
     expect(screen.getByText('효율 +40%')).toBeTruthy();
 
-    fireEvent.press(screen.getByText(/채소 밭/));
+    // The next-goal bar in the header also contains "채소 밭"; target the
+    // area tab specifically (it is the second match in DOM order).
+    const [, vegetableFieldTab] = screen.getAllByText(/채소 밭/);
+    fireEvent.press(vegetableFieldTab!);
     expect(screen.getByText('채소 밭 열기 조건')).toBeTruthy();
     fireEvent.press(screen.getByText('초보 밭'));
 
@@ -285,7 +288,10 @@ describe('FarmGame UI flow', () => {
     expect(screen.getAllByText('Empty')).toHaveLength(6);
     expect(screen.getByText('Carrot')).toBeTruthy();
 
-    fireEvent.press(screen.getByText(/Vegetable Field/));
+    // The next-goal bar in the header also contains "Vegetable Field"; target
+    // the area tab specifically (it is the second match in DOM order).
+    const [, vegetableFieldTab] = screen.getAllByText(/Vegetable Field/);
+    fireEvent.press(vegetableFieldTab!);
     expect(screen.getByText('Vegetable Field requirements')).toBeTruthy();
     fireEvent.press(screen.getByText('Starter Field'));
 

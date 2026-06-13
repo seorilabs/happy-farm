@@ -174,6 +174,59 @@ function formatStatMultiplier(value: number) {
   return value >= 100 ? `×${Math.round(value).toLocaleString()}` : `×${value.toFixed(1)}`;
 }
 
+// Identifies the single most actionable next milestone for the player: the
+// first locked sequential area, and whichever of its requirements is furthest
+// from met. Returned raw so the component can format it with the active locale.
+type NextAreaGoal =
+  | { kind: 'gold'; areaKey: AreaKey; current: number; total: number }
+  | { kind: 'harvest'; areaKey: AreaKey; current: number; total: number }
+  | { kind: 'upgrade'; areaKey: AreaKey; current: number; total: number }
+  | { kind: 'ready'; areaKey: AreaKey }
+  | null;
+
+function getNextAreaGoal(gameState: GameState): NextAreaGoal {
+  const nextArea = FARM_AREAS.find(
+    (area) => !isAreaUnlocked(gameState, area.key) && area.unlock.gate == null
+  );
+  if (nextArea == null) return null;
+
+  const goldOk = gameState.gold >= nextArea.unlock.cost;
+  const harvestOk = gameState.harvestedCropKeys.length >= nextArea.unlock.requiredHarvestedCropCount;
+  const upgradeOk = getMinUpgradeLevel(gameState) >= nextArea.unlock.requiredUpgradeLevel;
+
+  if (goldOk && harvestOk && upgradeOk) {
+    return { kind: 'ready', areaKey: nextArea.key };
+  }
+
+  const goldRatio = nextArea.unlock.cost > 0 ? gameState.gold / nextArea.unlock.cost : 1;
+  const harvestRatio =
+    nextArea.unlock.requiredHarvestedCropCount > 0
+      ? gameState.harvestedCropKeys.length / nextArea.unlock.requiredHarvestedCropCount
+      : 1;
+  const upgradeRatio =
+    nextArea.unlock.requiredUpgradeLevel > 1
+      ? getMinUpgradeLevel(gameState) / nextArea.unlock.requiredUpgradeLevel
+      : 1;
+
+  if (!goldOk && goldRatio <= harvestRatio && goldRatio <= upgradeRatio) {
+    return { kind: 'gold', areaKey: nextArea.key, current: gameState.gold, total: nextArea.unlock.cost };
+  }
+  if (!harvestOk && harvestRatio <= upgradeRatio) {
+    return {
+      kind: 'harvest',
+      areaKey: nextArea.key,
+      current: gameState.harvestedCropKeys.length,
+      total: nextArea.unlock.requiredHarvestedCropCount,
+    };
+  }
+  return {
+    kind: 'upgrade',
+    areaKey: nextArea.key,
+    current: getMinUpgradeLevel(gameState),
+    total: nextArea.unlock.requiredUpgradeLevel,
+  };
+}
+
 function getCropEconomy(cropEconomyByKey: Record<CropKey, CropEconomyEstimate>, cropKey: CropKey): CropEconomyEstimate {
   const estimate = cropEconomyByKey[cropKey];
   if (estimate == null) {
@@ -831,6 +884,7 @@ export default function FarmGame({
     () => (chainIncome.accruedGold > 0 ? 1 : 0) + (canPrestige(gameState).allowed ? 1 : 0),
     [chainIncome.accruedGold, gameState]
   );
+  const nextAreaGoal = useMemo(() => getNextAreaGoal(gameState), [gameState]);
 
   useEffect(() => {
     const now = Date.now();
@@ -1514,6 +1568,16 @@ export default function FarmGame({
           </View>
         </View>
 
+        {nextAreaGoal != null ? (
+          <NextGoalBar
+            goal={nextAreaGoal}
+            messages={messages}
+            locale={locale}
+            getAreaName={(areaKey) => getLocalizedAreaLabel(areaKey).name}
+            onPress={openShop}
+          />
+        ) : null}
+
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.navRow}>
           <NavButton label={messages.shopButton} onPress={openShop} />
           <NavButton
@@ -2066,6 +2130,59 @@ function ComboDisplay({ count, messages }: { count: number; messages: FarmMessag
         {icon} {messages.comboLabel(count)}
       </Text>
     </Animated.View>
+  );
+}
+
+// Compact progress bar shown in the header that surfaces the single most
+// actionable next milestone (next area unlock) so players have a clear target
+// during crop growth wait times. Tapping it opens the shop directly.
+function NextGoalBar({
+  goal,
+  messages,
+  locale,
+  getAreaName,
+  onPress,
+}: {
+  goal: NonNullable<NextAreaGoal>;
+  messages: FarmMessages;
+  locale: SupportedLocale;
+  getAreaName: (areaKey: AreaKey) => string;
+  onPress: () => void;
+}) {
+  const areaName = getAreaName(goal.areaKey);
+
+  if (goal.kind === 'ready') {
+    return (
+      <Pressable style={styles.nextGoalBar} onPress={onPress}>
+        <Text style={styles.nextGoalReadyText} numberOfLines={1}>
+          {messages.nextGoalReady(areaName)}
+        </Text>
+      </Pressable>
+    );
+  }
+
+  let label: string;
+  let ratio: number;
+  if (goal.kind === 'gold') {
+    label = messages.nextGoalGold(areaName, formatMoney(goal.total - goal.current, locale));
+    ratio = goal.current / goal.total;
+  } else if (goal.kind === 'harvest') {
+    label = messages.nextGoalHarvest(areaName, goal.current, goal.total);
+    ratio = goal.current / goal.total;
+  } else {
+    label = messages.nextGoalUpgrade(areaName, goal.current, goal.total);
+    ratio = goal.current / goal.total;
+  }
+
+  return (
+    <View style={styles.nextGoalBar}>
+      <Text style={styles.nextGoalLabel} numberOfLines={1}>
+        {label}
+      </Text>
+      <View style={styles.nextGoalTrack}>
+        <View style={[styles.nextGoalFill, { width: `${Math.min(Math.round(ratio * 100), 100)}%` }]} />
+      </View>
+    </View>
   );
 }
 
@@ -3509,5 +3626,31 @@ const styles = StyleSheet.create({
   comboTextLegendary: {
     color: '#ffd23f',
     fontSize: 32,
+  },
+  nextGoalBar: {
+    marginTop: 7,
+  },
+  nextGoalLabel: {
+    color: '#4a7c59',
+    fontSize: 11,
+    fontWeight: '800',
+    marginBottom: 4,
+  },
+  nextGoalReadyText: {
+    color: '#1c7538',
+    fontSize: 11,
+    fontWeight: '900',
+    paddingVertical: 2,
+  },
+  nextGoalTrack: {
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: 'rgba(0, 0, 0, 0.08)',
+    overflow: 'hidden',
+  },
+  nextGoalFill: {
+    height: '100%',
+    borderRadius: 2,
+    backgroundColor: '#4caf6a',
   },
 });
