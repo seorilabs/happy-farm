@@ -1586,7 +1586,7 @@ function PlotCell({
         <GrowthProgressBar progressRatio={progressRatio} />
       ) : null}
       {plot.state === 2 ? (
-        <ReadyCropIcon icon={icon} />
+        <ReadyCropIcon icon={icon} phaseSeed={plot.id} />
       ) : (
         <Text style={styles.cropIcon}>{icon}</Text>
       )}
@@ -1597,7 +1597,7 @@ function PlotCell({
 // Ripe crops gently pulse so harvestable plots draw the eye in a full grid,
 // reinforcing the "see ready -> tap" loop. Native-driven loop keeps it cheap
 // even with every plot ripe at once.
-function ReadyCropIcon({ icon }: { icon: string }) {
+function ReadyCropIcon({ icon, phaseSeed }: { icon: string; phaseSeed: number }) {
   const pulseRef = useRef<Animated.Value | null>(null);
   if (pulseRef.current == null) {
     pulseRef.current = new Animated.Value(0);
@@ -1605,25 +1605,31 @@ function ReadyCropIcon({ icon }: { icon: string }) {
   const pulse = pulseRef.current;
 
   useEffect(() => {
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulse, {
-          toValue: 1,
-          duration: 650,
-          easing: Easing.inOut(Easing.quad),
-          useNativeDriver: true,
-        }),
-        Animated.timing(pulse, {
-          toValue: 0,
-          duration: 650,
-          easing: Easing.inOut(Easing.quad),
-          useNativeDriver: true,
-        }),
-      ])
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [pulse]);
+    // Stagger each plot's pulse by a stable per-plot offset so a grid of ripe
+    // crops breathes organically instead of beating in robotic unison.
+    const startDelay = (phaseSeed % 7) * 90;
+    const animation = Animated.sequence([
+      Animated.delay(startDelay),
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulse, {
+            toValue: 1,
+            duration: 650,
+            easing: Easing.inOut(Easing.quad),
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulse, {
+            toValue: 0,
+            duration: 650,
+            easing: Easing.inOut(Easing.quad),
+            useNativeDriver: true,
+          }),
+        ])
+      ),
+    ]);
+    animation.start();
+    return () => animation.stop();
+  }, [pulse, phaseSeed]);
 
   const scale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.14] });
 
