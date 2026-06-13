@@ -40,7 +40,6 @@ import {
   getRegionArchetypeLabel,
   getResearchNodeLabel,
   getTitleLabel,
-  performPlant,
   prestigeFarm,
   runAutomationTick,
   setActiveTitle,
@@ -70,6 +69,7 @@ import {
   createFarmAnalytics,
   createInitialState,
   DEFAULT_LOCALE,
+  executeFarmGameCommand,
   formatHourlyGold,
   formatMoney,
   formatRemainingTime,
@@ -96,7 +96,6 @@ import {
   isPlotGrowthComplete,
   isTitleUnlocked,
   normalizeLocale,
-  performHarvest,
   recordHarvestBonusAdPrompt,
   recordRewardedAdUsage,
   type CropEconomyEstimate,
@@ -937,35 +936,36 @@ export default function FarmGame({
   }
 
   function plantCrop(index: number, cropKey: CropKey) {
-    const crop = getCrop(cropKey);
-    if (!isAreaUnlocked(gameState, crop.area)) {
-      toast(messages.areaFirstToast);
-      return;
-    }
-    if (!isCropPlantable(gameState, cropKey)) {
-      toast(messages.breedRequiredToast);
-      return;
-    }
     const now = Date.now();
-    const cost = getCropPurchaseCost(gameState, cropKey, now);
-    if (gameState.gold < cost) {
-      toast(messages.insufficientGoldToast);
-      return;
-    }
-    // Remaining failure modes (occupied/locked plot) are silent; only track
-    // analytics for plants that actually succeed.
-    if (performPlant(gameState, index, cropKey, now) == null) {
+    const result = executeFarmGameCommand(
+      gameState,
+      { type: 'plantCrop', plotIndex: index, cropKey },
+      { now, rng: Math.random }
+    );
+    if (result.status === 'blocked') {
+      if (result.reason === 'areaLocked') {
+        toast(messages.areaFirstToast);
+      } else if (result.reason === 'cropLocked') {
+        toast(messages.breedRequiredToast);
+      } else if (result.reason === 'insufficientGold') {
+        toast(messages.insufficientGoldToast);
+      }
       return;
     }
 
-    setGameState((state) => performPlant(state, index, cropKey, now) ?? state);
+    const event = result.events[0];
+    if (event?.type !== 'cropPlanted') {
+      return;
+    }
+
+    setGameState(result.state);
     // Pop the fresh sprout in and give a light tap so planting feels as tactile
     // as harvesting. Manual path only, so auto-replant stays silent.
     plantPulseTokenRef.current += 1;
     const token = plantPulseTokenRef.current;
     setPlantPulses((prev) => ({ ...prev, [index]: token }));
     Vibration.vibrate(15);
-    farmAnalytics.trackCropPlanted(cropKey, crop.area, crop.tier, cost, analyticsContext());
+    farmAnalytics.trackCropPlanted(event.cropKey, event.areaKey, event.cropTier, event.cost, analyticsContext());
   }
 
   function harvestCrop(index: number) {
@@ -974,63 +974,66 @@ export default function FarmGame({
     // to the outcome replayed inside the state updater.
     const roll = Math.random();
     const rng = () => roll;
-    const outcome = performHarvest(gameState, index, { now, rng });
-    if (outcome == null) {
+    const result = executeFarmGameCommand(gameState, { type: 'harvestCrop', plotIndex: index }, { now, rng });
+    if (result.status === 'blocked') {
       return;
     }
-    const crop = getCrop(outcome.cropKey);
 
-    setGameState((state) => performHarvest(state, index, { now, rng })?.state ?? state);
+    const event = result.events[0];
+    if (event?.type !== 'cropHarvested') {
+      return;
+    }
+
+    setGameState(result.state);
 
     farmAnalytics.trackCropHarvested({
-      cropKey: outcome.cropKey,
-      areaKey: crop.area,
-      cropTier: crop.tier,
-      revenue: outcome.goldGained,
-      isFirstMeaningfulHarvest: outcome.isFirstMeaningfulHarvest,
-      isFirstCropHarvest: outcome.isNewCropDiscovery,
+      cropKey: event.cropKey,
+      areaKey: event.areaKey,
+      cropTier: event.cropTier,
+      revenue: event.goldGained,
+      isFirstMeaningfulHarvest: event.isFirstMeaningfulHarvest,
+      isFirstCropHarvest: event.isNewCropDiscovery,
       context: analyticsContext(),
     });
-    if (outcome.newMasteryRank != null) {
+    if (event.newMasteryRank != null) {
       toast(
         messages.masteryRankUpToast(
-          getLocalizedCropName(outcome.cropKey),
-          getMasteryRankLabel(outcome.newMasteryRank.key, locale).name,
-          outcome.newMasteryRank.icon
+          getLocalizedCropName(event.cropKey),
+          getMasteryRankLabel(event.newMasteryRank.key, locale).name,
+          event.newMasteryRank.icon
         )
       );
-    } else if (outcome.donated) {
-      toast(messages.donatedToast(formatMoney(outcome.rpGained, locale)));
-    } else if (outcome.mutation != null) {
+    } else if (event.donated) {
+      toast(messages.donatedToast(formatMoney(event.rpGained, locale)));
+    } else if (event.mutation != null) {
       toast(
         messages.mutationHarvestedToast(
-          getMutationLabel(outcome.mutation.key, locale).name,
-          outcome.mutation.icon,
-          formatMoney(outcome.goldGained, locale)
+          getMutationLabel(event.mutation.key, locale).name,
+          event.mutation.icon,
+          formatMoney(event.goldGained, locale)
         )
       );
     } else {
       toast(
-        outcome.boostActive
-          ? messages.harvestedBoostToast(formatMoney(outcome.goldGained, locale), outcome.boostMultiplier)
-          : messages.harvestedToast(formatMoney(outcome.goldGained, locale))
+        event.boostActive
+          ? messages.harvestedBoostToast(formatMoney(event.goldGained, locale), event.boostMultiplier)
+          : messages.harvestedToast(formatMoney(event.goldGained, locale))
       );
     }
     const canShowHarvestBonusNudge =
       rewardedAd.isAdReady &&
       getRewardedAdLimitStatus(gameState, 'harvestBonusAd', now).allowed &&
       getHarvestBonusPromptStatus(gameState, now).allowed &&
-      !outcome.boostActive;
+      !event.boostActive;
     if (canShowHarvestBonusNudge) {
       setGameState((state) => ({ ...state, adUsage: recordHarvestBonusAdPrompt(state, now) }));
       setActiveSheet({ type: 'harvestBonus' });
     }
-    const isSpecialHarvest =
-      outcome.mutation != null || outcome.newMasteryRank != null || outcome.boostActive;
-    if (outcome.goldGained > 0) {
+    const isSpecialHarvest = event.mutation != null || event.newMasteryRank != null || event.boostActive;
+    if (event.goldGained > 0) {
       harvestFxRef.current?.spawn(
         index,
-        `+${formatMoney(outcome.goldGained, locale)}`,
+        `+${formatMoney(event.goldGained, locale)}`,
         isSpecialHarvest ? 'special' : 'normal'
       );
       pulseGold();

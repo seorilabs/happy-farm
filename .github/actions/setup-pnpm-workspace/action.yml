@@ -1,6 +1,12 @@
 name: Setup pnpm workspace
 description: Install the pinned Node/pnpm toolchain and workspace dependencies.
 
+inputs:
+  install-command:
+    description: Dependency install command to run after Node and pnpm are ready.
+    required: false
+    default: pnpm install --frozen-lockfile
+
 runs:
   using: composite
   steps:
@@ -19,4 +25,4 @@ runs:
 
     - name: Install dependencies
       shell: bash
-      run: pnpm install --frozen-lockfile
+      run: ${{ inputs.install-command }}
