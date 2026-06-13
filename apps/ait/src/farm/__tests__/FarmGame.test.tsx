@@ -1,7 +1,7 @@
 /// <reference types="jest" />
 
 import React from 'react';
-import { Vibration } from 'react-native';
+import { StyleSheet, Vibration } from 'react-native';
 import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react-native';
 import {
   CROPS,
@@ -253,6 +253,24 @@ describe('FarmGame UI flow', () => {
     } finally {
       vibrateSpy.mockRestore();
     }
+  });
+
+  test('highlights empty plots as plant targets once an affordable seed is selected', async () => {
+    const screen = await renderGame(null);
+
+    await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+
+    // In harvest mode empty plots use the neutral label color (no plant target).
+    const beforeColor = StyleSheet.flatten(screen.getAllByText('빈 밭')[0]!.props.style).color;
+    expect(beforeColor).not.toBe('#2f7a36');
+
+    fireEvent.press(screen.getByText('초보 밭'));
+    fireEvent.press(screen.getByText('당근'));
+
+    // With an affordable seed selected, every empty plot lights up as a target.
+    expect(screen.getAllByText('빈 밭')).toHaveLength(6);
+    const afterColor = StyleSheet.flatten(screen.getAllByText('빈 밭')[0]!.props.style).color;
+    expect(afterColor).toBe('#2f7a36');
   });
 
   test('renders the shared farm UI in English when the saved locale is en-US', async () => {

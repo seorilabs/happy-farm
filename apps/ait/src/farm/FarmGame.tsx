@@ -1165,6 +1165,19 @@ export default function FarmGame({
   handlePlotClickRef.current = handlePlotClick;
   const onPlotPress = useCallback((index: number) => handlePlotClickRef.current(index), []);
 
+  // When an affordable seed is selected, empty plots light up as plant targets
+  // so the player sees where a tap will sow. False in harvest mode, for a
+  // locked/unbreedable crop, or when there isn't gold for one more seed.
+  const plantTargetActive = useMemo(() => {
+    if (selectedTool === 'harvest' || !selectedAreaUnlocked) {
+      return false;
+    }
+    if (!isCropPlantable(gameState, selectedTool)) {
+      return false;
+    }
+    return gameState.gold >= getCropPurchaseCost(gameState, selectedTool);
+  }, [gameState, selectedAreaUnlocked, selectedTool]);
+
   return (
     <View style={styles.root}>
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
@@ -1277,6 +1290,7 @@ export default function FarmGame({
               tileSize={plotTileSize}
               messages={messages}
               plantToken={plantPulses[index]}
+              plantTarget={plantTargetActive}
               onPlantPulseDone={clearPlantPulse}
               onPress={onPlotPress}
             />
@@ -1616,6 +1630,7 @@ const PlotCell = React.memo(function PlotCell({
   tileSize,
   messages,
   plantToken,
+  plantTarget,
   onPlantPulseDone,
   onPress,
 }: {
@@ -1626,6 +1641,7 @@ const PlotCell = React.memo(function PlotCell({
   tileSize: number;
   messages: FarmMessages;
   plantToken: number | undefined;
+  plantTarget: boolean;
   onPlantPulseDone: (index: number) => void;
   onPress: (index: number) => void;
 }) {
@@ -1641,9 +1657,16 @@ const PlotCell = React.memo(function PlotCell({
   }
 
   if (plot.state === 0) {
+    // A selected, affordable seed lights empty plots up as clear plant targets
+    // so the player can see where a tap will sow.
     return (
-      <Pressable style={[styles.plotTile, tileSizeStyle, styles.emptyPlot]} onPress={handlePress}>
-        <Text style={styles.emptyPlotText}>{messages.emptyPlot}</Text>
+      <Pressable
+        style={[styles.plotTile, tileSizeStyle, plantTarget ? styles.emptyPlotTarget : styles.emptyPlot]}
+        onPress={handlePress}
+      >
+        <Text style={[styles.emptyPlotText, plantTarget && styles.emptyPlotTextTarget]}>
+          {messages.emptyPlot}
+        </Text>
       </Pressable>
     );
   }
@@ -2644,6 +2667,14 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 16,
     fontWeight: '900',
+  },
+  emptyPlotTarget: {
+    borderColor: '#5fa85a',
+    borderWidth: 2,
+    backgroundColor: '#dcecd0',
+  },
+  emptyPlotTextTarget: {
+    color: '#2f7a36',
   },
   growingPlot: {
     borderColor: '#5e4631',
