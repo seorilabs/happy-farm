@@ -223,6 +223,15 @@ type PendingFarmCommandEffect =
       event: CropHarvestedGameEvent;
       now: number;
       shouldShowHarvestBonusNudge: boolean;
+    }
+  | {
+      id: number;
+      type: 'harvestedAll';
+      fx: { plotIndex: number; goldGained: number; special: boolean }[];
+      totalGoldGained: number;
+      totalRpGained: number;
+      harvestedCount: number;
+      specialCount: number;
     };
 
 // One-shot floating "+gold" feedback spawned at the tapped plot on a manual
@@ -448,6 +457,49 @@ export default function FarmGame({
         setPlantPulses((prev) => ({ ...prev, [event.plotIndex]: token }));
         Vibration.vibrate(15);
         farmAnalytics.trackCropPlanted(event.cropKey, event.areaKey, event.cropTier, event.cost, analyticsContext());
+        continue;
+      }
+
+      if (effect.type === 'harvestedAll') {
+        if (effect.harvestedCount > 0) {
+          // One floating "+gold" per harvested plot keeps the spatial reward;
+          // the overlay self-caps concurrent pops, so a full grid stays cheap.
+          // The HUD pulse, toast, sound, and haptic fire once for the whole
+          // batch instead of stacking dozens of buzzes and toasts.
+          for (const fx of effect.fx) {
+            if (fx.goldGained > 0) {
+              harvestFxRef.current?.spawn(
+                fx.plotIndex,
+                `+${formatMoney(fx.goldGained, locale)}`,
+                fx.special ? 'special' : 'normal'
+              );
+            }
+          }
+          if (effect.totalGoldGained > 0) {
+            pulseGold();
+            toast(messages.harvestAllToast(formatMoney(effect.totalGoldGained, locale), effect.harvestedCount));
+          } else {
+            // Donation mode routes the whole batch into research points.
+            toast(messages.harvestAllDonatedToast(formatMoney(effect.totalRpGained, locale), effect.harvestedCount));
+          }
+          farmAnalytics.trackHarvestAll({
+            harvestedCount: effect.harvestedCount,
+            totalGold: effect.totalGoldGained,
+            specialCount: effect.specialCount,
+            context: analyticsContext(),
+          });
+          if (effect.specialCount > 0 && Platform.OS === 'android') {
+            Vibration.vibrate([0, 24, 36, 48]);
+          } else {
+            Vibration.vibrate(50);
+          }
+          if (gameSettings.soundEffectsEnabled && audio.isSupported) {
+            void audio.playHarvest();
+          }
+        }
+        // Always release the guard, even on a no-op (drift cleared the plots),
+        // so the button can never get stuck disabled.
+        harvestAllInFlightRef.current = false;
         continue;
       }
 
@@ -696,12 +748,9 @@ export default function FarmGame({
     [gameState, harvestBonusBoost.multiplier]
   );
   const readyPlotCount = useMemo(() => getReadyPlotCount(gameState), [gameState]);
-  // Blocks a second "Harvest All" tap until the ripe set actually changes,
-  // preventing a rapid double-tap from replaying the batch feedback.
+  // Blocks a second "Harvest All" tap until the in-flight batch finishes; the
+  // command drain effect releases it after each attempt (success or no-op).
   const harvestAllInFlightRef = useRef(false);
-  useEffect(() => {
-    harvestAllInFlightRef.current = false;
-  }, [readyPlotCount]);
   const chainIncome = useMemo(() => getChainIncome(gameState), [gameState, tick]);
   const mapActionableCount = useMemo(
     () => (chainIncome.accruedGold > 0 ? 1 : 0) + (canPrestige(gameState).allowed ? 1 : 0),
@@ -1133,18 +1182,17 @@ export default function FarmGame({
 
   function harvestAllCrops() {
     // Re-entry guard: a fast double-tap before the batch re-renders (and the
-    // button disappears) would otherwise replay the FX/toast/pulse. The flag is
-    // cleared whenever the ripe set changes (see effect below), so the next
-    // distinct set stays harvestable.
+    // button disappears) would otherwise replay the feedback. The drain effect
+    // clears the flag after every attempt, so the next ripe set stays harvestable.
     if (harvestAllInFlightRef.current) {
       return;
     }
 
     const now = Date.now();
-    // One stable roll per plot index — not a flat sequence. A plot keeps its
-    // roll no matter how the ripe set shifts between this preview and the
-    // committed update, so the on-screen FX can never claim a mutation the
-    // harvested state doesn't actually have.
+    const effectId = ++commandEffectIdRef.current;
+    // One stable roll per plot index — not a flat sequence. Built outside the
+    // updater so a StrictMode double-invoke reuses the same rolls, and keyed by
+    // index so a plot's outcome never shifts with the surrounding ripe set.
     const rollByPlot: Record<number, number> = {};
     const rollFor = (plotIndex: number) => {
       const existing = rollByPlot[plotIndex];
@@ -1156,59 +1204,28 @@ export default function FarmGame({
       return roll;
     };
 
-    const preview = performHarvestAll(gameState, { now, rollFor });
-    if (preview.harvestedCount === 0) {
-      return;
-    }
     harvestAllInFlightRef.current = true;
-
-    setGameState((state) =>
-      // Commit the exact previewed state when nothing changed underneath us so
-      // the FX/toast match perfectly; otherwise recompute on the live state to
-      // avoid clobbering a concurrent tick. Per-plot rolls keep both paths
-      // consistent for any plot harvested in both.
-      state === gameState ? preview.state : performHarvestAll(state, { now, rollFor }).state
-    );
-
-    // One floating "+gold" per harvested plot preserves the spatial reward; the
-    // overlay self-caps concurrent pops, so a full grid stays cheap. The rest of
-    // the feedback (HUD pulse, toast, sound, haptic) fires once for the batch
-    // instead of stacking dozens of buzzes and toasts.
-    for (const { plotIndex, outcome } of preview.harvests) {
-      if (outcome.goldGained > 0) {
-        const isSpecial =
-          outcome.mutation != null || outcome.newMasteryRank != null || outcome.boostActive;
-        harvestFxRef.current?.spawn(
+    setGameState((state) => {
+      // Compute on the authoritative committed state and queue the feedback from
+      // here, so the FX/toast/analytics always reflect exactly what was harvested
+      // even if a concurrent tick shifted the ripe set after this tap.
+      const result = performHarvestAll(state, { now, rollFor });
+      pendingCommandEffectsRef.current.push({
+        id: effectId,
+        type: 'harvestedAll',
+        fx: result.harvests.map(({ plotIndex, outcome }) => ({
           plotIndex,
-          `+${formatMoney(outcome.goldGained, locale)}`,
-          isSpecial ? 'special' : 'normal'
-        );
-      }
-    }
-
-    if (preview.totalGoldGained > 0) {
-      pulseGold();
-      toast(messages.harvestAllToast(formatMoney(preview.totalGoldGained, locale), preview.harvestedCount));
-    } else {
-      // Donation mode routes the whole batch into research points instead of gold.
-      toast(messages.harvestAllDonatedToast(formatMoney(preview.totalRpGained, locale), preview.harvestedCount));
-    }
-
-    farmAnalytics.trackHarvestAll({
-      harvestedCount: preview.harvestedCount,
-      totalGold: preview.totalGoldGained,
-      specialCount: preview.specialCount,
-      context: analyticsContext(),
+          goldGained: outcome.goldGained,
+          special: outcome.mutation != null || outcome.newMasteryRank != null || outcome.boostActive,
+        })),
+        totalGoldGained: result.totalGoldGained,
+        totalRpGained: result.totalRpGained,
+        harvestedCount: result.harvestedCount,
+        specialCount: result.specialCount,
+      });
+      return result.harvestedCount > 0 ? result.state : state;
     });
-
-    if (preview.specialCount > 0 && Platform.OS === 'android') {
-      Vibration.vibrate([0, 24, 36, 48]);
-    } else {
-      Vibration.vibrate(50);
-    }
-    if (gameSettings.soundEffectsEnabled && audio.isSupported) {
-      void audio.playHarvest();
-    }
+    setCommandEffectVersion((version) => version + 1);
   }
 
   function handlePlotClick(index: number) {
