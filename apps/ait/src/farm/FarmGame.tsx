@@ -461,6 +461,9 @@ export default function FarmGame({
       }
 
       if (effect.type === 'harvestedAll') {
+        // Release the guard up front so it resets even if feedback below throws,
+        // and on a no-op (drift cleared the plots) — the button can never stick.
+        harvestAllInFlightRef.current = false;
         if (effect.harvestedCount > 0) {
           // One floating "+gold" per harvested plot keeps the spatial reward;
           // the overlay self-caps concurrent pops, so a full grid stays cheap.
@@ -475,12 +478,16 @@ export default function FarmGame({
               );
             }
           }
+          // Donation mode converts the batch into research points; key the toast
+          // on RP earned (not "gold === 0") so a future zero-value crop still
+          // reads as a harvest rather than a donation.
+          if (effect.totalRpGained > 0) {
+            toast(messages.harvestAllDonatedToast(formatMoney(effect.totalRpGained, locale), effect.harvestedCount));
+          } else {
+            toast(messages.harvestAllToast(formatMoney(effect.totalGoldGained, locale), effect.harvestedCount));
+          }
           if (effect.totalGoldGained > 0) {
             pulseGold();
-            toast(messages.harvestAllToast(formatMoney(effect.totalGoldGained, locale), effect.harvestedCount));
-          } else {
-            // Donation mode routes the whole batch into research points.
-            toast(messages.harvestAllDonatedToast(formatMoney(effect.totalRpGained, locale), effect.harvestedCount));
           }
           farmAnalytics.trackHarvestAll({
             harvestedCount: effect.harvestedCount,
@@ -497,9 +504,6 @@ export default function FarmGame({
             void audio.playHarvest();
           }
         }
-        // Always release the guard, even on a no-op (drift cleared the plots),
-        // so the button can never get stuck disabled.
-        harvestAllInFlightRef.current = false;
         continue;
       }
 
@@ -1210,19 +1214,24 @@ export default function FarmGame({
       // here, so the FX/toast/analytics always reflect exactly what was harvested
       // even if a concurrent tick shifted the ripe set after this tap.
       const result = performHarvestAll(state, { now, rollFor });
-      pendingCommandEffectsRef.current.push({
-        id: effectId,
-        type: 'harvestedAll',
-        fx: result.harvests.map(({ plotIndex, outcome }) => ({
-          plotIndex,
-          goldGained: outcome.goldGained,
-          special: outcome.mutation != null || outcome.newMasteryRank != null || outcome.boostActive,
-        })),
-        totalGoldGained: result.totalGoldGained,
-        totalRpGained: result.totalRpGained,
-        harvestedCount: result.harvestedCount,
-        specialCount: result.specialCount,
-      });
+      // Guard the queue against a StrictMode/concurrent double-invoke of this
+      // updater: keep at most one effect per id. (The drain loop also dedupes by
+      // id, so feedback never doubles either way — this just keeps the queue clean.)
+      if (!pendingCommandEffectsRef.current.some((pending) => pending.id === effectId)) {
+        pendingCommandEffectsRef.current.push({
+          id: effectId,
+          type: 'harvestedAll',
+          fx: result.harvests.map(({ plotIndex, outcome }) => ({
+            plotIndex,
+            goldGained: outcome.goldGained,
+            special: outcome.mutation != null || outcome.newMasteryRank != null || outcome.boostActive,
+          })),
+          totalGoldGained: result.totalGoldGained,
+          totalRpGained: result.totalRpGained,
+          harvestedCount: result.harvestedCount,
+          specialCount: result.specialCount,
+        });
+      }
       return result.harvestedCount > 0 ? result.state : state;
     });
     setCommandEffectVersion((version) => version + 1);

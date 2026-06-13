@@ -88,6 +88,21 @@ describe('performHarvestAll', () => {
     expect(first.state.gold).toBe(second.state.gold);
   });
 
+  test('routes the whole batch into research points in donation mode', () => {
+    const base = createInitialState();
+    const donating: GameState = {
+      ...base,
+      automationSettings: { ...base.automationSettings, donationModeEnabled: true },
+    };
+    const ripe = withRipePlots(donating, [0, 1, 2]);
+    const result = performHarvestAll(ripe, { now: 0, rng: noMutationRng });
+
+    expect(result.harvestedCount).toBe(3);
+    expect(result.totalGoldGained).toBe(0);
+    expect(result.totalRpGained).toBeGreaterThan(0);
+    expect(result.state.gold).toBe(ripe.gold);
+  });
+
   test('is a no-op when nothing is ripe', () => {
     const base = createInitialState();
     const result = performHarvestAll(base, { now: 0, rng: noMutationRng });
