@@ -526,7 +526,7 @@ describe('FarmGame UI flow', () => {
     fireEvent.press(screen.getByLabelText('작물 도감'));
 
     expect(screen.getByText(`${firstThreshold}/${thresholds[1]}`)).toBeTruthy();
-    expect(screen.getByText('🥉')).toBeTruthy();
+    expect(screen.getAllByText('🥉').length).toBeGreaterThan(0);
   });
 
   test('collects every ripe plot in one tap via the Harvest All shortcut', async () => {

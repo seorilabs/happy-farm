@@ -88,6 +88,7 @@ import {
   getHarvestBonusBoostStatus,
   getHarvestBonusPromptStatus,
   getMasteryRankLabel,
+  getMasteryStatus,
   getMinUpgradeLevel,
   getMutationLabel,
   getPlotCost,
@@ -1617,6 +1618,7 @@ export default function FarmGame({
           {visibleCropKeys.map((key) => {
             const crop = getCrop(key);
             const cropCost = getCropPurchaseCost(gameState, key);
+            const mastery = getMasteryStatus(gameState, key);
             return (
               <ToolButton
                 key={key}
@@ -1626,6 +1628,8 @@ export default function FarmGame({
                 cost={formatMoney(cropCost, locale)}
                 roi={messages.roi(formatSignedPercent(getCropEconomy(cropEconomyByKey, key).roiPercent, locale))}
                 affordable={gameState.gold >= cropCost}
+                masteryRankIcon={mastery.rank?.icon ?? null}
+                masteryProgress={mastery.nextThreshold != null ? mastery.progressRatio : mastery.rank != null ? 1 : mastery.progressRatio}
                 onPress={() => selectCrop(key)}
               />
             );
@@ -2612,6 +2616,8 @@ function ToolButton({
   cost,
   roi,
   affordable,
+  masteryRankIcon,
+  masteryProgress,
   onPress,
 }: {
   active: boolean;
@@ -2620,6 +2626,8 @@ function ToolButton({
   cost?: string;
   roi?: string;
   affordable?: boolean;
+  masteryRankIcon?: string | null;
+  masteryProgress?: number;
   onPress: () => void;
 }) {
   return (
@@ -2632,6 +2640,21 @@ function ToolButton({
         <Text style={[styles.toolCost, affordable === false && styles.toolCostUnaffordable]}>{cost}</Text>
       ) : null}
       {roi != null ? <Text style={styles.toolRoi}>{roi}</Text> : null}
+      {masteryRankIcon != null ? (
+        <View style={styles.toolMasteryBadge} pointerEvents="none">
+          <Text style={styles.toolMasteryBadgeText}>{masteryRankIcon}</Text>
+        </View>
+      ) : null}
+      {masteryProgress != null ? (
+        <View style={styles.toolMasteryTrack} pointerEvents="none">
+          <View
+            style={[
+              styles.toolMasteryFill,
+              { transform: [{ scaleX: Math.max(0, Math.min(1, masteryProgress)) }] },
+            ]}
+          />
+        </View>
+      ) : null}
     </Pressable>
   );
 }
@@ -3321,6 +3344,32 @@ const styles = StyleSheet.create({
     color: '#247241',
     fontSize: 10,
     fontWeight: '900',
+  },
+  toolMasteryBadge: {
+    position: 'absolute',
+    top: 5,
+    right: 5,
+  },
+  toolMasteryBadgeText: {
+    fontSize: 11,
+    lineHeight: 13,
+  },
+  toolMasteryTrack: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 3,
+    backgroundColor: 'rgba(0, 0, 0, 0.08)',
+    borderBottomLeftRadius: 8,
+    borderBottomRightRadius: 8,
+    overflow: 'hidden',
+  },
+  toolMasteryFill: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#f59e0b',
+    transformOrigin: 'left center',
   },
   lockedNotice: {
     width: 260,
