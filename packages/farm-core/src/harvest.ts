@@ -78,12 +78,16 @@ export function getPlotRemainingWallClockMs(gameState: GameState, plot: Plot, no
     return 0;
   }
 
+  const remainingGrowthMs = getPlotRemainingGrowthMs(gameState, plot, now);
   const { speedMultiplier } = getCropModifiers(gameState, plot.cropType, now);
+  // A non-positive multiplier means growth is frozen (paused/debuffed): fall
+  // back to the unscaled remaining so the timer never collapses to 0 and falsely
+  // signals "ready now". Round up so the countdown never under-reports.
   if (speedMultiplier <= 0) {
-    return 0;
+    return Math.ceil(remainingGrowthMs);
   }
 
-  return getPlotRemainingGrowthMs(gameState, plot, now) / speedMultiplier;
+  return Math.ceil(remainingGrowthMs / speedMultiplier);
 }
 
 export function isPlotGrowthComplete(gameState: GameState, plot: Plot, now = Date.now()): boolean {

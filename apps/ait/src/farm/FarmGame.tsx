@@ -1671,8 +1671,10 @@ const PlotCell = React.memo(function PlotCell({
       {plot.state === 1 && crop != null && plot.startTime != null ? (
         <>
           {growthCountdown != null ? (
-            <View style={styles.growthTimer}>
-              <Text style={styles.growthTimerText}>{growthCountdown}</Text>
+            <View style={[styles.growthTimer, { maxWidth: Math.max(0, tileSize - 10) }]}>
+              <Text style={styles.growthTimerText} numberOfLines={1} ellipsizeMode="tail">
+                {growthCountdown}
+              </Text>
             </View>
           ) : null}
           <GrowthProgressBar progressRatio={progressRatio} />

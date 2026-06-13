@@ -39,6 +39,17 @@ describe('getPlotRemainingWallClockMs', () => {
     expect(getPlotRemainingWallClockMs(state, plot, 500)).toBe(500);
   });
 
+  it('always rounds up to whole milliseconds so the display stays clean', () => {
+    // speed level 4 -> multiplier 1.3, which yields a fractional raw division.
+    const state = plantedState(4, 0);
+    const plot = state.plots[0]!;
+
+    const remaining = getPlotRemainingWallClockMs(state, plot, 0);
+    // 2000 / 1.3 = 1538.46... -> ceil 1539.
+    expect(remaining).toBe(1539);
+    expect(Number.isInteger(remaining)).toBe(true);
+  });
+
   it('returns 0 for empty and ready plots', () => {
     const emptyState = createInitialState();
     expect(getPlotRemainingWallClockMs(emptyState, emptyState.plots[0]!, 0)).toBe(0);
