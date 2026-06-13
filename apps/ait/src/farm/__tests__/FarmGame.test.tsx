@@ -580,6 +580,13 @@ describe('FarmGame UI flow', () => {
     // from the persistent gold counter (no leading "+") and the bottom toast.
     const floating = screen.getByText(/^\+[\d.,KMBT]+G$/);
     expect(floating).toBeTruthy();
+
+    // Once the float animation finishes, the label is cleared so it can never
+    // replay (e.g. on a later remount) and no stale value lingers.
+    await act(async () => {
+      jest.advanceTimersByTime(2000);
+    });
+    await waitFor(() => expect(screen.queryByText(/^\+[\d.,KMBT]+G$/)).toBeNull());
   });
 
   test('spaces out harvest bonus nudges by time after the player declines one', async () => {

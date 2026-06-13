@@ -327,6 +327,16 @@ export default function FarmGame({
   const closeSheet = useCallback(() => {
     setActiveSheet(null);
   }, []);
+  const clearFloatingGain = useCallback((index: number) => {
+    setFloatingGains((prev) => {
+      if (prev[index] == null) {
+        return prev;
+      }
+      const next = { ...prev };
+      delete next[index];
+      return next;
+    });
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -972,6 +982,10 @@ export default function FarmGame({
       floatingGainTokenRef.current += 1;
       const token = floatingGainTokenRef.current;
       setFloatingGains((prev) => ({ ...prev, [index]: { token, ...floatingGain } }));
+    } else {
+      // Nothing worth popping (e.g. a 0-value donation): drop any stale entry so
+      // it can never replay for this plot.
+      clearFloatingGain(index);
     }
     Vibration.vibrate(50);
     if (gameSettings.soundEffectsEnabled && audio.isSupported) {
@@ -1193,6 +1207,7 @@ export default function FarmGame({
               tileSize={plotTileSize}
               messages={messages}
               gain={floatingGains[index]}
+              onGainDone={() => clearFloatingGain(index)}
               onPress={() => handlePlotClick(index)}
             />
           ))}
@@ -1551,6 +1566,7 @@ function PlotCell({
   tileSize,
   messages,
   gain,
+  onGainDone,
   onPress,
 }: {
   plot: GameState['plots'][number];
@@ -1559,6 +1575,7 @@ function PlotCell({
   tileSize: number;
   messages: FarmMessages;
   gain: FloatingGain | undefined;
+  onGainDone: () => void;
   onPress: () => void;
 }) {
   const tileSizeStyle = { width: tileSize, height: tileSize };
@@ -1598,10 +1615,13 @@ function PlotCell({
   }
 
   return (
-    <HarvestPopCell gainToken={gain?.token} style={tileSizeStyle}>
-      {tile}
-      <FloatingGain gain={gain} />
-    </HarvestPopCell>
+    // Non-clipping container so the floating number can escape upward. The tile
+    // pop and the floating number are siblings, so the tile's scale animation
+    // does not compound with the number's own scale.
+    <View style={[styles.plotCellWrap, tileSizeStyle]}>
+      <HarvestPopCell gainToken={gain?.token}>{tile}</HarvestPopCell>
+      <FloatingGain gain={gain} onDone={onGainDone} />
+    </View>
   );
 }
 
@@ -1609,11 +1629,9 @@ function PlotCell({
 // (the gain token changes), so tapping a ready crop feels tactile.
 function HarvestPopCell({
   gainToken,
-  style,
   children,
 }: {
   gainToken: number | undefined;
-  style: { width: number; height: number };
   children: React.ReactNode;
 }) {
   const popRef = useRef<Animated.Value | null>(null);
@@ -1643,14 +1661,16 @@ function HarvestPopCell({
   }, [gainToken, pop]);
 
   return (
-    <Animated.View style={[styles.plotCellWrap, style, { transform: [{ scale: pop }] }]}>
+    <Animated.View style={[styles.plotTileFill, { transform: [{ scale: pop }] }]}>
       {children}
     </Animated.View>
   );
 }
 
 // The "+gold" number that floats up and fades out above a harvested plot.
-function FloatingGain({ gain }: { gain: FloatingGain | undefined }) {
+// onDone clears the parent's per-plot entry so a finished animation never
+// replays if the cell remounts (navigation, parent re-render).
+function FloatingGain({ gain, onDone }: { gain: FloatingGain | undefined; onDone: () => void }) {
   const progressRef = useRef<Animated.Value | null>(null);
   if (progressRef.current == null) {
     progressRef.current = new Animated.Value(0);
@@ -1658,6 +1678,9 @@ function FloatingGain({ gain }: { gain: FloatingGain | undefined }) {
   const progress = progressRef.current;
   const [visible, setVisible] = useState(false);
   const lastTokenRef = useRef<number | undefined>(undefined);
+  // Keep onDone in a ref so the float effect only re-runs on a new token.
+  const onDoneRef = useRef(onDone);
+  onDoneRef.current = onDone;
 
   const token = gain?.token;
   useEffect(() => {
@@ -1676,6 +1699,7 @@ function FloatingGain({ gain }: { gain: FloatingGain | undefined }) {
     animation.start(({ finished }) => {
       if (finished) {
         setVisible(false);
+        onDoneRef.current();
       }
     });
     return () => animation.stop();
@@ -2453,8 +2477,11 @@ const styles = StyleSheet.create({
   floatingGain: {
     position: 'absolute',
     top: -6,
-    alignSelf: 'center',
+    left: 0,
+    right: 0,
+    alignItems: 'center',
     zIndex: 30,
+    elevation: 6,
   },
   floatingGainText: {
     fontSize: 15,
