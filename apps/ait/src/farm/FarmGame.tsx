@@ -91,9 +91,8 @@ import {
   getMinUpgradeLevel,
   getMutationLabel,
   getPlotCost,
-  getPlotGrowthRatio,
+  getPlotGrowthDisplay,
   getPlotRemainingGrowthMs,
-  getPlotRemainingWallClockMs,
   getRewardedAdLimitStatus,
   getUpgradeCost,
   isAreaUnlocked,
@@ -1513,23 +1512,28 @@ export default function FarmGame({
 
       <ScrollView contentContainerStyle={styles.mainContent} style={styles.main}>
         <View style={styles.plotGrid}>
-          {gameState.plots.map((plot, index) => (
-            <PlotCell
-              key={plot.id}
-              index={index}
-              plot={plot}
-              unlocked={index < gameState.unlockedPlotCount}
-              progressRatio={getPlotGrowthRatio(gameState, plot)}
-              growthCountdown={
-                plot.state === 1 ? formatDuration(getPlotRemainingWallClockMs(gameState, plot), locale) : undefined
-              }
-              tileSize={plotTileSize}
-              messages={messages}
-              plantToken={plantPulses[index]}
-              onPlantPulseDone={clearPlantPulse}
-              onPress={onPlotPress}
-            />
-          ))}
+          {gameState.plots.map((plot, index) => {
+            // Resolve growth ratio and countdown together so the crop modifiers
+            // are computed once per tile per tick instead of once for each.
+            const growth = getPlotGrowthDisplay(gameState, plot);
+            return (
+              <PlotCell
+                key={plot.id}
+                index={index}
+                plot={plot}
+                unlocked={index < gameState.unlockedPlotCount}
+                progressRatio={growth.growthRatio}
+                growthCountdown={
+                  plot.state === 1 ? formatDuration(growth.remainingWallClockMs, locale) : undefined
+                }
+                tileSize={plotTileSize}
+                messages={messages}
+                plantToken={plantPulses[index]}
+                onPlantPulseDone={clearPlantPulse}
+                onPress={onPlotPress}
+              />
+            );
+          })}
           <HarvestFxOverlay ref={harvestFxRef} tileSize={plotTileSize} />
         </View>
       </ScrollView>

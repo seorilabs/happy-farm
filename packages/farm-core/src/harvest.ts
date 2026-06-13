@@ -101,6 +101,45 @@ export function getPlotRemainingWallClockMs(gameState: GameState, plot: Plot, no
   return Math.max(0, Math.ceil(crop.growTime / speedMultiplier - elapsed));
 }
 
+export type PlotGrowthDisplay = {
+  growthRatio: number;
+  remainingWallClockMs: number;
+};
+
+// Combined growth-display data for the plot grid. getPlotGrowthRatio and
+// getPlotRemainingWallClockMs each resolve getCropModifiers independently, but
+// the grid needs both for every growing tile every tick, so computing them in
+// one pass resolves the modifiers once per tile instead of twice. Field-for-field
+// equivalent to calling the two helpers separately (locked down by the
+// plotCountdown equivalence test).
+export function getPlotGrowthDisplay(gameState: GameState, plot: Plot, now = Date.now()): PlotGrowthDisplay {
+  if (plot.state === 2) {
+    return { growthRatio: 1, remainingWallClockMs: 0 };
+  }
+  if (plot.state !== 1 || plot.cropType == null || plot.startTime == null) {
+    return { growthRatio: 0, remainingWallClockMs: 0 };
+  }
+
+  const crop = getKnownCrop(plot.cropType);
+  const { speedMultiplier } = getCropModifiers(gameState, plot.cropType, now);
+  const elapsed = now - plot.startTime;
+
+  if (crop.growTime <= 0 || speedMultiplier <= 0) {
+    // Mirrors getPlotGrowthRatio (ratio 1) and getPlotRemainingWallClockMs
+    // (frozen constant for a stalled multiplier, 0 for an instant crop) for these
+    // degenerate/unreachable inputs.
+    return {
+      growthRatio: 1,
+      remainingWallClockMs: speedMultiplier <= 0 ? crop.growTime : 0,
+    };
+  }
+
+  return {
+    growthRatio: Math.min(Math.max((elapsed * speedMultiplier) / crop.growTime, 0), 1),
+    remainingWallClockMs: Math.max(0, Math.ceil(crop.growTime / speedMultiplier - elapsed)),
+  };
+}
+
 export function isPlotGrowthComplete(gameState: GameState, plot: Plot, now = Date.now()): boolean {
   return plot.state === 1 && getPlotGrowthRatio(gameState, plot, now) >= 1;
 }

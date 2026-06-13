@@ -1,7 +1,13 @@
 /// <reference types="jest" />
 
 import { createInitialState } from '../constants';
-import { getPlotRemainingGrowthMs, getPlotRemainingWallClockMs, performPlant } from '../harvest';
+import {
+  getPlotGrowthDisplay,
+  getPlotGrowthRatio,
+  getPlotRemainingGrowthMs,
+  getPlotRemainingWallClockMs,
+  performPlant,
+} from '../harvest';
 import type { GameState } from '../types';
 
 // carrot is a starter crop with a 2000ms grow time (balance.json).
@@ -86,5 +92,34 @@ describe('getPlotRemainingWallClockMs', () => {
 
     const grown = plantedState(1, 0);
     expect(getPlotRemainingWallClockMs(grown, grown.plots[0]!, 5000)).toBe(0);
+  });
+});
+
+describe('getPlotGrowthDisplay', () => {
+  // The grid swapped two per-tile calls (getPlotGrowthRatio + getPlotRemainingWallClockMs)
+  // for this single-pass helper to avoid resolving crop modifiers twice. It must
+  // stay field-for-field identical to the originals across growth states, speeds,
+  // and timestamps, otherwise the visible progress bar or countdown would drift.
+  it('matches getPlotGrowthRatio and getPlotRemainingWallClockMs everywhere', () => {
+    const speedLevels = [1, 4, 11, -9, -20];
+    const times = [0, 250, 1000, 2000, 5000, 100000];
+
+    for (const speed of speedLevels) {
+      const state = plantedState(speed, 0);
+      const plot = state.plots[0]!;
+      for (const now of times) {
+        const display = getPlotGrowthDisplay(state, plot, now);
+        expect(display.growthRatio).toBe(getPlotGrowthRatio(state, plot, now));
+        expect(display.remainingWallClockMs).toBe(getPlotRemainingWallClockMs(state, plot, now));
+      }
+    }
+
+    // Empty and ready plots too.
+    const empty = createInitialState();
+    const emptyPlot = empty.plots[0]!;
+    expect(getPlotGrowthDisplay(empty, emptyPlot, 0)).toEqual({
+      growthRatio: getPlotGrowthRatio(empty, emptyPlot, 0),
+      remainingWallClockMs: getPlotRemainingWallClockMs(empty, emptyPlot, 0),
+    });
   });
 });
