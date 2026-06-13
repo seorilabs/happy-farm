@@ -1,10 +1,11 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import {
   Animated,
   Easing,
   KeyboardAvoidingView,
   Modal,
   PanResponder,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -214,6 +215,13 @@ type HarvestPop = {
   tone: 'normal' | 'special';
 };
 
+// Imperative handle so a harvest can fire a burst without lifting pop state into
+// FarmGame: spawning/removing pops re-renders only the overlay, never the plot
+// grid, keeping rapid tapping cheap on low-end devices.
+type HarvestFxHandle = {
+  spawn: (index: number, label: string, tone: HarvestPop['tone']) => void;
+};
+
 const defaultFarmAnalytics = createFarmAnalytics();
 const defaultFarmAudio: FarmGameAudio = {
   isSupported: false,
@@ -278,8 +286,7 @@ export default function FarmGame({
   const [gameSettings, setGameSettings] = useState<FarmGameSettings>(DEFAULT_FARM_GAME_SETTINGS);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [harvestPops, setHarvestPops] = useState<HarvestPop[]>([]);
-  const harvestPopIdRef = useRef(0);
+  const harvestFxRef = useRef<HarvestFxHandle>(null);
   const lastInterstitialShownAtRef = useRef(0);
   const sessionStartedAtRef = useRef(Date.now());
   const gameStartTrackedRef = useRef(false);
@@ -321,18 +328,6 @@ export default function FarmGame({
       setToastMessage(null);
       toastTimerRef.current = null;
     }, 1800);
-  }, []);
-  const spawnHarvestPop = useCallback((index: number, label: string, tone: HarvestPop['tone']) => {
-    const id = (harvestPopIdRef.current += 1);
-    setHarvestPops((prev) => {
-      // Cap concurrent pops so rapid tapping can never grow the overlay
-      // unbounded before each pop self-removes at the end of its animation.
-      const next = prev.length >= 8 ? prev.slice(prev.length - 7) : prev;
-      return [...next, { id, index, label, tone }];
-    });
-  }, []);
-  const removeHarvestPop = useCallback((id: number) => {
-    setHarvestPops((prev) => prev.filter((pop) => pop.id !== id));
   }, []);
   const closeSheet = useCallback(() => {
     setActiveSheet(null);
@@ -980,15 +975,22 @@ export default function FarmGame({
     const isSpecialHarvest =
       outcome.mutation != null || outcome.newMasteryRank != null || outcome.boostActive;
     if (outcome.goldGained > 0) {
-      spawnHarvestPop(
+      harvestFxRef.current?.spawn(
         index,
         `+${formatMoney(outcome.goldGained, locale)}`,
         isSpecialHarvest ? 'special' : 'normal'
       );
     }
     // A celebratory double-buzz marks rare moments (mutation, mastery rank-up,
-    // active boost); ordinary harvests keep the light single tap.
-    Vibration.vibrate(isSpecialHarvest ? [0, 24, 36, 48] : 50);
+    // active boost); ordinary harvests keep the light single tap. The pattern
+    // is Android-only: iOS uses a fixed-length vibration and treats array
+    // entries as wait gaps, so a "short double tap" can't be expressed there —
+    // we fall back to the standard single buzz.
+    if (isSpecialHarvest && Platform.OS === 'android') {
+      Vibration.vibrate([0, 24, 36, 48]);
+    } else {
+      Vibration.vibrate(50);
+    }
     if (gameSettings.soundEffectsEnabled && audio.isSupported) {
       void audio.playHarvest();
     }
@@ -1210,9 +1212,7 @@ export default function FarmGame({
               onPress={() => handlePlotClick(index)}
             />
           ))}
-          {harvestPops.map((pop) => (
-            <HarvestPopText key={pop.id} pop={pop} tileSize={plotTileSize} onDone={removeHarvestPop} />
-          ))}
+          <HarvestFxOverlay ref={harvestFxRef} tileSize={plotTileSize} />
         </View>
       </ScrollView>
 
@@ -1589,6 +1589,42 @@ function PlotCell({
     </Pressable>
   );
 }
+
+const HarvestFxOverlay = React.forwardRef<HarvestFxHandle, { tileSize: number }>(function HarvestFxOverlay(
+  { tileSize },
+  ref
+) {
+  const [pops, setPops] = useState<HarvestPop[]>([]);
+  const idRef = useRef(0);
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      spawn(index, label, tone) {
+        const id = (idRef.current += 1);
+        setPops((prev) => {
+          // Cap concurrent pops so rapid tapping can never grow the overlay
+          // unbounded before each pop self-removes at the end of its animation.
+          const next = prev.length >= 8 ? prev.slice(prev.length - 7) : prev;
+          return [...next, { id, index, label, tone }];
+        });
+      },
+    }),
+    []
+  );
+
+  const remove = useCallback((id: number) => {
+    setPops((prev) => prev.filter((pop) => pop.id !== id));
+  }, []);
+
+  return (
+    <>
+      {pops.map((pop) => (
+        <HarvestPopText key={pop.id} pop={pop} tileSize={tileSize} onDone={remove} />
+      ))}
+    </>
+  );
+});
 
 function HarvestPopText({
   pop,
