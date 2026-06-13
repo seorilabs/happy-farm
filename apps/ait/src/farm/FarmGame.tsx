@@ -99,6 +99,7 @@ import {
   recordHarvestBonusAdPrompt,
   recordRewardedAdUsage,
   type CropEconomyEstimate,
+  type HarvestOutcome,
   type SupportedLocale,
 } from '../../../../packages/farm-core/src';
 
@@ -122,6 +123,11 @@ export const GAME_TICK_INTERVAL_MS = 250;
 // Auto-harvest analytics are batched into one summary event per interval.
 const AUTO_HARVEST_SUMMARY_INTERVAL_MS = 60_000;
 const PROGRESS_ANIMATION_DURATION_MS = GAME_TICK_INTERVAL_MS;
+// Harvest "juice": a +gold number floats up from the tapped plot while the tile
+// gives a quick scale pop, so the payoff moment reads instantly at the plot
+// instead of only in the bottom toast.
+const HARVEST_FLOAT_DURATION_MS = 900;
+const HARVEST_POP_DURATION_MS = 220;
 const SHEET_DISMISS_DRAG_DISTANCE = 96;
 const SHEET_DISMISS_VELOCITY = 1.1;
 const SHEET_DISMISS_TRANSLATE_Y = 520;
@@ -205,6 +211,9 @@ export type FarmGameProps = {
 type GetAnalyticsContext = (state?: GameState) => GameAnalyticsContext;
 type ToolKey = 'harvest' | CropKey;
 
+type FloatingGainTone = 'normal' | 'boost' | 'mutation' | 'donate';
+type FloatingGain = { token: number; text: string; tone: FloatingGainTone };
+
 const defaultFarmAnalytics = createFarmAnalytics();
 const defaultFarmAudio: FarmGameAudio = {
   isSupported: false,
@@ -269,6 +278,10 @@ export default function FarmGame({
   const [gameSettings, setGameSettings] = useState<FarmGameSettings>(DEFAULT_FARM_GAME_SETTINGS);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Per-plot floating "+gold" popups. Keyed by plot index; the token bumps on
+  // every harvest so the PlotCell replays its float/pop animation each time.
+  const [floatingGains, setFloatingGains] = useState<Record<number, FloatingGain>>({});
+  const floatingGainTokenRef = useRef(0);
   const lastInterstitialShownAtRef = useRef(0);
   const sessionStartedAtRef = useRef(Date.now());
   const gameStartTrackedRef = useRef(false);
@@ -954,6 +967,12 @@ export default function FarmGame({
       setGameState((state) => ({ ...state, adUsage: recordHarvestBonusAdPrompt(state, now) }));
       setActiveSheet({ type: 'harvestBonus' });
     }
+    const floatingGain = buildFloatingGain(outcome, locale);
+    if (floatingGain != null) {
+      floatingGainTokenRef.current += 1;
+      const token = floatingGainTokenRef.current;
+      setFloatingGains((prev) => ({ ...prev, [index]: { token, ...floatingGain } }));
+    }
     Vibration.vibrate(50);
     if (gameSettings.soundEffectsEnabled && audio.isSupported) {
       void audio.playHarvest();
@@ -1173,6 +1192,7 @@ export default function FarmGame({
               progressRatio={getPlotGrowthRatio(gameState, plot)}
               tileSize={plotTileSize}
               messages={messages}
+              gain={floatingGains[index]}
               onPress={() => handlePlotClick(index)}
             />
           ))}
@@ -1499,12 +1519,38 @@ function NavButton({
   );
 }
 
+// Builds the floating "+gold" text/tone for a harvest. Returns null when there
+// is nothing worth popping at the plot (e.g. a zero-value donation harvest).
+function buildFloatingGain(
+  outcome: HarvestOutcome,
+  locale: SupportedLocale
+): { text: string; tone: FloatingGainTone } | null {
+  if (outcome.donated) {
+    if (outcome.rpGained <= 0) {
+      return null;
+    }
+    return { text: `🔬 +${formatMoney(outcome.rpGained, locale)}`, tone: 'donate' };
+  }
+  if (outcome.goldGained <= 0) {
+    return null;
+  }
+  const amount = `+${formatMoney(outcome.goldGained, locale)}G`;
+  if (outcome.mutation != null) {
+    return { text: `${outcome.mutation.icon} ${amount}`, tone: 'mutation' };
+  }
+  if (outcome.boostActive) {
+    return { text: `${amount} ×${outcome.boostMultiplier}`, tone: 'boost' };
+  }
+  return { text: amount, tone: 'normal' };
+}
+
 function PlotCell({
   plot,
   unlocked,
   progressRatio,
   tileSize,
   messages,
+  gain,
   onPress,
 }: {
   plot: GameState['plots'][number];
@@ -1512,45 +1558,158 @@ function PlotCell({
   progressRatio: number;
   tileSize: number;
   messages: FarmMessages;
+  gain: FloatingGain | undefined;
   onPress: () => void;
 }) {
   const tileSizeStyle = { width: tileSize, height: tileSize };
+  const crop = plot.cropType != null ? getCrop(plot.cropType) : null;
 
+  let tile: React.ReactNode;
   if (!unlocked) {
-    return (
-      <Pressable style={[styles.plotTile, tileSizeStyle, styles.lockedPlot]} onPress={onPress}>
+    tile = (
+      <Pressable style={[styles.plotTile, styles.plotTileFill, styles.lockedPlot]} onPress={onPress}>
         <Text style={styles.lockIcon}>🔒</Text>
       </Pressable>
     );
-  }
-
-  if (plot.state === 0) {
-    return (
-      <Pressable style={[styles.plotTile, tileSizeStyle, styles.emptyPlot]} onPress={onPress}>
+  } else if (plot.state === 0) {
+    tile = (
+      <Pressable style={[styles.plotTile, styles.plotTileFill, styles.emptyPlot]} onPress={onPress}>
         <Text style={styles.emptyPlotText}>{messages.emptyPlot}</Text>
+      </Pressable>
+    );
+  } else {
+    const icon = plot.state === 2 ? (crop?.icon ?? '🌱') : progressRatio > 0.5 ? '🌿' : '🌱';
+    tile = (
+      <Pressable
+        style={[styles.plotTile, styles.plotTileFill, plot.state === 2 ? styles.readyPlot : styles.growingPlot]}
+        onPress={onPress}
+      >
+        {plot.state === 2 ? (
+          <View style={styles.harvestBadge}>
+            <Text style={styles.harvestBadgeText}>{messages.readyBadge}</Text>
+          </View>
+        ) : null}
+        {plot.state === 1 && crop != null && plot.startTime != null ? (
+          <GrowthProgressBar progressRatio={progressRatio} />
+        ) : null}
+        <Text style={plot.state === 2 ? styles.readyCropIcon : styles.cropIcon}>{icon}</Text>
       </Pressable>
     );
   }
 
-  const crop = plot.cropType != null ? getCrop(plot.cropType) : null;
-  const icon = plot.state === 2 ? (crop?.icon ?? '🌱') : progressRatio > 0.5 ? '🌿' : '🌱';
+  return (
+    <HarvestPopCell gainToken={gain?.token} style={tileSizeStyle}>
+      {tile}
+      <FloatingGain gain={gain} />
+    </HarvestPopCell>
+  );
+}
+
+// Wraps a plot tile and gives it a quick scale "pop" each time a harvest lands
+// (the gain token changes), so tapping a ready crop feels tactile.
+function HarvestPopCell({
+  gainToken,
+  style,
+  children,
+}: {
+  gainToken: number | undefined;
+  style: { width: number; height: number };
+  children: React.ReactNode;
+}) {
+  const popRef = useRef<Animated.Value | null>(null);
+  if (popRef.current == null) {
+    popRef.current = new Animated.Value(1);
+  }
+  const pop = popRef.current;
+  const lastTokenRef = useRef(gainToken);
+
+  useEffect(() => {
+    if (gainToken == null || gainToken === lastTokenRef.current) {
+      lastTokenRef.current = gainToken;
+      return undefined;
+    }
+    lastTokenRef.current = gainToken;
+    const animation = Animated.sequence([
+      Animated.timing(pop, {
+        toValue: 1.16,
+        duration: HARVEST_POP_DURATION_MS * 0.4,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
+      Animated.spring(pop, { toValue: 1, friction: 4, tension: 140, useNativeDriver: true }),
+    ]);
+    animation.start();
+    return () => animation.stop();
+  }, [gainToken, pop]);
 
   return (
-    <Pressable
-      style={[styles.plotTile, tileSizeStyle, plot.state === 2 ? styles.readyPlot : styles.growingPlot]}
-      onPress={onPress}
-    >
-      {plot.state === 2 ? (
-        <View style={styles.harvestBadge}>
-          <Text style={styles.harvestBadgeText}>{messages.readyBadge}</Text>
-        </View>
-      ) : null}
-      {plot.state === 1 && crop != null && plot.startTime != null ? (
-        <GrowthProgressBar progressRatio={progressRatio} />
-      ) : null}
-      <Text style={plot.state === 2 ? styles.readyCropIcon : styles.cropIcon}>{icon}</Text>
-    </Pressable>
+    <Animated.View style={[styles.plotCellWrap, style, { transform: [{ scale: pop }] }]}>
+      {children}
+    </Animated.View>
   );
+}
+
+// The "+gold" number that floats up and fades out above a harvested plot.
+function FloatingGain({ gain }: { gain: FloatingGain | undefined }) {
+  const progressRef = useRef<Animated.Value | null>(null);
+  if (progressRef.current == null) {
+    progressRef.current = new Animated.Value(0);
+  }
+  const progress = progressRef.current;
+  const [visible, setVisible] = useState(false);
+  const lastTokenRef = useRef<number | undefined>(undefined);
+
+  const token = gain?.token;
+  useEffect(() => {
+    if (token == null || token === lastTokenRef.current) {
+      return undefined;
+    }
+    lastTokenRef.current = token;
+    setVisible(true);
+    progress.setValue(0);
+    const animation = Animated.timing(progress, {
+      toValue: 1,
+      duration: HARVEST_FLOAT_DURATION_MS,
+      easing: Easing.out(Easing.quad),
+      useNativeDriver: true,
+    });
+    animation.start(({ finished }) => {
+      if (finished) {
+        setVisible(false);
+      }
+    });
+    return () => animation.stop();
+  }, [token, progress]);
+
+  if (!visible || gain == null) {
+    return null;
+  }
+
+  const translateY = progress.interpolate({ inputRange: [0, 1], outputRange: [4, -40] });
+  const opacity = progress.interpolate({ inputRange: [0, 0.15, 0.7, 1], outputRange: [0, 1, 1, 0] });
+  const scale = progress.interpolate({ inputRange: [0, 0.2, 1], outputRange: [0.7, 1.1, 1] });
+
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[styles.floatingGain, { opacity, transform: [{ translateY }, { scale }] }]}
+    >
+      <Text style={[styles.floatingGainText, floatingGainToneStyle(gain.tone)]}>{gain.text}</Text>
+    </Animated.View>
+  );
+}
+
+function floatingGainToneStyle(tone: FloatingGainTone) {
+  switch (tone) {
+    case 'mutation':
+      return styles.floatingGainMutation;
+    case 'boost':
+      return styles.floatingGainBoost;
+    case 'donate':
+      return styles.floatingGainDonate;
+    default:
+      return styles.floatingGainNormal;
+  }
 }
 
 function GrowthProgressBar({ progressRatio }: { progressRatio: number }) {
@@ -2275,12 +2434,49 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     textAlign: 'center',
   },
+  plotCellWrap: {
+    // Floating harvest numbers escape upward, so this wrapper must not clip.
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   plotTile: {
     borderRadius: 8,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
+  },
+  plotTileFill: {
+    width: '100%',
+    height: '100%',
+  },
+  floatingGain: {
+    position: 'absolute',
+    top: -6,
+    alignSelf: 'center',
+    zIndex: 30,
+  },
+  floatingGainText: {
+    fontSize: 15,
+    fontWeight: '900',
+    textAlign: 'center',
+    textShadowColor: 'rgba(0, 0, 0, 0.35)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  floatingGainNormal: {
+    color: '#f4d03f',
+  },
+  floatingGainBoost: {
+    color: '#ff8c2b',
+    fontSize: 16,
+  },
+  floatingGainMutation: {
+    color: '#c084fc',
+    fontSize: 17,
+  },
+  floatingGainDonate: {
+    color: '#5ec5ff',
   },
   lockedPlot: {
     opacity: 0.62,

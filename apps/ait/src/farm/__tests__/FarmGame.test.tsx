@@ -567,6 +567,21 @@ describe('FarmGame UI flow', () => {
     expect(playHarvest).toHaveBeenCalledTimes(1);
   });
 
+  test('floats a +gold number up from a plot when it is harvested', async () => {
+    const screen = await renderGame(createReadyHarvestState());
+
+    await waitFor(() => expect(screen.getAllByText('GET').length).toBeGreaterThan(0));
+    // Nothing floats before the first harvest.
+    expect(screen.queryByText(/^\+[\d.,KMBT]+G$/)).toBeNull();
+
+    fireEvent.press(screen.getAllByText('GET')[0]!);
+
+    // The harvested gold pops up as its own floating label at the plot, distinct
+    // from the persistent gold counter (no leading "+") and the bottom toast.
+    const floating = screen.getByText(/^\+[\d.,KMBT]+G$/);
+    expect(floating).toBeTruthy();
+  });
+
   test('spaces out harvest bonus nudges by time after the player declines one', async () => {
     const lateGame = createLateGameState();
     const rewardedAd = createReadyRewardedAd();
