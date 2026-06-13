@@ -304,5 +304,20 @@ export function createFarmAnalytics(track: TrackGameEvent = noopTrackGameEvent) 
         ...params.context,
       });
     },
+    // One event per manual "Harvest All" tap (not per crop), so a single
+    // batched action reads as a single funnel step.
+    trackHarvestAll: (params: {
+      harvestedCount: number;
+      totalGold: number;
+      specialCount: number;
+      context: GameAnalyticsContext;
+    }) => {
+      track('harvest_all', {
+        harvested_count: params.harvestedCount,
+        total_gold: params.totalGold,
+        special_count: params.specialCount,
+        ...params.context,
+      });
+    },
   };
 }

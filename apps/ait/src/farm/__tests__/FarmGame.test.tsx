@@ -36,6 +36,8 @@ const mockPersistence = {
   removePersistedGameState: jest.fn<Promise<void>, []>(),
   readPersistedGameSettings: jest.fn(),
   writePersistedGameSettings: jest.fn(),
+  readLastSeenAt: jest.fn<Promise<number | null>, []>(),
+  writeLastSeenAt: jest.fn<Promise<void>, [number]>(),
 };
 
 function getCropKeys() {
@@ -185,6 +187,10 @@ describe('FarmGame UI flow', () => {
     mockPersistence.removePersistedGameState.mockResolvedValue(undefined);
     mockPersistence.readPersistedGameSettings.mockReset();
     mockPersistence.writePersistedGameSettings.mockResolvedValue(undefined);
+    mockPersistence.readLastSeenAt.mockReset();
+    mockPersistence.readLastSeenAt.mockResolvedValue(null);
+    mockPersistence.writeLastSeenAt.mockReset();
+    mockPersistence.writeLastSeenAt.mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -253,6 +259,21 @@ describe('FarmGame UI flow', () => {
     } finally {
       vibrateSpy.mockRestore();
     }
+  });
+
+  test('keeps rapid harvest state updates from overwriting each other', async () => {
+    const screen = await renderGame(createReadyHarvestState());
+
+    await waitFor(() => expect(screen.getByText('50G')).toBeTruthy());
+
+    const readyPlots = screen.getAllByText('GET');
+    await act(async () => {
+      fireEvent.press(readyPlots[0]!);
+      fireEvent.press(readyPlots[1]!);
+    });
+
+    await waitFor(() => expect(screen.getByText('78G')).toBeTruthy());
+    expect(screen.getAllByText('빈 밭')).toHaveLength(6);
   });
 
   test('renders the shared farm UI in English when the saved locale is en-US', async () => {
@@ -508,6 +529,23 @@ describe('FarmGame UI flow', () => {
     expect(screen.getByText('🥉')).toBeTruthy();
   });
 
+  test('collects every ripe plot in one tap via the Harvest All shortcut', async () => {
+    const screen = await renderGame(createReadyHarvestState());
+
+    await waitFor(() => expect(screen.getByText('50G')).toBeTruthy());
+
+    // Two ripe carrots surface the batch shortcut in place of the tool hint.
+    expect(screen.getByText('🧺 모두 수확 2')).toBeTruthy();
+    fireEvent.press(screen.getByLabelText('🧺 모두 수확 2'));
+
+    // Both plots collected at once: +14G each, with a single batch toast.
+    await waitFor(() => expect(screen.getByText('78G')).toBeTruthy());
+    expect(screen.getByText(/한 번에 수확했어요/)).toBeTruthy();
+    // No ripe plots remain, so neither the GET badge nor the shortcut shows.
+    expect(screen.queryByText('GET')).toBeNull();
+    expect(screen.queryByText(/모두 수확/)).toBeNull();
+  });
+
   test('auto-harvests and replants through the game tick when automation is unlocked', async () => {
     const base = createReadyHarvestState();
     const state: GameState = {
@@ -649,5 +687,27 @@ describe('FarmGame UI flow', () => {
     fireEvent.press(screen.getAllByText('GET')[0]!);
 
     expect(screen.getByText(`${formatMoney(readyHarvestState.gold + carrotRevenue * 3)}G`)).toBeTruthy();
+  });
+
+  test('greets a returning player with an offline progress recap', async () => {
+    mockPersistence.readLastSeenAt.mockResolvedValueOnce(NOW - 2 * 60 * 60 * 1000);
+    const screen = await renderGame(createReadyHarvestState());
+
+    await waitFor(() => expect(screen.getByText('다시 오셨네요!')).toBeTruthy());
+    expect(screen.getByText('수확을 기다리는 작물')).toBeTruthy();
+    expect(screen.getByText('2칸')).toBeTruthy();
+    // The recap is marked as seen immediately so a quick reload won't replay it.
+    expect(mockPersistence.writeLastSeenAt).toHaveBeenCalled();
+
+    fireEvent.press(screen.getByText('농장으로 가기'));
+    await waitFor(() => expect(screen.queryByText('다시 오셨네요!')).toBeNull());
+  });
+
+  test('does not show the recap after only a brief absence', async () => {
+    mockPersistence.readLastSeenAt.mockResolvedValueOnce(NOW - 30_000);
+    const screen = await renderGame(createReadyHarvestState());
+
+    await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+    expect(screen.queryByText('다시 오셨네요!')).toBeNull();
   });
 });

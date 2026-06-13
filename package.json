@@ -10,7 +10,7 @@
     "build:android": "pnpm --dir apps/mobile build:android",
     "release:android:aab": "node scripts/build-google-play-aab.mjs",
     "check:core": "jest packages/farm-core --runInBand",
-    "check:ait": "pnpm lint && pnpm typecheck && pnpm test && pnpm build",
+    "check:ait": "pnpm --dir apps/ait lint && pnpm --dir apps/ait typecheck && pnpm check:core && pnpm --dir apps/ait test && pnpm --dir apps/ait build",
     "check:mobile": "pnpm --dir apps/mobile typecheck && pnpm --dir apps/mobile test --watchAll=false && pnpm --dir apps/mobile build:android",
     "check:play": "node scripts/check-google-play-readiness.mjs",
     "check:app-store": "node scripts/check-app-store-readiness.mjs",
