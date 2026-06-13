@@ -1512,20 +1512,27 @@ export default function FarmGame({
 
       <ScrollView contentContainerStyle={styles.mainContent} style={styles.main}>
         <View style={styles.plotGrid}>
-          {gameState.plots.map((plot, index) => (
-            <PlotCell
-              key={plot.id}
-              index={index}
-              plot={plot}
-              unlocked={index < gameState.unlockedPlotCount}
-              progressRatio={getPlotGrowthRatio(gameState, plot)}
-              tileSize={plotTileSize}
-              messages={messages}
-              plantToken={plantPulses[index]}
-              onPlantPulseDone={clearPlantPulse}
-              onPress={onPlotPress}
-            />
-          ))}
+          {gameState.plots.map((plot, index) => {
+            const remainingMs =
+              plot.state === 1 && plot.startTime != null
+                ? getPlotRemainingGrowthMs(gameState, plot)
+                : 0;
+            return (
+              <PlotCell
+                key={plot.id}
+                index={index}
+                plot={plot}
+                unlocked={index < gameState.unlockedPlotCount}
+                progressRatio={getPlotGrowthRatio(gameState, plot)}
+                tileSize={plotTileSize}
+                messages={messages}
+                plantToken={plantPulses[index]}
+                growingTimeLabel={remainingMs > 0 ? formatDuration(remainingMs, locale) : undefined}
+                onPlantPulseDone={clearPlantPulse}
+                onPress={onPlotPress}
+              />
+            );
+          })}
           <HarvestFxOverlay ref={harvestFxRef} tileSize={plotTileSize} />
         </View>
       </ScrollView>
@@ -1970,6 +1977,7 @@ const PlotCell = React.memo(function PlotCell({
   tileSize,
   messages,
   plantToken,
+  growingTimeLabel,
   onPlantPulseDone,
   onPress,
 }: {
@@ -1980,6 +1988,7 @@ const PlotCell = React.memo(function PlotCell({
   tileSize: number;
   messages: FarmMessages;
   plantToken: number | undefined;
+  growingTimeLabel: string | undefined;
   onPlantPulseDone: (index: number) => void;
   onPress: (index: number) => void;
 }) {
@@ -2024,6 +2033,9 @@ const PlotCell = React.memo(function PlotCell({
       ) : null}
       {plot.state === 1 && crop != null && plot.startTime != null ? (
         <GrowthProgressBar progressRatio={progressRatio} />
+      ) : null}
+      {plot.state === 1 && growingTimeLabel != null ? (
+        <Text style={styles.growingTimeText}>{growingTimeLabel}</Text>
       ) : null}
       {plot.state === 2 ? (
         <ReadyCropIcon icon={icon} phaseSeed={plot.id} />
@@ -3037,6 +3049,17 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 10,
     fontWeight: '900',
+  },
+  growingTimeText: {
+    position: 'absolute',
+    top: 5,
+    alignSelf: 'center',
+    color: 'rgba(255, 255, 255, 0.82)',
+    fontSize: 10,
+    fontWeight: '900',
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   progressTrack: {
     position: 'absolute',
