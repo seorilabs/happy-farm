@@ -62,6 +62,16 @@ describe('getPlotRemainingWallClockMs', () => {
     expect(getPlotRemainingWallClockMs(state, plot, 100000)).toBe(2000);
   });
 
+  it('does not run backwards when the multiplier is negative', () => {
+    // speed level -20 -> getSpeedMultiplier = 1 + (-21) * 0.1 = -1.1 (negative).
+    // The frozen-branch constant must not climb as wall-clock time passes.
+    const state = plantedState(-20, 0);
+    const plot = state.plots[0]!;
+
+    expect(getPlotRemainingWallClockMs(state, plot, 0)).toBe(2000);
+    expect(getPlotRemainingWallClockMs(state, plot, 10000)).toBe(2000);
+  });
+
   it('clamps to 0 once wall-clock elapsed passes the full grow duration', () => {
     // speed level 11 -> multiplier 2, so the wall-clock duration is 1000ms; well
     // past that the countdown must stay pinned at 0 rather than go negative.

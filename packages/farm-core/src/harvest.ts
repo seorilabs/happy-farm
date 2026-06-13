@@ -87,11 +87,11 @@ export function getPlotRemainingWallClockMs(gameState: GameState, plot: Plot, no
 
   if (speedMultiplier <= 0) {
     // Defensive only: in the shipped balance the multiplier is a product of
-    // strictly positive factors, so growth never actually freezes and this branch
-    // is unreachable. If a future mechanic ever sets it to 0, dividing by it is
-    // undefined, so report the stable raw grow-time remaining (which does not tick
-    // down while frozen) instead of a wall-clock value.
-    return Math.max(0, Math.ceil(crop.growTime - elapsed * speedMultiplier));
+    // strictly positive factors, so growth never freezes and this branch is
+    // unreachable. If a future mechanic ever drives it to <= 0, growth is not
+    // progressing, so report a constant (the full grow time): it neither ticks
+    // down nor — for a negative multiplier — climbs with elapsed time.
+    return crop.growTime;
   }
 
   // Total wall-clock duration at the current speed is growTime / speedMultiplier;
