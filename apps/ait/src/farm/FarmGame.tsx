@@ -205,6 +205,15 @@ export type FarmGameProps = {
 type GetAnalyticsContext = (state?: GameState) => GameAnalyticsContext;
 type ToolKey = 'harvest' | CropKey;
 
+// One-shot floating "+gold" feedback spawned at the tapped plot on a manual
+// harvest. Auto-harvest stays silent so the burst always maps to a finger tap.
+type HarvestPop = {
+  id: number;
+  index: number;
+  label: string;
+  tone: 'normal' | 'special';
+};
+
 const defaultFarmAnalytics = createFarmAnalytics();
 const defaultFarmAudio: FarmGameAudio = {
   isSupported: false,
@@ -269,6 +278,8 @@ export default function FarmGame({
   const [gameSettings, setGameSettings] = useState<FarmGameSettings>(DEFAULT_FARM_GAME_SETTINGS);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [harvestPops, setHarvestPops] = useState<HarvestPop[]>([]);
+  const harvestPopIdRef = useRef(0);
   const lastInterstitialShownAtRef = useRef(0);
   const sessionStartedAtRef = useRef(Date.now());
   const gameStartTrackedRef = useRef(false);
@@ -310,6 +321,18 @@ export default function FarmGame({
       setToastMessage(null);
       toastTimerRef.current = null;
     }, 1800);
+  }, []);
+  const spawnHarvestPop = useCallback((index: number, label: string, tone: HarvestPop['tone']) => {
+    const id = (harvestPopIdRef.current += 1);
+    setHarvestPops((prev) => {
+      // Cap concurrent pops so rapid tapping can never grow the overlay
+      // unbounded before each pop self-removes at the end of its animation.
+      const next = prev.length >= 8 ? prev.slice(prev.length - 7) : prev;
+      return [...next, { id, index, label, tone }];
+    });
+  }, []);
+  const removeHarvestPop = useCallback((id: number) => {
+    setHarvestPops((prev) => prev.filter((pop) => pop.id !== id));
   }, []);
   const closeSheet = useCallback(() => {
     setActiveSheet(null);
@@ -954,7 +977,18 @@ export default function FarmGame({
       setGameState((state) => ({ ...state, adUsage: recordHarvestBonusAdPrompt(state, now) }));
       setActiveSheet({ type: 'harvestBonus' });
     }
-    Vibration.vibrate(50);
+    const isSpecialHarvest =
+      outcome.mutation != null || outcome.newMasteryRank != null || outcome.boostActive;
+    if (outcome.goldGained > 0) {
+      spawnHarvestPop(
+        index,
+        `+${formatMoney(outcome.goldGained, locale)}`,
+        isSpecialHarvest ? 'special' : 'normal'
+      );
+    }
+    // A celebratory double-buzz marks rare moments (mutation, mastery rank-up,
+    // active boost); ordinary harvests keep the light single tap.
+    Vibration.vibrate(isSpecialHarvest ? [0, 24, 36, 48] : 50);
     if (gameSettings.soundEffectsEnabled && audio.isSupported) {
       void audio.playHarvest();
     }
@@ -1175,6 +1209,9 @@ export default function FarmGame({
               messages={messages}
               onPress={() => handlePlotClick(index)}
             />
+          ))}
+          {harvestPops.map((pop) => (
+            <HarvestPopText key={pop.id} pop={pop} tileSize={plotTileSize} onDone={removeHarvestPop} />
           ))}
         </View>
       </ScrollView>
@@ -1550,6 +1587,70 @@ function PlotCell({
       ) : null}
       <Text style={plot.state === 2 ? styles.readyCropIcon : styles.cropIcon}>{icon}</Text>
     </Pressable>
+  );
+}
+
+function HarvestPopText({
+  pop,
+  tileSize,
+  onDone,
+}: {
+  pop: HarvestPop;
+  tileSize: number;
+  onDone: (id: number) => void;
+}) {
+  const progressRef = useRef<Animated.Value | null>(null);
+  if (progressRef.current == null) {
+    progressRef.current = new Animated.Value(0);
+  }
+  const progress = progressRef.current;
+  const onDoneRef = useRef(onDone);
+  onDoneRef.current = onDone;
+
+  useEffect(() => {
+    const animation = Animated.timing(progress, {
+      toValue: 1,
+      duration: 900,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    });
+    animation.start(({ finished }) => {
+      if (finished) {
+        onDoneRef.current(pop.id);
+      }
+    });
+    return () => animation.stop();
+  }, [pop.id, progress]);
+
+  const col = pop.index % PLOT_COLUMNS;
+  const row = Math.floor(pop.index / PLOT_COLUMNS);
+  const left = col * (tileSize + PLOT_GAP);
+  const top = row * (tileSize + PLOT_GAP);
+  const translateY = progress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [tileSize * 0.2, -tileSize * 0.55],
+  });
+  const scale = progress.interpolate({
+    inputRange: [0, 0.25, 1],
+    outputRange: [0.6, 1.15, 1],
+  });
+  const opacity = progress.interpolate({
+    inputRange: [0, 0.12, 0.65, 1],
+    outputRange: [0, 1, 1, 0],
+  });
+
+  return (
+    <View pointerEvents="none" style={[styles.harvestPop, { left, top, width: tileSize, height: tileSize }]}>
+      <Animated.Text
+        style={[
+          styles.harvestPopText,
+          pop.tone === 'special' && styles.harvestPopTextSpecial,
+          { opacity, transform: [{ translateY }, { scale }] },
+        ]}
+      >
+        {pop.label}
+      </Animated.Text>
+    </View>
   );
 }
 
@@ -2254,6 +2355,26 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: PLOT_GAP,
+  },
+  harvestPop: {
+    position: 'absolute',
+    zIndex: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  harvestPopText: {
+    color: '#f7b733',
+    fontSize: 18,
+    fontWeight: '900',
+    textShadowColor: 'rgba(31, 41, 55, 0.85)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
+  harvestPopTextSpecial: {
+    color: '#ffd23f',
+    fontSize: 22,
+    textShadowColor: 'rgba(180, 83, 9, 0.95)',
+    textShadowRadius: 4,
   },
   toast: {
     position: 'absolute',

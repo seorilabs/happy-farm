@@ -226,6 +226,8 @@ describe('FarmGame UI flow', () => {
 
     expect(screen.getByText('54G')).toBeTruthy();
     expect(screen.getAllByText('빈 밭')).toHaveLength(6);
+    // Harvesting spawns a floating "+gold" burst at the tapped plot (gained 14G).
+    expect(screen.getByText('+14')).toBeTruthy();
   });
 
   test('renders the shared farm UI in English when the saved locale is en-US', async () => {
