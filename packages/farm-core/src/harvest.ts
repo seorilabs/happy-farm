@@ -49,8 +49,15 @@ export function getPlotGrowthRatio(gameState: GameState, plot: Plot, now = Date.
 
   const crop = getKnownCrop(plot.cropType);
   const { speedMultiplier } = getCropModifiers(gameState, plot.cropType, now);
-  if (crop.growTime <= 0 || speedMultiplier <= 0) {
+  if (crop.growTime <= 0) {
+    // Instant crop: already fully grown.
     return 1;
+  }
+  if (speedMultiplier <= 0) {
+    // Frozen (unreachable in balance): growth is stalled at the start, so report
+    // 0% rather than a misleading "ready" 100%. Keeps the progress bar consistent
+    // with the countdown, which holds the full grow time in this case.
+    return 0;
   }
 
   const elapsed = Math.max(0, now - plot.startTime) * speedMultiplier;
@@ -124,14 +131,14 @@ export function getPlotGrowthDisplay(gameState: GameState, plot: Plot, now = Dat
   const { speedMultiplier } = getCropModifiers(gameState, plot.cropType, now);
   const elapsed = now - plot.startTime;
 
-  if (crop.growTime <= 0 || speedMultiplier <= 0) {
-    // Mirrors getPlotGrowthRatio (ratio 1) and getPlotRemainingWallClockMs
-    // (frozen constant for a stalled multiplier, 0 for an instant crop) for these
-    // degenerate/unreachable inputs.
-    return {
-      growthRatio: 1,
-      remainingWallClockMs: speedMultiplier <= 0 ? crop.growTime : 0,
-    };
+  if (crop.growTime <= 0) {
+    // Instant crop: fully grown, nothing remaining.
+    return { growthRatio: 1, remainingWallClockMs: 0 };
+  }
+  if (speedMultiplier <= 0) {
+    // Frozen (unreachable in balance): stuck at the start, so 0% progress with the
+    // full grow time still to go. Both fields agree on "not progressing".
+    return { growthRatio: 0, remainingWallClockMs: crop.growTime };
   }
 
   return {

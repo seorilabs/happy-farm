@@ -66,6 +66,13 @@ describe('getPlotRemainingWallClockMs', () => {
     expect(getPlotRemainingWallClockMs(state, plot, 0)).toBe(2000);
     expect(getPlotRemainingWallClockMs(state, plot, 1000)).toBe(2000);
     expect(getPlotRemainingWallClockMs(state, plot, 100000)).toBe(2000);
+
+    // Progress bar and countdown must agree: 0% grown with the full time still
+    // remaining (not a misleading "ready" 100%).
+    const display = getPlotGrowthDisplay(state, plot, 1000);
+    expect(display.growthRatio).toBe(0);
+    expect(display.remainingWallClockMs).toBe(2000);
+    expect(getPlotGrowthRatio(state, plot, 1000)).toBe(0);
   });
 
   it('does not run backwards when the multiplier is negative', () => {
