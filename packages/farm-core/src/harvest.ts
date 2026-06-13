@@ -49,8 +49,15 @@ export function getPlotGrowthRatio(gameState: GameState, plot: Plot, now = Date.
 
   const crop = getKnownCrop(plot.cropType);
   const { speedMultiplier } = getCropModifiers(gameState, plot.cropType, now);
-  if (crop.growTime <= 0 || speedMultiplier <= 0) {
+  if (crop.growTime <= 0) {
+    // Instant crop: already fully grown.
     return 1;
+  }
+  if (speedMultiplier <= 0) {
+    // Frozen (unreachable in balance): growth is stalled at the start, so report
+    // 0% rather than a misleading "ready" 100%. Keeps the progress bar consistent
+    // with the countdown, which holds the full grow time in this case.
+    return 0;
   }
 
   const elapsed = Math.max(0, now - plot.startTime) * speedMultiplier;
@@ -67,6 +74,77 @@ export function getPlotRemainingGrowthMs(gameState: GameState, plot: Plot, now =
   const crop = getKnownCrop(plot.cropType);
   const { speedMultiplier } = getCropModifiers(gameState, plot.cropType, now);
   return Math.max(0, crop.growTime - (now - plot.startTime) * speedMultiplier);
+}
+
+// Wall-clock milliseconds until this plot is harvestable, for the player-facing
+// plot countdown. Unlike getPlotRemainingGrowthMs (which stays on the raw
+// grow-time scale the ad skip window is defined against), this divides by the
+// active speed multiplier so the displayed timer matches real elapsed time.
+export function getPlotRemainingWallClockMs(gameState: GameState, plot: Plot, now = Date.now()): number {
+  if (plot.state !== 1 || plot.cropType == null || plot.startTime == null) {
+    return 0;
+  }
+
+  const crop = getKnownCrop(plot.cropType);
+  // Resolve the multiplier once (getCropModifiers is the hot part) and inline the
+  // remaining-growth math instead of calling getPlotRemainingGrowthMs, which would
+  // recompute the same modifiers a second time on every tile every tick.
+  const { speedMultiplier } = getCropModifiers(gameState, plot.cropType, now);
+  const elapsed = now - plot.startTime;
+
+  if (speedMultiplier <= 0) {
+    // Defensive only: in the shipped balance the multiplier is a product of
+    // strictly positive factors, so growth never freezes and this branch is
+    // unreachable. If a future mechanic ever drives it to <= 0, growth is not
+    // progressing, so report a constant (the full grow time): it neither ticks
+    // down nor — for a negative multiplier — climbs with elapsed time.
+    return crop.growTime;
+  }
+
+  // Total wall-clock duration at the current speed is growTime / speedMultiplier;
+  // subtract the wall-clock time already elapsed. This stays consistent with the
+  // growth model getPlotGrowthRatio/getPlotRemainingGrowthMs use to decide actual
+  // harvest readiness, so the timer always hits 0 exactly when the crop is ready.
+  return Math.max(0, Math.ceil(crop.growTime / speedMultiplier - elapsed));
+}
+
+export type PlotGrowthDisplay = {
+  growthRatio: number;
+  remainingWallClockMs: number;
+};
+
+// Combined growth-display data for the plot grid. getPlotGrowthRatio and
+// getPlotRemainingWallClockMs each resolve getCropModifiers independently, but
+// the grid needs both for every growing tile every tick, so computing them in
+// one pass resolves the modifiers once per tile instead of twice. Field-for-field
+// equivalent to calling the two helpers separately (locked down by the
+// plotCountdown equivalence test).
+export function getPlotGrowthDisplay(gameState: GameState, plot: Plot, now = Date.now()): PlotGrowthDisplay {
+  if (plot.state === 2) {
+    return { growthRatio: 1, remainingWallClockMs: 0 };
+  }
+  if (plot.state !== 1 || plot.cropType == null || plot.startTime == null) {
+    return { growthRatio: 0, remainingWallClockMs: 0 };
+  }
+
+  const crop = getKnownCrop(plot.cropType);
+  const { speedMultiplier } = getCropModifiers(gameState, plot.cropType, now);
+  const elapsed = now - plot.startTime;
+
+  if (crop.growTime <= 0) {
+    // Instant crop: fully grown, nothing remaining.
+    return { growthRatio: 1, remainingWallClockMs: 0 };
+  }
+  if (speedMultiplier <= 0) {
+    // Frozen (unreachable in balance): stuck at the start, so 0% progress with the
+    // full grow time still to go. Both fields agree on "not progressing".
+    return { growthRatio: 0, remainingWallClockMs: crop.growTime };
+  }
+
+  return {
+    growthRatio: Math.min(Math.max((elapsed * speedMultiplier) / crop.growTime, 0), 1),
+    remainingWallClockMs: Math.max(0, Math.ceil(crop.growTime / speedMultiplier - elapsed)),
+  };
 }
 
 export function isPlotGrowthComplete(gameState: GameState, plot: Plot, now = Date.now()): boolean {

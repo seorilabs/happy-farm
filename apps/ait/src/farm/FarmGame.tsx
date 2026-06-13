@@ -91,7 +91,7 @@ import {
   getMinUpgradeLevel,
   getMutationLabel,
   getPlotCost,
-  getPlotGrowthRatio,
+  getPlotGrowthDisplay,
   getPlotRemainingGrowthMs,
   getRewardedAdLimitStatus,
   getUpgradeCost,
@@ -1527,21 +1527,24 @@ export default function FarmGame({
       <ScrollView contentContainerStyle={styles.mainContent} style={styles.main}>
         <View style={styles.plotGrid}>
           {gameState.plots.map((plot, index) => {
-            const remainingMs =
-              plot.state === 1 && plot.startTime != null
-                ? getPlotRemainingGrowthMs(gameState, plot, plotRenderNow)
-                : 0;
+            // Resolve growth ratio and countdown together so the crop modifiers
+            // are computed once per tile per tick instead of once for each.
+            const growth = getPlotGrowthDisplay(gameState, plot, plotRenderNow);
             return (
               <PlotCell
                 key={plot.id}
                 index={index}
                 plot={plot}
                 unlocked={index < gameState.unlockedPlotCount}
-                progressRatio={getPlotGrowthRatio(gameState, plot, plotRenderNow)}
+                progressRatio={growth.growthRatio}
+                growthCountdown={
+                  plot.state === 1 && growth.remainingWallClockMs > 0
+                    ? formatGrowthTimeCompact(growth.remainingWallClockMs, locale)
+                    : undefined
+                }
                 tileSize={plotTileSize}
                 messages={messages}
                 plantToken={plantPulses[index]}
-                growingTimeLabel={remainingMs > 0 ? formatGrowthTimeCompact(remainingMs, locale) : undefined}
                 onPlantPulseDone={clearPlantPulse}
                 onPress={onPlotPress}
               />
@@ -1988,10 +1991,10 @@ const PlotCell = React.memo(function PlotCell({
   plot,
   unlocked,
   progressRatio,
+  growthCountdown,
   tileSize,
   messages,
   plantToken,
-  growingTimeLabel,
   onPlantPulseDone,
   onPress,
 }: {
@@ -1999,10 +2002,10 @@ const PlotCell = React.memo(function PlotCell({
   plot: GameState['plots'][number];
   unlocked: boolean;
   progressRatio: number;
+  growthCountdown: string | undefined;
   tileSize: number;
   messages: FarmMessages;
   plantToken: number | undefined;
-  growingTimeLabel: string | undefined;
   onPlantPulseDone: (index: number) => void;
   onPress: (index: number) => void;
 }) {
@@ -2046,7 +2049,16 @@ const PlotCell = React.memo(function PlotCell({
         </View>
       ) : null}
       {plot.state === 1 && crop != null && plot.startTime != null ? (
-        <GrowthProgressBar progressRatio={progressRatio} />
+        <>
+          {growthCountdown != null ? (
+            <View style={[styles.growthTimer, { maxWidth: Math.max(0, tileSize - 10) }]}>
+              <Text style={styles.growthTimerText} numberOfLines={1} ellipsizeMode="tail">
+                {growthCountdown}
+              </Text>
+            </View>
+          ) : null}
+          <GrowthProgressBar progressRatio={progressRatio} />
+        </>
       ) : null}
       {plot.state === 2 ? (
         <ReadyCropIcon icon={icon} phaseSeed={plot.id} />
@@ -2057,9 +2069,6 @@ const PlotCell = React.memo(function PlotCell({
           onPlantPulseDone={() => onPlantPulseDone(index)}
         />
       )}
-      {plot.state === 1 && growingTimeLabel != null ? (
-        <Text style={styles.growingTimeText} numberOfLines={1}>{growingTimeLabel}</Text>
-      ) : null}
     </Pressable>
   );
 });
@@ -3064,16 +3073,19 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '900',
   },
-  growingTimeText: {
+  growthTimer: {
     position: 'absolute',
     top: 5,
-    alignSelf: 'center',
-    color: 'rgba(255, 255, 255, 0.82)',
+    left: 5,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 7,
+    backgroundColor: 'rgba(0, 0, 0, 0.42)',
+  },
+  growthTimerText: {
+    color: '#ffffff',
     fontSize: 10,
-    fontWeight: '900',
-    textShadowColor: 'rgba(0, 0, 0, 0.5)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
+    fontWeight: '800',
   },
   progressTrack: {
     position: 'absolute',
