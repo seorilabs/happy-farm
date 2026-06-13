@@ -86,14 +86,19 @@ export function getPlotRemainingWallClockMs(gameState: GameState, plot: Plot, no
   const elapsed = now - plot.startTime;
 
   if (speedMultiplier <= 0) {
-    // Growth is frozen (paused/debuffed). Dividing by zero is undefined and the
-    // raw grow-time remaining would jump to the full grow time, so fall back to
-    // the unscaled (1x) wall-clock remaining: it keeps ticking down continuously
-    // instead of snapping back to max. Round up so the timer never under-reports.
-    return Math.max(0, Math.ceil(crop.growTime - elapsed));
+    // Defensive only: in the shipped balance the multiplier is a product of
+    // strictly positive factors, so growth never actually freezes and this branch
+    // is unreachable. If a future mechanic ever sets it to 0, dividing by it is
+    // undefined, so report the stable raw grow-time remaining (which does not tick
+    // down while frozen) instead of a wall-clock value.
+    return Math.max(0, Math.ceil(crop.growTime - elapsed * speedMultiplier));
   }
 
-  return Math.max(0, Math.ceil((crop.growTime - elapsed * speedMultiplier) / speedMultiplier));
+  // Total wall-clock duration at the current speed is growTime / speedMultiplier;
+  // subtract the wall-clock time already elapsed. This stays consistent with the
+  // growth model getPlotGrowthRatio/getPlotRemainingGrowthMs use to decide actual
+  // harvest readiness, so the timer always hits 0 exactly when the crop is ready.
+  return Math.max(0, Math.ceil(crop.growTime / speedMultiplier - elapsed));
 }
 
 export function isPlotGrowthComplete(gameState: GameState, plot: Plot, now = Date.now()): boolean {
