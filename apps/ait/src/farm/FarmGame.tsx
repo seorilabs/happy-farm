@@ -152,9 +152,9 @@ const EMPTY_SAFE_AREA_INSETS = { top: 0, right: 0, bottom: 0, left: 0 };
 function formatGrowthTimeCompact(ms: number, locale: SupportedLocale): string {
   const seconds = Math.ceil(ms / 1000);
   if (seconds < 60) return locale === 'en-US' ? `${seconds}s` : `${seconds}초`;
-  const minutes = Math.floor(seconds / 60);
+  const minutes = Math.ceil(seconds / 60);
   if (minutes < 60) return locale === 'en-US' ? `${minutes}m` : `${minutes}분`;
-  const hours = Math.floor(minutes / 60);
+  const hours = Math.ceil(minutes / 60);
   return locale === 'en-US' ? `${hours}h` : `${hours}시간`;
 }
 
