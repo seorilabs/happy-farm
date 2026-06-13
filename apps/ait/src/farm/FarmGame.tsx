@@ -196,6 +196,7 @@ type ActiveSheet =
   | { type: 'harvestBonus' }
   | { type: 'welcomeBack'; summary: ReturnSummary }
   | { type: 'resetConfirm' }
+  | { type: 'areaUnlocked'; areaKey: AreaKey }
   | null;
 
 export type FarmGamePersistence = {
@@ -1711,6 +1712,7 @@ export default function FarmGame({
               analytics={farmAnalytics}
               onDone={toast}
               onMilestone={() => void maybeShowMilestoneAd()}
+              onAreaUnlocked={(areaKey) => setActiveSheet({ type: 'areaUnlocked', areaKey })}
             />
 
             <Text style={styles.sheetSectionTitle}>{messages.researchSection}</Text>
@@ -1911,6 +1913,33 @@ export default function FarmGame({
               onPress={() => void confirmReset()}
             />
             <SheetAction label={messages.resetKeepAction} secondary onPress={() => setActiveSheet(null)} />
+          </View>
+        ) : null}
+
+        {activeSheet?.type === 'areaUnlocked' ? (
+          <View>
+            <Text style={styles.sheetSectionTitle}>{messages.areaUnlockedNewCropsLabel}</Text>
+            <View style={styles.areaUnlockedCropList}>
+              {(Object.keys(CROPS) as CropKey[])
+                .filter((key) => getCrop(key).area === activeSheet.areaKey)
+                .sort((a, b) => getCrop(a).tier - getCrop(b).tier)
+                .map((key) => {
+                  const crop = getCrop(key);
+                  return (
+                    <View key={key} style={styles.areaUnlockedCropRow}>
+                      <Text style={styles.areaUnlockedCropIcon}>{crop.icon}</Text>
+                      <Text style={styles.areaUnlockedCropName}>{getLocalizedCropName(key)}</Text>
+                    </View>
+                  );
+                })}
+            </View>
+            <SheetAction
+              label={messages.areaUnlockedCta}
+              onPress={() => {
+                setSelectedArea(activeSheet.areaKey);
+                setActiveSheet(null);
+              }}
+            />
           </View>
         ) : null}
       </Sheet>
@@ -2556,6 +2585,9 @@ function getSheetTitle(activeSheet: ActiveSheet, messages: FarmMessages) {
   if (activeSheet?.type === 'collection') {
     return messages.sheetTitleCollection;
   }
+  if (activeSheet?.type === 'areaUnlocked') {
+    return messages.sheetTitleAreaUnlocked;
+  }
   return messages.sheetTitleShop;
 }
 
@@ -2601,6 +2633,9 @@ function getSheetDescription(
   }
   if (activeSheet?.type === 'resetConfirm') {
     return messages.sheetDescriptionResetConfirm(messages.resetConfirmText);
+  }
+  if (activeSheet?.type === 'areaUnlocked') {
+    return messages.sheetDescriptionAreaUnlocked(getAreaLabel(activeSheet.areaKey, locale).name);
   }
   return messages.sheetDescriptionShop;
 }
@@ -2701,6 +2736,7 @@ function ShopAreaUnlockRows({
   analytics,
   onDone,
   onMilestone,
+  onAreaUnlocked,
 }: {
   gameState: GameState;
   locale: SupportedLocale;
@@ -2710,6 +2746,7 @@ function ShopAreaUnlockRows({
   analytics: FarmAnalytics;
   onDone: (msg: string) => void;
   onMilestone: () => void;
+  onAreaUnlocked?: (areaKey: AreaKey) => void;
 }) {
   const lockedAreas = FARM_AREAS.filter((area) => !isAreaUnlocked(gameState, area.key));
   // Gated areas (research-unlocked) sit outside the sequential progression.
@@ -2766,7 +2803,11 @@ function ShopAreaUnlockRows({
             cost: area.unlock.cost,
             context: getAnalyticsContext(gameState),
           });
-          onDone(messages.areaOpenedToast(areaLabel.name));
+          if (onAreaUnlocked != null) {
+            onAreaUnlocked(area.key);
+          } else {
+            onDone(messages.areaOpenedToast(areaLabel.name));
+          }
           onMilestone();
         }}
       />
@@ -3509,5 +3550,30 @@ const styles = StyleSheet.create({
   comboTextLegendary: {
     color: '#ffd23f',
     fontSize: 32,
+  },
+  areaUnlockedCropList: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 16,
+  },
+  areaUnlockedCropRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#d6ecd0',
+    backgroundColor: '#f3faf1',
+  },
+  areaUnlockedCropIcon: {
+    fontSize: 18,
+  },
+  areaUnlockedCropName: {
+    color: '#1f7a3d',
+    fontSize: 13,
+    fontWeight: '800',
   },
 });
