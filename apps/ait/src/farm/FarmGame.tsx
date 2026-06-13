@@ -98,7 +98,10 @@ import {
   normalizeLocale,
   recordHarvestBonusAdPrompt,
   recordRewardedAdUsage,
+  type CropHarvestedGameEvent,
+  type CropPlantedGameEvent,
   type CropEconomyEstimate,
+  type FarmGameCommandBlockedReason,
   type SupportedLocale,
 } from '../../../../packages/farm-core/src';
 
@@ -206,6 +209,16 @@ export type FarmGameProps = {
 
 type GetAnalyticsContext = (state?: GameState) => GameAnalyticsContext;
 type ToolKey = 'harvest' | CropKey;
+type PendingFarmCommandEffect =
+  | { id: number; type: 'plantBlocked'; reason: FarmGameCommandBlockedReason }
+  | { id: number; type: 'cropPlanted'; event: CropPlantedGameEvent }
+  | {
+      id: number;
+      type: 'cropHarvested';
+      event: CropHarvestedGameEvent;
+      now: number;
+      shouldShowHarvestBonusNudge: boolean;
+    };
 
 // One-shot floating "+gold" feedback spawned at the tapped plot on a manual
 // harvest. Auto-harvest stays silent so the burst always maps to a finger tap.
@@ -309,6 +322,10 @@ export default function FarmGame({
   const firstSeedSelectedRef = useRef(false);
   const claimedRewardKeysRef = useRef<Set<CollectionRewardKey>>(new Set());
   const claimedAchievementKeysRef = useRef<Set<string>>(new Set());
+  const commandEffectIdRef = useRef(0);
+  const pendingCommandEffectsRef = useRef<PendingFarmCommandEffect[]>([]);
+  const handledCommandEffectIdsRef = useRef<Set<number>>(new Set());
+  const [commandEffectVersion, setCommandEffectVersion] = useState(0);
   // Double-tap guard for confirmPrestige: the state updater is idempotent,
   // but the toast/analytics must fire exactly once per graduated level.
   const prestigedLevelsRef = useRef<Set<number>>(new Set());
@@ -391,6 +408,118 @@ export default function FarmGame({
     (state = gameState) => getGameAnalyticsContext(state, sessionStartedAtRef.current),
     [gameState]
   );
+
+  useEffect(() => {
+    if (pendingCommandEffectsRef.current.length === 0) {
+      return;
+    }
+
+    const effects = pendingCommandEffectsRef.current;
+    pendingCommandEffectsRef.current = [];
+
+    for (const effect of effects) {
+      if (handledCommandEffectIdsRef.current.has(effect.id)) {
+        continue;
+      }
+      handledCommandEffectIdsRef.current.add(effect.id);
+
+      if (effect.type === 'plantBlocked') {
+        if (effect.reason === 'areaLocked') {
+          toast(messages.areaFirstToast);
+        } else if (effect.reason === 'cropLocked') {
+          toast(messages.breedRequiredToast);
+        } else if (effect.reason === 'insufficientGold') {
+          toast(messages.insufficientGoldToast);
+        }
+        continue;
+      }
+
+      if (effect.type === 'cropPlanted') {
+        const { event } = effect;
+        // Pop the fresh sprout in and give a light tap so planting feels as
+        // tactile as harvesting. Manual path only, so auto-replant stays silent.
+        plantPulseTokenRef.current += 1;
+        const token = plantPulseTokenRef.current;
+        setPlantPulses((prev) => ({ ...prev, [event.plotIndex]: token }));
+        Vibration.vibrate(15);
+        farmAnalytics.trackCropPlanted(event.cropKey, event.areaKey, event.cropTier, event.cost, analyticsContext());
+        continue;
+      }
+
+      const { event } = effect;
+      farmAnalytics.trackCropHarvested({
+        cropKey: event.cropKey,
+        areaKey: event.areaKey,
+        cropTier: event.cropTier,
+        revenue: event.goldGained,
+        isFirstMeaningfulHarvest: event.isFirstMeaningfulHarvest,
+        isFirstCropHarvest: event.isNewCropDiscovery,
+        context: analyticsContext(),
+      });
+      if (event.newMasteryRank != null) {
+        toast(
+          messages.masteryRankUpToast(
+            getLocalizedCropName(event.cropKey),
+            getMasteryRankLabel(event.newMasteryRank.key, locale).name,
+            event.newMasteryRank.icon
+          )
+        );
+      } else if (event.donated) {
+        toast(messages.donatedToast(formatMoney(event.rpGained, locale)));
+      } else if (event.mutation != null) {
+        toast(
+          messages.mutationHarvestedToast(
+            getMutationLabel(event.mutation.key, locale).name,
+            event.mutation.icon,
+            formatMoney(event.goldGained, locale)
+          )
+        );
+      } else {
+        toast(
+          event.boostActive
+            ? messages.harvestedBoostToast(formatMoney(event.goldGained, locale), event.boostMultiplier)
+            : messages.harvestedToast(formatMoney(event.goldGained, locale))
+        );
+      }
+      if (effect.shouldShowHarvestBonusNudge) {
+        setGameState((state) => ({ ...state, adUsage: recordHarvestBonusAdPrompt(state, effect.now) }));
+        setActiveSheet({ type: 'harvestBonus' });
+      }
+      const isSpecialHarvest = event.mutation != null || event.newMasteryRank != null || event.boostActive;
+      if (event.goldGained > 0) {
+        harvestFxRef.current?.spawn(
+          event.plotIndex,
+          `+${formatMoney(event.goldGained, locale)}`,
+          isSpecialHarvest ? 'special' : 'normal'
+        );
+        pulseGold();
+      }
+      // A celebratory double-buzz marks rare moments (mutation, mastery rank-up,
+      // active boost); ordinary harvests keep the light single tap. The pattern
+      // is Android-only: iOS uses a fixed-length vibration and treats array
+      // entries as wait gaps, so a "short double tap" can't be expressed there -
+      // we fall back to the standard single buzz.
+      if (isSpecialHarvest && Platform.OS === 'android') {
+        Vibration.vibrate([0, 24, 36, 48]);
+      } else {
+        Vibration.vibrate(50);
+      }
+      if (gameSettings.soundEffectsEnabled && audio.isSupported) {
+        void audio.playHarvest();
+      }
+    }
+  }, [
+    analyticsContext,
+    audio,
+    commandEffectVersion,
+    farmAnalytics,
+    gameSettings.soundEffectsEnabled,
+    getLocalizedCropName,
+    locale,
+    messages,
+    pulseGold,
+    toast,
+  ]);
 
   useEffect(() => {
     let cancelled = false;
@@ -937,120 +1066,57 @@ export default function FarmGame({
 
   function plantCrop(index: number, cropKey: CropKey) {
     const now = Date.now();
-    const result = executeFarmGameCommand(
-      gameState,
-      { type: 'plantCrop', plotIndex: index, cropKey },
-      { now, rng: Math.random }
-    );
-    if (result.status === 'blocked') {
-      if (result.reason === 'areaLocked') {
-        toast(messages.areaFirstToast);
-      } else if (result.reason === 'cropLocked') {
-        toast(messages.breedRequiredToast);
-      } else if (result.reason === 'insufficientGold') {
-        toast(messages.insufficientGoldToast);
+    const effectId = ++commandEffectIdRef.current;
+    setGameState((state) => {
+      const result = executeFarmGameCommand(
+        state,
+        { type: 'plantCrop', plotIndex: index, cropKey },
+        { now, rng: Math.random }
+      );
+
+      if (result.status === 'blocked') {
+        pendingCommandEffectsRef.current.push({ id: effectId, type: 'plantBlocked', reason: result.reason });
+        return state;
       }
-      return;
-    }
-
-    const event = result.events[0];
-    if (event?.type !== 'cropPlanted') {
-      return;
-    }
-
-    setGameState(result.state);
-    // Pop the fresh sprout in and give a light tap so planting feels as tactile
-    // as harvesting. Manual path only, so auto-replant stays silent.
-    plantPulseTokenRef.current += 1;
-    const token = plantPulseTokenRef.current;
-    setPlantPulses((prev) => ({ ...prev, [index]: token }));
-    Vibration.vibrate(15);
-    farmAnalytics.trackCropPlanted(event.cropKey, event.areaKey, event.cropTier, event.cost, analyticsContext());
+      const event = result.events[0];
+      if (event?.type === 'cropPlanted') {
+        pendingCommandEffectsRef.current.push({ id: effectId, type: 'cropPlanted', event });
+      }
+      return result.state;
+    });
+    setCommandEffectVersion((version) => version + 1);
   }
 
   function harvestCrop(index: number) {
     const now = Date.now();
-    // One shared roll keeps the previewed outcome (toast/analytics) identical
-    // to the outcome replayed inside the state updater.
-    const roll = Math.random();
-    const rng = () => roll;
-    const result = executeFarmGameCommand(gameState, { type: 'harvestCrop', plotIndex: index }, { now, rng });
-    if (result.status === 'blocked') {
-      return;
-    }
-
-    const event = result.events[0];
-    if (event?.type !== 'cropHarvested') {
-      return;
-    }
-
-    setGameState(result.state);
-
-    farmAnalytics.trackCropHarvested({
-      cropKey: event.cropKey,
-      areaKey: event.areaKey,
-      cropTier: event.cropTier,
-      revenue: event.goldGained,
-      isFirstMeaningfulHarvest: event.isFirstMeaningfulHarvest,
-      isFirstCropHarvest: event.isNewCropDiscovery,
-      context: analyticsContext(),
+    const effectId = ++commandEffectIdRef.current;
+    setGameState((state) => {
+      const roll = Math.random();
+      const result = executeFarmGameCommand(
+        state,
+        { type: 'harvestCrop', plotIndex: index },
+        { now, rng: () => roll }
+      );
+      if (result.status === 'blocked') {
+        return state;
+      }
+      const event = result.events[0];
+      if (event?.type === 'cropHarvested') {
+        pendingCommandEffectsRef.current.push({
+          id: effectId,
+          type: 'cropHarvested',
+          event,
+          now,
+          shouldShowHarvestBonusNudge:
+            rewardedAd.isAdReady &&
+            getRewardedAdLimitStatus(result.state, 'harvestBonusAd', now).allowed &&
+            getHarvestBonusPromptStatus(result.state, now).allowed &&
+            !event.boostActive,
+        });
+      }
+      return result.state;
     });
-    if (event.newMasteryRank != null) {
-      toast(
-        messages.masteryRankUpToast(
-          getLocalizedCropName(event.cropKey),
-          getMasteryRankLabel(event.newMasteryRank.key, locale).name,
-          event.newMasteryRank.icon
-        )
-      );
-    } else if (event.donated) {
-      toast(messages.donatedToast(formatMoney(event.rpGained, locale)));
-    } else if (event.mutation != null) {
-      toast(
-        messages.mutationHarvestedToast(
-          getMutationLabel(event.mutation.key, locale).name,
-          event.mutation.icon,
-          formatMoney(event.goldGained, locale)
-        )
-      );
-    } else {
-      toast(
-        event.boostActive
-          ? messages.harvestedBoostToast(formatMoney(event.goldGained, locale), event.boostMultiplier)
-          : messages.harvestedToast(formatMoney(event.goldGained, locale))
-      );
-    }
-    const canShowHarvestBonusNudge =
-      rewardedAd.isAdReady &&
-      getRewardedAdLimitStatus(gameState, 'harvestBonusAd', now).allowed &&
-      getHarvestBonusPromptStatus(gameState, now).allowed &&
-      !event.boostActive;
-    if (canShowHarvestBonusNudge) {
-      setGameState((state) => ({ ...state, adUsage: recordHarvestBonusAdPrompt(state, now) }));
-      setActiveSheet({ type: 'harvestBonus' });
-    }
-    const isSpecialHarvest = event.mutation != null || event.newMasteryRank != null || event.boostActive;
-    if (event.goldGained > 0) {
-      harvestFxRef.current?.spawn(
-        index,
-        `+${formatMoney(event.goldGained, locale)}`,
-        isSpecialHarvest ? 'special' : 'normal'
-      );
-      pulseGold();
-    }
-    // A celebratory double-buzz marks rare moments (mutation, mastery rank-up,
-    // active boost); ordinary harvests keep the light single tap. The pattern
-    // is Android-only: iOS uses a fixed-length vibration and treats array
-    // entries as wait gaps, so a "short double tap" can't be expressed there —
-    // we fall back to the standard single buzz.
-    if (isSpecialHarvest && Platform.OS === 'android') {
-      Vibration.vibrate([0, 24, 36, 48]);
-    } else {
-      Vibration.vibrate(50);
-    }
-    if (gameSettings.soundEffectsEnabled && audio.isSupported) {
-      void audio.playHarvest();
-    }
+    setCommandEffectVersion((version) => version + 1);
   }
 
   function handlePlotClick(index: number) {
