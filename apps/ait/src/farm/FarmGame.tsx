@@ -147,6 +147,17 @@ const SHEET_ANIMATION_DURATION_MS = 180;
 const SHEET_DRAG_HIT_TARGET_HEIGHT = 36;
 const EMPTY_SAFE_AREA_INSETS = { top: 0, right: 0, bottom: 0, left: 0 };
 
+// Compact single-unit time for the plot tile label: "30초", "5분", "2시간".
+// Keeps the string short enough to fit in small tiles without overflow.
+function formatGrowthTimeCompact(ms: number, locale: SupportedLocale): string {
+  const seconds = Math.ceil(ms / 1000);
+  if (seconds < 60) return locale === 'en-US' ? `${seconds}s` : `${seconds}초`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return locale === 'en-US' ? `${minutes}m` : `${minutes}분`;
+  const hours = Math.floor(minutes / 60);
+  return locale === 'en-US' ? `${hours}h` : `${hours}시간`;
+}
+
 function getFirstArea() {
   const area = FARM_AREAS[0];
   if (area == null) {
@@ -804,6 +815,9 @@ export default function FarmGame({
   // command drain effect releases it after each attempt (success or no-op).
   const harvestAllInFlightRef = useRef(false);
   const chainIncome = useMemo(() => getChainIncome(gameState), [gameState, tick]);
+  // Stable timestamp anchored to the tick so growthRatio and remainingMs
+  // in the plots grid always reflect the same moment within one render pass.
+  const plotRenderNow = useMemo(() => Date.now(), [tick]);
   const mapActionableCount = useMemo(
     () => (chainIncome.accruedGold > 0 ? 1 : 0) + (canPrestige(gameState).allowed ? 1 : 0),
     [chainIncome.accruedGold, gameState]
@@ -1515,7 +1529,7 @@ export default function FarmGame({
           {gameState.plots.map((plot, index) => {
             const remainingMs =
               plot.state === 1 && plot.startTime != null
-                ? getPlotRemainingGrowthMs(gameState, plot)
+                ? getPlotRemainingGrowthMs(gameState, plot, plotRenderNow)
                 : 0;
             return (
               <PlotCell
@@ -1523,11 +1537,11 @@ export default function FarmGame({
                 index={index}
                 plot={plot}
                 unlocked={index < gameState.unlockedPlotCount}
-                progressRatio={getPlotGrowthRatio(gameState, plot)}
+                progressRatio={getPlotGrowthRatio(gameState, plot, plotRenderNow)}
                 tileSize={plotTileSize}
                 messages={messages}
                 plantToken={plantPulses[index]}
-                growingTimeLabel={remainingMs > 0 ? formatDuration(remainingMs, locale) : undefined}
+                growingTimeLabel={remainingMs > 0 ? formatGrowthTimeCompact(remainingMs, locale) : undefined}
                 onPlantPulseDone={clearPlantPulse}
                 onPress={onPlotPress}
               />
@@ -2035,7 +2049,7 @@ const PlotCell = React.memo(function PlotCell({
         <GrowthProgressBar progressRatio={progressRatio} />
       ) : null}
       {plot.state === 1 && growingTimeLabel != null ? (
-        <Text style={styles.growingTimeText}>{growingTimeLabel}</Text>
+        <Text style={styles.growingTimeText} numberOfLines={1}>{growingTimeLabel}</Text>
       ) : null}
       {plot.state === 2 ? (
         <ReadyCropIcon icon={icon} phaseSeed={plot.id} />
