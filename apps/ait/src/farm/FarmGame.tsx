@@ -1492,6 +1492,11 @@ export default function FarmGame({
           </View>
           <View style={styles.summaryColumn}>
             <Text style={styles.researchBadge}>{messages.researchBadge(researchLevel)}</Text>
+            {gameState.research.points > 0 ? (
+              <Text style={styles.rpHudText} numberOfLines={1}>
+                {messages.rpHudText(formatMoney(gameState.research.points, locale))}
+              </Text>
+            ) : null}
             <Text style={styles.productivityText} numberOfLines={1}>
               {messages.productivity(formatHourlyGold(farmProductivity.netProfitPerHour, locale))}
             </Text>
@@ -1508,6 +1513,9 @@ export default function FarmGame({
                 <View style={styles.compactStat}>
                   <Text style={styles.label}>{messages.boostLabel}</Text>
                   <Text style={styles.boostStat}>×{harvestBonusBoost.multiplier.toFixed(1)}</Text>
+                  <Text style={styles.boostRemaining}>
+                    {formatRemainingTime(harvestBonusBoost.remainingMs, locale)}
+                  </Text>
                 </View>
               ) : null}
             </View>
@@ -3018,6 +3026,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#6f57d9',
     fontSize: 11,
     fontWeight: '900',
+  },
+  rpHudText: {
+    marginTop: 2,
+    color: '#6f57d9',
+    fontSize: 11,
+    fontWeight: '900',
+    textAlign: 'right',
   },
   productivityText: {
     marginTop: 3,
