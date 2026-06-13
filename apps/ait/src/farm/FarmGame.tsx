@@ -294,9 +294,10 @@ export default function FarmGame({
   const goldPulse = goldPulseRef.current;
   const goldPulseScaleRef = useRef<Animated.AnimatedInterpolation<number> | null>(null);
   if (goldPulseScaleRef.current == null) {
-    goldPulseScaleRef.current = goldPulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.18] });
+    goldPulseScaleRef.current = goldPulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.12] });
   }
   const goldPulseScale = goldPulseScaleRef.current;
+  useEffect(() => () => goldPulse.stopAnimation(), [goldPulse]);
   const lastInterstitialShownAtRef = useRef(0);
   const sessionStartedAtRef = useRef(Date.now());
   const gameStartTrackedRef = useRef(false);
@@ -1169,13 +1170,18 @@ export default function FarmGame({
 
         <View style={styles.statsPanel}>
           <View style={styles.assetRow}>
-            <Animated.Text style={[styles.coinIcon, { transform: [{ scale: goldPulseScale }] }]}>💰</Animated.Text>
-            <View style={styles.assetTextGroup}>
-              <Text style={styles.label}>{messages.assetLabel}</Text>
-              <Animated.Text style={[styles.money, { transform: [{ scale: goldPulseScale }] }]} numberOfLines={1}>
-                {formatMoney(gameState.gold, locale)}G
-              </Animated.Text>
-            </View>
+            {/* The whole asset block scales as one unit (anchored left so it
+                grows into its own space, not into the panel border) for a
+                consistent "cha-ching" on harvest. */}
+            <Animated.View style={[styles.assetPulse, { transform: [{ scale: goldPulseScale }] }]}>
+              <Text style={styles.coinIcon}>💰</Text>
+              <View style={styles.assetTextGroup}>
+                <Text style={styles.label}>{messages.assetLabel}</Text>
+                <Text style={styles.money} numberOfLines={1}>
+                  {formatMoney(gameState.gold, locale)}G
+                </Text>
+              </View>
+            </Animated.View>
           </View>
           <View style={styles.summaryColumn}>
             <Text style={styles.researchBadge}>{messages.researchBadge(researchLevel)}</Text>
@@ -2376,6 +2382,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 9,
+  },
+  assetPulse: {
+    minWidth: 0,
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 9,
+    transformOrigin: 'left center',
   },
   coinIcon: {
     width: 30,
