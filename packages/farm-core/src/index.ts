@@ -8,6 +8,7 @@ export * from './mastery';
 export * from './modifiers';
 export * from './prestige';
 export * from './research';
+export * from './returnSummary';
 export {
   DEFAULT_LOCALE,
   SUPPORTED_LOCALES,

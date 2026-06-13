@@ -36,6 +36,8 @@ const mockPersistence = {
   removePersistedGameState: jest.fn<Promise<void>, []>(),
   readPersistedGameSettings: jest.fn(),
   writePersistedGameSettings: jest.fn(),
+  readLastSeenAt: jest.fn<Promise<number | null>, []>(),
+  writeLastSeenAt: jest.fn<Promise<void>, [number]>(),
 };
 
 function getCropKeys() {
@@ -185,6 +187,10 @@ describe('FarmGame UI flow', () => {
     mockPersistence.removePersistedGameState.mockResolvedValue(undefined);
     mockPersistence.readPersistedGameSettings.mockReset();
     mockPersistence.writePersistedGameSettings.mockResolvedValue(undefined);
+    mockPersistence.readLastSeenAt.mockReset();
+    mockPersistence.readLastSeenAt.mockResolvedValue(null);
+    mockPersistence.writeLastSeenAt.mockReset();
+    mockPersistence.writeLastSeenAt.mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -664,5 +670,27 @@ describe('FarmGame UI flow', () => {
     fireEvent.press(screen.getAllByText('GET')[0]!);
 
     expect(screen.getByText(`${formatMoney(readyHarvestState.gold + carrotRevenue * 3)}G`)).toBeTruthy();
+  });
+
+  test('greets a returning player with an offline progress recap', async () => {
+    mockPersistence.readLastSeenAt.mockResolvedValueOnce(NOW - 2 * 60 * 60 * 1000);
+    const screen = await renderGame(createReadyHarvestState());
+
+    await waitFor(() => expect(screen.getByText('다시 오셨네요!')).toBeTruthy());
+    expect(screen.getByText('수확을 기다리는 작물')).toBeTruthy();
+    expect(screen.getByText('2칸')).toBeTruthy();
+    // The recap is marked as seen immediately so a quick reload won't replay it.
+    expect(mockPersistence.writeLastSeenAt).toHaveBeenCalled();
+
+    fireEvent.press(screen.getByText('농장으로 가기'));
+    await waitFor(() => expect(screen.queryByText('다시 오셨네요!')).toBeNull());
+  });
+
+  test('does not show the recap after only a brief absence', async () => {
+    mockPersistence.readLastSeenAt.mockResolvedValueOnce(NOW - 30_000);
+    const screen = await renderGame(createReadyHarvestState());
+
+    await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+    expect(screen.queryByText('다시 오셨네요!')).toBeNull();
   });
 });
