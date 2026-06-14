@@ -965,6 +965,9 @@ export default function FarmGame({
     [gameState, locale, tick]
   );
   const harvestBonusBoost = useMemo(() => getHarvestBonusBoostStatus(gameState), [gameState, tick]);
+  const safeBoostRemainingMs = Number.isFinite(harvestBonusBoost.remainingMs)
+    ? Math.max(0, harvestBonusBoost.remainingMs)
+    : 0;
   const farmProductivity = useMemo(
     () => getFarmHourlyProductivity(gameState),
     [gameState, harvestBonusBoost.multiplier]
@@ -1676,12 +1679,7 @@ export default function FarmGame({
                   <Text style={styles.label}>{messages.boostLabel}</Text>
                   <Text style={styles.boostStat}>×{harvestBonusBoost.multiplier.toFixed(1)}</Text>
                   <Text style={styles.boostRemaining}>
-                    {formatRemainingTime(
-                      Number.isFinite(harvestBonusBoost.remainingMs)
-                        ? Math.max(0, harvestBonusBoost.remainingMs)
-                        : 0,
-                      locale,
-                    )}
+                    {formatRemainingTime(safeBoostRemainingMs, locale)}
                   </Text>
                 </View>
               ) : null}

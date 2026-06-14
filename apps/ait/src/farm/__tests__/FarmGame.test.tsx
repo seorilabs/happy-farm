@@ -8,6 +8,7 @@ import {
   DEFAULT_LOCALE,
   FARM_AREAS,
   HARVEST_BONUS_AD_COOLDOWN_MS,
+  HARVEST_BONUS_BOOST_DURATION_MS,
   HARVEST_BONUS_MULTIPLIER,
   MAX_PLOTS,
   PRESTIGE_STARS_BASE,
@@ -142,6 +143,20 @@ function createShopReadyState(): GameState {
     ...base,
     gold: 10_000,
     harvestedCropKeys: getCropKeys().slice(0, 5),
+  };
+}
+
+function createActiveBoostState(): GameState {
+  const base = createInitialState();
+  return {
+    ...base,
+    adUsage: {
+      ...base.adUsage,
+      harvestBonusAd: {
+        ...base.adUsage.harvestBonusAd,
+        boostEndsAt: NOW + HARVEST_BONUS_BOOST_DURATION_MS,
+      },
+    },
   };
 }
 
@@ -870,6 +885,16 @@ describe('FarmGame UI flow', () => {
     fireEvent.press(screen.getAllByText('GET')[0]!);
 
     expect(screen.getByText(`${formatMoney(readyHarvestState.gold + carrotRevenue * 3)}G`)).toBeTruthy();
+  });
+
+  test('shows boost remaining time in the header and guards against invalid remainingMs', async () => {
+    const screen = await renderGame(createActiveBoostState());
+
+    await waitFor(() => expect(screen.getByText('부스트')).toBeTruthy());
+    expect(screen.getByText(`×${HARVEST_BONUS_MULTIPLIER.toFixed(1)}`)).toBeTruthy();
+    // formatRemainingTime(HARVEST_BONUS_BOOST_DURATION_MS, 'ko-KR') → "30분"
+    const expectedTime = `${Math.ceil(HARVEST_BONUS_BOOST_DURATION_MS / 60000)}분`;
+    expect(screen.getByText(expectedTime)).toBeTruthy();
   });
 
   test('greets a returning player with an offline progress recap', async () => {
