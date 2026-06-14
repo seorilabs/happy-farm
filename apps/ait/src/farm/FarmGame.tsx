@@ -804,7 +804,7 @@ export default function FarmGame({
           ? 'rainbow'
           : mutationKey === 'golden'
             ? 'golden'
-            : isSpecialHarvest
+            : isSpecialHarvest || comboBonusGold > 0
               ? 'special'
               : 'normal';
       if (totalDisplayGold > 0) {
