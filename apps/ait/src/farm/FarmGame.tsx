@@ -1465,36 +1465,42 @@ export default function FarmGame({
   }
 
   function harvestCrop(index: number) {
-    // Pre-check against the last rendered state: if the plot isn't harvestable
-    // right now, bail early so a tap on an empty/locked plot never advances the
-    // combo. A narrow race remains for rapid same-plot double-taps that both fire
-    // before the first re-render, but that scenario requires sub-frame precision
-    // that can't arise from normal gameplay.
-    const currentState = gameStateRef.current;
-    const preCheckPlot = currentState.plots[index];
-    if (
-      preCheckPlot == null ||
-      preCheckPlot.id >= currentState.unlockedPlotCount ||
-      preCheckPlot.state !== 2 ||
-      preCheckPlot.cropType == null
-    ) {
-      return;
-    }
-
     const now = Date.now();
     const effectId = ++commandEffectIdRef.current;
-    // Read the multiplier from the ref before advancing it so this tap's bonus
-    // is based on the streak built by all PREVIOUS taps (including those that
-    // fired before the last re-render). advanceCombo(1) then bumps the ref so
-    // the NEXT tap computes the correct next-tier multiplier.
     const comboMultiplier = getComboGoldMultiplier(harvestComboRef.current);
-    advanceCombo(1);
+
+    // Stable roll shared between the probe and the authoritative updater so the
+    // mutation outcome is identical even when the updater re-runs in StrictMode
+    // (same memoisation pattern as harvestAllCrops's rollByPlot).
+    let capturedRoll: number | null = null;
+    const getRoll = () => {
+      if (capturedRoll == null) capturedRoll = Math.random();
+      return capturedRoll;
+    };
+
+    // Probe executeFarmGameCommand against the last-rendered state. This covers
+    // every blocked reason (empty/locked plot, area lock, etc.) so the combo
+    // only advances when the harvest is genuinely expected to succeed.
+    // setGameState always runs below — valid harvests are never silently dropped.
+    // If the committed state diverged from the probe base (rare concurrent update),
+    // the authoritative updater decides the final outcome independently.
+    const probeResult = executeFarmGameCommand(
+      gameStateRef.current,
+      { type: 'harvestCrop', plotIndex: index, comboMultiplier },
+      { now, rng: getRoll }
+    );
+    if (probeResult.status !== 'blocked') {
+      // Probe succeeded: advance the combo synchronously so rapid consecutive
+      // taps each compute the correct next-tier multiplier without waiting for
+      // a re-render.
+      advanceCombo(1);
+    }
+
     setGameState((state) => {
-      const roll = Math.random();
       const result = executeFarmGameCommand(
         state,
         { type: 'harvestCrop', plotIndex: index, comboMultiplier },
-        { now, rng: () => roll }
+        { now, rng: getRoll }
       );
       if (result.status === 'blocked') {
         return state;
