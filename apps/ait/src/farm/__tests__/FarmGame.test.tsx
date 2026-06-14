@@ -4,6 +4,7 @@ import React from 'react';
 import { Vibration } from 'react-native';
 import { act, cleanup, fireEvent, render, waitFor, within } from '@testing-library/react-native';
 import {
+  ACHIEVEMENT_TRACKS,
   COLLECTION_AREA_REWARDS,
   CROPS,
   DEFAULT_LOCALE,
@@ -22,6 +23,7 @@ import {
   getPrestigeCost,
   getRegionArchetypeLabel,
   type AreaKey,
+  type AchievementTrackKey,
   type CropKey,
   type GameState,
   type RewardedAdController,
@@ -934,6 +936,68 @@ describe('FarmGame UI flow', () => {
       const screen = await renderAndClaim(playHarvest, { soundEffectsEnabled: true });
       await waitFor(() => expect(screen.getByText(claimMessages.collectionClaimedLabel)).toBeTruthy());
       await waitFor(() => expect(onGoldPulse).toHaveBeenCalledTimes(1));
+    });
+  });
+
+  describe('achievement claim side-effects', () => {
+    function getHarvestTrack() {
+      const track = ACHIEVEMENT_TRACKS.find((t) => t.key === 'harvest_total');
+      if (track == null) throw new Error('harvest_total achievement track must exist');
+      return track;
+    }
+
+    function createAchievementClaimableState(): GameState {
+      const base = createInitialState();
+      const track = getHarvestTrack();
+      return {
+        ...base,
+        lifetimeStats: { ...base.lifetimeStats, totalHarvests: track.base },
+      };
+    }
+
+    async function renderAndClaimAchievement(
+      playHarvest: jest.Mock,
+      savedSettings: unknown
+    ) {
+      const claimMessages = getFarmMessages();
+      const track = getHarvestTrack();
+      const claimLabel = claimMessages.achievementClaimAction(track.starsPerTier);
+      const screen = await renderGame(
+        createAchievementClaimableState(),
+        {
+          audio: {
+            isSupported: true,
+            playHarvest,
+            playComboMilestone: jest.fn(),
+            setBackgroundMusicEnabled: jest.fn(),
+          },
+        },
+        savedSettings
+      );
+      fireEvent.press(
+        screen.getByLabelText(claimMessages.achievementsButtonAccessibilityLabel)
+      );
+      await waitFor(() => expect(screen.getByText(claimLabel)).toBeTruthy());
+      fireEvent.press(screen.getByText(claimLabel));
+      return screen;
+    }
+
+    test('plays harvest sound when an achievement tier is claimed', async () => {
+      const playHarvest = jest.fn();
+      await renderAndClaimAchievement(playHarvest, { soundEffectsEnabled: true });
+      await waitFor(() => expect(playHarvest).toHaveBeenCalledTimes(1));
+    });
+
+    test('does not play harvest sound when sound effects are disabled', async () => {
+      const playHarvest = jest.fn();
+      const claimMessages = getFarmMessages();
+      const screen = await renderAndClaimAchievement(playHarvest, {
+        soundEffectsEnabled: false,
+      });
+      await waitFor(() =>
+        expect(screen.getByText(claimMessages.achievementClaimedToast(getHarvestTrack().starsPerTier))).toBeTruthy()
+      );
+      expect(playHarvest).not.toHaveBeenCalled();
     });
   });
 
