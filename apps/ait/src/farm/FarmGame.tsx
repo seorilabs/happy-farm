@@ -496,6 +496,11 @@ export default function FarmGame({
   const getLocalizedAreaLabel = useCallback((areaKey: AreaKey) => getAreaLabel(areaKey, locale), [locale]);
 
   const [gameState, setGameState] = useState<GameState>(() => createInitialState());
+  // Mirror of gameState updated synchronously in the render body. Used by
+  // harvestCrop to pre-check plot harvestability without waiting for a re-render,
+  // so blocked harvests (empty/locked plots) don't advance the combo counter.
+  const gameStateRef = useRef(gameState);
+  gameStateRef.current = gameState;
   const [selectedTool, setSelectedTool] = useState<ToolKey>('harvest');
   const [selectedArea, setSelectedArea] = useState<AreaKey>(FIRST_AREA.key);
   const [prestigeArchetype, setPrestigeArchetype] = useState<RegionArchetypeKey>(
@@ -537,7 +542,10 @@ export default function FarmGame({
       }),
     ]).start();
   }, [goldPulse]);
-  const incrementCombo = useCallback((count: number) => {
+  // Single entry point for all combo advances (manual tap and harvest-all).
+  // Centralising here ensures harvestCrop and the effects flush share identical
+  // ref/timer semantics and can't diverge or accidentally overwrite each other.
+  const advanceCombo = useCallback((count: number) => {
     if (comboTimerRef.current != null) {
       clearTimeout(comboTimerRef.current);
     }
@@ -724,7 +732,7 @@ export default function FarmGame({
           if (gameSettings.soundEffectsEnabled && audio.isSupported) {
             void audio.playHarvest();
           }
-          incrementCombo(effect.harvestedCount);
+          advanceCombo(effect.harvestedCount);
         }
         continue;
       }
@@ -820,7 +828,7 @@ export default function FarmGame({
     farmAnalytics,
     gameSettings.soundEffectsEnabled,
     getLocalizedCropName,
-    incrementCombo,
+    advanceCombo,
     locale,
     messages,
     pulseGold,
@@ -1457,24 +1465,30 @@ export default function FarmGame({
   }
 
   function harvestCrop(index: number) {
+    // Pre-check against the last rendered state: if the plot isn't harvestable
+    // right now, bail early so a tap on an empty/locked plot never advances the
+    // combo. A narrow race remains for rapid same-plot double-taps that both fire
+    // before the first re-render, but that scenario requires sub-frame precision
+    // that can't arise from normal gameplay.
+    const currentState = gameStateRef.current;
+    const preCheckPlot = currentState.plots[index];
+    if (
+      preCheckPlot == null ||
+      preCheckPlot.id >= currentState.unlockedPlotCount ||
+      preCheckPlot.state !== 2 ||
+      preCheckPlot.cropType == null
+    ) {
+      return;
+    }
+
     const now = Date.now();
     const effectId = ++commandEffectIdRef.current;
-    // Read the multiplier from the ref, then advance it synchronously. Using the
-    // ref (not the harvestCombo state value) means rapid taps that fire before
-    // React re-renders each see the up-to-date tier rather than the same stale
-    // render-closure value. The combo timer is also reset here so the window is
-    // anchored to this tap, not to the deferred effects flush.
+    // Read the multiplier from the ref before advancing it so this tap's bonus
+    // is based on the streak built by all PREVIOUS taps (including those that
+    // fired before the last re-render). advanceCombo(1) then bumps the ref so
+    // the NEXT tap computes the correct next-tier multiplier.
     const comboMultiplier = getComboGoldMultiplier(harvestComboRef.current);
-    if (comboTimerRef.current != null) {
-      clearTimeout(comboTimerRef.current);
-    }
-    harvestComboRef.current += 1;
-    setHarvestCombo(harvestComboRef.current);
-    comboTimerRef.current = setTimeout(() => {
-      harvestComboRef.current = 0;
-      setHarvestCombo(0);
-      comboTimerRef.current = null;
-    }, COMBO_WINDOW_MS);
+    advanceCombo(1);
     setGameState((state) => {
       const roll = Math.random();
       const result = executeFarmGameCommand(
