@@ -821,8 +821,7 @@ describe('FarmGame UI flow', () => {
   });
 
   describe('collection reward claim side-effects', () => {
-    // createLateGameState() discovers all crops, making all area collection rewards claimable.
-    const lateGame = createLateGameState();
+    // Constants derived from balance data — safe to compute once at describe scope.
     const claimMessages = getFarmMessages();
     const firstAreaKey = FARM_AREAS[0]!.key;
     const firstAreaReward = COLLECTION_AREA_REWARDS[firstAreaKey];
@@ -831,8 +830,13 @@ describe('FarmGame UI flow', () => {
       formatMoney(firstAreaReward, DEFAULT_LOCALE)
     );
 
+    // createLateGameState() discovers all crops, making all area collection rewards
+    // claimable. A fresh instance is created per test to prevent state bleed if
+    // renderGame or the component ever mutates the input object.
+    let lateGame: GameState;
     let onGoldPulse: jest.Mock;
     beforeEach(() => {
+      lateGame = createLateGameState();
       onGoldPulse = jest.fn();
       __setGoldPulseTestHook(onGoldPulse);
     });
