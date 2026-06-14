@@ -206,14 +206,20 @@ function computeNextGoal(
 
   if (gameState.unlockedPlotCount < MAX_PLOTS) {
     const cost = getPlotCost(gameState.unlockedPlotCount);
-    candidates.push({ label: messages.shopPlotTitle, cost, progress: Math.min(1, gold / cost), affordable: gold >= cost });
+    if (cost > 0) {
+      candidates.push({ label: messages.shopPlotTitle, cost, progress: Math.min(1, gold / cost), affordable: gold >= cost });
+    }
   }
 
   const speedCost = getUpgradeCost('speed', gameState.upgrades.speed);
-  candidates.push({ label: messages.speedUpgradeTitle, cost: speedCost, progress: Math.min(1, gold / speedCost), affordable: gold >= speedCost });
+  if (speedCost > 0) {
+    candidates.push({ label: messages.speedUpgradeTitle, cost: speedCost, progress: Math.min(1, gold / speedCost), affordable: gold >= speedCost });
+  }
 
   const profitCost = getUpgradeCost('profit', gameState.upgrades.profit);
-  candidates.push({ label: messages.profitUpgradeTitle, cost: profitCost, progress: Math.min(1, gold / profitCost), affordable: gold >= profitCost });
+  if (profitCost > 0) {
+    candidates.push({ label: messages.profitUpgradeTitle, cost: profitCost, progress: Math.min(1, gold / profitCost), affordable: gold >= profitCost });
+  }
 
   const nextArea = FARM_AREAS.find((area) => {
     if (isAreaUnlocked(gameState, area.key)) return false;
@@ -226,7 +232,11 @@ function computeNextGoal(
   });
   if (nextArea != null) {
     const cost = nextArea.unlock.cost;
-    candidates.push({ label: getLocalizedAreaLabel(nextArea.key).name, cost, progress: Math.min(1, gold / cost), affordable: gold >= cost });
+    // area.unlock.cost === 0 is already excluded by the find() filter above,
+    // but guard explicitly so progress never becomes Infinity.
+    if (cost > 0) {
+      candidates.push({ label: getLocalizedAreaLabel(nextArea.key).name, cost, progress: Math.min(1, gold / cost), affordable: gold >= cost });
+    }
   }
 
   if (candidates.length === 0) return null;
