@@ -181,12 +181,12 @@ describe('performHarvest — comboMultiplier', () => {
     expect(outcome!.comboMultiplier).toBe(1);
   });
 
-  test('clamps invalid comboMultiplier values (NaN, Infinity, negative, <1, >10) to 1', () => {
+  test('clamps invalid comboMultiplier values (NaN, Infinity, negative, <1, >2) to 1', () => {
     const ripe = withRipePlots(createInitialState(), [0]);
     const base = performHarvest(ripe, 0, { now: 0, rng: noMutationRng });
     expect(base).not.toBeNull();
 
-    for (const badValue of [NaN, Infinity, -1, 0, 0.5, 11, 1e308]) {
+    for (const badValue of [NaN, Infinity, -1, 0, 0.5, 2.01, 11, 1e308]) {
       const outcome = performHarvest(ripe, 0, { now: 0, rng: noMutationRng, comboMultiplier: badValue });
       expect(outcome).not.toBeNull();
       expect(outcome!.comboMultiplier).toBe(1);
