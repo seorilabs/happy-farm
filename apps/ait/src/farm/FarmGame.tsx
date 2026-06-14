@@ -38,6 +38,7 @@ import {
   getFarmHourlyProductivity,
   getGlobalModifiers,
   getPrestigeSkillLabel,
+  getRegionArchetype,
   getRegionArchetypeLabel,
   getResearchNodeLabel,
   getTitleLabel,
@@ -147,6 +148,7 @@ const COMBO_WINDOW_MS = 1500;
 const COMBO_GREAT_THRESHOLD = 5;
 const COMBO_LEGENDARY_THRESHOLD = 10;
 export const MASTERY_RANK_UP_CELEBRATION_DURATION_MS = 2600;
+export const PRESTIGE_GRADUATION_CELEBRATION_DURATION_MS = 3500;
 const SHEET_DISMISS_DRAG_DISTANCE = 96;
 const SHEET_DISMISS_VELOCITY = 1.1;
 const SHEET_DISMISS_TRANSLATE_Y = 520;
@@ -270,6 +272,13 @@ const MASTERY_RANK_COLORS: Record<MasteryRankKey, string> = {
   prism: '#7c44ff',
 };
 
+type PrestigeGraduationNotice = {
+  id: number;
+  regionIcon: string;
+  regionName: string;
+  starsAwarded: number;
+};
+
 // One-shot floating "+gold" feedback spawned at the tapped plot on a manual
 // harvest. Auto-harvest stays silent so the burst always maps to a finger tap.
 type HarvestPop = {
@@ -363,6 +372,9 @@ export default function FarmGame({
   const [masteryRankUpNotice, setMasteryRankUpNotice] = useState<MasteryRankUpNotice | null>(null);
   const masteryRankUpTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const masteryNoticeIdRef = useRef(0);
+  const [prestigeGraduationNotice, setPrestigeGraduationNotice] = useState<PrestigeGraduationNotice | null>(null);
+  const prestigeGraduationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const prestigeGraduationNoticeIdRef = useRef(0);
   // Per-plot "just planted" tokens. Bumped only on a manual plant so the fresh
   // sprout bounces in (auto-replant and save-load stay silent). Keyed by index.
   const [plantPulses, setPlantPulses] = useState<Record<number, number>>({});
@@ -474,6 +486,24 @@ export default function FarmGame({
     }
     setMasteryRankUpNotice(null);
   }, []);
+  const showPrestigeGraduation = useCallback((notice: Omit<PrestigeGraduationNotice, 'id'>) => {
+    if (prestigeGraduationTimerRef.current != null) {
+      clearTimeout(prestigeGraduationTimerRef.current);
+    }
+    prestigeGraduationNoticeIdRef.current += 1;
+    setPrestigeGraduationNotice({ ...notice, id: prestigeGraduationNoticeIdRef.current });
+    prestigeGraduationTimerRef.current = setTimeout(() => {
+      setPrestigeGraduationNotice(null);
+      prestigeGraduationTimerRef.current = null;
+    }, PRESTIGE_GRADUATION_CELEBRATION_DURATION_MS);
+  }, []);
+  const dismissPrestigeGraduation = useCallback(() => {
+    if (prestigeGraduationTimerRef.current != null) {
+      clearTimeout(prestigeGraduationTimerRef.current);
+      prestigeGraduationTimerRef.current = null;
+    }
+    setPrestigeGraduationNotice(null);
+  }, []);
   const closeSheet = useCallback(() => {
     setActiveSheet(null);
   }, []);
@@ -498,6 +528,9 @@ export default function FarmGame({
       }
       if (masteryRankUpTimerRef.current != null) {
         clearTimeout(masteryRankUpTimerRef.current);
+      }
+      if (prestigeGraduationTimerRef.current != null) {
+        clearTimeout(prestigeGraduationTimerRef.current);
       }
     };
   }, []);
@@ -1111,9 +1144,11 @@ export default function FarmGame({
       chainGoldPerHour: result.chainFarm.goldPerHour,
       context: analyticsContext(),
     });
-    toast(
-      messages.prestigeDoneToast(getRegionArchetypeLabel(prestigeArchetype, locale).name, result.starsAwarded)
-    );
+    showPrestigeGraduation({
+      regionIcon: getRegionArchetype(prestigeArchetype).icon,
+      regionName: getRegionArchetypeLabel(prestigeArchetype, locale).name,
+      starsAwarded: result.starsAwarded,
+    });
   }
 
   function purchaseSkill(skillKey: PrestigeSkillKey) {
@@ -1992,6 +2027,14 @@ export default function FarmGame({
           onDismiss={dismissMasteryRankUpCelebration}
         />
       ) : null}
+      {prestigeGraduationNotice != null ? (
+        <PrestigeGraduationOverlay
+          key={prestigeGraduationNotice.id}
+          notice={prestigeGraduationNotice}
+          messages={messages}
+          onDismiss={dismissPrestigeGraduation}
+        />
+      ) : null}
     </View>
   );
 }
@@ -2181,6 +2224,109 @@ function MasteryRankUpOverlay({
             {notice.rankIcon} {notice.rankName}
           </Animated.Text>
           <Text style={styles.masteryCropName}>{notice.cropName}</Text>
+        </Animated.View>
+      </View>
+    </Pressable>
+  );
+}
+
+// Prestige graduation ceremony: full-screen overlay shown when the player
+// completes a prestige — the game's biggest milestone. The region icon springs
+// in with extra energy; stars slide up from below so the reward reads as the
+// climax. Auto-dismisses after PRESTIGE_GRADUATION_CELEBRATION_DURATION_MS;
+// tapping anywhere dismisses early.
+function PrestigeGraduationOverlay({
+  notice,
+  messages,
+  onDismiss,
+}: {
+  notice: PrestigeGraduationNotice;
+  messages: FarmMessages;
+  onDismiss: () => void;
+}) {
+  const backdropRef = useRef<Animated.Value | null>(null);
+  if (backdropRef.current == null) backdropRef.current = new Animated.Value(0);
+  const backdrop = backdropRef.current;
+
+  const cardScaleRef = useRef<Animated.Value | null>(null);
+  if (cardScaleRef.current == null) cardScaleRef.current = new Animated.Value(0.5);
+  const cardScale = cardScaleRef.current;
+
+  const iconScaleRef = useRef<Animated.Value | null>(null);
+  if (iconScaleRef.current == null) iconScaleRef.current = new Animated.Value(0.1);
+  const iconScale = iconScaleRef.current;
+
+  const starsEntranceRef = useRef<Animated.Value | null>(null);
+  if (starsEntranceRef.current == null) starsEntranceRef.current = new Animated.Value(0);
+  const starsEntrance = starsEntranceRef.current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(backdrop, {
+        toValue: 1,
+        duration: 220,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
+      Animated.spring(cardScale, {
+        toValue: 1,
+        damping: 14,
+        stiffness: 260,
+        mass: 0.9,
+        useNativeDriver: true,
+      }),
+      Animated.sequence([
+        Animated.delay(80),
+        Animated.spring(iconScale, {
+          toValue: 1,
+          damping: 7,
+          stiffness: 180,
+          mass: 0.6,
+          useNativeDriver: true,
+        }),
+      ]),
+      Animated.sequence([
+        Animated.delay(300),
+        Animated.spring(starsEntrance, {
+          toValue: 1,
+          damping: 11,
+          stiffness: 240,
+          useNativeDriver: true,
+        }),
+      ]),
+    ]).start();
+
+    return () => {
+      backdrop.stopAnimation();
+      cardScale.stopAnimation();
+      iconScale.stopAnimation();
+      starsEntrance.stopAnimation();
+    };
+  }, [backdrop, cardScale, iconScale, starsEntrance]);
+
+  const starsTranslateY = starsEntrance.interpolate({ inputRange: [0, 1], outputRange: [20, 0] });
+
+  return (
+    <Pressable testID="prestige-graduation-overlay" style={StyleSheet.absoluteFill} onPress={onDismiss}>
+      <Animated.View style={[styles.prestigeBackdrop, { opacity: backdrop }]} />
+      <View style={styles.prestigeCenter} pointerEvents="none">
+        <Animated.View
+          testID="prestige-graduation-card"
+          style={[styles.prestigeCard, { transform: [{ scale: cardScale }] }]}
+        >
+          <Text style={styles.prestigeTitle}>{messages.prestigeGraduationTitle}</Text>
+          <Animated.Text style={[styles.prestigeRegionIcon, { transform: [{ scale: iconScale }] }]}>
+            {notice.regionIcon}
+          </Animated.Text>
+          <Text style={styles.prestigeRegionName}>{notice.regionName}</Text>
+          <Animated.Text
+            style={[
+              styles.prestigeStarsBadge,
+              { opacity: starsEntrance, transform: [{ translateY: starsTranslateY }] },
+            ]}
+          >
+            {messages.prestigeGraduationStarsLabel(notice.starsAwarded)}
+          </Animated.Text>
         </Animated.View>
       </View>
     </Pressable>
@@ -3852,5 +3998,52 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     color: '#344054',
     marginTop: 4,
+  },
+  prestigeBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(10, 12, 30, 0.72)',
+  },
+  prestigeCenter: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingBottom: 80,
+  },
+  prestigeCard: {
+    width: 288,
+    paddingHorizontal: 32,
+    paddingVertical: 32,
+    borderRadius: 24,
+    backgroundColor: '#ffffff',
+    alignItems: 'center',
+    gap: 6,
+    shadowColor: '#000000',
+    shadowOpacity: 0.32,
+    shadowRadius: 36,
+    shadowOffset: { width: 0, height: 14 },
+    elevation: 18,
+  },
+  prestigeTitle: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: '#667085',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+  },
+  prestigeRegionIcon: {
+    fontSize: 80,
+    lineHeight: 88,
+    marginVertical: 4,
+  },
+  prestigeRegionName: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: '#344054',
+  },
+  prestigeStarsBadge: {
+    fontSize: 34,
+    fontWeight: '900',
+    color: '#d4860a',
+    marginTop: 6,
   },
 });
