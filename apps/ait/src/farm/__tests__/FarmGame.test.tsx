@@ -888,11 +888,6 @@ describe('FarmGame UI flow', () => {
   });
 
   test('shows boost multiplier and remaining time in the header when boost is active', async () => {
-    // beforeEach enables fake timers; set time to NOW so boostEndsAt (= NOW + DURATION)
-    // is in the future and getHarvestBonusBoostStatus returns active=true.
-    // waitFor works with fake timers here just as in every other test in this describe.
-    jest.setSystemTime(NOW);
-
     const messages = getFarmMessages(DEFAULT_LOCALE);
     const screen = await renderGame(createActiveBoostState(NOW), { preferredLocale: DEFAULT_LOCALE });
 
