@@ -20,6 +20,7 @@ on:
   push:
     branches:
       - develop
+      - main
     paths-ignore:
       - '**.md'
       - '**.png'
