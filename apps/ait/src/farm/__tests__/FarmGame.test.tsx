@@ -2,6 +2,8 @@
 
 import React from 'react';
 import { Vibration } from 'react-native';
+// This import also runs RNTL's extend-expect side-effect, registering
+// toHaveTextContent, toBeVisible, and other built-in matchers globally.
 import { act, cleanup, fireEvent, render, waitFor, within } from '@testing-library/react-native';
 import {
   CROPS,
@@ -888,10 +890,10 @@ describe('FarmGame UI flow', () => {
   });
 
   test('shows boost multiplier and remaining time in the header when boost is active', async () => {
-    // Explicitly freeze the clock at NOW so getHarvestBonusBoostStatus computes
-    // remainingMs = HARVEST_BONUS_BOOST_DURATION_MS and returns active=true.
-    // beforeEach already does this, but we repeat it here for self-containment.
-    jest.useFakeTimers();
+    // beforeEach calls jest.useFakeTimers(); afterEach calls jest.useRealTimers().
+    // Re-set the system time here to make the timing dependency explicit: with
+    // Date.now() === NOW, getHarvestBonusBoostStatus returns active=true and
+    // remainingMs = HARVEST_BONUS_BOOST_DURATION_MS.
     jest.setSystemTime(NOW);
 
     const messages = getFarmMessages(DEFAULT_LOCALE);
