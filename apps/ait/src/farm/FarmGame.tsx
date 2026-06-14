@@ -145,7 +145,7 @@ const HARVEST_ALL_MIN_COUNT = 2;
 const COMBO_WINDOW_MS = 1500;
 const COMBO_GREAT_THRESHOLD = 5;
 const COMBO_LEGENDARY_THRESHOLD = 10;
-const MASTERY_RANK_UP_CELEBRATION_DURATION_MS = 2600;
+export const MASTERY_RANK_UP_CELEBRATION_DURATION_MS = 2600;
 const SHEET_DISMISS_DRAG_DISTANCE = 96;
 const SHEET_DISMISS_VELOCITY = 1.1;
 const SHEET_DISMISS_TRANSLATE_Y = 520;
@@ -2134,7 +2134,7 @@ function MasteryRankUpOverlay({
   const rankEntranceScale = rankEntrance.interpolate({ inputRange: [0, 1], outputRange: [0.4, 1] });
 
   return (
-    <Pressable style={StyleSheet.absoluteFill} onPress={onDismiss}>
+    <Pressable testID="mastery-rank-up-overlay" style={StyleSheet.absoluteFill} onPress={onDismiss}>
       <Animated.View style={[styles.masteryBackdrop, { opacity: backdrop }]} />
       <View style={styles.masteryCenter} pointerEvents="none">
         <Animated.View style={[styles.masteryCard, { transform: [{ scale: cardScale }] }]}>
