@@ -1670,9 +1670,8 @@ export default function FarmGame({
   function harvestCrop(index: number) {
     // Dispatch through the harvest reducer: game state + harvest effect are
     // committed atomically (no phantom effects if a concurrent render is aborted).
-    // The reducer reads state.comboCount (confirmed prior harvests) plus
-    // state.pendingHarvestEffects.length (preceding harvests in the same batch)
-    // to compute the correct combo tier without touching any external ref.
+    // The reducer uses state.comboCount (confirmed harvests since the last reset)
+    // as the sole source for the combo tier — no external ref or pending-length needed.
     farmDispatch({
       type: 'HARVEST_CROP',
       payload: {
