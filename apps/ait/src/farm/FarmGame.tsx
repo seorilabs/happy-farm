@@ -1761,6 +1761,7 @@ export default function FarmGame({
             const crop = getCrop(key);
             const cropCost = getCropPurchaseCost(gameState, key);
             const masteryRank = getMasteryStatus(gameState, key).rank;
+            const isNew = !gameState.harvestedCropKeys.includes(key);
             return (
               <ToolButton
                 key={key}
@@ -1771,6 +1772,8 @@ export default function FarmGame({
                 roi={messages.roi(formatSignedPercent(getCropEconomy(cropEconomyByKey, key).roiPercent, locale))}
                 affordable={gameState.gold >= cropCost}
                 masteryRank={masteryRank}
+                isNew={isNew}
+                newLabel={messages.newCropBadge}
                 onPress={() => selectCrop(key)}
               />
             );
@@ -3138,6 +3141,8 @@ function ToolButton({
   roi,
   affordable,
   masteryRank,
+  isNew,
+  newLabel,
   onPress,
 }: {
   active: boolean;
@@ -3147,6 +3152,8 @@ function ToolButton({
   roi?: string;
   affordable?: boolean;
   masteryRank?: { icon: string } | null;
+  isNew?: boolean;
+  newLabel?: string;
   onPress: () => void;
 }) {
   return (
@@ -3162,6 +3169,11 @@ function ToolButton({
       {masteryRank != null ? (
         <View pointerEvents="none" style={styles.toolMasteryBadge}>
           <Text style={styles.toolMasteryBadgeText}>{masteryRank.icon}</Text>
+        </View>
+      ) : null}
+      {isNew === true && newLabel != null ? (
+        <View pointerEvents="none" style={styles.toolNewBadge}>
+          <Text style={styles.toolNewBadgeText}>{newLabel}</Text>
         </View>
       ) : null}
     </Pressable>
@@ -3924,6 +3936,22 @@ const styles = StyleSheet.create({
   toolMasteryBadgeText: {
     fontSize: 11,
     lineHeight: 14,
+  },
+  toolNewBadge: {
+    position: 'absolute',
+    bottom: 4,
+    left: 4,
+    borderRadius: 4,
+    backgroundColor: '#16a34a',
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+  },
+  toolNewBadgeText: {
+    color: '#ffffff',
+    fontSize: 8,
+    fontWeight: '900',
+    lineHeight: 11,
+    letterSpacing: 0.3,
   },
   lockedNotice: {
     width: 260,
