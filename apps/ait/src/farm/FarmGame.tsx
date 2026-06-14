@@ -2618,7 +2618,7 @@ function ComboDisplay({ count, messages }: { count: number; messages: FarmMessag
   }
   const rotate = rotateRef.current;
 
-  const prevCountRef = useRef(count);
+  const prevCountRef = useRef(0);
 
   useEffect(() => {
     const prevCount = prevCountRef.current;
@@ -2657,6 +2657,7 @@ function ComboDisplay({ count, messages }: { count: number; messages: FarmMessag
       ]);
       Animated.parallel([scaleAnim, wobble]).start();
     } else {
+      rotate.setValue(0);
       scaleAnim.start();
     }
 
@@ -2688,7 +2689,7 @@ function ComboDisplay({ count, messages }: { count: number; messages: FarmMessag
       expiry.stopAnimation();
       rotate.stopAnimation();
     };
-  }, [scale, expiry, rotate]);
+  }, [scale, expiry, rotate, count]);
 
   const opacity = expiry.interpolate({
     inputRange: [0, 0.4, 1],
