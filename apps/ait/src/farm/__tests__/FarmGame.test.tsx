@@ -4,6 +4,7 @@ import React from 'react';
 import { Vibration } from 'react-native';
 import { act, cleanup, fireEvent, render, waitFor, within } from '@testing-library/react-native';
 import {
+  COLLECTION_AREA_REWARDS,
   CROPS,
   DEFAULT_LOCALE,
   FARM_AREAS,
@@ -816,6 +817,35 @@ describe('FarmGame UI flow', () => {
     fireEvent.press(screen.getAllByText('GET')[0]!);
 
     expect(playHarvest).toHaveBeenCalledTimes(1);
+  });
+
+  test('pulses the gold display and plays harvest sound when a collection reward is claimed', async () => {
+    const lateGame = createLateGameState();
+    const playHarvest = jest.fn();
+    const claimMessages = getFarmMessages();
+    const firstAreaKey = FARM_AREAS[0]!.key;
+    const firstAreaReward = COLLECTION_AREA_REWARDS[firstAreaKey] ?? 0;
+    const claimButtonLabel = claimMessages.collectionClaimAction(
+      formatMoney(firstAreaReward, DEFAULT_LOCALE)
+    );
+    const screen = await renderGame(lateGame, {
+      audio: {
+        isSupported: true,
+        playHarvest,
+        playComboMilestone: jest.fn(),
+        setBackgroundMusicEnabled: jest.fn(),
+      },
+    });
+
+    await waitFor(() => expect(screen.getByText(`${formatMoney(lateGame.gold)}G`)).toBeTruthy());
+
+    fireEvent.press(screen.getByLabelText(claimMessages.collectionButtonAccessibilityLabel));
+
+    await waitFor(() => expect(screen.getByText(claimButtonLabel)).toBeTruthy());
+    fireEvent.press(screen.getByText(claimButtonLabel));
+
+    expect(playHarvest).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(screen.getByText(claimMessages.collectionClaimedLabel)).toBeTruthy());
   });
 
   test('fires combo great milestone audio when combo crosses the great tier threshold', async () => {

@@ -1102,6 +1102,10 @@ export default function FarmGame({
       context: analyticsContext(),
     });
     toast(messages.collectionRewardClaimedToast(formatMoney(preview.awardedGold, locale)));
+    pulseGold();
+    if (gameSettings.soundEffectsEnabled && audio.isSupported) {
+      void audio.playHarvest();
+    }
   }
 
   function openAchievements() {
