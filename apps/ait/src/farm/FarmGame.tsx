@@ -496,11 +496,13 @@ export default function FarmGame({
   const getLocalizedAreaLabel = useCallback((areaKey: AreaKey) => getAreaLabel(areaKey, locale), [locale]);
 
   const [gameState, setGameState] = useState<GameState>(() => createInitialState());
-  // Mirror of gameState updated synchronously in the render body. Used by
-  // harvestCrop to pre-check plot harvestability without waiting for a re-render,
-  // so blocked harvests (empty/locked plots) don't advance the combo counter.
-  const gameStateRef = useRef(gameState);
-  gameStateRef.current = gameState;
+  // Tracks the number of harvests that have succeeded in the setGameState updater
+  // but whose effects haven't been flushed yet. Used inside the updater to compute
+  // the effective combo tier for rapid taps that all land in the same React batch —
+  // since updaters run sequentially, each tap sees the incremented count from all
+  // preceding taps in the batch, giving the correct tier without a probe or stale
+  // closure. Decremented in the effects flush when advanceCombo is called.
+  const pendingHarvestsRef = useRef(0);
   const [selectedTool, setSelectedTool] = useState<ToolKey>('harvest');
   const [selectedArea, setSelectedArea] = useState<AreaKey>(FIRST_AREA.key);
   const [prestigeArchetype, setPrestigeArchetype] = useState<RegionArchetypeKey>(
@@ -818,8 +820,10 @@ export default function FarmGame({
       if (gameSettings.soundEffectsEnabled && audio.isSupported) {
         void audio.playHarvest();
       }
-      // Combo is now advanced synchronously in harvestCrop (before setGameState)
-      // so rapid taps get correct per-tap tiers. No increment needed here.
+      // Advance the combo here (confirmed success) and release the pending slot
+      // so subsequent updaters see the accurate effective-combo base.
+      pendingHarvestsRef.current = Math.max(0, pendingHarvestsRef.current - 1);
+      advanceCombo(1);
     }
   }, [
     analyticsContext,
@@ -1252,6 +1256,7 @@ export default function FarmGame({
       comboTimerRef.current = null;
     }
     harvestComboRef.current = 0;
+    pendingHarvestsRef.current = 0;
     setHarvestCombo(0);
     setGameState((state) => prestigeFarm(state, prestigeArchetype, now)?.state ?? state);
     setSelectedArea(FIRST_AREA.key);
@@ -1433,6 +1438,7 @@ export default function FarmGame({
       comboTimerRef.current = null;
     }
     harvestComboRef.current = 0;
+    pendingHarvestsRef.current = 0;
     setHarvestCombo(0);
     setGameState(createInitialState());
     setSelectedArea(FIRST_AREA.key);
@@ -1467,36 +1473,34 @@ export default function FarmGame({
   function harvestCrop(index: number) {
     const now = Date.now();
     const effectId = ++commandEffectIdRef.current;
-    const comboMultiplier = getComboGoldMultiplier(harvestComboRef.current);
 
-    // Stable roll shared between the probe and the authoritative updater so the
-    // mutation outcome is identical even when the updater re-runs in StrictMode
-    // (same memoisation pattern as harvestAllCrops's rollByPlot).
+    // Stable mutation roll sampled once per tap so both StrictMode updater
+    // invocations use the same value (same pattern as harvestAllCrops rollByPlot).
     let capturedRoll: number | null = null;
     const getRoll = () => {
       if (capturedRoll == null) capturedRoll = Math.random();
       return capturedRoll;
     };
 
-    // Probe executeFarmGameCommand against the last-rendered state. This covers
-    // every blocked reason (empty/locked plot, area lock, etc.) so the combo
-    // only advances when the harvest is genuinely expected to succeed.
-    // setGameState always runs below — valid harvests are never silently dropped.
-    // If the committed state diverged from the probe base (rare concurrent update),
-    // the authoritative updater decides the final outcome independently.
-    const probeResult = executeFarmGameCommand(
-      gameStateRef.current,
-      { type: 'harvestCrop', plotIndex: index, comboMultiplier },
-      { now, rng: getRoll }
-    );
-    if (probeResult.status !== 'blocked') {
-      // Probe succeeded: advance the combo synchronously so rapid consecutive
-      // taps each compute the correct next-tier multiplier without waiting for
-      // a re-render.
-      advanceCombo(1);
-    }
+    // The combo multiplier is computed INSIDE the updater on its first invocation,
+    // using harvestComboRef.current + pendingHarvestsRef.current. Since React runs
+    // batched updaters sequentially, each successive tap sees the incremented count
+    // from all preceding taps in the same batch — rapid taps always get the correct
+    // tier with no probe, no stale closure, and no blocked-harvest false positives.
+    // The value is memoised via capturedMultiplier so StrictMode re-invocations
+    // apply the identical multiplier. pendingHarvestsRef is incremented on success
+    // (guarded by `counted` to survive StrictMode double-invoke) and decremented by
+    // the effects flush once advanceCombo has been called.
+    let capturedMultiplier: number | null = null;
+    let counted = false;
 
     setGameState((state) => {
+      if (capturedMultiplier == null) {
+        const effectiveCombo = harvestComboRef.current + pendingHarvestsRef.current;
+        capturedMultiplier = getComboGoldMultiplier(effectiveCombo);
+      }
+      const comboMultiplier = capturedMultiplier;
+
       const result = executeFarmGameCommand(
         state,
         { type: 'harvestCrop', plotIndex: index, comboMultiplier },
@@ -1505,6 +1509,12 @@ export default function FarmGame({
       if (result.status === 'blocked') {
         return state;
       }
+
+      if (!counted) {
+        counted = true;
+        pendingHarvestsRef.current += 1;
+      }
+
       const event = result.events[0];
       if (event?.type === 'cropHarvested') {
         pendingCommandEffectsRef.current.push({
