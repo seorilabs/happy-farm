@@ -151,7 +151,7 @@ const COMBO_GREAT_BONUS_RATIO = 0.1;
 const COMBO_LEGENDARY_BONUS_RATIO = 0.25;
 
 // Pure function: gold bonus for the given combo streak and base harvest value.
-// `streak` must already include the current harvest (i.e. comboAtTap + 1).
+// `streak` must already include the current harvest (i.e. the post-increment value).
 // Callers must guard with `!event.donated` before invoking; this function does
 // not inspect donation status and will return a non-zero bonus if baseGold > 0.
 export function computeComboGoldBonus(streak: number, baseGold: number): number {
@@ -1346,15 +1346,8 @@ export default function FarmGame({
   function harvestCrop(index: number) {
     const now = Date.now();
     const effectId = ++commandEffectIdRef.current;
-    // Eagerly capture and advance the combo ref so back-to-back harvests
-    // within a single render frame see the correct streak depth. The ref is
-    // the source of truth for bonus calculation; setHarvestCombo (for the
-    // display) is synced to it in the pending-effect drain loop after commit.
-    const comboAtTap = harvestComboRef.current;
-    harvestComboRef.current += 1;
-    // Timer is reset only on confirmed harvest (in the effect drain loop) so
-    // that blocked taps — tapping a plot that is growing or already empty —
-    // do not extend the combo window.
+    // Math.random() is captured outside the updater so both StrictMode
+    // invocations use the same roll (same pattern as harvestAllCrops).
     const roll = Math.random();
     setGameState((state) => {
       const result = executeFarmGameCommand(
@@ -1363,25 +1356,27 @@ export default function FarmGame({
         { now, rng: () => roll }
       );
       if (result.status === 'blocked') {
-        // CAS-style restore: only undo this tap's increment if a later tap hasn't
-        // already advanced the ref further. This is both StrictMode-safe (idempotent
-        // on double-invoke: first call restores, second call's check fails → no-op)
-        // and safe for rapid successive taps (doesn't clobber a later tap's value).
-        if (harvestComboRef.current === comboAtTap + 1) harvestComboRef.current = comboAtTap;
         return state;
       }
-      const event = result.events[0];
-      if (event?.type !== 'cropHarvested') {
-        // harvestCrop command always produces cropHarvested on success, but restore
-        // defensively in case that ever changes.
-        if (harvestComboRef.current === comboAtTap + 1) harvestComboRef.current = comboAtTap;
+      // Use find() so the crop event is located by type, not assumed to be [0].
+      const event = result.events.find((e) => e.type === 'cropHarvested');
+      if (event == null || event.type !== 'cropHarvested') {
         return result.state;
       }
 
-      // Combo gold bonus: applied only to non-donation gold harvests. We check
-      // event.donated explicitly rather than relying on goldGained===0 so the
-      // guard stays valid if donation semantics ever change.
-      const comboBonus = !event.donated ? computeComboGoldBonus(comboAtTap + 1, event.goldGained) : 0;
+      // Reuse the pendingCommandEffectsRef dedup guard to increment the streak
+      // ref exactly once per effectId, even under StrictMode double-invoke.
+      // This means the ref is updated only after a cropHarvested is confirmed —
+      // blocked taps never increment it, so streak inflation is impossible.
+      const alreadyQueued = pendingCommandEffectsRef.current.some((p) => p.id === effectId);
+      if (!alreadyQueued) {
+        harvestComboRef.current += 1;
+      }
+      const streak = harvestComboRef.current;
+
+      // Combo gold bonus: applied only to non-donation harvests. event.donated
+      // is checked explicitly so the guard stays valid if donation semantics change.
+      const comboBonus = !event.donated ? computeComboGoldBonus(streak, event.goldGained) : 0;
       const nextState =
         comboBonus > 0
           ? {
@@ -1394,9 +1389,7 @@ export default function FarmGame({
             }
           : result.state;
 
-      // Guard against StrictMode/concurrent double-invoke of this updater:
-      // push at most one effect per effectId (same pattern as harvestAllCrops).
-      if (!pendingCommandEffectsRef.current.some((pending) => pending.id === effectId)) {
+      if (!alreadyQueued) {
         pendingCommandEffectsRef.current.push({
           id: effectId,
           type: 'cropHarvested',
