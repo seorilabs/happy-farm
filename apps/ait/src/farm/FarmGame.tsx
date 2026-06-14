@@ -1277,14 +1277,16 @@ export default function FarmGame({
       }
 
       // Combo gold bonus: applied only to gold harvests (not donations) so the
-      // RP flow stays untouched. Uses the streak depth at the moment of tap so
-      // back-to-back harvests feel progressively more rewarding.
+      // RP flow stays untouched. `comboAtTap + 1` is the streak depth including
+      // this harvest (the ref hasn't been incremented yet at tap time), so the
+      // 5th consecutive harvest correctly enters the Great tier.
+      const comboWithThisHarvest = comboAtTap + 1;
       let comboBonus = 0;
       let nextState = result.state;
       if (!event.donated && event.goldGained > 0) {
-        if (comboAtTap >= COMBO_LEGENDARY_THRESHOLD) {
+        if (comboWithThisHarvest >= COMBO_LEGENDARY_THRESHOLD) {
           comboBonus = Math.floor(event.goldGained * COMBO_LEGENDARY_BONUS_RATIO);
-        } else if (comboAtTap >= COMBO_GREAT_THRESHOLD) {
+        } else if (comboWithThisHarvest >= COMBO_GREAT_THRESHOLD) {
           comboBonus = Math.floor(event.goldGained * COMBO_GREAT_BONUS_RATIO);
         }
         if (comboBonus > 0) {
@@ -1307,8 +1309,8 @@ export default function FarmGame({
         comboBonus,
         shouldShowHarvestBonusNudge:
           rewardedAd.isAdReady &&
-          getRewardedAdLimitStatus(result.state, 'harvestBonusAd', now).allowed &&
-          getHarvestBonusPromptStatus(result.state, now).allowed &&
+          getRewardedAdLimitStatus(nextState, 'harvestBonusAd', now).allowed &&
+          getHarvestBonusPromptStatus(nextState, now).allowed &&
           !event.boostActive,
       });
       return nextState;
