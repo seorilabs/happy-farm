@@ -531,6 +531,7 @@ export default function FarmGame({
       }
       if (prestigeGraduationTimerRef.current != null) {
         clearTimeout(prestigeGraduationTimerRef.current);
+        prestigeGraduationTimerRef.current = null;
       }
     };
   }, []);
@@ -2261,7 +2262,7 @@ function PrestigeGraduationOverlay({
   const starsEntrance = starsEntranceRef.current;
 
   useEffect(() => {
-    Animated.parallel([
+    const anim = Animated.parallel([
       Animated.timing(backdrop, {
         toValue: 1,
         duration: 220,
@@ -2294,14 +2295,9 @@ function PrestigeGraduationOverlay({
           useNativeDriver: true,
         }),
       ]),
-    ]).start();
-
-    return () => {
-      backdrop.stopAnimation();
-      cardScale.stopAnimation();
-      iconScale.stopAnimation();
-      starsEntrance.stopAnimation();
-    };
+    ]);
+    anim.start();
+    return () => anim.stop();
   }, [backdrop, cardScale, iconScale, starsEntrance]);
 
   const starsTranslateY = starsEntrance.interpolate({ inputRange: [0, 1], outputRange: [20, 0] });

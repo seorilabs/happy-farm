@@ -9,17 +9,21 @@ import {
   HARVEST_BONUS_AD_COOLDOWN_MS,
   HARVEST_BONUS_MULTIPLIER,
   MAX_PLOTS,
+  PRESTIGE_STARS_BASE,
+  REGION_ARCHETYPES,
   createFarmAnalytics,
   createInitialState,
   formatMoney,
   getAreaCropKeys,
   getMasteryThresholds,
   getPrestigeCost,
+  getRegionArchetypeLabel,
   type CropKey,
   type GameState,
   type RewardedAdController,
   type RewardedAdShowResult,
 } from '../../../../../packages/farm-core/src';
+import { getFarmMessages } from '../i18n';
 
 const NOW = Date.parse('2026-05-27T03:00:00.000Z');
 
@@ -700,6 +704,10 @@ describe('FarmGame UI flow', () => {
     expect(screen.getByText(/1호 농장 · 평원/)).toBeTruthy();
   });
 
+  const prestigeMessages = getFarmMessages();
+  const tundra = REGION_ARCHETYPES.find((a) => a.key === 'tundra')!;
+  const tundraName = getRegionArchetypeLabel(tundra.key, 'ko-KR').name;
+
   function createPrestigeReadyState(): GameState {
     const base = createInitialState();
     const legendCrops = getAreaCropKeys('legend_field');
@@ -714,9 +722,9 @@ describe('FarmGame UI flow', () => {
   async function triggerPrestige(screen: ReturnType<typeof render>) {
     await waitFor(() => expect(screen.getByText('★ 0')).toBeTruthy());
     fireEvent.press(screen.getByText('🗺️ 개척'));
-    fireEvent.press(screen.getByText(/개척 준비하기/));
-    fireEvent.press(screen.getByText(/설원/));
-    fireEvent.press(screen.getByText(/개척하고 ★3 받기/));
+    fireEvent.press(screen.getByText(prestigeMessages.prestigeAction(PRESTIGE_STARS_BASE)));
+    fireEvent.press(screen.getByText(new RegExp(tundraName)));
+    fireEvent.press(screen.getByText(prestigeMessages.prestigeConfirmAction(PRESTIGE_STARS_BASE)));
   }
 
   test('shows prestige graduation overlay on region pioneer', async () => {
@@ -725,10 +733,10 @@ describe('FarmGame UI flow', () => {
     await triggerPrestige(screen);
 
     const card = await waitFor(() => screen.getByTestId('prestige-graduation-card'));
-    expect(within(card).getByText('개척 완료!')).toBeTruthy();
-    expect(within(card).getByText('🏔️')).toBeTruthy();
-    expect(within(card).getByText('설원')).toBeTruthy();
-    expect(within(card).getByText('★ +3')).toBeTruthy();
+    expect(within(card).getByText(prestigeMessages.prestigeGraduationTitle)).toBeTruthy();
+    expect(within(card).getByText(tundra.icon)).toBeTruthy();
+    expect(within(card).getByText(tundraName)).toBeTruthy();
+    expect(within(card).getByText(prestigeMessages.prestigeGraduationStarsLabel(PRESTIGE_STARS_BASE))).toBeTruthy();
   });
 
   test('prestige graduation overlay auto-dismisses after the celebration duration', async () => {
