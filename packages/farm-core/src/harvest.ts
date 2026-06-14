@@ -184,7 +184,8 @@ export function performHarvest(gameState: GameState, plotIndex: number, options:
   // Clamp to [1, MAX_COMBO_MULTIPLIER]; reject non-finite or sub-1 values entirely.
   const comboMultiplier =
     typeof raw === 'number' && isFinite(raw) && raw >= 1 ? Math.min(raw, MAX_COMBO_MULTIPLIER) : 1;
-  const goldGained = donated ? 0 : Math.floor(saleValue * comboMultiplier);
+  const rawGold = donated ? 0 : saleValue;
+  const goldGained = comboMultiplier > 1 ? Math.floor(rawGold * comboMultiplier) : rawGold;
   const rpGained = donated ? getDonationRp(gameState, saleValue) : 0;
 
   const nextPlots = [...gameState.plots];

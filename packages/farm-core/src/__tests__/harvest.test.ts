@@ -167,6 +167,7 @@ describe('performHarvest — comboMultiplier', () => {
     expect(outcome!.goldGained).toBe(0);
     expect(outcome!.donated).toBe(true);
     expect(outcome!.rpGained).toBeGreaterThan(0);
+    expect(outcome!.state.gold).toBe(ripe.gold);
   });
 
   test('donation mode records effective comboMultiplier as 1 regardless of input', () => {

@@ -430,14 +430,20 @@ function useFarmSafeAreaInsets() {
 // effect enqueue are discarded together — no phantom sound/analytics can fire
 // for a harvest that never actually committed.
 //
-// Per-burst combo accuracy: state.pendingHarvestEffects.length counts confirmed
-// harvests from PRECEDING dispatches in the same batch. Adding baseCombo
-// (from prior batches) gives each rapid tap the correct multiplier tier even
-// when many taps land within the same render cycle.
+// Per-burst combo accuracy: state.comboCount (confirmed harvests from prior
+// effect-flush cycles) plus state.pendingHarvestEffects.length (confirmed
+// harvests from preceding dispatches in the same batch) gives each rapid tap
+// the correct multiplier tier even when many taps land within the same render
+// cycle. HARVEST_ALL increments state.comboCount atomically with the game
+// state change, so a manual tap immediately after a batch harvest also sees
+// the correct tier.
 
 type FarmUIState = {
   game: GameState;
+  /** Total harvests confirmed since the last combo reset (across all flush cycles). */
+  comboCount: number;
   pendingHarvestEffects: Array<Extract<PendingFarmCommandEffect, { type: 'cropHarvested' }>>;
+  pendingHarvestAllEffect: Extract<PendingFarmCommandEffect, { type: 'harvestedAll' }> | null;
 };
 
 type FarmUIAction =
@@ -446,15 +452,24 @@ type FarmUIAction =
       payload: {
         effectId: number;
         plotIndex: number;
-        /** harvestComboRef.current at dispatch time — confirmed combo from prior batches. */
-        baseCombo: number;
         /** Pre-sampled so the reducer is deterministic across StrictMode re-invocations. */
         rollValue: number;
         now: number;
         isAdReady: boolean;
       };
     }
+  | {
+      type: 'HARVEST_ALL';
+      payload: {
+        effectId: number;
+        /** Per-plot roll keyed by index — idempotent on StrictMode double-invoke. */
+        rollFor: (plotIndex: number) => number;
+        now: number;
+      };
+    }
   | { type: 'DRAIN_HARVEST_EFFECTS' }
+  | { type: 'DRAIN_HARVEST_ALL_EFFECT' }
+  | { type: 'RESET_COMBO' }
   | { type: 'SET_GAME'; updater: (prev: GameState) => GameState };
 
 function farmUIReducer(state: FarmUIState, action: FarmUIAction): FarmUIState {
@@ -462,12 +477,21 @@ function farmUIReducer(state: FarmUIState, action: FarmUIAction): FarmUIState {
     case 'SET_GAME':
       return { ...state, game: action.updater(state.game) };
 
-    case 'DRAIN_HARVEST_EFFECTS':
-      return state.pendingHarvestEffects.length > 0 ? { ...state, pendingHarvestEffects: [] } : state;
+    case 'DRAIN_HARVEST_EFFECTS': {
+      const count = state.pendingHarvestEffects.length;
+      if (count === 0) return state;
+      return { ...state, comboCount: state.comboCount + count, pendingHarvestEffects: [] };
+    }
+
+    case 'DRAIN_HARVEST_ALL_EFFECT':
+      return state.pendingHarvestAllEffect == null ? state : { ...state, pendingHarvestAllEffect: null };
+
+    case 'RESET_COMBO':
+      return state.comboCount === 0 ? state : { ...state, comboCount: 0 };
 
     case 'HARVEST_CROP': {
       const { payload } = action;
-      const effectiveCombo = payload.baseCombo + state.pendingHarvestEffects.length;
+      const effectiveCombo = state.comboCount + state.pendingHarvestEffects.length;
       const comboMultiplier = getComboGoldMultiplier(effectiveCombo);
       const result = executeFarmGameCommand(
         state.game,
@@ -478,6 +502,7 @@ function farmUIReducer(state: FarmUIState, action: FarmUIAction): FarmUIState {
       const event = result.events[0];
       if (event?.type !== 'cropHarvested') return { ...state, game: result.state };
       return {
+        ...state,
         game: result.state,
         pendingHarvestEffects: [
           ...state.pendingHarvestEffects,
@@ -493,6 +518,33 @@ function farmUIReducer(state: FarmUIState, action: FarmUIAction): FarmUIState {
               !event.boostActive,
           },
         ],
+      };
+    }
+
+    case 'HARVEST_ALL': {
+      const { payload } = action;
+      const result = performHarvestAll(state.game, { now: payload.now, rollFor: payload.rollFor });
+      const pendingHarvestAllEffect: Extract<PendingFarmCommandEffect, { type: 'harvestedAll' }> = {
+        id: payload.effectId,
+        type: 'harvestedAll',
+        fx: result.harvests.map(({ plotIndex, outcome }) => ({
+          plotIndex,
+          goldGained: outcome.goldGained,
+          special: outcome.mutation != null || outcome.newMasteryRank != null || outcome.boostActive,
+        })),
+        totalGoldGained: result.totalGoldGained,
+        totalRpGained: result.totalRpGained,
+        harvestedCount: result.harvestedCount,
+        specialCount: result.specialCount,
+      };
+      if (result.harvestedCount === 0) {
+        return { ...state, pendingHarvestAllEffect };
+      }
+      return {
+        ...state,
+        game: result.state,
+        comboCount: state.comboCount + result.harvestedCount,
+        pendingHarvestAllEffect,
       };
     }
   }
@@ -573,7 +625,9 @@ export default function FarmGame({
 
   const [farmState, farmDispatch] = useReducer(farmUIReducer, undefined, (): FarmUIState => ({
     game: createInitialState(),
+    comboCount: 0,
     pendingHarvestEffects: [],
+    pendingHarvestAllEffect: null,
   }));
   // Backward-compat aliases so the rest of the component is unchanged.
   const gameState = farmState.game;
@@ -637,8 +691,9 @@ export default function FarmGame({
       harvestComboRef.current = 0;
       setHarvestCombo(0);
       comboTimerRef.current = null;
+      farmDispatch({ type: 'RESET_COMBO' });
     }, COMBO_WINDOW_MS);
-  }, []);
+  }, [farmDispatch]);
   const showMasteryRankUpCelebration = useCallback((notice: Omit<MasteryRankUpNotice, 'id'>) => {
     if (masteryRankUpTimerRef.current != null) {
       clearTimeout(masteryRankUpTimerRef.current);
@@ -771,53 +826,6 @@ export default function FarmGame({
         continue;
       }
 
-      if (effect.type === 'harvestedAll') {
-        // Release the guard up front so it resets even if feedback below throws,
-        // and on a no-op (drift cleared the plots) — the button can never stick.
-        harvestAllInFlightRef.current = false;
-        if (effect.harvestedCount > 0) {
-          // One floating "+gold" per harvested plot keeps the spatial reward;
-          // the overlay self-caps concurrent pops, so a full grid stays cheap.
-          // The HUD pulse, toast, sound, and haptic fire once for the whole
-          // batch instead of stacking dozens of buzzes and toasts.
-          for (const fx of effect.fx) {
-            if (fx.goldGained > 0) {
-              harvestFxRef.current?.spawn(
-                fx.plotIndex,
-                `+${formatMoney(fx.goldGained, locale)}`,
-                fx.special ? 'special' : 'normal'
-              );
-            }
-          }
-          // Donation mode converts the batch into research points; key the toast
-          // on RP earned (not "gold === 0") so a future zero-value crop still
-          // reads as a harvest rather than a donation.
-          if (effect.totalRpGained > 0) {
-            toast(messages.harvestAllDonatedToast(formatMoney(effect.totalRpGained, locale), effect.harvestedCount));
-          } else {
-            toast(messages.harvestAllToast(formatMoney(effect.totalGoldGained, locale), effect.harvestedCount));
-          }
-          if (effect.totalGoldGained > 0) {
-            pulseGold();
-          }
-          farmAnalytics.trackHarvestAll({
-            harvestedCount: effect.harvestedCount,
-            totalGold: effect.totalGoldGained,
-            specialCount: effect.specialCount,
-            context: analyticsContext(),
-          });
-          if (effect.specialCount > 0 && Platform.OS === 'android') {
-            Vibration.vibrate([0, 24, 36, 48]);
-          } else {
-            Vibration.vibrate(50);
-          }
-          if (gameSettings.soundEffectsEnabled && audio.isSupported) {
-            void audio.playHarvest();
-          }
-          advanceCombo(effect.harvestedCount);
-        }
-        continue;
-      }
     }
   }, [
     analyticsContext,
@@ -825,10 +833,8 @@ export default function FarmGame({
     commandEffectVersion,
     farmAnalytics,
     gameSettings.soundEffectsEnabled,
-    advanceCombo,
     locale,
     messages,
-    pulseGold,
     toast,
   ]);
 
@@ -933,6 +939,66 @@ export default function FarmGame({
     setActiveSheet,
     setGameState,
     showMasteryRankUpCelebration,
+    toast,
+  ]);
+
+  // Process a committed harvestAll effect from the reducer. The guard flag and
+  // combo advance are both driven from here so they always reflect the actual
+  // committed state change rather than the moment of dispatch.
+  useEffect(() => {
+    if (farmState.pendingHarvestAllEffect == null) return;
+    const effect = farmState.pendingHarvestAllEffect;
+    // Release the guard first so a no-op (ripe set drifted) still unblocks.
+    harvestAllInFlightRef.current = false;
+    if (effect.harvestedCount > 0) {
+      for (const fx of effect.fx) {
+        if (fx.goldGained > 0) {
+          harvestFxRef.current?.spawn(
+            fx.plotIndex,
+            `+${formatMoney(fx.goldGained, locale)}`,
+            fx.special ? 'special' : 'normal'
+          );
+        }
+      }
+      // Donation mode converts the batch into research points; key the toast
+      // on RP earned (not "gold === 0") so a future zero-value crop still
+      // reads as a harvest rather than a donation.
+      if (effect.totalRpGained > 0) {
+        toast(messages.harvestAllDonatedToast(formatMoney(effect.totalRpGained, locale), effect.harvestedCount));
+      } else {
+        toast(messages.harvestAllToast(formatMoney(effect.totalGoldGained, locale), effect.harvestedCount));
+      }
+      if (effect.totalGoldGained > 0) {
+        pulseGold();
+      }
+      farmAnalytics.trackHarvestAll({
+        harvestedCount: effect.harvestedCount,
+        totalGold: effect.totalGoldGained,
+        specialCount: effect.specialCount,
+        context: analyticsContext(),
+      });
+      if (effect.specialCount > 0 && Platform.OS === 'android') {
+        Vibration.vibrate([0, 24, 36, 48]);
+      } else {
+        Vibration.vibrate(50);
+      }
+      if (gameSettings.soundEffectsEnabled && audio.isSupported) {
+        void audio.playHarvest();
+      }
+      advanceCombo(effect.harvestedCount);
+    }
+    farmDispatch({ type: 'DRAIN_HARVEST_ALL_EFFECT' });
+  }, [
+    farmState.pendingHarvestAllEffect,
+    advanceCombo,
+    analyticsContext,
+    audio,
+    farmAnalytics,
+    farmDispatch,
+    gameSettings.soundEffectsEnabled,
+    locale,
+    messages,
+    pulseGold,
     toast,
   ]);
 
@@ -1352,9 +1418,12 @@ export default function FarmGame({
       comboTimerRef.current = null;
     }
     harvestComboRef.current = 0;
+    harvestAllInFlightRef.current = false;
     setHarvestCombo(0);
     setGameState((state) => prestigeFarm(state, prestigeArchetype, now)?.state ?? state);
     farmDispatch({ type: 'DRAIN_HARVEST_EFFECTS' });
+    farmDispatch({ type: 'DRAIN_HARVEST_ALL_EFFECT' });
+    farmDispatch({ type: 'RESET_COMBO' });
     setSelectedArea(FIRST_AREA.key);
     setSelectedTool('harvest');
     setActiveSheet(null);
@@ -1534,9 +1603,12 @@ export default function FarmGame({
       comboTimerRef.current = null;
     }
     harvestComboRef.current = 0;
+    harvestAllInFlightRef.current = false;
     setHarvestCombo(0);
     setGameState(createInitialState());
     farmDispatch({ type: 'DRAIN_HARVEST_EFFECTS' });
+    farmDispatch({ type: 'DRAIN_HARVEST_ALL_EFFECT' });
+    farmDispatch({ type: 'RESET_COMBO' });
     setSelectedArea(FIRST_AREA.key);
     setSelectedTool('harvest');
     setActiveSheet(null);
@@ -1569,14 +1641,14 @@ export default function FarmGame({
   function harvestCrop(index: number) {
     // Dispatch through the harvest reducer: game state + harvest effect are
     // committed atomically (no phantom effects if a concurrent render is aborted).
-    // state.pendingHarvestEffects.length inside the reducer counts preceding
-    // confirmed harvests in the same batch, giving each tap the correct combo tier.
+    // The reducer reads state.comboCount (confirmed prior harvests) plus
+    // state.pendingHarvestEffects.length (preceding harvests in the same batch)
+    // to compute the correct combo tier without touching any external ref.
     farmDispatch({
       type: 'HARVEST_CROP',
       payload: {
         effectId: ++commandEffectIdRef.current,
         plotIndex: index,
-        baseCombo: harvestComboRef.current,
         rollValue: Math.random(),
         now: Date.now(),
         isAdReady: rewardedAd.isAdReady,
@@ -1594,47 +1666,20 @@ export default function FarmGame({
 
     const now = Date.now();
     const effectId = ++commandEffectIdRef.current;
-    // One stable roll per plot index — not a flat sequence. Built outside the
-    // updater so a StrictMode double-invoke reuses the same rolls, and keyed by
-    // index so a plot's outcome never shifts with the surrounding ripe set.
+    // One stable roll per plot index — not a flat sequence. Built here so a
+    // StrictMode double-invoke of the reducer reuses the same closure and returns
+    // identical rolls (rollByPlot is already populated on the second call).
     const rollByPlot: Record<number, number> = {};
     const rollFor = (plotIndex: number) => {
       const existing = rollByPlot[plotIndex];
-      if (existing != null) {
-        return existing;
-      }
+      if (existing != null) return existing;
       const roll = Math.random();
       rollByPlot[plotIndex] = roll;
       return roll;
     };
 
     harvestAllInFlightRef.current = true;
-    setGameState((state) => {
-      // Compute on the authoritative committed state and queue the feedback from
-      // here, so the FX/toast/analytics always reflect exactly what was harvested
-      // even if a concurrent tick shifted the ripe set after this tap.
-      const result = performHarvestAll(state, { now, rollFor });
-      // Guard the queue against a StrictMode/concurrent double-invoke of this
-      // updater: keep at most one effect per id. (The drain loop also dedupes by
-      // id, so feedback never doubles either way — this just keeps the queue clean.)
-      if (!pendingCommandEffectsRef.current.some((pending) => pending.id === effectId)) {
-        pendingCommandEffectsRef.current.push({
-          id: effectId,
-          type: 'harvestedAll',
-          fx: result.harvests.map(({ plotIndex, outcome }) => ({
-            plotIndex,
-            goldGained: outcome.goldGained,
-            special: outcome.mutation != null || outcome.newMasteryRank != null || outcome.boostActive,
-          })),
-          totalGoldGained: result.totalGoldGained,
-          totalRpGained: result.totalRpGained,
-          harvestedCount: result.harvestedCount,
-          specialCount: result.specialCount,
-        });
-      }
-      return result.harvestedCount > 0 ? result.state : state;
-    });
-    setCommandEffectVersion((version) => version + 1);
+    farmDispatch({ type: 'HARVEST_ALL', payload: { effectId, rollFor, now } });
   }
 
   function handlePlotClick(index: number) {
