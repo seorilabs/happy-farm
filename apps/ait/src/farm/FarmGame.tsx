@@ -157,6 +157,15 @@ const SHEET_ANIMATION_DURATION_MS = 180;
 const SHEET_DRAG_HIT_TARGET_HEIGHT = 36;
 const EMPTY_SAFE_AREA_INSETS = { top: 0, right: 0, bottom: 0, left: 0 };
 
+// Module-level hook so test suites can spy on gold pulses without touching props.
+// Only active outside production; the setter is a no-op when NODE_ENV=production.
+let _goldPulseTestHook: (() => void) | undefined;
+export function __setGoldPulseTestHook(fn: (() => void) | undefined): void {
+  if (process.env.NODE_ENV !== 'production') {
+    _goldPulseTestHook = fn;
+  }
+}
+
 function getFirstArea() {
   const area = FARM_AREAS[0];
   if (area == null) {
@@ -288,10 +297,6 @@ export type FarmGameProps = {
   audio?: FarmGameAudio;
   market?: FarmGameMarket;
   preferredLocale?: SupportedLocale;
-  // Test-only hook: called immediately after pulseGold() fires, enabling spies
-  // to assert the gold-pulse path without coupling tests to Animated internals.
-  // Must not be used in production code.
-  __testOnlyOnGoldPulse?: () => void;
 };
 
 type GetAnalyticsContext = (state?: GameState) => GameAnalyticsContext;
@@ -424,7 +429,6 @@ export default function FarmGame({
   audio = defaultFarmAudio,
   market = 'appsInToss',
   preferredLocale = DEFAULT_LOCALE,
-  __testOnlyOnGoldPulse: onGoldPulse,
 }: FarmGameProps = {}) {
   const insets = useFarmSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
@@ -1108,7 +1112,9 @@ export default function FarmGame({
     });
     toast(messages.collectionRewardClaimedToast(formatMoney(preview.awardedGold, locale)));
     pulseGold();
-    onGoldPulse?.();
+    if (process.env.NODE_ENV !== 'production') {
+      _goldPulseTestHook?.();
+    }
     if (gameSettings.soundEffectsEnabled && audio.isSupported) {
       try {
         void Promise.resolve(audio.playHarvest() as unknown).catch(() => undefined);

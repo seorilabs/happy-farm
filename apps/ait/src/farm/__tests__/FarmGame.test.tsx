@@ -42,6 +42,7 @@ const {
   PRESTIGE_GRADUATION_CELEBRATION_DURATION_MS,
   COMBO_GREAT_THRESHOLD,
   COMBO_LEGENDARY_THRESHOLD,
+  __setGoldPulseTestHook,
 } = farmGameModule;
 const mockPersistence = {
   readPersistedGameState: jest.fn<Promise<GameState>, []>(),
@@ -819,11 +820,9 @@ describe('FarmGame UI flow', () => {
     expect(playHarvest).toHaveBeenCalledTimes(1);
   });
 
-  test('plays harvest sound and pulses gold when a collection reward is claimed', async () => {
+  describe('collection reward claim side-effects', () => {
     // createLateGameState() discovers all crops, making all area collection rewards claimable.
     const lateGame = createLateGameState();
-    const playHarvest = jest.fn();
-    const onGoldPulse = jest.fn();
     const claimMessages = getFarmMessages();
     const firstAreaKey = FARM_AREAS[0]!.key;
     const firstAreaReward = COLLECTION_AREA_REWARDS[firstAreaKey];
@@ -831,102 +830,88 @@ describe('FarmGame UI flow', () => {
     const claimButtonLabel = claimMessages.collectionClaimAction(
       formatMoney(firstAreaReward, DEFAULT_LOCALE)
     );
-    const screen = await renderGame(
-      lateGame,
-      {
-        audio: {
-          isSupported: true,
-          playHarvest,
-          playComboMilestone: jest.fn(),
-          setBackgroundMusicEnabled: jest.fn(),
+
+    let onGoldPulse: jest.Mock;
+    beforeEach(() => {
+      onGoldPulse = jest.fn();
+      __setGoldPulseTestHook(onGoldPulse);
+    });
+    afterEach(() => {
+      __setGoldPulseTestHook(undefined);
+    });
+
+    async function renderAndClaim(playHarvest: jest.Mock, savedSettings: unknown) {
+      const screen = await renderGame(
+        lateGame,
+        {
+          audio: {
+            isSupported: true,
+            playHarvest,
+            playComboMilestone: jest.fn(),
+            setBackgroundMusicEnabled: jest.fn(),
+          },
         },
-        __testOnlyOnGoldPulse: onGoldPulse,
-      },
-      { soundEffectsEnabled: true }
-    );
+        savedSettings
+      );
+      await waitFor(() => expect(screen.getByText(`${formatMoney(lateGame.gold)}G`)).toBeTruthy());
+      fireEvent.press(screen.getByLabelText(claimMessages.collectionButtonAccessibilityLabel));
+      await waitFor(() => expect(screen.getByText(claimButtonLabel)).toBeTruthy());
+      fireEvent.press(screen.getByText(claimButtonLabel));
+      return screen;
+    }
 
-    await waitFor(() => expect(screen.getByText(`${formatMoney(lateGame.gold)}G`)).toBeTruthy());
+    test('plays harvest sound and pulses gold when sound effects are enabled', async () => {
+      const playHarvest = jest.fn();
+      const screen = await renderAndClaim(playHarvest, { soundEffectsEnabled: true });
+      await waitFor(() => expect(playHarvest).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(onGoldPulse).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(screen.getByText(claimMessages.collectionClaimedLabel)).toBeTruthy());
+    });
 
-    fireEvent.press(screen.getByLabelText(claimMessages.collectionButtonAccessibilityLabel));
+    test('pulses gold but skips harvest sound when sound effects are disabled', async () => {
+      const playHarvest = jest.fn();
+      const screen = await renderAndClaim(playHarvest, { soundEffectsEnabled: false });
+      await waitFor(() => expect(screen.getByText(claimMessages.collectionClaimedLabel)).toBeTruthy());
+      await waitFor(() => expect(onGoldPulse).toHaveBeenCalledTimes(1));
+      expect(playHarvest).not.toHaveBeenCalled();
+    });
 
-    await waitFor(() => expect(screen.getByText(claimButtonLabel)).toBeTruthy());
-    fireEvent.press(screen.getByText(claimButtonLabel));
-
-    await waitFor(() => expect(playHarvest).toHaveBeenCalledTimes(1));
-    await waitFor(() => expect(onGoldPulse).toHaveBeenCalledTimes(1));
-    await waitFor(() => expect(screen.getByText(claimMessages.collectionClaimedLabel)).toBeTruthy());
-  });
-
-  test('does not play harvest sound when sound effects are disabled, but still pulses gold', async () => {
-    // createLateGameState() discovers all crops, making all area collection rewards claimable.
-    const lateGame = createLateGameState();
-    const playHarvest = jest.fn();
-    const onGoldPulse = jest.fn();
-    const claimMessages = getFarmMessages();
-    const firstAreaKey = FARM_AREAS[0]!.key;
-    const firstAreaReward = COLLECTION_AREA_REWARDS[firstAreaKey];
-    if (firstAreaReward == null) throw new Error(`No collection reward defined for area ${firstAreaKey}`);
-    const claimButtonLabel = claimMessages.collectionClaimAction(
-      formatMoney(firstAreaReward, DEFAULT_LOCALE)
-    );
-    const screen = await renderGame(
-      lateGame,
-      {
-        audio: {
-          isSupported: true,
-          playHarvest,
-          playComboMilestone: jest.fn(),
-          setBackgroundMusicEnabled: jest.fn(),
+    test('pulses gold but skips harvest sound when audio is unsupported', async () => {
+      const playHarvest = jest.fn();
+      const screen = await renderGame(
+        lateGame,
+        {
+          audio: {
+            isSupported: false,
+            playHarvest,
+            playComboMilestone: jest.fn(),
+            setBackgroundMusicEnabled: jest.fn(),
+          },
         },
-        __testOnlyOnGoldPulse: onGoldPulse,
-      },
-      { soundEffectsEnabled: false }
-    );
+        { soundEffectsEnabled: true }
+      );
+      await waitFor(() => expect(screen.getByText(`${formatMoney(lateGame.gold)}G`)).toBeTruthy());
+      fireEvent.press(screen.getByLabelText(claimMessages.collectionButtonAccessibilityLabel));
+      await waitFor(() => expect(screen.getByText(claimButtonLabel)).toBeTruthy());
+      fireEvent.press(screen.getByText(claimButtonLabel));
+      await waitFor(() => expect(screen.getByText(claimMessages.collectionClaimedLabel)).toBeTruthy());
+      await waitFor(() => expect(onGoldPulse).toHaveBeenCalledTimes(1));
+      expect(playHarvest).not.toHaveBeenCalled();
+    });
 
-    await waitFor(() => expect(screen.getByText(`${formatMoney(lateGame.gold)}G`)).toBeTruthy());
-    fireEvent.press(screen.getByLabelText(claimMessages.collectionButtonAccessibilityLabel));
-    await waitFor(() => expect(screen.getByText(claimButtonLabel)).toBeTruthy());
-    fireEvent.press(screen.getByText(claimButtonLabel));
+    test('claim flow completes when playHarvest throws synchronously', async () => {
+      const playHarvest = jest.fn(() => { throw new Error('audio error'); });
+      const screen = await renderAndClaim(playHarvest, { soundEffectsEnabled: true });
+      await waitFor(() => expect(screen.getByText(claimMessages.collectionClaimedLabel)).toBeTruthy());
+      await waitFor(() => expect(onGoldPulse).toHaveBeenCalledTimes(1));
+    });
 
-    await waitFor(() => expect(screen.getByText(claimMessages.collectionClaimedLabel)).toBeTruthy());
-    await waitFor(() => expect(onGoldPulse).toHaveBeenCalledTimes(1));
-    expect(playHarvest).not.toHaveBeenCalled();
-  });
-
-  test('does not play harvest sound when audio is unsupported, but still pulses gold', async () => {
-    // createLateGameState() discovers all crops, making all area collection rewards claimable.
-    const lateGame = createLateGameState();
-    const playHarvest = jest.fn();
-    const onGoldPulse = jest.fn();
-    const claimMessages = getFarmMessages();
-    const firstAreaKey = FARM_AREAS[0]!.key;
-    const firstAreaReward = COLLECTION_AREA_REWARDS[firstAreaKey];
-    if (firstAreaReward == null) throw new Error(`No collection reward defined for area ${firstAreaKey}`);
-    const claimButtonLabel = claimMessages.collectionClaimAction(
-      formatMoney(firstAreaReward, DEFAULT_LOCALE)
-    );
-    const screen = await renderGame(
-      lateGame,
-      {
-        audio: {
-          isSupported: false,
-          playHarvest,
-          playComboMilestone: jest.fn(),
-          setBackgroundMusicEnabled: jest.fn(),
-        },
-        __testOnlyOnGoldPulse: onGoldPulse,
-      },
-      { soundEffectsEnabled: true }
-    );
-
-    await waitFor(() => expect(screen.getByText(`${formatMoney(lateGame.gold)}G`)).toBeTruthy());
-    fireEvent.press(screen.getByLabelText(claimMessages.collectionButtonAccessibilityLabel));
-    await waitFor(() => expect(screen.getByText(claimButtonLabel)).toBeTruthy());
-    fireEvent.press(screen.getByText(claimButtonLabel));
-
-    await waitFor(() => expect(screen.getByText(claimMessages.collectionClaimedLabel)).toBeTruthy());
-    await waitFor(() => expect(onGoldPulse).toHaveBeenCalledTimes(1));
-    expect(playHarvest).not.toHaveBeenCalled();
+    test('claim flow completes when playHarvest returns a rejected Promise', async () => {
+      const playHarvest = jest.fn(() => Promise.reject(new Error('audio error')));
+      const screen = await renderAndClaim(playHarvest, { soundEffectsEnabled: true });
+      await waitFor(() => expect(screen.getByText(claimMessages.collectionClaimedLabel)).toBeTruthy());
+      await waitFor(() => expect(onGoldPulse).toHaveBeenCalledTimes(1));
+    });
   });
 
   test('fires combo great milestone audio when combo crosses the great tier threshold', async () => {
