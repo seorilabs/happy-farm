@@ -712,7 +712,7 @@ describe('FarmGame UI flow', () => {
   beforeAll(() => {
     const found = REGION_ARCHETYPES.find((a) => a.key === 'tundra');
     expect(found).toBeDefined();
-    if (found == null) return;
+    if (found == null) throw new Error('tundra archetype missing from REGION_ARCHETYPES');
     tundra = found;
     tundraName = getRegionArchetypeLabel(found.key, DEFAULT_LOCALE).name;
   });

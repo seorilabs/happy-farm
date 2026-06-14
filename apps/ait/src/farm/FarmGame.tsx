@@ -2235,7 +2235,8 @@ function MasteryRankUpOverlay({
 // completes a prestige — the game's biggest milestone. The region icon springs
 // in with extra energy; stars slide up from below so the reward reads as the
 // climax. Auto-dismisses after PRESTIGE_GRADUATION_CELEBRATION_DURATION_MS;
-// tapping anywhere dismisses early.
+// tapping anywhere on the overlay (backdrop or card) also dismisses early —
+// the inner View uses pointerEvents="none" so all touches reach the Pressable.
 function PrestigeGraduationOverlay({
   notice,
   messages,
