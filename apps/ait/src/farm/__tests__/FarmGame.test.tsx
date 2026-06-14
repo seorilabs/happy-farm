@@ -898,10 +898,7 @@ describe('FarmGame UI flow', () => {
     // tests for formatRemainingTime; here we only verify the element is rendered.
     const remaining = screen.getByTestId('boost-remaining');
     expect(remaining).toBeTruthy();
-    const remainingText = remaining.props.children;
-    expect(remainingText).not.toBeNull();
-    expect(remainingText).not.toBeUndefined();
-    expect(String(remainingText).trim().length).toBeGreaterThan(0);
+    expect(remaining).toHaveTextContent(/\S+/);
   });
 
   test('greets a returning player with an offline progress recap', async () => {
