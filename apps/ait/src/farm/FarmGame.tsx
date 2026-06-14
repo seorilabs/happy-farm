@@ -1106,7 +1106,7 @@ export default function FarmGame({
       context: analyticsContext(),
     });
     toast(messages.collectionRewardClaimedToast(formatMoney(preview.awardedGold, locale)));
-    Vibration.vibrate(50);
+    try { Vibration.vibrate(50); } catch {} // non-critical haptic
     pulseGold();
     _callGoldPulseHook();
     if (gameSettings.soundEffectsEnabled && audio.isSupported) {
@@ -1142,7 +1142,7 @@ export default function FarmGame({
       context: analyticsContext(),
     });
     toast(messages.achievementClaimedToast(preview.starsAwarded));
-    Vibration.vibrate(50);
+    try { Vibration.vibrate(50); } catch {} // non-critical haptic
     if (gameSettings.soundEffectsEnabled && audio.isSupported) {
       try {
         void Promise.resolve(audio.playHarvest()).catch(() => undefined);
