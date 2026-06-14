@@ -2650,7 +2650,7 @@ function ToolButton({
           <View
             style={[
               styles.toolMasteryFill,
-              { transform: [{ scaleX: Math.max(0, Math.min(1, masteryProgress)) }] },
+              { width: `${Math.round(Math.max(0, Math.min(1, masteryProgress)) * 100)}%` },
             ]}
           />
         </View>
@@ -3366,10 +3366,9 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   toolMasteryFill: {
-    width: '100%',
     height: '100%',
     backgroundColor: '#f59e0b',
-    transformOrigin: 'left center',
+    borderBottomLeftRadius: 8,
   },
   lockedNotice: {
     width: 260,
