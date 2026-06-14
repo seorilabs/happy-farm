@@ -829,3 +829,28 @@ describe('getNextAreaGoal', () => {
     expect(result).toMatchObject({ kind: 'upgrade', areaKey: 'vegetable_field', current: 0, total: 1 });
   });
 });
+
+// ---------------------------------------------------------------------------
+// UI tests for NextGoalBar component
+// ---------------------------------------------------------------------------
+describe('NextGoalBar', () => {
+  test('shows the ready state bar and opens the shop when tapped', async () => {
+    // vegetable_field requirements: 300G + 4 crop types + Lv.1 upgrade (already met at start).
+    const readyAreaState: GameState = {
+      ...createInitialState(),
+      gold: 300,
+      harvestedCropKeys: ['carrot', 'wheat', 'potato', 'onion'] as GameState['harvestedCropKeys'],
+    };
+    const screen = await renderGame(readyAreaState);
+
+    // The ready bar should appear once the game loads.
+    await waitFor(() =>
+      expect(screen.getByText('🔓 채소 밭 해금 준비 완료! 상점에서 열기')).toBeTruthy()
+    );
+
+    // Tapping it should open the shop sheet.
+    fireEvent.press(screen.getByText('🔓 채소 밭 해금 준비 완료! 상점에서 열기'));
+
+    expect(screen.getByText('농장 관리소')).toBeTruthy();
+  });
+});

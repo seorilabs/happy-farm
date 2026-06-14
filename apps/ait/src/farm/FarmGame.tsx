@@ -2163,17 +2163,14 @@ function NextGoalBar({
   }
 
   let label: string;
-  let ratio: number;
   if (goal.kind === 'gold') {
     label = messages.nextGoalGold(areaName, formatMoney(goal.total - goal.current, locale));
-    ratio = goal.current / goal.total;
   } else if (goal.kind === 'harvest') {
     label = messages.nextGoalHarvest(areaName, goal.current, goal.total);
-    ratio = goal.current / goal.total;
   } else {
     label = messages.nextGoalUpgrade(areaName, goal.current, goal.total);
-    ratio = goal.current / goal.total;
   }
+  const ratio = goal.total > 0 ? Math.max(0, Math.min(goal.current / goal.total, 1)) : 0;
 
   return (
     <View style={styles.nextGoalBar}>
@@ -2181,7 +2178,7 @@ function NextGoalBar({
         {label}
       </Text>
       <View style={styles.nextGoalTrack}>
-        <View style={[styles.nextGoalFill, { width: `${Math.min(Math.round(ratio * 100), 100)}%` }]} />
+        <View style={[styles.nextGoalFill, { width: `${Math.round(ratio * 100)}%` }]} />
       </View>
     </View>
   );
