@@ -496,13 +496,16 @@ export default function FarmGame({
   const getLocalizedAreaLabel = useCallback((areaKey: AreaKey) => getAreaLabel(areaKey, locale), [locale]);
 
   const [gameState, setGameState] = useState<GameState>(() => createInitialState());
-  // Tracks the number of harvests that have succeeded in the setGameState updater
-  // but whose effects haven't been flushed yet. Used inside the updater to compute
-  // the effective combo tier for rapid taps that all land in the same React batch —
-  // since updaters run sequentially, each tap sees the incremented count from all
-  // preceding taps in the batch, giving the correct tier without a probe or stale
-  // closure. Decremented in the effects flush when advanceCombo is called.
-  const pendingHarvestsRef = useRef(0);
+  // Set of effectIds for harvests that succeeded in the setGameState updater but
+  // whose effects haven't been flushed yet. .size drives the effective-combo
+  // calculation inside the updater — since updaters are sequential, each tap sees
+  // the set grown by all preceding taps in the batch, giving the correct tier
+  // without a probe or stale closure. Set semantics make updater re-invocations
+  // (StrictMode double-invoke) idempotent. The effectId is added only alongside the
+  // cropHarvested effect push and removed in the effects flush, so increment and
+  // decrement are structurally tied to the same event rather than a loose count.
+  // This mirrors the effectId-deduplication pattern used by pendingCommandEffectsRef.
+  const pendingHarvestIdsRef = useRef(new Set<number>());
   const [selectedTool, setSelectedTool] = useState<ToolKey>('harvest');
   const [selectedArea, setSelectedArea] = useState<AreaKey>(FIRST_AREA.key);
   const [prestigeArchetype, setPrestigeArchetype] = useState<RegionArchetypeKey>(
@@ -822,7 +825,7 @@ export default function FarmGame({
       }
       // Advance the combo here (confirmed success) and release the pending slot
       // so subsequent updaters see the accurate effective-combo base.
-      pendingHarvestsRef.current = Math.max(0, pendingHarvestsRef.current - 1);
+      pendingHarvestIdsRef.current.delete(effect.id);
       advanceCombo(1);
     }
   }, [
@@ -1256,7 +1259,7 @@ export default function FarmGame({
       comboTimerRef.current = null;
     }
     harvestComboRef.current = 0;
-    pendingHarvestsRef.current = 0;
+    pendingHarvestIdsRef.current.clear();
     setHarvestCombo(0);
     setGameState((state) => prestigeFarm(state, prestigeArchetype, now)?.state ?? state);
     setSelectedArea(FIRST_AREA.key);
@@ -1438,7 +1441,7 @@ export default function FarmGame({
       comboTimerRef.current = null;
     }
     harvestComboRef.current = 0;
-    pendingHarvestsRef.current = 0;
+    pendingHarvestIdsRef.current.clear();
     setHarvestCombo(0);
     setGameState(createInitialState());
     setSelectedArea(FIRST_AREA.key);
@@ -1483,20 +1486,19 @@ export default function FarmGame({
     };
 
     // The combo multiplier is computed INSIDE the updater on its first invocation,
-    // using harvestComboRef.current + pendingHarvestsRef.current. Since React runs
-    // batched updaters sequentially, each successive tap sees the incremented count
+    // using harvestComboRef.current + pendingHarvestIdsRef.current.size. Since React
+    // runs batched updaters sequentially, each successive tap sees the updated size
     // from all preceding taps in the same batch — rapid taps always get the correct
     // tier with no probe, no stale closure, and no blocked-harvest false positives.
     // The value is memoised via capturedMultiplier so StrictMode re-invocations
-    // apply the identical multiplier. pendingHarvestsRef is incremented on success
-    // (guarded by `counted` to survive StrictMode double-invoke) and decremented by
-    // the effects flush once advanceCombo has been called.
+    // apply the identical multiplier. pendingHarvestIdsRef.current is grown on
+    // success (Set.add is idempotent across re-invocations) and shrunk by the
+    // effects flush once advanceCombo has been called.
     let capturedMultiplier: number | null = null;
-    let counted = false;
 
     setGameState((state) => {
       if (capturedMultiplier == null) {
-        const effectiveCombo = harvestComboRef.current + pendingHarvestsRef.current;
+        const effectiveCombo = harvestComboRef.current + pendingHarvestIdsRef.current.size;
         capturedMultiplier = getComboGoldMultiplier(effectiveCombo);
       }
       const comboMultiplier = capturedMultiplier;
@@ -1510,13 +1512,12 @@ export default function FarmGame({
         return state;
       }
 
-      if (!counted) {
-        counted = true;
-        pendingHarvestsRef.current += 1;
-      }
-
       const event = result.events[0];
       if (event?.type === 'cropHarvested') {
+        // Add to the pending set before pushing the effect so the decrement in
+        // the effects flush (which deletes this same effectId) keeps the set
+        // balanced. Set.add is idempotent across StrictMode re-invocations.
+        pendingHarvestIdsRef.current.add(effectId);
         pendingCommandEffectsRef.current.push({
           id: effectId,
           type: 'cropHarvested',
