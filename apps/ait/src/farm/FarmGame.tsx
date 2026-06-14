@@ -315,6 +315,7 @@ type PendingFarmCommandEffect =
   | {
       id: number;
       type: 'harvestedAll';
+      now: number;
       fx: { plotIndex: number; goldGained: number; special: boolean }[];
       totalGoldGained: number;
       totalRpGained: number;
@@ -477,11 +478,8 @@ function farmUIReducer(state: FarmUIState, action: FarmUIAction): FarmUIState {
     case 'SET_GAME':
       return { ...state, game: action.updater(state.game) };
 
-    case 'DRAIN_HARVEST_EFFECTS': {
-      const count = state.pendingHarvestEffects.length;
-      if (count === 0) return state;
-      return { ...state, comboCount: state.comboCount + count, pendingHarvestEffects: [] };
-    }
+    case 'DRAIN_HARVEST_EFFECTS':
+      return state.pendingHarvestEffects.length === 0 ? state : { ...state, pendingHarvestEffects: [] };
 
     case 'DRAIN_HARVEST_ALL_EFFECT':
       return state.pendingHarvestAllEffect == null ? state : { ...state, pendingHarvestAllEffect: null };
@@ -491,7 +489,9 @@ function farmUIReducer(state: FarmUIState, action: FarmUIAction): FarmUIState {
 
     case 'HARVEST_CROP': {
       const { payload } = action;
-      const effectiveCombo = state.comboCount + state.pendingHarvestEffects.length;
+      // comboCount is incremented atomically on every successful harvest, so
+      // effectiveCombo is always the confirmed count — no need to add pending.length.
+      const effectiveCombo = state.comboCount;
       const comboMultiplier = getComboGoldMultiplier(effectiveCombo);
       const result = executeFarmGameCommand(
         state.game,
@@ -500,10 +500,11 @@ function farmUIReducer(state: FarmUIState, action: FarmUIAction): FarmUIState {
       );
       if (result.status !== 'applied') return state;
       const event = result.events[0];
-      if (event?.type !== 'cropHarvested') return { ...state, game: result.state };
+      if (event?.type !== 'cropHarvested') return { ...state, game: result.state, comboCount: state.comboCount + 1 };
       return {
         ...state,
         game: result.state,
+        comboCount: state.comboCount + 1,
         pendingHarvestEffects: [
           ...state.pendingHarvestEffects,
           {
@@ -527,6 +528,7 @@ function farmUIReducer(state: FarmUIState, action: FarmUIAction): FarmUIState {
       const pendingHarvestAllEffect: Extract<PendingFarmCommandEffect, { type: 'harvestedAll' }> = {
         id: payload.effectId,
         type: 'harvestedAll',
+        now: payload.now,
         fx: result.harvests.map(({ plotIndex, outcome }) => ({
           plotIndex,
           goldGained: outcome.goldGained,
@@ -636,9 +638,9 @@ export default function FarmGame({
   // Backward-compat aliases so the rest of the component is unchanged.
   const gameState = farmState.game;
   // Combo displayed to the player — same source as the bonus multiplier the reducer
-  // computes. Pending effects count committed-but-not-yet-drained taps so the
-  // display updates in the same render that the reducer commits each harvest.
-  const comboDisplay = farmState.comboCount + farmState.pendingHarvestEffects.length;
+  // computes. comboCount is incremented atomically with each HARVEST_CROP dispatch,
+  // so the display is always in sync with the actual committed harvest count.
+  const comboDisplay = farmState.comboCount;
   const setGameState = useCallback(
     (next: GameState | ((prev: GameState) => GameState)) => {
       farmDispatch({ type: 'SET_GAME', updater: typeof next === 'function' ? next : () => next });
@@ -686,18 +688,18 @@ export default function FarmGame({
       }),
     ]).start();
   }, [goldPulse]);
-  // Resets the combo expiry window. Called after every committed harvest so the
-  // 1500 ms window is always anchored to the most recent harvest, not dispatch time.
-  // Combo counting is fully managed by farmUIReducer (comboCount field), so this
-  // function only owns the timer — no state or ref bookkeeping needed here.
-  const advanceCombo = useCallback(() => {
+  // Resets the combo expiry window. Called after every committed harvest batch.
+  // durationMs lets callers anchor the timer to the original harvest commit time
+  // rather than effect-processing time: pass COMBO_WINDOW_MS - elapsed to account
+  // for the scheduling lag between dispatch and effect execution.
+  const advanceCombo = useCallback((durationMs: number = COMBO_WINDOW_MS) => {
     if (comboTimerRef.current != null) {
       clearTimeout(comboTimerRef.current);
     }
     comboTimerRef.current = setTimeout(() => {
       comboTimerRef.current = null;
       farmDispatch({ type: 'RESET_COMBO' });
-    }, COMBO_WINDOW_MS);
+    }, durationMs);
   }, [farmDispatch]);
   const showMasteryRankUpCelebration = useCallback((notice: Omit<MasteryRankUpNotice, 'id'>) => {
     if (masteryRankUpTimerRef.current != null) {
@@ -933,7 +935,12 @@ export default function FarmGame({
         if (gameSettings.soundEffectsEnabled && audio.isSupported) {
           void audio.playHarvest();
         }
-        advanceCombo();
+      }
+      // Anchor the expiry timer to the last harvest's commit time so the window
+      // starts when the player tapped, not when the effect fired.
+      const lastEffect = farmState.pendingHarvestEffects[farmState.pendingHarvestEffects.length - 1];
+      if (lastEffect != null) {
+        advanceCombo(Math.max(1, COMBO_WINDOW_MS - (Date.now() - lastEffect.now)));
       }
     } finally {
       farmDispatch({ type: 'DRAIN_HARVEST_EFFECTS' });
@@ -1001,7 +1008,7 @@ export default function FarmGame({
         if (gameSettings.soundEffectsEnabled && audio.isSupported) {
           void audio.playHarvest();
         }
-        advanceCombo();
+        advanceCombo(Math.max(1, COMBO_WINDOW_MS - (Date.now() - effect.now)));
       }
     } finally {
       farmDispatch({ type: 'DRAIN_HARVEST_ALL_EFFECT' });

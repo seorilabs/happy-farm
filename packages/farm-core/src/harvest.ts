@@ -12,7 +12,7 @@ import {
 import { getDonationRp, isCropPlantable, isNodeUnlocked } from './research';
 
 /** Upper bound for comboMultiplier accepted by performHarvest. Values above this are clamped down. */
-export const MAX_COMBO_MULTIPLIER = 2;
+export const MAX_COMBO_MULTIPLIER = 1.15;
 
 export type HarvestOptions = {
   now?: number;
