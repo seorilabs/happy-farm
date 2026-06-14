@@ -84,12 +84,13 @@ export function useAppsInTossFarmAudio(): { audio: FarmGameAudio; audioElement: 
         setHarvestPlaying(true);
       },
       playComboMilestone: (tier) => {
+        if (comboMilestoneTimerRef.current != null) {
+          clearTimeout(comboMilestoneTimerRef.current);
+          comboMilestoneTimerRef.current = null;
+        }
         comboBonusOneRef.current?.seek(0);
         setComboBonusOnePlaying(true);
         if (tier === 'legendary') {
-          if (comboMilestoneTimerRef.current != null) {
-            clearTimeout(comboMilestoneTimerRef.current);
-          }
           comboMilestoneTimerRef.current = setTimeout(() => {
             comboBonusTwoRef.current?.seek(0);
             setComboBonusTwoPlaying(true);

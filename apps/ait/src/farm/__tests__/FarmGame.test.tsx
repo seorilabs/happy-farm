@@ -838,8 +838,10 @@ describe('FarmGame UI flow', () => {
       fireEvent.press(screen.getAllByText('GET')[0]!);
     }
 
-    expect(playComboMilestone).toHaveBeenCalledWith('great');
-    expect(playComboMilestone).toHaveBeenCalledTimes(1);
+    await waitFor(() => {
+      expect(playComboMilestone).toHaveBeenCalledWith('great');
+      expect(playComboMilestone).toHaveBeenCalledTimes(1);
+    });
   });
 
   test('fires combo legendary milestone audio when combo crosses the legendary tier threshold', async () => {
@@ -862,9 +864,11 @@ describe('FarmGame UI flow', () => {
       fireEvent.press(screen.getAllByText('GET')[0]!);
     }
 
-    expect(playComboMilestone).toHaveBeenCalledWith('great');
-    expect(playComboMilestone).toHaveBeenCalledWith('legendary');
-    expect(playComboMilestone).toHaveBeenCalledTimes(2);
+    await waitFor(() => {
+      expect(playComboMilestone).toHaveBeenCalledWith('great');
+      expect(playComboMilestone).toHaveBeenCalledWith('legendary');
+      expect(playComboMilestone).toHaveBeenCalledTimes(2);
+    });
   });
 
   test('spaces out harvest bonus nudges by time after the player declines one', async () => {
