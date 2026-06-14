@@ -58,6 +58,8 @@ import {
   INTERSTITIAL_MILESTONE_COOLDOWN_MS,
   MAX_PLOTS,
   REWARDED_GOLD_AMOUNT,
+  REWARDED_GOLD_MAX_USES_PER_WINDOW,
+  REWARDED_GOLD_WINDOW_MS,
   type AreaKey,
   type CollectionRewardKey,
   type CropKey,
@@ -1904,7 +1906,7 @@ export default function FarmGame({
                 <Text style={styles.sheetSectionTitle}>{messages.adRewardsSection}</Text>
                 <AdRewardCard
                   title={messages.rewardedGoldTitle(formatMoney(REWARDED_GOLD_AMOUNT, locale))}
-                  desc={rewardedGoldLimit.allowed ? messages.rewardedGoldReadyDesc : rewardedGoldLimit.reason}
+                  desc={rewardedGoldLimit.allowed ? messages.rewardedGoldReadyDesc(Math.round(REWARDED_GOLD_WINDOW_MS / 60000), REWARDED_GOLD_MAX_USES_PER_WINDOW) : rewardedGoldLimit.reason}
                   cta={
                     rewardedAd.isAdReady && rewardedGoldLimit.allowed
                       ? messages.rewardReceiveCta
