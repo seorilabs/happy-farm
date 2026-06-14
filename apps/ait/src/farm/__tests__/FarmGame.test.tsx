@@ -740,8 +740,13 @@ describe('getNextAreaGoal', () => {
   // Four distinct crop keys that satisfy the vegetable_field harvest requirement (4).
   const FOUR_CROPS = ['carrot', 'wheat', 'potato', 'onion'] as const;
 
-  test('returns null when all sequential (non-gated) areas are unlocked', () => {
+  test('returns null when all sequential areas are unlocked, even if gated areas remain locked', () => {
+    // Unlock every area that has no gate. Gated areas (e.g. hybrid_greenhouse with
+    // gate='breeding_lab') must be excluded from the sequential scan so they never
+    // become the returned goal — verified here by leaving them locked.
     const sequentialAreaKeys = FARM_AREAS.filter((a) => a.unlock.gate == null).map((a) => a.key);
+    const hasGatedArea = FARM_AREAS.some((a) => a.unlock.gate != null);
+    expect(hasGatedArea).toBe(true); // guard: test only makes sense when gated areas exist
     const state = withUnlocked(createInitialState(), sequentialAreaKeys);
     expect(getNextAreaGoal(state)).toBeNull();
   });
@@ -807,12 +812,20 @@ describe('getNextAreaGoal', () => {
     expect(result).toMatchObject({ kind: 'gold', current: 299, total: 300 });
   });
 
-  test('skips gated areas (hybrid_greenhouse) when all sequential areas are unlocked', () => {
-    // hybrid_greenhouse has gate='breeding_lab' so it must be excluded from the
-    // sequential scan. With all sequential areas unlocked the function returns null
-    // rather than pointing at the gated area.
-    const sequentialAreaKeys = FARM_AREAS.filter((a) => a.unlock.gate == null).map((a) => a.key);
-    const state = withUnlocked(createInitialState(), sequentialAreaKeys);
-    expect(getNextAreaGoal(state)).toBeNull();
+  test('upgrade bottleneck is detected even when requiredUpgradeLevel is 1', () => {
+    // Prior bug: upgradeRatio used `> 1` guard so level-1 requirements always got
+    // ratio=1 (treated as "satisfied"). With the fix (`> 0`) a current level of 0
+    // now correctly computes ratio=0 and surfaces the upgrade bottleneck.
+    // This state is hypothetical (initial saves start at Lv.1) but validates the
+    // formula is safe across all non-negative upgrade levels.
+    const state = {
+      ...withHarvested(withGold(createInitialState(), 100), [...FOUR_CROPS]),
+      upgrades: { speed: 0, profit: 0 }, // getMinUpgradeLevel → 0
+    };
+    // vegetable_field needs Lv.1; current is 0 → upgradeOk=false, upgradeRatio=0.
+    // gold: 100/300≈0.33. harvest: 4/4=1 (ok). upgrade: 0/1=0.
+    // upgrade ratio (0) < gold ratio (0.33) → kind=upgrade.
+    const result = getNextAreaGoal(state);
+    expect(result).toMatchObject({ kind: 'upgrade', areaKey: 'vegetable_field', current: 0, total: 1 });
   });
 });

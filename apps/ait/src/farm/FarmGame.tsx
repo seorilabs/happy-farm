@@ -204,7 +204,7 @@ export function getNextAreaGoal(gameState: GameState): NextAreaGoal {
       ? gameState.harvestedCropKeys.length / nextArea.unlock.requiredHarvestedCropCount
       : 1;
   const upgradeRatio =
-    nextArea.unlock.requiredUpgradeLevel > 1
+    nextArea.unlock.requiredUpgradeLevel > 0
       ? getMinUpgradeLevel(gameState) / nextArea.unlock.requiredUpgradeLevel
       : 1;
 
