@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { Vibration } from 'react-native';
-import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act, cleanup, fireEvent, render, waitFor, within } from '@testing-library/react-native';
 import {
   CROPS,
   FARM_AREAS,
@@ -572,12 +572,13 @@ describe('FarmGame UI flow', () => {
     expect(screen.queryByText('숙련도 달성!')).toBeNull();
   });
 
-  test('consecutive rank-ups keep the overlay visible by replacing the notice and resetting the timer', async () => {
+  test('consecutive rank-ups replace the overlay notice and reset the auto-dismiss timer', async () => {
     const thresholds = getMasteryThresholds('carrot');
     const firstThreshold = thresholds[0]!;
     const wheatThresholds = getMasteryThresholds('wheat');
     const wheatFirstThreshold = wheatThresholds[0]!;
     const base = createInitialState();
+    // Plot 0 = carrot (rank-up on next harvest), plot 1 = wheat (rank-up on next harvest)
     const state: GameState = {
       ...base,
       plots: [
@@ -596,9 +597,12 @@ describe('FarmGame UI flow', () => {
 
     await waitFor(() => expect(screen.getAllByText('GET').length).toBeGreaterThanOrEqual(2));
 
-    // First rank-up: overlay appears for carrot
-    fireEvent.press(screen.getAllByText('GET')[0]!);
-    expect(screen.getByText('숙련도 달성!')).toBeTruthy();
+    // First rank-up: explicitly press plot 0 (carrot) — overlay shows carrot's name
+    const getButtons = screen.getAllByText('GET');
+    fireEvent.press(getButtons[0]!);
+    const cardAfterFirst = screen.getByTestId('mastery-rank-up-card');
+    expect(within(cardAfterFirst).getByText('당근')).toBeTruthy();
+    expect(within(cardAfterFirst).getByText(/브론즈/)).toBeTruthy();
 
     // Advance partway through the first timer — overlay still showing
     await act(async () => {
@@ -606,9 +610,12 @@ describe('FarmGame UI flow', () => {
     });
     expect(screen.getByText('숙련도 달성!')).toBeTruthy();
 
-    // Second rank-up: replaces overlay (resets timer)
+    // Second rank-up: carrot plot is now empty so getAllByText('GET')[0] is wheat.
+    // Pressing it replaces the overlay with wheat's notice and resets the timer.
     fireEvent.press(screen.getAllByText('GET')[0]!);
-    expect(screen.getByText('숙련도 달성!')).toBeTruthy();
+    const cardAfterSecond = screen.getByTestId('mastery-rank-up-card');
+    expect(within(cardAfterSecond).getByText('밀')).toBeTruthy();
+    expect(within(cardAfterSecond).getByText(/브론즈/)).toBeTruthy();
 
     // Old timer would have expired by now but the reset timer is still running
     await act(async () => {
@@ -616,7 +623,7 @@ describe('FarmGame UI flow', () => {
     });
     expect(screen.getByText('숙련도 달성!')).toBeTruthy();
 
-    // Full duration from second rank-up elapses — overlay gone
+    // Full duration from the second rank-up elapses — overlay gone
     await act(async () => {
       jest.advanceTimersByTime(MASTERY_RANK_UP_CELEBRATION_DURATION_MS);
     });

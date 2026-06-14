@@ -1688,6 +1688,7 @@ export default function FarmGame({
 
       {masteryRankUpNotice != null ? (
         <MasteryRankUpOverlay
+          key={`${masteryRankUpNotice.cropName}-${masteryRankUpNotice.rankKey}`}
           notice={masteryRankUpNotice}
           messages={messages}
           onDismiss={dismissMasteryRankUpCelebration}
@@ -2137,7 +2138,7 @@ function MasteryRankUpOverlay({
     <Pressable testID="mastery-rank-up-overlay" style={StyleSheet.absoluteFill} onPress={onDismiss}>
       <Animated.View style={[styles.masteryBackdrop, { opacity: backdrop }]} />
       <View style={styles.masteryCenter} pointerEvents="none">
-        <Animated.View style={[styles.masteryCard, { transform: [{ scale: cardScale }] }]}>
+        <Animated.View testID="mastery-rank-up-card" style={[styles.masteryCard, { transform: [{ scale: cardScale }] }]}>
           <Text style={styles.masteryTitle}>{messages.masteryRankUpTitle}</Text>
           <Animated.Text style={[styles.masteryCropIcon, { transform: [{ scale: cropScale }] }]}>
             {notice.cropIcon}
