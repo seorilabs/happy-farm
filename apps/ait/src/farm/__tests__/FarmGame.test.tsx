@@ -610,9 +610,8 @@ describe('FarmGame UI flow', () => {
     });
     expect(screen.getByText('숙련도 달성!')).toBeTruthy();
 
-    // Second rank-up: carrot plot is now empty so getAllByText('GET')[0] is wheat.
-    // Pressing it replaces the overlay with wheat's notice and resets the timer.
-    fireEvent.press(screen.getAllByText('GET')[0]!);
+    // Second rank-up: target plot-cell-1 (wheat) directly, independent of DOM order.
+    fireEvent.press(within(screen.getByTestId('plot-cell-1')).getByText('GET'));
     const cardAfterSecond = screen.getByTestId('mastery-rank-up-card');
     expect(within(cardAfterSecond).getByText('밀')).toBeTruthy();
     expect(within(cardAfterSecond).getByText(/브론즈/)).toBeTruthy();

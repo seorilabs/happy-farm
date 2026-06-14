@@ -46,6 +46,7 @@ import {
   setActiveTitle,
   unlockNode,
   type AchievementTrackKey,
+  type MasteryRankKey,
   type PrestigeSkillKey,
   type RegionArchetypeKey,
   type ResearchNodeKey,
@@ -256,9 +257,16 @@ type PendingFarmCommandEffect =
 type MasteryRankUpNotice = {
   cropIcon: string;
   cropName: string;
-  rankKey: string;
+  rankKey: MasteryRankKey;
   rankIcon: string;
   rankName: string;
+};
+
+const MASTERY_RANK_COLORS: Record<MasteryRankKey, string> = {
+  bronze: '#9a6b3e',
+  silver: '#5f7e99',
+  gold: '#d4860a',
+  prism: '#7c44ff',
 };
 
 // One-shot floating "+gold" feedback spawned at the tapped plot on a manual
@@ -1686,15 +1694,6 @@ export default function FarmGame({
         </View>
       ) : null}
 
-      {masteryRankUpNotice != null ? (
-        <MasteryRankUpOverlay
-          key={`${masteryRankUpNotice.cropName}-${masteryRankUpNotice.rankKey}`}
-          notice={masteryRankUpNotice}
-          messages={messages}
-          onDismiss={dismissMasteryRankUpCelebration}
-        />
-      ) : null}
-
       <Sheet
         activeSheet={activeSheet}
         description={getSheetDescription(activeSheet, messages, locale, getLocalizedCropName, collectionSummary)}
@@ -1956,6 +1955,16 @@ export default function FarmGame({
           </View>
         ) : null}
       </Sheet>
+
+      {/* Rendered last so it appears above the Sheet and all other overlays. */}
+      {masteryRankUpNotice != null ? (
+        <MasteryRankUpOverlay
+          key={`${masteryRankUpNotice.cropName}-${masteryRankUpNotice.rankKey}`}
+          notice={masteryRankUpNotice}
+          messages={messages}
+          onDismiss={dismissMasteryRankUpCelebration}
+        />
+      ) : null}
     </View>
   );
 }
@@ -2123,14 +2132,7 @@ function MasteryRankUpOverlay({
     };
   }, [backdrop, cardScale, cropScale, rankEntrance]);
 
-  const rankColor =
-    notice.rankKey === 'prism'
-      ? '#7c44ff'
-      : notice.rankKey === 'gold'
-        ? '#d4860a'
-        : notice.rankKey === 'silver'
-          ? '#5f7e99'
-          : '#9a6b3e';
+  const rankColor = MASTERY_RANK_COLORS[notice.rankKey];
 
   const rankEntranceScale = rankEntrance.interpolate({ inputRange: [0, 1], outputRange: [0.4, 1] });
 
@@ -2252,7 +2254,7 @@ const PlotCell = React.memo(function PlotCell({
 
   if (!unlocked) {
     return (
-      <Pressable style={[styles.plotTile, tileSizeStyle, styles.lockedPlot]} onPress={handlePress}>
+      <Pressable testID={`plot-cell-${index}`} style={[styles.plotTile, tileSizeStyle, styles.lockedPlot]} onPress={handlePress}>
         <Text style={styles.lockIcon}>🔒</Text>
       </Pressable>
     );
@@ -2260,7 +2262,7 @@ const PlotCell = React.memo(function PlotCell({
 
   if (plot.state === 0) {
     return (
-      <Pressable style={[styles.plotTile, tileSizeStyle, styles.emptyPlot]} onPress={handlePress}>
+      <Pressable testID={`plot-cell-${index}`} style={[styles.plotTile, tileSizeStyle, styles.emptyPlot]} onPress={handlePress}>
         <Text style={styles.emptyPlotText}>{messages.emptyPlot}</Text>
       </Pressable>
     );
@@ -2278,6 +2280,7 @@ const PlotCell = React.memo(function PlotCell({
 
   return (
     <Pressable
+      testID={`plot-cell-${index}`}
       style={[styles.plotTile, tileSizeStyle, plot.state === 2 ? styles.readyPlot : styles.growingPlot]}
       onPress={handlePress}
     >
