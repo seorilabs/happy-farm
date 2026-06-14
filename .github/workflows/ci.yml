@@ -3,7 +3,7 @@ name: Validate
 on:
   pull_request:
     branches:
-      - develop
+      - main
     paths-ignore:
       - '**.md'
       - '**.png'
@@ -17,8 +17,8 @@ on:
       - 'play-store/screenshots/**'
       - '.github/workflows/deploy-*.yml'
   push:
-    branches:
-      - develop
+    branches-ignore:
+      - main
     paths-ignore:
       - '**.md'
       - '**.png'
