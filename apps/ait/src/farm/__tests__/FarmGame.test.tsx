@@ -8,6 +8,7 @@ import {
   DEFAULT_LOCALE,
   FARM_AREAS,
   HARVEST_BONUS_AD_COOLDOWN_MS,
+  HARVEST_BONUS_BOOST_DURATION_MS,
   HARVEST_BONUS_MULTIPLIER,
   MAX_PLOTS,
   PRESTIGE_STARS_BASE,
@@ -144,6 +145,20 @@ function createShopReadyState(): GameState {
     ...base,
     gold: 10_000,
     harvestedCropKeys: getCropKeys().slice(0, 5),
+  };
+}
+
+function createActiveBoostState(now = NOW): GameState {
+  const base = createInitialState();
+  return {
+    ...base,
+    adUsage: {
+      ...base.adUsage,
+      harvestBonusAd: {
+        ...base.adUsage.harvestBonusAd,
+        boostEndsAt: now + HARVEST_BONUS_BOOST_DURATION_MS,
+      },
+    },
   };
 }
 
@@ -951,6 +966,23 @@ describe('FarmGame UI flow', () => {
     fireEvent.press(screen.getAllByText('GET')[0]!);
 
     expect(screen.getByText(`${formatMoney(readyHarvestState.gold + carrotRevenue * 3)}G`)).toBeTruthy();
+  });
+
+  test('shows boost multiplier and remaining time in the header when boost is active', async () => {
+    const messages = getFarmMessages(DEFAULT_LOCALE);
+    const screen = await renderGame(createActiveBoostState(NOW), { preferredLocale: DEFAULT_LOCALE });
+
+    await waitFor(() => expect(screen.getByText(messages.boostLabel)).toBeTruthy());
+    expect(screen.getByText(`×${HARVEST_BONUS_MULTIPLIER.toFixed(1)}`)).toBeTruthy();
+    // Assert the remaining-time element has a non-zero time value.
+    // boostEndsAt = NOW + HARVEST_BONUS_BOOST_DURATION_MS and Date.now() = NOW
+    // (beforeEach freezes the clock), so safeBoostRemainingMs = BOOST_DURATION > 0.
+    // The regex /^[1-9]/ ensures the displayed string starts with a non-zero digit
+    // (e.g. "30분"), catching any regression where the display collapses to "0초".
+    // toHaveTextContent is registered globally via jest.setup.ts.
+    const remaining = screen.getByTestId('boost-remaining');
+    expect(remaining).toBeTruthy();
+    expect(remaining).toHaveTextContent(/^[1-9]/);
   });
 
   test('greets a returning player with an offline progress recap', async () => {
