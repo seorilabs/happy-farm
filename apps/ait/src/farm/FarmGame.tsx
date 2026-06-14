@@ -2185,8 +2185,16 @@ function NextGoalBar({
     progressRef.current = new Animated.Value(goal.progress);
   }
   const progressAnim = progressRef.current;
+  // Skip animation on first render — the value is already initialized correctly.
+  // Animating on mount queues requestAnimationFrame callbacks that interact badly
+  // with jest.useFakeTimers() and cause test timeouts on slow CI runners.
+  const isInitialRef = useRef(true);
 
   useEffect(() => {
+    if (isInitialRef.current) {
+      isInitialRef.current = false;
+      return;
+    }
     const animation = Animated.timing(progressAnim, {
       toValue: goal.progress,
       duration: 300,
