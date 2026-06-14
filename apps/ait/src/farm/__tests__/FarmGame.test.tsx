@@ -175,8 +175,9 @@ function createThrowingRewardedAd(error = new Error('sdk dynamic failure message
 }
 
 // Rendering the full farm tree is heavy; the first test additionally pays the
-// module-loading warmup, which can exceed jest's 5s default on slow CI runners.
-jest.setTimeout(15000);
+// module-loading warmup. Tests with multiple sequential waitFor calls can
+// exceed 15 s on slow ARM CI runners (RPi), so raise the budget accordingly.
+jest.setTimeout(25000);
 
 describe('FarmGame UI flow', () => {
   beforeEach(() => {
