@@ -2635,10 +2635,6 @@ function FirstHarvestOverlay({
   );
 }
 
-// Celebration overlay shown when the player unlocks a new farm area in the shop.
-// The card springs in from below; the area emoji bounces with extra energy;
-// the crop count fades up after a short delay so the reward reads last.
-// Auto-dismisses after AREA_UNLOCK_CELEBRATION_DURATION_MS; tap to dismiss early.
 function AreaUnlockOverlay({
   notice,
   messages,
