@@ -157,6 +157,8 @@ const SHEET_ANIMATION_DURATION_MS = 180;
 const SHEET_DRAG_HIT_TARGET_HEIGHT = 36;
 const EMPTY_SAFE_AREA_INSETS = { top: 0, right: 0, bottom: 0, left: 0 };
 
+import { _callGoldPulseHook } from './farmGoldPulse';
+
 function getFirstArea() {
   const area = FARM_AREAS[0];
   if (area == null) {
@@ -1104,6 +1106,15 @@ export default function FarmGame({
       context: analyticsContext(),
     });
     toast(messages.collectionRewardClaimedToast(formatMoney(preview.awardedGold, locale)));
+    pulseGold();
+    _callGoldPulseHook();
+    if (gameSettings.soundEffectsEnabled && audio.isSupported) {
+      try {
+        void Promise.resolve(audio.playHarvest()).catch(() => undefined);
+      } catch {
+        // SFX errors are non-critical.
+      }
+    }
   }
 
   function openAchievements() {
