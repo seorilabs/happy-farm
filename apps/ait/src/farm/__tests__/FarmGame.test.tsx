@@ -893,11 +893,15 @@ describe('FarmGame UI flow', () => {
 
     await waitFor(() => expect(screen.getByText(messages.boostLabel)).toBeTruthy());
     expect(screen.getByText(`×${HARVEST_BONUS_MULTIPLIER.toFixed(1)}`)).toBeTruthy();
-    // Assert the remaining-time element exists with non-empty text.
+    // Assert the remaining-time element has a non-zero time value.
+    // boostEndsAt = NOW + HARVEST_BONUS_BOOST_DURATION_MS and Date.now() = NOW
+    // (beforeEach freezes the clock), so safeBoostRemainingMs = BOOST_DURATION > 0.
+    // The regex /^[1-9]/ ensures the displayed string starts with a non-zero digit
+    // (e.g. "30분"), catching any regression where the display collapses to "0초".
     // toHaveTextContent is registered globally via jest.setup.ts.
     const remaining = screen.getByTestId('boost-remaining');
     expect(remaining).toBeTruthy();
-    expect(remaining).toHaveTextContent(/\S+/);
+    expect(remaining).toHaveTextContent(/^[1-9]/);
   });
 
   test('greets a returning player with an offline progress recap', async () => {
