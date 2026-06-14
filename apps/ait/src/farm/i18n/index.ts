@@ -239,7 +239,8 @@ const EN_FARM_MESSAGES: FarmMessages = {
   lockedAreaTitle: (areaName) => `${areaName} requirements`,
   adRewardsSection: 'Ad Rewards',
   rewardedGoldTitle: (amount) => `Watch ad for ${amount}G`,
-  rewardedGoldReadyDesc: (windowMinutes: number, maxUses: number) => `Up to ${maxUses} times every ${windowMinutes} minutes.`,
+  rewardedGoldReadyDesc: (windowMinutes: number, maxUses: number) =>
+    `Up to ${maxUses} ${maxUses === 1 ? 'time' : 'times'} every ${windowMinutes} ${windowMinutes === 1 ? 'minute' : 'minutes'}.`,
   rewardedPlotTitle: 'Watch ad to unlock 1 plot',
   rewardedPlotReadyDesc: 'Add planting space without paying the clearing cost.',
   rewardReceiveCta: 'Claim',

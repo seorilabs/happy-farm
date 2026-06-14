@@ -450,6 +450,10 @@ describe('FarmGame UI flow', () => {
     expect(within(screen.getByTestId('shop-nav-button')).queryByText('1')).toBeNull();
   });
 
+  test('REWARDED_GOLD_WINDOW_MS is a whole number of minutes so the description divides without rounding', () => {
+    expect(REWARDED_GOLD_WINDOW_MS % 60000).toBe(0);
+  });
+
   test('shows the correct window duration and max uses in the rewarded gold ad description', async () => {
     const messages = getFarmMessages(DEFAULT_LOCALE);
     const rewardedAd = createReadyRewardedAd();
@@ -458,8 +462,9 @@ describe('FarmGame UI flow', () => {
     await waitFor(() => expect(screen.getByText('🏪 상점')).toBeTruthy());
     fireEvent.press(screen.getByText('🏪 상점'));
 
+    // Use direct division — the invariant test above guarantees no remainder.
     const expectedDesc = messages.rewardedGoldReadyDesc(
-      Math.round(REWARDED_GOLD_WINDOW_MS / 60000),
+      REWARDED_GOLD_WINDOW_MS / 60000,
       REWARDED_GOLD_MAX_USES_PER_WINDOW
     );
     expect(screen.getByText(expectedDesc)).toBeTruthy();
