@@ -2331,21 +2331,10 @@ function PrestigeGraduationOverlay({
   messages: FarmMessages;
   onDismiss: () => void;
 }) {
-  const backdropRef = useRef<Animated.Value | null>(null);
-  if (backdropRef.current == null) backdropRef.current = new Animated.Value(0);
-  const backdrop = backdropRef.current;
-
-  const cardScaleRef = useRef<Animated.Value | null>(null);
-  if (cardScaleRef.current == null) cardScaleRef.current = new Animated.Value(0.5);
-  const cardScale = cardScaleRef.current;
-
-  const iconScaleRef = useRef<Animated.Value | null>(null);
-  if (iconScaleRef.current == null) iconScaleRef.current = new Animated.Value(0.1);
-  const iconScale = iconScaleRef.current;
-
-  const starsEntranceRef = useRef<Animated.Value | null>(null);
-  if (starsEntranceRef.current == null) starsEntranceRef.current = new Animated.Value(0);
-  const starsEntrance = starsEntranceRef.current;
+  const backdrop = useRef(new Animated.Value(0)).current;
+  const cardScale = useRef(new Animated.Value(0.5)).current;
+  const iconScale = useRef(new Animated.Value(0.1)).current;
+  const starsEntrance = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     const anim = Animated.parallel([

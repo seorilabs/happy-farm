@@ -777,7 +777,7 @@ describe('FarmGame UI flow', () => {
 
     fireEvent.press(screen.getByTestId('prestige-graduation-overlay'));
 
-    expect(screen.queryByTestId('prestige-graduation-overlay')).toBeNull();
+    await waitFor(() => expect(screen.queryByTestId('prestige-graduation-overlay')).toBeNull());
   });
 
   test('keeps reset behind the settings sheet', async () => {
