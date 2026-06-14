@@ -432,8 +432,8 @@ describe('FarmGame UI flow', () => {
 
   test('hides the shop badge when the rewarded ad rate limit is exhausted', async () => {
     // Fill the sliding window to trigger the cooldown (REWARDED_GOLD_MAX_USES_PER_WINDOW uses).
-    // Both shop ad rewards (gold + free plot) share rewardedGoldLimit, so exhausting the
-    // window disables all shop ad rewards and the badge should disappear.
+    // rewardedGoldLimit gates the shop's gold reward and free-plot reward. Exhausting the
+    // window should suppress the badge.
     const base = createInitialState();
     const exhaustedState: GameState = {
       ...base,

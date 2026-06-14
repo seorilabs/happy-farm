@@ -985,6 +985,9 @@ export default function FarmGame({
     () => getRewardedAdLimitStatus(gameState, 'rewardedGold', Date.now(), locale),
     [gameState, locale, tick]
   );
+  // Both shop ad items (gold reward + free plot) are gated by rewardedGoldLimit.
+  // growthAdLimit and harvestBonusAdLimit gate separate flows (plot-tap / post-harvest
+  // nudge) that are not accessible from the shop, so only rewardedGoldLimit is relevant.
   const shopAdBadgeCount = rewardedAd.isAdSupported && rewardedAd.isAdReady && rewardedGoldLimit.allowed ? 1 : 0;
   const growthAdLimit = useMemo(
     () => getRewardedAdLimitStatus(gameState, 'growthAd', Date.now(), locale),
