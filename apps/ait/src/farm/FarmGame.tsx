@@ -630,6 +630,10 @@ export default function FarmGame({
         clearTimeout(prestigeGraduationTimerRef.current);
         prestigeGraduationTimerRef.current = null;
       }
+      if (firstHarvestTimerRef.current != null) {
+        clearTimeout(firstHarvestTimerRef.current);
+        firstHarvestTimerRef.current = null;
+      }
     };
   }, []);
 
