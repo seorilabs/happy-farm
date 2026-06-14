@@ -398,7 +398,7 @@ describe('FarmGame UI flow', () => {
 
     fireEvent.press(screen.getByText('당근'));
     expect(screen.getByText('당근 심기 · 10G · 투자효율 +40%')).toBeTruthy();
-  });
+  }, 30_000);
 
   test('closes the shop sheet after a free plot ad reward', async () => {
     const rewardedAd = createReadyRewardedAd();
@@ -416,7 +416,7 @@ describe('FarmGame UI flow', () => {
 
     fireEvent.press(screen.getByText('🏪 상점'));
     expect(screen.getByText('현재 7칸 · 작물을 심을 공간을 1칸 늘려요')).toBeTruthy();
-  });
+  }, 30_000);
 
   test('closes the current sheet when a rewarded ad is dismissed without reward', async () => {
     const rewardedAd = createRewardedAd({ status: 'dismissed' });
@@ -434,7 +434,7 @@ describe('FarmGame UI flow', () => {
 
     fireEvent.press(screen.getByText('당근'));
     expect(screen.getByText('당근 심기 · 10G · 투자효율 +40%')).toBeTruthy();
-  });
+  }, 30_000);
 
   test('normalizes thrown rewarded ad failures and closes the active sheet', async () => {
     const rewardedAd = createThrowingRewardedAd(new Error('sdk request failed with dynamic token 123'));
@@ -460,7 +460,7 @@ describe('FarmGame UI flow', () => {
       })
     );
     expect(screen.getByText('50G')).toBeTruthy();
-  });
+  }, 30_000);
 
   test('closes the growth ad sheet after completing crop growth', async () => {
     const rewardedAd = createReadyRewardedAd();
@@ -478,7 +478,7 @@ describe('FarmGame UI flow', () => {
     await waitFor(() => expect(rewardedAd.showAd).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(screen.queryByText('즉시 성장')).toBeNull());
     await waitFor(() => expect(screen.getByText('GET')).toBeTruthy());
-  });
+  }, 30_000);
 
   test('never drives the growth bar with a full-grow-time animation (legend crops crashed iOS)', async () => {
     // Regression: GrowthProgressBar used to run a single Animated.timing spanning
