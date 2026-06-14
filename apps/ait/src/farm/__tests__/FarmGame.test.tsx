@@ -2,8 +2,6 @@
 
 import React from 'react';
 import { Vibration } from 'react-native';
-// This import also runs RNTL's extend-expect side-effect, registering
-// toHaveTextContent, toBeVisible, and other built-in matchers globally.
 import { act, cleanup, fireEvent, render, waitFor, within } from '@testing-library/react-native';
 import {
   CROPS,
@@ -890,23 +888,21 @@ describe('FarmGame UI flow', () => {
   });
 
   test('shows boost multiplier and remaining time in the header when boost is active', async () => {
-    // Explicitly own the timer lifecycle for self-containment.
-    jest.useFakeTimers();
+    // beforeEach enables fake timers; set time to NOW so boostEndsAt (= NOW + DURATION)
+    // is in the future and getHarvestBonusBoostStatus returns active=true.
+    // waitFor works with fake timers here just as in every other test in this describe.
     jest.setSystemTime(NOW);
-    try {
-      const messages = getFarmMessages(DEFAULT_LOCALE);
-      const screen = await renderGame(createActiveBoostState(NOW), { preferredLocale: DEFAULT_LOCALE });
 
-      await waitFor(() => expect(screen.getByText(messages.boostLabel)).toBeTruthy());
-      expect(screen.getByText(`×${HARVEST_BONUS_MULTIPLIER.toFixed(1)}`)).toBeTruthy();
-      // Assert the remaining-time element exists and has non-empty content.
-      // toHaveTextContent is registered globally via jest.setup.ts.
-      const remaining = screen.getByTestId('boost-remaining');
-      expect(remaining).toBeTruthy();
-      expect(remaining).toHaveTextContent(/\S+/);
-    } finally {
-      jest.useRealTimers();
-    }
+    const messages = getFarmMessages(DEFAULT_LOCALE);
+    const screen = await renderGame(createActiveBoostState(NOW), { preferredLocale: DEFAULT_LOCALE });
+
+    await waitFor(() => expect(screen.getByText(messages.boostLabel)).toBeTruthy());
+    expect(screen.getByText(`×${HARVEST_BONUS_MULTIPLIER.toFixed(1)}`)).toBeTruthy();
+    // Assert the remaining-time element exists with non-empty text.
+    // toHaveTextContent is registered globally via jest.setup.ts.
+    const remaining = screen.getByTestId('boost-remaining');
+    expect(remaining).toBeTruthy();
+    expect(remaining).toHaveTextContent(/\S+/);
   });
 
   test('greets a returning player with an offline progress recap', async () => {
