@@ -177,7 +177,8 @@ function createThrowingRewardedAd(error = new Error('sdk dynamic failure message
 
 // Rendering the full farm tree is heavy; the first test additionally pays the
 // module-loading warmup, which can exceed jest's 5s default on slow CI runners.
-jest.setTimeout(15000);
+// 30 s gives the ARM64 CI runner (≈3× slower than local) comfortable headroom.
+jest.setTimeout(30000);
 
 describe('FarmGame UI flow', () => {
   beforeEach(() => {
@@ -1035,6 +1036,15 @@ describe('NextGoalBar', () => {
     // Plant a carrot in the first plot, then switch back to harvest tool.
     fireEvent.press(screen.getByText('당근'));
     fireEvent.press(screen.getAllByText('빈 밭')[0]!);
+
+    // Advance past the plant-pop animation (PLANT_POP_DURATION_MS = 320 ms) so
+    // the GrowingCropIcon callback fires inside act() and avoids a dangling
+    // state-update warning that would leak into subsequent tests.
+    await act(async () => {
+      jest.advanceTimersByTime(400);
+    });
+
+    // Switch back to harvest tool — now one plot is growing.
     fireEvent.press(screen.getByText('수확'));
 
     // One plot is now growing → seed hint replaced by harvest hint.
