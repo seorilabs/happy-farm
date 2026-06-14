@@ -1259,6 +1259,56 @@ describe('FarmGame UI flow', () => {
     await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
     expect(screen.queryByText('다시 오셨네요!')).toBeNull();
   });
+
+  // ---------------------------------------------------------------------------
+  // Tutorial sheet — first-ever-play detection and priority vs. welcome-back
+  // ---------------------------------------------------------------------------
+
+  test('shows the tutorial sheet on the very first play (all plots empty, no harvests)', async () => {
+    // null → createInitialState(): all plots in state 0, harvestedCropKeys []
+    const screen = await renderGame(null);
+
+    await waitFor(() => expect(screen.getByText('행복 농장에 오신 것을 환영해요! 🌾')).toBeTruthy());
+    expect(screen.getByText('씨앗 선택')).toBeTruthy();
+    expect(screen.getByText('🌱 시작하기')).toBeTruthy();
+  });
+
+  test('dismisses the tutorial and returns to normal play when start is pressed', async () => {
+    const screen = await renderGame(null);
+
+    await waitFor(() => expect(screen.getByText('행복 농장에 오신 것을 환영해요! 🌾')).toBeTruthy());
+    fireEvent.press(screen.getByText('🌱 시작하기'));
+    await waitFor(() => expect(screen.queryByText('행복 농장에 오신 것을 환영해요! 🌾')).toBeNull());
+    // Main game UI is accessible after dismissal
+    expect(screen.getByText('행복 농장')).toBeTruthy();
+  });
+
+  test('does not show the tutorial once a crop has been planted (growing state)', async () => {
+    const screen = await renderGame(createGrowingCropState());
+
+    await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+    expect(screen.queryByText('행복 농장에 오신 것을 환영해요! 🌾')).toBeNull();
+  });
+
+  test('does not show the tutorial once a crop has been harvested before', async () => {
+    const state: GameState = { ...createInitialState(), harvestedCropKeys: ['carrot'] };
+    const screen = await renderGame(state);
+
+    await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+    expect(screen.queryByText('행복 농장에 오신 것을 환영해요! 🌾')).toBeNull();
+  });
+
+  test('shows welcome-back recap (not tutorial) for returning players with harvest history', async () => {
+    mockPersistence.readLastSeenAt.mockResolvedValueOnce(NOW - 2 * 60 * 60 * 1000);
+    const state: GameState = {
+      ...createReadyHarvestState(),
+      harvestedCropKeys: ['carrot'],
+    };
+    const screen = await renderGame(state);
+
+    await waitFor(() => expect(screen.getByText('다시 오셨네요!')).toBeTruthy());
+    expect(screen.queryByText('행복 농장에 오신 것을 환영해요! 🌾')).toBeNull();
+  });
 });
 
 // ---------------------------------------------------------------------------
