@@ -15,6 +15,7 @@ import {
   getAreaCropKeys,
   getMasteryThresholds,
   getPrestigeCost,
+  type AreaKey,
   type CropKey,
   type GameState,
   type RewardedAdController,
@@ -823,17 +824,17 @@ describe('getNextAreaGoal', () => {
 
   // Helpers for building targeted game states.
   const withGold = (state: GameState, gold: number): GameState => ({ ...state, gold });
-  const withHarvested = (state: GameState, keys: string[]): GameState => ({
+  const withHarvested = (state: GameState, keys: readonly CropKey[]): GameState => ({
     ...state,
-    harvestedCropKeys: keys as GameState['harvestedCropKeys'],
+    harvestedCropKeys: [...keys],
   });
   const withUpgrades = (state: GameState, level: number): GameState => ({
     ...state,
     upgrades: { speed: level, profit: level },
   });
-  const withUnlocked = (state: GameState, areaKeys: string[]): GameState => ({
+  const withUnlocked = (state: GameState, areaKeys: readonly AreaKey[]): GameState => ({
     ...state,
-    unlockedAreas: areaKeys as GameState['unlockedAreas'],
+    unlockedAreas: [...areaKeys],
   });
 
   // getNextAreaGoal uses FARM_AREAS.find() and relies on sequential (non-gated)
@@ -848,7 +849,7 @@ describe('getNextAreaGoal', () => {
   });
 
   // Four distinct crop keys that satisfy the vegetable_field harvest requirement (4).
-  const FOUR_CROPS = ['carrot', 'wheat', 'potato', 'onion'] as const;
+  const FOUR_CROPS = ['carrot', 'wheat', 'potato', 'onion'] as const satisfies readonly CropKey[];
 
   test('returns null when all sequential areas are unlocked, even if gated areas remain locked', () => {
     // Unlock every area that has no gate. Gated areas (e.g. hybrid_greenhouse with
@@ -880,7 +881,7 @@ describe('getNextAreaGoal', () => {
     // fruit_field needs upgradeLevel 3. We unlock vegetable_field and set gold/harvest
     // to satisfy fruit_field's gold (15000) and harvest (10) requirements but keep
     // the upgrade level at 1 (min of speed/profit).
-    const tenCrops = ['carrot','wheat','potato','onion','corn','tomato','pepper','mushroom','rice','strawberry'];
+    const tenCrops = ['carrot','wheat','potato','onion','corn','tomato','pepper','mushroom','rice','strawberry'] as const satisfies readonly CropKey[];
     const state = withUpgrades(
       withHarvested(
         withGold(
@@ -949,7 +950,7 @@ describe('NextGoalBar', () => {
     const readyAreaState: GameState = {
       ...createInitialState(),
       gold: 300,
-      harvestedCropKeys: ['carrot', 'wheat', 'potato', 'onion'] as GameState['harvestedCropKeys'],
+      harvestedCropKeys: ['carrot', 'wheat', 'potato', 'onion'] satisfies CropKey[],
     };
     const screen = await renderGame(readyAreaState);
 
@@ -984,7 +985,7 @@ describe('NextGoalBar', () => {
     const goldState: GameState = {
       ...createInitialState(),
       gold: 100,
-      harvestedCropKeys: ['carrot', 'wheat', 'potato', 'onion'] as GameState['harvestedCropKeys'],
+      harvestedCropKeys: ['carrot', 'wheat', 'potato', 'onion'] satisfies CropKey[],
     };
     const screen = await renderGame(goldState);
 
@@ -1000,7 +1001,7 @@ describe('NextGoalBar', () => {
     const upgradeState: GameState = {
       ...createInitialState(),
       gold: 300,
-      harvestedCropKeys: ['carrot', 'wheat', 'potato', 'onion'] as GameState['harvestedCropKeys'],
+      harvestedCropKeys: ['carrot', 'wheat', 'potato', 'onion'] satisfies CropKey[],
       upgrades: { speed: 0, profit: 0 },
     };
     const screen = await renderGame(upgradeState);
