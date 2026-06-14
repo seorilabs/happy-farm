@@ -127,6 +127,10 @@ function getRewardedAdEventListener(rewardedAd: MockRewardedAd) {
   return listener as (event: { type: string; payload?: unknown }) => void;
 }
 
+// Rendering the full farm tree pays a module-loading warmup cost on slow CI
+// runners (ARM64 Pi) that can exceed Jest's 5 s default.
+jest.setTimeout(15000);
+
 beforeEach(() => {
   jest.clearAllMocks();
 });
