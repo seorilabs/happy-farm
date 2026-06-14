@@ -61,6 +61,9 @@ jobs:
       - name: Lint AIT and shared core
         run: pnpm --dir apps/ait lint
 
+      - name: Typecheck AIT app
+        run: pnpm --dir apps/ait typecheck
+
       - name: Test shared core
         run: pnpm check:core
 
