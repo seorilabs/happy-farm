@@ -73,6 +73,9 @@ export function getPlotRemainingGrowthMs(gameState: GameState, plot: Plot, now =
 
   const crop = getKnownCrop(plot.cropType);
   const { speedMultiplier } = getCropModifiers(gameState, plot.cropType, now);
+  if (speedMultiplier <= 0) {
+    return crop.growTime;
+  }
   return Math.max(0, crop.growTime - (now - plot.startTime) * speedMultiplier);
 }
 

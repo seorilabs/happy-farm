@@ -700,8 +700,12 @@ export default function FarmGame({
       return;
     }
     const markSeen = () => void persistence.writeLastSeenAt?.(Date.now())?.catch(() => {});
-    const heartbeat = setInterval(markSeen, LAST_SEEN_HEARTBEAT_MS);
+    let appActive = true;
+    const heartbeat = setInterval(() => {
+      if (appActive) markSeen();
+    }, LAST_SEEN_HEARTBEAT_MS);
     const subscription = AppState.addEventListener('change', (nextState) => {
+      appActive = nextState === 'active';
       if (nextState === 'background' || nextState === 'inactive') {
         markSeen();
       }
