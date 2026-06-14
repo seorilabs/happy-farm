@@ -1641,7 +1641,7 @@ export default function FarmGame({
                   <Text style={styles.label}>{messages.boostLabel}</Text>
                   <Text style={styles.boostStat}>×{harvestBonusBoost.multiplier.toFixed(1)}</Text>
                   <Text style={styles.boostRemaining}>
-                    {formatRemainingTime(Math.max(0, harvestBonusBoost.remainingMs), locale)}
+                    {formatRemainingTime(Math.max(0, harvestBonusBoost.remainingMs ?? 0), locale)}
                   </Text>
                 </View>
               ) : null}
