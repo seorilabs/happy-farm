@@ -62,6 +62,16 @@ describe('getReturnSummary', () => {
     expect(summary?.awayMs).toBe(2 * MS_PER_HOUR);
   });
 
+  test('does not count ready crops on locked plots in readyCropCount', () => {
+    const base = createInitialState();
+    // Place a ready crop on the first locked plot (index === unlockedPlotCount).
+    const lockedIndex = base.unlockedPlotCount;
+    const state = withReadyCrop(lockedIndex, base);
+    const lastSeen = NOW - 2 * MS_PER_HOUR;
+    // No unlocked ready crops and no chain income — summary should be suppressed.
+    expect(getReturnSummary(state, lastSeen, NOW)).toBeNull();
+  });
+
   test('surfaces accrued offline chain gold', () => {
     const state = withChainFarm(3600, NOW - 2 * MS_PER_HOUR, createInitialState());
     const lastSeen = NOW - 2 * MS_PER_HOUR;
