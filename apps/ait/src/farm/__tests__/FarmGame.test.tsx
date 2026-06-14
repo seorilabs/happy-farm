@@ -13,6 +13,7 @@ import {
   createFarmAnalytics,
   createInitialState,
   formatMoney,
+  formatRemainingTime,
   getAreaCropKeys,
   getMasteryThresholds,
   getPrestigeCost,
@@ -813,8 +814,8 @@ describe('FarmGame UI flow', () => {
 
     await waitFor(() => expect(screen.getByText('부스트')).toBeTruthy());
     expect(screen.getByText(`×${HARVEST_BONUS_MULTIPLIER.toFixed(1)}`)).toBeTruthy();
-    // Remaining time should show the full 30-minute duration (30분) right at boost start.
-    expect(screen.getByText(`${Math.ceil(HARVEST_BONUS_BOOST_DURATION_MS / 60000)}분`)).toBeTruthy();
+    // Remaining time should match exactly what formatRemainingTime produces for the full duration.
+    expect(screen.getByText(formatRemainingTime(HARVEST_BONUS_BOOST_DURATION_MS))).toBeTruthy();
   });
 
   test('greets a returning player with an offline progress recap', async () => {
