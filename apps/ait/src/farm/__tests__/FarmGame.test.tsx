@@ -883,6 +883,7 @@ describe('FarmGame UI flow', () => {
       await waitFor(() => expect(screen.getByText(`${formatMoney(lateGame.gold)}G`)).toBeTruthy());
       fireEvent.press(screen.getByLabelText(claimMessages.collectionButtonAccessibilityLabel));
       await waitFor(() => expect(screen.getByText(claimButtonLabel)).toBeTruthy());
+      vibrateSpy.mockClear(); // reset count so only the claim press is counted
       fireEvent.press(screen.getByText(claimButtonLabel));
       return screen;
     }
@@ -996,6 +997,7 @@ describe('FarmGame UI flow', () => {
         screen.getByLabelText(claimMessages.achievementsButtonAccessibilityLabel)
       );
       await waitFor(() => expect(screen.getByText(claimLabel)).toBeTruthy());
+      vibrateSpy.mockClear(); // reset count so only the claim press is counted
       fireEvent.press(screen.getByText(claimLabel));
       return screen;
     }
