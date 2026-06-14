@@ -1110,6 +1110,7 @@ export default function FarmGame({
       context: analyticsContext(),
     });
     toast(messages.collectionRewardClaimedToast(formatMoney(preview.awardedGold, locale)));
+    try { Vibration.vibrate(50); } catch { /* non-critical haptic */ }
     pulseGold();
     _callGoldPulseHook();
     if (gameSettings.soundEffectsEnabled && audio.isSupported) {
@@ -1145,6 +1146,14 @@ export default function FarmGame({
       context: analyticsContext(),
     });
     toast(messages.achievementClaimedToast(preview.starsAwarded));
+    try { Vibration.vibrate(50); } catch { /* non-critical haptic */ }
+    if (gameSettings.soundEffectsEnabled && audio.isSupported) {
+      try {
+        void Promise.resolve(audio.playHarvest()).catch(() => undefined);
+      } catch {
+        // SFX errors are non-critical.
+      }
+    }
   }
 
   function selectTitle(titleKey: TitleKey | null) {
