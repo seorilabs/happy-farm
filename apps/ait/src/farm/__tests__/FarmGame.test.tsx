@@ -814,8 +814,9 @@ describe('FarmGame UI flow', () => {
 
     await waitFor(() => expect(screen.getByText('부스트')).toBeTruthy());
     expect(screen.getByText(`×${HARVEST_BONUS_MULTIPLIER.toFixed(1)}`)).toBeTruthy();
-    // Remaining time should match exactly what formatRemainingTime produces for the full duration.
-    expect(screen.getByText(formatRemainingTime(HARVEST_BONUS_BOOST_DURATION_MS))).toBeTruthy();
+    // Remaining time should match exactly what formatRemainingTime produces for the full duration
+    // in the default Korean locale that renderGame uses.
+    expect(screen.getByText(formatRemainingTime(HARVEST_BONUS_BOOST_DURATION_MS, 'ko-KR'))).toBeTruthy();
   });
 
   test('greets a returning player with an offline progress recap', async () => {
