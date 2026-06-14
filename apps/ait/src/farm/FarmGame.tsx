@@ -711,7 +711,9 @@ export default function FarmGame({
               harvestFxRef.current?.spawn(
                 fx.plotIndex,
                 `+${formatMoney(fx.goldGained, locale)}`,
-                fx.special ? 'special' : 'normal'
+                // Elevate to 'special' tone when the batch earned a combo bonus
+                // so the FX signal mirrors single-harvest combo behaviour.
+                fx.special || allBonusGold > 0 ? 'special' : 'normal'
               );
             }
           }
