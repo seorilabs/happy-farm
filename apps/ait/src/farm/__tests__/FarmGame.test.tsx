@@ -5,22 +5,27 @@ import { Vibration } from 'react-native';
 import { act, cleanup, fireEvent, render, waitFor, within } from '@testing-library/react-native';
 import {
   CROPS,
+  DEFAULT_LOCALE,
   FARM_AREAS,
   HARVEST_BONUS_AD_COOLDOWN_MS,
   HARVEST_BONUS_MULTIPLIER,
   MAX_PLOTS,
+  PRESTIGE_STARS_BASE,
+  REGION_ARCHETYPES,
   createFarmAnalytics,
   createInitialState,
   formatMoney,
   getAreaCropKeys,
   getMasteryThresholds,
   getPrestigeCost,
+  getRegionArchetypeLabel,
   type AreaKey,
   type CropKey,
   type GameState,
   type RewardedAdController,
   type RewardedAdShowResult,
 } from '../../../../../packages/farm-core/src';
+import { getFarmMessages } from '../i18n';
 
 const NOW = Date.parse('2026-05-27T03:00:00.000Z');
 
@@ -30,7 +35,11 @@ jest.mock('react-native-safe-area-context', () => ({
 
 const farmGameModule = jest.requireActual('../FarmGame') as typeof import('../FarmGame');
 const FarmGame = farmGameModule.default;
-const { GAME_TICK_INTERVAL_MS, MASTERY_RANK_UP_CELEBRATION_DURATION_MS } = farmGameModule;
+const {
+  GAME_TICK_INTERVAL_MS,
+  MASTERY_RANK_UP_CELEBRATION_DURATION_MS,
+  PRESTIGE_GRADUATION_CELEBRATION_DURATION_MS,
+} = farmGameModule;
 const mockPersistence = {
   readPersistedGameState: jest.fn<Promise<GameState>, []>(),
   writePersistedGameState: jest.fn<Promise<void>, [GameState]>(),
@@ -175,8 +184,9 @@ function createThrowingRewardedAd(error = new Error('sdk dynamic failure message
   };
 }
 
-// Rendering the full farm tree is heavy; the first test additionally pays the
-// module-loading warmup, which can exceed jest's 5s default on slow CI runners.
+// CI runners are typically 3-5× slower than local; 30 s gives enough headroom
+// for the heaviest tests (first-run module warmup, rewarded ad flows) without
+// letting a genuinely hung test pass unnoticed.
 jest.setTimeout(30000);
 
 describe('FarmGame UI flow', () => {
@@ -701,6 +711,73 @@ describe('FarmGame UI flow', () => {
     // The graduated farm is now part of the chain; the active farm is #2.
     expect(screen.getByText(/2호 농장/)).toBeTruthy();
     expect(screen.getByText(/1호 농장 · 평원/)).toBeTruthy();
+  });
+
+  const prestigeMessages = getFarmMessages();
+  let tundra!: (typeof REGION_ARCHETYPES)[number];
+  let tundraName!: string;
+
+  beforeAll(() => {
+    const found = REGION_ARCHETYPES.find((a) => a.key === 'tundra');
+    expect(found).toBeDefined();
+    if (found == null) throw new Error('tundra archetype missing from REGION_ARCHETYPES');
+    tundra = found;
+    tundraName = getRegionArchetypeLabel(found.key, DEFAULT_LOCALE).name;
+  });
+
+  function createPrestigeReadyState(): GameState {
+    const base = createInitialState();
+    const legendCrops = getAreaCropKeys('legend_field');
+    return {
+      ...base,
+      gold: getPrestigeCost(0),
+      harvestedCropKeys: [...legendCrops],
+      harvestCounts: Object.fromEntries(legendCrops.map((cropKey) => [cropKey, 2])),
+    };
+  }
+
+  async function triggerPrestige(screen: ReturnType<typeof render>) {
+    await waitFor(() => expect(screen.getByTestId('prestige-stars-chip')).toBeTruthy());
+    fireEvent.press(screen.getByLabelText(prestigeMessages.mapButtonAccessibilityLabel));
+    fireEvent.press(screen.getByText(prestigeMessages.prestigeAction(PRESTIGE_STARS_BASE)));
+    fireEvent.press(screen.getByText(`${tundra.icon} ${tundraName}`));
+    fireEvent.press(screen.getByText(prestigeMessages.prestigeConfirmAction(PRESTIGE_STARS_BASE)));
+  }
+
+  test('shows prestige graduation overlay on region pioneer', async () => {
+    const screen = await renderGame(createPrestigeReadyState());
+
+    await triggerPrestige(screen);
+
+    const card = await waitFor(() => screen.getByTestId('prestige-graduation-card'));
+    expect(within(card).getByText(prestigeMessages.prestigeGraduationTitle)).toBeTruthy();
+    expect(within(card).getByText(tundra.icon)).toBeTruthy();
+    expect(within(card).getByText(tundraName)).toBeTruthy();
+    expect(within(card).getByText(prestigeMessages.prestigeGraduationStarsLabel(PRESTIGE_STARS_BASE))).toBeTruthy();
+  });
+
+  test('prestige graduation overlay auto-dismisses after the celebration duration', async () => {
+    const screen = await renderGame(createPrestigeReadyState());
+
+    await triggerPrestige(screen);
+    await waitFor(() => expect(screen.getByTestId('prestige-graduation-overlay')).toBeTruthy());
+
+    await act(async () => {
+      jest.advanceTimersByTime(PRESTIGE_GRADUATION_CELEBRATION_DURATION_MS);
+    });
+
+    await waitFor(() => expect(screen.queryByTestId('prestige-graduation-overlay')).toBeNull());
+  });
+
+  test('prestige graduation overlay dismisses immediately on backdrop tap', async () => {
+    const screen = await renderGame(createPrestigeReadyState());
+
+    await triggerPrestige(screen);
+    await waitFor(() => expect(screen.getByTestId('prestige-graduation-overlay')).toBeTruthy());
+
+    fireEvent.press(screen.getByTestId('prestige-graduation-overlay'));
+
+    await waitFor(() => expect(screen.queryByTestId('prestige-graduation-overlay')).toBeNull());
   });
 
   test('keeps reset behind the settings sheet', async () => {
