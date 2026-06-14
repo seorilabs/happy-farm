@@ -210,12 +210,11 @@ describe('FarmGame UI flow', () => {
     expect(screen.getByText('당근')).toBeTruthy();
     expect(screen.getByText('효율 +40%')).toBeTruthy();
 
-    // The next-goal bar in the header also contains "채소 밭"; target the
-    // area tab specifically (it is the second match in DOM order).
-    const [, vegetableFieldTab] = screen.getAllByText(/채소 밭/);
-    fireEvent.press(vegetableFieldTab!);
+    // Use the stable testID added to each area tab so text duplication with the
+    // next-goal bar in the header cannot cause a selector collision.
+    fireEvent.press(screen.getByTestId('area-tab-vegetable_field'));
     expect(screen.getByText('채소 밭 열기 조건')).toBeTruthy();
-    fireEvent.press(screen.getByText('초보 밭'));
+    fireEvent.press(screen.getByTestId('area-tab-starter_field'));
 
     fireEvent.press(screen.getByText('당근'));
     expect(screen.getByText('당근 심기 · 10G · 투자효율 +40%')).toBeTruthy();
@@ -288,12 +287,11 @@ describe('FarmGame UI flow', () => {
     expect(screen.getAllByText('Empty')).toHaveLength(6);
     expect(screen.getByText('Carrot')).toBeTruthy();
 
-    // The next-goal bar in the header also contains "Vegetable Field"; target
-    // the area tab specifically (it is the second match in DOM order).
-    const [, vegetableFieldTab] = screen.getAllByText(/Vegetable Field/);
-    fireEvent.press(vegetableFieldTab!);
+    // Use the stable testID on each area tab to avoid colliding with the
+    // next-goal bar in the header that also shows the area name.
+    fireEvent.press(screen.getByTestId('area-tab-vegetable_field'));
     expect(screen.getByText('Vegetable Field requirements')).toBeTruthy();
-    fireEvent.press(screen.getByText('Starter Field'));
+    fireEvent.press(screen.getByTestId('area-tab-starter_field'));
 
     fireEvent.press(screen.getByText('Carrot'));
     expect(screen.getByText('Plant Carrot · 10G · ROI +40%')).toBeTruthy();
@@ -715,5 +713,106 @@ describe('FarmGame UI flow', () => {
 
     await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
     expect(screen.queryByText('다시 오셨네요!')).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Unit tests for getNextAreaGoal – pure function, no RN rendering needed.
+// ---------------------------------------------------------------------------
+describe('getNextAreaGoal', () => {
+  const { getNextAreaGoal } = farmGameModule;
+
+  // Helpers for building targeted game states.
+  const withGold = (state: GameState, gold: number): GameState => ({ ...state, gold });
+  const withHarvested = (state: GameState, keys: string[]): GameState => ({
+    ...state,
+    harvestedCropKeys: keys as GameState['harvestedCropKeys'],
+  });
+  const withUpgrades = (state: GameState, level: number): GameState => ({
+    ...state,
+    upgrades: { speed: level, profit: level },
+  });
+  const withUnlocked = (state: GameState, areaKeys: string[]): GameState => ({
+    ...state,
+    unlockedAreas: areaKeys as GameState['unlockedAreas'],
+  });
+
+  // Four distinct crop keys that satisfy the vegetable_field harvest requirement (4).
+  const FOUR_CROPS = ['carrot', 'wheat', 'potato', 'onion'] as const;
+
+  test('returns null when all sequential (non-gated) areas are unlocked', () => {
+    const sequentialAreaKeys = FARM_AREAS.filter((a) => a.unlock.gate == null).map((a) => a.key);
+    const state = withUnlocked(createInitialState(), sequentialAreaKeys);
+    expect(getNextAreaGoal(state)).toBeNull();
+  });
+
+  test('returns harvest kind when harvest ratio is the worst bottleneck', () => {
+    // Initial state: gold=50 (ratio≈0.17 vs 300 needed), harvested=0 (ratio=0 vs 4 needed).
+    // Harvest ratio (0) < gold ratio (~0.17) → harvest is the bottleneck.
+    const state = createInitialState();
+    const result = getNextAreaGoal(state);
+    expect(result).toMatchObject({ kind: 'harvest', areaKey: 'vegetable_field', current: 0, total: 4 });
+  });
+
+  test('returns gold kind when harvest is met but gold is the bottleneck', () => {
+    // harvest=4/4 (ok), gold=100/300 (not ok), upgrade=1/1 (ok) → gold.
+    const state = withHarvested(withGold(createInitialState(), 100), [...FOUR_CROPS]);
+    const result = getNextAreaGoal(state);
+    expect(result).toMatchObject({ kind: 'gold', areaKey: 'vegetable_field', current: 100, total: 300 });
+  });
+
+  test('returns upgrade kind when both gold and harvest are met but upgrade level is too low', () => {
+    // fruit_field needs upgradeLevel 3. We unlock vegetable_field and set gold/harvest
+    // to satisfy fruit_field's gold (15000) and harvest (10) requirements but keep
+    // the upgrade level at 1 (min of speed/profit).
+    const tenCrops = ['carrot','wheat','potato','onion','corn','tomato','pepper','mushroom','rice','strawberry'];
+    const state = withUpgrades(
+      withHarvested(
+        withGold(
+          withUnlocked(createInitialState(), ['starter_field', 'vegetable_field']),
+          20_000
+        ),
+        tenCrops
+      ),
+      1 // minUpgradeLevel=1 < 3 required
+    );
+    const result = getNextAreaGoal(state);
+    expect(result).toMatchObject({ kind: 'upgrade', areaKey: 'fruit_field', current: 1, total: 3 });
+  });
+
+  test('returns ready kind when every requirement for the next area is met', () => {
+    // vegetable_field: 300G, 4 crops, Lv.1 – all satisfied.
+    const state = withHarvested(withGold(createInitialState(), 300), [...FOUR_CROPS]);
+    const result = getNextAreaGoal(state);
+    expect(result).toMatchObject({ kind: 'ready', areaKey: 'vegetable_field' });
+  });
+
+  test('gold wins the tie when goldRatio equals harvestRatio', () => {
+    // gold=150 → ratio 0.5 (150/300); harvested=2 → ratio 0.5 (2/4).
+    // When ratios are equal the gold branch fires first because its condition
+    // uses <=, giving gold priority over harvest in ties.
+    const state = withHarvested(withGold(createInitialState(), 150), ['carrot', 'wheat']);
+    const result = getNextAreaGoal(state);
+    expect(result).toMatchObject({ kind: 'gold', areaKey: 'vegetable_field' });
+  });
+
+  test('boundary: reaching the exact gold threshold switches to ready', () => {
+    const state = withHarvested(withGold(createInitialState(), 300), [...FOUR_CROPS]);
+    expect(getNextAreaGoal(state)).toMatchObject({ kind: 'ready' });
+  });
+
+  test('boundary: one gold short of the threshold stays as gold', () => {
+    const state = withHarvested(withGold(createInitialState(), 299), [...FOUR_CROPS]);
+    const result = getNextAreaGoal(state);
+    expect(result).toMatchObject({ kind: 'gold', current: 299, total: 300 });
+  });
+
+  test('skips gated areas (hybrid_greenhouse) when all sequential areas are unlocked', () => {
+    // hybrid_greenhouse has gate='breeding_lab' so it must be excluded from the
+    // sequential scan. With all sequential areas unlocked the function returns null
+    // rather than pointing at the gated area.
+    const sequentialAreaKeys = FARM_AREAS.filter((a) => a.unlock.gate == null).map((a) => a.key);
+    const state = withUnlocked(createInitialState(), sequentialAreaKeys);
+    expect(getNextAreaGoal(state)).toBeNull();
   });
 });

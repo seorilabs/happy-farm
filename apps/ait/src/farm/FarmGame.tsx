@@ -177,14 +177,14 @@ function formatStatMultiplier(value: number) {
 // Identifies the single most actionable next milestone for the player: the
 // first locked sequential area, and whichever of its requirements is furthest
 // from met. Returned raw so the component can format it with the active locale.
-type NextAreaGoal =
+export type NextAreaGoal =
   | { kind: 'gold'; areaKey: AreaKey; current: number; total: number }
   | { kind: 'harvest'; areaKey: AreaKey; current: number; total: number }
   | { kind: 'upgrade'; areaKey: AreaKey; current: number; total: number }
   | { kind: 'ready'; areaKey: AreaKey }
   | null;
 
-function getNextAreaGoal(gameState: GameState): NextAreaGoal {
+export function getNextAreaGoal(gameState: GameState): NextAreaGoal {
   const nextArea = FARM_AREAS.find(
     (area) => !isAreaUnlocked(gameState, area.key) && area.unlock.gate == null
   );
@@ -1658,6 +1658,7 @@ export default function FarmGame({
             return (
               <Pressable
                 key={area.key}
+                testID={`area-tab-${area.key}`}
                 style={[styles.areaTab, !unlocked && styles.lockedAreaTab, active && styles.activeAreaTab]}
                 onPress={() => selectArea(area.key)}
               >
