@@ -691,7 +691,12 @@ export default function FarmGame({
           // on RP earned (not "gold === 0") so a future zero-value crop still
           // reads as a harvest rather than a donation.
           if (effect.totalRpGained > 0) {
-            toast(messages.harvestAllDonatedToast(formatMoney(effect.totalRpGained, locale), effect.harvestedCount));
+            const isFirstRp = gameState.lifetimeStats.researchPointsEarned === effect.totalRpGained;
+            toast(
+              isFirstRp
+                ? messages.firstDonationToast(formatMoney(effect.totalRpGained, locale))
+                : messages.harvestAllDonatedToast(formatMoney(effect.totalRpGained, locale), effect.harvestedCount)
+            );
           } else {
             toast(messages.harvestAllToast(formatMoney(effect.totalGoldGained, locale), effect.harvestedCount));
           }
@@ -737,7 +742,12 @@ export default function FarmGame({
           rankName: getMasteryRankLabel(event.newMasteryRank.key, locale).name,
         });
       } else if (event.donated) {
-        toast(messages.donatedToast(formatMoney(event.rpGained, locale)));
+        const isFirstRp = gameState.lifetimeStats.researchPointsEarned === event.rpGained;
+        toast(
+          isFirstRp
+            ? messages.firstDonationToast(formatMoney(event.rpGained, locale))
+            : messages.donatedToast(formatMoney(event.rpGained, locale))
+        );
       } else if (event.mutation != null) {
         toast(
           messages.mutationHarvestedToast(
