@@ -313,11 +313,10 @@ describe('FarmGame UI flow', () => {
     expect(screen.getAllByText('빈 밭')).toHaveLength(6);
   });
 
-  test('shows mastery rank badge on plots with a ranked crop', async () => {
+  test('shows mastery rank badge on a growing (state 1) plot', async () => {
     const base = createInitialState();
-    const masteryState: GameState = {
+    const state: GameState = {
       ...base,
-      // 10 carrot harvests => Bronze rank (🥉) for tier-1 crops
       harvestCounts: { ...base.harvestCounts, carrot: 10 },
       plots: base.plots.map((plot, index) =>
         index === 0
@@ -325,11 +324,55 @@ describe('FarmGame UI flow', () => {
           : plot
       ),
     };
-    const screen = await renderGame(masteryState);
-
+    const screen = await renderGame(state);
     await waitFor(() =>
       expect(within(screen.getByTestId('plot-cell-0')).getByText('🥉')).toBeTruthy()
     );
+  });
+
+  test('shows mastery rank badge on a ready-to-harvest (state 2) plot', async () => {
+    const base = createInitialState();
+    const state: GameState = {
+      ...base,
+      harvestCounts: { ...base.harvestCounts, carrot: 10 },
+      plots: base.plots.map((plot, index) =>
+        index === 0
+          ? { ...plot, cropType: 'carrot' as CropKey, startTime: NOW - 10_000, state: 2 as const }
+          : plot
+      ),
+    };
+    const screen = await renderGame(state);
+    await waitFor(() =>
+      expect(within(screen.getByTestId('plot-cell-0')).getByText('🥉')).toBeTruthy()
+    );
+  });
+
+  test('hides mastery rank badge on an empty (state 0) plot', async () => {
+    const base = createInitialState();
+    const state: GameState = {
+      ...base,
+      harvestCounts: { ...base.harvestCounts, carrot: 10 },
+    };
+    const screen = await renderGame(state);
+    await waitFor(() => expect(screen.getByTestId('plot-cell-0')).toBeTruthy());
+    expect(within(screen.getByTestId('plot-cell-0')).queryByText('🥉')).toBeNull();
+  });
+
+  test('hides mastery rank badge on a locked plot', async () => {
+    const base = createInitialState();
+    const state: GameState = {
+      ...base,
+      harvestCounts: { ...base.harvestCounts, carrot: 10 },
+      unlockedPlotCount: 1,
+      plots: base.plots.map((plot, index) =>
+        index === 1
+          ? { ...plot, cropType: 'carrot' as CropKey, startTime: NOW, state: 1 as const }
+          : plot
+      ),
+    };
+    const screen = await renderGame(state);
+    await waitFor(() => expect(screen.getByTestId('plot-cell-1')).toBeTruthy());
+    expect(within(screen.getByTestId('plot-cell-1')).queryByText('🥉')).toBeNull();
   });
 
   test('renders the shared farm UI in English when the saved locale is en-US', async () => {
