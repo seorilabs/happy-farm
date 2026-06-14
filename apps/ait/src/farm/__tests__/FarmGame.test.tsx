@@ -840,7 +840,7 @@ describe('FarmGame UI flow', () => {
           playComboMilestone: jest.fn(),
           setBackgroundMusicEnabled: jest.fn(),
         },
-        onGoldPulse,
+        __testOnlyOnGoldPulse: onGoldPulse,
       },
       { soundEffectsEnabled: true }
     );
@@ -853,14 +853,15 @@ describe('FarmGame UI flow', () => {
     fireEvent.press(screen.getByText(claimButtonLabel));
 
     await waitFor(() => expect(playHarvest).toHaveBeenCalledTimes(1));
-    expect(onGoldPulse).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(onGoldPulse).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(screen.getByText(claimMessages.collectionClaimedLabel)).toBeTruthy());
   });
 
-  test('does not play harvest sound when sound effects are disabled', async () => {
+  test('does not play harvest sound when sound effects are disabled, but still pulses gold', async () => {
     // createLateGameState() discovers all crops, making all area collection rewards claimable.
     const lateGame = createLateGameState();
     const playHarvest = jest.fn();
+    const onGoldPulse = jest.fn();
     const claimMessages = getFarmMessages();
     const firstAreaKey = FARM_AREAS[0]!.key;
     const firstAreaReward = COLLECTION_AREA_REWARDS[firstAreaKey];
@@ -877,6 +878,7 @@ describe('FarmGame UI flow', () => {
           playComboMilestone: jest.fn(),
           setBackgroundMusicEnabled: jest.fn(),
         },
+        __testOnlyOnGoldPulse: onGoldPulse,
       },
       { soundEffectsEnabled: false }
     );
@@ -887,13 +889,15 @@ describe('FarmGame UI flow', () => {
     fireEvent.press(screen.getByText(claimButtonLabel));
 
     await waitFor(() => expect(screen.getByText(claimMessages.collectionClaimedLabel)).toBeTruthy());
+    await waitFor(() => expect(onGoldPulse).toHaveBeenCalledTimes(1));
     expect(playHarvest).not.toHaveBeenCalled();
   });
 
-  test('does not play harvest sound when audio is unsupported', async () => {
+  test('does not play harvest sound when audio is unsupported, but still pulses gold', async () => {
     // createLateGameState() discovers all crops, making all area collection rewards claimable.
     const lateGame = createLateGameState();
     const playHarvest = jest.fn();
+    const onGoldPulse = jest.fn();
     const claimMessages = getFarmMessages();
     const firstAreaKey = FARM_AREAS[0]!.key;
     const firstAreaReward = COLLECTION_AREA_REWARDS[firstAreaKey];
@@ -910,6 +914,7 @@ describe('FarmGame UI flow', () => {
           playComboMilestone: jest.fn(),
           setBackgroundMusicEnabled: jest.fn(),
         },
+        __testOnlyOnGoldPulse: onGoldPulse,
       },
       { soundEffectsEnabled: true }
     );
@@ -920,6 +925,7 @@ describe('FarmGame UI flow', () => {
     fireEvent.press(screen.getByText(claimButtonLabel));
 
     await waitFor(() => expect(screen.getByText(claimMessages.collectionClaimedLabel)).toBeTruthy());
+    await waitFor(() => expect(onGoldPulse).toHaveBeenCalledTimes(1));
     expect(playHarvest).not.toHaveBeenCalled();
   });
 

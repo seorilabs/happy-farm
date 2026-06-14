@@ -288,9 +288,10 @@ export type FarmGameProps = {
   audio?: FarmGameAudio;
   market?: FarmGameMarket;
   preferredLocale?: SupportedLocale;
-  // Test hook: called immediately after pulseGold() fires, enabling spies to
-  // assert the gold-pulse path without coupling tests to Animated internals.
-  onGoldPulse?: () => void;
+  // Test-only hook: called immediately after pulseGold() fires, enabling spies
+  // to assert the gold-pulse path without coupling tests to Animated internals.
+  // Must not be used in production code.
+  __testOnlyOnGoldPulse?: () => void;
 };
 
 type GetAnalyticsContext = (state?: GameState) => GameAnalyticsContext;
@@ -423,7 +424,7 @@ export default function FarmGame({
   audio = defaultFarmAudio,
   market = 'appsInToss',
   preferredLocale = DEFAULT_LOCALE,
-  onGoldPulse,
+  __testOnlyOnGoldPulse: onGoldPulse,
 }: FarmGameProps = {}) {
   const insets = useFarmSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
