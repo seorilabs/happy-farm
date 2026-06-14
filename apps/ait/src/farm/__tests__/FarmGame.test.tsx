@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { Vibration } from 'react-native';
-import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act, cleanup, fireEvent, render, waitFor, within } from '@testing-library/react-native';
 import {
   CROPS,
   FARM_AREAS,
@@ -29,7 +29,7 @@ jest.mock('react-native-safe-area-context', () => ({
 
 const farmGameModule = jest.requireActual('../FarmGame') as typeof import('../FarmGame');
 const FarmGame = farmGameModule.default;
-const { GAME_TICK_INTERVAL_MS } = farmGameModule;
+const { GAME_TICK_INTERVAL_MS, MASTERY_RANK_UP_CELEBRATION_DURATION_MS } = farmGameModule;
 const mockPersistence = {
   readPersistedGameState: jest.fn<Promise<GameState>, []>(),
   writePersistedGameState: jest.fn<Promise<void>, [GameState]>(),
@@ -519,14 +519,113 @@ describe('FarmGame UI flow', () => {
 
     await waitFor(() => expect(screen.getByText('50G')).toBeTruthy());
 
-    fireEvent.press(screen.getAllByText('GET')[0]!);
+    fireEvent.press(within(screen.getByTestId('plot-cell-0')).getByText('GET'));
 
-    expect(screen.getByText(/숙련도가 브론즈 등급/)).toBeTruthy();
+    expect(screen.getByText('숙련도 달성!')).toBeTruthy();
+    expect(screen.getByText(/브론즈/)).toBeTruthy();
 
     fireEvent.press(screen.getByLabelText('작물 도감'));
 
     expect(screen.getByText(`${firstThreshold}/${thresholds[1]}`)).toBeTruthy();
     expect(screen.getByText('🥉')).toBeTruthy();
+  });
+
+  test('mastery rank-up overlay auto-dismisses after the celebration duration', async () => {
+    const thresholds = getMasteryThresholds('carrot');
+    const firstThreshold = thresholds[0]!;
+    const state: GameState = {
+      ...createReadyHarvestState(),
+      harvestedCropKeys: ['carrot'],
+      harvestCounts: { carrot: firstThreshold - 1 },
+    };
+    const screen = await renderGame(state);
+
+    await waitFor(() => expect(screen.getByText('50G')).toBeTruthy());
+    fireEvent.press(within(screen.getByTestId('plot-cell-0')).getByText('GET'));
+
+    expect(screen.getByText('숙련도 달성!')).toBeTruthy();
+
+    await act(async () => {
+      jest.advanceTimersByTime(MASTERY_RANK_UP_CELEBRATION_DURATION_MS);
+    });
+
+    expect(screen.queryByText('숙련도 달성!')).toBeNull();
+  });
+
+  test('mastery rank-up overlay dismisses immediately on backdrop tap', async () => {
+    const thresholds = getMasteryThresholds('carrot');
+    const firstThreshold = thresholds[0]!;
+    const state: GameState = {
+      ...createReadyHarvestState(),
+      harvestedCropKeys: ['carrot'],
+      harvestCounts: { carrot: firstThreshold - 1 },
+    };
+    const screen = await renderGame(state);
+
+    await waitFor(() => expect(screen.getByText('50G')).toBeTruthy());
+    fireEvent.press(within(screen.getByTestId('plot-cell-0')).getByText('GET'));
+
+    expect(screen.getByText('숙련도 달성!')).toBeTruthy();
+
+    fireEvent.press(screen.getByTestId('mastery-rank-up-overlay'));
+
+    expect(screen.queryByText('숙련도 달성!')).toBeNull();
+  });
+
+  test('consecutive rank-ups replace the overlay notice and reset the auto-dismiss timer', async () => {
+    const thresholds = getMasteryThresholds('carrot');
+    const firstThreshold = thresholds[0]!;
+    const wheatThresholds = getMasteryThresholds('wheat');
+    const wheatFirstThreshold = wheatThresholds[0]!;
+    const base = createInitialState();
+    // Plot 0 = carrot (rank-up on next harvest), plot 1 = wheat (rank-up on next harvest)
+    const state: GameState = {
+      ...base,
+      plots: [
+        { ...base.plots[0]!, cropType: 'carrot', startTime: NOW - 10_000, state: 2 },
+        { ...base.plots[1]!, cropType: 'wheat', startTime: NOW - 10_000, state: 2 },
+        ...base.plots.slice(2),
+      ],
+      unlockedAreas: base.unlockedAreas,
+      harvestedCropKeys: ['carrot', 'wheat'],
+      harvestCounts: {
+        carrot: firstThreshold - 1,
+        wheat: wheatFirstThreshold - 1,
+      },
+    };
+    const screen = await renderGame(state);
+
+    await waitFor(() => expect(screen.getAllByText('GET').length).toBeGreaterThanOrEqual(2));
+
+    // First rank-up: explicitly press plot 0 (carrot) — overlay shows carrot's name
+    fireEvent.press(within(screen.getByTestId('plot-cell-0')).getByText('GET'));
+    const cardAfterFirst = screen.getByTestId('mastery-rank-up-card');
+    expect(within(cardAfterFirst).getByText('당근')).toBeTruthy();
+    expect(within(cardAfterFirst).getByText(/브론즈/)).toBeTruthy();
+
+    // Advance partway through the first timer — overlay still showing
+    await act(async () => {
+      jest.advanceTimersByTime(MASTERY_RANK_UP_CELEBRATION_DURATION_MS - 500);
+    });
+    expect(screen.getByText('숙련도 달성!')).toBeTruthy();
+
+    // Second rank-up: target plot-cell-1 (wheat) directly, independent of DOM order.
+    fireEvent.press(within(screen.getByTestId('plot-cell-1')).getByText('GET'));
+    const cardAfterSecond = screen.getByTestId('mastery-rank-up-card');
+    expect(within(cardAfterSecond).getByText('밀')).toBeTruthy();
+    expect(within(cardAfterSecond).getByText(/브론즈/)).toBeTruthy();
+
+    // Old timer would have expired by now but the reset timer is still running
+    await act(async () => {
+      jest.advanceTimersByTime(600);
+    });
+    expect(screen.getByText('숙련도 달성!')).toBeTruthy();
+
+    // Full duration from the second rank-up elapses — overlay gone
+    await act(async () => {
+      jest.advanceTimersByTime(MASTERY_RANK_UP_CELEBRATION_DURATION_MS);
+    });
+    expect(screen.queryByText('숙련도 달성!')).toBeNull();
   });
 
   test('collects every ripe plot in one tap via the Harvest All shortcut', async () => {
