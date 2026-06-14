@@ -143,10 +143,11 @@ const PLANT_POP_DURATION_MS = 320;
 // tapping each one becomes a chore; a single ripe plot is a quick one-tap.
 const HARVEST_ALL_MIN_COUNT = 2;
 // Harvest combo: the window (ms) within which consecutive manual harvests
-// build a streak counter. Tier thresholds gate icon/color escalation.
+// build a streak counter. Tier thresholds gate icon/color escalation and
+// audio milestone cues.
 const COMBO_WINDOW_MS = 1500;
-const COMBO_GREAT_THRESHOLD = 5;
-const COMBO_LEGENDARY_THRESHOLD = 10;
+export const COMBO_GREAT_THRESHOLD = 5;
+export const COMBO_LEGENDARY_THRESHOLD = 10;
 export const MASTERY_RANK_UP_CELEBRATION_DURATION_MS = 2600;
 export const PRESTIGE_GRADUATION_CELEBRATION_DURATION_MS = 3500;
 const SHEET_DISMISS_DRAG_DISTANCE = 96;
@@ -274,6 +275,7 @@ type FarmGameMarket = 'appsInToss' | 'mobile';
 export type FarmGameAudio = {
   isSupported: boolean;
   playHarvest: () => void | Promise<void>;
+  playComboMilestone: (tier: 'great' | 'legendary') => void | Promise<void>;
   setBackgroundMusicEnabled: (enabled: boolean) => void | Promise<void>;
 };
 
@@ -364,6 +366,7 @@ const defaultFarmAnalytics = createFarmAnalytics();
 const defaultFarmAudio: FarmGameAudio = {
   isSupported: false,
   playHarvest: () => undefined,
+  playComboMilestone: () => undefined,
   setBackgroundMusicEnabled: () => undefined,
 };
 const defaultPersistence: FarmGamePersistence = {
@@ -428,6 +431,7 @@ export default function FarmGame({
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [harvestCombo, setHarvestCombo] = useState(0);
   const comboTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const prevComboRef = useRef(0);
   const [masteryRankUpNotice, setMasteryRankUpNotice] = useState<MasteryRankUpNotice | null>(null);
   const masteryRankUpTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const masteryNoticeIdRef = useRef(0);
@@ -595,6 +599,18 @@ export default function FarmGame({
       }
     };
   }, []);
+
+  useEffect(() => {
+    const prev = prevComboRef.current;
+    prevComboRef.current = harvestCombo;
+    if (!gameSettings.soundEffectsEnabled || !audio.isSupported) return;
+    if (harvestCombo === 0) return;
+    const prevTier = prev < COMBO_GREAT_THRESHOLD ? 0 : prev < COMBO_LEGENDARY_THRESHOLD ? 1 : 2;
+    const currTier = harvestCombo < COMBO_GREAT_THRESHOLD ? 0 : harvestCombo < COMBO_LEGENDARY_THRESHOLD ? 1 : 2;
+    if (currTier > prevTier) {
+      void audio.playComboMilestone(currTier >= 2 ? 'legendary' : 'great');
+    }
+  }, [harvestCombo, audio, gameSettings.soundEffectsEnabled]);
 
   const analyticsContext = useCallback(
     (state = gameState) => getGameAnalyticsContext(state, sessionStartedAtRef.current),
