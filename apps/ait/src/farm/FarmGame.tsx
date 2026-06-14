@@ -433,10 +433,6 @@ export default function FarmGame({
   const [isSaveLoaded, setIsSaveLoaded] = useState(false);
   const [isSettingsLoaded, setIsSettingsLoaded] = useState(false);
   const [gameSettings, setGameSettings] = useState<FarmGameSettings>(DEFAULT_FARM_GAME_SETTINGS);
-  // "Latest ref" pattern — always reflects the committed gameSettings without
-  // adding it to useCallback dependency arrays.
-  const gameSettingsRef = useRef(gameSettings);
-  gameSettingsRef.current = gameSettings;
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [harvestCombo, setHarvestCombo] = useState(0);
@@ -583,23 +579,13 @@ export default function FarmGame({
   }, []);
   // Marks the tutorial as seen (persisted) when the player dismisses it, so
   // it shows exactly once even if they close the app before planting.
+  // Persistence happens via the gameSettings useEffect (line ~929) once
+  // isSettingsLoaded is true. loadSavedSettings preserves this flag if it
+  // races with closeTutorial — see the functional update there.
   const closeTutorial = useCallback(() => {
-    // Functional update to avoid stale-closure races with concurrent settings
-    // changes (e.g. locale toggle). The updater stays pure — no side effects.
     setGameSettings((prev) => normalizeFarmGameSettings({ ...prev, hasSeenTutorial: true }));
-    // Fire-and-forget persistence write outside the updater. We use
-    // gameSettingsRef (always the latest committed state) so the write
-    // includes any concurrent changes already committed to state.
-    const seenSettings = normalizeFarmGameSettings({ ...gameSettingsRef.current, hasSeenTutorial: true });
-    Promise.resolve()
-      .then(() => persistence.writePersistedGameSettings?.(seenSettings))
-      .catch((err) => {
-        if (__DEV__) {
-          console.warn('[FarmGame] closeTutorial: failed to persist hasSeenTutorial', err);
-        }
-      });
     setActiveSheet(null);
-  }, [persistence]);
+  }, []);
   const clearPlantPulse = useCallback((index: number) => {
     setPlantPulses((prev) => {
       if (prev[index] == null) {
@@ -894,7 +880,12 @@ export default function FarmGame({
       if (cancelled) {
         return;
       }
-      setGameSettings(normalizeFarmGameSettings(savedSettings, preferredLocale));
+      setGameSettings((current) => {
+        const loaded = normalizeFarmGameSettings(savedSettings, preferredLocale);
+        // Preserve hasSeenTutorial if closeTutorial ran before persistence
+        // could save the flag (settings load races with tutorial dismissal).
+        return current.hasSeenTutorial ? { ...loaded, hasSeenTutorial: true } : loaded;
+      });
       setIsSettingsLoaded(true);
     }
 
