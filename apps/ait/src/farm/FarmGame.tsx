@@ -433,6 +433,10 @@ export default function FarmGame({
   const [isSaveLoaded, setIsSaveLoaded] = useState(false);
   const [isSettingsLoaded, setIsSettingsLoaded] = useState(false);
   const [gameSettings, setGameSettings] = useState<FarmGameSettings>(DEFAULT_FARM_GAME_SETTINGS);
+  // "Latest ref" pattern — always reflects the committed gameSettings without
+  // adding it to useCallback dependency arrays.
+  const gameSettingsRef = useRef(gameSettings);
+  gameSettingsRef.current = gameSettings;
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [harvestCombo, setHarvestCombo] = useState(0);
@@ -580,16 +584,22 @@ export default function FarmGame({
   // Marks the tutorial as seen (persisted) when the player dismisses it, so
   // it shows exactly once even if they close the app before planting.
   const closeTutorial = useCallback(() => {
-    const newSettings = normalizeFarmGameSettings({ ...gameSettings, hasSeenTutorial: true });
-    setGameSettings(newSettings);
-    // Fire-and-forget write outside the updater so the updater stays pure.
-    // Error is swallowed — failing to persist is non-critical; the worst
-    // outcome is the tutorial appears once more on the next cold start.
+    // Functional update to avoid stale-closure races with concurrent settings
+    // changes (e.g. locale toggle). The updater stays pure — no side effects.
+    setGameSettings((prev) => normalizeFarmGameSettings({ ...prev, hasSeenTutorial: true }));
+    // Fire-and-forget persistence write outside the updater. We use
+    // gameSettingsRef (always the latest committed state) so the write
+    // includes any concurrent changes already committed to state.
+    const seenSettings = normalizeFarmGameSettings({ ...gameSettingsRef.current, hasSeenTutorial: true });
     Promise.resolve()
-      .then(() => persistence.writePersistedGameSettings?.(newSettings))
-      .catch(() => {});
+      .then(() => persistence.writePersistedGameSettings?.(seenSettings))
+      .catch((err) => {
+        if (__DEV__) {
+          console.warn('[FarmGame] closeTutorial: failed to persist hasSeenTutorial', err);
+        }
+      });
     setActiveSheet(null);
-  }, [gameSettings, persistence]);
+  }, [persistence]);
   const clearPlantPulse = useCallback((index: number) => {
     setPlantPulses((prev) => {
       if (prev[index] == null) {
