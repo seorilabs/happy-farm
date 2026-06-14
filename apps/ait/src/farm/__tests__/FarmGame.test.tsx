@@ -1323,6 +1323,23 @@ describe('FarmGame UI flow', () => {
     await waitFor(() => expect(screen.getByText('다시 오셨네요!')).toBeTruthy());
     expect(screen.queryByText('행복 농장에 오신 것을 환영해요! 🌾')).toBeNull();
   });
+
+  // firstPlayHint (toolbar) — verifies the initial selectedTool is 'harvest' so
+  // new players always see the seed-selection nudge after dismissing the tutorial.
+  test('shows firstPlayHint in toolbar after tutorial dismissal (default tool is harvest)', async () => {
+    const screen = await renderGame(null);
+    await waitFor(() => expect(screen.getByText('행복 농장에 오신 것을 환영해요! 🌾')).toBeTruthy());
+    fireEvent.press(screen.getByText('🌱 시작하기'));
+    await waitFor(() => expect(screen.queryByText('행복 농장에 오신 것을 환영해요! 🌾')).toBeNull());
+    expect(screen.getByText('👇 아래에서 씨앗을 선택하고 밭에 심어보세요!')).toBeTruthy();
+  });
+
+  test('does not show firstPlayHint once a crop is growing (normal harvestHint shown instead)', async () => {
+    const screen = await renderGame(createGrowingCropState());
+    await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+    expect(screen.queryByText('👇 아래에서 씨앗을 선택하고 밭에 심어보세요!')).toBeNull();
+    expect(screen.getByText('밭을 눌러 수확할 수 있어요.')).toBeTruthy();
+  });
 });
 
 // ---------------------------------------------------------------------------
