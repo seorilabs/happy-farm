@@ -152,7 +152,8 @@ const COMBO_LEGENDARY_BONUS_RATIO = 0.25;
 
 // Pure function: gold bonus for the given combo streak and base harvest value.
 // `streak` must already include the current harvest (i.e. comboAtTap + 1).
-// Donation harvests pass baseGold = 0 so the result is always 0 — no special-case needed.
+// Callers must guard with `!event.donated` before invoking; this function does
+// not inspect donation status and will return a non-zero bonus if baseGold > 0.
 export function computeComboGoldBonus(streak: number, baseGold: number): number {
   if (streak >= COMBO_LEGENDARY_THRESHOLD) {
     return Math.floor(baseGold * COMBO_LEGENDARY_BONUS_RATIO);
@@ -692,7 +693,15 @@ export default function FarmGame({
       if (gameSettings.soundEffectsEnabled && audio.isSupported) {
         void audio.playHarvest();
       }
-      // ref was already advanced eagerly in harvestCrop; just sync the display state.
+      // Decay window resets here, after confirming the harvest, so blocked
+      // taps never extend the combo window. Ref was already advanced eagerly
+      // in harvestCrop; we only sync the display state and timer here.
+      if (comboTimerRef.current != null) clearTimeout(comboTimerRef.current);
+      comboTimerRef.current = setTimeout(() => {
+        harvestComboRef.current = 0;
+        setHarvestCombo(0);
+        comboTimerRef.current = null;
+      }, COMBO_WINDOW_MS);
       setHarvestCombo(harvestComboRef.current);
     }
   }, [
@@ -1343,16 +1352,9 @@ export default function FarmGame({
     // display) is synced to it in the pending-effect drain loop after commit.
     const comboAtTap = harvestComboRef.current;
     harvestComboRef.current += 1;
-    // Reset the decay window so every tap extends the streak correctly even
-    // before the effects are flushed.
-    if (comboTimerRef.current != null) {
-      clearTimeout(comboTimerRef.current);
-    }
-    comboTimerRef.current = setTimeout(() => {
-      harvestComboRef.current = 0;
-      setHarvestCombo(0);
-      comboTimerRef.current = null;
-    }, COMBO_WINDOW_MS);
+    // Timer is reset only on confirmed harvest (in the effect drain loop) so
+    // that blocked taps — tapping a plot that is growing or already empty —
+    // do not extend the combo window.
     const roll = Math.random();
     setGameState((state) => {
       const result = executeFarmGameCommand(
@@ -1361,9 +1363,9 @@ export default function FarmGame({
         { now, rng: () => roll }
       );
       if (result.status === 'blocked') {
-        // Undo the eager ref increment — the harvest didn't happen.
-        // Math.max guards against double-decrement on StrictMode re-invoke.
-        harvestComboRef.current = Math.max(0, harvestComboRef.current - 1);
+        // Idempotent restore — calling comboAtTap assignment twice (StrictMode
+        // double-invoke) produces the same result, unlike a decrement.
+        harvestComboRef.current = comboAtTap;
         return state;
       }
       const event = result.events[0];
