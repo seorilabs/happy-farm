@@ -152,6 +152,7 @@ export const COMBO_GREAT_THRESHOLD = 5;
 export const COMBO_LEGENDARY_THRESHOLD = 10;
 export const MASTERY_RANK_UP_CELEBRATION_DURATION_MS = 2600;
 export const PRESTIGE_GRADUATION_CELEBRATION_DURATION_MS = 3500;
+export const FIRST_HARVEST_CELEBRATION_DURATION_MS = 3200;
 const SHEET_DISMISS_DRAG_DISTANCE = 96;
 const SHEET_DISMISS_VELOCITY = 1.1;
 const SHEET_DISMISS_TRANSLATE_Y = 520;
@@ -339,6 +340,12 @@ type PrestigeGraduationNotice = {
   starsAwarded: number;
 };
 
+type FirstHarvestNotice = {
+  id: number;
+  cropIcon: string;
+  goldFormatted: string;
+};
+
 // One-shot floating "+gold" feedback spawned at the tapped plot on a manual
 // harvest. Auto-harvest stays silent so the burst always maps to a finger tap.
 type HarvestPop = {
@@ -443,6 +450,9 @@ export default function FarmGame({
   const [prestigeGraduationNotice, setPrestigeGraduationNotice] = useState<PrestigeGraduationNotice | null>(null);
   const prestigeGraduationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prestigeGraduationNoticeIdRef = useRef(0);
+  const [firstHarvestNotice, setFirstHarvestNotice] = useState<FirstHarvestNotice | null>(null);
+  const firstHarvestTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const firstHarvestNoticeIdRef = useRef(0);
   // Per-plot "just planted" tokens. Bumped only on a manual plant so the fresh
   // sprout bounces in (auto-replant and save-load stay silent). Keyed by index.
   const [plantPulses, setPlantPulses] = useState<Record<number, number>>({});
@@ -572,6 +582,24 @@ export default function FarmGame({
       prestigeGraduationTimerRef.current = null;
     }
     setPrestigeGraduationNotice(null);
+  }, []);
+  const showFirstHarvestCelebration = useCallback((notice: Omit<FirstHarvestNotice, 'id'>) => {
+    if (firstHarvestTimerRef.current != null) {
+      clearTimeout(firstHarvestTimerRef.current);
+    }
+    firstHarvestNoticeIdRef.current += 1;
+    setFirstHarvestNotice({ ...notice, id: firstHarvestNoticeIdRef.current });
+    firstHarvestTimerRef.current = setTimeout(() => {
+      setFirstHarvestNotice(null);
+      firstHarvestTimerRef.current = null;
+    }, FIRST_HARVEST_CELEBRATION_DURATION_MS);
+  }, []);
+  const dismissFirstHarvestCelebration = useCallback(() => {
+    if (firstHarvestTimerRef.current != null) {
+      clearTimeout(firstHarvestTimerRef.current);
+      firstHarvestTimerRef.current = null;
+    }
+    setFirstHarvestNotice(null);
   }, []);
   const closeSheet = useCallback(() => {
     setActiveSheet(null);
@@ -727,6 +755,12 @@ export default function FarmGame({
         isFirstCropHarvest: event.isNewCropDiscovery,
         context: analyticsContext(),
       });
+      if (event.isFirstMeaningfulHarvest) {
+        showFirstHarvestCelebration({
+          cropIcon: getCrop(event.cropKey).icon,
+          goldFormatted: formatMoney(event.goldGained, locale),
+        });
+      }
       if (event.newMasteryRank != null) {
         const crop = getCrop(event.cropKey);
         showMasteryRankUpCelebration({
@@ -811,6 +845,7 @@ export default function FarmGame({
     locale,
     messages,
     pulseGold,
+    showFirstHarvestCelebration,
     showMasteryRankUpCelebration,
     toast,
   ]);
@@ -2181,6 +2216,14 @@ export default function FarmGame({
           onDismiss={dismissPrestigeGraduation}
         />
       ) : null}
+      {firstHarvestNotice != null ? (
+        <FirstHarvestOverlay
+          key={firstHarvestNotice.id}
+          notice={firstHarvestNotice}
+          messages={messages}
+          onDismiss={dismissFirstHarvestCelebration}
+        />
+      ) : null}
     </View>
   );
 }
@@ -2460,6 +2503,85 @@ function PrestigeGraduationOverlay({
           >
             {messages.prestigeGraduationStarsLabel(notice.starsAwarded)}
           </Animated.Text>
+        </Animated.View>
+      </View>
+    </Pressable>
+  );
+}
+
+// First-harvest ceremony: a warm, compact card that springs in when the player
+// harvests for the very first time. Lighter than the prestige overlay (no
+// full-screen dim) — the farm stays visible so it feels like an "in-world"
+// celebration rather than a modal. Auto-dismisses after
+// FIRST_HARVEST_CELEBRATION_DURATION_MS; tap anywhere to dismiss early.
+function FirstHarvestOverlay({
+  notice,
+  messages,
+  onDismiss,
+}: {
+  notice: FirstHarvestNotice;
+  messages: FarmMessages;
+  onDismiss: () => void;
+}) {
+  const cardScale = useRef(new Animated.Value(0.5)).current;
+  const cropScale = useRef(new Animated.Value(0.1)).current;
+  const goldEntrance = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const anim = Animated.parallel([
+      Animated.spring(cardScale, {
+        toValue: 1,
+        damping: 13,
+        stiffness: 270,
+        mass: 0.8,
+        useNativeDriver: true,
+      }),
+      Animated.sequence([
+        Animated.delay(60),
+        Animated.spring(cropScale, {
+          toValue: 1,
+          damping: 7,
+          stiffness: 200,
+          mass: 0.5,
+          useNativeDriver: true,
+        }),
+      ]),
+      Animated.sequence([
+        Animated.delay(280),
+        Animated.spring(goldEntrance, {
+          toValue: 1,
+          damping: 12,
+          stiffness: 260,
+          useNativeDriver: true,
+        }),
+      ]),
+    ]);
+    anim.start();
+    return () => anim.stop();
+  }, [cardScale, cropScale, goldEntrance]);
+
+  const goldTranslateY = goldEntrance.interpolate({ inputRange: [0, 1], outputRange: [12, 0] });
+
+  return (
+    <Pressable testID="first-harvest-overlay" style={StyleSheet.absoluteFill} onPress={onDismiss}>
+      <View style={styles.firstHarvestCenter} pointerEvents="none">
+        <Animated.View
+          testID="first-harvest-card"
+          style={[styles.firstHarvestCard, { transform: [{ scale: cardScale }] }]}
+        >
+          <Text style={styles.firstHarvestTitle}>{messages.firstHarvestTitle}</Text>
+          <Animated.Text style={[styles.firstHarvestCropIcon, { transform: [{ scale: cropScale }] }]}>
+            {notice.cropIcon}
+          </Animated.Text>
+          <Animated.Text
+            style={[
+              styles.firstHarvestGold,
+              { opacity: goldEntrance, transform: [{ translateY: goldTranslateY }] },
+            ]}
+          >
+            +{notice.goldFormatted}G
+          </Animated.Text>
+          <Text style={styles.firstHarvestSubtitle}>{messages.firstHarvestSubtitle}</Text>
         </Animated.View>
       </View>
     </Pressable>
@@ -4481,5 +4603,49 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     color: '#d4860a',
     marginTop: 6,
+  },
+  firstHarvestCenter: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingBottom: 60,
+  },
+  firstHarvestCard: {
+    width: 260,
+    paddingHorizontal: 24,
+    paddingVertical: 24,
+    borderRadius: 20,
+    backgroundColor: '#fffbeb',
+    borderWidth: 2,
+    borderColor: '#fde68a',
+    alignItems: 'center',
+    gap: 4,
+    shadowColor: '#d97706',
+    shadowOpacity: 0.22,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 12,
+  },
+  firstHarvestTitle: {
+    fontSize: 17,
+    fontWeight: '900',
+    color: '#92400e',
+    letterSpacing: 0.2,
+  },
+  firstHarvestCropIcon: {
+    fontSize: 72,
+    lineHeight: 80,
+    marginVertical: 4,
+  },
+  firstHarvestGold: {
+    fontSize: 26,
+    fontWeight: '900',
+    color: '#d97706',
+  },
+  firstHarvestSubtitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#92400e',
+    marginTop: 2,
   },
 });

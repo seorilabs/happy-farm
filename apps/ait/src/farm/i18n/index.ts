@@ -216,6 +216,8 @@ const KO_FARM_MESSAGES = {
   newCropDiscoveryTitle: '새 작물 발견!',
   newCropDiscoverySubtitle: '도감에 추가됐어요',
   newCropBadge: 'NEW',
+  firstHarvestTitle: '첫 수확 완료! 🎉',
+  firstHarvestSubtitle: '농부의 길이 시작됐어요!',
 };
 
 export type FarmMessages = typeof KO_FARM_MESSAGES;
@@ -421,6 +423,8 @@ const EN_FARM_MESSAGES: FarmMessages = {
   newCropDiscoveryTitle: 'New Crop!',
   newCropDiscoverySubtitle: 'Added to your collection',
   newCropBadge: 'NEW',
+  firstHarvestTitle: 'First Harvest! 🎉',
+  firstHarvestSubtitle: 'Your farming journey has begun!',
 };
 
 const FARM_MESSAGES: Record<SupportedLocale, FarmMessages> = {

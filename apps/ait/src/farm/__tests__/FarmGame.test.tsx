@@ -44,6 +44,7 @@ const {
   GAME_TICK_INTERVAL_MS,
   MASTERY_RANK_UP_CELEBRATION_DURATION_MS,
   PRESTIGE_GRADUATION_CELEBRATION_DURATION_MS,
+  FIRST_HARVEST_CELEBRATION_DURATION_MS,
   COMBO_GREAT_THRESHOLD,
   COMBO_LEGENDARY_THRESHOLD,
 } = farmGameModule;
@@ -722,6 +723,63 @@ describe('FarmGame UI flow', () => {
       jest.advanceTimersByTime(MASTERY_RANK_UP_CELEBRATION_DURATION_MS);
     });
     expect(screen.queryByText('숙련도 달성!')).toBeNull();
+  });
+
+  // ---------------------------------------------------------------------------
+  // First harvest celebration overlay
+  // ---------------------------------------------------------------------------
+
+  test('shows first-harvest celebration card when harvesting for the very first time', async () => {
+    // createReadyHarvestState has harvestedCropKeys: [] → qualifies as first harvest
+    const screen = await renderGame(createReadyHarvestState());
+    await waitFor(() => expect(screen.getByText('50G')).toBeTruthy());
+
+    fireEvent.press(within(screen.getByTestId('plot-cell-0')).getByText('GET'));
+
+    expect(screen.getByTestId('first-harvest-card')).toBeTruthy();
+    expect(screen.getByText('첫 수확 완료! 🎉')).toBeTruthy();
+    expect(screen.getByText('농부의 길이 시작됐어요!')).toBeTruthy();
+  });
+
+  test('does not show first-harvest celebration for subsequent harvests', async () => {
+    // harvestedCropKeys: ['carrot'] → no longer the first harvest
+    const state: GameState = {
+      ...createReadyHarvestState(),
+      harvestedCropKeys: ['carrot'],
+    };
+    const screen = await renderGame(state);
+    await waitFor(() => expect(screen.getByText('50G')).toBeTruthy());
+
+    fireEvent.press(within(screen.getByTestId('plot-cell-0')).getByText('GET'));
+
+    expect(screen.queryByTestId('first-harvest-card')).toBeNull();
+    expect(screen.queryByText('첫 수확 완료! 🎉')).toBeNull();
+  });
+
+  test('first-harvest overlay auto-dismisses after the celebration duration', async () => {
+    const screen = await renderGame(createReadyHarvestState());
+    await waitFor(() => expect(screen.getByText('50G')).toBeTruthy());
+
+    fireEvent.press(within(screen.getByTestId('plot-cell-0')).getByText('GET'));
+    expect(screen.getByText('첫 수확 완료! 🎉')).toBeTruthy();
+
+    await act(async () => {
+      jest.advanceTimersByTime(FIRST_HARVEST_CELEBRATION_DURATION_MS);
+    });
+
+    expect(screen.queryByText('첫 수확 완료! 🎉')).toBeNull();
+  });
+
+  test('first-harvest overlay dismisses immediately on tap', async () => {
+    const screen = await renderGame(createReadyHarvestState());
+    await waitFor(() => expect(screen.getByText('50G')).toBeTruthy());
+
+    fireEvent.press(within(screen.getByTestId('plot-cell-0')).getByText('GET'));
+    expect(screen.getByText('첫 수확 완료! 🎉')).toBeTruthy();
+
+    fireEvent.press(screen.getByTestId('first-harvest-overlay'));
+
+    expect(screen.queryByText('첫 수확 완료! 🎉')).toBeNull();
   });
 
   test('collects every ripe plot in one tap via the Harvest All shortcut', async () => {
