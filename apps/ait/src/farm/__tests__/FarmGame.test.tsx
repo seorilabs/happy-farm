@@ -14,6 +14,7 @@ import {
   HARVEST_BONUS_MULTIPLIER,
   MAX_PLOTS,
   REWARDED_GOLD_MAX_USES_PER_WINDOW,
+  REWARDED_GOLD_WINDOW_MS,
   PRESTIGE_STARS_BASE,
   REGION_ARCHETYPES,
   createFarmAnalytics,
@@ -448,6 +449,26 @@ describe('FarmGame UI flow', () => {
 
     await waitFor(() => expect(screen.getByTestId('shop-nav-button')).toBeTruthy());
     expect(within(screen.getByTestId('shop-nav-button')).queryByText('1')).toBeNull();
+  });
+
+  test('REWARDED_GOLD_WINDOW_MS is a whole number of minutes so the description divides without rounding', () => {
+    expect(REWARDED_GOLD_WINDOW_MS % 60000).toBe(0);
+  });
+
+  test('shows the correct window duration and max uses in the rewarded gold ad description', async () => {
+    const messages = getFarmMessages(DEFAULT_LOCALE);
+    const rewardedAd = createReadyRewardedAd();
+    const screen = await renderGame(null, { useRewardedAd: () => rewardedAd });
+
+    await waitFor(() => expect(screen.getByText('🏪 상점')).toBeTruthy());
+    fireEvent.press(screen.getByText('🏪 상점'));
+
+    // Use direct division — the invariant test above guarantees no remainder.
+    const expectedDesc = messages.rewardedGoldReadyDesc(
+      REWARDED_GOLD_WINDOW_MS / 60000,
+      REWARDED_GOLD_MAX_USES_PER_WINDOW
+    );
+    expect(screen.getByText(expectedDesc)).toBeTruthy();
   });
 
   test('closes the shop sheet after a rewarded gold ad so the farm remains tappable', async () => {
