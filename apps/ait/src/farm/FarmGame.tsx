@@ -985,6 +985,10 @@ export default function FarmGame({
     () => getRewardedAdLimitStatus(gameState, 'rewardedGold', Date.now(), locale),
     [gameState, locale, tick]
   );
+  // Both shop ad items (gold reward + free plot) are gated by rewardedGoldLimit.
+  // growthAdLimit and harvestBonusAdLimit gate separate flows (plot-tap / post-harvest
+  // nudge) that are not accessible from the shop, so only rewardedGoldLimit is relevant.
+  const shopAdBadgeCount = rewardedAd.isAdSupported && rewardedAd.isAdReady && rewardedGoldLimit.allowed ? 1 : 0;
   const growthAdLimit = useMemo(
     () => getRewardedAdLimitStatus(gameState, 'growthAd', Date.now(), locale),
     [gameState, locale, tick]
@@ -1735,7 +1739,7 @@ export default function FarmGame({
         ) : null}
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.navRow}>
-          <NavButton label={messages.shopButton} onPress={openShop} />
+          <NavButton testID="shop-nav-button" label={messages.shopButton} badge={shopAdBadgeCount} onPress={openShop} />
           <NavButton
             label={messages.collectionButton}
             badge={claimableCollectionCount}
@@ -2174,15 +2178,17 @@ function NavButton({
   label,
   badge,
   accessibilityLabel,
+  testID,
   onPress,
 }: {
   label: string;
   badge?: number;
   accessibilityLabel?: string;
+  testID?: string;
   onPress: () => void;
 }) {
   return (
-    <Pressable accessibilityLabel={accessibilityLabel} style={styles.navButton} onPress={onPress}>
+    <Pressable testID={testID} accessibilityLabel={accessibilityLabel} style={styles.navButton} onPress={onPress}>
       <Text style={styles.navButtonText}>{label}</Text>
       {badge != null && badge > 0 ? (
         <View style={styles.collectionBadge}>

@@ -12,6 +12,7 @@ import {
   HARVEST_BONUS_BOOST_DURATION_MS,
   HARVEST_BONUS_MULTIPLIER,
   MAX_PLOTS,
+  REWARDED_GOLD_MAX_USES_PER_WINDOW,
   PRESTIGE_STARS_BASE,
   REGION_ARCHETYPES,
   createFarmAnalytics,
@@ -411,6 +412,41 @@ describe('FarmGame UI flow', () => {
 
     fireEvent.press(screen.getByText('채소 밭 열기'));
     expect(screen.queryByText('채소 밭 열기')).toBeNull();
+  });
+
+  test('shows a badge on the shop nav button when a rewarded ad is ready to claim', async () => {
+    const rewardedAd = createReadyRewardedAd();
+    const screen = await renderGame(null, { useRewardedAd: () => rewardedAd });
+
+    await waitFor(() => expect(screen.getByTestId('shop-nav-button')).toBeTruthy());
+    expect(within(screen.getByTestId('shop-nav-button')).getByText('1')).toBeTruthy();
+  });
+
+  test('shows no badge on the shop nav button when ads are not supported', async () => {
+    // Default useRewardedAd is useUnsupportedAd (isAdSupported: false, isAdReady: false)
+    const screen = await renderGame(null);
+
+    await waitFor(() => expect(screen.getByTestId('shop-nav-button')).toBeTruthy());
+    expect(within(screen.getByTestId('shop-nav-button')).queryByText('1')).toBeNull();
+  });
+
+  test('hides the shop badge when the rewarded ad rate limit is exhausted', async () => {
+    // Fill the sliding window to trigger the cooldown (REWARDED_GOLD_MAX_USES_PER_WINDOW uses).
+    // rewardedGoldLimit gates the shop's gold reward and free-plot reward. Exhausting the
+    // window should suppress the badge.
+    const base = createInitialState();
+    const exhaustedState: GameState = {
+      ...base,
+      adUsage: {
+        ...base.adUsage,
+        rewardedGoldTimestamps: Array.from({ length: REWARDED_GOLD_MAX_USES_PER_WINDOW }, (_, i) => NOW - i * 10),
+      },
+    };
+    const rewardedAd = createReadyRewardedAd();
+    const screen = await renderGame(exhaustedState, { useRewardedAd: () => rewardedAd });
+
+    await waitFor(() => expect(screen.getByTestId('shop-nav-button')).toBeTruthy());
+    expect(within(screen.getByTestId('shop-nav-button')).queryByText('1')).toBeNull();
   });
 
   test('closes the shop sheet after a rewarded gold ad so the farm remains tappable', async () => {
