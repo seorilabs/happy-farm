@@ -23,7 +23,6 @@ import {
   getPrestigeCost,
   getRegionArchetypeLabel,
   type AreaKey,
-  type AchievementTrackKey,
   type CropKey,
   type GameState,
   type RewardedAdController,
@@ -856,13 +855,16 @@ describe('FarmGame UI flow', () => {
     // renderGame or the component ever mutates the input object.
     let lateGame: GameState;
     let onGoldPulse: jest.Mock;
+    let vibrateSpy: jest.SpyInstance;
     beforeEach(() => {
       lateGame = createLateGameState();
       onGoldPulse = jest.fn();
       __setGoldPulseTestHook(onGoldPulse);
+      vibrateSpy = jest.spyOn(Vibration, 'vibrate').mockImplementation(() => undefined);
     });
     afterEach(() => {
       __setGoldPulseTestHook(undefined);
+      vibrateSpy.mockRestore();
     });
 
     async function renderAndClaim(playHarvest: jest.Mock, savedSettings: unknown) {
@@ -885,19 +887,21 @@ describe('FarmGame UI flow', () => {
       return screen;
     }
 
-    test('plays harvest sound and pulses gold when sound effects are enabled', async () => {
+    test('plays harvest sound, pulses gold, and vibrates when sound effects are enabled', async () => {
       const playHarvest = jest.fn();
       const screen = await renderAndClaim(playHarvest, { soundEffectsEnabled: true });
       await waitFor(() => expect(playHarvest).toHaveBeenCalledTimes(1));
       await waitFor(() => expect(onGoldPulse).toHaveBeenCalledTimes(1));
+      expect(vibrateSpy).toHaveBeenCalledWith(50);
       await waitFor(() => expect(screen.getByText(claimMessages.collectionClaimedLabel)).toBeTruthy());
     });
 
-    test('pulses gold but skips harvest sound when sound effects are disabled', async () => {
+    test('pulses gold and vibrates but skips harvest sound when sound effects are disabled', async () => {
       const playHarvest = jest.fn();
       const screen = await renderAndClaim(playHarvest, { soundEffectsEnabled: false });
       await waitFor(() => expect(screen.getByText(claimMessages.collectionClaimedLabel)).toBeTruthy());
       await waitFor(() => expect(onGoldPulse).toHaveBeenCalledTimes(1));
+      expect(vibrateSpy).toHaveBeenCalledWith(50);
       expect(playHarvest).not.toHaveBeenCalled();
     });
 
@@ -955,6 +959,14 @@ describe('FarmGame UI flow', () => {
       };
     }
 
+    let vibrateSpy: jest.SpyInstance;
+    beforeEach(() => {
+      vibrateSpy = jest.spyOn(Vibration, 'vibrate').mockImplementation(() => undefined);
+    });
+    afterEach(() => {
+      vibrateSpy.mockRestore();
+    });
+
     async function renderAndClaimAchievement(
       playHarvest: jest.Mock,
       savedSettings: unknown
@@ -982,13 +994,14 @@ describe('FarmGame UI flow', () => {
       return screen;
     }
 
-    test('plays harvest sound when an achievement tier is claimed', async () => {
+    test('plays harvest sound and vibrates when an achievement tier is claimed', async () => {
       const playHarvest = jest.fn();
       await renderAndClaimAchievement(playHarvest, { soundEffectsEnabled: true });
       await waitFor(() => expect(playHarvest).toHaveBeenCalledTimes(1));
+      expect(vibrateSpy).toHaveBeenCalledWith(50);
     });
 
-    test('does not play harvest sound when sound effects are disabled', async () => {
+    test('vibrates but skips harvest sound when sound effects are disabled', async () => {
       const playHarvest = jest.fn();
       const claimMessages = getFarmMessages();
       const screen = await renderAndClaimAchievement(playHarvest, {
@@ -997,6 +1010,7 @@ describe('FarmGame UI flow', () => {
       await waitFor(() =>
         expect(screen.getByText(claimMessages.achievementClaimedToast(getHarvestTrack().starsPerTier))).toBeTruthy()
       );
+      expect(vibrateSpy).toHaveBeenCalledWith(50);
       expect(playHarvest).not.toHaveBeenCalled();
     });
   });
