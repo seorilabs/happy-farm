@@ -890,23 +890,23 @@ describe('FarmGame UI flow', () => {
   });
 
   test('shows boost multiplier and remaining time in the header when boost is active', async () => {
-    // beforeEach calls jest.useFakeTimers(); afterEach calls jest.useRealTimers().
-    // Re-set the system time here to make the timing dependency explicit: with
-    // Date.now() === NOW, getHarvestBonusBoostStatus returns active=true and
-    // remainingMs = HARVEST_BONUS_BOOST_DURATION_MS.
+    // Explicitly own the timer lifecycle for self-containment.
+    jest.useFakeTimers();
     jest.setSystemTime(NOW);
+    try {
+      const messages = getFarmMessages(DEFAULT_LOCALE);
+      const screen = await renderGame(createActiveBoostState(NOW), { preferredLocale: DEFAULT_LOCALE });
 
-    const messages = getFarmMessages(DEFAULT_LOCALE);
-    const screen = await renderGame(createActiveBoostState(NOW), { preferredLocale: DEFAULT_LOCALE });
-
-    await waitFor(() => expect(screen.getByText(messages.boostLabel)).toBeTruthy());
-    expect(screen.getByText(`×${HARVEST_BONUS_MULTIPLIER.toFixed(1)}`)).toBeTruthy();
-    // Assert the remaining-time element exists and has non-empty content without
-    // pinning the exact formatted string — exact formatting is covered by unit
-    // tests for formatRemainingTime; here we only verify the element is rendered.
-    const remaining = screen.getByTestId('boost-remaining');
-    expect(remaining).toBeTruthy();
-    expect(remaining).toHaveTextContent(/\S+/);
+      await waitFor(() => expect(screen.getByText(messages.boostLabel)).toBeTruthy());
+      expect(screen.getByText(`×${HARVEST_BONUS_MULTIPLIER.toFixed(1)}`)).toBeTruthy();
+      // Assert the remaining-time element exists and has non-empty content.
+      // toHaveTextContent is registered globally via jest.setup.ts.
+      const remaining = screen.getByTestId('boost-remaining');
+      expect(remaining).toBeTruthy();
+      expect(remaining).toHaveTextContent(/\S+/);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   test('greets a returning player with an offline progress recap', async () => {
