@@ -1640,6 +1640,9 @@ export default function FarmGame({
                 <View style={styles.compactStat}>
                   <Text style={styles.label}>{messages.boostLabel}</Text>
                   <Text style={styles.boostStat}>×{harvestBonusBoost.multiplier.toFixed(1)}</Text>
+                  <Text style={styles.boostRemaining}>
+                    {formatRemainingTime(harvestBonusBoost.remainingMs, locale)}
+                  </Text>
                 </View>
               ) : null}
             </View>
