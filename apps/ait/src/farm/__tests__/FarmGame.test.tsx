@@ -892,8 +892,10 @@ describe('FarmGame UI flow', () => {
       const screen = await renderAndClaim(playHarvest, { soundEffectsEnabled: true });
       await waitFor(() => expect(playHarvest).toHaveBeenCalledTimes(1));
       await waitFor(() => expect(onGoldPulse).toHaveBeenCalledTimes(1));
-      await waitFor(() => expect(vibrateSpy).toHaveBeenCalledTimes(1));
-      expect(vibrateSpy).toHaveBeenCalledWith(50);
+      await waitFor(() => {
+        expect(vibrateSpy).toHaveBeenCalledTimes(1);
+        expect(vibrateSpy).toHaveBeenLastCalledWith(50);
+      });
       await waitFor(() => expect(screen.getByText(claimMessages.collectionClaimedLabel)).toBeTruthy());
     });
 
@@ -902,8 +904,10 @@ describe('FarmGame UI flow', () => {
       const screen = await renderAndClaim(playHarvest, { soundEffectsEnabled: false });
       await waitFor(() => expect(screen.getByText(claimMessages.collectionClaimedLabel)).toBeTruthy());
       await waitFor(() => expect(onGoldPulse).toHaveBeenCalledTimes(1));
-      await waitFor(() => expect(vibrateSpy).toHaveBeenCalledTimes(1));
-      expect(vibrateSpy).toHaveBeenCalledWith(50);
+      await waitFor(() => {
+        expect(vibrateSpy).toHaveBeenCalledTimes(1);
+        expect(vibrateSpy).toHaveBeenLastCalledWith(50);
+      });
       expect(playHarvest).not.toHaveBeenCalled();
     });
 
@@ -1000,8 +1004,10 @@ describe('FarmGame UI flow', () => {
       const playHarvest = jest.fn();
       await renderAndClaimAchievement(playHarvest, { soundEffectsEnabled: true });
       await waitFor(() => expect(playHarvest).toHaveBeenCalledTimes(1));
-      await waitFor(() => expect(vibrateSpy).toHaveBeenCalledTimes(1));
-      expect(vibrateSpy).toHaveBeenCalledWith(50);
+      await waitFor(() => {
+        expect(vibrateSpy).toHaveBeenCalledTimes(1);
+        expect(vibrateSpy).toHaveBeenLastCalledWith(50);
+      });
     });
 
     test('vibrates but skips harvest sound when sound effects are disabled', async () => {
@@ -1013,8 +1019,10 @@ describe('FarmGame UI flow', () => {
       await waitFor(() =>
         expect(screen.getByText(claimMessages.achievementClaimedToast(getHarvestTrack().starsPerTier))).toBeTruthy()
       );
-      await waitFor(() => expect(vibrateSpy).toHaveBeenCalledTimes(1));
-      expect(vibrateSpy).toHaveBeenCalledWith(50);
+      await waitFor(() => {
+        expect(vibrateSpy).toHaveBeenCalledTimes(1);
+        expect(vibrateSpy).toHaveBeenLastCalledWith(50);
+      });
       expect(playHarvest).not.toHaveBeenCalled();
     });
   });
