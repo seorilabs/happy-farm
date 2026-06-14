@@ -449,7 +449,7 @@ export default function FarmGame({
   const claimedAchievementKeysRef = useRef<Set<string>>(new Set());
   const commandEffectIdRef = useRef(0);
   const pendingCommandEffectsRef = useRef<PendingFarmCommandEffect[]>([]);
-  const handledCommandEffectIdsRef = useRef<Set<number>>(new Set());
+  const lastHandledCommandEffectIdRef = useRef(0);
   const [commandEffectVersion, setCommandEffectVersion] = useState(0);
   // Double-tap guard for confirmPrestige: the state updater is idempotent,
   // but the toast/analytics must fire exactly once per graduated level.
@@ -577,10 +577,10 @@ export default function FarmGame({
     pendingCommandEffectsRef.current = [];
 
     for (const effect of effects) {
-      if (handledCommandEffectIdsRef.current.has(effect.id)) {
+      if (effect.id <= lastHandledCommandEffectIdRef.current) {
         continue;
       }
-      handledCommandEffectIdsRef.current.add(effect.id);
+      lastHandledCommandEffectIdRef.current = effect.id;
 
       if (effect.type === 'plantBlocked') {
         if (effect.reason === 'areaLocked') {
