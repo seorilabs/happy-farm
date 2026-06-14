@@ -147,9 +147,11 @@ const HARVEST_ALL_MIN_COUNT = 2;
 const COMBO_WINDOW_MS = 1500;
 const COMBO_GREAT_THRESHOLD = 5;
 const COMBO_LEGENDARY_THRESHOLD = 10;
-// Gold bonus ratios applied on top of the base harvest value while in combo.
-const COMBO_GREAT_BONUS_RATIO = 0.1;
-const COMBO_LEGENDARY_BONUS_RATIO = 0.25;
+// Integer numerators for bonus ratios: 10% = 10/100, 25% = 25/100.
+// Avoiding decimal multipliers (0.1, 0.25) prevents floating-point drift that
+// can silently undercount bonuses on certain baseGold values.
+const COMBO_GREAT_BONUS_NUMERATOR = 10;
+const COMBO_LEGENDARY_BONUS_NUMERATOR = 25;
 
 // Pure function: gold bonus for the given combo streak and base harvest value.
 // `streak` must already include the current harvest (i.e. the post-increment value).
@@ -157,10 +159,10 @@ const COMBO_LEGENDARY_BONUS_RATIO = 0.25;
 export function computeComboGoldBonus(streak: number, baseGold: number, isDonation: boolean): number {
   if (isDonation) return 0;
   if (streak >= COMBO_LEGENDARY_THRESHOLD) {
-    return Math.floor(baseGold * COMBO_LEGENDARY_BONUS_RATIO);
+    return Math.floor((baseGold * COMBO_LEGENDARY_BONUS_NUMERATOR) / 100);
   }
   if (streak >= COMBO_GREAT_THRESHOLD) {
-    return Math.floor(baseGold * COMBO_GREAT_BONUS_RATIO);
+    return Math.floor((baseGold * COMBO_GREAT_BONUS_NUMERATOR) / 100);
   }
   return 0;
 }

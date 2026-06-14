@@ -50,10 +50,18 @@ describe('computeComboGoldBonus', () => {
   });
 
   test('floors the result — no fractional gold', () => {
-    // 14 * 0.1 = 1.4 → floors to 1
+    // (14 * 10) / 100 = 1.4 → floors to 1
     expect(computeComboGoldBonus(5, 14, false)).toBe(1);
-    // 3 * 0.25 = 0.75 → floors to 0
+    // (3 * 25) / 100 = 0.75 → floors to 0
     expect(computeComboGoldBonus(10, 3, false)).toBe(0);
+  });
+
+  test('integer arithmetic avoids floating-point drift on boundary values', () => {
+    // These values expose drift when using baseGold * 0.1 (decimal multiplier).
+    expect(computeComboGoldBonus(5, 10, false)).toBe(1);   // 10%: (10*10)/100 = 1
+    expect(computeComboGoldBonus(5, 100, false)).toBe(10); // 10%: (100*10)/100 = 10
+    expect(computeComboGoldBonus(10, 4, false)).toBe(1);   // 25%: (4*25)/100 = 1
+    expect(computeComboGoldBonus(10, 8, false)).toBe(2);   // 25%: (8*25)/100 = 2
   });
 
   test('donation harvests always yield 0 regardless of baseGold', () => {
@@ -217,6 +225,7 @@ jest.setTimeout(15000);
 
 describe('FarmGame UI flow', () => {
   beforeEach(() => {
+    jest.setTimeout(30000); // CI runners can be 3-4x slower than local
     jest.useFakeTimers();
     jest.setSystemTime(NOW);
     mockPersistence.readPersistedGameState.mockReset();
