@@ -1340,8 +1340,12 @@ export default function FarmGame({
     // Capture the current combo streak synchronously before any state update;
     // the updater below runs asynchronously so reading state here is safe.
     const comboAtTap = harvestComboRef.current;
+    // Fix the mutation roll outside the updater so both invocations of the
+    // updater (React StrictMode double-invoke) use the same roll, keeping the
+    // committed state and the queued FX payload consistent. harvestAllCrops
+    // uses the same pattern (rollByPlot built outside setGameState).
+    const roll = Math.random();
     setGameState((state) => {
-      const roll = Math.random();
       const result = executeFarmGameCommand(
         state,
         { type: 'harvestCrop', plotIndex: index },
