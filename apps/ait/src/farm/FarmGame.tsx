@@ -504,6 +504,9 @@ function farmUIReducer(state: FarmUIState, action: FarmUIAction): FarmUIState {
       const event = result.events[0];
       // Unreachable: harvestCrop always emits cropHarvested when applied.
       if (event?.type !== 'cropHarvested') return { ...state, game: result.state, comboCount: state.comboCount + 1, lastComboAt: payload.now };
+      // Design intent: comboCount increments in donation mode too. The combo
+      // tracks tapping rhythm, not gold earned. performHarvest already zeroes
+      // goldGained in donation mode, so the multiplier never inflates RP.
       return {
         ...state,
         game: result.state,
@@ -701,12 +704,13 @@ export default function FarmGame({
       }),
     ]).start();
   }, [goldPulse]);
-  // Anchor the combo expiry timer to the reducer commit timestamp (lastComboAt)
-  // rather than to the asynchronous useEffect that processes feedback. Running in
-  // useLayoutEffect (synchronous with React's commit phase) means clearTimeout +
-  // setTimeout execute before any pending macrotask — including a timer that was
-  // about to fire at the moment of the harvest commit — so RESET_COMBO can never
-  // race between dispatch and the old advanceCombo call in a useEffect.
+  // Anchor the combo expiry timer to the reducer commit timestamp (lastComboAt).
+  // Running in useLayoutEffect (synchronous with React's commit phase) means
+  // clearTimeout + setTimeout execute before any pending macrotask — including a
+  // timer that was about to fire at the moment of the harvest commit.
+  // comboCount is included as a dep so the effect re-runs on every successful
+  // harvest even when two taps land in the same millisecond (lastComboAt unchanged),
+  // guaranteeing the timer is always re-anchored to the latest commit.
   useLayoutEffect(() => {
     if (farmState.lastComboAt === 0) return;
     if (comboTimerRef.current != null) clearTimeout(comboTimerRef.current);
@@ -721,7 +725,7 @@ export default function FarmGame({
         comboTimerRef.current = null;
       }
     };
-  }, [farmState.lastComboAt, farmDispatch]);
+  }, [farmState.lastComboAt, farmState.comboCount, farmDispatch]);
   const showMasteryRankUpCelebration = useCallback((notice: Omit<MasteryRankUpNotice, 'id'>) => {
     if (masteryRankUpTimerRef.current != null) {
       clearTimeout(masteryRankUpTimerRef.current);
