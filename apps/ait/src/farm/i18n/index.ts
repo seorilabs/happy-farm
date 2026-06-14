@@ -115,6 +115,8 @@ const KO_FARM_MESSAGES = {
   donatedToast: (rp: string) => `연구에 헌납했어요. +${rp}RP`,
   harvestedToast: (amount: string) => `+${amount}G 수확했어요.`,
   harvestedBoostToast: (amount: string, multiplier: number) => `+${amount}G 수확했어요. ×${multiplier} 부스트 적용`,
+  prestigeGraduationTitle: '개척 완료!',
+  prestigeGraduationStarsLabel: (stars: number) => `★ +${stars}`,
   masteryRankUpTitle: '숙련도 달성!',
   masteryRankUpToast: (cropName: string, rankName: string, rankIcon: string) =>
     `${rankIcon} ${cropName} 숙련도가 ${rankName} 등급이 됐어요!`,
@@ -214,6 +216,7 @@ const KO_FARM_MESSAGES = {
   nextGoalReady: (areaName: string) => `🔓 ${areaName} 해금 준비 완료! 상점에서 열기`,
   newCropDiscoveryTitle: '새 작물 발견!',
   newCropDiscoverySubtitle: '도감에 추가됐어요',
+  newCropBadge: 'NEW',
 };
 
 export type FarmMessages = typeof KO_FARM_MESSAGES;
@@ -323,6 +326,8 @@ const EN_FARM_MESSAGES: FarmMessages = {
   donatedToast: (rp) => `Donated to research. +${rp}RP`,
   harvestedToast: (amount) => `Harvested +${amount}G.`,
   harvestedBoostToast: (amount, multiplier) => `Harvested +${amount}G with ${multiplier}x boost.`,
+  prestigeGraduationTitle: 'Pioneered!',
+  prestigeGraduationStarsLabel: (stars) => `★ +${stars}`,
   masteryRankUpTitle: 'Mastery Achieved!',
   masteryRankUpToast: (cropName, rankName, rankIcon) => `${rankIcon} ${cropName} mastery reached ${rankName}!`,
   mutationHarvestedToast: (mutationName, mutationIcon, amount) =>
@@ -416,6 +421,7 @@ const EN_FARM_MESSAGES: FarmMessages = {
   nextGoalReady: (areaName) => `🔓 ${areaName} is ready to unlock! Open Shop`,
   newCropDiscoveryTitle: 'New Crop!',
   newCropDiscoverySubtitle: 'Added to your collection',
+  newCropBadge: 'NEW',
 };
 
 const FARM_MESSAGES: Record<SupportedLocale, FarmMessages> = {

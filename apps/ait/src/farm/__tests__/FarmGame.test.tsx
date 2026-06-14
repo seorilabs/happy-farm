@@ -5,22 +5,27 @@ import { Vibration } from 'react-native';
 import { act, cleanup, fireEvent, render, waitFor, within } from '@testing-library/react-native';
 import {
   CROPS,
+  DEFAULT_LOCALE,
   FARM_AREAS,
   HARVEST_BONUS_AD_COOLDOWN_MS,
   HARVEST_BONUS_MULTIPLIER,
   MAX_PLOTS,
+  PRESTIGE_STARS_BASE,
+  REGION_ARCHETYPES,
   createFarmAnalytics,
   createInitialState,
   formatMoney,
   getAreaCropKeys,
   getMasteryThresholds,
   getPrestigeCost,
+  getRegionArchetypeLabel,
   type AreaKey,
   type CropKey,
   type GameState,
   type RewardedAdController,
   type RewardedAdShowResult,
 } from '../../../../../packages/farm-core/src';
+import { getFarmMessages } from '../i18n';
 
 const NOW = Date.parse('2026-05-27T03:00:00.000Z');
 
@@ -30,7 +35,13 @@ jest.mock('react-native-safe-area-context', () => ({
 
 const farmGameModule = jest.requireActual('../FarmGame') as typeof import('../FarmGame');
 const FarmGame = farmGameModule.default;
-const { GAME_TICK_INTERVAL_MS, MASTERY_RANK_UP_CELEBRATION_DURATION_MS } = farmGameModule;
+const {
+  GAME_TICK_INTERVAL_MS,
+  MASTERY_RANK_UP_CELEBRATION_DURATION_MS,
+  PRESTIGE_GRADUATION_CELEBRATION_DURATION_MS,
+  COMBO_GREAT_THRESHOLD,
+  COMBO_LEGENDARY_THRESHOLD,
+} = farmGameModule;
 const mockPersistence = {
   readPersistedGameState: jest.fn<Promise<GameState>, []>(),
   writePersistedGameState: jest.fn<Promise<void>, [GameState]>(),
@@ -175,9 +186,9 @@ function createThrowingRewardedAd(error = new Error('sdk dynamic failure message
   };
 }
 
-// Rendering the full farm tree is heavy; the first test additionally pays the
-// module-loading warmup, which can exceed jest's 5s default on slow CI runners.
-// 30 s gives the ARM64 CI runner (≈3× slower than local) comfortable headroom.
+// CI runners are typically 3-5× slower than local; 30 s gives enough headroom
+// for the heaviest tests (first-run module warmup, rewarded ad flows) without
+// letting a genuinely hung test pass unnoticed.
 jest.setTimeout(30000);
 
 describe('FarmGame UI flow', () => {
@@ -704,6 +715,73 @@ describe('FarmGame UI flow', () => {
     expect(screen.getByText(/1호 농장 · 평원/)).toBeTruthy();
   });
 
+  const prestigeMessages = getFarmMessages();
+  let tundra!: (typeof REGION_ARCHETYPES)[number];
+  let tundraName!: string;
+
+  beforeAll(() => {
+    const found = REGION_ARCHETYPES.find((a) => a.key === 'tundra');
+    expect(found).toBeDefined();
+    if (found == null) throw new Error('tundra archetype missing from REGION_ARCHETYPES');
+    tundra = found;
+    tundraName = getRegionArchetypeLabel(found.key, DEFAULT_LOCALE).name;
+  });
+
+  function createPrestigeReadyState(): GameState {
+    const base = createInitialState();
+    const legendCrops = getAreaCropKeys('legend_field');
+    return {
+      ...base,
+      gold: getPrestigeCost(0),
+      harvestedCropKeys: [...legendCrops],
+      harvestCounts: Object.fromEntries(legendCrops.map((cropKey) => [cropKey, 2])),
+    };
+  }
+
+  async function triggerPrestige(screen: ReturnType<typeof render>) {
+    await waitFor(() => expect(screen.getByTestId('prestige-stars-chip')).toBeTruthy());
+    fireEvent.press(screen.getByLabelText(prestigeMessages.mapButtonAccessibilityLabel));
+    fireEvent.press(screen.getByText(prestigeMessages.prestigeAction(PRESTIGE_STARS_BASE)));
+    fireEvent.press(screen.getByText(`${tundra.icon} ${tundraName}`));
+    fireEvent.press(screen.getByText(prestigeMessages.prestigeConfirmAction(PRESTIGE_STARS_BASE)));
+  }
+
+  test('shows prestige graduation overlay on region pioneer', async () => {
+    const screen = await renderGame(createPrestigeReadyState());
+
+    await triggerPrestige(screen);
+
+    const card = await waitFor(() => screen.getByTestId('prestige-graduation-card'));
+    expect(within(card).getByText(prestigeMessages.prestigeGraduationTitle)).toBeTruthy();
+    expect(within(card).getByText(tundra.icon)).toBeTruthy();
+    expect(within(card).getByText(tundraName)).toBeTruthy();
+    expect(within(card).getByText(prestigeMessages.prestigeGraduationStarsLabel(PRESTIGE_STARS_BASE))).toBeTruthy();
+  });
+
+  test('prestige graduation overlay auto-dismisses after the celebration duration', async () => {
+    const screen = await renderGame(createPrestigeReadyState());
+
+    await triggerPrestige(screen);
+    await waitFor(() => expect(screen.getByTestId('prestige-graduation-overlay')).toBeTruthy());
+
+    await act(async () => {
+      jest.advanceTimersByTime(PRESTIGE_GRADUATION_CELEBRATION_DURATION_MS);
+    });
+
+    await waitFor(() => expect(screen.queryByTestId('prestige-graduation-overlay')).toBeNull());
+  });
+
+  test('prestige graduation overlay dismisses immediately on backdrop tap', async () => {
+    const screen = await renderGame(createPrestigeReadyState());
+
+    await triggerPrestige(screen);
+    await waitFor(() => expect(screen.getByTestId('prestige-graduation-overlay')).toBeTruthy());
+
+    fireEvent.press(screen.getByTestId('prestige-graduation-overlay'));
+
+    await waitFor(() => expect(screen.queryByTestId('prestige-graduation-overlay')).toBeNull());
+  });
+
   test('keeps reset behind the settings sheet', async () => {
     const screen = await renderGame(null);
 
@@ -728,6 +806,7 @@ describe('FarmGame UI flow', () => {
       audio: {
         isSupported: true,
         playHarvest,
+        playComboMilestone: jest.fn(),
         setBackgroundMusicEnabled: jest.fn(),
       },
     });
@@ -737,6 +816,84 @@ describe('FarmGame UI flow', () => {
     fireEvent.press(screen.getAllByText('GET')[0]!);
 
     expect(playHarvest).toHaveBeenCalledTimes(1);
+  });
+
+  test('fires combo great milestone audio when combo crosses the great tier threshold', async () => {
+    const lateGame = createLateGameState();
+    const playComboMilestone = jest.fn();
+    const screen = await renderGame(lateGame, {
+      audio: {
+        isSupported: true,
+        playHarvest: jest.fn(),
+        playComboMilestone,
+        setBackgroundMusicEnabled: jest.fn(),
+      },
+    });
+
+    await waitFor(() =>
+      expect(screen.getAllByText('GET').length).toBeGreaterThanOrEqual(COMBO_GREAT_THRESHOLD)
+    );
+
+    for (let i = 0; i < COMBO_GREAT_THRESHOLD; i++) {
+      fireEvent.press(screen.getAllByText('GET')[0]!);
+    }
+
+    await waitFor(() => {
+      expect(playComboMilestone).toHaveBeenCalledWith('great');
+      expect(playComboMilestone).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  test('fires combo legendary milestone audio when combo crosses the legendary tier threshold', async () => {
+    const lateGame = createLateGameState();
+    const playComboMilestone = jest.fn();
+    const screen = await renderGame(lateGame, {
+      audio: {
+        isSupported: true,
+        playHarvest: jest.fn(),
+        playComboMilestone,
+        setBackgroundMusicEnabled: jest.fn(),
+      },
+    });
+
+    await waitFor(() =>
+      expect(screen.getAllByText('GET').length).toBeGreaterThanOrEqual(COMBO_LEGENDARY_THRESHOLD)
+    );
+
+    for (let i = 0; i < COMBO_LEGENDARY_THRESHOLD; i++) {
+      fireEvent.press(screen.getAllByText('GET')[0]!);
+    }
+
+    await waitFor(() => {
+      expect(playComboMilestone).toHaveBeenNthCalledWith(1, 'great');
+      expect(playComboMilestone).toHaveBeenNthCalledWith(2, 'legendary');
+      expect(playComboMilestone).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  test('batch harvest fires only legendary when combo jumps past great in one action', async () => {
+    // Intentional design: a single harvestAll action that pushes combo past both
+    // thresholds at once triggers only the highest milestone reached, not great+legendary.
+    const lateGame = createLateGameState();
+    const playComboMilestone = jest.fn();
+    const harvestAllLabel = getFarmMessages().harvestAllButton(MAX_PLOTS);
+    const screen = await renderGame(lateGame, {
+      audio: {
+        isSupported: true,
+        playHarvest: jest.fn(),
+        playComboMilestone,
+        setBackgroundMusicEnabled: jest.fn(),
+      },
+    });
+
+    await waitFor(() => expect(screen.getByText(harvestAllLabel)).toBeTruthy());
+    fireEvent.press(screen.getByText(harvestAllLabel));
+
+    await waitFor(() => {
+      expect(playComboMilestone).toHaveBeenCalledWith('legendary');
+      expect(playComboMilestone).not.toHaveBeenCalledWith('great');
+      expect(playComboMilestone).toHaveBeenCalledTimes(1);
+    });
   });
 
   test('spaces out harvest bonus nudges by time after the player declines one', async () => {
@@ -1050,5 +1207,43 @@ describe('NextGoalBar', () => {
     // One plot is now growing → seed hint replaced by harvest hint.
     expect(screen.queryByText('🌱 아래에서 씨앗을 골라 빈 밭에 심어보세요!')).toBeNull();
     expect(screen.getByText('밭을 눌러 수확할 수 있어요.')).toBeTruthy();
+  });
+
+  test('applies GREAT combo bonus (+10%) on the 5th consecutive harvest', async () => {
+    // Gold starts at 0 so cumulative amounts are predictable.
+    // All 6 unlocked plots pre-loaded with ripe carrots (sell=14G, profit level=1 → no multiplier).
+    const s = createInitialState();
+    const ripeState: GameState = {
+      ...s,
+      gold: 0,
+      harvestedCropKeys: ['carrot'] satisfies CropKey[],
+      plots: s.plots.map((plot, i) =>
+        i < s.unlockedPlotCount
+          ? { ...plot, state: 2 as const, cropType: 'carrot' as const, startTime: 0 }
+          : plot
+      ),
+    };
+    const screen = await renderGame(ripeState);
+    await waitFor(() => expect(screen.getByText('0G')).toBeTruthy());
+
+    // Harvests 1–4: combo below COMBO_GREAT_THRESHOLD (5) → no bonus.
+    // Each press is followed by an act so the drain effect runs and harvestCombo
+    // increments before the next press reads it.
+    for (let i = 0; i < 4; i++) {
+      fireEvent.press(within(screen.getByTestId(`plot-cell-${i}`)).getByText('GET'));
+      await act(async () => {
+        jest.advanceTimersByTime(100);
+      });
+    }
+    // 4 × 14G = 56G, no combo bonus.
+    await waitFor(() => expect(screen.getByText('56G')).toBeTruthy());
+
+    // 5th harvest: harvestCombo=4 → getComboMultiplier(4+1=5)=COMBO_GREAT_BONUS (1.1)
+    // bonus = floor(14 × 0.1) = 1G → 5th harvest earns 15G → total = 71G.
+    fireEvent.press(within(screen.getByTestId('plot-cell-4')).getByText('GET'));
+    await act(async () => {
+      jest.advanceTimersByTime(100);
+    });
+    await waitFor(() => expect(screen.getByText('71G')).toBeTruthy());
   });
 });

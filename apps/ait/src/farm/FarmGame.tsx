@@ -143,11 +143,13 @@ const PLANT_POP_DURATION_MS = 320;
 // tapping each one becomes a chore; a single ripe plot is a quick one-tap.
 const HARVEST_ALL_MIN_COUNT = 2;
 // Harvest combo: the window (ms) within which consecutive manual harvests
-// build a streak counter. Tier thresholds gate icon/color escalation.
+// build a streak counter. Tier thresholds gate icon/color escalation and
+// audio milestone cues.
 const COMBO_WINDOW_MS = 1500;
-const COMBO_GREAT_THRESHOLD = 5;
-const COMBO_LEGENDARY_THRESHOLD = 10;
+export const COMBO_GREAT_THRESHOLD = 5;
+export const COMBO_LEGENDARY_THRESHOLD = 10;
 export const MASTERY_RANK_UP_CELEBRATION_DURATION_MS = 2600;
+export const PRESTIGE_GRADUATION_CELEBRATION_DURATION_MS = 3500;
 const SHEET_DISMISS_DRAG_DISTANCE = 96;
 const SHEET_DISMISS_VELOCITY = 1.1;
 const SHEET_DISMISS_TRANSLATE_Y = 520;
@@ -175,6 +177,20 @@ function getCrop(cropKey: CropKey) {
 // to a whole-number display once a decimal stops being informative.
 function formatStatMultiplier(value: number) {
   return value >= 100 ? `×${Math.round(value).toLocaleString()}` : `×${value.toFixed(1)}`;
+}
+
+// Combo gold bonus: rewards players who harvest quickly in succession.
+// Great tier (≥5) gives +10%; Legendary tier (≥10) gives +25%.
+// Applied on top of the base harvest value so the benefit scales naturally
+// with crop value — early crops get a small absolute bump, late-game crops
+// get a meaningful reward for active play.
+const COMBO_GREAT_BONUS = 1.1;
+const COMBO_LEGENDARY_BONUS = 1.25;
+
+function getComboMultiplier(combo: number): number {
+  if (combo >= COMBO_LEGENDARY_THRESHOLD) return COMBO_LEGENDARY_BONUS;
+  if (combo >= COMBO_GREAT_THRESHOLD) return COMBO_GREAT_BONUS;
+  return 1;
 }
 
 // Identifies the single most actionable next milestone for the player: the
@@ -273,6 +289,8 @@ type FarmGameMarket = 'appsInToss' | 'mobile';
 export type FarmGameAudio = {
   isSupported: boolean;
   playHarvest: () => void | Promise<void>;
+  // Fire-and-forget: implementations must not throw or return a rejectable Promise.
+  playComboMilestone: (tier: 'great' | 'legendary') => void;
   setBackgroundMusicEnabled: (enabled: boolean) => void | Promise<void>;
 };
 
@@ -297,6 +315,7 @@ type PendingFarmCommandEffect =
       event: CropHarvestedGameEvent;
       now: number;
       shouldShowHarvestBonusNudge: boolean;
+      comboMultiplier: number;
     }
   | {
       id: number;
@@ -306,6 +325,7 @@ type PendingFarmCommandEffect =
       totalRpGained: number;
       harvestedCount: number;
       specialCount: number;
+      comboMultiplier: number;
     };
 
 type MasteryRankUpNotice = {
@@ -322,6 +342,13 @@ const MASTERY_RANK_COLORS: Record<MasteryRankKey, string> = {
   silver: '#5f7e99',
   gold: '#d4860a',
   prism: '#7c44ff',
+};
+
+type PrestigeGraduationNotice = {
+  id: number;
+  regionIcon: string;
+  regionName: string;
+  starsAwarded: number;
 };
 
 // One-shot floating "+gold" feedback spawned at the tapped plot on a manual
@@ -356,6 +383,7 @@ const defaultFarmAnalytics = createFarmAnalytics();
 const defaultFarmAudio: FarmGameAudio = {
   isSupported: false,
   playHarvest: () => undefined,
+  playComboMilestone: () => undefined,
   setBackgroundMusicEnabled: () => undefined,
 };
 const defaultPersistence: FarmGamePersistence = {
@@ -420,9 +448,13 @@ export default function FarmGame({
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [harvestCombo, setHarvestCombo] = useState(0);
   const comboTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const prevComboRef = useRef(0);
   const [masteryRankUpNotice, setMasteryRankUpNotice] = useState<MasteryRankUpNotice | null>(null);
   const masteryRankUpTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const masteryNoticeIdRef = useRef(0);
+  const [prestigeGraduationNotice, setPrestigeGraduationNotice] = useState<PrestigeGraduationNotice | null>(null);
+  const prestigeGraduationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const prestigeGraduationNoticeIdRef = useRef(0);
   // Per-plot "just planted" tokens. Bumped only on a manual plant so the fresh
   // sprout bounces in (auto-replant and save-load stay silent). Keyed by index.
   const [plantPulses, setPlantPulses] = useState<Record<number, number>>({});
@@ -449,7 +481,7 @@ export default function FarmGame({
   const claimedAchievementKeysRef = useRef<Set<string>>(new Set());
   const commandEffectIdRef = useRef(0);
   const pendingCommandEffectsRef = useRef<PendingFarmCommandEffect[]>([]);
-  const lastHandledCommandEffectIdRef = useRef(0);
+  const handledCommandEffectIdsRef = useRef<Set<number>>(new Set());
   const [commandEffectVersion, setCommandEffectVersion] = useState(0);
   // Double-tap guard for confirmPrestige: the state updater is idempotent,
   // but the toast/analytics must fire exactly once per graduated level.
@@ -535,6 +567,24 @@ export default function FarmGame({
     }
     setMasteryRankUpNotice(null);
   }, []);
+  const showPrestigeGraduation = useCallback((notice: Omit<PrestigeGraduationNotice, 'id'>) => {
+    if (prestigeGraduationTimerRef.current != null) {
+      clearTimeout(prestigeGraduationTimerRef.current);
+    }
+    prestigeGraduationNoticeIdRef.current += 1;
+    setPrestigeGraduationNotice({ ...notice, id: prestigeGraduationNoticeIdRef.current });
+    prestigeGraduationTimerRef.current = setTimeout(() => {
+      setPrestigeGraduationNotice(null);
+      prestigeGraduationTimerRef.current = null;
+    }, PRESTIGE_GRADUATION_CELEBRATION_DURATION_MS);
+  }, []);
+  const dismissPrestigeGraduation = useCallback(() => {
+    if (prestigeGraduationTimerRef.current != null) {
+      clearTimeout(prestigeGraduationTimerRef.current);
+      prestigeGraduationTimerRef.current = null;
+    }
+    setPrestigeGraduationNotice(null);
+  }, []);
   const closeSheet = useCallback(() => {
     setActiveSheet(null);
   }, []);
@@ -560,8 +610,34 @@ export default function FarmGame({
       if (masteryRankUpTimerRef.current != null) {
         clearTimeout(masteryRankUpTimerRef.current);
       }
+      if (prestigeGraduationTimerRef.current != null) {
+        clearTimeout(prestigeGraduationTimerRef.current);
+        prestigeGraduationTimerRef.current = null;
+      }
     };
   }, []);
+
+  useEffect(() => {
+    const prev = prevComboRef.current;
+    prevComboRef.current = harvestCombo;
+    if (!gameSettings.soundEffectsEnabled || !audio.isSupported) return;
+    if (harvestCombo === 0) return;
+    const prevTier = prev < COMBO_GREAT_THRESHOLD ? 0 : prev < COMBO_LEGENDARY_THRESHOLD ? 1 : 2;
+    const currTier = harvestCombo < COMBO_GREAT_THRESHOLD ? 0 : harvestCombo < COMBO_LEGENDARY_THRESHOLD ? 1 : 2;
+    if (currTier > prevTier) {
+      // Single-action design: when a batch harvest jumps combo past multiple tiers
+      // at once, we play only the highest tier reached. This preserves a meaningful
+      // audio advantage for individual manual harvesting over Harvest All.
+      const tier = currTier >= 2 ? 'legendary' : 'great';
+      try {
+        // Promise.resolve wraps both void and any unexpected Promise return, so
+        // the catch handles async rejections even if the void contract is violated.
+        void Promise.resolve(audio.playComboMilestone(tier) as unknown).catch(() => undefined);
+      } catch {
+        // Synchronous throws from SFX are non-critical.
+      }
+    }
+  }, [harvestCombo, audio, gameSettings.soundEffectsEnabled]);
 
   const analyticsContext = useCallback(
     (state = gameState) => getGameAnalyticsContext(state, sessionStartedAtRef.current),
@@ -577,10 +653,10 @@ export default function FarmGame({
     pendingCommandEffectsRef.current = [];
 
     for (const effect of effects) {
-      if (effect.id <= lastHandledCommandEffectIdRef.current) {
+      if (handledCommandEffectIdsRef.current.has(effect.id)) {
         continue;
       }
-      lastHandledCommandEffectIdRef.current = effect.id;
+      handledCommandEffectIdsRef.current.add(effect.id);
 
       if (effect.type === 'plantBlocked') {
         if (effect.reason === 'areaLocked') {
@@ -610,6 +686,18 @@ export default function FarmGame({
         // and on a no-op (drift cleared the plots) — the button can never stick.
         harvestAllInFlightRef.current = false;
         if (effect.harvestedCount > 0) {
+          // Combo bonus: apply multiplier earned before this batch started.
+          // Added to state here (after the primary harvest already ran) so
+          // the bonus stays separate from core harvest accounting.
+          const allBonusGold =
+            effect.totalGoldGained > 0 && effect.comboMultiplier > 1
+              ? Math.floor(effect.totalGoldGained * (effect.comboMultiplier - 1))
+              : 0;
+          if (allBonusGold > 0) {
+            setGameState((state) => ({ ...state, gold: state.gold + allBonusGold }));
+          }
+          const allTotalGold = effect.totalGoldGained + allBonusGold;
+
           // One floating "+gold" per harvested plot keeps the spatial reward;
           // the overlay self-caps concurrent pops, so a full grid stays cheap.
           // The HUD pulse, toast, sound, and haptic fire once for the whole
@@ -629,14 +717,14 @@ export default function FarmGame({
           if (effect.totalRpGained > 0) {
             toast(messages.harvestAllDonatedToast(formatMoney(effect.totalRpGained, locale), effect.harvestedCount));
           } else {
-            toast(messages.harvestAllToast(formatMoney(effect.totalGoldGained, locale), effect.harvestedCount));
+            toast(messages.harvestAllToast(formatMoney(allTotalGold, locale), effect.harvestedCount));
           }
-          if (effect.totalGoldGained > 0) {
+          if (allTotalGold > 0) {
             pulseGold();
           }
           farmAnalytics.trackHarvestAll({
             harvestedCount: effect.harvestedCount,
-            totalGold: effect.totalGoldGained,
+            totalGold: allTotalGold,
             specialCount: effect.specialCount,
             context: analyticsContext(),
           });
@@ -654,11 +742,23 @@ export default function FarmGame({
       }
 
       const { event } = effect;
+      // Combo bonus: extra gold for harvesting quickly in succession.
+      // Computed and applied here (after primary harvest) so farm-core stays
+      // pure; donation harvests (goldGained === 0) naturally receive no bonus.
+      const comboBonusGold =
+        event.goldGained > 0 && effect.comboMultiplier > 1
+          ? Math.floor(event.goldGained * (effect.comboMultiplier - 1))
+          : 0;
+      if (comboBonusGold > 0) {
+        setGameState((state) => ({ ...state, gold: state.gold + comboBonusGold }));
+      }
+      const totalDisplayGold = event.goldGained + comboBonusGold;
+
       farmAnalytics.trackCropHarvested({
         cropKey: event.cropKey,
         areaKey: event.areaKey,
         cropTier: event.cropTier,
-        revenue: event.goldGained,
+        revenue: totalDisplayGold,
         isFirstMeaningfulHarvest: event.isFirstMeaningfulHarvest,
         isFirstCropHarvest: event.isNewCropDiscovery,
         context: analyticsContext(),
@@ -679,14 +779,14 @@ export default function FarmGame({
           messages.mutationHarvestedToast(
             getMutationLabel(event.mutation.key, locale).name,
             event.mutation.icon,
-            formatMoney(event.goldGained, locale)
+            formatMoney(totalDisplayGold, locale)
           )
         );
       } else {
         toast(
           event.boostActive
-            ? messages.harvestedBoostToast(formatMoney(event.goldGained, locale), event.boostMultiplier)
-            : messages.harvestedToast(formatMoney(event.goldGained, locale))
+            ? messages.harvestedBoostToast(formatMoney(totalDisplayGold, locale), event.boostMultiplier)
+            : messages.harvestedToast(formatMoney(totalDisplayGold, locale))
         );
       }
       if (effect.shouldShowHarvestBonusNudge) {
@@ -703,10 +803,10 @@ export default function FarmGame({
             : isSpecialHarvest
               ? 'special'
               : 'normal';
-      if (event.goldGained > 0) {
+      if (totalDisplayGold > 0) {
         harvestFxRef.current?.spawn(
           event.plotIndex,
-          `+${formatMoney(event.goldGained, locale)}`,
+          `+${formatMoney(totalDisplayGold, locale)}`,
           popTone
         );
         pulseGold();
@@ -735,6 +835,16 @@ export default function FarmGame({
         void audio.playHarvest();
       }
       incrementCombo(1);
+    }
+
+    // Prune processed-effect ids to prevent unbounded Set growth in long sessions.
+    // IDs are monotonically increasing; anything 500 below the current ceiling
+    // cannot appear in a future drain batch, so it is safe to discard.
+    const floor = commandEffectIdRef.current - 500;
+    if (floor > 0) {
+      for (const id of handledCommandEffectIdsRef.current) {
+        if (id < floor) handledCommandEffectIdsRef.current.delete(id);
+      }
     }
   }, [
     analyticsContext,
@@ -1177,9 +1287,11 @@ export default function FarmGame({
       chainGoldPerHour: result.chainFarm.goldPerHour,
       context: analyticsContext(),
     });
-    toast(
-      messages.prestigeDoneToast(getRegionArchetypeLabel(prestigeArchetype, locale).name, result.starsAwarded)
-    );
+    showPrestigeGraduation({
+      regionIcon: REGION_ARCHETYPES.find((a) => a.key === prestigeArchetype)?.icon ?? '🏁',
+      regionName: getRegionArchetypeLabel(prestigeArchetype, locale).name,
+      starsAwarded: result.starsAwarded,
+    });
   }
 
   function purchaseSkill(skillKey: PrestigeSkillKey) {
@@ -1377,6 +1489,10 @@ export default function FarmGame({
 
   function harvestCrop(index: number) {
     const now = Date.now();
+    // Use harvestCombo + 1 so the bonus applies exactly when the displayed tier
+    // is reached: the 5th harvest sees combo=4 pre-increment, but the post-
+    // increment value is 5 (GREAT), so it should already earn the bonus.
+    const comboMultiplier = getComboMultiplier(harvestCombo + 1);
     const effectId = ++commandEffectIdRef.current;
     setGameState((state) => {
       const roll = Math.random();
@@ -1400,6 +1516,7 @@ export default function FarmGame({
             getRewardedAdLimitStatus(result.state, 'harvestBonusAd', now).allowed &&
             getHarvestBonusPromptStatus(result.state, now).allowed &&
             !event.boostActive,
+          comboMultiplier,
         });
       }
       return result.state;
@@ -1416,6 +1533,12 @@ export default function FarmGame({
     }
 
     const now = Date.now();
+    // Intentionally uses harvestCombo (not harvestCombo + 1): Harvest All is a
+    // single tap that collects multiple plots. Applying a per-plot +1 increment
+    // would reward one button press as heavily as N rapid taps, which misrepresents
+    // the player's combo skill. The batch earns whatever multiplier the player
+    // has already built up before pressing the button.
+    const comboMultiplier = getComboMultiplier(harvestCombo);
     const effectId = ++commandEffectIdRef.current;
     // One stable roll per plot index — not a flat sequence. Built outside the
     // updater so a StrictMode double-invoke reuses the same rolls, and keyed by
@@ -1453,6 +1576,7 @@ export default function FarmGame({
           totalRpGained: result.totalRpGained,
           harvestedCount: result.harvestedCount,
           specialCount: result.specialCount,
+          comboMultiplier,
         });
       }
       return result.harvestedCount > 0 ? result.state : state;
@@ -1601,7 +1725,7 @@ export default function FarmGame({
           </View>
 
           <View style={styles.headerActions}>
-            <Text style={styles.starsChip}>★ {gameState.prestige.stars}</Text>
+            <Text testID="prestige-stars-chip" style={styles.starsChip}>★ {gameState.prestige.stars}</Text>
             <Pressable
               accessibilityLabel={messages.settingsAccessibilityLabel}
               hitSlop={8}
@@ -1646,6 +1770,7 @@ export default function FarmGame({
                 <View style={styles.compactStat}>
                   <Text style={styles.label}>{messages.boostLabel}</Text>
                   <Text style={styles.boostStat}>×{harvestBonusBoost.multiplier.toFixed(1)}</Text>
+                  <Text style={styles.boostRemaining}>{formatRemainingTime(harvestBonusBoost.remainingMs, locale)}</Text>
                 </View>
               ) : null}
             </View>
@@ -1767,6 +1892,7 @@ export default function FarmGame({
             const crop = getCrop(key);
             const cropCost = getCropPurchaseCost(gameState, key);
             const masteryRank = getMasteryStatus(gameState, key).rank;
+            const isNew = !gameState.harvestedCropKeys.includes(key);
             return (
               <ToolButton
                 key={key}
@@ -1777,6 +1903,8 @@ export default function FarmGame({
                 roi={messages.roi(formatSignedPercent(getCropEconomy(cropEconomyByKey, key).roiPercent, locale))}
                 affordable={gameState.gold >= cropCost}
                 masteryRank={masteryRank}
+                isNew={isNew}
+                newLabel={messages.newCropBadge}
                 onPress={() => selectCrop(key)}
               />
             );
@@ -2083,6 +2211,14 @@ export default function FarmGame({
           onDismiss={dismissMasteryRankUpCelebration}
         />
       ) : null}
+      {prestigeGraduationNotice != null ? (
+        <PrestigeGraduationOverlay
+          key={prestigeGraduationNotice.id}
+          notice={prestigeGraduationNotice}
+          messages={messages}
+          onDismiss={dismissPrestigeGraduation}
+        />
+      ) : null}
     </View>
   );
 }
@@ -2278,6 +2414,94 @@ function MasteryRankUpOverlay({
   );
 }
 
+// Prestige graduation ceremony: full-screen overlay shown when the player
+// completes a prestige — the game's biggest milestone. The region icon springs
+// in with extra energy; stars slide up from below so the reward reads as the
+// climax. Auto-dismisses after PRESTIGE_GRADUATION_CELEBRATION_DURATION_MS;
+// tapping anywhere on the overlay (backdrop or card) also dismisses early —
+// the inner View uses pointerEvents="none" so all touches reach the Pressable.
+function PrestigeGraduationOverlay({
+  notice,
+  messages,
+  onDismiss,
+}: {
+  notice: PrestigeGraduationNotice;
+  messages: FarmMessages;
+  onDismiss: () => void;
+}) {
+  const backdrop = useRef(new Animated.Value(0)).current;
+  const cardScale = useRef(new Animated.Value(0.5)).current;
+  const iconScale = useRef(new Animated.Value(0.1)).current;
+  const starsEntrance = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const anim = Animated.parallel([
+      Animated.timing(backdrop, {
+        toValue: 1,
+        duration: 220,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
+      Animated.spring(cardScale, {
+        toValue: 1,
+        damping: 14,
+        stiffness: 260,
+        mass: 0.9,
+        useNativeDriver: true,
+      }),
+      Animated.sequence([
+        Animated.delay(80),
+        Animated.spring(iconScale, {
+          toValue: 1,
+          damping: 7,
+          stiffness: 180,
+          mass: 0.6,
+          useNativeDriver: true,
+        }),
+      ]),
+      Animated.sequence([
+        Animated.delay(300),
+        Animated.spring(starsEntrance, {
+          toValue: 1,
+          damping: 11,
+          stiffness: 240,
+          useNativeDriver: true,
+        }),
+      ]),
+    ]);
+    anim.start();
+    return () => anim.stop();
+  }, [backdrop, cardScale, iconScale, starsEntrance]);
+
+  const starsTranslateY = starsEntrance.interpolate({ inputRange: [0, 1], outputRange: [20, 0] });
+
+  return (
+    <Pressable testID="prestige-graduation-overlay" style={StyleSheet.absoluteFill} onPress={onDismiss}>
+      <Animated.View style={[styles.prestigeBackdrop, { opacity: backdrop }]} />
+      <View style={styles.prestigeCenter} pointerEvents="none">
+        <Animated.View
+          testID="prestige-graduation-card"
+          style={[styles.prestigeCard, { transform: [{ scale: cardScale }] }]}
+        >
+          <Text style={styles.prestigeTitle}>{messages.prestigeGraduationTitle}</Text>
+          <Animated.Text style={[styles.prestigeRegionIcon, { transform: [{ scale: iconScale }] }]}>
+            {notice.regionIcon}
+          </Animated.Text>
+          <Text style={styles.prestigeRegionName}>{notice.regionName}</Text>
+          <Animated.Text
+            style={[
+              styles.prestigeStarsBadge,
+              { opacity: starsEntrance, transform: [{ translateY: starsTranslateY }] },
+            ]}
+          >
+            {messages.prestigeGraduationStarsLabel(notice.starsAwarded)}
+          </Animated.Text>
+        </Animated.View>
+      </View>
+    </Pressable>
+  );
+}
+
 // Shows a growing streak counter when the player rapidly harvests multiple
 // plots in quick succession. Punches out on each count update so the number
 // change is unmistakable; tiers escalate icon and color at 5× and 10×.
@@ -2289,6 +2513,13 @@ function ComboDisplay({ count, messages }: { count: number; messages: FarmMessag
     scaleRef.current = new Animated.Value(0.6);
   }
   const scale = scaleRef.current;
+
+  // Fades out as the combo window expires so the player sees "it's ending — tap more!"
+  const expiryRef = useRef<Animated.Value | null>(null);
+  if (expiryRef.current == null) {
+    expiryRef.current = new Animated.Value(1);
+  }
+  const expiry = expiryRef.current;
 
   useEffect(() => {
     scale.stopAnimation();
@@ -2311,13 +2542,39 @@ function ComboDisplay({ count, messages }: { count: number; messages: FarmMessag
     return () => animation.stop();
   }, [scale, count]);
 
+  // Reset to fully visible on each harvest, then fade to 25% over the combo window.
+  // The last 40% of the window (600 ms) transitions from fully visible to dim,
+  // signalling "tap fast or lose your combo!" without being distracting early on.
   useEffect(() => {
-    return () => scale.stopAnimation();
-  }, [scale]);
+    expiry.stopAnimation();
+    expiry.setValue(1);
+    const animation = Animated.timing(expiry, {
+      toValue: 0,
+      duration: COMBO_WINDOW_MS,
+      easing: Easing.linear,
+      useNativeDriver: true,
+    });
+    animation.start();
+    return () => animation.stop();
+  }, [expiry, count]);
+
+  useEffect(() => {
+    return () => {
+      scale.stopAnimation();
+      expiry.stopAnimation();
+    };
+  }, [scale, expiry]);
+
+  const opacity = expiry.interpolate({
+    inputRange: [0, 0.4, 1],
+    outputRange: [0.25, 1, 1],
+  });
 
   const tier =
     count >= COMBO_LEGENDARY_THRESHOLD ? 'legendary' : count >= COMBO_GREAT_THRESHOLD ? 'great' : 'normal';
   const icon = tier === 'legendary' ? '⚡' : tier === 'great' ? '🔥' : '🌾';
+  // Show the active gold bonus so players immediately understand the combo reward.
+  const bonusLabel = tier === 'legendary' ? ' +25%' : tier === 'great' ? ' +10%' : '';
 
   return (
     <Animated.View
@@ -2325,7 +2582,7 @@ function ComboDisplay({ count, messages }: { count: number; messages: FarmMessag
         styles.comboDisplay,
         tier === 'great' && styles.comboDisplayGreat,
         tier === 'legendary' && styles.comboDisplayLegendary,
-        { transform: [{ scale }] },
+        { opacity, transform: [{ scale }] },
       ]}
     >
       <Text
@@ -2335,7 +2592,7 @@ function ComboDisplay({ count, messages }: { count: number; messages: FarmMessag
           tier === 'legendary' && styles.comboTextLegendary,
         ]}
       >
-        {icon} {messages.comboLabel(count)}
+        {icon} {messages.comboLabel(count)}{bonusLabel}
       </Text>
     </Animated.View>
   );
@@ -3144,6 +3401,8 @@ function ToolButton({
   roi,
   affordable,
   masteryRank,
+  isNew,
+  newLabel,
   onPress,
 }: {
   active: boolean;
@@ -3153,6 +3412,8 @@ function ToolButton({
   roi?: string;
   affordable?: boolean;
   masteryRank?: { icon: string } | null;
+  isNew?: boolean;
+  newLabel?: string;
   onPress: () => void;
 }) {
   return (
@@ -3168,6 +3429,11 @@ function ToolButton({
       {masteryRank != null ? (
         <View pointerEvents="none" style={styles.toolMasteryBadge}>
           <Text style={styles.toolMasteryBadgeText}>{masteryRank.icon}</Text>
+        </View>
+      ) : null}
+      {isNew === true && newLabel != null ? (
+        <View pointerEvents="none" style={styles.toolNewBadge}>
+          <Text style={styles.toolNewBadgeText}>{newLabel}</Text>
         </View>
       ) : null}
     </Pressable>
@@ -3931,6 +4197,22 @@ const styles = StyleSheet.create({
     fontSize: 11,
     lineHeight: 14,
   },
+  toolNewBadge: {
+    position: 'absolute',
+    bottom: 4,
+    left: 4,
+    borderRadius: 4,
+    backgroundColor: '#16a34a',
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+  },
+  toolNewBadgeText: {
+    color: '#ffffff',
+    fontSize: 8,
+    fontWeight: '900',
+    lineHeight: 11,
+    letterSpacing: 0.3,
+  },
   lockedNotice: {
     width: 260,
     minHeight: 76,
@@ -4190,5 +4472,52 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     color: '#344054',
     marginTop: 4,
+  },
+  prestigeBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(10, 12, 30, 0.72)',
+  },
+  prestigeCenter: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingBottom: 80,
+  },
+  prestigeCard: {
+    width: 288,
+    paddingHorizontal: 32,
+    paddingVertical: 32,
+    borderRadius: 24,
+    backgroundColor: '#ffffff',
+    alignItems: 'center',
+    gap: 6,
+    shadowColor: '#000000',
+    shadowOpacity: 0.32,
+    shadowRadius: 36,
+    shadowOffset: { width: 0, height: 14 },
+    elevation: 18,
+  },
+  prestigeTitle: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: '#667085',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+  },
+  prestigeRegionIcon: {
+    fontSize: 80,
+    lineHeight: 88,
+    marginVertical: 4,
+  },
+  prestigeRegionName: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: '#344054',
+  },
+  prestigeStarsBadge: {
+    fontSize: 34,
+    fontWeight: '900',
+    color: '#d4860a',
+    marginTop: 6,
   },
 });
