@@ -258,6 +258,7 @@ type ActiveSheet =
   | { type: 'harvestBonus' }
   | { type: 'welcomeBack'; summary: ReturnSummary }
   | { type: 'resetConfirm' }
+  | { type: 'tutorial' }
   | null;
 
 export type FarmGamePersistence = {
@@ -832,7 +833,16 @@ export default function FarmGame({
       // yet) so the very first frame after a long absence shows the summary.
       const now = Date.now();
       const summary = getReturnSummary(savedState, lastSeenAt, now);
-      if (summary != null) {
+      // Show the tutorial for truly brand new players: no harvests recorded and
+      // all plots are still empty (the player hasn't planted anything yet).
+      // Once any crop is planted or harvested, the tutorial gives way to
+      // normal play (or the welcome-back recap for returning players).
+      const isFirstEverPlay =
+        savedState.harvestedCropKeys.length === 0 &&
+        savedState.plots.every((p) => p.state === 0);
+      if (isFirstEverPlay) {
+        setActiveSheet({ type: 'tutorial' });
+      } else if (summary != null) {
         setActiveSheet({ type: 'welcomeBack', summary });
       }
       // Mark "seen" immediately so a quick reload doesn't replay the recap.
@@ -1639,6 +1649,11 @@ export default function FarmGame({
       );
     }
     if (selectedTool === 'harvest') {
+      // First-play nudge: guide new players to select their first seed.
+      // Fades naturally once any crop has been planted or harvested.
+      if (gameState.harvestedCropKeys.length === 0 && gameState.plots.every((p) => p.state === 0)) {
+        return messages.firstPlayHint;
+      }
       return messages.harvestHint;
     }
     return messages.plantHint(
@@ -2162,6 +2177,10 @@ export default function FarmGame({
             <SheetAction label={messages.resetKeepAction} secondary onPress={() => setActiveSheet(null)} />
           </View>
         ) : null}
+
+        {activeSheet?.type === 'tutorial' ? (
+          <TutorialSheetContent messages={messages} onStart={closeSheet} />
+        ) : null}
       </Sheet>
 
       {/* Rendered last so it appears above the Sheet and all other overlays. */}
@@ -2181,6 +2200,30 @@ export default function FarmGame({
           onDismiss={dismissPrestigeGraduation}
         />
       ) : null}
+    </View>
+  );
+}
+
+// First-play tutorial: explains the core plant → grow → harvest loop
+// to new players who have never harvested anything.
+function TutorialSheetContent({ messages, onStart }: { messages: FarmMessages; onStart: () => void }) {
+  const steps: { icon: string; title: string; desc: string }[] = [
+    { icon: '🌾', title: messages.tutorialStep1, desc: messages.tutorialStep1Desc },
+    { icon: '🪴', title: messages.tutorialStep2, desc: messages.tutorialStep2Desc },
+    { icon: '🧺', title: messages.tutorialStep3, desc: messages.tutorialStep3Desc },
+  ];
+  return (
+    <View>
+      {steps.map((step, i) => (
+        <View key={i} style={styles.tutorialStep}>
+          <Text style={styles.tutorialStepIcon}>{step.icon}</Text>
+          <View style={styles.tutorialStepBody}>
+            <Text style={styles.tutorialStepTitle}>{step.title}</Text>
+            <Text style={styles.tutorialStepDesc}>{step.desc}</Text>
+          </View>
+        </View>
+      ))}
+      <SheetAction label={messages.tutorialStartAction} onPress={onStart} />
     </View>
   );
 }
@@ -3306,6 +3349,9 @@ function getSheetTitle(activeSheet: ActiveSheet, messages: FarmMessages) {
   if (activeSheet?.type === 'collection') {
     return messages.sheetTitleCollection;
   }
+  if (activeSheet?.type === 'tutorial') {
+    return messages.sheetTitleTutorial;
+  }
   return messages.sheetTitleShop;
 }
 
@@ -3351,6 +3397,9 @@ function getSheetDescription(
   }
   if (activeSheet?.type === 'resetConfirm') {
     return messages.sheetDescriptionResetConfirm(messages.resetConfirmText);
+  }
+  if (activeSheet?.type === 'tutorial') {
+    return messages.sheetDescriptionTutorial;
   }
   return messages.sheetDescriptionShop;
 }
@@ -4293,6 +4342,37 @@ const styles = StyleSheet.create({
     color: '#1f7a3d',
     fontSize: 20,
     fontWeight: '900',
+  },
+  tutorialStep: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 14,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f4f0',
+    marginBottom: 2,
+  },
+  tutorialStepIcon: {
+    fontSize: 36,
+    lineHeight: 44,
+    width: 44,
+    textAlign: 'center',
+  },
+  tutorialStepBody: {
+    flex: 1,
+    paddingTop: 2,
+  },
+  tutorialStepTitle: {
+    fontSize: 15,
+    fontWeight: '900',
+    color: '#253126',
+    marginBottom: 4,
+  },
+  tutorialStepDesc: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#5b6b58',
+    lineHeight: 19,
   },
   resetInput: {
     minHeight: 48,

@@ -216,6 +216,16 @@ const KO_FARM_MESSAGES = {
   newCropDiscoveryTitle: '새 작물 발견!',
   newCropDiscoverySubtitle: '도감에 추가됐어요',
   newCropBadge: 'NEW',
+  sheetTitleTutorial: '행복 농장에 오신 것을 환영해요! 🌾',
+  sheetDescriptionTutorial: '작물을 심고, 기다리고, 수확하면 끝이에요.',
+  tutorialStep1: '씨앗 선택',
+  tutorialStep1Desc: '화면 아래 도구 막대에서 🥕 당근 같은 작물을 탭해 선택하세요.',
+  tutorialStep2: '심기',
+  tutorialStep2Desc: '빈 밭 칸을 탭하면 선택한 작물이 심어져요.',
+  tutorialStep3: '수확',
+  tutorialStep3Desc: '작물이 다 자라면 밭을 탭해 골드를 수확하세요. 콤보를 이어가면 더 재미있어요!',
+  tutorialStartAction: '🌱 시작하기',
+  firstPlayHint: '👇 아래에서 씨앗을 선택하고 밭에 심어보세요!',
 };
 
 export type FarmMessages = typeof KO_FARM_MESSAGES;
@@ -421,6 +431,16 @@ const EN_FARM_MESSAGES: FarmMessages = {
   newCropDiscoveryTitle: 'New Crop!',
   newCropDiscoverySubtitle: 'Added to your collection',
   newCropBadge: 'NEW',
+  sheetTitleTutorial: 'Welcome to Happy Farm! 🌾',
+  sheetDescriptionTutorial: 'Plant, wait, and harvest — that is all there is to it.',
+  tutorialStep1: 'Select a Seed',
+  tutorialStep1Desc: 'Tap a crop like 🥕 Carrot in the tool bar at the bottom of the screen.',
+  tutorialStep2: 'Plant It',
+  tutorialStep2Desc: 'Tap any empty plot on your farm to plant the selected crop.',
+  tutorialStep3: 'Harvest',
+  tutorialStep3Desc: 'When the crop is fully grown, tap the plot to collect gold. Chain harvests for a combo!',
+  tutorialStartAction: '🌱 Let\'s go!',
+  firstPlayHint: '👇 Select a seed below and plant it on a plot!',
 };
 
 const FARM_MESSAGES: Record<SupportedLocale, FarmMessages> = {
