@@ -154,7 +154,7 @@ function createActiveBoostState(): GameState {
       ...base.adUsage,
       harvestBonusAd: {
         ...base.adUsage.harvestBonusAd,
-        boostEndsAt: NOW + HARVEST_BONUS_BOOST_DURATION_MS,
+        boostEndsAt: Date.now() + HARVEST_BONUS_BOOST_DURATION_MS,
       },
     },
   };
