@@ -305,6 +305,7 @@ type PendingFarmCommandEffect =
       event: CropHarvestedGameEvent;
       now: number;
       shouldShowHarvestBonusNudge: boolean;
+      isFirstResearchDonation: boolean;
     }
   | {
       id: number;
@@ -314,6 +315,7 @@ type PendingFarmCommandEffect =
       totalRpGained: number;
       harvestedCount: number;
       specialCount: number;
+      isFirstResearchDonation: boolean;
     };
 
 type MasteryRankUpNotice = {
@@ -691,9 +693,8 @@ export default function FarmGame({
           // on RP earned (not "gold === 0") so a future zero-value crop still
           // reads as a harvest rather than a donation.
           if (effect.totalRpGained > 0) {
-            const isFirstRp = gameState.lifetimeStats.researchPointsEarned === effect.totalRpGained;
             toast(
-              isFirstRp
+              effect.isFirstResearchDonation
                 ? messages.firstDonationToast(formatMoney(effect.totalRpGained, locale))
                 : messages.harvestAllDonatedToast(formatMoney(effect.totalRpGained, locale), effect.harvestedCount)
             );
@@ -742,9 +743,8 @@ export default function FarmGame({
           rankName: getMasteryRankLabel(event.newMasteryRank.key, locale).name,
         });
       } else if (event.donated) {
-        const isFirstRp = gameState.lifetimeStats.researchPointsEarned === event.rpGained;
         toast(
-          isFirstRp
+          effect.isFirstResearchDonation
             ? messages.firstDonationToast(formatMoney(event.rpGained, locale))
             : messages.donatedToast(formatMoney(event.rpGained, locale))
         );
@@ -1500,6 +1500,7 @@ export default function FarmGame({
             getRewardedAdLimitStatus(result.state, 'harvestBonusAd', now).allowed &&
             getHarvestBonusPromptStatus(result.state, now).allowed &&
             !event.boostActive,
+          isFirstResearchDonation: state.lifetimeStats.researchPointsEarned === 0 && event.donated && event.rpGained > 0,
         });
       }
       return result.state;
@@ -1553,6 +1554,7 @@ export default function FarmGame({
           totalRpGained: result.totalRpGained,
           harvestedCount: result.harvestedCount,
           specialCount: result.specialCount,
+          isFirstResearchDonation: state.lifetimeStats.researchPointsEarned === 0 && result.totalRpGained > 0,
         });
       }
       return result.harvestedCount > 0 ? result.state : state;
