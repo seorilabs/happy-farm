@@ -14,6 +14,9 @@ import { getDonationRp, isCropPlantable, isNodeUnlocked } from './research';
 export type HarvestOptions = {
   now?: number;
   rng?: () => number;
+  // Optional multiplier applied only to manual-tap harvests in combo mode.
+  // 1.0 = no bonus. Values above 1.0 reward rapid consecutive taps.
+  comboMultiplier?: number;
 };
 
 export type HarvestOutcome = {
@@ -24,6 +27,7 @@ export type HarvestOutcome = {
   donated: boolean;
   boostActive: boolean;
   boostMultiplier: number;
+  comboMultiplier: number;
   isNewCropDiscovery: boolean;
   isFirstMeaningfulHarvest: boolean;
   mutation: MutationKind | null;
@@ -173,7 +177,8 @@ export function performHarvest(gameState: GameState, plotIndex: number, options:
   // Donation mode converts the full sale value (mutations included) into
   // research points instead of gold.
   const donated = gameState.automationSettings.donationModeEnabled;
-  const goldGained = donated ? 0 : saleValue;
+  const comboMultiplier = options.comboMultiplier ?? 1;
+  const goldGained = donated ? 0 : Math.floor(saleValue * comboMultiplier);
   const rpGained = donated ? getDonationRp(gameState, saleValue) : 0;
 
   const nextPlots = [...gameState.plots];
@@ -229,6 +234,7 @@ export function performHarvest(gameState: GameState, plotIndex: number, options:
     donated,
     boostActive: modifiers.harvestMultiplier > 1,
     boostMultiplier: modifiers.harvestMultiplier,
+    comboMultiplier,
     isNewCropDiscovery,
     isFirstMeaningfulHarvest,
     mutation,

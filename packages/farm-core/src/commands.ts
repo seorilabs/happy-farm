@@ -6,7 +6,7 @@ import type { AreaKey, CropKey, GameState } from './types';
 
 export type FarmGameCommand =
   | { type: 'plantCrop'; plotIndex: number; cropKey: CropKey }
-  | { type: 'harvestCrop'; plotIndex: number };
+  | { type: 'harvestCrop'; plotIndex: number; comboMultiplier?: number };
 
 export type FarmGameCommandEnvironment = {
   now: number;
@@ -56,7 +56,7 @@ export function executeFarmGameCommand(
     case 'plantCrop':
       return executePlantCropCommand(gameState, command.plotIndex, command.cropKey, environment);
     case 'harvestCrop':
-      return executeHarvestCropCommand(gameState, command.plotIndex, environment);
+      return executeHarvestCropCommand(gameState, command.plotIndex, environment, command.comboMultiplier);
   }
 }
 
@@ -105,9 +105,10 @@ function executePlantCropCommand(
 function executeHarvestCropCommand(
   gameState: GameState,
   plotIndex: number,
-  environment: FarmGameCommandEnvironment
+  environment: FarmGameCommandEnvironment,
+  comboMultiplier?: number
 ): FarmGameCommandResult {
-  const outcome = performHarvest(gameState, plotIndex, { now: environment.now, rng: environment.rng });
+  const outcome = performHarvest(gameState, plotIndex, { now: environment.now, rng: environment.rng, comboMultiplier });
   if (outcome == null) {
     return { status: 'blocked', reason: 'plotUnavailable', events: [] };
   }

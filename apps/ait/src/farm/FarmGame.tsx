@@ -147,6 +147,17 @@ const HARVEST_ALL_MIN_COUNT = 2;
 const COMBO_WINDOW_MS = 1500;
 const COMBO_GREAT_THRESHOLD = 5;
 const COMBO_LEGENDARY_THRESHOLD = 10;
+// Gold bonus multipliers awarded to manual taps when the harvest combo is in
+// the Great or Legendary tier. Applied on top of all other modifiers.
+const COMBO_GREAT_MULTIPLIER = 1.07;
+const COMBO_LEGENDARY_MULTIPLIER = 1.15;
+
+function getComboGoldMultiplier(combo: number): number {
+  if (combo >= COMBO_LEGENDARY_THRESHOLD) return COMBO_LEGENDARY_MULTIPLIER;
+  if (combo >= COMBO_GREAT_THRESHOLD) return COMBO_GREAT_MULTIPLIER;
+  return 1;
+}
+
 export const MASTERY_RANK_UP_CELEBRATION_DURATION_MS = 2600;
 export const PRESTIGE_GRADUATION_CELEBRATION_DURATION_MS = 3500;
 const SHEET_DISMISS_DRAG_DISTANCE = 96;
@@ -1413,11 +1424,14 @@ export default function FarmGame({
   function harvestCrop(index: number) {
     const now = Date.now();
     const effectId = ++commandEffectIdRef.current;
+    // Capture the current combo before the state update so the multiplier
+    // reflects the streak that was already built (it increments after this tap).
+    const comboMultiplier = getComboGoldMultiplier(harvestCombo);
     setGameState((state) => {
       const roll = Math.random();
       const result = executeFarmGameCommand(
         state,
-        { type: 'harvestCrop', plotIndex: index },
+        { type: 'harvestCrop', plotIndex: index, comboMultiplier },
         { now, rng: () => roll }
       );
       if (result.status === 'blocked') {
@@ -2478,6 +2492,8 @@ function ComboDisplay({ count, messages }: { count: number; messages: FarmMessag
   const tier =
     count >= COMBO_LEGENDARY_THRESHOLD ? 'legendary' : count >= COMBO_GREAT_THRESHOLD ? 'great' : 'normal';
   const icon = tier === 'legendary' ? '⚡' : tier === 'great' ? '🔥' : '🌾';
+  // Show the bonus % that WILL apply to the next tap, only when in a bonus tier.
+  const bonusPercent = tier === 'legendary' ? Math.round((COMBO_LEGENDARY_MULTIPLIER - 1) * 100) : tier === 'great' ? Math.round((COMBO_GREAT_MULTIPLIER - 1) * 100) : 0;
 
   return (
     <Animated.View
@@ -2497,6 +2513,17 @@ function ComboDisplay({ count, messages }: { count: number; messages: FarmMessag
       >
         {icon} {messages.comboLabel(count)}
       </Text>
+      {bonusPercent > 0 ? (
+        <Text
+          style={[
+            styles.comboBonusText,
+            tier === 'great' && styles.comboBonusTextGreat,
+            tier === 'legendary' && styles.comboBonusTextLegendary,
+          ]}
+        >
+          {messages.comboBonusLabel(bonusPercent)}
+        </Text>
+      ) : null}
     </Animated.View>
   );
 }
@@ -4303,6 +4330,23 @@ const styles = StyleSheet.create({
   comboTextLegendary: {
     color: '#ffd23f',
     fontSize: 32,
+  },
+  comboBonusText: {
+    color: '#f7b733',
+    fontSize: 13,
+    fontWeight: '900',
+    textAlign: 'center',
+    marginTop: 2,
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  comboBonusTextGreat: {
+    color: '#ffb347',
+  },
+  comboBonusTextLegendary: {
+    color: '#ffd23f',
+    fontSize: 14,
   },
   nextGoalBar: {
     marginTop: 7,

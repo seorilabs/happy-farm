@@ -122,3 +122,50 @@ describe('performHarvestAll', () => {
     expect(result.state.plots[lockedIndex]?.state).toBe(2);
   });
 });
+
+describe('performHarvest — comboMultiplier', () => {
+  test('defaults to no bonus when comboMultiplier is omitted', () => {
+    const ripe = withRipePlots(createInitialState(), [0]);
+    const base = performHarvest(ripe, 0, { now: 0, rng: noMutationRng });
+    const withOne = performHarvest(ripe, 0, { now: 0, rng: noMutationRng, comboMultiplier: 1 });
+    expect(base).not.toBeNull();
+    expect(withOne).not.toBeNull();
+    expect(base!.goldGained).toBe(withOne!.goldGained);
+    expect(base!.comboMultiplier).toBe(1);
+  });
+
+  test('applies the great-tier bonus (×1.07) to gold', () => {
+    const ripe = withRipePlots(createInitialState(), [0]);
+    const normal = performHarvest(ripe, 0, { now: 0, rng: noMutationRng });
+    const combo = performHarvest(ripe, 0, { now: 0, rng: noMutationRng, comboMultiplier: 1.07 });
+    expect(normal).not.toBeNull();
+    expect(combo).not.toBeNull();
+    expect(combo!.goldGained).toBe(Math.floor(normal!.goldGained * 1.07));
+    expect(combo!.comboMultiplier).toBe(1.07);
+    expect(combo!.state.gold).toBe(ripe.gold + combo!.goldGained);
+  });
+
+  test('applies the legendary-tier bonus (×1.15) to gold', () => {
+    const ripe = withRipePlots(createInitialState(), [0]);
+    const normal = performHarvest(ripe, 0, { now: 0, rng: noMutationRng });
+    const combo = performHarvest(ripe, 0, { now: 0, rng: noMutationRng, comboMultiplier: 1.15 });
+    expect(normal).not.toBeNull();
+    expect(combo).not.toBeNull();
+    expect(combo!.goldGained).toBe(Math.floor(normal!.goldGained * 1.15));
+    expect(combo!.state.gold).toBe(ripe.gold + combo!.goldGained);
+  });
+
+  test('combo bonus does not affect donation-mode harvests (gold stays 0)', () => {
+    const base = createInitialState();
+    const donating: GameState = {
+      ...base,
+      automationSettings: { ...base.automationSettings, donationModeEnabled: true },
+    };
+    const ripe = withRipePlots(donating, [0]);
+    const outcome = performHarvest(ripe, 0, { now: 0, rng: noMutationRng, comboMultiplier: 1.15 });
+    expect(outcome).not.toBeNull();
+    expect(outcome!.goldGained).toBe(0);
+    expect(outcome!.donated).toBe(true);
+    expect(outcome!.rpGained).toBeGreaterThan(0);
+  });
+});
