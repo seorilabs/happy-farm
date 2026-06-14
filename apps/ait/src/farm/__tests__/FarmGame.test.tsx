@@ -836,6 +836,17 @@ describe('getNextAreaGoal', () => {
     unlockedAreas: areaKeys as GameState['unlockedAreas'],
   });
 
+  // getNextAreaGoal uses FARM_AREAS.find() and relies on sequential (non-gated)
+  // areas being ordered by ascending unlock cost so find() returns the correct
+  // next milestone. This test locks in that invariant so a reordering in
+  // balance.json is caught before it silently breaks the goal logic.
+  test('sequential areas in FARM_AREAS are ordered by ascending unlock cost', () => {
+    const sequential = FARM_AREAS.filter((a) => a.unlock.gate == null);
+    for (let i = 1; i < sequential.length; i++) {
+      expect(sequential[i]!.unlock.cost).toBeGreaterThanOrEqual(sequential[i - 1]!.unlock.cost);
+    }
+  });
+
   // Four distinct crop keys that satisfy the vegetable_field harvest requirement (4).
   const FOUR_CROPS = ['carrot', 'wheat', 'potato', 'onion'] as const;
 
