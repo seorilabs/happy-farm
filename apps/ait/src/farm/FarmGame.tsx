@@ -1675,6 +1675,7 @@ export default function FarmGame({
                 <View style={styles.compactStat}>
                   <Text style={styles.label}>{messages.boostLabel}</Text>
                   <Text style={styles.boostStat}>×{harvestBonusBoost.multiplier.toFixed(1)}</Text>
+                  <Text style={styles.boostRemaining}>{formatRemainingTime(harvestBonusBoost.remainingMs, locale)}</Text>
                 </View>
               ) : null}
             </View>
@@ -2418,6 +2419,13 @@ function ComboDisplay({ count, messages }: { count: number; messages: FarmMessag
   }
   const scale = scaleRef.current;
 
+  // Fades out as the combo window expires so the player sees "it's ending — tap more!"
+  const expiryRef = useRef<Animated.Value | null>(null);
+  if (expiryRef.current == null) {
+    expiryRef.current = new Animated.Value(1);
+  }
+  const expiry = expiryRef.current;
+
   useEffect(() => {
     scale.stopAnimation();
     const animation = Animated.sequence([
@@ -2439,9 +2447,33 @@ function ComboDisplay({ count, messages }: { count: number; messages: FarmMessag
     return () => animation.stop();
   }, [scale, count]);
 
+  // Reset to fully visible on each harvest, then fade to 25% over the combo window.
+  // The last 40% of the window (600 ms) transitions from fully visible to dim,
+  // signalling "tap fast or lose your combo!" without being distracting early on.
   useEffect(() => {
-    return () => scale.stopAnimation();
-  }, [scale]);
+    expiry.stopAnimation();
+    expiry.setValue(1);
+    const animation = Animated.timing(expiry, {
+      toValue: 0,
+      duration: COMBO_WINDOW_MS,
+      easing: Easing.linear,
+      useNativeDriver: true,
+    });
+    animation.start();
+    return () => animation.stop();
+  }, [expiry, count]);
+
+  useEffect(() => {
+    return () => {
+      scale.stopAnimation();
+      expiry.stopAnimation();
+    };
+  }, [scale, expiry]);
+
+  const opacity = expiry.interpolate({
+    inputRange: [0, 0.4, 1],
+    outputRange: [0.25, 1, 1],
+  });
 
   const tier =
     count >= COMBO_LEGENDARY_THRESHOLD ? 'legendary' : count >= COMBO_GREAT_THRESHOLD ? 'great' : 'normal';
@@ -2453,7 +2485,7 @@ function ComboDisplay({ count, messages }: { count: number; messages: FarmMessag
         styles.comboDisplay,
         tier === 'great' && styles.comboDisplayGreat,
         tier === 'legendary' && styles.comboDisplayLegendary,
-        { transform: [{ scale }] },
+        { opacity, transform: [{ scale }] },
       ]}
     >
       <Text
