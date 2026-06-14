@@ -4,6 +4,7 @@ on:
   pull_request:
     branches:
       - develop
+      - main
     paths-ignore:
       - '**.md'
       - '**.png'
@@ -19,6 +20,7 @@ on:
   push:
     branches:
       - develop
+      - main
     paths-ignore:
       - '**.md'
       - '**.png'
@@ -58,6 +60,9 @@ jobs:
 
       - name: Lint AIT and shared core
         run: pnpm --dir apps/ait lint
+
+      - name: Typecheck AIT app
+        run: pnpm --dir apps/ait typecheck
 
       - name: Test shared core
         run: pnpm check:core

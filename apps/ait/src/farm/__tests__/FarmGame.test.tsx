@@ -1172,4 +1172,40 @@ describe('NextGoalBar', () => {
     fireEvent.press(screen.getByTestId('next-goal-bar'));
     expect(screen.getByText('농장 관리소')).toBeTruthy();
   });
+
+  test('shows seed selection hint when all unlocked plots are empty and harvest tool is selected', async () => {
+    const screen = await renderGame(null);
+
+    await waitFor(() => expect(screen.getByText('50G')).toBeTruthy());
+
+    // All 6 plots are empty and harvest tool is selected by default →
+    // the hint should guide the player to pick a seed, not prompt harvesting.
+    expect(screen.getByText('🌱 아래에서 씨앗을 골라 빈 밭에 심어보세요!')).toBeTruthy();
+    expect(screen.queryByText('밭을 눌러 수확할 수 있어요.')).toBeNull();
+  });
+
+  test('switches back to harvest hint once any plot has a crop', async () => {
+    const screen = await renderGame(null);
+
+    await waitFor(() => expect(screen.getByText('50G')).toBeTruthy());
+    expect(screen.getByText('🌱 아래에서 씨앗을 골라 빈 밭에 심어보세요!')).toBeTruthy();
+
+    // Plant a carrot in the first plot, then switch back to harvest tool.
+    fireEvent.press(screen.getByText('당근'));
+    fireEvent.press(screen.getAllByText('빈 밭')[0]!);
+
+    // Advance past the plant-pop animation (PLANT_POP_DURATION_MS = 320 ms) so
+    // the GrowingCropIcon callback fires inside act() and avoids a dangling
+    // state-update warning that would leak into subsequent tests.
+    await act(async () => {
+      jest.advanceTimersByTime(400);
+    });
+
+    // Switch back to harvest tool — now one plot is growing.
+    fireEvent.press(screen.getByText('수확'));
+
+    // One plot is now growing → seed hint replaced by harvest hint.
+    expect(screen.queryByText('🌱 아래에서 씨앗을 골라 빈 밭에 심어보세요!')).toBeNull();
+    expect(screen.getByText('밭을 눌러 수확할 수 있어요.')).toBeTruthy();
+  });
 });

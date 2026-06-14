@@ -1655,6 +1655,12 @@ export default function FarmGame({
       );
     }
     if (selectedTool === 'harvest') {
+      const hasAnyCropPlanted = gameState.plots.some(
+        (p, i) => i < gameState.unlockedPlotCount && p.state !== 0
+      );
+      if (!hasAnyCropPlanted) {
+        return messages.emptyFarmSeedHint;
+      }
       return messages.harvestHint;
     }
     return messages.plantHint(
