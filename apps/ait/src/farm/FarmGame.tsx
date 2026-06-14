@@ -2191,7 +2191,9 @@ function NextGoalBar({
       toValue: goal.progress,
       duration: 300,
       easing: Easing.out(Easing.quad),
-      useNativeDriver: true,
+      // width interpolation cannot use the native driver; this bar updates only
+      // when gold changes (not on the 250ms tick) so JS-thread animation is fine.
+      useNativeDriver: false,
     });
     animation.start();
     return () => animation.stop();
@@ -2202,6 +2204,9 @@ function NextGoalBar({
   }, [progressAnim]);
 
   const goldNeeded = Math.max(0, goal.cost - gold);
+  // Interpolate to a percentage width so the fill always grows left-to-right
+  // without relying on transformOrigin (partially supported on some RN versions).
+  const fillWidth = progressAnim.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] });
 
   return (
     <Pressable style={({ pressed }) => [styles.nextGoalBar, pressed && styles.nextGoalBarPressed]} onPress={onPress}>
@@ -2210,7 +2215,7 @@ function NextGoalBar({
       </Text>
       <View style={styles.nextGoalRight}>
         <View style={styles.nextGoalProgressTrack}>
-          <Animated.View style={[styles.nextGoalProgressFill, { transform: [{ scaleX: progressAnim }] }]} />
+          <Animated.View style={[styles.nextGoalProgressFill, { width: fillWidth }]} />
         </View>
         <Text style={[styles.nextGoalAmount, goal.affordable && styles.nextGoalAmountReady]}>
           {goal.affordable ? messages.nextGoalReady : messages.nextGoalNeeded(formatMoney(goldNeeded, locale))}
@@ -3978,10 +3983,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.10)',
   },
   nextGoalProgressFill: {
-    width: '100%',
     height: '100%',
     backgroundColor: '#2e9e57',
-    transformOrigin: 'left center',
   },
   nextGoalAmount: {
     color: '#667085',
