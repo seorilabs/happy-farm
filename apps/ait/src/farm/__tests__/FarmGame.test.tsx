@@ -819,7 +819,8 @@ describe('FarmGame UI flow', () => {
     expect(playHarvest).toHaveBeenCalledTimes(1);
   });
 
-  test('pulses the gold display and plays harvest sound when a collection reward is claimed', async () => {
+  test('plays harvest sound when a collection reward is claimed', async () => {
+    // createLateGameState() discovers all crops, making all area collection rewards claimable.
     const lateGame = createLateGameState();
     const playHarvest = jest.fn();
     const claimMessages = getFarmMessages();
@@ -844,7 +845,7 @@ describe('FarmGame UI flow', () => {
     await waitFor(() => expect(screen.getByText(claimButtonLabel)).toBeTruthy());
     fireEvent.press(screen.getByText(claimButtonLabel));
 
-    expect(playHarvest).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(playHarvest).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(screen.getByText(claimMessages.collectionClaimedLabel)).toBeTruthy());
   });
 

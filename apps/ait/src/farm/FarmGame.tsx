@@ -1104,7 +1104,11 @@ export default function FarmGame({
     toast(messages.collectionRewardClaimedToast(formatMoney(preview.awardedGold, locale)));
     pulseGold();
     if (gameSettings.soundEffectsEnabled && audio.isSupported) {
-      void audio.playHarvest();
+      try {
+        void Promise.resolve(audio.playHarvest() as unknown).catch(() => undefined);
+      } catch {
+        // SFX errors are non-critical.
+      }
     }
   }
 
