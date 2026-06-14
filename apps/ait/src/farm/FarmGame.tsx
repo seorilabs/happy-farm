@@ -2178,7 +2178,7 @@ function NextGoalBar({
 
   if (goal.kind === 'ready') {
     return (
-      <Pressable style={styles.nextGoalBar} onPress={onPress}>
+      <Pressable testID="next-goal-bar" style={styles.nextGoalBar} onPress={onPress}>
         <Text style={styles.nextGoalReadyText} numberOfLines={1}>
           {messages.nextGoalReady(areaName)}
         </Text>
@@ -2197,14 +2197,14 @@ function NextGoalBar({
   const ratio = goal.total > 0 ? Math.max(0, Math.min(goal.current / goal.total, 1)) : 0;
 
   return (
-    <View style={styles.nextGoalBar}>
+    <Pressable testID="next-goal-bar" style={styles.nextGoalBar} onPress={onPress}>
       <Text style={styles.nextGoalLabel} numberOfLines={1}>
         {label}
       </Text>
       <View style={styles.nextGoalTrack}>
         <View style={[styles.nextGoalFill, { width: `${Math.round(ratio * 100)}%` }]} />
       </View>
-    </View>
+    </Pressable>
   );
 }
 

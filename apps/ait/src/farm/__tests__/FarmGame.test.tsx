@@ -848,8 +848,12 @@ describe('NextGoalBar', () => {
       expect(screen.getByText('🔓 채소 밭 해금 준비 완료! 상점에서 열기')).toBeTruthy()
     );
 
-    // Tapping it should open the shop sheet.
-    fireEvent.press(screen.getByText('🔓 채소 밭 해금 준비 완료! 상점에서 열기'));
+    // Shop must be closed before the tap (guard against false positive).
+    expect(screen.queryByText('농장 관리소')).toBeNull();
+
+    // Press the Pressable directly via testID so we validate the onPress wiring,
+    // not just that a Text node exists inside the component.
+    fireEvent.press(screen.getByTestId('next-goal-bar'));
 
     expect(screen.getByText('농장 관리소')).toBeTruthy();
   });
