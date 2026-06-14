@@ -213,6 +213,7 @@ const KO_FARM_MESSAGES = {
   nextGoalReady: (areaName: string) => `🔓 ${areaName} 해금 준비 완료! 상점에서 열기`,
   newCropDiscoveryTitle: '새 작물 발견!',
   newCropDiscoverySubtitle: '도감에 추가됐어요',
+  newCropBadge: 'NEW',
 };
 
 export type FarmMessages = typeof KO_FARM_MESSAGES;
@@ -414,6 +415,7 @@ const EN_FARM_MESSAGES: FarmMessages = {
   nextGoalReady: (areaName) => `🔓 ${areaName} is ready to unlock! Open Shop`,
   newCropDiscoveryTitle: 'New Crop!',
   newCropDiscoverySubtitle: 'Added to your collection',
+  newCropBadge: 'NEW',
 };
 
 const FARM_MESSAGES: Record<SupportedLocale, FarmMessages> = {
