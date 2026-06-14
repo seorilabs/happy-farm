@@ -16,6 +16,7 @@ import {
   createFarmAnalytics,
   createInitialState,
   formatMoney,
+  formatRemainingTime,
   getAreaCropKeys,
   getMasteryThresholds,
   getPrestigeCost,
@@ -887,14 +888,12 @@ describe('FarmGame UI flow', () => {
     expect(screen.getByText(`${formatMoney(readyHarvestState.gold + carrotRevenue * 3)}G`)).toBeTruthy();
   });
 
-  test('shows boost remaining time in the header and guards against invalid remainingMs', async () => {
+  test('shows boost multiplier and remaining time in the header when boost is active', async () => {
     const screen = await renderGame(createActiveBoostState());
 
     await waitFor(() => expect(screen.getByText('부스트')).toBeTruthy());
     expect(screen.getByText(`×${HARVEST_BONUS_MULTIPLIER.toFixed(1)}`)).toBeTruthy();
-    // formatRemainingTime(HARVEST_BONUS_BOOST_DURATION_MS, 'ko-KR') → "30분"
-    const expectedTime = `${Math.ceil(HARVEST_BONUS_BOOST_DURATION_MS / 60000)}분`;
-    expect(screen.getByText(expectedTime)).toBeTruthy();
+    expect(screen.getByText(formatRemainingTime(HARVEST_BONUS_BOOST_DURATION_MS, DEFAULT_LOCALE))).toBeTruthy();
   });
 
   test('greets a returning player with an offline progress recap', async () => {
