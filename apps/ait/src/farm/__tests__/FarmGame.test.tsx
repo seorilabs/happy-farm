@@ -865,9 +865,34 @@ describe('FarmGame UI flow', () => {
     }
 
     await waitFor(() => {
-      expect(playComboMilestone).toHaveBeenCalledWith('great');
-      expect(playComboMilestone).toHaveBeenCalledWith('legendary');
+      expect(playComboMilestone).toHaveBeenNthCalledWith(1, 'great');
+      expect(playComboMilestone).toHaveBeenNthCalledWith(2, 'legendary');
       expect(playComboMilestone).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  test('batch harvest fires only legendary when combo jumps past great in one action', async () => {
+    // Intentional design: a single harvestAll action that pushes combo past both
+    // thresholds at once triggers only the highest milestone reached, not great+legendary.
+    const lateGame = createLateGameState();
+    const playComboMilestone = jest.fn();
+    const harvestAllLabel = getFarmMessages().harvestAllButton(MAX_PLOTS);
+    const screen = await renderGame(lateGame, {
+      audio: {
+        isSupported: true,
+        playHarvest: jest.fn(),
+        playComboMilestone,
+        setBackgroundMusicEnabled: jest.fn(),
+      },
+    });
+
+    await waitFor(() => expect(screen.getByText(harvestAllLabel)).toBeTruthy());
+    fireEvent.press(screen.getByText(harvestAllLabel));
+
+    await waitFor(() => {
+      expect(playComboMilestone).toHaveBeenCalledWith('legendary');
+      expect(playComboMilestone).not.toHaveBeenCalledWith('great');
+      expect(playComboMilestone).toHaveBeenCalledTimes(1);
     });
   });
 

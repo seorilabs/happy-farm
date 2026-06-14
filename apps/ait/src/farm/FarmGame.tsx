@@ -609,7 +609,17 @@ export default function FarmGame({
     const prevTier = prev < COMBO_GREAT_THRESHOLD ? 0 : prev < COMBO_LEGENDARY_THRESHOLD ? 1 : 2;
     const currTier = harvestCombo < COMBO_GREAT_THRESHOLD ? 0 : harvestCombo < COMBO_LEGENDARY_THRESHOLD ? 1 : 2;
     if (currTier > prevTier) {
-      void audio.playComboMilestone(currTier >= 2 ? 'legendary' : 'great');
+      // Single-action design: when a batch harvest jumps combo past multiple tiers
+      // at once, we play only the highest tier reached. This preserves a meaningful
+      // audio advantage for individual manual harvesting over Harvest All.
+      const tier = currTier >= 2 ? 'legendary' : 'great';
+      try {
+        // Promise.resolve wraps both void and any unexpected Promise return, so
+        // the catch handles async rejections even if the void contract is violated.
+        void Promise.resolve(audio.playComboMilestone(tier) as unknown).catch(() => undefined);
+      } catch {
+        // Synchronous throws from SFX are non-critical.
+      }
     }
   }, [harvestCombo, audio, gameSettings.soundEffectsEnabled]);
 
