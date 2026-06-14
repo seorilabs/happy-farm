@@ -2133,6 +2133,11 @@ const DiscoveryBanner = React.forwardRef<
   // Holds the running animation so the useEffect cleanup can cancel it, and so
   // show() can interrupt a still-playing sequence.
   const animationRef = useRef<Animated.CompositeAnimation | null>(null);
+  // Generation counter: each show() call increments this and closes over the
+  // new value. The completion callback only calls setEntry(null) when its
+  // captured token still matches — stale completions from a previous sequence
+  // (including the Animated.delay timer inside the sequence) are discarded.
+  const animTokenRef = useRef(0);
   const isMountedRef = useRef(true);
   useEffect(() => {
     return () => {
@@ -2145,11 +2150,15 @@ const DiscoveryBanner = React.forwardRef<
     ref,
     () => ({
       show(icon: string, name: string) {
+        // Stop the previous CompositeAnimation first. Calling stopAnimation()
+        // on individual values only pauses value updates; it does NOT cancel
+        // the CompositeAnimation's own delay timer, which could fire
+        // setEntry(null) after the new entry is already showing.
+        animationRef.current?.stop();
         setEntry({ icon, name });
-        translateY.stopAnimation();
         translateY.setValue(80);
-        opacity.stopAnimation();
         opacity.setValue(0);
+        const token = ++animTokenRef.current;
         animationRef.current = Animated.sequence([
           Animated.parallel([
             Animated.timing(translateY, {
@@ -2182,7 +2191,7 @@ const DiscoveryBanner = React.forwardRef<
           ]),
         ]);
         animationRef.current.start(({ finished }) => {
-          if (finished && isMountedRef.current) {
+          if (finished && isMountedRef.current && animTokenRef.current === token) {
             setEntry(null);
           }
         });
