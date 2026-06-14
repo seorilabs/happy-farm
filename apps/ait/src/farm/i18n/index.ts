@@ -115,6 +115,7 @@ const KO_FARM_MESSAGES = {
   donatedToast: (rp: string) => `연구에 헌납했어요. +${rp}RP`,
   harvestedToast: (amount: string) => `+${amount}G 수확했어요.`,
   harvestedBoostToast: (amount: string, multiplier: number) => `+${amount}G 수확했어요. ×${multiplier} 부스트 적용`,
+  masteryRankUpTitle: '숙련도 달성!',
   masteryRankUpToast: (cropName: string, rankName: string, rankIcon: string) =>
     `${rankIcon} ${cropName} 숙련도가 ${rankName} 등급이 됐어요!`,
   mutationHarvestedToast: (mutationName: string, mutationIcon: string, amount: string) =>
@@ -319,6 +320,7 @@ const EN_FARM_MESSAGES: FarmMessages = {
   donatedToast: (rp) => `Donated to research. +${rp}RP`,
   harvestedToast: (amount) => `Harvested +${amount}G.`,
   harvestedBoostToast: (amount, multiplier) => `Harvested +${amount}G with ${multiplier}x boost.`,
+  masteryRankUpTitle: 'Mastery Achieved!',
   masteryRankUpToast: (cropName, rankName, rankIcon) => `${rankIcon} ${cropName} mastery reached ${rankName}!`,
   mutationHarvestedToast: (mutationName, mutationIcon, amount) =>
     `${mutationIcon} ${mutationName} mutation! +${amount}G`,
