@@ -42,8 +42,10 @@ const {
   PRESTIGE_GRADUATION_CELEBRATION_DURATION_MS,
   COMBO_GREAT_THRESHOLD,
   COMBO_LEGENDARY_THRESHOLD,
-  __setGoldPulseTestHook,
 } = farmGameModule;
+const { __setGoldPulseTestHook } = jest.requireActual<
+  typeof import('../farmGoldPulse')
+>('../farmGoldPulse');
 const mockPersistence = {
   readPersistedGameState: jest.fn<Promise<GameState>, []>(),
   writePersistedGameState: jest.fn<Promise<void>, [GameState]>(),
@@ -823,7 +825,9 @@ describe('FarmGame UI flow', () => {
   describe('collection reward claim side-effects', () => {
     // Constants derived from balance data — safe to compute once at describe scope.
     const claimMessages = getFarmMessages();
-    const firstAreaKey = FARM_AREAS[0]!.key;
+    const firstArea = FARM_AREAS[0];
+    if (firstArea == null) throw new Error('Test requires at least one area in FARM_AREAS');
+    const firstAreaKey = firstArea.key;
     const firstAreaReward = COLLECTION_AREA_REWARDS[firstAreaKey];
     if (firstAreaReward == null) throw new Error(`No collection reward defined for area ${firstAreaKey}`);
     const claimButtonLabel = claimMessages.collectionClaimAction(

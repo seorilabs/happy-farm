@@ -157,15 +157,7 @@ const SHEET_ANIMATION_DURATION_MS = 180;
 const SHEET_DRAG_HIT_TARGET_HEIGHT = 36;
 const EMPTY_SAFE_AREA_INSETS = { top: 0, right: 0, bottom: 0, left: 0 };
 
-// Module-level hook so test suites can spy on gold pulses without touching props.
-// Only active in development/test builds (__DEV__ is false in production bundles).
-let _goldPulseTestHook: (() => void) | undefined;
-/** @internal */
-export function __setGoldPulseTestHook(fn: (() => void) | undefined): void {
-  if (typeof __DEV__ !== 'undefined' && __DEV__) {
-    _goldPulseTestHook = fn;
-  }
-}
+import { _callGoldPulseHook } from './farmGoldPulse';
 
 function getFirstArea() {
   const area = FARM_AREAS[0];
@@ -1113,15 +1105,10 @@ export default function FarmGame({
     });
     toast(messages.collectionRewardClaimedToast(formatMoney(preview.awardedGold, locale)));
     pulseGold();
-    if (typeof __DEV__ !== 'undefined' && __DEV__) {
-      _goldPulseTestHook?.();
-    }
+    _callGoldPulseHook();
     if (gameSettings.soundEffectsEnabled && audio.isSupported) {
       try {
-        const sfxResult: void | Promise<void> = audio.playHarvest();
-        if (sfxResult instanceof Promise) {
-          void sfxResult.catch(() => undefined);
-        }
+        void Promise.resolve(audio.playHarvest()).catch(() => undefined);
       } catch {
         // SFX errors are non-critical.
       }
