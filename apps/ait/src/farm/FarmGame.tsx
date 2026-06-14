@@ -577,6 +577,12 @@ export default function FarmGame({
   const closeSheet = useCallback(() => {
     setActiveSheet(null);
   }, []);
+  // Marks the tutorial as seen (persisted) when the player dismisses it, so
+  // it shows exactly once even if they close the app before planting.
+  const closeTutorial = useCallback(() => {
+    setGameSettings((settings) => normalizeFarmGameSettings({ ...settings, hasSeenTutorial: true }));
+    setActiveSheet(null);
+  }, []);
   const clearPlantPulse = useCallback((index: number) => {
     setPlantPulses((prev) => {
       if (prev[index] == null) {
@@ -820,7 +826,13 @@ export default function FarmGame({
     let cancelled = false;
 
     async function loadSavedGame() {
-      const savedState = await persistence.readPersistedGameState();
+      // Read game state and settings in parallel so the tutorial visibility
+      // decision can check hasSeenTutorial without waiting for the separate
+      // loadSavedSettings effect to complete.
+      const [savedState, savedSettings] = await Promise.all([
+        persistence.readPersistedGameState(),
+        persistence.readPersistedGameSettings?.() ?? null,
+      ]);
       const lastSeenAt = (await persistence.readLastSeenAt?.()) ?? null;
       if (cancelled) {
         return;
@@ -833,14 +845,15 @@ export default function FarmGame({
       // yet) so the very first frame after a long absence shows the summary.
       const now = Date.now();
       const summary = getReturnSummary(savedState, lastSeenAt, now);
-      // Show the tutorial for truly brand new players: no harvests recorded and
-      // all plots are still empty (the player hasn't planted anything yet).
-      // Once any crop is planted or harvested, the tutorial gives way to
-      // normal play (or the welcome-back recap for returning players).
+      // Show the tutorial only for truly first-ever play: no harvests, all
+      // plots empty, and hasSeenTutorial not yet set. Once the player dismisses
+      // the tutorial (even without planting), hasSeenTutorial is persisted so
+      // it shows exactly once.
       const isFirstEverPlay =
         savedState.harvestedCropKeys.length === 0 &&
         savedState.plots.every((p) => p.state === 0);
-      if (isFirstEverPlay) {
+      const hasSeenTutorial = savedSettings?.hasSeenTutorial === true;
+      if (isFirstEverPlay && !hasSeenTutorial) {
         setActiveSheet({ type: 'tutorial' });
       } else if (summary != null) {
         setActiveSheet({ type: 'welcomeBack', summary });
@@ -1921,7 +1934,7 @@ export default function FarmGame({
         activeSheet={activeSheet}
         description={getSheetDescription(activeSheet, messages, locale, getLocalizedCropName, collectionSummary)}
         title={getSheetTitle(activeSheet, messages)}
-        onClose={closeSheet}
+        onClose={activeSheet?.type === 'tutorial' ? closeTutorial : closeSheet}
       >
         {activeSheet?.type === 'shop' ? (
           <View>
@@ -2179,7 +2192,7 @@ export default function FarmGame({
         ) : null}
 
         {activeSheet?.type === 'tutorial' ? (
-          <TutorialSheetContent messages={messages} onStart={closeSheet} />
+          <TutorialSheetContent messages={messages} onStart={closeTutorial} />
         ) : null}
       </Sheet>
 

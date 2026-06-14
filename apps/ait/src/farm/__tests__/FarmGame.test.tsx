@@ -175,7 +175,10 @@ async function renderGame(
   savedSettings: unknown = null
 ) {
   mockPersistence.readPersistedGameState.mockResolvedValueOnce(savedState ?? createInitialState());
-  mockPersistence.readPersistedGameSettings.mockResolvedValueOnce(savedSettings);
+  // Use mockResolvedValue (not Once) so both loadSavedGame and loadSavedSettings
+  // get the same settings value; loadSavedGame reads settings in parallel to
+  // determine hasSeenTutorial before deciding whether to show the tutorial.
+  mockPersistence.readPersistedGameSettings.mockResolvedValue(savedSettings);
 
   const view = render(<FarmGame persistence={mockPersistence} {...props} />);
   await act(async () => {
@@ -1281,6 +1284,17 @@ describe('FarmGame UI flow', () => {
     await waitFor(() => expect(screen.queryByText('행복 농장에 오신 것을 환영해요! 🌾')).toBeNull());
     // Main game UI is accessible after dismissal
     expect(screen.getByText('행복 농장')).toBeTruthy();
+    // Dismissing the tutorial writes hasSeenTutorial to settings persistence
+    expect(mockPersistence.writePersistedGameSettings).toHaveBeenCalledWith(
+      expect.objectContaining({ hasSeenTutorial: true })
+    );
+  });
+
+  test('does not show the tutorial again if hasSeenTutorial is persisted', async () => {
+    const screen = await renderGame(null, {}, { hasSeenTutorial: true });
+
+    await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+    expect(screen.queryByText('행복 농장에 오신 것을 환영해요! 🌾')).toBeNull();
   });
 
   test('does not show the tutorial once a crop has been planted (growing state)', async () => {

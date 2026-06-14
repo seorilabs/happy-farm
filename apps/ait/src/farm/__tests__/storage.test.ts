@@ -132,6 +132,7 @@ describe('farm storage', () => {
         locale: 'en-US',
         soundEffectsEnabled: false,
         backgroundMusicEnabled: true,
+        hasSeenTutorial: false,
       })
     );
   });
