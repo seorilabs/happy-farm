@@ -577,15 +577,31 @@ export default function FarmGame({
   const closeSheet = useCallback(() => {
     setActiveSheet(null);
   }, []);
-  // Marks the tutorial as seen (persisted) when the player dismisses it, so
-  // it shows exactly once even if they close the app before planting.
-  // Persistence happens via the gameSettings useEffect (line ~929) once
-  // isSettingsLoaded is true. loadSavedSettings preserves this flag if it
-  // races with closeTutorial — see the functional update there.
+  // Marks the tutorial as seen when the player dismisses it so it shows
+  // exactly once. Two paths write the flag:
+  // 1. setGameSettings updater → useEffect flushes to storage (normal path).
+  // 2. Immediate read-modify-write below → guards against the crash window
+  //    between the updater and the next effect flush.
+  // loadSavedSettings uses a functional update that preserves hasSeenTutorial
+  // if it races with closeTutorial — see the guard there.
   const closeTutorial = useCallback(() => {
     setGameSettings((prev) => normalizeFarmGameSettings({ ...prev, hasSeenTutorial: true }));
+    // Immediately persist hasSeenTutorial via read-modify-write so a crash
+    // between setState and the next useEffect flush doesn't reset the flag.
+    Promise.resolve()
+      .then(() => persistence.readPersistedGameSettings?.() ?? null)
+      .then((saved) =>
+        persistence.writePersistedGameSettings?.(
+          normalizeFarmGameSettings({ ...(saved ?? {}), hasSeenTutorial: true })
+        )
+      )
+      .catch((err) => {
+        if (__DEV__) {
+          console.warn('[FarmGame] closeTutorial: failed to persist hasSeenTutorial', err);
+        }
+      });
     setActiveSheet(null);
-  }, []);
+  }, [persistence]);
   const clearPlantPulse = useCallback((index: number) => {
     setPlantPulses((prev) => {
       if (prev[index] == null) {
