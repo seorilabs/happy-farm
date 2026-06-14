@@ -2180,41 +2180,8 @@ function NextGoalBar({
   messages: FarmMessages;
   onPress: () => void;
 }) {
-  const progressRef = useRef<Animated.Value | null>(null);
-  if (progressRef.current == null) {
-    progressRef.current = new Animated.Value(goal.progress);
-  }
-  const progressAnim = progressRef.current;
-  // Skip animation on first render — the value is already initialized correctly.
-  // Animating on mount queues requestAnimationFrame callbacks that interact badly
-  // with jest.useFakeTimers() and cause test timeouts on slow CI runners.
-  const isInitialRef = useRef(true);
-
-  useEffect(() => {
-    if (isInitialRef.current) {
-      isInitialRef.current = false;
-      return;
-    }
-    const animation = Animated.timing(progressAnim, {
-      toValue: goal.progress,
-      duration: 300,
-      easing: Easing.out(Easing.quad),
-      // width interpolation cannot use the native driver; this bar updates only
-      // when gold changes (not on the 250ms tick) so JS-thread animation is fine.
-      useNativeDriver: false,
-    });
-    animation.start();
-    return () => animation.stop();
-  }, [progressAnim, goal.progress]);
-
-  useEffect(() => {
-    return () => progressAnim.stopAnimation();
-  }, [progressAnim]);
-
   const goldNeeded = Math.max(0, goal.cost - gold);
-  // Interpolate to a percentage width so the fill always grows left-to-right
-  // without relying on transformOrigin (partially supported on some RN versions).
-  const fillWidth = progressAnim.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] });
+  const fillWidthPct = `${Math.min(100, Math.round(goal.progress * 100))}%` as `${number}%`;
 
   return (
     <Pressable style={({ pressed }) => [styles.nextGoalBar, pressed && styles.nextGoalBarPressed]} onPress={onPress}>
@@ -2223,7 +2190,7 @@ function NextGoalBar({
       </Text>
       <View style={styles.nextGoalRight}>
         <View style={styles.nextGoalProgressTrack}>
-          <Animated.View style={[styles.nextGoalProgressFill, { width: fillWidth }]} />
+          <View style={[styles.nextGoalProgressFill, { width: fillWidthPct }]} />
         </View>
         <Text style={[styles.nextGoalAmount, goal.affordable && styles.nextGoalAmountReady]}>
           {goal.affordable ? messages.nextGoalReady : messages.nextGoalNeeded(formatMoney(goldNeeded, locale))}
