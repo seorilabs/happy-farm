@@ -831,7 +831,7 @@ export default function FarmGame({
       // loadSavedSettings effect to complete.
       const [savedState, savedSettings] = await Promise.all([
         persistence.readPersistedGameState(),
-        (persistence.readPersistedGameSettings?.() ?? Promise.resolve(null)).catch(() => null),
+        Promise.resolve(persistence.readPersistedGameSettings?.() ?? null).catch(() => null),
       ]);
       const lastSeenAt = (await persistence.readLastSeenAt?.()) ?? null;
       if (cancelled) {
