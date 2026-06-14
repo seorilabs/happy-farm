@@ -4,12 +4,17 @@ import React from 'react';
 import { Vibration } from 'react-native';
 import { act, cleanup, fireEvent, render, waitFor, within } from '@testing-library/react-native';
 import {
+  ACHIEVEMENT_TRACKS,
+  COLLECTION_AREA_REWARDS,
   CROPS,
   DEFAULT_LOCALE,
   FARM_AREAS,
   HARVEST_BONUS_AD_COOLDOWN_MS,
+  HARVEST_BONUS_BOOST_DURATION_MS,
   HARVEST_BONUS_MULTIPLIER,
   MAX_PLOTS,
+  REWARDED_GOLD_MAX_USES_PER_WINDOW,
+  REWARDED_GOLD_WINDOW_MS,
   PRESTIGE_STARS_BASE,
   REGION_ARCHETYPES,
   createFarmAnalytics,
@@ -42,6 +47,9 @@ const {
   COMBO_GREAT_THRESHOLD,
   COMBO_LEGENDARY_THRESHOLD,
 } = farmGameModule;
+const { __setGoldPulseTestHook } = jest.requireActual<
+  typeof import('../farmGoldPulse')
+>('../farmGoldPulse');
 const mockPersistence = {
   readPersistedGameState: jest.fn<Promise<GameState>, []>(),
   writePersistedGameState: jest.fn<Promise<void>, [GameState]>(),
@@ -144,6 +152,20 @@ function createShopReadyState(): GameState {
     ...base,
     gold: 10_000,
     harvestedCropKeys: getCropKeys().slice(0, 5),
+  };
+}
+
+function createActiveBoostState(now = NOW): GameState {
+  const base = createInitialState();
+  return {
+    ...base,
+    adUsage: {
+      ...base.adUsage,
+      harvestBonusAd: {
+        ...base.adUsage.harvestBonusAd,
+        boostEndsAt: now + HARVEST_BONUS_BOOST_DURATION_MS,
+      },
+    },
   };
 }
 
@@ -392,6 +414,61 @@ describe('FarmGame UI flow', () => {
 
     fireEvent.press(screen.getByText('채소 밭 열기'));
     expect(screen.queryByText('채소 밭 열기')).toBeNull();
+  });
+
+  test('shows a badge on the shop nav button when a rewarded ad is ready to claim', async () => {
+    const rewardedAd = createReadyRewardedAd();
+    const screen = await renderGame(null, { useRewardedAd: () => rewardedAd });
+
+    await waitFor(() => expect(screen.getByTestId('shop-nav-button')).toBeTruthy());
+    expect(within(screen.getByTestId('shop-nav-button')).getByText('1')).toBeTruthy();
+  });
+
+  test('shows no badge on the shop nav button when ads are not supported', async () => {
+    // Default useRewardedAd is useUnsupportedAd (isAdSupported: false, isAdReady: false)
+    const screen = await renderGame(null);
+
+    await waitFor(() => expect(screen.getByTestId('shop-nav-button')).toBeTruthy());
+    expect(within(screen.getByTestId('shop-nav-button')).queryByText('1')).toBeNull();
+  });
+
+  test('hides the shop badge when the rewarded ad rate limit is exhausted', async () => {
+    // Fill the sliding window to trigger the cooldown (REWARDED_GOLD_MAX_USES_PER_WINDOW uses).
+    // rewardedGoldLimit gates the shop's gold reward and free-plot reward. Exhausting the
+    // window should suppress the badge.
+    const base = createInitialState();
+    const exhaustedState: GameState = {
+      ...base,
+      adUsage: {
+        ...base.adUsage,
+        rewardedGoldTimestamps: Array.from({ length: REWARDED_GOLD_MAX_USES_PER_WINDOW }, (_, i) => NOW - i * 10),
+      },
+    };
+    const rewardedAd = createReadyRewardedAd();
+    const screen = await renderGame(exhaustedState, { useRewardedAd: () => rewardedAd });
+
+    await waitFor(() => expect(screen.getByTestId('shop-nav-button')).toBeTruthy());
+    expect(within(screen.getByTestId('shop-nav-button')).queryByText('1')).toBeNull();
+  });
+
+  test('REWARDED_GOLD_WINDOW_MS is a whole number of minutes so the description divides without rounding', () => {
+    expect(REWARDED_GOLD_WINDOW_MS % 60000).toBe(0);
+  });
+
+  test('shows the correct window duration and max uses in the rewarded gold ad description', async () => {
+    const messages = getFarmMessages(DEFAULT_LOCALE);
+    const rewardedAd = createReadyRewardedAd();
+    const screen = await renderGame(null, { useRewardedAd: () => rewardedAd });
+
+    await waitFor(() => expect(screen.getByText('🏪 상점')).toBeTruthy());
+    fireEvent.press(screen.getByText('🏪 상점'));
+
+    // Use direct division — the invariant test above guarantees no remainder.
+    const expectedDesc = messages.rewardedGoldReadyDesc(
+      REWARDED_GOLD_WINDOW_MS / 60000,
+      REWARDED_GOLD_MAX_USES_PER_WINDOW
+    );
+    expect(screen.getByText(expectedDesc)).toBeTruthy();
   });
 
   test('closes the shop sheet after a rewarded gold ad so the farm remains tappable', async () => {
@@ -818,6 +895,197 @@ describe('FarmGame UI flow', () => {
     expect(playHarvest).toHaveBeenCalledTimes(1);
   });
 
+  describe('collection reward claim side-effects', () => {
+    // Constants derived from balance data — safe to compute once at describe scope.
+    const claimMessages = getFarmMessages();
+    const firstArea = FARM_AREAS[0];
+    if (firstArea == null) throw new Error('Test requires at least one area in FARM_AREAS');
+    const firstAreaKey = firstArea.key;
+    const firstAreaReward = COLLECTION_AREA_REWARDS[firstAreaKey];
+    if (firstAreaReward == null) throw new Error(`No collection reward defined for area ${firstAreaKey}`);
+    const claimButtonLabel = claimMessages.collectionClaimAction(
+      formatMoney(firstAreaReward, DEFAULT_LOCALE)
+    );
+
+    // createLateGameState() discovers all crops, making all area collection rewards
+    // claimable. A fresh instance is created per test to prevent state bleed if
+    // renderGame or the component ever mutates the input object.
+    let lateGame: GameState;
+    let onGoldPulse: jest.Mock;
+    let vibrateSpy: jest.SpyInstance;
+    beforeEach(() => {
+      lateGame = createLateGameState();
+      onGoldPulse = jest.fn();
+      __setGoldPulseTestHook(onGoldPulse);
+      vibrateSpy = jest.spyOn(Vibration, 'vibrate').mockImplementation(() => undefined);
+    });
+    afterEach(() => {
+      __setGoldPulseTestHook(undefined);
+      vibrateSpy.mockRestore();
+    });
+
+    async function renderAndClaim(playHarvest: jest.Mock, savedSettings: unknown) {
+      const screen = await renderGame(
+        lateGame,
+        {
+          audio: {
+            isSupported: true,
+            playHarvest,
+            playComboMilestone: jest.fn(),
+            setBackgroundMusicEnabled: jest.fn(),
+          },
+        },
+        savedSettings
+      );
+      await waitFor(() => expect(screen.getByText(`${formatMoney(lateGame.gold)}G`)).toBeTruthy());
+      fireEvent.press(screen.getByLabelText(claimMessages.collectionButtonAccessibilityLabel));
+      await waitFor(() => expect(screen.getByText(claimButtonLabel)).toBeTruthy());
+      vibrateSpy.mockClear(); // reset count so only the claim press is counted
+      fireEvent.press(screen.getByText(claimButtonLabel));
+      return screen;
+    }
+
+    test('plays harvest sound, pulses gold, and vibrates when sound effects are enabled', async () => {
+      const playHarvest = jest.fn();
+      const screen = await renderAndClaim(playHarvest, { soundEffectsEnabled: true });
+      await waitFor(() => expect(playHarvest).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(onGoldPulse).toHaveBeenCalledTimes(1));
+      await waitFor(() => {
+        expect(vibrateSpy).toHaveBeenCalledTimes(1);
+        expect(vibrateSpy).toHaveBeenLastCalledWith(50);
+      });
+      await waitFor(() => expect(screen.getByText(claimMessages.collectionClaimedLabel)).toBeTruthy());
+    });
+
+    test('pulses gold and vibrates but skips harvest sound when sound effects are disabled', async () => {
+      const playHarvest = jest.fn();
+      const screen = await renderAndClaim(playHarvest, { soundEffectsEnabled: false });
+      await waitFor(() => expect(screen.getByText(claimMessages.collectionClaimedLabel)).toBeTruthy());
+      await waitFor(() => expect(onGoldPulse).toHaveBeenCalledTimes(1));
+      await waitFor(() => {
+        expect(vibrateSpy).toHaveBeenCalledTimes(1);
+        expect(vibrateSpy).toHaveBeenLastCalledWith(50);
+      });
+      expect(playHarvest).not.toHaveBeenCalled();
+    });
+
+    test('pulses gold but skips harvest sound when audio is unsupported', async () => {
+      const playHarvest = jest.fn();
+      const screen = await renderGame(
+        lateGame,
+        {
+          audio: {
+            isSupported: false,
+            playHarvest,
+            playComboMilestone: jest.fn(),
+            setBackgroundMusicEnabled: jest.fn(),
+          },
+        },
+        { soundEffectsEnabled: true }
+      );
+      await waitFor(() => expect(screen.getByText(`${formatMoney(lateGame.gold)}G`)).toBeTruthy());
+      fireEvent.press(screen.getByLabelText(claimMessages.collectionButtonAccessibilityLabel));
+      await waitFor(() => expect(screen.getByText(claimButtonLabel)).toBeTruthy());
+      fireEvent.press(screen.getByText(claimButtonLabel));
+      await waitFor(() => expect(screen.getByText(claimMessages.collectionClaimedLabel)).toBeTruthy());
+      await waitFor(() => expect(onGoldPulse).toHaveBeenCalledTimes(1));
+      expect(playHarvest).not.toHaveBeenCalled();
+    });
+
+    test('claim flow completes when playHarvest throws synchronously', async () => {
+      const playHarvest = jest.fn(() => { throw new Error('audio error'); });
+      const screen = await renderAndClaim(playHarvest, { soundEffectsEnabled: true });
+      await waitFor(() => expect(screen.getByText(claimMessages.collectionClaimedLabel)).toBeTruthy());
+      await waitFor(() => expect(onGoldPulse).toHaveBeenCalledTimes(1));
+    });
+
+    test('claim flow completes when playHarvest returns a rejected Promise', async () => {
+      const playHarvest = jest.fn(() => Promise.reject(new Error('audio error')));
+      const screen = await renderAndClaim(playHarvest, { soundEffectsEnabled: true });
+      await waitFor(() => expect(screen.getByText(claimMessages.collectionClaimedLabel)).toBeTruthy());
+      await waitFor(() => expect(onGoldPulse).toHaveBeenCalledTimes(1));
+    });
+  });
+
+  describe('achievement claim side-effects', () => {
+    function getHarvestTrack() {
+      const track = ACHIEVEMENT_TRACKS.find((t) => t.key === 'harvest_total');
+      if (track == null) throw new Error('harvest_total achievement track must exist');
+      return track;
+    }
+
+    function createAchievementClaimableState(): GameState {
+      const base = createInitialState();
+      const track = getHarvestTrack();
+      return {
+        ...base,
+        lifetimeStats: { ...base.lifetimeStats, totalHarvests: track.base },
+      };
+    }
+
+    let vibrateSpy: jest.SpyInstance;
+    beforeEach(() => {
+      vibrateSpy = jest.spyOn(Vibration, 'vibrate').mockImplementation(() => undefined);
+    });
+    afterEach(() => {
+      vibrateSpy.mockRestore();
+    });
+
+    async function renderAndClaimAchievement(
+      playHarvest: jest.Mock,
+      savedSettings: unknown
+    ) {
+      const claimMessages = getFarmMessages();
+      const track = getHarvestTrack();
+      const claimLabel = claimMessages.achievementClaimAction(track.starsPerTier);
+      const screen = await renderGame(
+        createAchievementClaimableState(),
+        {
+          audio: {
+            isSupported: true,
+            playHarvest,
+            playComboMilestone: jest.fn(),
+            setBackgroundMusicEnabled: jest.fn(),
+          },
+        },
+        savedSettings
+      );
+      fireEvent.press(
+        screen.getByLabelText(claimMessages.achievementsButtonAccessibilityLabel)
+      );
+      await waitFor(() => expect(screen.getByText(claimLabel)).toBeTruthy());
+      vibrateSpy.mockClear(); // reset count so only the claim press is counted
+      fireEvent.press(screen.getByText(claimLabel));
+      return screen;
+    }
+
+    test('plays harvest sound and vibrates when an achievement tier is claimed', async () => {
+      const playHarvest = jest.fn();
+      await renderAndClaimAchievement(playHarvest, { soundEffectsEnabled: true });
+      await waitFor(() => expect(playHarvest).toHaveBeenCalledTimes(1));
+      await waitFor(() => {
+        expect(vibrateSpy).toHaveBeenCalledTimes(1);
+        expect(vibrateSpy).toHaveBeenLastCalledWith(50);
+      });
+    });
+
+    test('vibrates but skips harvest sound when sound effects are disabled', async () => {
+      const playHarvest = jest.fn();
+      const claimMessages = getFarmMessages();
+      const screen = await renderAndClaimAchievement(playHarvest, {
+        soundEffectsEnabled: false,
+      });
+      await waitFor(() =>
+        expect(screen.getByText(claimMessages.achievementClaimedToast(getHarvestTrack().starsPerTier))).toBeTruthy()
+      );
+      await waitFor(() => {
+        expect(vibrateSpy).toHaveBeenCalledTimes(1);
+        expect(vibrateSpy).toHaveBeenLastCalledWith(50);
+      });
+      expect(playHarvest).not.toHaveBeenCalled();
+    });
+  });
+
   test('fires combo great milestone audio when combo crosses the great tier threshold', async () => {
     const lateGame = createLateGameState();
     const playComboMilestone = jest.fn();
@@ -951,6 +1219,23 @@ describe('FarmGame UI flow', () => {
     fireEvent.press(screen.getAllByText('GET')[0]!);
 
     expect(screen.getByText(`${formatMoney(readyHarvestState.gold + carrotRevenue * 3)}G`)).toBeTruthy();
+  });
+
+  test('shows boost multiplier and remaining time in the header when boost is active', async () => {
+    const messages = getFarmMessages(DEFAULT_LOCALE);
+    const screen = await renderGame(createActiveBoostState(NOW), { preferredLocale: DEFAULT_LOCALE });
+
+    await waitFor(() => expect(screen.getByText(messages.boostLabel)).toBeTruthy());
+    expect(screen.getByText(`×${HARVEST_BONUS_MULTIPLIER.toFixed(1)}`)).toBeTruthy();
+    // Assert the remaining-time element has a non-zero time value.
+    // boostEndsAt = NOW + HARVEST_BONUS_BOOST_DURATION_MS and Date.now() = NOW
+    // (beforeEach freezes the clock), so safeBoostRemainingMs = BOOST_DURATION > 0.
+    // The regex /^[1-9]/ ensures the displayed string starts with a non-zero digit
+    // (e.g. "30분"), catching any regression where the display collapses to "0초".
+    // toHaveTextContent is registered globally via jest.setup.ts.
+    const remaining = screen.getByTestId('boost-remaining');
+    expect(remaining).toBeTruthy();
+    expect(remaining).toHaveTextContent(/^[1-9]/);
   });
 
   test('greets a returning player with an offline progress recap', async () => {

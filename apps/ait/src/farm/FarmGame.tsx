@@ -58,6 +58,8 @@ import {
   INTERSTITIAL_MILESTONE_COOLDOWN_MS,
   MAX_PLOTS,
   REWARDED_GOLD_AMOUNT,
+  REWARDED_GOLD_MAX_USES_PER_WINDOW,
+  REWARDED_GOLD_WINDOW_MS,
   type AreaKey,
   type CollectionRewardKey,
   type CropKey,
@@ -163,6 +165,8 @@ const SHEET_DISMISS_TRANSLATE_Y = 520;
 const SHEET_ANIMATION_DURATION_MS = 180;
 const SHEET_DRAG_HIT_TARGET_HEIGHT = 36;
 const EMPTY_SAFE_AREA_INSETS = { top: 0, right: 0, bottom: 0, left: 0 };
+
+import { _callGoldPulseHook } from './farmGoldPulse';
 
 function getFirstArea() {
   const area = FARM_AREAS[0];
@@ -1212,6 +1216,10 @@ export default function FarmGame({
     () => getRewardedAdLimitStatus(gameState, 'rewardedGold', Date.now(), locale),
     [gameState, locale, tick]
   );
+  // Both shop ad items (gold reward + free plot) are gated by rewardedGoldLimit.
+  // growthAdLimit and harvestBonusAdLimit gate separate flows (plot-tap / post-harvest
+  // nudge) that are not accessible from the shop, so only rewardedGoldLimit is relevant.
+  const shopAdBadgeCount = rewardedAd.isAdSupported && rewardedAd.isAdReady && rewardedGoldLimit.allowed ? 1 : 0;
   const growthAdLimit = useMemo(
     () => getRewardedAdLimitStatus(gameState, 'growthAd', Date.now(), locale),
     [gameState, locale, tick]
@@ -1221,6 +1229,8 @@ export default function FarmGame({
     [gameState, locale, tick]
   );
   const harvestBonusBoost = useMemo(() => getHarvestBonusBoostStatus(gameState), [gameState, tick]);
+  const rawBoostRemainingMs = harvestBonusBoost.remainingMs;
+  const safeBoostRemainingMs = Number.isFinite(rawBoostRemainingMs) ? Math.max(0, rawBoostRemainingMs) : 0;
   const farmProductivity = useMemo(
     () => getFarmHourlyProductivity(gameState),
     [gameState, harvestBonusBoost.multiplier]
@@ -1328,6 +1338,16 @@ export default function FarmGame({
       context: analyticsContext(),
     });
     toast(messages.collectionRewardClaimedToast(formatMoney(preview.awardedGold, locale)));
+    try { Vibration.vibrate(50); } catch { /* non-critical haptic */ }
+    pulseGold();
+    _callGoldPulseHook();
+    if (gameSettings.soundEffectsEnabled && audio.isSupported) {
+      try {
+        void Promise.resolve(audio.playHarvest()).catch(() => undefined);
+      } catch {
+        // SFX errors are non-critical.
+      }
+    }
   }
 
   function openAchievements() {
@@ -1354,6 +1374,14 @@ export default function FarmGame({
       context: analyticsContext(),
     });
     toast(messages.achievementClaimedToast(preview.starsAwarded));
+    try { Vibration.vibrate(50); } catch { /* non-critical haptic */ }
+    if (gameSettings.soundEffectsEnabled && audio.isSupported) {
+      try {
+        void Promise.resolve(audio.playHarvest()).catch(() => undefined);
+      } catch {
+        // SFX errors are non-critical.
+      }
+    }
   }
 
   function selectTitle(titleKey: TitleKey | null) {
@@ -1890,7 +1918,9 @@ export default function FarmGame({
                 <View style={styles.compactStat}>
                   <Text style={styles.label}>{messages.boostLabel}</Text>
                   <Text style={styles.boostStat}>×{harvestBonusBoost.multiplier.toFixed(1)}</Text>
-                  <Text style={styles.boostRemaining}>{formatRemainingTime(harvestBonusBoost.remainingMs, locale)}</Text>
+                  <Text testID="boost-remaining" style={styles.boostRemaining}>
+                    {formatRemainingTime(safeBoostRemainingMs, locale)}
+                  </Text>
                 </View>
               ) : null}
             </View>
@@ -1908,7 +1938,7 @@ export default function FarmGame({
         ) : null}
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.navRow}>
-          <NavButton label={messages.shopButton} onPress={openShop} />
+          <NavButton testID="shop-nav-button" label={messages.shopButton} badge={shopAdBadgeCount} onPress={openShop} />
           <NavButton
             label={messages.collectionButton}
             badge={claimableCollectionCount}
@@ -2073,7 +2103,7 @@ export default function FarmGame({
                 <Text style={styles.sheetSectionTitle}>{messages.adRewardsSection}</Text>
                 <AdRewardCard
                   title={messages.rewardedGoldTitle(formatMoney(REWARDED_GOLD_AMOUNT, locale))}
-                  desc={rewardedGoldLimit.allowed ? messages.rewardedGoldReadyDesc : rewardedGoldLimit.reason}
+                  desc={rewardedGoldLimit.allowed ? messages.rewardedGoldReadyDesc(REWARDED_GOLD_WINDOW_MS / 60000, REWARDED_GOLD_MAX_USES_PER_WINDOW) : rewardedGoldLimit.reason}
                   cta={
                     rewardedAd.isAdReady && rewardedGoldLimit.allowed
                       ? messages.rewardReceiveCta
@@ -2347,15 +2377,17 @@ function NavButton({
   label,
   badge,
   accessibilityLabel,
+  testID,
   onPress,
 }: {
   label: string;
   badge?: number;
   accessibilityLabel?: string;
+  testID?: string;
   onPress: () => void;
 }) {
   return (
-    <Pressable accessibilityLabel={accessibilityLabel} style={styles.navButton} onPress={onPress}>
+    <Pressable testID={testID} accessibilityLabel={accessibilityLabel} style={styles.navButton} onPress={onPress}>
       <Text style={styles.navButtonText}>{label}</Text>
       {badge != null && badge > 0 ? (
         <View style={styles.collectionBadge}>
