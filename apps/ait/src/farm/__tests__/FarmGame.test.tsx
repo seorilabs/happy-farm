@@ -146,7 +146,7 @@ function createShopReadyState(): GameState {
   };
 }
 
-function createActiveBoostState(): GameState {
+function createActiveBoostState(now = NOW): GameState {
   const base = createInitialState();
   return {
     ...base,
@@ -154,7 +154,7 @@ function createActiveBoostState(): GameState {
       ...base.adUsage,
       harvestBonusAd: {
         ...base.adUsage.harvestBonusAd,
-        boostEndsAt: Date.now() + HARVEST_BONUS_BOOST_DURATION_MS,
+        boostEndsAt: now + HARVEST_BONUS_BOOST_DURATION_MS,
       },
     },
   };
