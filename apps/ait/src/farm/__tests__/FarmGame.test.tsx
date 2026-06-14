@@ -1208,4 +1208,42 @@ describe('NextGoalBar', () => {
     expect(screen.queryByText('🌱 아래에서 씨앗을 골라 빈 밭에 심어보세요!')).toBeNull();
     expect(screen.getByText('밭을 눌러 수확할 수 있어요.')).toBeTruthy();
   });
+
+  test('applies GREAT combo bonus (+10%) on the 5th consecutive harvest', async () => {
+    // Gold starts at 0 so cumulative amounts are predictable.
+    // All 6 unlocked plots pre-loaded with ripe carrots (sell=14G, profit level=1 → no multiplier).
+    const s = createInitialState();
+    const ripeState: GameState = {
+      ...s,
+      gold: 0,
+      harvestedCropKeys: ['carrot'] satisfies CropKey[],
+      plots: s.plots.map((plot, i) =>
+        i < s.unlockedPlotCount
+          ? { ...plot, state: 2 as const, cropType: 'carrot' as const, startTime: 0 }
+          : plot
+      ),
+    };
+    const screen = await renderGame(ripeState);
+    await waitFor(() => expect(screen.getByText('0G')).toBeTruthy());
+
+    // Harvests 1–4: combo below COMBO_GREAT_THRESHOLD (5) → no bonus.
+    // Each press is followed by an act so the drain effect runs and harvestCombo
+    // increments before the next press reads it.
+    for (let i = 0; i < 4; i++) {
+      fireEvent.press(within(screen.getByTestId(`plot-cell-${i}`)).getByText('GET'));
+      await act(async () => {
+        jest.advanceTimersByTime(100);
+      });
+    }
+    // 4 × 14G = 56G, no combo bonus.
+    await waitFor(() => expect(screen.getByText('56G')).toBeTruthy());
+
+    // 5th harvest: harvestCombo=4 → getComboMultiplier(4+1=5)=COMBO_GREAT_BONUS (1.1)
+    // bonus = floor(14 × 0.1) = 1G → 5th harvest earns 15G → total = 71G.
+    fireEvent.press(within(screen.getByTestId('plot-cell-4')).getByText('GET'));
+    await act(async () => {
+      jest.advanceTimersByTime(100);
+    });
+    await waitFor(() => expect(screen.getByText('71G')).toBeTruthy());
+  });
 });

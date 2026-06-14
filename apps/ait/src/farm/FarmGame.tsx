@@ -724,7 +724,7 @@ export default function FarmGame({
           }
           farmAnalytics.trackHarvestAll({
             harvestedCount: effect.harvestedCount,
-            totalGold: effect.totalGoldGained,
+            totalGold: allTotalGold,
             specialCount: effect.specialCount,
             context: analyticsContext(),
           });
@@ -758,7 +758,7 @@ export default function FarmGame({
         cropKey: event.cropKey,
         areaKey: event.areaKey,
         cropTier: event.cropTier,
-        revenue: event.goldGained,
+        revenue: totalDisplayGold,
         isFirstMeaningfulHarvest: event.isFirstMeaningfulHarvest,
         isFirstCropHarvest: event.isNewCropDiscovery,
         context: analyticsContext(),
@@ -835,6 +835,16 @@ export default function FarmGame({
         void audio.playHarvest();
       }
       incrementCombo(1);
+    }
+
+    // Prune processed-effect ids to prevent unbounded Set growth in long sessions.
+    // IDs are monotonically increasing; anything 500 below the current ceiling
+    // cannot appear in a future drain batch, so it is safe to discard.
+    const floor = commandEffectIdRef.current - 500;
+    if (floor > 0) {
+      for (const id of handledCommandEffectIdsRef.current) {
+        if (id < floor) handledCommandEffectIdsRef.current.delete(id);
+      }
     }
   }, [
     analyticsContext,
@@ -1479,7 +1489,10 @@ export default function FarmGame({
 
   function harvestCrop(index: number) {
     const now = Date.now();
-    const comboMultiplier = getComboMultiplier(harvestCombo);
+    // Use harvestCombo + 1 so the bonus applies exactly when the displayed tier
+    // is reached: the 5th harvest sees combo=4 pre-increment, but the post-
+    // increment value is 5 (GREAT), so it should already earn the bonus.
+    const comboMultiplier = getComboMultiplier(harvestCombo + 1);
     const effectId = ++commandEffectIdRef.current;
     setGameState((state) => {
       const roll = Math.random();
