@@ -505,9 +505,12 @@ function farmUIReducer(state: FarmUIState, action: FarmUIAction): FarmUIState {
         { now: payload.now, rng: () => payload.rollValue }
       );
       if (result.status !== 'applied') return state;
-      const event = result.events[0];
-      // Unreachable: harvestCrop always emits cropHarvested when applied.
-      if (event?.type !== 'cropHarvested') return { ...state, game: result.state, comboCount: state.comboCount + 1, lastComboAt: payload.now };
+      // Engine contract: harvestCrop always emits a single cropHarvested event when applied.
+      // Use find() so the reducer stays correct if the engine ever emits additional events
+      // alongside it; if the contract is somehow violated, return state unchanged rather
+      // than committing game state without the accompanying side-effect entries.
+      const event = result.events.find((e): e is CropHarvestedGameEvent => e.type === 'cropHarvested');
+      if (event == null) return state;
       // Design intent: comboCount increments in donation mode too. The combo
       // tracks tapping rhythm, not gold earned. performHarvest already zeroes
       // goldGained in donation mode, so the multiplier never inflates RP.
