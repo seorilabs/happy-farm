@@ -75,7 +75,7 @@ export function CollectionSheet({
   onClaimReward: (rewardKey: CollectionRewardKey) => void;
 }) {
   return (
-    <View>
+    <View testID="collection-sheet">
       {collectionSummary.areas.map((area) => {
         const areaLabel = getAreaLabel(area.areaKey, locale);
         return (

@@ -527,9 +527,9 @@ describe('FarmGame UI flow', () => {
     fireEvent.press(screen.getByLabelText('작물 도감'));
 
     expect(screen.getByText(`${firstThreshold}/${thresholds[1]}`)).toBeTruthy();
-    // 🥉 appears in both the collection sheet and the seed-picker badge (newly
-    // added mastery rank indicator), so we use getAllByText instead of getByText.
-    expect(screen.getAllByText('🥉').length).toBeGreaterThan(0);
+    // Scope to the collection sheet so the seed-picker badge (which also shows
+    // 🥉 for mastered crops) doesn't mask a regression in the collection view.
+    expect(within(screen.getByTestId('collection-sheet')).getByText('🥉')).toBeTruthy();
   });
 
   test('mastery rank-up overlay auto-dismisses after the celebration duration', async () => {
