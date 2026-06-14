@@ -1,5 +1,5 @@
 import { Video, type VideoRef } from '@granite-js/react-native';
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Platform, StyleSheet } from 'react-native';
 
 import type { FarmGameAudio } from '../FarmGame';
@@ -68,6 +68,14 @@ export function useAppsInTossFarmAudio(): { audio: FarmGameAudio; audioElement: 
   const stopComboBonusOnePlayback = useCallback(() => setComboBonusOnePlaying(false), []);
   const stopComboBonusTwoPlayback = useCallback(() => setComboBonusTwoPlaying(false), []);
 
+  useEffect(() => {
+    return () => {
+      if (comboMilestoneTimerRef.current != null) {
+        clearTimeout(comboMilestoneTimerRef.current);
+      }
+    };
+  }, []);
+
   const audio = useMemo<FarmGameAudio>(
     () => ({
       isSupported: Video.isAvailable,
@@ -109,18 +117,6 @@ export function useAppsInTossFarmAudio(): { audio: FarmGameAudio; audioElement: 
       />
       <Video
         {...audioFocusProps}
-        ref={harvestPlayerRef}
-        ignoreSilentSwitch="ignore"
-        onAudioFocusChanged={keepPlaybackOnAudioFocusChange}
-        onEnd={stopHarvestPlayback}
-        onError={warnHarvestCoinFailure}
-        paused={!harvestPlaying}
-        source={FARM_AUDIO_VIDEO_SOURCES.harvestCoin}
-        style={styles.hiddenPlayer}
-        volume={HARVEST_VOLUME}
-      />
-      <Video
-        {...audioFocusProps}
         ref={comboBonusOneRef}
         ignoreSilentSwitch="ignore"
         onAudioFocusChanged={keepPlaybackOnAudioFocusChange}
@@ -139,6 +135,18 @@ export function useAppsInTossFarmAudio(): { audio: FarmGameAudio; audioElement: 
         onEnd={stopComboBonusTwoPlayback}
         onError={warnHarvestCoinFailure}
         paused={!comboBonusTwoPlaying}
+        source={FARM_AUDIO_VIDEO_SOURCES.harvestCoin}
+        style={styles.hiddenPlayer}
+        volume={HARVEST_VOLUME}
+      />
+      <Video
+        {...audioFocusProps}
+        ref={harvestPlayerRef}
+        ignoreSilentSwitch="ignore"
+        onAudioFocusChanged={keepPlaybackOnAudioFocusChange}
+        onEnd={stopHarvestPlayback}
+        onError={warnHarvestCoinFailure}
+        paused={!harvestPlaying}
         source={FARM_AUDIO_VIDEO_SOURCES.harvestCoin}
         style={styles.hiddenPlayer}
         volume={HARVEST_VOLUME}
