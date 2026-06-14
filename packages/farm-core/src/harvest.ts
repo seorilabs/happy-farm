@@ -11,8 +11,13 @@ import {
 } from './mastery';
 import { getDonationRp, isCropPlantable, isNodeUnlocked } from './research';
 
-/** Upper bound for comboMultiplier accepted by performHarvest. Values above this are clamped down. */
-export const MAX_COMBO_MULTIPLIER = 1.15;
+/** Gold multiplier applied when the harvest combo reaches the Great tier. */
+export const COMBO_GREAT_MULTIPLIER = 1.07;
+/** Gold multiplier applied when the harvest combo reaches the Legendary tier. */
+export const COMBO_LEGENDARY_MULTIPLIER = 1.15;
+/** Upper bound for comboMultiplier accepted by performHarvest. Derived from the
+ *  Legendary multiplier so the clamp and the tier bonus are always in sync. */
+export const MAX_COMBO_MULTIPLIER = COMBO_LEGENDARY_MULTIPLIER;
 
 export type HarvestOptions = {
   now?: number;

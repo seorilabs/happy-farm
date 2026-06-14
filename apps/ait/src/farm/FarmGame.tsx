@@ -106,6 +106,8 @@ import {
   getReadyPlotCount,
   recordHarvestBonusAdPrompt,
   recordRewardedAdUsage,
+  COMBO_GREAT_MULTIPLIER,
+  COMBO_LEGENDARY_MULTIPLIER,
   type CropHarvestedGameEvent,
   type CropPlantedGameEvent,
   type CropEconomyEstimate,
@@ -148,11 +150,6 @@ const HARVEST_ALL_MIN_COUNT = 2;
 const COMBO_WINDOW_MS = 1500;
 export const COMBO_GREAT_THRESHOLD = 5;
 export const COMBO_LEGENDARY_THRESHOLD = 10;
-// Gold bonus multipliers awarded to manual taps when the harvest combo is in
-// the Great or Legendary tier. Applied on top of all other modifiers.
-const COMBO_GREAT_MULTIPLIER = 1.07;
-const COMBO_LEGENDARY_MULTIPLIER = 1.15;
-
 function getComboGoldMultiplier(combo: number): number {
   if (combo >= COMBO_LEGENDARY_THRESHOLD) return COMBO_LEGENDARY_MULTIPLIER;
   if (combo >= COMBO_GREAT_THRESHOLD) return COMBO_GREAT_MULTIPLIER;
