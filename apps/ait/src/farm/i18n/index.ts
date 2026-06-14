@@ -211,6 +211,8 @@ const KO_FARM_MESSAGES = {
   nextGoalUpgrade: (areaName: string, current: number, total: number) =>
     `🧪 ${areaName} 해금: 연구 Lv.${current}/${total} 필요`,
   nextGoalReady: (areaName: string) => `🔓 ${areaName} 해금 준비 완료! 상점에서 열기`,
+  newCropDiscoveryTitle: '새 작물 발견!',
+  newCropDiscoverySubtitle: '도감에 추가됐어요',
 };
 
 export type FarmMessages = typeof KO_FARM_MESSAGES;
@@ -410,6 +412,8 @@ const EN_FARM_MESSAGES: FarmMessages = {
   nextGoalHarvest: (areaName, current, total) => `🌾 Unlock ${areaName}: harvest ${current}/${total} crop types`,
   nextGoalUpgrade: (areaName, current, total) => `🧪 Unlock ${areaName}: Research Lv.${current}/${total} required`,
   nextGoalReady: (areaName) => `🔓 ${areaName} is ready to unlock! Open Shop`,
+  newCropDiscoveryTitle: 'New Crop!',
+  newCropDiscoverySubtitle: 'Added to your collection',
 };
 
 const FARM_MESSAGES: Record<SupportedLocale, FarmMessages> = {
