@@ -38,7 +38,6 @@ import {
   getFarmHourlyProductivity,
   getGlobalModifiers,
   getPrestigeSkillLabel,
-  getRegionArchetype,
   getRegionArchetypeLabel,
   getResearchNodeLabel,
   getTitleLabel,
@@ -1212,7 +1211,7 @@ export default function FarmGame({
       context: analyticsContext(),
     });
     showPrestigeGraduation({
-      regionIcon: getRegionArchetype(prestigeArchetype).icon,
+      regionIcon: REGION_ARCHETYPES.find((a) => a.key === prestigeArchetype)?.icon ?? '🏁',
       regionName: getRegionArchetypeLabel(prestigeArchetype, locale).name,
       starsAwarded: result.starsAwarded,
     });

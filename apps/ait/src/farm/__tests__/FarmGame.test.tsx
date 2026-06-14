@@ -766,7 +766,7 @@ describe('FarmGame UI flow', () => {
       jest.advanceTimersByTime(PRESTIGE_GRADUATION_CELEBRATION_DURATION_MS);
     });
 
-    expect(screen.queryByTestId('prestige-graduation-overlay')).toBeNull();
+    await waitFor(() => expect(screen.queryByTestId('prestige-graduation-overlay')).toBeNull());
   });
 
   test('prestige graduation overlay dismisses immediately on backdrop tap', async () => {
