@@ -1222,6 +1222,41 @@ describe('FarmGame UI flow', () => {
     });
   });
 
+  // ---------------------------------------------------------------------------
+  // Combo tier visual icons — lock in the icon/label at each threshold
+  // ---------------------------------------------------------------------------
+
+  test('combo display shows fire icon at the great tier threshold', async () => {
+    const lateGame = createLateGameState();
+    const screen = await renderGame(lateGame);
+
+    await waitFor(() =>
+      expect(screen.getAllByText('GET').length).toBeGreaterThanOrEqual(COMBO_GREAT_THRESHOLD)
+    );
+
+    for (let i = 0; i < COMBO_GREAT_THRESHOLD; i++) {
+      fireEvent.press(screen.getAllByText('GET')[0]!);
+    }
+
+    // At exactly COMBO_GREAT_THRESHOLD harvests the combo enters the great tier
+    await waitFor(() => expect(screen.getByText(`🔥 ×${COMBO_GREAT_THRESHOLD} 콤보!`)).toBeTruthy());
+  });
+
+  test('combo display shows lightning icon at the legendary tier threshold', async () => {
+    const lateGame = createLateGameState();
+    const screen = await renderGame(lateGame);
+
+    await waitFor(() =>
+      expect(screen.getAllByText('GET').length).toBeGreaterThanOrEqual(COMBO_LEGENDARY_THRESHOLD)
+    );
+
+    for (let i = 0; i < COMBO_LEGENDARY_THRESHOLD; i++) {
+      fireEvent.press(screen.getAllByText('GET')[0]!);
+    }
+
+    await waitFor(() => expect(screen.getByText(`⚡ ×${COMBO_LEGENDARY_THRESHOLD} 콤보!`)).toBeTruthy());
+  });
+
   test('spaces out harvest bonus nudges by time after the player declines one', async () => {
     const lateGame = createLateGameState();
     const rewardedAd = createReadyRewardedAd();

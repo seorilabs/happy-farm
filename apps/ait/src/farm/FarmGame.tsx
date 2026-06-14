@@ -2595,8 +2595,9 @@ function FirstHarvestOverlay({
 // Shows a growing streak counter when the player rapidly harvests multiple
 // plots in quick succession. Punches out on each count update so the number
 // change is unmistakable; tiers escalate icon and color at 5× and 10×.
-// Animation: quick pop to 1.25× then spring back to 1.0, starting from
-// whatever scale the previous animation left — no snapping on rapid taps.
+// Tier breakthroughs (normal→great, great→legendary) trigger an extra-large
+// burst and a brief wobble so the milestone feels meaningfully different from
+// a regular count increment.
 function ComboDisplay({ count, messages }: { count: number; messages: FarmMessages }) {
   const scaleRef = useRef<Animated.Value | null>(null);
   if (scaleRef.current == null) {
@@ -2611,26 +2612,60 @@ function ComboDisplay({ count, messages }: { count: number; messages: FarmMessag
   }
   const expiry = expiryRef.current;
 
+  const rotateRef = useRef<Animated.Value | null>(null);
+  if (rotateRef.current == null) {
+    rotateRef.current = new Animated.Value(0);
+  }
+  const rotate = rotateRef.current;
+
+  const prevCountRef = useRef(0);
+
   useEffect(() => {
+    const prevCount = prevCountRef.current;
+    prevCountRef.current = count;
+
+    const isTierUp =
+      (prevCount < COMBO_GREAT_THRESHOLD && count >= COMBO_GREAT_THRESHOLD) ||
+      (prevCount < COMBO_LEGENDARY_THRESHOLD && count >= COMBO_LEGENDARY_THRESHOLD);
+
     scale.stopAnimation();
-    const animation = Animated.sequence([
+    rotate.stopAnimation();
+    rotate.setValue(0);
+
+    const scaleAnim = Animated.sequence([
       Animated.timing(scale, {
-        toValue: 1.25,
-        duration: 80,
+        toValue: isTierUp ? 1.65 : 1.25,
+        duration: isTierUp ? 100 : 80,
         easing: Easing.out(Easing.quad),
         useNativeDriver: true,
       }),
       Animated.spring(scale, {
         toValue: 1,
-        damping: 12,
-        stiffness: 240,
-        mass: 0.6,
+        damping: isTierUp ? 7 : 12,
+        stiffness: isTierUp ? 200 : 240,
+        mass: isTierUp ? 0.8 : 0.6,
         useNativeDriver: true,
       }),
     ]);
-    animation.start();
-    return () => animation.stop();
-  }, [scale, count]);
+
+    if (isTierUp) {
+      const wobble = Animated.sequence([
+        Animated.timing(rotate, { toValue: 1, duration: 55, useNativeDriver: true }),
+        Animated.timing(rotate, { toValue: -1, duration: 55, useNativeDriver: true }),
+        Animated.timing(rotate, { toValue: 0.5, duration: 45, useNativeDriver: true }),
+        Animated.spring(rotate, { toValue: 0, damping: 10, stiffness: 300, useNativeDriver: true }),
+      ]);
+      Animated.parallel([scaleAnim, wobble]).start();
+    } else {
+      rotate.setValue(0);
+      scaleAnim.start();
+    }
+
+    return () => {
+      scale.stopAnimation();
+      rotate.stopAnimation();
+    };
+  }, [scale, rotate, count]);
 
   // Reset to fully visible on each harvest, then fade to 25% over the combo window.
   // The last 40% of the window (600 ms) transitions from fully visible to dim,
@@ -2652,13 +2687,15 @@ function ComboDisplay({ count, messages }: { count: number; messages: FarmMessag
     return () => {
       scale.stopAnimation();
       expiry.stopAnimation();
+      rotate.stopAnimation();
     };
-  }, [scale, expiry]);
+  }, [scale, expiry, rotate, count]);
 
   const opacity = expiry.interpolate({
     inputRange: [0, 0.4, 1],
     outputRange: [0.25, 1, 1],
   });
+  const rotateInterp = rotate.interpolate({ inputRange: [-1, 0, 1], outputRange: ['-8deg', '0deg', '8deg'] });
 
   const tier =
     count >= COMBO_LEGENDARY_THRESHOLD ? 'legendary' : count >= COMBO_GREAT_THRESHOLD ? 'great' : 'normal';
@@ -2670,7 +2707,7 @@ function ComboDisplay({ count, messages }: { count: number; messages: FarmMessag
         styles.comboDisplay,
         tier === 'great' && styles.comboDisplayGreat,
         tier === 'legendary' && styles.comboDisplayLegendary,
-        { opacity, transform: [{ scale }] },
+        { opacity, transform: [{ scale }, { rotate: rotateInterp }] },
       ]}
     >
       <Text
