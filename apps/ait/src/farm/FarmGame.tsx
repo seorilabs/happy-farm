@@ -608,7 +608,10 @@ export default function FarmGame({
         pulseGold();
       }
       if (event.mutation != null) {
-        mutationFlashRef.current?.flash(event.mutation.key as 'golden' | 'rainbow');
+        const mutKey = event.mutation.key;
+        if (mutKey === 'golden' || mutKey === 'rainbow') {
+          mutationFlashRef.current?.flash(mutKey);
+        }
       }
       // A celebratory double-buzz marks rare moments (mutation, mastery rank-up,
       // active boost); ordinary harvests keep the light single tap. The pattern
@@ -2113,14 +2116,17 @@ const MutationFlashOverlay = React.forwardRef<MutationFlashHandle>(function Muta
         if (mutationKey === 'rainbow') {
           rainbowOpacity.stopAnimation();
           rainbowOpacity.setValue(0);
+          // Avoid Animated.delay here: stopAnimation() does not reliably interrupt
+          // a delay stage mid-sequence in React Native, which can cause the opacity
+          // to snap unexpectedly when rapid successive mutations overlap. The 80ms
+          // "hold" is folded into the fade-in duration instead (150 + 80 = 230ms).
           Animated.sequence([
             Animated.timing(rainbowOpacity, {
               toValue: 0.45,
-              duration: 150,
+              duration: 230,
               easing: Easing.out(Easing.quad),
               useNativeDriver: true,
             }),
-            Animated.delay(80),
             Animated.timing(rainbowOpacity, {
               toValue: 0,
               duration: 600,
