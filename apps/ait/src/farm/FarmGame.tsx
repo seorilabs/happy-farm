@@ -179,6 +179,20 @@ function formatStatMultiplier(value: number) {
   return value >= 100 ? `×${Math.round(value).toLocaleString()}` : `×${value.toFixed(1)}`;
 }
 
+// Combo gold bonus: rewards players who harvest quickly in succession.
+// Great tier (≥5) gives +10%; Legendary tier (≥10) gives +25%.
+// Applied on top of the base harvest value so the benefit scales naturally
+// with crop value — early crops get a small absolute bump, late-game crops
+// get a meaningful reward for active play.
+const COMBO_GREAT_BONUS = 1.1;
+const COMBO_LEGENDARY_BONUS = 1.25;
+
+function getComboMultiplier(combo: number): number {
+  if (combo >= COMBO_LEGENDARY_THRESHOLD) return COMBO_LEGENDARY_BONUS;
+  if (combo >= COMBO_GREAT_THRESHOLD) return COMBO_GREAT_BONUS;
+  return 1;
+}
+
 // Identifies the single most actionable next milestone for the player: the
 // first locked sequential area, and whichever of its requirements is furthest
 // from met. Returned raw so the component can format it with the active locale.
@@ -301,6 +315,7 @@ type PendingFarmCommandEffect =
       event: CropHarvestedGameEvent;
       now: number;
       shouldShowHarvestBonusNudge: boolean;
+      comboMultiplier: number;
     }
   | {
       id: number;
@@ -310,6 +325,7 @@ type PendingFarmCommandEffect =
       totalRpGained: number;
       harvestedCount: number;
       specialCount: number;
+      comboMultiplier: number;
     };
 
 type MasteryRankUpNotice = {
@@ -670,6 +686,18 @@ export default function FarmGame({
         // and on a no-op (drift cleared the plots) — the button can never stick.
         harvestAllInFlightRef.current = false;
         if (effect.harvestedCount > 0) {
+          // Combo bonus: apply multiplier earned before this batch started.
+          // Added to state here (after the primary harvest already ran) so
+          // the bonus stays separate from core harvest accounting.
+          const allBonusGold =
+            effect.totalGoldGained > 0 && effect.comboMultiplier > 1
+              ? Math.floor(effect.totalGoldGained * (effect.comboMultiplier - 1))
+              : 0;
+          if (allBonusGold > 0) {
+            setGameState((state) => ({ ...state, gold: state.gold + allBonusGold }));
+          }
+          const allTotalGold = effect.totalGoldGained + allBonusGold;
+
           // One floating "+gold" per harvested plot keeps the spatial reward;
           // the overlay self-caps concurrent pops, so a full grid stays cheap.
           // The HUD pulse, toast, sound, and haptic fire once for the whole
@@ -689,9 +717,9 @@ export default function FarmGame({
           if (effect.totalRpGained > 0) {
             toast(messages.harvestAllDonatedToast(formatMoney(effect.totalRpGained, locale), effect.harvestedCount));
           } else {
-            toast(messages.harvestAllToast(formatMoney(effect.totalGoldGained, locale), effect.harvestedCount));
+            toast(messages.harvestAllToast(formatMoney(allTotalGold, locale), effect.harvestedCount));
           }
-          if (effect.totalGoldGained > 0) {
+          if (allTotalGold > 0) {
             pulseGold();
           }
           farmAnalytics.trackHarvestAll({
@@ -714,6 +742,18 @@ export default function FarmGame({
       }
 
       const { event } = effect;
+      // Combo bonus: extra gold for harvesting quickly in succession.
+      // Computed and applied here (after primary harvest) so farm-core stays
+      // pure; donation harvests (goldGained === 0) naturally receive no bonus.
+      const comboBonusGold =
+        event.goldGained > 0 && effect.comboMultiplier > 1
+          ? Math.floor(event.goldGained * (effect.comboMultiplier - 1))
+          : 0;
+      if (comboBonusGold > 0) {
+        setGameState((state) => ({ ...state, gold: state.gold + comboBonusGold }));
+      }
+      const totalDisplayGold = event.goldGained + comboBonusGold;
+
       farmAnalytics.trackCropHarvested({
         cropKey: event.cropKey,
         areaKey: event.areaKey,
@@ -739,14 +779,14 @@ export default function FarmGame({
           messages.mutationHarvestedToast(
             getMutationLabel(event.mutation.key, locale).name,
             event.mutation.icon,
-            formatMoney(event.goldGained, locale)
+            formatMoney(totalDisplayGold, locale)
           )
         );
       } else {
         toast(
           event.boostActive
-            ? messages.harvestedBoostToast(formatMoney(event.goldGained, locale), event.boostMultiplier)
-            : messages.harvestedToast(formatMoney(event.goldGained, locale))
+            ? messages.harvestedBoostToast(formatMoney(totalDisplayGold, locale), event.boostMultiplier)
+            : messages.harvestedToast(formatMoney(totalDisplayGold, locale))
         );
       }
       if (effect.shouldShowHarvestBonusNudge) {
@@ -763,10 +803,10 @@ export default function FarmGame({
             : isSpecialHarvest
               ? 'special'
               : 'normal';
-      if (event.goldGained > 0) {
+      if (totalDisplayGold > 0) {
         harvestFxRef.current?.spawn(
           event.plotIndex,
-          `+${formatMoney(event.goldGained, locale)}`,
+          `+${formatMoney(totalDisplayGold, locale)}`,
           popTone
         );
         pulseGold();
@@ -1439,6 +1479,7 @@ export default function FarmGame({
 
   function harvestCrop(index: number) {
     const now = Date.now();
+    const comboMultiplier = getComboMultiplier(harvestCombo);
     const effectId = ++commandEffectIdRef.current;
     setGameState((state) => {
       const roll = Math.random();
@@ -1462,6 +1503,7 @@ export default function FarmGame({
             getRewardedAdLimitStatus(result.state, 'harvestBonusAd', now).allowed &&
             getHarvestBonusPromptStatus(result.state, now).allowed &&
             !event.boostActive,
+          comboMultiplier,
         });
       }
       return result.state;
@@ -1478,6 +1520,7 @@ export default function FarmGame({
     }
 
     const now = Date.now();
+    const comboMultiplier = getComboMultiplier(harvestCombo);
     const effectId = ++commandEffectIdRef.current;
     // One stable roll per plot index — not a flat sequence. Built outside the
     // updater so a StrictMode double-invoke reuses the same rolls, and keyed by
@@ -1515,6 +1558,7 @@ export default function FarmGame({
           totalRpGained: result.totalRpGained,
           harvestedCount: result.harvestedCount,
           specialCount: result.specialCount,
+          comboMultiplier,
         });
       }
       return result.harvestedCount > 0 ? result.state : state;
@@ -2505,6 +2549,8 @@ function ComboDisplay({ count, messages }: { count: number; messages: FarmMessag
   const tier =
     count >= COMBO_LEGENDARY_THRESHOLD ? 'legendary' : count >= COMBO_GREAT_THRESHOLD ? 'great' : 'normal';
   const icon = tier === 'legendary' ? '⚡' : tier === 'great' ? '🔥' : '🌾';
+  // Show the active gold bonus so players immediately understand the combo reward.
+  const bonusLabel = tier === 'legendary' ? ' +25%' : tier === 'great' ? ' +10%' : '';
 
   return (
     <Animated.View
@@ -2522,7 +2568,7 @@ function ComboDisplay({ count, messages }: { count: number; messages: FarmMessag
           tier === 'legendary' && styles.comboTextLegendary,
         ]}
       >
-        {icon} {messages.comboLabel(count)}
+        {icon} {messages.comboLabel(count)}{bonusLabel}
       </Text>
     </Animated.View>
   );
