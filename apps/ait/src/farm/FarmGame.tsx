@@ -89,6 +89,7 @@ import {
   getHarvestBonusBoostStatus,
   getHarvestBonusPromptStatus,
   getMasteryRankLabel,
+  getMasteryStatus,
   getMinUpgradeLevel,
   getMutationLabel,
   getPlotCost,
@@ -1759,6 +1760,7 @@ export default function FarmGame({
           {visibleCropKeys.map((key) => {
             const crop = getCrop(key);
             const cropCost = getCropPurchaseCost(gameState, key);
+            const masteryRank = getMasteryStatus(gameState, key).rank;
             return (
               <ToolButton
                 key={key}
@@ -1768,6 +1770,7 @@ export default function FarmGame({
                 cost={formatMoney(cropCost, locale)}
                 roi={messages.roi(formatSignedPercent(getCropEconomy(cropEconomyByKey, key).roiPercent, locale))}
                 affordable={gameState.gold >= cropCost}
+                masteryRank={masteryRank}
                 onPress={() => selectCrop(key)}
               />
             );
@@ -3134,6 +3137,7 @@ function ToolButton({
   cost,
   roi,
   affordable,
+  masteryRank,
   onPress,
 }: {
   active: boolean;
@@ -3142,6 +3146,7 @@ function ToolButton({
   cost?: string;
   roi?: string;
   affordable?: boolean;
+  masteryRank?: { icon: string } | null;
   onPress: () => void;
 }) {
   return (
@@ -3154,6 +3159,11 @@ function ToolButton({
         <Text style={[styles.toolCost, affordable === false && styles.toolCostUnaffordable]}>{cost}</Text>
       ) : null}
       {roi != null ? <Text style={styles.toolRoi}>{roi}</Text> : null}
+      {masteryRank != null ? (
+        <View pointerEvents="none" style={styles.toolMasteryBadge}>
+          <Text style={styles.toolMasteryBadgeText}>{masteryRank.icon}</Text>
+        </View>
+      ) : null}
     </Pressable>
   );
 }
@@ -3905,6 +3915,15 @@ const styles = StyleSheet.create({
     color: '#247241',
     fontSize: 10,
     fontWeight: '900',
+  },
+  toolMasteryBadge: {
+    position: 'absolute',
+    top: 3,
+    right: 4,
+  },
+  toolMasteryBadgeText: {
+    fontSize: 11,
+    lineHeight: 14,
   },
   lockedNotice: {
     width: 260,
