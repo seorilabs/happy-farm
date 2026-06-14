@@ -275,7 +275,8 @@ type FarmGameMarket = 'appsInToss' | 'mobile';
 export type FarmGameAudio = {
   isSupported: boolean;
   playHarvest: () => void | Promise<void>;
-  playComboMilestone: (tier: 'great' | 'legendary') => void | Promise<void>;
+  // Fire-and-forget: implementations must not throw or return a rejectable Promise.
+  playComboMilestone: (tier: 'great' | 'legendary') => void;
   setBackgroundMusicEnabled: (enabled: boolean) => void | Promise<void>;
 };
 
