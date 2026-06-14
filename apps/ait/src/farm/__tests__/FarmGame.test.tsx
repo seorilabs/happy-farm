@@ -706,9 +706,16 @@ describe('FarmGame UI flow', () => {
   });
 
   const prestigeMessages = getFarmMessages();
-  const tundra = REGION_ARCHETYPES.find((a) => a.key === 'tundra');
-  if (tundra == null) throw new Error('tundra archetype missing from REGION_ARCHETYPES');
-  const tundraName = getRegionArchetypeLabel(tundra.key, DEFAULT_LOCALE).name;
+  let tundra!: (typeof REGION_ARCHETYPES)[number];
+  let tundraName!: string;
+
+  beforeAll(() => {
+    const found = REGION_ARCHETYPES.find((a) => a.key === 'tundra');
+    expect(found).toBeDefined();
+    if (found == null) return;
+    tundra = found;
+    tundraName = getRegionArchetypeLabel(found.key, DEFAULT_LOCALE).name;
+  });
 
   function createPrestigeReadyState(): GameState {
     const base = createInitialState();
@@ -725,7 +732,7 @@ describe('FarmGame UI flow', () => {
     await waitFor(() => expect(screen.getByTestId('prestige-stars-chip')).toBeTruthy());
     fireEvent.press(screen.getByLabelText(prestigeMessages.mapButtonAccessibilityLabel));
     fireEvent.press(screen.getByText(prestigeMessages.prestigeAction(PRESTIGE_STARS_BASE)));
-    fireEvent.press(screen.getByText(new RegExp(tundraName)));
+    fireEvent.press(screen.getByText(`${tundra.icon} ${tundraName}`));
     fireEvent.press(screen.getByText(prestigeMessages.prestigeConfirmAction(PRESTIGE_STARS_BASE)));
   }
 
