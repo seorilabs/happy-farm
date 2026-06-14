@@ -1,7 +1,7 @@
 /// <reference types="jest" />
 
 import { createInitialState } from '../constants';
-import { getReadyPlotCount, performHarvest, performHarvestAll } from '../harvest';
+import { getReadyPlotCount, performHarvest, performHarvestAll, MAX_COMBO_MULTIPLIER } from '../harvest';
 import type { CropKey, GameState, PlotState } from '../types';
 
 const STARTER_CROP: CropKey = 'carrot';
@@ -181,16 +181,30 @@ describe('performHarvest — comboMultiplier', () => {
     expect(outcome!.comboMultiplier).toBe(1);
   });
 
-  test('clamps invalid comboMultiplier values (NaN, Infinity, negative, <1, >2) to 1', () => {
+  test('rejects non-finite and sub-1 comboMultiplier values — falls back to ×1', () => {
     const ripe = withRipePlots(createInitialState(), [0]);
     const base = performHarvest(ripe, 0, { now: 0, rng: noMutationRng });
     expect(base).not.toBeNull();
 
-    for (const badValue of [NaN, Infinity, -1, 0, 0.5, 2.01, 11, 1e308]) {
+    for (const badValue of [NaN, Infinity, -Infinity, -1, 0, 0.5]) {
       const outcome = performHarvest(ripe, 0, { now: 0, rng: noMutationRng, comboMultiplier: badValue });
       expect(outcome).not.toBeNull();
       expect(outcome!.comboMultiplier).toBe(1);
       expect(outcome!.goldGained).toBe(base!.goldGained);
+      expect(Number.isFinite(outcome!.state.gold)).toBe(true);
+    }
+  });
+
+  test('clamps above-MAX_COMBO_MULTIPLIER values to MAX_COMBO_MULTIPLIER, not to 1', () => {
+    const ripe = withRipePlots(createInitialState(), [0]);
+    const atMax = performHarvest(ripe, 0, { now: 0, rng: noMutationRng, comboMultiplier: MAX_COMBO_MULTIPLIER });
+    expect(atMax).not.toBeNull();
+
+    for (const overMax of [MAX_COMBO_MULTIPLIER + 0.01, 3, 11, 1e308]) {
+      const outcome = performHarvest(ripe, 0, { now: 0, rng: noMutationRng, comboMultiplier: overMax });
+      expect(outcome).not.toBeNull();
+      expect(outcome!.comboMultiplier).toBe(MAX_COMBO_MULTIPLIER);
+      expect(outcome!.goldGained).toBe(atMax!.goldGained);
       expect(Number.isFinite(outcome!.state.gold)).toBe(true);
     }
   });

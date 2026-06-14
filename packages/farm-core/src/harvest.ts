@@ -11,6 +11,9 @@ import {
 } from './mastery';
 import { getDonationRp, isCropPlantable, isNodeUnlocked } from './research';
 
+/** Upper bound for comboMultiplier accepted by performHarvest. Values above this are clamped down. */
+export const MAX_COMBO_MULTIPLIER = 2;
+
 export type HarvestOptions = {
   now?: number;
   rng?: () => number;
@@ -178,8 +181,9 @@ export function performHarvest(gameState: GameState, plotIndex: number, options:
   // research points instead of gold.
   const donated = gameState.automationSettings.donationModeEnabled;
   const raw = options.comboMultiplier;
-  // Cap at 2 (just above the game's max of 1.15) to reject implausible values early.
-  const comboMultiplier = typeof raw === 'number' && isFinite(raw) && raw >= 1 && raw <= 2 ? raw : 1;
+  // Clamp to [1, MAX_COMBO_MULTIPLIER]; reject non-finite or sub-1 values entirely.
+  const comboMultiplier =
+    typeof raw === 'number' && isFinite(raw) && raw >= 1 ? Math.min(raw, MAX_COMBO_MULTIPLIER) : 1;
   const goldGained = donated ? 0 : Math.floor(saleValue * comboMultiplier);
   const rpGained = donated ? getDonationRp(gameState, saleValue) : 0;
 
