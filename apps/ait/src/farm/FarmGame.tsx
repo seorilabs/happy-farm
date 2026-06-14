@@ -530,6 +530,9 @@ function farmUIReducer(state: FarmUIState, action: FarmUIAction): FarmUIState {
     }
 
     case 'HARVEST_ALL': {
+      // Idempotent guard: two taps that both dispatch before a re-render (or a
+      // concurrent-mode render retry that replays the queue) must not double-harvest.
+      if (state.harvestAllInFlight) return state;
       const { payload } = action;
       const result = performHarvestAll(state.game, { now: payload.now, rollFor: payload.rollFor });
       const pendingHarvestAllEffect: Extract<PendingFarmCommandEffect, { type: 'harvestedAll' }> = {
@@ -548,6 +551,9 @@ function farmUIReducer(state: FarmUIState, action: FarmUIAction): FarmUIState {
       if (result.harvestedCount === 0) {
         return { ...state, harvestAllInFlight: true, pendingHarvestAllEffect };
       }
+      // Design intent: Harvest All contributes to the combo streak. Clearing many
+      // plots at once rewards active engagement and the accumulated tier applies to
+      // the next manual tap — this is intentional, not a bug.
       return {
         ...state,
         game: result.state,
@@ -719,16 +725,6 @@ export default function FarmGame({
       }
     };
   }, [farmState.lastComboAt, farmDispatch]);
-  // Sync harvestAllInFlightRef back to false once DRAIN_HARVEST_ALL_EFFECT commits.
-  // The ref is set to true synchronously before dispatch as a double-tap guard;
-  // the reducer then owns the canonical "in flight" truth via harvestAllInFlight.
-  // Running in useLayoutEffect keeps the ref in sync during the commit phase,
-  // before any microtask or asynchronous tap handler can re-read it.
-  useLayoutEffect(() => {
-    if (!farmState.harvestAllInFlight) {
-      harvestAllInFlightRef.current = false;
-    }
-  }, [farmState.harvestAllInFlight]);
   const showMasteryRankUpCelebration = useCallback((notice: Omit<MasteryRankUpNotice, 'id'>) => {
     if (masteryRankUpTimerRef.current != null) {
       clearTimeout(masteryRankUpTimerRef.current);
@@ -1246,9 +1242,6 @@ export default function FarmGame({
     [gameState, harvestBonusBoost.multiplier]
   );
   const readyPlotCount = useMemo(() => getReadyPlotCount(gameState), [gameState]);
-  // Synchronous double-tap guard: set true before HARVEST_ALL dispatch, cleared
-  // by useLayoutEffect when harvestAllInFlight commits false (DRAIN_HARVEST_ALL_EFFECT).
-  const harvestAllInFlightRef = useRef(false);
   const chainIncome = useMemo(() => getChainIncome(gameState), [gameState, tick]);
   const mapActionableCount = useMemo(
     () => (chainIncome.accruedGold > 0 ? 1 : 0) + (canPrestige(gameState).allowed ? 1 : 0),
@@ -1692,11 +1685,11 @@ export default function FarmGame({
   }
 
   function harvestAllCrops() {
-    // Double-tap guard: ref provides synchronous protection within the same event
-    // cycle (before React re-renders). farmState.harvestAllInFlight is the committed
-    // source of truth — HARVEST_ALL sets it, DRAIN_HARVEST_ALL_EFFECT clears it —
-    // so a concurrent-mode render abort cannot leave the guard stuck permanently.
-    if (harvestAllInFlightRef.current || farmState.harvestAllInFlight) {
+    // farmState.harvestAllInFlight is the single source of truth: set in the HARVEST_ALL
+    // reducer commit and cleared in DRAIN_HARVEST_ALL_EFFECT, so it survives concurrent-mode
+    // render aborts. The reducer also guards against double-dispatch idempotently, so a
+    // second tap that slips through before re-render produces a no-op harvest.
+    if (farmState.harvestAllInFlight) {
       return;
     }
 
@@ -1714,7 +1707,6 @@ export default function FarmGame({
       return roll;
     };
 
-    harvestAllInFlightRef.current = true;
     farmDispatch({ type: 'HARVEST_ALL', payload: { effectId, rollFor, now } });
   }
 
