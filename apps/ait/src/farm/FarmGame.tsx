@@ -620,7 +620,6 @@ export default function FarmGame({
   useEffect(() => {
     const prev = prevComboRef.current;
     prevComboRef.current = harvestCombo;
-    if (!gameSettings.soundEffectsEnabled || !audio.isSupported) return;
     if (harvestCombo === 0) return;
     const prevTier = prev < COMBO_GREAT_THRESHOLD ? 0 : prev < COMBO_LEGENDARY_THRESHOLD ? 1 : 2;
     const currTier = harvestCombo < COMBO_GREAT_THRESHOLD ? 0 : harvestCombo < COMBO_LEGENDARY_THRESHOLD ? 1 : 2;
@@ -629,15 +628,20 @@ export default function FarmGame({
       // at once, we play only the highest tier reached. This preserves a meaningful
       // audio advantage for individual manual harvesting over Harvest All.
       const tier = currTier >= 2 ? 'legendary' : 'great';
-      try {
-        // Promise.resolve wraps both void and any unexpected Promise return, so
-        // the catch handles async rejections even if the void contract is violated.
-        void Promise.resolve(audio.playComboMilestone(tier) as unknown).catch(() => undefined);
-      } catch {
-        // Synchronous throws from SFX are non-critical.
+      // Toast confirms the active bonus so players immediately know what reward
+      // their combo has unlocked, regardless of whether sound is on.
+      toast(tier === 'legendary' ? messages.comboLegendaryToast : messages.comboGreatToast);
+      if (gameSettings.soundEffectsEnabled && audio.isSupported) {
+        try {
+          // Promise.resolve wraps both void and any unexpected Promise return, so
+          // the catch handles async rejections even if the void contract is violated.
+          void Promise.resolve(audio.playComboMilestone(tier) as unknown).catch(() => undefined);
+        } catch {
+          // Synchronous throws from SFX are non-critical.
+        }
       }
     }
-  }, [harvestCombo, audio, gameSettings.soundEffectsEnabled]);
+  }, [harvestCombo, audio, gameSettings.soundEffectsEnabled, messages, toast]);
 
   const analyticsContext = useCallback(
     (state = gameState) => getGameAnalyticsContext(state, sessionStartedAtRef.current),
@@ -2573,8 +2577,14 @@ function ComboDisplay({ count, messages }: { count: number; messages: FarmMessag
   const tier =
     count >= COMBO_LEGENDARY_THRESHOLD ? 'legendary' : count >= COMBO_GREAT_THRESHOLD ? 'great' : 'normal';
   const icon = tier === 'legendary' ? '⚡' : tier === 'great' ? '🔥' : '🌾';
-  // Show the active gold bonus so players immediately understand the combo reward.
-  const bonusLabel = tier === 'legendary' ? ' +25%' : tier === 'great' ? ' +10%' : '';
+  // Derive the percentage from the same constants that drive the actual bonus
+  // calculation so the label stays accurate if balance values change.
+  const bonusLabel =
+    tier === 'legendary'
+      ? ` +${Math.round((COMBO_LEGENDARY_BONUS - 1) * 100)}%`
+      : tier === 'great'
+        ? ` +${Math.round((COMBO_GREAT_BONUS - 1) * 100)}%`
+        : '';
 
   return (
     <Animated.View
