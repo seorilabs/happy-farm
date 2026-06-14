@@ -2630,6 +2630,7 @@ function ComboDisplay({ count, messages }: { count: number; messages: FarmMessag
 
     scale.stopAnimation();
     rotate.stopAnimation();
+    rotate.setValue(0);
 
     const scaleAnim = Animated.sequence([
       Animated.timing(scale, {
@@ -2648,7 +2649,6 @@ function ComboDisplay({ count, messages }: { count: number; messages: FarmMessag
     ]);
 
     if (isTierUp) {
-      rotate.setValue(0);
       const wobble = Animated.sequence([
         Animated.timing(rotate, { toValue: 1, duration: 55, useNativeDriver: true }),
         Animated.timing(rotate, { toValue: -1, duration: 55, useNativeDriver: true }),
