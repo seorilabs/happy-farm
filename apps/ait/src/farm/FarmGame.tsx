@@ -361,13 +361,23 @@ export default function FarmGame({
   const claimedAchievementKeysRef = useRef<Set<string>>(new Set());
   const commandEffectIdRef = useRef(0);
   const pendingCommandEffectsRef = useRef<PendingFarmCommandEffect[]>([]);
-  const handledCommandEffectIdsRef = useRef<Set<number>>(new Set());
+  // Tracks the highest effect id already processed so duplicate drain runs
+  // (e.g. StrictMode double-invoke of the updater) never fire side effects twice.
+  // A monotonic counter avoids unbounded Set growth in long sessions.
+  const lastHandledEffectIdRef = useRef(-1);
   const [commandEffectVersion, setCommandEffectVersion] = useState(0);
   // Double-tap guard for confirmPrestige: the state updater is idempotent,
   // but the toast/analytics must fire exactly once per graduated level.
   const prestigedLevelsRef = useRef<Set<number>>(new Set());
   const autoHarvestSummaryRef = useRef({ harvestedCount: 0, replantedCount: 0, windowStartedAt: 0 });
   const rewardedAd = useRewardedAd(REWARDED_AD_GROUP_ID);
+  // Mirror ad readiness into a ref so the setGameState updater (which closes
+  // over a render-time snapshot) can always read the latest value without a
+  // stale-closure race when the ad SDK changes readiness between renders.
+  const rewardedAdReadyRef = useRef(rewardedAd.isAdReady);
+  useEffect(() => {
+    rewardedAdReadyRef.current = rewardedAd.isAdReady;
+  }, [rewardedAd.isAdReady]);
   const interstitialAd = useInterstitialAd(INTERSTITIAL_AD_GROUP_ID);
   const farmAnalytics = analytics;
   const isMobileMarket = market === 'mobile';
@@ -468,10 +478,10 @@ export default function FarmGame({
     pendingCommandEffectsRef.current = [];
 
     for (const effect of effects) {
-      if (handledCommandEffectIdsRef.current.has(effect.id)) {
+      if (effect.id <= lastHandledEffectIdRef.current) {
         continue;
       }
-      handledCommandEffectIdsRef.current.add(effect.id);
+      lastHandledEffectIdRef.current = effect.id;
 
       if (effect.type === 'plantBlocked') {
         if (effect.reason === 'areaLocked') {
@@ -1208,6 +1218,7 @@ export default function FarmGame({
     claimedRewardKeysRef.current.clear();
     claimedAchievementKeysRef.current.clear();
     prestigedLevelsRef.current.clear();
+    lastHandledEffectIdRef.current = -1;
     autoHarvestSummaryRef.current = { harvestedCount: 0, replantedCount: 0, windowStartedAt: 0 };
     if (comboTimerRef.current != null) {
       clearTimeout(comboTimerRef.current);
@@ -1265,7 +1276,7 @@ export default function FarmGame({
           event,
           now,
           shouldShowHarvestBonusNudge:
-            rewardedAd.isAdReady &&
+            rewardedAdReadyRef.current &&
             getRewardedAdLimitStatus(result.state, 'harvestBonusAd', now).allowed &&
             getHarvestBonusPromptStatus(result.state, now).allowed &&
             !event.boostActive,
@@ -3000,7 +3011,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 9,
-    transformOrigin: 'left center',
   },
   coinIcon: {
     width: 30,
