@@ -819,24 +819,31 @@ describe('FarmGame UI flow', () => {
     expect(playHarvest).toHaveBeenCalledTimes(1);
   });
 
-  test('plays harvest sound when a collection reward is claimed', async () => {
+  test('plays harvest sound and pulses gold when a collection reward is claimed', async () => {
     // createLateGameState() discovers all crops, making all area collection rewards claimable.
     const lateGame = createLateGameState();
     const playHarvest = jest.fn();
+    const onGoldPulse = jest.fn();
     const claimMessages = getFarmMessages();
     const firstAreaKey = FARM_AREAS[0]!.key;
-    const firstAreaReward = COLLECTION_AREA_REWARDS[firstAreaKey] ?? 0;
+    const firstAreaReward = COLLECTION_AREA_REWARDS[firstAreaKey];
+    if (firstAreaReward == null) throw new Error(`No collection reward defined for area ${firstAreaKey}`);
     const claimButtonLabel = claimMessages.collectionClaimAction(
       formatMoney(firstAreaReward, DEFAULT_LOCALE)
     );
-    const screen = await renderGame(lateGame, {
-      audio: {
-        isSupported: true,
-        playHarvest,
-        playComboMilestone: jest.fn(),
-        setBackgroundMusicEnabled: jest.fn(),
+    const screen = await renderGame(
+      lateGame,
+      {
+        audio: {
+          isSupported: true,
+          playHarvest,
+          playComboMilestone: jest.fn(),
+          setBackgroundMusicEnabled: jest.fn(),
+        },
+        onGoldPulse,
       },
-    });
+      { soundEffectsEnabled: true }
+    );
 
     await waitFor(() => expect(screen.getByText(`${formatMoney(lateGame.gold)}G`)).toBeTruthy());
 
@@ -846,7 +853,74 @@ describe('FarmGame UI flow', () => {
     fireEvent.press(screen.getByText(claimButtonLabel));
 
     await waitFor(() => expect(playHarvest).toHaveBeenCalledTimes(1));
+    expect(onGoldPulse).toHaveBeenCalledTimes(1);
     await waitFor(() => expect(screen.getByText(claimMessages.collectionClaimedLabel)).toBeTruthy());
+  });
+
+  test('does not play harvest sound when sound effects are disabled', async () => {
+    // createLateGameState() discovers all crops, making all area collection rewards claimable.
+    const lateGame = createLateGameState();
+    const playHarvest = jest.fn();
+    const claimMessages = getFarmMessages();
+    const firstAreaKey = FARM_AREAS[0]!.key;
+    const firstAreaReward = COLLECTION_AREA_REWARDS[firstAreaKey];
+    if (firstAreaReward == null) throw new Error(`No collection reward defined for area ${firstAreaKey}`);
+    const claimButtonLabel = claimMessages.collectionClaimAction(
+      formatMoney(firstAreaReward, DEFAULT_LOCALE)
+    );
+    const screen = await renderGame(
+      lateGame,
+      {
+        audio: {
+          isSupported: true,
+          playHarvest,
+          playComboMilestone: jest.fn(),
+          setBackgroundMusicEnabled: jest.fn(),
+        },
+      },
+      { soundEffectsEnabled: false }
+    );
+
+    await waitFor(() => expect(screen.getByText(`${formatMoney(lateGame.gold)}G`)).toBeTruthy());
+    fireEvent.press(screen.getByLabelText(claimMessages.collectionButtonAccessibilityLabel));
+    await waitFor(() => expect(screen.getByText(claimButtonLabel)).toBeTruthy());
+    fireEvent.press(screen.getByText(claimButtonLabel));
+
+    await waitFor(() => expect(screen.getByText(claimMessages.collectionClaimedLabel)).toBeTruthy());
+    expect(playHarvest).not.toHaveBeenCalled();
+  });
+
+  test('does not play harvest sound when audio is unsupported', async () => {
+    // createLateGameState() discovers all crops, making all area collection rewards claimable.
+    const lateGame = createLateGameState();
+    const playHarvest = jest.fn();
+    const claimMessages = getFarmMessages();
+    const firstAreaKey = FARM_AREAS[0]!.key;
+    const firstAreaReward = COLLECTION_AREA_REWARDS[firstAreaKey];
+    if (firstAreaReward == null) throw new Error(`No collection reward defined for area ${firstAreaKey}`);
+    const claimButtonLabel = claimMessages.collectionClaimAction(
+      formatMoney(firstAreaReward, DEFAULT_LOCALE)
+    );
+    const screen = await renderGame(
+      lateGame,
+      {
+        audio: {
+          isSupported: false,
+          playHarvest,
+          playComboMilestone: jest.fn(),
+          setBackgroundMusicEnabled: jest.fn(),
+        },
+      },
+      { soundEffectsEnabled: true }
+    );
+
+    await waitFor(() => expect(screen.getByText(`${formatMoney(lateGame.gold)}G`)).toBeTruthy());
+    fireEvent.press(screen.getByLabelText(claimMessages.collectionButtonAccessibilityLabel));
+    await waitFor(() => expect(screen.getByText(claimButtonLabel)).toBeTruthy());
+    fireEvent.press(screen.getByText(claimButtonLabel));
+
+    await waitFor(() => expect(screen.getByText(claimMessages.collectionClaimedLabel)).toBeTruthy());
+    expect(playHarvest).not.toHaveBeenCalled();
   });
 
   test('fires combo great milestone audio when combo crosses the great tier threshold', async () => {

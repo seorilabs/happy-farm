@@ -288,6 +288,9 @@ export type FarmGameProps = {
   audio?: FarmGameAudio;
   market?: FarmGameMarket;
   preferredLocale?: SupportedLocale;
+  // Test hook: called immediately after pulseGold() fires, enabling spies to
+  // assert the gold-pulse path without coupling tests to Animated internals.
+  onGoldPulse?: () => void;
 };
 
 type GetAnalyticsContext = (state?: GameState) => GameAnalyticsContext;
@@ -420,6 +423,7 @@ export default function FarmGame({
   audio = defaultFarmAudio,
   market = 'appsInToss',
   preferredLocale = DEFAULT_LOCALE,
+  onGoldPulse,
 }: FarmGameProps = {}) {
   const insets = useFarmSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
@@ -1103,6 +1107,7 @@ export default function FarmGame({
     });
     toast(messages.collectionRewardClaimedToast(formatMoney(preview.awardedGold, locale)));
     pulseGold();
+    onGoldPulse?.();
     if (gameSettings.soundEffectsEnabled && audio.isSupported) {
       try {
         void Promise.resolve(audio.playHarvest() as unknown).catch(() => undefined);
