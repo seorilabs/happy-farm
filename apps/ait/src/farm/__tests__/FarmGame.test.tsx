@@ -12,6 +12,7 @@ import {
   HARVEST_BONUS_BOOST_DURATION_MS,
   HARVEST_BONUS_MULTIPLIER,
   MAX_PLOTS,
+  REWARDED_GOLD_MAX_USES_PER_WINDOW,
   PRESTIGE_STARS_BASE,
   REGION_ARCHETYPES,
   createFarmAnalytics,
@@ -424,6 +425,25 @@ describe('FarmGame UI flow', () => {
   test('shows no badge on the shop nav button when ads are not supported', async () => {
     // Default useRewardedAd is useUnsupportedAd (isAdSupported: false, isAdReady: false)
     const screen = await renderGame(null);
+
+    await waitFor(() => expect(screen.getByTestId('shop-nav-button')).toBeTruthy());
+    expect(within(screen.getByTestId('shop-nav-button')).queryByText('1')).toBeNull();
+  });
+
+  test('hides the shop badge when the rewarded ad rate limit is exhausted', async () => {
+    // Fill the sliding window to trigger the cooldown (REWARDED_GOLD_MAX_USES_PER_WINDOW uses).
+    // Both shop ad rewards (gold + free plot) share rewardedGoldLimit, so exhausting the
+    // window disables all shop ad rewards and the badge should disappear.
+    const base = createInitialState();
+    const exhaustedState: GameState = {
+      ...base,
+      adUsage: {
+        ...base.adUsage,
+        rewardedGoldTimestamps: Array.from({ length: REWARDED_GOLD_MAX_USES_PER_WINDOW }, (_, i) => NOW - i * 10),
+      },
+    };
+    const rewardedAd = createReadyRewardedAd();
+    const screen = await renderGame(exhaustedState, { useRewardedAd: () => rewardedAd });
 
     await waitFor(() => expect(screen.getByTestId('shop-nav-button')).toBeTruthy());
     expect(within(screen.getByTestId('shop-nav-button')).queryByText('1')).toBeNull();
