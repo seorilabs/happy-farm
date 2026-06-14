@@ -7,6 +7,7 @@ import {
   CROPS,
   FARM_AREAS,
   HARVEST_BONUS_AD_COOLDOWN_MS,
+  HARVEST_BONUS_BOOST_DURATION_MS,
   HARVEST_BONUS_MULTIPLIER,
   MAX_PLOTS,
   createFarmAnalytics,
@@ -794,6 +795,26 @@ describe('FarmGame UI flow', () => {
     fireEvent.press(screen.getAllByText('GET')[0]!);
 
     expect(screen.getByText(`${formatMoney(readyHarvestState.gold + carrotRevenue * 3)}G`)).toBeTruthy();
+  });
+
+  test('shows boost remaining time countdown in header when boost is active', async () => {
+    const base = createInitialState();
+    const boostState: GameState = {
+      ...base,
+      adUsage: {
+        ...base.adUsage,
+        harvestBonusAd: {
+          ...base.adUsage.harvestBonusAd,
+          boostEndsAt: NOW + HARVEST_BONUS_BOOST_DURATION_MS,
+        },
+      },
+    };
+    const screen = await renderGame(boostState);
+
+    await waitFor(() => expect(screen.getByText('부스트')).toBeTruthy());
+    expect(screen.getByText(`×${HARVEST_BONUS_MULTIPLIER.toFixed(1)}`)).toBeTruthy();
+    // Remaining time should show the full 30-minute duration (30분) right at boost start.
+    expect(screen.getByText(`${Math.ceil(HARVEST_BONUS_BOOST_DURATION_MS / 60000)}분`)).toBeTruthy();
   });
 
   test('greets a returning player with an offline progress recap', async () => {
