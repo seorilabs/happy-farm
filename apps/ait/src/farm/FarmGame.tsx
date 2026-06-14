@@ -245,7 +245,7 @@ type PendingFarmCommandEffect =
   | {
       id: number;
       type: 'harvestedAll';
-      fx: { plotIndex: number; goldGained: number; special: boolean }[];
+      fx: { plotIndex: number; goldGained: number; special: boolean; mutationKey: string | null }[];
       totalGoldGained: number;
       totalRpGained: number;
       harvestedCount: number;
@@ -507,11 +507,16 @@ export default function FarmGame({
           // batch instead of stacking dozens of buzzes and toasts.
           for (const fx of effect.fx) {
             if (fx.goldGained > 0) {
-              harvestFxRef.current?.spawn(
-                fx.plotIndex,
-                `+${formatMoney(fx.goldGained, locale)}`,
-                fx.special ? 'special' : 'normal'
-              );
+              const batchTone: HarvestPop['tone'] =
+                fx.mutationKey === 'rainbow' ? 'rainbow' :
+                fx.mutationKey === 'golden' ? 'golden' :
+                fx.special ? 'special' :
+                'normal';
+              const batchLabel =
+                fx.mutationKey === 'rainbow' ? `🌈 +${formatMoney(fx.goldGained, locale)}` :
+                fx.mutationKey === 'golden' ? `✨ +${formatMoney(fx.goldGained, locale)}` :
+                `+${formatMoney(fx.goldGained, locale)}`;
+              harvestFxRef.current?.spawn(fx.plotIndex, batchLabel, batchTone);
             }
           }
           // Donation mode converts the batch into research points; key the toast
@@ -650,7 +655,7 @@ export default function FarmGame({
         setActiveSheet({ type: 'welcomeBack', summary });
       }
       // Mark "seen" immediately so a quick reload doesn't replay the recap.
-      void persistence.writeLastSeenAt?.(now);
+      void persistence.writeLastSeenAt?.(now)?.catch(() => {});
     }
 
     void loadSavedGame();
@@ -694,7 +699,7 @@ export default function FarmGame({
     if (!isSaveLoaded) {
       return;
     }
-    const markSeen = () => void persistence.writeLastSeenAt?.(Date.now());
+    const markSeen = () => void persistence.writeLastSeenAt?.(Date.now())?.catch(() => {});
     const heartbeat = setInterval(markSeen, LAST_SEEN_HEARTBEAT_MS);
     const subscription = AppState.addEventListener('change', (nextState) => {
       if (nextState === 'background' || nextState === 'inactive') {
@@ -1325,6 +1330,7 @@ export default function FarmGame({
             plotIndex,
             goldGained: outcome.goldGained,
             special: outcome.mutation != null || outcome.newMasteryRank != null || outcome.boostActive,
+            mutationKey: outcome.mutation?.key ?? null,
           })),
           totalGoldGained: result.totalGoldGained,
           totalRpGained: result.totalRpGained,
