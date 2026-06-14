@@ -3045,7 +3045,7 @@ function ToolButton({
       ) : null}
       {roi != null ? <Text style={styles.toolRoi}>{roi}</Text> : null}
       {masteryRank != null ? (
-        <View style={styles.toolMasteryBadge}>
+        <View pointerEvents="none" style={styles.toolMasteryBadge}>
           <Text style={styles.toolMasteryBadgeText}>{masteryRank.icon}</Text>
         </View>
       ) : null}
