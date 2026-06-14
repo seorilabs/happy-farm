@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useImperativeHandle, useMemo, useReducer, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react';
 import {
   Animated,
   AppState,
@@ -315,7 +315,6 @@ type PendingFarmCommandEffect =
   | {
       id: number;
       type: 'harvestedAll';
-      now: number;
       fx: { plotIndex: number; goldGained: number; special: boolean }[];
       totalGoldGained: number;
       totalRpGained: number;
@@ -431,18 +430,19 @@ function useFarmSafeAreaInsets() {
 // effect enqueue are discarded together — no phantom sound/analytics can fire
 // for a harvest that never actually committed.
 //
-// Per-burst combo accuracy: state.comboCount (confirmed harvests from prior
-// effect-flush cycles) plus state.pendingHarvestEffects.length (confirmed
-// harvests from preceding dispatches in the same batch) gives each rapid tap
-// the correct multiplier tier even when many taps land within the same render
-// cycle. HARVEST_ALL increments state.comboCount atomically with the game
-// state change, so a manual tap immediately after a batch harvest also sees
-// the correct tier.
+// Combo accuracy: comboCount is incremented atomically with each HARVEST_CROP
+// dispatch so each tap in a rapid-tap batch sees the correct tier without any
+// pending-effects count. lastComboAt stores the commit timestamp so the
+// useLayoutEffect can anchor the expiry timer to the tap itself, not to the
+// asynchronous useEffect that processes feedback — eliminating the race where
+// a near-expired timer fires between the reducer commit and the timer reset.
 
 type FarmUIState = {
   game: GameState;
   /** Total harvests confirmed since the last combo reset (across all flush cycles). */
   comboCount: number;
+  /** Wall-clock ms of the most recent committed harvest; 0 when no active combo. */
+  lastComboAt: number;
   pendingHarvestEffects: Array<Extract<PendingFarmCommandEffect, { type: 'cropHarvested' }>>;
   pendingHarvestAllEffect: Extract<PendingFarmCommandEffect, { type: 'harvestedAll' }> | null;
 };
@@ -485,7 +485,7 @@ function farmUIReducer(state: FarmUIState, action: FarmUIAction): FarmUIState {
       return state.pendingHarvestAllEffect == null ? state : { ...state, pendingHarvestAllEffect: null };
 
     case 'RESET_COMBO':
-      return state.comboCount === 0 ? state : { ...state, comboCount: 0 };
+      return state.comboCount === 0 ? state : { ...state, comboCount: 0, lastComboAt: 0 };
 
     case 'HARVEST_CROP': {
       const { payload } = action;
@@ -500,11 +500,13 @@ function farmUIReducer(state: FarmUIState, action: FarmUIAction): FarmUIState {
       );
       if (result.status !== 'applied') return state;
       const event = result.events[0];
-      if (event?.type !== 'cropHarvested') return { ...state, game: result.state, comboCount: state.comboCount + 1 };
+      // Unreachable: harvestCrop always emits cropHarvested when applied.
+      if (event?.type !== 'cropHarvested') return { ...state, game: result.state, comboCount: state.comboCount + 1, lastComboAt: payload.now };
       return {
         ...state,
         game: result.state,
         comboCount: state.comboCount + 1,
+        lastComboAt: payload.now,
         pendingHarvestEffects: [
           ...state.pendingHarvestEffects,
           {
@@ -528,7 +530,6 @@ function farmUIReducer(state: FarmUIState, action: FarmUIAction): FarmUIState {
       const pendingHarvestAllEffect: Extract<PendingFarmCommandEffect, { type: 'harvestedAll' }> = {
         id: payload.effectId,
         type: 'harvestedAll',
-        now: payload.now,
         fx: result.harvests.map(({ plotIndex, outcome }) => ({
           plotIndex,
           goldGained: outcome.goldGained,
@@ -546,6 +547,7 @@ function farmUIReducer(state: FarmUIState, action: FarmUIAction): FarmUIState {
         ...state,
         game: result.state,
         comboCount: state.comboCount + result.harvestedCount,
+        lastComboAt: payload.now,
         pendingHarvestAllEffect,
       };
     }
@@ -632,6 +634,7 @@ export default function FarmGame({
   const [farmState, farmDispatch] = useReducer(farmUIReducer, undefined, (): FarmUIState => ({
     game: createInitialState(),
     comboCount: 0,
+    lastComboAt: 0,
     pendingHarvestEffects: [],
     pendingHarvestAllEffect: null,
   }));
@@ -688,19 +691,27 @@ export default function FarmGame({
       }),
     ]).start();
   }, [goldPulse]);
-  // Resets the combo expiry window. Called after every committed harvest batch.
-  // durationMs lets callers anchor the timer to the original harvest commit time
-  // rather than effect-processing time: pass COMBO_WINDOW_MS - elapsed to account
-  // for the scheduling lag between dispatch and effect execution.
-  const advanceCombo = useCallback((durationMs: number = COMBO_WINDOW_MS) => {
-    if (comboTimerRef.current != null) {
-      clearTimeout(comboTimerRef.current);
-    }
+  // Anchor the combo expiry timer to the reducer commit timestamp (lastComboAt)
+  // rather than to the asynchronous useEffect that processes feedback. Running in
+  // useLayoutEffect (synchronous with React's commit phase) means clearTimeout +
+  // setTimeout execute before any pending macrotask — including a timer that was
+  // about to fire at the moment of the harvest commit — so RESET_COMBO can never
+  // race between dispatch and the old advanceCombo call in a useEffect.
+  useLayoutEffect(() => {
+    if (farmState.lastComboAt === 0) return;
+    if (comboTimerRef.current != null) clearTimeout(comboTimerRef.current);
+    const remaining = Math.max(1, COMBO_WINDOW_MS - (Date.now() - farmState.lastComboAt));
     comboTimerRef.current = setTimeout(() => {
       comboTimerRef.current = null;
       farmDispatch({ type: 'RESET_COMBO' });
-    }, durationMs);
-  }, [farmDispatch]);
+    }, remaining);
+    return () => {
+      if (comboTimerRef.current != null) {
+        clearTimeout(comboTimerRef.current);
+        comboTimerRef.current = null;
+      }
+    };
+  }, [farmState.lastComboAt, farmDispatch]);
   const showMasteryRankUpCelebration = useCallback((notice: Omit<MasteryRankUpNotice, 'id'>) => {
     if (masteryRankUpTimerRef.current != null) {
       clearTimeout(masteryRankUpTimerRef.current);
@@ -936,18 +947,11 @@ export default function FarmGame({
           void audio.playHarvest();
         }
       }
-      // Anchor the expiry timer to the last harvest's commit time so the window
-      // starts when the player tapped, not when the effect fired.
-      const lastEffect = farmState.pendingHarvestEffects[farmState.pendingHarvestEffects.length - 1];
-      if (lastEffect != null) {
-        advanceCombo(Math.max(1, COMBO_WINDOW_MS - (Date.now() - lastEffect.now)));
-      }
     } finally {
       farmDispatch({ type: 'DRAIN_HARVEST_EFFECTS' });
     }
   }, [
     farmState.pendingHarvestEffects,
-    advanceCombo,
     analyticsContext,
     audio,
     farmAnalytics,
@@ -1008,14 +1012,12 @@ export default function FarmGame({
         if (gameSettings.soundEffectsEnabled && audio.isSupported) {
           void audio.playHarvest();
         }
-        advanceCombo(Math.max(1, COMBO_WINDOW_MS - (Date.now() - effect.now)));
       }
     } finally {
       farmDispatch({ type: 'DRAIN_HARVEST_ALL_EFFECT' });
     }
   }, [
     farmState.pendingHarvestAllEffect,
-    advanceCombo,
     analyticsContext,
     audio,
     farmAnalytics,
