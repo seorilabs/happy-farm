@@ -255,6 +255,7 @@ type PendingFarmCommandEffect =
     };
 
 type MasteryRankUpNotice = {
+  id: number;
   cropIcon: string;
   cropName: string;
   rankKey: MasteryRankKey;
@@ -355,6 +356,7 @@ export default function FarmGame({
   const comboTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [masteryRankUpNotice, setMasteryRankUpNotice] = useState<MasteryRankUpNotice | null>(null);
   const masteryRankUpTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const masteryNoticeIdRef = useRef(0);
   // Per-plot "just planted" tokens. Bumped only on a manual plant so the fresh
   // sprout bounces in (auto-replant and save-load stay silent). Keyed by index.
   const [plantPulses, setPlantPulses] = useState<Record<number, number>>({});
@@ -447,11 +449,12 @@ export default function FarmGame({
       comboTimerRef.current = null;
     }, COMBO_WINDOW_MS);
   }, []);
-  const showMasteryRankUpCelebration = useCallback((notice: MasteryRankUpNotice) => {
+  const showMasteryRankUpCelebration = useCallback((notice: Omit<MasteryRankUpNotice, 'id'>) => {
     if (masteryRankUpTimerRef.current != null) {
       clearTimeout(masteryRankUpTimerRef.current);
     }
-    setMasteryRankUpNotice(notice);
+    masteryNoticeIdRef.current += 1;
+    setMasteryRankUpNotice({ ...notice, id: masteryNoticeIdRef.current });
     masteryRankUpTimerRef.current = setTimeout(() => {
       setMasteryRankUpNotice(null);
       masteryRankUpTimerRef.current = null;
@@ -1959,7 +1962,7 @@ export default function FarmGame({
       {/* Rendered last so it appears above the Sheet and all other overlays. */}
       {masteryRankUpNotice != null ? (
         <MasteryRankUpOverlay
-          key={`${masteryRankUpNotice.cropName}-${masteryRankUpNotice.rankKey}`}
+          key={masteryRankUpNotice.id}
           notice={masteryRankUpNotice}
           messages={messages}
           onDismiss={dismissMasteryRankUpCelebration}

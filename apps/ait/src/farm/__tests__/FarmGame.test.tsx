@@ -519,7 +519,7 @@ describe('FarmGame UI flow', () => {
 
     await waitFor(() => expect(screen.getByText('50G')).toBeTruthy());
 
-    fireEvent.press(screen.getAllByText('GET')[0]!);
+    fireEvent.press(within(screen.getByTestId('plot-cell-0')).getByText('GET'));
 
     expect(screen.getByText('숙련도 달성!')).toBeTruthy();
     expect(screen.getByText(/브론즈/)).toBeTruthy();
@@ -541,7 +541,7 @@ describe('FarmGame UI flow', () => {
     const screen = await renderGame(state);
 
     await waitFor(() => expect(screen.getByText('50G')).toBeTruthy());
-    fireEvent.press(screen.getAllByText('GET')[0]!);
+    fireEvent.press(within(screen.getByTestId('plot-cell-0')).getByText('GET'));
 
     expect(screen.getByText('숙련도 달성!')).toBeTruthy();
 
@@ -563,7 +563,7 @@ describe('FarmGame UI flow', () => {
     const screen = await renderGame(state);
 
     await waitFor(() => expect(screen.getByText('50G')).toBeTruthy());
-    fireEvent.press(screen.getAllByText('GET')[0]!);
+    fireEvent.press(within(screen.getByTestId('plot-cell-0')).getByText('GET'));
 
     expect(screen.getByText('숙련도 달성!')).toBeTruthy();
 
@@ -598,8 +598,7 @@ describe('FarmGame UI flow', () => {
     await waitFor(() => expect(screen.getAllByText('GET').length).toBeGreaterThanOrEqual(2));
 
     // First rank-up: explicitly press plot 0 (carrot) — overlay shows carrot's name
-    const getButtons = screen.getAllByText('GET');
-    fireEvent.press(getButtons[0]!);
+    fireEvent.press(within(screen.getByTestId('plot-cell-0')).getByText('GET'));
     const cardAfterFirst = screen.getByTestId('mastery-rank-up-card');
     expect(within(cardAfterFirst).getByText('당근')).toBeTruthy();
     expect(within(cardAfterFirst).getByText(/브론즈/)).toBeTruthy();
