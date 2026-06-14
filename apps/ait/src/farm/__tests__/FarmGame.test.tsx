@@ -413,6 +413,22 @@ describe('FarmGame UI flow', () => {
     expect(screen.queryByText('채소 밭 열기')).toBeNull();
   });
 
+  test('shows a badge on the shop nav button when a rewarded ad is ready to claim', async () => {
+    const rewardedAd = createReadyRewardedAd();
+    const screen = await renderGame(null, { useRewardedAd: () => rewardedAd });
+
+    await waitFor(() => expect(screen.getByTestId('shop-nav-button')).toBeTruthy());
+    expect(within(screen.getByTestId('shop-nav-button')).getByText('1')).toBeTruthy();
+  });
+
+  test('shows no badge on the shop nav button when ads are not supported', async () => {
+    // Default useRewardedAd is useUnsupportedAd (isAdSupported: false, isAdReady: false)
+    const screen = await renderGame(null);
+
+    await waitFor(() => expect(screen.getByTestId('shop-nav-button')).toBeTruthy());
+    expect(within(screen.getByTestId('shop-nav-button')).queryByText('1')).toBeNull();
+  });
+
   test('closes the shop sheet after a rewarded gold ad so the farm remains tappable', async () => {
     const rewardedAd = createReadyRewardedAd();
     const screen = await renderGame(null, { useRewardedAd: () => rewardedAd });
