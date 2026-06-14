@@ -148,6 +148,19 @@ const COMBO_LEGENDARY_THRESHOLD = 10;
 // Gold bonus ratios applied on top of the base harvest value while in combo.
 const COMBO_GREAT_BONUS_RATIO = 0.1;
 const COMBO_LEGENDARY_BONUS_RATIO = 0.25;
+
+// Pure function: gold bonus for the given combo streak and base harvest value.
+// `streak` must already include the current harvest (i.e. comboAtTap + 1).
+// Donation harvests pass baseGold = 0 so the result is always 0 — no special-case needed.
+export function computeComboGoldBonus(streak: number, baseGold: number): number {
+  if (streak >= COMBO_LEGENDARY_THRESHOLD) {
+    return Math.floor(baseGold * COMBO_LEGENDARY_BONUS_RATIO);
+  }
+  if (streak >= COMBO_GREAT_THRESHOLD) {
+    return Math.floor(baseGold * COMBO_GREAT_BONUS_RATIO);
+  }
+  return 0;
+}
 const SHEET_DISMISS_DRAG_DISTANCE = 96;
 const SHEET_DISMISS_VELOCITY = 1.1;
 const SHEET_DISMISS_TRANSLATE_Y = 520;
@@ -1298,43 +1311,39 @@ export default function FarmGame({
         return result.state;
       }
 
-      // Combo gold bonus: applied only to gold harvests (not donations) so the
-      // RP flow stays untouched. `comboAtTap + 1` is the streak depth including
-      // this harvest (the ref hasn't been incremented yet at tap time), so the
-      // 5th consecutive harvest correctly enters the Great tier.
-      const comboWithThisHarvest = comboAtTap + 1;
-      let comboBonus = 0;
-      let nextState = result.state;
-      if (!event.donated && event.goldGained > 0) {
-        if (comboWithThisHarvest >= COMBO_LEGENDARY_THRESHOLD) {
-          comboBonus = Math.floor(event.goldGained * COMBO_LEGENDARY_BONUS_RATIO);
-        } else if (comboWithThisHarvest >= COMBO_GREAT_THRESHOLD) {
-          comboBonus = Math.floor(event.goldGained * COMBO_GREAT_BONUS_RATIO);
-        }
-        if (comboBonus > 0) {
-          nextState = {
-            ...result.state,
-            gold: result.state.gold + comboBonus,
-            lifetimeStats: {
-              ...result.state.lifetimeStats,
-              totalGoldEarned: result.state.lifetimeStats.totalGoldEarned + comboBonus,
-            },
-          };
-        }
-      }
+      // Combo gold bonus: `comboAtTap + 1` is the streak including this harvest
+      // (the ref hasn't been incremented yet at tap time) so the 5th consecutive
+      // harvest correctly enters the Great tier. Donation harvests pass goldGained=0
+      // so computeComboGoldBonus naturally returns 0 — no extra guard needed.
+      const comboBonus = computeComboGoldBonus(comboAtTap + 1, event.goldGained);
+      const nextState =
+        comboBonus > 0
+          ? {
+              ...result.state,
+              gold: result.state.gold + comboBonus,
+              lifetimeStats: {
+                ...result.state.lifetimeStats,
+                totalGoldEarned: result.state.lifetimeStats.totalGoldEarned + comboBonus,
+              },
+            }
+          : result.state;
 
-      pendingCommandEffectsRef.current.push({
-        id: effectId,
-        type: 'cropHarvested',
-        event,
-        now,
-        comboBonus,
-        shouldShowHarvestBonusNudge:
-          rewardedAd.isAdReady &&
-          getRewardedAdLimitStatus(nextState, 'harvestBonusAd', now).allowed &&
-          getHarvestBonusPromptStatus(nextState, now).allowed &&
-          !event.boostActive,
-      });
+      // Guard against StrictMode/concurrent double-invoke of this updater:
+      // push at most one effect per effectId (same pattern as harvestAllCrops).
+      if (!pendingCommandEffectsRef.current.some((pending) => pending.id === effectId)) {
+        pendingCommandEffectsRef.current.push({
+          id: effectId,
+          type: 'cropHarvested',
+          event,
+          now,
+          comboBonus,
+          shouldShowHarvestBonusNudge:
+            rewardedAd.isAdReady &&
+            getRewardedAdLimitStatus(nextState, 'harvestBonusAd', now).allowed &&
+            getHarvestBonusPromptStatus(nextState, now).allowed &&
+            !event.boostActive,
+        });
+      }
       return nextState;
     });
     setCommandEffectVersion((version) => version + 1);
