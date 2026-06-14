@@ -313,6 +313,24 @@ describe('FarmGame UI flow', () => {
     expect(screen.getAllByText('빈 밭')).toHaveLength(6);
   });
 
+  test('shows mastery rank badge on plots with a ranked crop', async () => {
+    const base = createInitialState();
+    const masteryState: GameState = {
+      ...base,
+      // 10 carrot harvests => Bronze rank (🥉) for tier-1 crops
+      harvestCounts: { carrot: 10 },
+      plots: base.plots.map((plot, index) =>
+        index === 0
+          ? { ...plot, cropType: 'carrot' as CropKey, startTime: NOW, state: 1 as const }
+          : plot
+      ),
+    };
+    const screen = await renderGame(masteryState);
+
+    await waitFor(() => expect(screen.getByTestId('plot-cell-0')).toBeTruthy());
+    expect(within(screen.getByTestId('plot-cell-0')).getByText('🥉')).toBeTruthy();
+  });
+
   test('renders the shared farm UI in English when the saved locale is en-US', async () => {
     const screen = await renderGame(null, {}, { locale: 'en-US' });
 

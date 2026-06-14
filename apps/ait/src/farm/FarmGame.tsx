@@ -1784,6 +1784,10 @@ export default function FarmGame({
             // Resolve growth ratio and countdown together so the crop modifiers
             // are computed once per tile per tick instead of once for each.
             const growth = getPlotGrowthDisplay(gameState, plot);
+            const masteryRankIcon =
+              plot.state !== 0 && plot.cropType != null
+                ? getMasteryStatus(gameState, plot.cropType).rank?.icon
+                : undefined;
             return (
               <PlotCell
                 key={plot.id}
@@ -1796,6 +1800,7 @@ export default function FarmGame({
                 }
                 tileSize={plotTileSize}
                 messages={messages}
+                masteryRankIcon={masteryRankIcon}
                 plantToken={plantPulses[index]}
                 onPlantPulseDone={clearPlantPulse}
                 onPress={onPlotPress}
@@ -2812,6 +2817,7 @@ const PlotCell = React.memo(function PlotCell({
   growthCountdown,
   tileSize,
   messages,
+  masteryRankIcon,
   plantToken,
   onPlantPulseDone,
   onPress,
@@ -2823,6 +2829,7 @@ const PlotCell = React.memo(function PlotCell({
   growthCountdown: string | undefined;
   tileSize: number;
   messages: FarmMessages;
+  masteryRankIcon: string | undefined;
   plantToken: number | undefined;
   onPlantPulseDone: (index: number) => void;
   onPress: (index: number) => void;
@@ -2888,6 +2895,9 @@ const PlotCell = React.memo(function PlotCell({
           onPlantPulseDone={() => onPlantPulseDone(index)}
         />
       )}
+      {masteryRankIcon != null ? (
+        <Text style={styles.masteryRankBadge}>{masteryRankIcon}</Text>
+      ) : null}
     </Pressable>
   );
 });
@@ -4000,6 +4010,13 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 10,
     fontWeight: '800',
+  },
+  masteryRankBadge: {
+    position: 'absolute',
+    bottom: 3,
+    right: 3,
+    fontSize: 11,
+    lineHeight: 13,
   },
   progressTrack: {
     position: 'absolute',
