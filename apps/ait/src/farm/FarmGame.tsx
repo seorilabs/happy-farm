@@ -317,6 +317,7 @@ type PendingFarmCommandEffect =
       now: number;
       shouldShowHarvestBonusNudge: boolean;
       comboBonus: number;
+      streak: number;
     }
   | {
       id: number;
@@ -760,16 +761,19 @@ export default function FarmGame({
       if (gameSettings.soundEffectsEnabled && audio.isSupported) {
         void audio.playHarvest();
       }
-      // Decay window resets here, after confirming the harvest, so blocked
-      // taps never extend the combo window. Ref was already advanced eagerly
-      // in harvestCrop; we only sync the display state and timer here.
+      // Decay window resets here, scheduled relative to effect.now (the actual
+      // harvest time) rather than the current clock, so JS thread delays don't
+      // extend the combo window. Display uses effect.streak so rapid successive
+      // effects each show the correct per-harvest value rather than jumping to
+      // the latest ref value.
       if (comboTimerRef.current != null) clearTimeout(comboTimerRef.current);
+      const remainingMs = Math.max(0, effect.now + COMBO_WINDOW_MS - Date.now());
       comboTimerRef.current = setTimeout(() => {
         harvestComboRef.current = 0;
         setHarvestCombo(0);
         comboTimerRef.current = null;
-      }, COMBO_WINDOW_MS);
-      setHarvestCombo(harvestComboRef.current);
+      }, remainingMs);
+      setHarvestCombo(effect.streak);
     }
   }, [
     analyticsContext,
@@ -1463,6 +1467,7 @@ export default function FarmGame({
           event,
           now,
           comboBonus,
+          streak,
           shouldShowHarvestBonusNudge:
             rewardedAd.isAdReady &&
             getRewardedAdLimitStatus(nextState, 'harvestBonusAd', now).allowed &&

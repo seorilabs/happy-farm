@@ -220,12 +220,11 @@ function createThrowingRewardedAd(error = new Error('sdk dynamic failure message
 }
 
 // Rendering the full farm tree is heavy; the first test additionally pays the
-// module-loading warmup, which can exceed jest's 5s default on slow CI runners.
-jest.setTimeout(15000);
+// module-loading warmup, which can take 30+ s on slow CI runners.
+jest.setTimeout(30000);
 
 describe('FarmGame UI flow', () => {
   beforeEach(() => {
-    jest.setTimeout(30000); // CI runners can be 3-4x slower than local
     jest.useFakeTimers();
     jest.setSystemTime(NOW);
     mockPersistence.readPersistedGameState.mockReset();
