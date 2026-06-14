@@ -768,7 +768,10 @@ export default function FarmGame({
   }, []);
 
   useEffect(() => {
-    const curr = farmState.comboCount;
+    // comboDisplay is the single source of truth for both the visual combo count
+    // and the bonus tier — using it here ensures the tier-up sound fires in the
+    // same render that the display transitions, never a render behind.
+    const curr = comboDisplay;
     const prev = prevComboRef.current;
     prevComboRef.current = curr;
     if (!gameSettings.soundEffectsEnabled || !audio.isSupported) return;
@@ -788,7 +791,7 @@ export default function FarmGame({
         // Synchronous throws from SFX are non-critical.
       }
     }
-  }, [farmState.comboCount, audio, gameSettings.soundEffectsEnabled]);
+  }, [comboDisplay, audio, gameSettings.soundEffectsEnabled]);
 
   const analyticsContext = useCallback(
     (state = gameState) => getGameAnalyticsContext(state, sessionStartedAtRef.current),
@@ -848,88 +851,93 @@ export default function FarmGame({
   // is guaranteed to correspond to a committed game-state change — no phantom
   // effects from aborted concurrent renders. After processing, drain the queue
   // so a follow-up render sees an empty array (and this effect is a no-op).
+  // try/finally guarantees drain even if a side-effect call throws, preventing
+  // the same effects from re-firing on the next render.
   useEffect(() => {
     if (farmState.pendingHarvestEffects.length === 0) return;
-    for (const effect of farmState.pendingHarvestEffects) {
-      const { event } = effect;
-      farmAnalytics.trackCropHarvested({
-        cropKey: event.cropKey,
-        areaKey: event.areaKey,
-        cropTier: event.cropTier,
-        revenue: event.goldGained,
-        isFirstMeaningfulHarvest: event.isFirstMeaningfulHarvest,
-        isFirstCropHarvest: event.isNewCropDiscovery,
-        context: analyticsContext(),
-      });
-      if (event.newMasteryRank != null) {
-        const crop = getCrop(event.cropKey);
-        showMasteryRankUpCelebration({
-          cropIcon: crop.icon,
-          cropName: getLocalizedCropName(event.cropKey),
-          rankKey: event.newMasteryRank.key,
-          rankIcon: event.newMasteryRank.icon,
-          rankName: getMasteryRankLabel(event.newMasteryRank.key, locale).name,
+    try {
+      for (const effect of farmState.pendingHarvestEffects) {
+        const { event } = effect;
+        farmAnalytics.trackCropHarvested({
+          cropKey: event.cropKey,
+          areaKey: event.areaKey,
+          cropTier: event.cropTier,
+          revenue: event.goldGained,
+          isFirstMeaningfulHarvest: event.isFirstMeaningfulHarvest,
+          isFirstCropHarvest: event.isNewCropDiscovery,
+          context: analyticsContext(),
         });
-      } else if (event.donated) {
-        toast(messages.donatedToast(formatMoney(event.rpGained, locale)));
-      } else if (event.mutation != null) {
-        toast(
-          messages.mutationHarvestedToast(
-            getMutationLabel(event.mutation.key, locale).name,
-            event.mutation.icon,
-            formatMoney(event.goldGained, locale)
-          )
-        );
-      } else {
-        toast(
-          event.boostActive
-            ? messages.harvestedBoostToast(formatMoney(event.goldGained, locale), event.boostMultiplier)
-            : messages.harvestedToast(formatMoney(event.goldGained, locale))
-        );
-      }
-      if (effect.shouldShowHarvestBonusNudge) {
-        setGameState((state) => ({ ...state, adUsage: recordHarvestBonusAdPrompt(state, effect.now) }));
-        setActiveSheet({ type: 'harvestBonus' });
-      }
-      const isSpecialHarvest = event.mutation != null || event.newMasteryRank != null || event.boostActive;
-      const mutationKey = event.mutation?.key;
-      const popTone: HarvestPop['tone'] =
-        mutationKey === 'rainbow'
-          ? 'rainbow'
-          : mutationKey === 'golden'
-            ? 'golden'
-            : isSpecialHarvest
-              ? 'special'
-              : 'normal';
-      if (event.goldGained > 0) {
-        harvestFxRef.current?.spawn(
-          event.plotIndex,
-          `+${formatMoney(event.goldGained, locale)}`,
-          popTone
-        );
-        pulseGold();
-      }
-      if (event.mutation != null) {
-        const mutKey = event.mutation.key;
-        if (mutKey === 'golden' || mutKey === 'rainbow') {
-          mutationFlashRef.current?.flash(mutKey);
+        if (event.newMasteryRank != null) {
+          const crop = getCrop(event.cropKey);
+          showMasteryRankUpCelebration({
+            cropIcon: crop.icon,
+            cropName: getLocalizedCropName(event.cropKey),
+            rankKey: event.newMasteryRank.key,
+            rankIcon: event.newMasteryRank.icon,
+            rankName: getMasteryRankLabel(event.newMasteryRank.key, locale).name,
+          });
+        } else if (event.donated) {
+          toast(messages.donatedToast(formatMoney(event.rpGained, locale)));
+        } else if (event.mutation != null) {
+          toast(
+            messages.mutationHarvestedToast(
+              getMutationLabel(event.mutation.key, locale).name,
+              event.mutation.icon,
+              formatMoney(event.goldGained, locale)
+            )
+          );
+        } else {
+          toast(
+            event.boostActive
+              ? messages.harvestedBoostToast(formatMoney(event.goldGained, locale), event.boostMultiplier)
+              : messages.harvestedToast(formatMoney(event.goldGained, locale))
+          );
         }
+        if (effect.shouldShowHarvestBonusNudge) {
+          setGameState((state) => ({ ...state, adUsage: recordHarvestBonusAdPrompt(state, effect.now) }));
+          setActiveSheet({ type: 'harvestBonus' });
+        }
+        const isSpecialHarvest = event.mutation != null || event.newMasteryRank != null || event.boostActive;
+        const mutationKey = event.mutation?.key;
+        const popTone: HarvestPop['tone'] =
+          mutationKey === 'rainbow'
+            ? 'rainbow'
+            : mutationKey === 'golden'
+              ? 'golden'
+              : isSpecialHarvest
+                ? 'special'
+                : 'normal';
+        if (event.goldGained > 0) {
+          harvestFxRef.current?.spawn(
+            event.plotIndex,
+            `+${formatMoney(event.goldGained, locale)}`,
+            popTone
+          );
+          pulseGold();
+        }
+        if (event.mutation != null) {
+          const mutKey = event.mutation.key;
+          if (mutKey === 'golden' || mutKey === 'rainbow') {
+            mutationFlashRef.current?.flash(mutKey);
+          }
+        }
+        if (event.isNewCropDiscovery) {
+          const crop = getCrop(event.cropKey);
+          discoveryBannerRef.current?.show(crop.icon, getLocalizedCropName(event.cropKey));
+        }
+        if (isSpecialHarvest && Platform.OS === 'android') {
+          Vibration.vibrate([0, 24, 36, 48]);
+        } else {
+          Vibration.vibrate(50);
+        }
+        if (gameSettings.soundEffectsEnabled && audio.isSupported) {
+          void audio.playHarvest();
+        }
+        advanceCombo();
       }
-      if (event.isNewCropDiscovery) {
-        const crop = getCrop(event.cropKey);
-        discoveryBannerRef.current?.show(crop.icon, getLocalizedCropName(event.cropKey));
-      }
-      if (isSpecialHarvest && Platform.OS === 'android') {
-        Vibration.vibrate([0, 24, 36, 48]);
-      } else {
-        Vibration.vibrate(50);
-      }
-      if (gameSettings.soundEffectsEnabled && audio.isSupported) {
-        void audio.playHarvest();
-      }
-      advanceCombo();
+    } finally {
+      farmDispatch({ type: 'DRAIN_HARVEST_EFFECTS' });
     }
-    farmDispatch({ type: 'DRAIN_HARVEST_EFFECTS' });
   }, [
     farmState.pendingHarvestEffects,
     advanceCombo,
@@ -951,49 +959,53 @@ export default function FarmGame({
   // Process a committed harvestAll effect from the reducer. The guard flag and
   // combo advance are both driven from here so they always reflect the actual
   // committed state change rather than the moment of dispatch.
+  // harvestAllInFlightRef is cleared before the try so it resets even if
+  // feedback throws. try/finally ensures the drain always fires.
   useEffect(() => {
     if (farmState.pendingHarvestAllEffect == null) return;
     const effect = farmState.pendingHarvestAllEffect;
-    // Release the guard first so a no-op (ripe set drifted) still unblocks.
     harvestAllInFlightRef.current = false;
-    if (effect.harvestedCount > 0) {
-      for (const fx of effect.fx) {
-        if (fx.goldGained > 0) {
-          harvestFxRef.current?.spawn(
-            fx.plotIndex,
-            `+${formatMoney(fx.goldGained, locale)}`,
-            fx.special ? 'special' : 'normal'
-          );
+    try {
+      if (effect.harvestedCount > 0) {
+        for (const fx of effect.fx) {
+          if (fx.goldGained > 0) {
+            harvestFxRef.current?.spawn(
+              fx.plotIndex,
+              `+${formatMoney(fx.goldGained, locale)}`,
+              fx.special ? 'special' : 'normal'
+            );
+          }
         }
+        // Donation mode converts the batch into research points; key the toast
+        // on RP earned (not "gold === 0") so a future zero-value crop still
+        // reads as a harvest rather than a donation.
+        if (effect.totalRpGained > 0) {
+          toast(messages.harvestAllDonatedToast(formatMoney(effect.totalRpGained, locale), effect.harvestedCount));
+        } else {
+          toast(messages.harvestAllToast(formatMoney(effect.totalGoldGained, locale), effect.harvestedCount));
+        }
+        if (effect.totalGoldGained > 0) {
+          pulseGold();
+        }
+        farmAnalytics.trackHarvestAll({
+          harvestedCount: effect.harvestedCount,
+          totalGold: effect.totalGoldGained,
+          specialCount: effect.specialCount,
+          context: analyticsContext(),
+        });
+        if (effect.specialCount > 0 && Platform.OS === 'android') {
+          Vibration.vibrate([0, 24, 36, 48]);
+        } else {
+          Vibration.vibrate(50);
+        }
+        if (gameSettings.soundEffectsEnabled && audio.isSupported) {
+          void audio.playHarvest();
+        }
+        advanceCombo();
       }
-      // Donation mode converts the batch into research points; key the toast
-      // on RP earned (not "gold === 0") so a future zero-value crop still
-      // reads as a harvest rather than a donation.
-      if (effect.totalRpGained > 0) {
-        toast(messages.harvestAllDonatedToast(formatMoney(effect.totalRpGained, locale), effect.harvestedCount));
-      } else {
-        toast(messages.harvestAllToast(formatMoney(effect.totalGoldGained, locale), effect.harvestedCount));
-      }
-      if (effect.totalGoldGained > 0) {
-        pulseGold();
-      }
-      farmAnalytics.trackHarvestAll({
-        harvestedCount: effect.harvestedCount,
-        totalGold: effect.totalGoldGained,
-        specialCount: effect.specialCount,
-        context: analyticsContext(),
-      });
-      if (effect.specialCount > 0 && Platform.OS === 'android') {
-        Vibration.vibrate([0, 24, 36, 48]);
-      } else {
-        Vibration.vibrate(50);
-      }
-      if (gameSettings.soundEffectsEnabled && audio.isSupported) {
-        void audio.playHarvest();
-      }
-      advanceCombo();
+    } finally {
+      farmDispatch({ type: 'DRAIN_HARVEST_ALL_EFFECT' });
     }
-    farmDispatch({ type: 'DRAIN_HARVEST_ALL_EFFECT' });
   }, [
     farmState.pendingHarvestAllEffect,
     advanceCombo,
