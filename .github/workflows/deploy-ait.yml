@@ -25,7 +25,7 @@ concurrency:
 jobs:
   deploy:
     name: AIT artifact deploy
-    runs-on: seorilabs-rpi-arm64
+    runs-on: ubuntu-latest
     timeout-minutes: 25
     environment: apps-in-toss
 

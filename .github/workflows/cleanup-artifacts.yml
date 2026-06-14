@@ -25,7 +25,7 @@ concurrency:
 jobs:
   cleanup:
     name: Delete old artifacts
-    runs-on: seorilabs-rpi-arm64
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - name: Delete artifacts

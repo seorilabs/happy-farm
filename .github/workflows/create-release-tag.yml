@@ -32,7 +32,7 @@ concurrency:
 jobs:
   create-release-tag:
     name: Create release tag
-    runs-on: seorilabs-rpi-arm64
+    runs-on: ubuntu-latest
     timeout-minutes: 10
 
     steps:
