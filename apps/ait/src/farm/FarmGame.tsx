@@ -153,9 +153,9 @@ const COMBO_LEGENDARY_BONUS_RATIO = 0.25;
 
 // Pure function: gold bonus for the given combo streak and base harvest value.
 // `streak` must already include the current harvest (i.e. the post-increment value).
-// Callers must guard with `!event.donated` before invoking; this function does
-// not inspect donation status and will return a non-zero bonus if baseGold > 0.
-export function computeComboGoldBonus(streak: number, baseGold: number): number {
+// Donation harvests always return 0 regardless of baseGold.
+export function computeComboGoldBonus(streak: number, baseGold: number, isDonation: boolean): number {
+  if (isDonation) return 0;
   if (streak >= COMBO_LEGENDARY_THRESHOLD) {
     return Math.floor(baseGold * COMBO_LEGENDARY_BONUS_RATIO);
   }
@@ -1440,9 +1440,8 @@ export default function FarmGame({
       }
       const streak = harvestComboRef.current;
 
-      // Combo gold bonus: applied only to non-donation harvests. event.donated
-      // is checked explicitly so the guard stays valid if donation semantics change.
-      const comboBonus = !event.donated ? computeComboGoldBonus(streak, event.goldGained) : 0;
+      // computeComboGoldBonus returns 0 when isDonation is true, so no external guard needed.
+      const comboBonus = computeComboGoldBonus(streak, event.goldGained, event.donated);
       const nextState =
         comboBonus > 0
           ? {

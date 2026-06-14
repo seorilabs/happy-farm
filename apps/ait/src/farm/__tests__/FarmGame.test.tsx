@@ -34,31 +34,37 @@ const { GAME_TICK_INTERVAL_MS, MASTERY_RANK_UP_CELEBRATION_DURATION_MS, computeC
 
 describe('computeComboGoldBonus', () => {
   test('no bonus below great threshold', () => {
-    expect(computeComboGoldBonus(0, 1000)).toBe(0);
-    expect(computeComboGoldBonus(1, 1000)).toBe(0);
-    expect(computeComboGoldBonus(4, 1000)).toBe(0);
+    expect(computeComboGoldBonus(0, 1000, false)).toBe(0);
+    expect(computeComboGoldBonus(1, 1000, false)).toBe(0);
+    expect(computeComboGoldBonus(4, 1000, false)).toBe(0);
   });
 
   test('great bonus (10%) applies from streak 5', () => {
-    expect(computeComboGoldBonus(5, 1000)).toBe(100);
-    expect(computeComboGoldBonus(9, 1000)).toBe(100);
+    expect(computeComboGoldBonus(5, 1000, false)).toBe(100);
+    expect(computeComboGoldBonus(9, 1000, false)).toBe(100);
   });
 
   test('legendary bonus (25%) applies from streak 10', () => {
-    expect(computeComboGoldBonus(10, 1000)).toBe(250);
-    expect(computeComboGoldBonus(99, 1000)).toBe(250);
+    expect(computeComboGoldBonus(10, 1000, false)).toBe(250);
+    expect(computeComboGoldBonus(99, 1000, false)).toBe(250);
   });
 
   test('floors the result — no fractional gold', () => {
     // 14 * 0.1 = 1.4 → floors to 1
-    expect(computeComboGoldBonus(5, 14)).toBe(1);
+    expect(computeComboGoldBonus(5, 14, false)).toBe(1);
     // 3 * 0.25 = 0.75 → floors to 0
-    expect(computeComboGoldBonus(10, 3)).toBe(0);
+    expect(computeComboGoldBonus(10, 3, false)).toBe(0);
   });
 
-  test('baseGold 0 always yields 0 (donation mode guard)', () => {
-    expect(computeComboGoldBonus(5, 0)).toBe(0);
-    expect(computeComboGoldBonus(10, 0)).toBe(0);
+  test('donation harvests always yield 0 regardless of baseGold', () => {
+    expect(computeComboGoldBonus(5, 1000, true)).toBe(0);
+    expect(computeComboGoldBonus(10, 1000, true)).toBe(0);
+    expect(computeComboGoldBonus(99, 9999, true)).toBe(0);
+  });
+
+  test('baseGold 0 yields 0 even without donation flag', () => {
+    expect(computeComboGoldBonus(5, 0, false)).toBe(0);
+    expect(computeComboGoldBonus(10, 0, false)).toBe(0);
   });
 });
 const mockPersistence = {
