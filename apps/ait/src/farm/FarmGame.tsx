@@ -692,7 +692,8 @@ export default function FarmGame({
       if (gameSettings.soundEffectsEnabled && audio.isSupported) {
         void audio.playHarvest();
       }
-      incrementCombo(1);
+      // ref was already advanced eagerly in harvestCrop; just sync the display state.
+      setHarvestCombo(harvestComboRef.current);
     }
   }, [
     analyticsContext,
@@ -701,7 +702,6 @@ export default function FarmGame({
     farmAnalytics,
     gameSettings.soundEffectsEnabled,
     getLocalizedCropName,
-    incrementCombo,
     locale,
     messages,
     pulseGold,
@@ -1337,13 +1337,22 @@ export default function FarmGame({
   function harvestCrop(index: number) {
     const now = Date.now();
     const effectId = ++commandEffectIdRef.current;
-    // Capture the current combo streak synchronously before any state update;
-    // the updater below runs asynchronously so reading state here is safe.
+    // Eagerly capture and advance the combo ref so back-to-back harvests
+    // within a single render frame see the correct streak depth. The ref is
+    // the source of truth for bonus calculation; setHarvestCombo (for the
+    // display) is synced to it in the pending-effect drain loop after commit.
     const comboAtTap = harvestComboRef.current;
-    // Fix the mutation roll outside the updater so both invocations of the
-    // updater (React StrictMode double-invoke) use the same roll, keeping the
-    // committed state and the queued FX payload consistent. harvestAllCrops
-    // uses the same pattern (rollByPlot built outside setGameState).
+    harvestComboRef.current += 1;
+    // Reset the decay window so every tap extends the streak correctly even
+    // before the effects are flushed.
+    if (comboTimerRef.current != null) {
+      clearTimeout(comboTimerRef.current);
+    }
+    comboTimerRef.current = setTimeout(() => {
+      harvestComboRef.current = 0;
+      setHarvestCombo(0);
+      comboTimerRef.current = null;
+    }, COMBO_WINDOW_MS);
     const roll = Math.random();
     setGameState((state) => {
       const result = executeFarmGameCommand(
@@ -1352,6 +1361,9 @@ export default function FarmGame({
         { now, rng: () => roll }
       );
       if (result.status === 'blocked') {
+        // Undo the eager ref increment — the harvest didn't happen.
+        // Math.max guards against double-decrement on StrictMode re-invoke.
+        harvestComboRef.current = Math.max(0, harvestComboRef.current - 1);
         return state;
       }
       const event = result.events[0];
