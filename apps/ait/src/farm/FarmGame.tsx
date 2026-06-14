@@ -1260,8 +1260,11 @@ export default function FarmGame({
   function harvestCrop(index: number) {
     const now = Date.now();
     const effectId = ++commandEffectIdRef.current;
+    // Pre-generate the mutation roll outside the updater so a StrictMode
+    // double-invoke uses the same roll for both the committed state and the
+    // queued FX event — matching the pattern used in harvestAllCrops.
+    const roll = Math.random();
     setGameState((state) => {
-      const roll = Math.random();
       const result = executeFarmGameCommand(
         state,
         { type: 'harvestCrop', plotIndex: index },
