@@ -1,5 +1,5 @@
 import { Video, type VideoRef } from '@granite-js/react-native';
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Platform, StyleSheet } from 'react-native';
 
 import type { FarmGameAudio } from '../FarmGame';
@@ -49,12 +49,32 @@ function createPlaybackFailureWarning(uri: string) {
 const warnBackgroundMusicFailure = createPlaybackFailureWarning(FARM_AUDIO_SOURCES.backgroundMusic);
 const warnHarvestCoinFailure = createPlaybackFailureWarning(FARM_AUDIO_SOURCES.harvestCoin);
 
+// Combo milestone: playing the coin sound from two/three players in rapid
+// succession gives a "ka-ching ching" double-hit at Great and a triple-hit
+// at Legendary without needing separate audio assets.
+const COMBO_BONUS_DELAY_MS = 90;
+
 export function useAppsInTossFarmAudio(): { audio: FarmGameAudio; audioElement: React.ReactNode } {
   const harvestPlayerRef = useRef<VideoRef | null>(null);
+  const comboBonusOneRef = useRef<VideoRef | null>(null);
+  const comboBonusTwoRef = useRef<VideoRef | null>(null);
+  const comboMilestoneTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [backgroundMusicEnabled, setBackgroundMusicEnabled] = useState(false);
   const [harvestPlaying, setHarvestPlaying] = useState(false);
+  const [comboBonusOnePlaying, setComboBonusOnePlaying] = useState(false);
+  const [comboBonusTwoPlaying, setComboBonusTwoPlaying] = useState(false);
 
   const stopHarvestPlayback = useCallback(() => setHarvestPlaying(false), []);
+  const stopComboBonusOnePlayback = useCallback(() => setComboBonusOnePlaying(false), []);
+  const stopComboBonusTwoPlayback = useCallback(() => setComboBonusTwoPlaying(false), []);
+
+  useEffect(() => {
+    return () => {
+      if (comboMilestoneTimerRef.current != null) {
+        clearTimeout(comboMilestoneTimerRef.current);
+      }
+    };
+  }, []);
 
   const audio = useMemo<FarmGameAudio>(
     () => ({
@@ -62,6 +82,21 @@ export function useAppsInTossFarmAudio(): { audio: FarmGameAudio; audioElement: 
       playHarvest: () => {
         harvestPlayerRef.current?.seek(0);
         setHarvestPlaying(true);
+      },
+      playComboMilestone: (tier) => {
+        if (comboMilestoneTimerRef.current != null) {
+          clearTimeout(comboMilestoneTimerRef.current);
+          comboMilestoneTimerRef.current = null;
+        }
+        comboBonusOneRef.current?.seek(0);
+        setComboBonusOnePlaying(true);
+        if (tier === 'legendary') {
+          comboMilestoneTimerRef.current = setTimeout(() => {
+            comboBonusTwoRef.current?.seek(0);
+            setComboBonusTwoPlaying(true);
+            comboMilestoneTimerRef.current = null;
+          }, COMBO_BONUS_DELAY_MS);
+        }
       },
       setBackgroundMusicEnabled,
     }),
@@ -80,6 +115,30 @@ export function useAppsInTossFarmAudio(): { audio: FarmGameAudio; audioElement: 
         source={FARM_AUDIO_VIDEO_SOURCES.backgroundMusic}
         style={styles.hiddenPlayer}
         volume={BACKGROUND_MUSIC_VOLUME}
+      />
+      <Video
+        {...audioFocusProps}
+        ref={comboBonusOneRef}
+        ignoreSilentSwitch="ignore"
+        onAudioFocusChanged={keepPlaybackOnAudioFocusChange}
+        onEnd={stopComboBonusOnePlayback}
+        onError={warnHarvestCoinFailure}
+        paused={!comboBonusOnePlaying}
+        source={FARM_AUDIO_VIDEO_SOURCES.harvestCoin}
+        style={styles.hiddenPlayer}
+        volume={HARVEST_VOLUME}
+      />
+      <Video
+        {...audioFocusProps}
+        ref={comboBonusTwoRef}
+        ignoreSilentSwitch="ignore"
+        onAudioFocusChanged={keepPlaybackOnAudioFocusChange}
+        onEnd={stopComboBonusTwoPlayback}
+        onError={warnHarvestCoinFailure}
+        paused={!comboBonusTwoPlaying}
+        source={FARM_AUDIO_VIDEO_SOURCES.harvestCoin}
+        style={styles.hiddenPlayer}
+        volume={HARVEST_VOLUME}
       />
       <Video
         {...audioFocusProps}

@@ -39,6 +39,8 @@ const {
   GAME_TICK_INTERVAL_MS,
   MASTERY_RANK_UP_CELEBRATION_DURATION_MS,
   PRESTIGE_GRADUATION_CELEBRATION_DURATION_MS,
+  COMBO_GREAT_THRESHOLD,
+  COMBO_LEGENDARY_THRESHOLD,
 } = farmGameModule;
 const mockPersistence = {
   readPersistedGameState: jest.fn<Promise<GameState>, []>(),
@@ -804,6 +806,7 @@ describe('FarmGame UI flow', () => {
       audio: {
         isSupported: true,
         playHarvest,
+        playComboMilestone: jest.fn(),
         setBackgroundMusicEnabled: jest.fn(),
       },
     });
@@ -813,6 +816,84 @@ describe('FarmGame UI flow', () => {
     fireEvent.press(screen.getAllByText('GET')[0]!);
 
     expect(playHarvest).toHaveBeenCalledTimes(1);
+  });
+
+  test('fires combo great milestone audio when combo crosses the great tier threshold', async () => {
+    const lateGame = createLateGameState();
+    const playComboMilestone = jest.fn();
+    const screen = await renderGame(lateGame, {
+      audio: {
+        isSupported: true,
+        playHarvest: jest.fn(),
+        playComboMilestone,
+        setBackgroundMusicEnabled: jest.fn(),
+      },
+    });
+
+    await waitFor(() =>
+      expect(screen.getAllByText('GET').length).toBeGreaterThanOrEqual(COMBO_GREAT_THRESHOLD)
+    );
+
+    for (let i = 0; i < COMBO_GREAT_THRESHOLD; i++) {
+      fireEvent.press(screen.getAllByText('GET')[0]!);
+    }
+
+    await waitFor(() => {
+      expect(playComboMilestone).toHaveBeenCalledWith('great');
+      expect(playComboMilestone).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  test('fires combo legendary milestone audio when combo crosses the legendary tier threshold', async () => {
+    const lateGame = createLateGameState();
+    const playComboMilestone = jest.fn();
+    const screen = await renderGame(lateGame, {
+      audio: {
+        isSupported: true,
+        playHarvest: jest.fn(),
+        playComboMilestone,
+        setBackgroundMusicEnabled: jest.fn(),
+      },
+    });
+
+    await waitFor(() =>
+      expect(screen.getAllByText('GET').length).toBeGreaterThanOrEqual(COMBO_LEGENDARY_THRESHOLD)
+    );
+
+    for (let i = 0; i < COMBO_LEGENDARY_THRESHOLD; i++) {
+      fireEvent.press(screen.getAllByText('GET')[0]!);
+    }
+
+    await waitFor(() => {
+      expect(playComboMilestone).toHaveBeenNthCalledWith(1, 'great');
+      expect(playComboMilestone).toHaveBeenNthCalledWith(2, 'legendary');
+      expect(playComboMilestone).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  test('batch harvest fires only legendary when combo jumps past great in one action', async () => {
+    // Intentional design: a single harvestAll action that pushes combo past both
+    // thresholds at once triggers only the highest milestone reached, not great+legendary.
+    const lateGame = createLateGameState();
+    const playComboMilestone = jest.fn();
+    const harvestAllLabel = getFarmMessages().harvestAllButton(MAX_PLOTS);
+    const screen = await renderGame(lateGame, {
+      audio: {
+        isSupported: true,
+        playHarvest: jest.fn(),
+        playComboMilestone,
+        setBackgroundMusicEnabled: jest.fn(),
+      },
+    });
+
+    await waitFor(() => expect(screen.getByText(harvestAllLabel)).toBeTruthy());
+    fireEvent.press(screen.getByText(harvestAllLabel));
+
+    await waitFor(() => {
+      expect(playComboMilestone).toHaveBeenCalledWith('legendary');
+      expect(playComboMilestone).not.toHaveBeenCalledWith('great');
+      expect(playComboMilestone).toHaveBeenCalledTimes(1);
+    });
   });
 
   test('spaces out harvest bonus nudges by time after the player declines one', async () => {
