@@ -1881,7 +1881,7 @@ export default function FarmGame({
 
       {harvestCombo >= 2 ? (
         <View pointerEvents="none" style={styles.comboOverlay}>
-          <ComboDisplay count={harvestCombo} messages={messages} />
+          <ComboDisplay count={harvestCombo} messages={messages} donationModeEnabled={gameState.automationSettings.donationModeEnabled} />
         </View>
       ) : null}
 
@@ -2452,7 +2452,7 @@ function PrestigeGraduationOverlay({
 // change is unmistakable; tiers escalate icon and color at 5× and 10×.
 // Animation: quick pop to 1.25× then spring back to 1.0, starting from
 // whatever scale the previous animation left — no snapping on rapid taps.
-function ComboDisplay({ count, messages }: { count: number; messages: FarmMessages }) {
+function ComboDisplay({ count, messages, donationModeEnabled }: { count: number; messages: FarmMessages; donationModeEnabled: boolean }) {
   const scaleRef = useRef<Animated.Value | null>(null);
   if (scaleRef.current == null) {
     scaleRef.current = new Animated.Value(0.6);
@@ -2539,7 +2539,7 @@ function ComboDisplay({ count, messages }: { count: number; messages: FarmMessag
       >
         {icon} {messages.comboLabel(count)}
       </Text>
-      {bonusPercent > 0 ? (
+      {bonusPercent > 0 && !donationModeEnabled ? (
         <Text
           style={[
             styles.comboBonusText,

@@ -177,7 +177,8 @@ export function performHarvest(gameState: GameState, plotIndex: number, options:
   // Donation mode converts the full sale value (mutations included) into
   // research points instead of gold.
   const donated = gameState.automationSettings.donationModeEnabled;
-  const comboMultiplier = options.comboMultiplier ?? 1;
+  const raw = options.comboMultiplier;
+  const comboMultiplier = typeof raw === 'number' && isFinite(raw) && raw >= 1 ? raw : 1;
   const goldGained = donated ? 0 : Math.floor(saleValue * comboMultiplier);
   const rpGained = donated ? getDonationRp(gameState, saleValue) : 0;
 
@@ -234,7 +235,7 @@ export function performHarvest(gameState: GameState, plotIndex: number, options:
     donated,
     boostActive: modifiers.harvestMultiplier > 1,
     boostMultiplier: modifiers.harvestMultiplier,
-    comboMultiplier,
+    comboMultiplier: donated ? 1 : comboMultiplier,
     isNewCropDiscovery,
     isFirstMeaningfulHarvest,
     mutation,

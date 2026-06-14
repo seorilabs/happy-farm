@@ -168,4 +168,30 @@ describe('performHarvest — comboMultiplier', () => {
     expect(outcome!.donated).toBe(true);
     expect(outcome!.rpGained).toBeGreaterThan(0);
   });
+
+  test('donation mode records effective comboMultiplier as 1 regardless of input', () => {
+    const base = createInitialState();
+    const donating: GameState = {
+      ...base,
+      automationSettings: { ...base.automationSettings, donationModeEnabled: true },
+    };
+    const ripe = withRipePlots(donating, [0]);
+    const outcome = performHarvest(ripe, 0, { now: 0, rng: noMutationRng, comboMultiplier: 1.15 });
+    expect(outcome).not.toBeNull();
+    expect(outcome!.comboMultiplier).toBe(1);
+  });
+
+  test('clamps invalid comboMultiplier values (NaN, Infinity, negative, <1) to 1', () => {
+    const ripe = withRipePlots(createInitialState(), [0]);
+    const base = performHarvest(ripe, 0, { now: 0, rng: noMutationRng });
+    expect(base).not.toBeNull();
+
+    for (const badValue of [NaN, Infinity, -1, 0, 0.5]) {
+      const outcome = performHarvest(ripe, 0, { now: 0, rng: noMutationRng, comboMultiplier: badValue });
+      expect(outcome).not.toBeNull();
+      expect(outcome!.comboMultiplier).toBe(1);
+      expect(outcome!.goldGained).toBe(base!.goldGained);
+      expect(Number.isFinite(outcome!.state.gold)).toBe(true);
+    }
+  });
 });
