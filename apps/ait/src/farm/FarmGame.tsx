@@ -2130,6 +2130,17 @@ const DiscoveryBanner = React.forwardRef<
   }
   const opacity = opacityRef.current;
 
+  // Holds the running animation so the useEffect cleanup can cancel it, and so
+  // show() can interrupt a still-playing sequence.
+  const animationRef = useRef<Animated.CompositeAnimation | null>(null);
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+      animationRef.current?.stop();
+    };
+  }, []);
+
   useImperativeHandle(
     ref,
     () => ({
@@ -2139,7 +2150,7 @@ const DiscoveryBanner = React.forwardRef<
         translateY.setValue(80);
         opacity.stopAnimation();
         opacity.setValue(0);
-        Animated.sequence([
+        animationRef.current = Animated.sequence([
           Animated.parallel([
             Animated.timing(translateY, {
               toValue: 0,
@@ -2169,8 +2180,9 @@ const DiscoveryBanner = React.forwardRef<
               useNativeDriver: true,
             }),
           ]),
-        ]).start(({ finished }) => {
-          if (finished) {
+        ]);
+        animationRef.current.start(({ finished }) => {
+          if (finished && isMountedRef.current) {
             setEntry(null);
           }
         });
@@ -2179,21 +2191,25 @@ const DiscoveryBanner = React.forwardRef<
     [translateY, opacity]
   );
 
-  if (entry == null) {
-    return null;
-  }
-
+  // Always mounted so the native animated node is live before show() starts
+  // the animation. Returning null when entry == null would create a race:
+  // setEntry() schedules a re-render while the native animation starts
+  // immediately, so the first frames can be lost before the view mounts.
   return (
     <Animated.View
       pointerEvents="none"
       style={[styles.discoveryBanner, { transform: [{ translateY }], opacity }]}
     >
-      <Text style={styles.discoveryBannerIcon}>{entry.icon}</Text>
-      <View>
-        <Text style={styles.discoveryBannerTitle}>{title}</Text>
-        <Text style={styles.discoveryBannerName}>{entry.name}</Text>
-        <Text style={styles.discoveryBannerSubtitle}>{subtitle}</Text>
-      </View>
+      {entry != null ? (
+        <>
+          <Text style={styles.discoveryBannerIcon}>{entry.icon}</Text>
+          <View>
+            <Text style={styles.discoveryBannerTitle}>{title}</Text>
+            <Text style={styles.discoveryBannerName}>{entry.name}</Text>
+            <Text style={styles.discoveryBannerSubtitle}>{subtitle}</Text>
+          </View>
+        </>
+      ) : null}
     </Animated.View>
   );
 });
