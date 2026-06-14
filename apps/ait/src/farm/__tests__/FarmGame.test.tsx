@@ -5,6 +5,7 @@ import { Vibration } from 'react-native';
 import { act, cleanup, fireEvent, render, waitFor, within } from '@testing-library/react-native';
 import {
   CROPS,
+  DEFAULT_LOCALE,
   FARM_AREAS,
   HARVEST_BONUS_AD_COOLDOWN_MS,
   HARVEST_BONUS_MULTIPLIER,
@@ -705,8 +706,9 @@ describe('FarmGame UI flow', () => {
   });
 
   const prestigeMessages = getFarmMessages();
-  const tundra = REGION_ARCHETYPES.find((a) => a.key === 'tundra')!;
-  const tundraName = getRegionArchetypeLabel(tundra.key, 'ko-KR').name;
+  const tundra = REGION_ARCHETYPES.find((a) => a.key === 'tundra');
+  if (tundra == null) throw new Error('tundra archetype missing from REGION_ARCHETYPES');
+  const tundraName = getRegionArchetypeLabel(tundra.key, DEFAULT_LOCALE).name;
 
   function createPrestigeReadyState(): GameState {
     const base = createInitialState();
@@ -720,8 +722,8 @@ describe('FarmGame UI flow', () => {
   }
 
   async function triggerPrestige(screen: ReturnType<typeof render>) {
-    await waitFor(() => expect(screen.getByText('★ 0')).toBeTruthy());
-    fireEvent.press(screen.getByText('🗺️ 개척'));
+    await waitFor(() => expect(screen.getByTestId('prestige-stars-chip')).toBeTruthy());
+    fireEvent.press(screen.getByLabelText(prestigeMessages.mapButtonAccessibilityLabel));
     fireEvent.press(screen.getByText(prestigeMessages.prestigeAction(PRESTIGE_STARS_BASE)));
     fireEvent.press(screen.getByText(new RegExp(tundraName)));
     fireEvent.press(screen.getByText(prestigeMessages.prestigeConfirmAction(PRESTIGE_STARS_BASE)));

@@ -1565,7 +1565,7 @@ export default function FarmGame({
           </View>
 
           <View style={styles.headerActions}>
-            <Text style={styles.starsChip}>★ {gameState.prestige.stars}</Text>
+            <Text testID="prestige-stars-chip" style={styles.starsChip}>★ {gameState.prestige.stars}</Text>
             <Pressable
               accessibilityLabel={messages.settingsAccessibilityLabel}
               hitSlop={8}
