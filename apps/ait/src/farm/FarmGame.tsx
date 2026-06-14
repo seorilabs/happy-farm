@@ -794,19 +794,28 @@ export default function FarmGame({
       if (gameSettings.soundEffectsEnabled && audio.isSupported) {
         void audio.playHarvest();
       }
-      // Decay window resets here, scheduled relative to effect.now (the actual
-      // harvest time) rather than the current clock, so JS thread delays don't
-      // extend the combo window. Display uses effect.streak so rapid successive
-      // effects each show the correct per-harvest value rather than jumping to
-      // the latest ref value.
+      // Timer is scheduled relative to effect.now (actual harvest time) so JS
+      // thread delays don't extend the combo window. We also re-sync the ref
+      // here because the old timer may have fired between the state updater and
+      // this effect handler (macrotask vs. React commit), leaving ref=0 while
+      // the updater already incremented it. If the window already expired
+      // (remainingMs===0), skip displaying the combo and immediately clear so
+      // a stale streak is never shown.
       if (comboTimerRef.current != null) clearTimeout(comboTimerRef.current);
       const remainingMs = Math.max(0, effect.now + COMBO_WINDOW_MS - Date.now());
-      comboTimerRef.current = setTimeout(() => {
+      if (remainingMs === 0) {
         harvestComboRef.current = 0;
         setHarvestCombo(0);
         comboTimerRef.current = null;
-      }, remainingMs);
-      setHarvestCombo(effect.streak);
+      } else {
+        harvestComboRef.current = effect.streak;
+        comboTimerRef.current = setTimeout(() => {
+          harvestComboRef.current = 0;
+          setHarvestCombo(0);
+          comboTimerRef.current = null;
+        }, remainingMs);
+        setHarvestCombo(effect.streak);
+      }
     }
   }, [
     analyticsContext,

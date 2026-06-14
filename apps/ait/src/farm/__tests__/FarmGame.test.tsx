@@ -141,6 +141,19 @@ function createReadyHarvestState(): GameState {
   };
 }
 
+function createSixReadyHarvestState(): GameState {
+  const base = createInitialState();
+  return {
+    ...base,
+    plots: base.plots.map((plot) => ({
+      ...plot,
+      cropType: 'carrot' as const,
+      startTime: NOW - 10_000,
+      state: 2 as const,
+    })),
+  };
+}
+
 function createGrowingCropState(): GameState {
   const base = createInitialState();
 
@@ -332,6 +345,27 @@ describe('FarmGame UI flow', () => {
 
     await waitFor(() => expect(screen.getByText('78G')).toBeTruthy());
     expect(screen.getAllByText('빈 밭')).toHaveLength(6);
+  });
+
+  test('5회 이상 연속 수확 시 Great 콤보 보너스(10%)가 gold에 반영된다', async () => {
+    // Carrot sell = 14G, initial gold = 50G, no upgrades.
+    // Harvests 1-4 (streak < 5): no bonus, +14G each → 106G
+    // Harvest 5 (streak 5, Great): +14 + floor(14*10/100)=1 → 121G
+    // Harvest 6 (streak 6, Great): +15 → 136G
+    // Without bonus 6 harvests would be: 50 + 14*6 = 134G
+    const screen = await renderGame(createSixReadyHarvestState());
+    await waitFor(() => expect(screen.getByText('50G')).toBeTruthy());
+
+    const getButtons = screen.getAllByText('GET');
+    expect(getButtons).toHaveLength(6);
+
+    await act(async () => {
+      for (const btn of getButtons) {
+        fireEvent.press(btn);
+      }
+    });
+
+    await waitFor(() => expect(screen.getByText('136G')).toBeTruthy());
   });
 
   test('renders the shared farm UI in English when the saved locale is en-US', async () => {
