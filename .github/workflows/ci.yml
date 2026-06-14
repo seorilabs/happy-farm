@@ -3,6 +3,7 @@ name: Validate
 on:
   pull_request:
     branches:
+      - develop
       - main
     paths-ignore:
       - '**.md'
@@ -17,7 +18,8 @@ on:
       - 'play-store/screenshots/**'
       - '.github/workflows/deploy-*.yml'
   push:
-    branches-ignore:
+    branches:
+      - develop
       - main
     paths-ignore:
       - '**.md'
@@ -41,10 +43,38 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  pr-checks:
+    name: PR lint and tests
+    if: github.event_name == 'pull_request'
+    runs-on: seorilabs-rpi-arm64
+    timeout-minutes: 12
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup lightweight pnpm workspace
+        uses: ./.github/actions/setup-pnpm-workspace
+        with:
+          install-command: pnpm --filter . --filter @happy-farm/ait... install --frozen-lockfile
+
+      - name: Lint AIT and shared core
+        run: pnpm --dir apps/ait lint
+
+      - name: Typecheck AIT app
+        run: pnpm --dir apps/ait typecheck
+
+      - name: Test shared core
+        run: pnpm check:core
+
+      - name: Test AIT app
+        run: pnpm --dir apps/ait test
+
   validate:
     name: Workspace checks
+    if: github.event_name != 'pull_request'
     runs-on: seorilabs-rpi-arm64
-    timeout-minutes: 20
+    timeout-minutes: 35
 
     steps:
       - name: Checkout

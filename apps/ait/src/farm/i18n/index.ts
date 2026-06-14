@@ -63,6 +63,7 @@ const KO_FARM_MESSAGES = {
   readyBadge: 'GET',
   sheetTitleGrowthAd: '즉시 성장',
   sheetTitleHarvestBonus: '수확 보너스',
+  sheetTitleWelcomeBack: '다시 오셨네요!',
   sheetTitleSettings: '설정',
   sheetTitleResetConfirm: '새로 시작하기',
   sheetTitleShop: '농장 관리소',
@@ -70,6 +71,13 @@ const KO_FARM_MESSAGES = {
     `${cropName}이(가) 다 자랄 때까지 약 ${remainingTime} 남았어요.`,
   sheetDescriptionHarvestBonus: (duration: string, multiplier: number) =>
     `광고를 보면 ${duration} 동안 수확 보상이 ${multiplier}배로 올라가요.`,
+  sheetDescriptionWelcomeBack: (awayDuration: string) =>
+    `${awayDuration} 동안 자리를 비운 사이 농장이 부지런히 움직였어요.`,
+  welcomeBackOfflineLabel: '운영 농장이 모아둔 수익',
+  welcomeBackReadyLabel: '수확을 기다리는 작물',
+  welcomeBackReadyValue: (count: number) => `${count}칸`,
+  welcomeBackCollectAction: (amount: string) => `+${amount}G 받고 시작하기`,
+  welcomeBackConfirmAction: '농장으로 가기',
   sheetDescriptionSettings: '사운드와 농장 기록을 관리해요.',
   sheetDescriptionResetConfirm: (confirmText: string) => `정말 초기화하려면 '${confirmText}'를 입력해야 해요.`,
   sheetDescriptionShop: '광고 보상과 업그레이드로 농장을 빠르게 키워보세요.',
@@ -107,6 +115,7 @@ const KO_FARM_MESSAGES = {
   donatedToast: (rp: string) => `연구에 헌납했어요. +${rp}RP`,
   harvestedToast: (amount: string) => `+${amount}G 수확했어요.`,
   harvestedBoostToast: (amount: string, multiplier: number) => `+${amount}G 수확했어요. ×${multiplier} 부스트 적용`,
+  masteryRankUpTitle: '숙련도 달성!',
   masteryRankUpToast: (cropName: string, rankName: string, rankIcon: string) =>
     `${rankIcon} ${cropName} 숙련도가 ${rankName} 등급이 됐어요!`,
   mutationHarvestedToast: (mutationName: string, mutationIcon: string, amount: string) =>
@@ -117,7 +126,12 @@ const KO_FARM_MESSAGES = {
   harvestBonusActivatedToast: (duration: string, multiplier: number) =>
     `${duration} 동안 수확 보상이 ${multiplier}배예요.`,
   lockedAreaHint: (areaName: string, requirement: string) => `${areaName} 열기 조건 · ${requirement}`,
+  emptyFarmSeedHint: '🌱 아래에서 씨앗을 골라 빈 밭에 심어보세요!',
   harvestHint: '밭을 눌러 수확할 수 있어요.',
+  harvestAllButton: (count: number) => `🧺 모두 수확 ${count}`,
+  harvestAllToast: (amount: string, count: number) => `+${amount}G · ${count}곳 한 번에 수확했어요!`,
+  harvestAllDonatedToast: (rp: string, count: number) => `연구에 헌납했어요. +${rp}RP · ${count}곳`,
+  comboLabel: (count: number) => `×${count} 콤보!`,
   plantHint: (cropName: string, cost: string, roi: string) => `${cropName} 심기 · ${cost}G · 투자효율 ${roi}`,
   collectionButton: '📖 도감',
   collectionButtonAccessibilityLabel: '작물 도감',
@@ -192,6 +206,14 @@ const KO_FARM_MESSAGES = {
   collectionFullDesc: (discovered: number, total: number) =>
     `모든 작물 ${discovered}/${total}종을 모으면 큰 보상을 받아요.`,
   collectionRewardClaimedToast: (amount: string) => `+${amount}G 도감 보상을 받았어요.`,
+  nextGoalGold: (areaName: string, needed: string) => `⬆️ ${areaName} 해금까지 ${needed}G 더`,
+  nextGoalHarvest: (areaName: string, current: number, total: number) =>
+    `🌾 ${areaName} 해금: 작물 종류 ${current}/${total} 수확 필요`,
+  nextGoalUpgrade: (areaName: string, current: number, total: number) =>
+    `🧪 ${areaName} 해금: 연구 Lv.${current}/${total} 필요`,
+  nextGoalReady: (areaName: string) => `🔓 ${areaName} 해금 준비 완료! 상점에서 열기`,
+  newCropDiscoveryTitle: '새 작물 발견!',
+  newCropDiscoverySubtitle: '도감에 추가됐어요',
 };
 
 export type FarmMessages = typeof KO_FARM_MESSAGES;
@@ -251,12 +273,19 @@ const EN_FARM_MESSAGES: FarmMessages = {
   readyBadge: 'GET',
   sheetTitleGrowthAd: 'Grow Now',
   sheetTitleHarvestBonus: 'Harvest Bonus',
+  sheetTitleWelcomeBack: 'Welcome Back!',
   sheetTitleSettings: 'Settings',
   sheetTitleResetConfirm: 'Start Over',
   sheetTitleShop: 'Farm Office',
   sheetDescriptionGrowthAd: (cropName, remainingTime) => `${cropName} needs about ${remainingTime} before it is ready.`,
   sheetDescriptionHarvestBonus: (duration, multiplier) =>
     `Watch an ad to raise harvest rewards to ${multiplier}x for ${duration}.`,
+  sheetDescriptionWelcomeBack: (awayDuration) => `Your farm kept busy while you were away for ${awayDuration}.`,
+  welcomeBackOfflineLabel: 'Chain farm earnings',
+  welcomeBackReadyLabel: 'Crops ready to harvest',
+  welcomeBackReadyValue: (count) => `${count} plots`,
+  welcomeBackCollectAction: (amount) => `Collect +${amount}G and play`,
+  welcomeBackConfirmAction: 'Back to the farm',
   sheetDescriptionSettings: 'Manage sound, language, and farm records.',
   sheetDescriptionResetConfirm: (confirmText) => `Type '${confirmText}' to confirm reset.`,
   sheetDescriptionShop: 'Grow your farm faster with ad rewards and upgrades.',
@@ -294,6 +323,7 @@ const EN_FARM_MESSAGES: FarmMessages = {
   donatedToast: (rp) => `Donated to research. +${rp}RP`,
   harvestedToast: (amount) => `Harvested +${amount}G.`,
   harvestedBoostToast: (amount, multiplier) => `Harvested +${amount}G with ${multiplier}x boost.`,
+  masteryRankUpTitle: 'Mastery Achieved!',
   masteryRankUpToast: (cropName, rankName, rankIcon) => `${rankIcon} ${cropName} mastery reached ${rankName}!`,
   mutationHarvestedToast: (mutationName, mutationIcon, amount) =>
     `${mutationIcon} ${mutationName} mutation! +${amount}G`,
@@ -302,7 +332,12 @@ const EN_FARM_MESSAGES: FarmMessages = {
   growthDoneToast: 'The crop grew instantly.',
   harvestBonusActivatedToast: (duration, multiplier) => `Harvest rewards are ${multiplier}x for ${duration}.`,
   lockedAreaHint: (areaName, requirement) => `${areaName} requirements · ${requirement}`,
+  emptyFarmSeedHint: '🌱 Pick a seed below and plant it in an empty plot!',
   harvestHint: 'Tap a plot to harvest.',
+  harvestAllButton: (count) => `🧺 Harvest All ${count}`,
+  harvestAllToast: (amount, count) => `+${amount}G · harvested ${count} plots at once!`,
+  harvestAllDonatedToast: (rp, count) => `Donated to research. +${rp}RP · ${count} plots`,
+  comboLabel: (count) => `×${count} COMBO!`,
   plantHint: (cropName, cost, roi) => `Plant ${cropName} · ${cost}G · ROI ${roi}`,
   collectionButton: '📖 Collection',
   collectionButtonAccessibilityLabel: 'Crop Collection',
@@ -375,6 +410,12 @@ const EN_FARM_MESSAGES: FarmMessages = {
   collectionFullTitle: 'Full Collection',
   collectionFullDesc: (discovered, total) => `Collect all ${total} crops (${discovered}/${total}) for a big reward.`,
   collectionRewardClaimedToast: (amount) => `Claimed +${amount}G from your collection.`,
+  nextGoalGold: (areaName, needed) => `⬆️ ${needed}G more to unlock ${areaName}`,
+  nextGoalHarvest: (areaName, current, total) => `🌾 Unlock ${areaName}: harvest ${current}/${total} crop types`,
+  nextGoalUpgrade: (areaName, current, total) => `🧪 Unlock ${areaName}: Research Lv.${current}/${total} required`,
+  nextGoalReady: (areaName) => `🔓 ${areaName} is ready to unlock! Open Shop`,
+  newCropDiscoveryTitle: 'New Crop!',
+  newCropDiscoverySubtitle: 'Added to your collection',
 };
 
 const FARM_MESSAGES: Record<SupportedLocale, FarmMessages> = {

@@ -1,10 +1,12 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import {
   Animated,
+  AppState,
   Easing,
   KeyboardAvoidingView,
   Modal,
   PanResponder,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -39,12 +41,12 @@ import {
   getRegionArchetypeLabel,
   getResearchNodeLabel,
   getTitleLabel,
-  performPlant,
   prestigeFarm,
   runAutomationTick,
   setActiveTitle,
   unlockNode,
   type AchievementTrackKey,
+  type MasteryRankKey,
   type PrestigeSkillKey,
   type RegionArchetypeKey,
   type ResearchNodeKey,
@@ -69,10 +71,14 @@ import {
   createFarmAnalytics,
   createInitialState,
   DEFAULT_LOCALE,
+  executeFarmGameCommand,
+  formatDuration,
   formatHourlyGold,
   formatMoney,
   formatRemainingTime,
   formatSignedPercent,
+  getReturnSummary,
+  type ReturnSummary,
   getAreaLabel,
   getAreaUnlockRequirementText,
   getCollectionSummary,
@@ -83,10 +89,11 @@ import {
   getHarvestBonusBoostStatus,
   getHarvestBonusPromptStatus,
   getMasteryRankLabel,
+  getMasteryStatus,
   getMinUpgradeLevel,
   getMutationLabel,
   getPlotCost,
-  getPlotGrowthRatio,
+  getPlotGrowthDisplay,
   getPlotRemainingGrowthMs,
   getRewardedAdLimitStatus,
   getUpgradeCost,
@@ -95,10 +102,14 @@ import {
   isPlotGrowthComplete,
   isTitleUnlocked,
   normalizeLocale,
-  performHarvest,
+  performHarvestAll,
+  getReadyPlotCount,
   recordHarvestBonusAdPrompt,
   recordRewardedAdUsage,
+  type CropHarvestedGameEvent,
+  type CropPlantedGameEvent,
   type CropEconomyEstimate,
+  type FarmGameCommandBlockedReason,
   type SupportedLocale,
 } from '../../../../packages/farm-core/src';
 
@@ -121,7 +132,22 @@ const MAIN_HORIZONTAL_PADDING = 16;
 export const GAME_TICK_INTERVAL_MS = 250;
 // Auto-harvest analytics are batched into one summary event per interval.
 const AUTO_HARVEST_SUMMARY_INTERVAL_MS = 60_000;
+// How often the active session refreshes its "last seen" timestamp so the
+// welcome-back recap measures the real away gap even if the app is killed
+// without firing a background event.
+const LAST_SEEN_HEARTBEAT_MS = 30_000;
 const PROGRESS_ANIMATION_DURATION_MS = GAME_TICK_INTERVAL_MS;
+// Fresh-plant sprout "bounce in" duration.
+const PLANT_POP_DURATION_MS = 320;
+// The "Harvest All" shortcut only appears once enough plots are ripe that
+// tapping each one becomes a chore; a single ripe plot is a quick one-tap.
+const HARVEST_ALL_MIN_COUNT = 2;
+// Harvest combo: the window (ms) within which consecutive manual harvests
+// build a streak counter. Tier thresholds gate icon/color escalation.
+const COMBO_WINDOW_MS = 1500;
+const COMBO_GREAT_THRESHOLD = 5;
+const COMBO_LEGENDARY_THRESHOLD = 10;
+export const MASTERY_RANK_UP_CELEBRATION_DURATION_MS = 2600;
 const SHEET_DISMISS_DRAG_DISTANCE = 96;
 const SHEET_DISMISS_VELOCITY = 1.1;
 const SHEET_DISMISS_TRANSLATE_Y = 520;
@@ -151,6 +177,59 @@ function formatStatMultiplier(value: number) {
   return value >= 100 ? `×${Math.round(value).toLocaleString()}` : `×${value.toFixed(1)}`;
 }
 
+// Identifies the single most actionable next milestone for the player: the
+// first locked sequential area, and whichever of its requirements is furthest
+// from met. Returned raw so the component can format it with the active locale.
+export type NextAreaGoal =
+  | { kind: 'gold'; areaKey: AreaKey; current: number; total: number }
+  | { kind: 'harvest'; areaKey: AreaKey; current: number; total: number }
+  | { kind: 'upgrade'; areaKey: AreaKey; current: number; total: number }
+  | { kind: 'ready'; areaKey: AreaKey }
+  | null;
+
+export function getNextAreaGoal(gameState: GameState): NextAreaGoal {
+  const nextArea = FARM_AREAS.find(
+    (area) => !isAreaUnlocked(gameState, area.key) && area.unlock.gate == null
+  );
+  if (nextArea == null) return null;
+
+  const goldOk = gameState.gold >= nextArea.unlock.cost;
+  const harvestOk = gameState.harvestedCropKeys.length >= nextArea.unlock.requiredHarvestedCropCount;
+  const upgradeOk = getMinUpgradeLevel(gameState) >= nextArea.unlock.requiredUpgradeLevel;
+
+  if (goldOk && harvestOk && upgradeOk) {
+    return { kind: 'ready', areaKey: nextArea.key };
+  }
+
+  const goldRatio = nextArea.unlock.cost > 0 ? gameState.gold / nextArea.unlock.cost : 1;
+  const harvestRatio =
+    nextArea.unlock.requiredHarvestedCropCount > 0
+      ? gameState.harvestedCropKeys.length / nextArea.unlock.requiredHarvestedCropCount
+      : 1;
+  const upgradeRatio =
+    nextArea.unlock.requiredUpgradeLevel > 0
+      ? getMinUpgradeLevel(gameState) / nextArea.unlock.requiredUpgradeLevel
+      : 1;
+
+  if (!goldOk && goldRatio <= harvestRatio && goldRatio <= upgradeRatio) {
+    return { kind: 'gold', areaKey: nextArea.key, current: gameState.gold, total: nextArea.unlock.cost };
+  }
+  if (!harvestOk && harvestRatio <= upgradeRatio) {
+    return {
+      kind: 'harvest',
+      areaKey: nextArea.key,
+      current: gameState.harvestedCropKeys.length,
+      total: nextArea.unlock.requiredHarvestedCropCount,
+    };
+  }
+  return {
+    kind: 'upgrade',
+    areaKey: nextArea.key,
+    current: getMinUpgradeLevel(gameState),
+    total: nextArea.unlock.requiredUpgradeLevel,
+  };
+}
+
 function getCropEconomy(cropEconomyByKey: Record<CropKey, CropEconomyEstimate>, cropKey: CropKey): CropEconomyEstimate {
   const estimate = cropEconomyByKey[cropKey];
   if (estimate == null) {
@@ -171,6 +250,7 @@ type ActiveSheet =
   | { type: 'settings' }
   | { type: 'growthAd'; plotIndex: number; cropKey: CropKey; remainingMs: number }
   | { type: 'harvestBonus' }
+  | { type: 'welcomeBack'; summary: ReturnSummary }
   | { type: 'resetConfirm' }
   | null;
 
@@ -180,6 +260,10 @@ export type FarmGamePersistence = {
   removePersistedGameState: () => Promise<void>;
   readPersistedGameSettings?: () => Promise<Partial<FarmGameSettings> | null | undefined>;
   writePersistedGameSettings?: (settings: FarmGameSettings) => Promise<void>;
+  // Optional so older host integrations keep working; when absent the
+  // welcome-back summary simply never triggers.
+  readLastSeenAt?: () => Promise<number | null>;
+  writeLastSeenAt?: (timestamp: number) => Promise<void>;
 };
 
 type UseFarmAd = (adGroupId: string) => RewardedAdController;
@@ -204,6 +288,69 @@ export type FarmGameProps = {
 
 type GetAnalyticsContext = (state?: GameState) => GameAnalyticsContext;
 type ToolKey = 'harvest' | CropKey;
+type PendingFarmCommandEffect =
+  | { id: number; type: 'plantBlocked'; reason: FarmGameCommandBlockedReason }
+  | { id: number; type: 'cropPlanted'; event: CropPlantedGameEvent }
+  | {
+      id: number;
+      type: 'cropHarvested';
+      event: CropHarvestedGameEvent;
+      now: number;
+      shouldShowHarvestBonusNudge: boolean;
+    }
+  | {
+      id: number;
+      type: 'harvestedAll';
+      fx: { plotIndex: number; goldGained: number; special: boolean }[];
+      totalGoldGained: number;
+      totalRpGained: number;
+      harvestedCount: number;
+      specialCount: number;
+    };
+
+type MasteryRankUpNotice = {
+  id: number;
+  cropIcon: string;
+  cropName: string;
+  rankKey: MasteryRankKey;
+  rankIcon: string;
+  rankName: string;
+};
+
+const MASTERY_RANK_COLORS: Record<MasteryRankKey, string> = {
+  bronze: '#9a6b3e',
+  silver: '#5f7e99',
+  gold: '#d4860a',
+  prism: '#7c44ff',
+};
+
+// One-shot floating "+gold" feedback spawned at the tapped plot on a manual
+// harvest. Auto-harvest stays silent so the burst always maps to a finger tap.
+type HarvestPop = {
+  id: number;
+  index: number;
+  label: string;
+  tone: 'normal' | 'special' | 'golden' | 'rainbow';
+};
+
+// Imperative handle so a harvest can fire a burst without lifting pop state into
+// FarmGame: spawning/removing pops re-renders only the overlay, never the plot
+// grid, keeping rapid tapping cheap on low-end devices.
+type HarvestFxHandle = {
+  spawn: (index: number, label: string, tone: HarvestPop['tone']) => void;
+};
+
+// Imperative handle to fire the full-screen mutation flash overlay without
+// lifting flash state into FarmGame (avoids re-rendering the whole tree).
+type MutationFlashHandle = {
+  flash: (mutationKey: 'golden' | 'rainbow') => void;
+};
+
+// Imperative handle to show the new-crop discovery banner. Keeping crop data
+// in the call avoids any shared state and lets the overlay mount lazily.
+type DiscoveryBannerHandle = {
+  show: (icon: string, name: string) => void;
+};
 
 const defaultFarmAnalytics = createFarmAnalytics();
 const defaultFarmAudio: FarmGameAudio = {
@@ -217,6 +364,8 @@ const defaultPersistence: FarmGamePersistence = {
   removePersistedGameState: async () => undefined,
   readPersistedGameSettings: async () => null,
   writePersistedGameSettings: async () => undefined,
+  readLastSeenAt: async () => null,
+  writeLastSeenAt: async () => undefined,
 };
 
 function useUnsupportedAd(): RewardedAdController {
@@ -269,12 +418,39 @@ export default function FarmGame({
   const [gameSettings, setGameSettings] = useState<FarmGameSettings>(DEFAULT_FARM_GAME_SETTINGS);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [harvestCombo, setHarvestCombo] = useState(0);
+  const comboTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [masteryRankUpNotice, setMasteryRankUpNotice] = useState<MasteryRankUpNotice | null>(null);
+  const masteryRankUpTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const masteryNoticeIdRef = useRef(0);
+  // Per-plot "just planted" tokens. Bumped only on a manual plant so the fresh
+  // sprout bounces in (auto-replant and save-load stay silent). Keyed by index.
+  const [plantPulses, setPlantPulses] = useState<Record<number, number>>({});
+  const plantPulseTokenRef = useRef(0);
+  const harvestFxRef = useRef<HarvestFxHandle>(null);
+  const mutationFlashRef = useRef<MutationFlashHandle>(null);
+  const discoveryBannerRef = useRef<DiscoveryBannerHandle>(null);
+  const goldPulseRef = useRef<Animated.Value | null>(null);
+  if (goldPulseRef.current == null) {
+    goldPulseRef.current = new Animated.Value(0);
+  }
+  const goldPulse = goldPulseRef.current;
+  const goldPulseScaleRef = useRef<Animated.AnimatedInterpolation<number> | null>(null);
+  if (goldPulseScaleRef.current == null) {
+    goldPulseScaleRef.current = goldPulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.12] });
+  }
+  const goldPulseScale = goldPulseScaleRef.current;
+  useEffect(() => () => goldPulse.stopAnimation(), [goldPulse]);
   const lastInterstitialShownAtRef = useRef(0);
   const sessionStartedAtRef = useRef(Date.now());
   const gameStartTrackedRef = useRef(false);
   const firstSeedSelectedRef = useRef(false);
   const claimedRewardKeysRef = useRef<Set<CollectionRewardKey>>(new Set());
   const claimedAchievementKeysRef = useRef<Set<string>>(new Set());
+  const commandEffectIdRef = useRef(0);
+  const pendingCommandEffectsRef = useRef<PendingFarmCommandEffect[]>([]);
+  const lastHandledCommandEffectIdRef = useRef(0);
+  const [commandEffectVersion, setCommandEffectVersion] = useState(0);
   // Double-tap guard for confirmPrestige: the state updater is idempotent,
   // but the toast/analytics must fire exactly once per graduated level.
   const prestigedLevelsRef = useRef<Set<number>>(new Set());
@@ -311,14 +487,78 @@ export default function FarmGame({
       toastTimerRef.current = null;
     }, 1800);
   }, []);
+  // A quick "cha-ching" bump on the gold HUD when a harvest lands, so the eye
+  // links the floating "+gold" at the plot to the balance actually rising.
+  const pulseGold = useCallback(() => {
+    goldPulse.stopAnimation();
+    goldPulse.setValue(0);
+    Animated.sequence([
+      Animated.timing(goldPulse, {
+        toValue: 1,
+        duration: 120,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
+      Animated.timing(goldPulse, {
+        toValue: 0,
+        duration: 220,
+        easing: Easing.in(Easing.quad),
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [goldPulse]);
+  const incrementCombo = useCallback((count: number) => {
+    if (comboTimerRef.current != null) {
+      clearTimeout(comboTimerRef.current);
+    }
+    setHarvestCombo((prev) => prev + count);
+    comboTimerRef.current = setTimeout(() => {
+      setHarvestCombo(0);
+      comboTimerRef.current = null;
+    }, COMBO_WINDOW_MS);
+  }, []);
+  const showMasteryRankUpCelebration = useCallback((notice: Omit<MasteryRankUpNotice, 'id'>) => {
+    if (masteryRankUpTimerRef.current != null) {
+      clearTimeout(masteryRankUpTimerRef.current);
+    }
+    masteryNoticeIdRef.current += 1;
+    setMasteryRankUpNotice({ ...notice, id: masteryNoticeIdRef.current });
+    masteryRankUpTimerRef.current = setTimeout(() => {
+      setMasteryRankUpNotice(null);
+      masteryRankUpTimerRef.current = null;
+    }, MASTERY_RANK_UP_CELEBRATION_DURATION_MS);
+  }, []);
+  const dismissMasteryRankUpCelebration = useCallback(() => {
+    if (masteryRankUpTimerRef.current != null) {
+      clearTimeout(masteryRankUpTimerRef.current);
+      masteryRankUpTimerRef.current = null;
+    }
+    setMasteryRankUpNotice(null);
+  }, []);
   const closeSheet = useCallback(() => {
     setActiveSheet(null);
+  }, []);
+  const clearPlantPulse = useCallback((index: number) => {
+    setPlantPulses((prev) => {
+      if (prev[index] == null) {
+        return prev;
+      }
+      const next = { ...prev };
+      delete next[index];
+      return next;
+    });
   }, []);
 
   useEffect(() => {
     return () => {
       if (toastTimerRef.current != null) {
         clearTimeout(toastTimerRef.current);
+      }
+      if (comboTimerRef.current != null) {
+        clearTimeout(comboTimerRef.current);
+      }
+      if (masteryRankUpTimerRef.current != null) {
+        clearTimeout(masteryRankUpTimerRef.current);
       }
     };
   }, []);
@@ -329,15 +569,210 @@ export default function FarmGame({
   );
 
   useEffect(() => {
+    if (pendingCommandEffectsRef.current.length === 0) {
+      return;
+    }
+
+    const effects = pendingCommandEffectsRef.current;
+    pendingCommandEffectsRef.current = [];
+
+    for (const effect of effects) {
+      if (effect.id <= lastHandledCommandEffectIdRef.current) {
+        continue;
+      }
+      lastHandledCommandEffectIdRef.current = effect.id;
+
+      if (effect.type === 'plantBlocked') {
+        if (effect.reason === 'areaLocked') {
+          toast(messages.areaFirstToast);
+        } else if (effect.reason === 'cropLocked') {
+          toast(messages.breedRequiredToast);
+        } else if (effect.reason === 'insufficientGold') {
+          toast(messages.insufficientGoldToast);
+        }
+        continue;
+      }
+
+      if (effect.type === 'cropPlanted') {
+        const { event } = effect;
+        // Pop the fresh sprout in and give a light tap so planting feels as
+        // tactile as harvesting. Manual path only, so auto-replant stays silent.
+        plantPulseTokenRef.current += 1;
+        const token = plantPulseTokenRef.current;
+        setPlantPulses((prev) => ({ ...prev, [event.plotIndex]: token }));
+        Vibration.vibrate(15);
+        farmAnalytics.trackCropPlanted(event.cropKey, event.areaKey, event.cropTier, event.cost, analyticsContext());
+        continue;
+      }
+
+      if (effect.type === 'harvestedAll') {
+        // Release the guard up front so it resets even if feedback below throws,
+        // and on a no-op (drift cleared the plots) — the button can never stick.
+        harvestAllInFlightRef.current = false;
+        if (effect.harvestedCount > 0) {
+          // One floating "+gold" per harvested plot keeps the spatial reward;
+          // the overlay self-caps concurrent pops, so a full grid stays cheap.
+          // The HUD pulse, toast, sound, and haptic fire once for the whole
+          // batch instead of stacking dozens of buzzes and toasts.
+          for (const fx of effect.fx) {
+            if (fx.goldGained > 0) {
+              harvestFxRef.current?.spawn(
+                fx.plotIndex,
+                `+${formatMoney(fx.goldGained, locale)}`,
+                fx.special ? 'special' : 'normal'
+              );
+            }
+          }
+          // Donation mode converts the batch into research points; key the toast
+          // on RP earned (not "gold === 0") so a future zero-value crop still
+          // reads as a harvest rather than a donation.
+          if (effect.totalRpGained > 0) {
+            toast(messages.harvestAllDonatedToast(formatMoney(effect.totalRpGained, locale), effect.harvestedCount));
+          } else {
+            toast(messages.harvestAllToast(formatMoney(effect.totalGoldGained, locale), effect.harvestedCount));
+          }
+          if (effect.totalGoldGained > 0) {
+            pulseGold();
+          }
+          farmAnalytics.trackHarvestAll({
+            harvestedCount: effect.harvestedCount,
+            totalGold: effect.totalGoldGained,
+            specialCount: effect.specialCount,
+            context: analyticsContext(),
+          });
+          if (effect.specialCount > 0 && Platform.OS === 'android') {
+            Vibration.vibrate([0, 24, 36, 48]);
+          } else {
+            Vibration.vibrate(50);
+          }
+          if (gameSettings.soundEffectsEnabled && audio.isSupported) {
+            void audio.playHarvest();
+          }
+          incrementCombo(effect.harvestedCount);
+        }
+        continue;
+      }
+
+      const { event } = effect;
+      farmAnalytics.trackCropHarvested({
+        cropKey: event.cropKey,
+        areaKey: event.areaKey,
+        cropTier: event.cropTier,
+        revenue: event.goldGained,
+        isFirstMeaningfulHarvest: event.isFirstMeaningfulHarvest,
+        isFirstCropHarvest: event.isNewCropDiscovery,
+        context: analyticsContext(),
+      });
+      if (event.newMasteryRank != null) {
+        const crop = getCrop(event.cropKey);
+        showMasteryRankUpCelebration({
+          cropIcon: crop.icon,
+          cropName: getLocalizedCropName(event.cropKey),
+          rankKey: event.newMasteryRank.key,
+          rankIcon: event.newMasteryRank.icon,
+          rankName: getMasteryRankLabel(event.newMasteryRank.key, locale).name,
+        });
+      } else if (event.donated) {
+        toast(messages.donatedToast(formatMoney(event.rpGained, locale)));
+      } else if (event.mutation != null) {
+        toast(
+          messages.mutationHarvestedToast(
+            getMutationLabel(event.mutation.key, locale).name,
+            event.mutation.icon,
+            formatMoney(event.goldGained, locale)
+          )
+        );
+      } else {
+        toast(
+          event.boostActive
+            ? messages.harvestedBoostToast(formatMoney(event.goldGained, locale), event.boostMultiplier)
+            : messages.harvestedToast(formatMoney(event.goldGained, locale))
+        );
+      }
+      if (effect.shouldShowHarvestBonusNudge) {
+        setGameState((state) => ({ ...state, adUsage: recordHarvestBonusAdPrompt(state, effect.now) }));
+        setActiveSheet({ type: 'harvestBonus' });
+      }
+      const isSpecialHarvest = event.mutation != null || event.newMasteryRank != null || event.boostActive;
+      const mutationKey = event.mutation?.key;
+      const popTone: HarvestPop['tone'] =
+        mutationKey === 'rainbow'
+          ? 'rainbow'
+          : mutationKey === 'golden'
+            ? 'golden'
+            : isSpecialHarvest
+              ? 'special'
+              : 'normal';
+      if (event.goldGained > 0) {
+        harvestFxRef.current?.spawn(
+          event.plotIndex,
+          `+${formatMoney(event.goldGained, locale)}`,
+          popTone
+        );
+        pulseGold();
+      }
+      if (event.mutation != null) {
+        const mutKey = event.mutation.key;
+        if (mutKey === 'golden' || mutKey === 'rainbow') {
+          mutationFlashRef.current?.flash(mutKey);
+        }
+      }
+      if (event.isNewCropDiscovery) {
+        const crop = getCrop(event.cropKey);
+        discoveryBannerRef.current?.show(crop.icon, getLocalizedCropName(event.cropKey));
+      }
+      // A celebratory double-buzz marks rare moments (mutation, mastery rank-up,
+      // active boost); ordinary harvests keep the light single tap. The pattern
+      // is Android-only: iOS uses a fixed-length vibration and treats array
+      // entries as wait gaps, so a "short double tap" can't be expressed there -
+      // we fall back to the standard single buzz.
+      if (isSpecialHarvest && Platform.OS === 'android') {
+        Vibration.vibrate([0, 24, 36, 48]);
+      } else {
+        Vibration.vibrate(50);
+      }
+      if (gameSettings.soundEffectsEnabled && audio.isSupported) {
+        void audio.playHarvest();
+      }
+      incrementCombo(1);
+    }
+  }, [
+    analyticsContext,
+    audio,
+    commandEffectVersion,
+    farmAnalytics,
+    gameSettings.soundEffectsEnabled,
+    getLocalizedCropName,
+    incrementCombo,
+    locale,
+    messages,
+    pulseGold,
+    showMasteryRankUpCelebration,
+    toast,
+  ]);
+
+  useEffect(() => {
     let cancelled = false;
 
     async function loadSavedGame() {
       const savedState = await persistence.readPersistedGameState();
+      const lastSeenAt = (await persistence.readLastSeenAt?.()) ?? null;
       if (cancelled) {
         return;
       }
       setGameState(savedState);
       setIsSaveLoaded(true);
+
+      // Greet returning players with a recap of what waited for them. Computed
+      // off the freshly loaded save (not React state, which hasn't committed
+      // yet) so the very first frame after a long absence shows the summary.
+      const now = Date.now();
+      const summary = getReturnSummary(savedState, lastSeenAt, now);
+      if (summary != null) {
+        setActiveSheet({ type: 'welcomeBack', summary });
+      }
+      // Mark "seen" immediately so a quick reload doesn't replay the recap.
+      void persistence.writeLastSeenAt?.(now);
     }
 
     void loadSavedGame();
@@ -372,6 +807,27 @@ export default function FarmGame({
     }
     void persistence.writePersistedGameState(gameState);
   }, [gameState, isSaveLoaded, persistence]);
+
+  // Keep the "last seen" timestamp fresh while the player is active so the
+  // welcome-back recap measures the real gap since they left — not the time
+  // since their last save-triggering action. A light heartbeat covers the
+  // common case; an app-background write captures the exact moment they leave.
+  useEffect(() => {
+    if (!isSaveLoaded) {
+      return;
+    }
+    const markSeen = () => void persistence.writeLastSeenAt?.(Date.now());
+    const heartbeat = setInterval(markSeen, LAST_SEEN_HEARTBEAT_MS);
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'background' || nextState === 'inactive') {
+        markSeen();
+      }
+    });
+    return () => {
+      clearInterval(heartbeat);
+      subscription.remove();
+    };
+  }, [isSaveLoaded, persistence]);
 
   useEffect(() => {
     if (!isSettingsLoaded) {
@@ -497,11 +953,16 @@ export default function FarmGame({
       ),
     [gameState, harvestBonusBoost.multiplier]
   );
+  const readyPlotCount = useMemo(() => getReadyPlotCount(gameState), [gameState]);
+  // Blocks a second "Harvest All" tap until the in-flight batch finishes; the
+  // command drain effect releases it after each attempt (success or no-op).
+  const harvestAllInFlightRef = useRef(false);
   const chainIncome = useMemo(() => getChainIncome(gameState), [gameState, tick]);
   const mapActionableCount = useMemo(
     () => (chainIncome.accruedGold > 0 ? 1 : 0) + (canPrestige(gameState).allowed ? 1 : 0),
     [chainIncome.accruedGold, gameState]
   );
+  const nextAreaGoal = useMemo(() => getNextAreaGoal(gameState), [gameState]);
 
   useEffect(() => {
     const now = Date.now();
@@ -672,6 +1133,16 @@ export default function FarmGame({
     toast(messages.chainCollectedToast(formatMoney(collected.collectedGold, locale)));
   }
 
+  // Closes the welcome-back recap. When passive income piled up while away we
+  // sweep it straight into the player's purse so the recap doubles as a
+  // one-tap collect — returning should feel like an instant reward, not a chore.
+  function dismissWelcomeBack(collectOffline: boolean) {
+    if (collectOffline) {
+      collectChain();
+    }
+    setActiveSheet(null);
+  }
+
   function openPrestigeConfirm() {
     setActiveSheet({ type: 'prestigeConfirm' });
   }
@@ -691,6 +1162,11 @@ export default function FarmGame({
     // Drop any pending auto-harvest batch so old-farm counts never flush
     // under the new farm's analytics context.
     autoHarvestSummaryRef.current = { harvestedCount: 0, replantedCount: 0, windowStartedAt: 0 };
+    if (comboTimerRef.current != null) {
+      clearTimeout(comboTimerRef.current);
+      comboTimerRef.current = null;
+    }
+    setHarvestCombo(0);
     setGameState((state) => prestigeFarm(state, prestigeArchetype, now)?.state ?? state);
     setSelectedArea(FIRST_AREA.key);
     setSelectedTool('harvest');
@@ -864,6 +1340,11 @@ export default function FarmGame({
     claimedAchievementKeysRef.current.clear();
     prestigedLevelsRef.current.clear();
     autoHarvestSummaryRef.current = { harvestedCount: 0, replantedCount: 0, windowStartedAt: 0 };
+    if (comboTimerRef.current != null) {
+      clearTimeout(comboTimerRef.current);
+      comboTimerRef.current = null;
+    }
+    setHarvestCombo(0);
     setGameState(createInitialState());
     setSelectedArea(FIRST_AREA.key);
     setSelectedTool('harvest');
@@ -872,92 +1353,111 @@ export default function FarmGame({
   }
 
   function plantCrop(index: number, cropKey: CropKey) {
-    const crop = getCrop(cropKey);
-    if (!isAreaUnlocked(gameState, crop.area)) {
-      toast(messages.areaFirstToast);
-      return;
-    }
-    if (!isCropPlantable(gameState, cropKey)) {
-      toast(messages.breedRequiredToast);
-      return;
-    }
     const now = Date.now();
-    const cost = getCropPurchaseCost(gameState, cropKey, now);
-    if (gameState.gold < cost) {
-      toast(messages.insufficientGoldToast);
-      return;
-    }
-    // Remaining failure modes (occupied/locked plot) are silent; only track
-    // analytics for plants that actually succeed.
-    if (performPlant(gameState, index, cropKey, now) == null) {
-      return;
-    }
+    const effectId = ++commandEffectIdRef.current;
+    setGameState((state) => {
+      const result = executeFarmGameCommand(
+        state,
+        { type: 'plantCrop', plotIndex: index, cropKey },
+        { now, rng: Math.random }
+      );
 
-    setGameState((state) => performPlant(state, index, cropKey, now) ?? state);
-    farmAnalytics.trackCropPlanted(cropKey, crop.area, crop.tier, cost, analyticsContext());
+      if (result.status === 'blocked') {
+        pendingCommandEffectsRef.current.push({ id: effectId, type: 'plantBlocked', reason: result.reason });
+        return state;
+      }
+      const event = result.events[0];
+      if (event?.type === 'cropPlanted') {
+        pendingCommandEffectsRef.current.push({ id: effectId, type: 'cropPlanted', event });
+      }
+      return result.state;
+    });
+    setCommandEffectVersion((version) => version + 1);
   }
 
   function harvestCrop(index: number) {
     const now = Date.now();
-    // One shared roll keeps the previewed outcome (toast/analytics) identical
-    // to the outcome replayed inside the state updater.
-    const roll = Math.random();
-    const rng = () => roll;
-    const outcome = performHarvest(gameState, index, { now, rng });
-    if (outcome == null) {
+    const effectId = ++commandEffectIdRef.current;
+    setGameState((state) => {
+      const roll = Math.random();
+      const result = executeFarmGameCommand(
+        state,
+        { type: 'harvestCrop', plotIndex: index },
+        { now, rng: () => roll }
+      );
+      if (result.status === 'blocked') {
+        return state;
+      }
+      const event = result.events[0];
+      if (event?.type === 'cropHarvested') {
+        pendingCommandEffectsRef.current.push({
+          id: effectId,
+          type: 'cropHarvested',
+          event,
+          now,
+          shouldShowHarvestBonusNudge:
+            rewardedAd.isAdReady &&
+            getRewardedAdLimitStatus(result.state, 'harvestBonusAd', now).allowed &&
+            getHarvestBonusPromptStatus(result.state, now).allowed &&
+            !event.boostActive,
+        });
+      }
+      return result.state;
+    });
+    setCommandEffectVersion((version) => version + 1);
+  }
+
+  function harvestAllCrops() {
+    // Re-entry guard: a fast double-tap before the batch re-renders (and the
+    // button disappears) would otherwise replay the feedback. The drain effect
+    // clears the flag after every attempt, so the next ripe set stays harvestable.
+    if (harvestAllInFlightRef.current) {
       return;
     }
-    const crop = getCrop(outcome.cropKey);
 
-    setGameState((state) => performHarvest(state, index, { now, rng })?.state ?? state);
+    const now = Date.now();
+    const effectId = ++commandEffectIdRef.current;
+    // One stable roll per plot index — not a flat sequence. Built outside the
+    // updater so a StrictMode double-invoke reuses the same rolls, and keyed by
+    // index so a plot's outcome never shifts with the surrounding ripe set.
+    const rollByPlot: Record<number, number> = {};
+    const rollFor = (plotIndex: number) => {
+      const existing = rollByPlot[plotIndex];
+      if (existing != null) {
+        return existing;
+      }
+      const roll = Math.random();
+      rollByPlot[plotIndex] = roll;
+      return roll;
+    };
 
-    farmAnalytics.trackCropHarvested({
-      cropKey: outcome.cropKey,
-      areaKey: crop.area,
-      cropTier: crop.tier,
-      revenue: outcome.goldGained,
-      isFirstMeaningfulHarvest: outcome.isFirstMeaningfulHarvest,
-      isFirstCropHarvest: outcome.isNewCropDiscovery,
-      context: analyticsContext(),
+    harvestAllInFlightRef.current = true;
+    setGameState((state) => {
+      // Compute on the authoritative committed state and queue the feedback from
+      // here, so the FX/toast/analytics always reflect exactly what was harvested
+      // even if a concurrent tick shifted the ripe set after this tap.
+      const result = performHarvestAll(state, { now, rollFor });
+      // Guard the queue against a StrictMode/concurrent double-invoke of this
+      // updater: keep at most one effect per id. (The drain loop also dedupes by
+      // id, so feedback never doubles either way — this just keeps the queue clean.)
+      if (!pendingCommandEffectsRef.current.some((pending) => pending.id === effectId)) {
+        pendingCommandEffectsRef.current.push({
+          id: effectId,
+          type: 'harvestedAll',
+          fx: result.harvests.map(({ plotIndex, outcome }) => ({
+            plotIndex,
+            goldGained: outcome.goldGained,
+            special: outcome.mutation != null || outcome.newMasteryRank != null || outcome.boostActive,
+          })),
+          totalGoldGained: result.totalGoldGained,
+          totalRpGained: result.totalRpGained,
+          harvestedCount: result.harvestedCount,
+          specialCount: result.specialCount,
+        });
+      }
+      return result.harvestedCount > 0 ? result.state : state;
     });
-    if (outcome.newMasteryRank != null) {
-      toast(
-        messages.masteryRankUpToast(
-          getLocalizedCropName(outcome.cropKey),
-          getMasteryRankLabel(outcome.newMasteryRank.key, locale).name,
-          outcome.newMasteryRank.icon
-        )
-      );
-    } else if (outcome.donated) {
-      toast(messages.donatedToast(formatMoney(outcome.rpGained, locale)));
-    } else if (outcome.mutation != null) {
-      toast(
-        messages.mutationHarvestedToast(
-          getMutationLabel(outcome.mutation.key, locale).name,
-          outcome.mutation.icon,
-          formatMoney(outcome.goldGained, locale)
-        )
-      );
-    } else {
-      toast(
-        outcome.boostActive
-          ? messages.harvestedBoostToast(formatMoney(outcome.goldGained, locale), outcome.boostMultiplier)
-          : messages.harvestedToast(formatMoney(outcome.goldGained, locale))
-      );
-    }
-    const canShowHarvestBonusNudge =
-      rewardedAd.isAdReady &&
-      getRewardedAdLimitStatus(gameState, 'harvestBonusAd', now).allowed &&
-      getHarvestBonusPromptStatus(gameState, now).allowed &&
-      !outcome.boostActive;
-    if (canShowHarvestBonusNudge) {
-      setGameState((state) => ({ ...state, adUsage: recordHarvestBonusAdPrompt(state, now) }));
-      setActiveSheet({ type: 'harvestBonus' });
-    }
-    Vibration.vibrate(50);
-    if (gameSettings.soundEffectsEnabled && audio.isSupported) {
-      void audio.playHarvest();
-    }
+    setCommandEffectVersion((version) => version + 1);
   }
 
   function handlePlotClick(index: number) {
@@ -1049,6 +1549,12 @@ export default function FarmGame({
       );
     }
     if (selectedTool === 'harvest') {
+      const hasAnyCropPlanted = gameState.plots.some(
+        (p, i) => i < gameState.unlockedPlotCount && p.state !== 0
+      );
+      if (!hasAnyCropPlanted) {
+        return messages.emptyFarmSeedHint;
+      }
       return messages.harvestHint;
     }
     return messages.plantHint(
@@ -1067,6 +1573,13 @@ export default function FarmGame({
     selectedAreaUnlocked,
     selectedTool,
   ]);
+
+  // Stable, index-based press handler so memoized PlotCells keep referential
+  // equality across the 250ms tick and plant-pulse updates. handlePlotClick
+  // closes over fast-changing state, so route through a ref instead of a dep.
+  const handlePlotClickRef = useRef(handlePlotClick);
+  handlePlotClickRef.current = handlePlotClick;
+  const onPlotPress = useCallback((index: number) => handlePlotClickRef.current(index), []);
 
   return (
     <View style={styles.root}>
@@ -1102,13 +1615,18 @@ export default function FarmGame({
 
         <View style={styles.statsPanel}>
           <View style={styles.assetRow}>
-            <Text style={styles.coinIcon}>💰</Text>
-            <View style={styles.assetTextGroup}>
-              <Text style={styles.label}>{messages.assetLabel}</Text>
-              <Text style={styles.money} numberOfLines={1}>
-                {formatMoney(gameState.gold, locale)}G
-              </Text>
-            </View>
+            {/* The whole asset block scales as one unit (anchored left so it
+                grows into its own space, not into the panel border) for a
+                consistent "cha-ching" on harvest. */}
+            <Animated.View style={[styles.assetPulse, { transform: [{ scale: goldPulseScale }] }]}>
+              <Text style={styles.coinIcon}>💰</Text>
+              <View style={styles.assetTextGroup}>
+                <Text style={styles.label}>{messages.assetLabel}</Text>
+                <Text style={styles.money} numberOfLines={1}>
+                  {formatMoney(gameState.gold, locale)}G
+                </Text>
+              </View>
+            </Animated.View>
           </View>
           <View style={styles.summaryColumn}>
             <Text style={styles.researchBadge}>{messages.researchBadge(researchLevel)}</Text>
@@ -1133,6 +1651,16 @@ export default function FarmGame({
             </View>
           </View>
         </View>
+
+        {nextAreaGoal != null ? (
+          <NextGoalBar
+            goal={nextAreaGoal}
+            messages={messages}
+            locale={locale}
+            getAreaName={(areaKey) => getLocalizedAreaLabel(areaKey).name}
+            onPress={openShop}
+          />
+        ) : null}
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.navRow}>
           <NavButton label={messages.shopButton} onPress={openShop} />
@@ -1165,26 +1693,45 @@ export default function FarmGame({
 
       <ScrollView contentContainerStyle={styles.mainContent} style={styles.main}>
         <View style={styles.plotGrid}>
-          {gameState.plots.map((plot, index) => (
-            <PlotCell
-              key={plot.id}
-              plot={plot}
-              unlocked={index < gameState.unlockedPlotCount}
-              progressRatio={getPlotGrowthRatio(gameState, plot)}
-              tileSize={plotTileSize}
-              messages={messages}
-              onPress={() => handlePlotClick(index)}
-            />
-          ))}
+          {gameState.plots.map((plot, index) => {
+            // Resolve growth ratio and countdown together so the crop modifiers
+            // are computed once per tile per tick instead of once for each.
+            const growth = getPlotGrowthDisplay(gameState, plot);
+            return (
+              <PlotCell
+                key={plot.id}
+                index={index}
+                plot={plot}
+                unlocked={index < gameState.unlockedPlotCount}
+                progressRatio={growth.growthRatio}
+                growthCountdown={
+                  plot.state === 1 ? formatDuration(growth.remainingWallClockMs, locale) : undefined
+                }
+                tileSize={plotTileSize}
+                messages={messages}
+                plantToken={plantPulses[index]}
+                onPlantPulseDone={clearPlantPulse}
+                onPress={onPlotPress}
+              />
+            );
+          })}
+          <HarvestFxOverlay ref={harvestFxRef} tileSize={plotTileSize} />
         </View>
       </ScrollView>
 
       <View style={[styles.toolStrip, { paddingBottom: insets.bottom + 10 }]}>
         <View style={styles.toolHeader}>
           <Text style={styles.toolLabel}>{messages.toolLabel}</Text>
-          <Text style={styles.toolHint} numberOfLines={1}>
-            {toolHint}
-          </Text>
+          {readyPlotCount >= HARVEST_ALL_MIN_COUNT ? (
+            <HarvestAllButton
+              label={messages.harvestAllButton(readyPlotCount)}
+              onPress={harvestAllCrops}
+            />
+          ) : (
+            <Text style={styles.toolHint} numberOfLines={1}>
+              {toolHint}
+            </Text>
+          )}
         </View>
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.areaTabs}>
@@ -1195,6 +1742,7 @@ export default function FarmGame({
             return (
               <Pressable
                 key={area.key}
+                testID={`area-tab-${area.key}`}
                 style={[styles.areaTab, !unlocked && styles.lockedAreaTab, active && styles.activeAreaTab]}
                 onPress={() => selectArea(area.key)}
               >
@@ -1217,14 +1765,18 @@ export default function FarmGame({
           />
           {visibleCropKeys.map((key) => {
             const crop = getCrop(key);
+            const cropCost = getCropPurchaseCost(gameState, key);
+            const masteryRank = getMasteryStatus(gameState, key).rank;
             return (
               <ToolButton
                 key={key}
                 active={selectedTool === key}
                 icon={crop.icon}
                 name={getLocalizedCropName(key)}
-                cost={formatMoney(getCropPurchaseCost(gameState, key), locale)}
+                cost={formatMoney(cropCost, locale)}
                 roi={messages.roi(formatSignedPercent(getCropEconomy(cropEconomyByKey, key).roiPercent, locale))}
+                affordable={gameState.gold >= cropCost}
+                masteryRank={masteryRank}
                 onPress={() => selectCrop(key)}
               />
             );
@@ -1243,6 +1795,20 @@ export default function FarmGame({
       {toastMessage != null ? (
         <View pointerEvents="none" style={[styles.toast, { bottom: insets.bottom + 142 }]}>
           <Text style={styles.toastText}>{toastMessage}</Text>
+        </View>
+      ) : null}
+
+      <MutationFlashOverlay ref={mutationFlashRef} />
+
+      <DiscoveryBanner
+        ref={discoveryBannerRef}
+        title={messages.newCropDiscoveryTitle}
+        subtitle={messages.newCropDiscoverySubtitle}
+      />
+
+      {harvestCombo >= 2 ? (
+        <View pointerEvents="none" style={styles.comboOverlay}>
+          <ComboDisplay count={harvestCombo} messages={messages} />
         </View>
       ) : null}
 
@@ -1450,6 +2016,41 @@ export default function FarmGame({
           </View>
         ) : null}
 
+        {activeSheet?.type === 'welcomeBack' ? (
+          <View>
+            {activeSheet.summary.offlineGold > 0 ? (
+              <View style={styles.welcomeBackRow}>
+                <Text style={styles.welcomeBackIcon}>💰</Text>
+                <View style={styles.welcomeBackRowText}>
+                  <Text style={styles.welcomeBackRowLabel}>{messages.welcomeBackOfflineLabel}</Text>
+                  <Text style={styles.welcomeBackRowValue}>
+                    +{formatMoney(activeSheet.summary.offlineGold, locale)}G
+                  </Text>
+                </View>
+              </View>
+            ) : null}
+            {activeSheet.summary.readyCropCount > 0 ? (
+              <View style={styles.welcomeBackRow}>
+                <Text style={styles.welcomeBackIcon}>🧺</Text>
+                <View style={styles.welcomeBackRowText}>
+                  <Text style={styles.welcomeBackRowLabel}>{messages.welcomeBackReadyLabel}</Text>
+                  <Text style={styles.welcomeBackRowValue}>
+                    {messages.welcomeBackReadyValue(activeSheet.summary.readyCropCount)}
+                  </Text>
+                </View>
+              </View>
+            ) : null}
+            <SheetAction
+              label={
+                activeSheet.summary.offlineGold > 0
+                  ? messages.welcomeBackCollectAction(formatMoney(activeSheet.summary.offlineGold, locale))
+                  : messages.welcomeBackConfirmAction
+              }
+              onPress={() => dismissWelcomeBack(activeSheet.type === 'welcomeBack' && activeSheet.summary.offlineGold > 0)}
+            />
+          </View>
+        ) : null}
+
         {activeSheet?.type === 'resetConfirm' ? (
           <View>
             <Text style={styles.resetWarning}>{messages.resetWarning}</Text>
@@ -1472,6 +2073,16 @@ export default function FarmGame({
           </View>
         ) : null}
       </Sheet>
+
+      {/* Rendered last so it appears above the Sheet and all other overlays. */}
+      {masteryRankUpNotice != null ? (
+        <MasteryRankUpOverlay
+          key={masteryRankUpNotice.id}
+          notice={masteryRankUpNotice}
+          messages={messages}
+          onDismiss={dismissMasteryRankUpCelebration}
+        />
+      ) : null}
     </View>
   );
 }
@@ -1499,26 +2110,510 @@ function NavButton({
   );
 }
 
-function PlotCell({
+// Swaps in for the tool hint the moment a couple of plots ripen, turning a
+// row of individual taps into one satisfying batch harvest. It pops in and
+// breathes gently so the eye catches the call-to-action without nagging.
+function HarvestAllButton({ label, onPress }: { label: string; onPress: () => void }) {
+  const entranceRef = useRef<Animated.Value | null>(null);
+  if (entranceRef.current == null) {
+    entranceRef.current = new Animated.Value(0);
+  }
+  const entrance = entranceRef.current;
+  const pulseRef = useRef<Animated.Value | null>(null);
+  if (pulseRef.current == null) {
+    pulseRef.current = new Animated.Value(0);
+  }
+  const pulse = pulseRef.current;
+
+  useEffect(() => {
+    const animation = Animated.sequence([
+      Animated.timing(entrance, {
+        toValue: 1,
+        duration: 260,
+        easing: Easing.out(Easing.back(2.4)),
+        useNativeDriver: true,
+      }),
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulse, {
+            toValue: 1,
+            duration: 720,
+            easing: Easing.inOut(Easing.quad),
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulse, {
+            toValue: 0,
+            duration: 720,
+            easing: Easing.inOut(Easing.quad),
+            useNativeDriver: true,
+          }),
+        ])
+      ),
+    ]);
+    animation.start();
+    return () => animation.stop();
+  }, [entrance, pulse]);
+
+  const scale = Animated.multiply(
+    entrance.interpolate({ inputRange: [0, 1], outputRange: [0.7, 1] }),
+    pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.05] })
+  );
+
+  return (
+    <Pressable
+      accessibilityLabel={label}
+      hitSlop={6}
+      style={({ pressed }) => [pressed && styles.harvestAllButtonPressed]}
+      onPress={onPress}
+    >
+      <Animated.View style={[styles.harvestAllButton, { opacity: entrance, transform: [{ scale }] }]}>
+        <Text style={styles.harvestAllButtonText} numberOfLines={1}>
+          {label}
+        </Text>
+      </Animated.View>
+    </Pressable>
+  );
+}
+
+// Mastery rank-up celebration: full-screen overlay that marks the moment a crop
+// reaches a new mastery tier (Bronze → Silver → Gold → Prism). The card springs
+// in from below-center; the crop emoji bounces in first, then the rank badge
+// fades in with a slight delay so each element lands in sequence.
+// Auto-dismisses after MASTERY_RANK_UP_CELEBRATION_DURATION_MS; tapping anywhere
+// on the backdrop also dismisses it early.
+function MasteryRankUpOverlay({
+  notice,
+  messages,
+  onDismiss,
+}: {
+  notice: MasteryRankUpNotice;
+  messages: FarmMessages;
+  onDismiss: () => void;
+}) {
+  const backdropRef = useRef<Animated.Value | null>(null);
+  if (backdropRef.current == null) backdropRef.current = new Animated.Value(0);
+  const backdrop = backdropRef.current;
+
+  const cardScaleRef = useRef<Animated.Value | null>(null);
+  if (cardScaleRef.current == null) cardScaleRef.current = new Animated.Value(0.6);
+  const cardScale = cardScaleRef.current;
+
+  const cropScaleRef = useRef<Animated.Value | null>(null);
+  if (cropScaleRef.current == null) cropScaleRef.current = new Animated.Value(0.2);
+  const cropScale = cropScaleRef.current;
+
+  const rankEntranceRef = useRef<Animated.Value | null>(null);
+  if (rankEntranceRef.current == null) rankEntranceRef.current = new Animated.Value(0);
+  const rankEntrance = rankEntranceRef.current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(backdrop, {
+        toValue: 1,
+        duration: 200,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
+      Animated.spring(cardScale, {
+        toValue: 1,
+        damping: 15,
+        stiffness: 280,
+        mass: 0.8,
+        useNativeDriver: true,
+      }),
+      Animated.sequence([
+        Animated.delay(100),
+        Animated.spring(cropScale, {
+          toValue: 1,
+          damping: 9,
+          stiffness: 200,
+          mass: 0.5,
+          useNativeDriver: true,
+        }),
+      ]),
+      Animated.sequence([
+        Animated.delay(260),
+        Animated.spring(rankEntrance, {
+          toValue: 1,
+          damping: 12,
+          stiffness: 260,
+          useNativeDriver: true,
+        }),
+      ]),
+    ]).start();
+
+    return () => {
+      backdrop.stopAnimation();
+      cardScale.stopAnimation();
+      cropScale.stopAnimation();
+      rankEntrance.stopAnimation();
+    };
+  }, [backdrop, cardScale, cropScale, rankEntrance]);
+
+  const rankColor = MASTERY_RANK_COLORS[notice.rankKey];
+
+  const rankEntranceScale = rankEntrance.interpolate({ inputRange: [0, 1], outputRange: [0.4, 1] });
+
+  return (
+    <Pressable testID="mastery-rank-up-overlay" style={StyleSheet.absoluteFill} onPress={onDismiss}>
+      <Animated.View style={[styles.masteryBackdrop, { opacity: backdrop }]} />
+      <View style={styles.masteryCenter} pointerEvents="none">
+        <Animated.View testID="mastery-rank-up-card" style={[styles.masteryCard, { transform: [{ scale: cardScale }] }]}>
+          <Text style={styles.masteryTitle}>{messages.masteryRankUpTitle}</Text>
+          <Animated.Text style={[styles.masteryCropIcon, { transform: [{ scale: cropScale }] }]}>
+            {notice.cropIcon}
+          </Animated.Text>
+          <Animated.Text
+            style={[
+              styles.masteryRankBadge,
+              { color: rankColor, opacity: rankEntrance, transform: [{ scale: rankEntranceScale }] },
+            ]}
+          >
+            {notice.rankIcon} {notice.rankName}
+          </Animated.Text>
+          <Text style={styles.masteryCropName}>{notice.cropName}</Text>
+        </Animated.View>
+      </View>
+    </Pressable>
+  );
+}
+
+// Shows a growing streak counter when the player rapidly harvests multiple
+// plots in quick succession. Punches out on each count update so the number
+// change is unmistakable; tiers escalate icon and color at 5× and 10×.
+// Animation: quick pop to 1.25× then spring back to 1.0, starting from
+// whatever scale the previous animation left — no snapping on rapid taps.
+function ComboDisplay({ count, messages }: { count: number; messages: FarmMessages }) {
+  const scaleRef = useRef<Animated.Value | null>(null);
+  if (scaleRef.current == null) {
+    scaleRef.current = new Animated.Value(0.6);
+  }
+  const scale = scaleRef.current;
+
+  useEffect(() => {
+    scale.stopAnimation();
+    const animation = Animated.sequence([
+      Animated.timing(scale, {
+        toValue: 1.25,
+        duration: 80,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
+      Animated.spring(scale, {
+        toValue: 1,
+        damping: 12,
+        stiffness: 240,
+        mass: 0.6,
+        useNativeDriver: true,
+      }),
+    ]);
+    animation.start();
+    return () => animation.stop();
+  }, [scale, count]);
+
+  useEffect(() => {
+    return () => scale.stopAnimation();
+  }, [scale]);
+
+  const tier =
+    count >= COMBO_LEGENDARY_THRESHOLD ? 'legendary' : count >= COMBO_GREAT_THRESHOLD ? 'great' : 'normal';
+  const icon = tier === 'legendary' ? '⚡' : tier === 'great' ? '🔥' : '🌾';
+
+  return (
+    <Animated.View
+      style={[
+        styles.comboDisplay,
+        tier === 'great' && styles.comboDisplayGreat,
+        tier === 'legendary' && styles.comboDisplayLegendary,
+        { transform: [{ scale }] },
+      ]}
+    >
+      <Text
+        style={[
+          styles.comboText,
+          tier === 'great' && styles.comboTextGreat,
+          tier === 'legendary' && styles.comboTextLegendary,
+        ]}
+      >
+        {icon} {messages.comboLabel(count)}
+      </Text>
+    </Animated.View>
+  );
+}
+
+// Compact progress bar shown in the header that surfaces the single most
+// actionable next milestone (next area unlock) so players have a clear target
+// during crop growth wait times. Tapping it opens the shop directly.
+function NextGoalBar({
+  goal,
+  messages,
+  locale,
+  getAreaName,
+  onPress,
+}: {
+  goal: NonNullable<NextAreaGoal>;
+  messages: FarmMessages;
+  locale: SupportedLocale;
+  getAreaName: (areaKey: AreaKey) => string;
+  onPress: () => void;
+}) {
+  const areaName = getAreaName(goal.areaKey);
+
+  if (goal.kind === 'ready') {
+    return (
+      <Pressable testID="next-goal-bar" style={styles.nextGoalBar} onPress={onPress}>
+        <Text style={styles.nextGoalReadyText} numberOfLines={1}>
+          {messages.nextGoalReady(areaName)}
+        </Text>
+      </Pressable>
+    );
+  }
+
+  let label: string;
+  if (goal.kind === 'gold') {
+    label = messages.nextGoalGold(areaName, formatMoney(goal.total - goal.current, locale));
+  } else if (goal.kind === 'harvest') {
+    label = messages.nextGoalHarvest(areaName, goal.current, goal.total);
+  } else {
+    label = messages.nextGoalUpgrade(areaName, goal.current, goal.total);
+  }
+  const ratio = goal.total > 0 ? Math.max(0, Math.min(goal.current / goal.total, 1)) : 0;
+
+  return (
+    <Pressable testID="next-goal-bar" style={styles.nextGoalBar} onPress={onPress}>
+      <Text style={styles.nextGoalLabel} numberOfLines={1}>
+        {label}
+      </Text>
+      <View style={styles.nextGoalTrack}>
+        <View style={[styles.nextGoalFill, { width: `${Math.round(ratio * 100)}%` }]} />
+      </View>
+    </Pressable>
+  );
+}
+
+// Slide-up banner that celebrates the first harvest of a new crop type.
+// Rendered via an imperative handle so the banner can animate in/out without
+// lifting crop state into FarmGame or triggering a full re-render.
+const DiscoveryBanner = React.forwardRef<
+  DiscoveryBannerHandle,
+  { title: string; subtitle: string }
+>(function DiscoveryBanner({ title, subtitle }, ref) {
+  const [entry, setEntry] = useState<{ icon: string; name: string } | null>(null);
+  const translateYRef = useRef<Animated.Value | null>(null);
+  if (translateYRef.current == null) {
+    translateYRef.current = new Animated.Value(80);
+  }
+  const translateY = translateYRef.current;
+
+  const opacityRef = useRef<Animated.Value | null>(null);
+  if (opacityRef.current == null) {
+    opacityRef.current = new Animated.Value(0);
+  }
+  const opacity = opacityRef.current;
+
+  // Holds the running animation so the useEffect cleanup can cancel it, and so
+  // show() can interrupt a still-playing sequence.
+  const animationRef = useRef<Animated.CompositeAnimation | null>(null);
+  // Generation counter: each show() call increments this and closes over the
+  // new value. The completion callback only calls setEntry(null) when its
+  // captured token still matches — stale completions from a previous sequence
+  // (including the Animated.delay timer inside the sequence) are discarded.
+  const animTokenRef = useRef(0);
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+      animationRef.current?.stop();
+    };
+  }, []);
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      show(icon: string, name: string) {
+        // Stop the previous CompositeAnimation first. Calling stopAnimation()
+        // on individual values only pauses value updates; it does NOT cancel
+        // the CompositeAnimation's own delay timer, which could fire
+        // setEntry(null) after the new entry is already showing.
+        animationRef.current?.stop();
+        setEntry({ icon, name });
+        translateY.setValue(80);
+        opacity.setValue(0);
+        const token = ++animTokenRef.current;
+        animationRef.current = Animated.sequence([
+          Animated.parallel([
+            Animated.timing(translateY, {
+              toValue: 0,
+              duration: 320,
+              easing: Easing.out(Easing.back(1.6)),
+              useNativeDriver: true,
+            }),
+            Animated.timing(opacity, {
+              toValue: 1,
+              duration: 200,
+              easing: Easing.out(Easing.quad),
+              useNativeDriver: true,
+            }),
+          ]),
+          Animated.delay(1800),
+          Animated.parallel([
+            Animated.timing(translateY, {
+              toValue: -20,
+              duration: 340,
+              easing: Easing.in(Easing.quad),
+              useNativeDriver: true,
+            }),
+            Animated.timing(opacity, {
+              toValue: 0,
+              duration: 280,
+              easing: Easing.in(Easing.quad),
+              useNativeDriver: true,
+            }),
+          ]),
+        ]);
+        animationRef.current.start(({ finished }) => {
+          if (finished && isMountedRef.current && animTokenRef.current === token) {
+            setEntry(null);
+          }
+        });
+      },
+    }),
+    [translateY, opacity]
+  );
+
+  // Always mounted so the native animated node is live before show() starts
+  // the animation. Returning null when entry == null would create a race:
+  // setEntry() schedules a re-render while the native animation starts
+  // immediately, so the first frames can be lost before the view mounts.
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[styles.discoveryBanner, { transform: [{ translateY }], opacity }]}
+    >
+      {entry != null ? (
+        <>
+          <Text style={styles.discoveryBannerIcon}>{entry.icon}</Text>
+          <View>
+            <Text style={styles.discoveryBannerTitle}>{title}</Text>
+            <Text style={styles.discoveryBannerName}>{entry.name}</Text>
+            <Text style={styles.discoveryBannerSubtitle}>{subtitle}</Text>
+          </View>
+        </>
+      ) : null}
+    </Animated.View>
+  );
+});
+
+// Full-screen flash overlay for rare mutation harvests. Two overlay layers
+// (golden and rainbow) driven independently so both can coexist without shared
+// state; native driver keeps the flash cheap even at the moment of a burst.
+const MutationFlashOverlay = React.forwardRef<MutationFlashHandle>(function MutationFlashOverlay(_, ref) {
+  const goldenOpacityRef = useRef<Animated.Value | null>(null);
+  if (goldenOpacityRef.current == null) {
+    goldenOpacityRef.current = new Animated.Value(0);
+  }
+  const goldenOpacity = goldenOpacityRef.current;
+
+  const rainbowOpacityRef = useRef<Animated.Value | null>(null);
+  if (rainbowOpacityRef.current == null) {
+    rainbowOpacityRef.current = new Animated.Value(0);
+  }
+  const rainbowOpacity = rainbowOpacityRef.current;
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      flash(mutationKey: 'golden' | 'rainbow') {
+        if (mutationKey === 'rainbow') {
+          rainbowOpacity.stopAnimation();
+          rainbowOpacity.setValue(0);
+          // Avoid Animated.delay here: stopAnimation() does not reliably interrupt
+          // a delay stage mid-sequence in React Native, which can cause the opacity
+          // to snap unexpectedly when rapid successive mutations overlap. The 80ms
+          // "hold" is folded into the fade-in duration instead (150 + 80 = 230ms).
+          Animated.sequence([
+            Animated.timing(rainbowOpacity, {
+              toValue: 0.45,
+              duration: 230,
+              easing: Easing.out(Easing.quad),
+              useNativeDriver: true,
+            }),
+            Animated.timing(rainbowOpacity, {
+              toValue: 0,
+              duration: 600,
+              easing: Easing.in(Easing.quad),
+              useNativeDriver: true,
+            }),
+          ]).start();
+        } else {
+          goldenOpacity.stopAnimation();
+          goldenOpacity.setValue(0);
+          Animated.sequence([
+            Animated.timing(goldenOpacity, {
+              toValue: 0.36,
+              duration: 120,
+              easing: Easing.out(Easing.quad),
+              useNativeDriver: true,
+            }),
+            Animated.timing(goldenOpacity, {
+              toValue: 0,
+              duration: 400,
+              easing: Easing.in(Easing.quad),
+              useNativeDriver: true,
+            }),
+          ]).start();
+        }
+      },
+    }),
+    [goldenOpacity, rainbowOpacity]
+  );
+
+  return (
+    <>
+      <Animated.View
+        pointerEvents="none"
+        style={[styles.mutationFlash, { opacity: goldenOpacity, backgroundColor: '#fde68a' }]}
+      />
+      <Animated.View
+        pointerEvents="none"
+        style={[styles.mutationFlash, { opacity: rainbowOpacity, backgroundColor: '#c084fc' }]}
+      />
+    </>
+  );
+});
+
+// Memoized so a tick or a single plot's plant-pulse update never reconciles the
+// other (up to 24) plot subtrees. Relies on stable, index-based callbacks and
+// performPlant/performHarvest keeping untouched plot object refs intact.
+const PlotCell = React.memo(function PlotCell({
+  index,
   plot,
   unlocked,
   progressRatio,
+  growthCountdown,
   tileSize,
   messages,
+  plantToken,
+  onPlantPulseDone,
   onPress,
 }: {
+  index: number;
   plot: GameState['plots'][number];
   unlocked: boolean;
   progressRatio: number;
+  growthCountdown: string | undefined;
   tileSize: number;
   messages: FarmMessages;
-  onPress: () => void;
+  plantToken: number | undefined;
+  onPlantPulseDone: (index: number) => void;
+  onPress: (index: number) => void;
 }) {
   const tileSizeStyle = { width: tileSize, height: tileSize };
+  const handlePress = () => onPress(index);
 
   if (!unlocked) {
     return (
-      <Pressable style={[styles.plotTile, tileSizeStyle, styles.lockedPlot]} onPress={onPress}>
+      <Pressable testID={`plot-cell-${index}`} style={[styles.plotTile, tileSizeStyle, styles.lockedPlot]} onPress={handlePress}>
         <Text style={styles.lockIcon}>🔒</Text>
       </Pressable>
     );
@@ -1526,19 +2621,27 @@ function PlotCell({
 
   if (plot.state === 0) {
     return (
-      <Pressable style={[styles.plotTile, tileSizeStyle, styles.emptyPlot]} onPress={onPress}>
+      <Pressable testID={`plot-cell-${index}`} style={[styles.plotTile, tileSizeStyle, styles.emptyPlot]} onPress={handlePress}>
         <Text style={styles.emptyPlotText}>{messages.emptyPlot}</Text>
       </Pressable>
     );
   }
 
   const crop = plot.cropType != null ? getCrop(plot.cropType) : null;
-  const icon = plot.state === 2 ? (crop?.icon ?? '🌱') : progressRatio > 0.5 ? '🌿' : '🌱';
+  // Reveal the actual crop icon at ≥65% growth so players can see what's
+  // ripening and feel anticipation before the harvest tap.
+  const icon =
+    plot.state === 2 || progressRatio >= 0.65
+      ? (crop?.icon ?? '🌿')
+      : progressRatio >= 0.3
+        ? '🌿'
+        : '🌱';
 
   return (
     <Pressable
+      testID={`plot-cell-${index}`}
       style={[styles.plotTile, tileSizeStyle, plot.state === 2 ? styles.readyPlot : styles.growingPlot]}
-      onPress={onPress}
+      onPress={handlePress}
     >
       {plot.state === 2 ? (
         <View style={styles.harvestBadge}>
@@ -1546,10 +2649,236 @@ function PlotCell({
         </View>
       ) : null}
       {plot.state === 1 && crop != null && plot.startTime != null ? (
-        <GrowthProgressBar progressRatio={progressRatio} />
+        <>
+          {growthCountdown != null ? (
+            <View style={[styles.growthTimer, { maxWidth: Math.max(0, tileSize - 10) }]}>
+              <Text style={styles.growthTimerText} numberOfLines={1} ellipsizeMode="tail">
+                {growthCountdown}
+              </Text>
+            </View>
+          ) : null}
+          <GrowthProgressBar progressRatio={progressRatio} />
+        </>
       ) : null}
-      <Text style={plot.state === 2 ? styles.readyCropIcon : styles.cropIcon}>{icon}</Text>
+      {plot.state === 2 ? (
+        <ReadyCropIcon icon={icon} phaseSeed={plot.id} />
+      ) : (
+        <GrowingCropIcon
+          icon={icon}
+          plantToken={plantToken}
+          onPlantPulseDone={() => onPlantPulseDone(index)}
+        />
+      )}
     </Pressable>
+  );
+});
+
+// Ripe crops gently pulse so harvestable plots draw the eye in a full grid,
+// reinforcing the "see ready -> tap" loop. Native-driven loop keeps it cheap
+// even with every plot ripe at once.
+function ReadyCropIcon({ icon, phaseSeed }: { icon: string; phaseSeed: number }) {
+  const pulseRef = useRef<Animated.Value | null>(null);
+  if (pulseRef.current == null) {
+    pulseRef.current = new Animated.Value(0);
+  }
+  const pulse = pulseRef.current;
+
+  useEffect(() => {
+    // Stagger each plot's pulse by a stable per-plot offset so a grid of ripe
+    // crops breathes organically instead of beating in robotic unison.
+    const startDelay = (phaseSeed % 7) * 90;
+    const animation = Animated.sequence([
+      Animated.delay(startDelay),
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulse, {
+            toValue: 1,
+            duration: 650,
+            easing: Easing.inOut(Easing.quad),
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulse, {
+            toValue: 0,
+            duration: 650,
+            easing: Easing.inOut(Easing.quad),
+            useNativeDriver: true,
+          }),
+        ])
+      ),
+    ]);
+    animation.start();
+    return () => animation.stop();
+  }, [pulse, phaseSeed]);
+
+  const scale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.14] });
+
+  return <Animated.Text style={[styles.readyCropIcon, { transform: [{ scale }] }]}>{icon}</Animated.Text>;
+}
+
+// The growing-crop sprout. On a fresh manual plant (plantToken set), it bounces
+// in once so tapping an empty plot feels tactile. Auto-replant and save-load
+// pass no token, so reopening the app never re-pops every growing plot.
+function GrowingCropIcon({
+  icon,
+  plantToken,
+  onPlantPulseDone,
+}: {
+  icon: string;
+  plantToken: number | undefined;
+  onPlantPulseDone: () => void;
+}) {
+  const popRef = useRef<Animated.Value | null>(null);
+  if (popRef.current == null) {
+    popRef.current = new Animated.Value(1);
+  }
+  const pop = popRef.current;
+  const lastTokenRef = useRef<number | undefined>(undefined);
+  const onDoneRef = useRef(onPlantPulseDone);
+  onDoneRef.current = onPlantPulseDone;
+
+  useEffect(() => {
+    if (plantToken == null || plantToken === lastTokenRef.current) {
+      return undefined;
+    }
+    lastTokenRef.current = plantToken;
+    pop.setValue(0);
+    const animation = Animated.timing(pop, {
+      toValue: 1,
+      duration: PLANT_POP_DURATION_MS,
+      easing: Easing.out(Easing.back(2.2)),
+      useNativeDriver: true,
+    });
+    animation.start(({ finished }) => {
+      if (finished) {
+        // Clear the parent token so a later remount never re-triggers the pop.
+        onDoneRef.current();
+      }
+    });
+    return () => animation.stop();
+  }, [plantToken, pop]);
+
+  const scale = pop.interpolate({ inputRange: [0, 1], outputRange: [0.4, 1] });
+  const opacity = pop.interpolate({ inputRange: [0, 0.4, 1], outputRange: [0.2, 1, 1] });
+
+  return (
+    <Animated.Text style={[styles.cropIcon, { opacity, transform: [{ scale }] }]}>{icon}</Animated.Text>
+  );
+}
+
+const HarvestFxOverlay = React.forwardRef<HarvestFxHandle, { tileSize: number }>(function HarvestFxOverlay(
+  { tileSize },
+  ref
+) {
+  const [pops, setPops] = useState<HarvestPop[]>([]);
+  const idRef = useRef(0);
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      spawn(index, label, tone) {
+        const id = (idRef.current += 1);
+        setPops((prev) => {
+          // Cap concurrent pops so rapid tapping can never grow the overlay
+          // unbounded before each pop self-removes at the end of its animation.
+          const next = prev.length >= 8 ? prev.slice(prev.length - 7) : prev;
+          return [...next, { id, index, label, tone }];
+        });
+      },
+    }),
+    []
+  );
+
+  const remove = useCallback((id: number) => {
+    setPops((prev) => prev.filter((pop) => pop.id !== id));
+  }, []);
+
+  return (
+    <>
+      {pops.map((pop) => (
+        <HarvestPopText key={pop.id} pop={pop} tileSize={tileSize} onDone={remove} />
+      ))}
+    </>
+  );
+});
+
+function HarvestPopText({
+  pop,
+  tileSize,
+  onDone,
+}: {
+  pop: HarvestPop;
+  tileSize: number;
+  onDone: (id: number) => void;
+}) {
+  const progressRef = useRef<Animated.Value | null>(null);
+  if (progressRef.current == null) {
+    progressRef.current = new Animated.Value(0);
+  }
+  const progress = progressRef.current;
+  const onDoneRef = useRef(onDone);
+  onDoneRef.current = onDone;
+
+  useEffect(() => {
+    const dur = pop.tone === 'rainbow' ? 1400 : pop.tone === 'golden' ? 1100 : 900;
+    const animation = Animated.timing(progress, {
+      toValue: 1,
+      duration: dur,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    });
+    animation.start(({ finished }) => {
+      if (finished) {
+        onDoneRef.current(pop.id);
+      }
+    });
+    return () => animation.stop();
+  }, [pop.id, pop.tone, progress]);
+
+  const col = pop.index % PLOT_COLUMNS;
+  const row = Math.floor(pop.index / PLOT_COLUMNS);
+  const left = col * (tileSize + PLOT_GAP);
+  const top = row * (tileSize + PLOT_GAP);
+
+  const isMutationTone = pop.tone === 'golden' || pop.tone === 'rainbow';
+  const yTop =
+    pop.tone === 'rainbow' ? -tileSize * 0.95 : pop.tone === 'golden' ? -tileSize * 0.78 : -tileSize * 0.55;
+  // Scale start and max are larger for mutation tones to give the jackpot pop extra punch;
+  // normal/special keep their original 0.6 start so existing harvest feel is unchanged.
+  const scaleStart = isMutationTone ? 0.4 : 0.6;
+  const scaleMax = pop.tone === 'rainbow' ? 1.65 : pop.tone === 'golden' ? 1.45 : 1.15;
+
+  const translateY = progress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [tileSize * 0.2, yTop],
+  });
+  const scale = progress.interpolate({
+    inputRange: [0, 0.25, 1],
+    outputRange: [scaleStart, scaleMax, 1],
+  });
+  // Mutation pops fade in a touch faster (0.1 vs 0.12) and out a touch earlier (0.6
+  // vs 0.65) so the longer animation duration feels proportionate; normal/special keep
+  // the original timing so their feel is unchanged.
+  const opacity = progress.interpolate({
+    inputRange: isMutationTone ? [0, 0.1, 0.6, 1] : [0, 0.12, 0.65, 1],
+    outputRange: [0, 1, 1, 0],
+  });
+
+  const icon = pop.tone === 'rainbow' ? '🌈 ' : pop.tone === 'golden' ? '✨ ' : '';
+
+  return (
+    <View pointerEvents="none" style={[styles.harvestPop, { left, top, width: tileSize, height: tileSize }]}>
+      <Animated.Text
+        style={[
+          styles.harvestPopText,
+          pop.tone === 'special' && styles.harvestPopTextSpecial,
+          pop.tone === 'golden' && styles.harvestPopTextGolden,
+          pop.tone === 'rainbow' && styles.harvestPopTextRainbow,
+          { opacity, transform: [{ translateY }, { scale }] },
+        ]}
+      >
+        {icon}{pop.label}
+      </Animated.Text>
+    </View>
   );
 }
 
@@ -1746,6 +3075,9 @@ function getSheetTitle(activeSheet: ActiveSheet, messages: FarmMessages) {
   if (activeSheet?.type === 'harvestBonus') {
     return messages.sheetTitleHarvestBonus;
   }
+  if (activeSheet?.type === 'welcomeBack') {
+    return messages.sheetTitleWelcomeBack;
+  }
   if (activeSheet?.type === 'settings') {
     return messages.sheetTitleSettings;
   }
@@ -1792,6 +3124,9 @@ function getSheetDescription(
       HARVEST_BONUS_MULTIPLIER
     );
   }
+  if (activeSheet?.type === 'welcomeBack') {
+    return messages.sheetDescriptionWelcomeBack(formatDuration(activeSheet.summary.awayMs, locale));
+  }
   if (activeSheet?.type === 'settings') {
     return messages.sheetDescriptionSettings;
   }
@@ -1807,6 +3142,8 @@ function ToolButton({
   name,
   cost,
   roi,
+  affordable,
+  masteryRank,
   onPress,
 }: {
   active: boolean;
@@ -1814,6 +3151,8 @@ function ToolButton({
   name: string;
   cost?: string;
   roi?: string;
+  affordable?: boolean;
+  masteryRank?: { icon: string } | null;
   onPress: () => void;
 }) {
   return (
@@ -1822,8 +3161,15 @@ function ToolButton({
       <Text style={styles.toolName} numberOfLines={1}>
         {name}
       </Text>
-      {cost != null ? <Text style={styles.toolCost}>{cost}</Text> : null}
+      {cost != null ? (
+        <Text style={[styles.toolCost, affordable === false && styles.toolCostUnaffordable]}>{cost}</Text>
+      ) : null}
       {roi != null ? <Text style={styles.toolRoi}>{roi}</Text> : null}
+      {masteryRank != null ? (
+        <View pointerEvents="none" style={styles.toolMasteryBadge}>
+          <Text style={styles.toolMasteryBadgeText}>{masteryRank.icon}</Text>
+        </View>
+      ) : null}
     </Pressable>
   );
 }
@@ -2163,6 +3509,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 9,
   },
+  assetPulse: {
+    minWidth: 0,
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 9,
+    transformOrigin: 'left center',
+  },
   coinIcon: {
     width: 30,
     height: 30,
@@ -2255,6 +3609,88 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: PLOT_GAP,
   },
+  harvestPop: {
+    position: 'absolute',
+    zIndex: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  harvestPopText: {
+    color: '#f7b733',
+    fontSize: 18,
+    fontWeight: '900',
+    textShadowColor: 'rgba(31, 41, 55, 0.85)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
+  harvestPopTextSpecial: {
+    color: '#ffd23f',
+    fontSize: 22,
+    textShadowColor: 'rgba(180, 83, 9, 0.95)',
+    textShadowRadius: 4,
+  },
+  harvestPopTextGolden: {
+    color: '#fbbf24',
+    fontSize: 30,
+    textShadowColor: 'rgba(180, 83, 9, 0.95)',
+    textShadowRadius: 8,
+  },
+  harvestPopTextRainbow: {
+    color: '#c084fc',
+    fontSize: 38,
+    textShadowColor: 'rgba(109, 40, 217, 0.95)',
+    textShadowRadius: 10,
+  },
+  mutationFlash: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 8,
+  },
+  discoveryBanner: {
+    position: 'absolute',
+    bottom: 160,
+    left: 20,
+    right: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    backgroundColor: 'rgba(17, 24, 39, 0.94)',
+    borderRadius: 18,
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+    zIndex: 15,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    elevation: 8,
+  },
+  discoveryBannerIcon: {
+    fontSize: 44,
+  },
+  discoveryBannerTitle: {
+    color: '#86efac',
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+    marginBottom: 1,
+  },
+  discoveryBannerName: {
+    color: '#ffffff',
+    fontSize: 20,
+    fontWeight: '900',
+    lineHeight: 24,
+  },
+  discoveryBannerSubtitle: {
+    color: 'rgba(209, 213, 219, 0.8)',
+    fontSize: 13,
+    fontWeight: '500',
+    marginTop: 2,
+  },
   toast: {
     position: 'absolute',
     left: 18,
@@ -2323,6 +3759,20 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '900',
   },
+  growthTimer: {
+    position: 'absolute',
+    top: 5,
+    left: 5,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 7,
+    backgroundColor: 'rgba(0, 0, 0, 0.42)',
+  },
+  growthTimerText: {
+    color: '#ffffff',
+    fontSize: 10,
+    fontWeight: '800',
+  },
   progressTrack: {
     position: 'absolute',
     left: 8,
@@ -2372,6 +3822,26 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '900',
     textAlign: 'right',
+  },
+  harvestAllButton: {
+    minHeight: 34,
+    justifyContent: 'center',
+    borderRadius: 999,
+    paddingHorizontal: 16,
+    backgroundColor: '#2e9e57',
+    shadowColor: '#1c5f37',
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
+  },
+  harvestAllButtonPressed: {
+    opacity: 0.85,
+  },
+  harvestAllButtonText: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '900',
   },
   areaTabs: {
     gap: 8,
@@ -2444,10 +3914,22 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '900',
   },
+  toolCostUnaffordable: {
+    color: '#b42318',
+  },
   toolRoi: {
     color: '#247241',
     fontSize: 10,
     fontWeight: '900',
+  },
+  toolMasteryBadge: {
+    position: 'absolute',
+    top: 3,
+    right: 4,
+  },
+  toolMasteryBadgeText: {
+    fontSize: 11,
+    lineHeight: 14,
   },
   lockedNotice: {
     width: 260,
@@ -2540,6 +4022,34 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     fontWeight: '700',
   },
+  welcomeBackRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+    padding: 14,
+    borderRadius: 12,
+    backgroundColor: '#f3faf1',
+    borderWidth: 1,
+    borderColor: '#d6ecd0',
+  },
+  welcomeBackIcon: {
+    fontSize: 28,
+    marginRight: 14,
+  },
+  welcomeBackRowText: {
+    flex: 1,
+  },
+  welcomeBackRowLabel: {
+    color: '#5b6b58',
+    fontSize: 13,
+    fontWeight: '800',
+    marginBottom: 2,
+  },
+  welcomeBackRowValue: {
+    color: '#1f7a3d',
+    fontSize: 20,
+    fontWeight: '900',
+  },
   resetInput: {
     minHeight: 48,
     borderWidth: 1,
@@ -2567,5 +4077,118 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 10,
     fontWeight: '900',
+  },
+  comboOverlay: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    // Shift above true center so the combo sits over the plot grid,
+    // not the tool strip. paddingBottom lifts the visual center upward.
+    paddingBottom: 120,
+    zIndex: 9,
+  },
+  comboDisplay: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 24,
+    backgroundColor: 'rgba(31, 41, 55, 0.88)',
+  },
+  comboDisplayGreat: {
+    backgroundColor: 'rgba(154, 52, 18, 0.92)',
+  },
+  comboDisplayLegendary: {
+    backgroundColor: 'rgba(120, 70, 0, 0.95)',
+  },
+  comboText: {
+    color: '#f7b733',
+    fontSize: 24,
+    fontWeight: '900',
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
+  comboTextGreat: {
+    color: '#ff8c42',
+    fontSize: 28,
+  },
+  comboTextLegendary: {
+    color: '#ffd23f',
+    fontSize: 32,
+  },
+  nextGoalBar: {
+    marginTop: 7,
+  },
+  nextGoalLabel: {
+    color: '#4a7c59',
+    fontSize: 11,
+    fontWeight: '800',
+    marginBottom: 4,
+  },
+  nextGoalReadyText: {
+    color: '#1c7538',
+    fontSize: 11,
+    fontWeight: '900',
+    paddingVertical: 2,
+  },
+  nextGoalTrack: {
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: 'rgba(0, 0, 0, 0.08)',
+    overflow: 'hidden',
+  },
+  nextGoalFill: {
+    height: '100%',
+    borderRadius: 2,
+    backgroundColor: '#4caf6a',
+  },
+  masteryBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.58)',
+  },
+  masteryCenter: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingBottom: 80,
+  },
+  masteryCard: {
+    width: 268,
+    paddingHorizontal: 28,
+    paddingVertical: 28,
+    borderRadius: 20,
+    backgroundColor: '#ffffff',
+    alignItems: 'center',
+    gap: 6,
+    shadowColor: '#000000',
+    shadowOpacity: 0.28,
+    shadowRadius: 28,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 14,
+  },
+  masteryTitle: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: '#667085',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+  },
+  masteryCropIcon: {
+    fontSize: 68,
+    lineHeight: 76,
+    marginVertical: 2,
+  },
+  masteryRankBadge: {
+    fontSize: 30,
+    fontWeight: '900',
+  },
+  masteryCropName: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: '#344054',
+    marginTop: 4,
   },
 });

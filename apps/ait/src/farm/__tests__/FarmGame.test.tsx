@@ -1,7 +1,8 @@
 /// <reference types="jest" />
 
 import React from 'react';
-import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { Vibration } from 'react-native';
+import { act, cleanup, fireEvent, render, waitFor, within } from '@testing-library/react-native';
 import {
   CROPS,
   FARM_AREAS,
@@ -14,6 +15,7 @@ import {
   getAreaCropKeys,
   getMasteryThresholds,
   getPrestigeCost,
+  type AreaKey,
   type CropKey,
   type GameState,
   type RewardedAdController,
@@ -28,13 +30,15 @@ jest.mock('react-native-safe-area-context', () => ({
 
 const farmGameModule = jest.requireActual('../FarmGame') as typeof import('../FarmGame');
 const FarmGame = farmGameModule.default;
-const { GAME_TICK_INTERVAL_MS } = farmGameModule;
+const { GAME_TICK_INTERVAL_MS, MASTERY_RANK_UP_CELEBRATION_DURATION_MS } = farmGameModule;
 const mockPersistence = {
   readPersistedGameState: jest.fn<Promise<GameState>, []>(),
   writePersistedGameState: jest.fn<Promise<void>, [GameState]>(),
   removePersistedGameState: jest.fn<Promise<void>, []>(),
   readPersistedGameSettings: jest.fn(),
   writePersistedGameSettings: jest.fn(),
+  readLastSeenAt: jest.fn<Promise<number | null>, []>(),
+  writeLastSeenAt: jest.fn<Promise<void>, [number]>(),
 };
 
 function getCropKeys() {
@@ -173,7 +177,8 @@ function createThrowingRewardedAd(error = new Error('sdk dynamic failure message
 
 // Rendering the full farm tree is heavy; the first test additionally pays the
 // module-loading warmup, which can exceed jest's 5s default on slow CI runners.
-jest.setTimeout(15000);
+// 30 s gives the ARM64 CI runner (≈3× slower than local) comfortable headroom.
+jest.setTimeout(30000);
 
 describe('FarmGame UI flow', () => {
   beforeEach(() => {
@@ -184,6 +189,10 @@ describe('FarmGame UI flow', () => {
     mockPersistence.removePersistedGameState.mockResolvedValue(undefined);
     mockPersistence.readPersistedGameSettings.mockReset();
     mockPersistence.writePersistedGameSettings.mockResolvedValue(undefined);
+    mockPersistence.readLastSeenAt.mockReset();
+    mockPersistence.readLastSeenAt.mockResolvedValue(null);
+    mockPersistence.writeLastSeenAt.mockReset();
+    mockPersistence.writeLastSeenAt.mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -203,9 +212,11 @@ describe('FarmGame UI flow', () => {
     expect(screen.getByText('당근')).toBeTruthy();
     expect(screen.getByText('효율 +40%')).toBeTruthy();
 
-    fireEvent.press(screen.getByText(/채소 밭/));
+    // Use the stable testID added to each area tab so text duplication with the
+    // next-goal bar in the header cannot cause a selector collision.
+    fireEvent.press(screen.getByTestId('area-tab-vegetable_field'));
     expect(screen.getByText('채소 밭 열기 조건')).toBeTruthy();
-    fireEvent.press(screen.getByText('초보 밭'));
+    fireEvent.press(screen.getByTestId('area-tab-starter_field'));
 
     fireEvent.press(screen.getByText('당근'));
     expect(screen.getByText('당근 심기 · 10G · 투자효율 +40%')).toBeTruthy();
@@ -226,6 +237,47 @@ describe('FarmGame UI flow', () => {
 
     expect(screen.getByText('54G')).toBeTruthy();
     expect(screen.getAllByText('빈 밭')).toHaveLength(6);
+    // Harvesting spawns a floating "+gold" burst at the tapped plot (gained 14G).
+    expect(screen.getByText('+14')).toBeTruthy();
+  });
+
+  test('pops a sprout and buzzes when a seed is planted on an empty plot', async () => {
+    const vibrateSpy = jest.spyOn(Vibration, 'vibrate').mockImplementation(() => undefined);
+    try {
+      const screen = await renderGame(null);
+
+      await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+      expect(screen.getAllByText('빈 밭')).toHaveLength(6);
+      // No sprout exists before the first plant.
+      expect(screen.queryByText('🌱')).toBeNull();
+
+      fireEvent.press(screen.getByText('초보 밭'));
+      fireEvent.press(screen.getByText('당근'));
+      fireEvent.press(screen.getAllByText('빈 밭')[0]!);
+
+      // The freshly planted plot now shows the growing sprout, and planting
+      // fires a light haptic so the action feels tactile.
+      expect(screen.getByText('🌱')).toBeTruthy();
+      expect(screen.getAllByText('빈 밭')).toHaveLength(5);
+      expect(vibrateSpy).toHaveBeenCalled();
+    } finally {
+      vibrateSpy.mockRestore();
+    }
+  });
+
+  test('keeps rapid harvest state updates from overwriting each other', async () => {
+    const screen = await renderGame(createReadyHarvestState());
+
+    await waitFor(() => expect(screen.getByText('50G')).toBeTruthy());
+
+    const readyPlots = screen.getAllByText('GET');
+    await act(async () => {
+      fireEvent.press(readyPlots[0]!);
+      fireEvent.press(readyPlots[1]!);
+    });
+
+    await waitFor(() => expect(screen.getByText('78G')).toBeTruthy());
+    expect(screen.getAllByText('빈 밭')).toHaveLength(6);
   });
 
   test('renders the shared farm UI in English when the saved locale is en-US', async () => {
@@ -237,9 +289,11 @@ describe('FarmGame UI flow', () => {
     expect(screen.getAllByText('Empty')).toHaveLength(6);
     expect(screen.getByText('Carrot')).toBeTruthy();
 
-    fireEvent.press(screen.getByText(/Vegetable Field/));
+    // Use the stable testID on each area tab to avoid colliding with the
+    // next-goal bar in the header that also shows the area name.
+    fireEvent.press(screen.getByTestId('area-tab-vegetable_field'));
     expect(screen.getByText('Vegetable Field requirements')).toBeTruthy();
-    fireEvent.press(screen.getByText('Starter Field'));
+    fireEvent.press(screen.getByTestId('area-tab-starter_field'));
 
     fireEvent.press(screen.getByText('Carrot'));
     expect(screen.getByText('Plant Carrot · 10G · ROI +40%')).toBeTruthy();
@@ -346,7 +400,7 @@ describe('FarmGame UI flow', () => {
 
     fireEvent.press(screen.getByText('당근'));
     expect(screen.getByText('당근 심기 · 10G · 투자효율 +40%')).toBeTruthy();
-  });
+  }, 30_000);
 
   test('closes the shop sheet after a free plot ad reward', async () => {
     const rewardedAd = createReadyRewardedAd();
@@ -364,7 +418,7 @@ describe('FarmGame UI flow', () => {
 
     fireEvent.press(screen.getByText('🏪 상점'));
     expect(screen.getByText('현재 7칸 · 작물을 심을 공간을 1칸 늘려요')).toBeTruthy();
-  });
+  }, 30_000);
 
   test('closes the current sheet when a rewarded ad is dismissed without reward', async () => {
     const rewardedAd = createRewardedAd({ status: 'dismissed' });
@@ -382,7 +436,7 @@ describe('FarmGame UI flow', () => {
 
     fireEvent.press(screen.getByText('당근'));
     expect(screen.getByText('당근 심기 · 10G · 투자효율 +40%')).toBeTruthy();
-  });
+  }, 30_000);
 
   test('normalizes thrown rewarded ad failures and closes the active sheet', async () => {
     const rewardedAd = createThrowingRewardedAd(new Error('sdk request failed with dynamic token 123'));
@@ -408,7 +462,7 @@ describe('FarmGame UI flow', () => {
       })
     );
     expect(screen.getByText('50G')).toBeTruthy();
-  });
+  }, 30_000);
 
   test('closes the growth ad sheet after completing crop growth', async () => {
     const rewardedAd = createReadyRewardedAd();
@@ -426,7 +480,7 @@ describe('FarmGame UI flow', () => {
     await waitFor(() => expect(rewardedAd.showAd).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(screen.queryByText('즉시 성장')).toBeNull());
     await waitFor(() => expect(screen.getByText('GET')).toBeTruthy());
-  });
+  }, 30_000);
 
   test('never drives the growth bar with a full-grow-time animation (legend crops crashed iOS)', async () => {
     // Regression: GrowthProgressBar used to run a single Animated.timing spanning
@@ -471,14 +525,132 @@ describe('FarmGame UI flow', () => {
 
     await waitFor(() => expect(screen.getByText('50G')).toBeTruthy());
 
-    fireEvent.press(screen.getAllByText('GET')[0]!);
+    fireEvent.press(within(screen.getByTestId('plot-cell-0')).getByText('GET'));
 
-    expect(screen.getByText(/숙련도가 브론즈 등급/)).toBeTruthy();
+    expect(screen.getByText('숙련도 달성!')).toBeTruthy();
+    expect(screen.getByText(/브론즈/)).toBeTruthy();
 
     fireEvent.press(screen.getByLabelText('작물 도감'));
 
     expect(screen.getByText(`${firstThreshold}/${thresholds[1]}`)).toBeTruthy();
-    expect(screen.getByText('🥉')).toBeTruthy();
+    // Scope to the collection sheet so the seed-picker badge (which also shows
+    // 🥉 for mastered crops) doesn't mask a regression in the collection view.
+    expect(within(screen.getByTestId('collection-sheet')).getByText('🥉')).toBeTruthy();
+  });
+
+  test('mastery rank-up overlay auto-dismisses after the celebration duration', async () => {
+    const thresholds = getMasteryThresholds('carrot');
+    const firstThreshold = thresholds[0]!;
+    const state: GameState = {
+      ...createReadyHarvestState(),
+      harvestedCropKeys: ['carrot'],
+      harvestCounts: { carrot: firstThreshold - 1 },
+    };
+    const screen = await renderGame(state);
+
+    await waitFor(() => expect(screen.getByText('50G')).toBeTruthy());
+    fireEvent.press(within(screen.getByTestId('plot-cell-0')).getByText('GET'));
+
+    expect(screen.getByText('숙련도 달성!')).toBeTruthy();
+
+    await act(async () => {
+      jest.advanceTimersByTime(MASTERY_RANK_UP_CELEBRATION_DURATION_MS);
+    });
+
+    expect(screen.queryByText('숙련도 달성!')).toBeNull();
+  });
+
+  test('mastery rank-up overlay dismisses immediately on backdrop tap', async () => {
+    const thresholds = getMasteryThresholds('carrot');
+    const firstThreshold = thresholds[0]!;
+    const state: GameState = {
+      ...createReadyHarvestState(),
+      harvestedCropKeys: ['carrot'],
+      harvestCounts: { carrot: firstThreshold - 1 },
+    };
+    const screen = await renderGame(state);
+
+    await waitFor(() => expect(screen.getByText('50G')).toBeTruthy());
+    fireEvent.press(within(screen.getByTestId('plot-cell-0')).getByText('GET'));
+
+    expect(screen.getByText('숙련도 달성!')).toBeTruthy();
+
+    fireEvent.press(screen.getByTestId('mastery-rank-up-overlay'));
+
+    expect(screen.queryByText('숙련도 달성!')).toBeNull();
+  });
+
+  test('consecutive rank-ups replace the overlay notice and reset the auto-dismiss timer', async () => {
+    const thresholds = getMasteryThresholds('carrot');
+    const firstThreshold = thresholds[0]!;
+    const wheatThresholds = getMasteryThresholds('wheat');
+    const wheatFirstThreshold = wheatThresholds[0]!;
+    const base = createInitialState();
+    // Plot 0 = carrot (rank-up on next harvest), plot 1 = wheat (rank-up on next harvest)
+    const state: GameState = {
+      ...base,
+      plots: [
+        { ...base.plots[0]!, cropType: 'carrot', startTime: NOW - 10_000, state: 2 },
+        { ...base.plots[1]!, cropType: 'wheat', startTime: NOW - 10_000, state: 2 },
+        ...base.plots.slice(2),
+      ],
+      unlockedAreas: base.unlockedAreas,
+      harvestedCropKeys: ['carrot', 'wheat'],
+      harvestCounts: {
+        carrot: firstThreshold - 1,
+        wheat: wheatFirstThreshold - 1,
+      },
+    };
+    const screen = await renderGame(state);
+
+    await waitFor(() => expect(screen.getAllByText('GET').length).toBeGreaterThanOrEqual(2));
+
+    // First rank-up: explicitly press plot 0 (carrot) — overlay shows carrot's name
+    fireEvent.press(within(screen.getByTestId('plot-cell-0')).getByText('GET'));
+    const cardAfterFirst = screen.getByTestId('mastery-rank-up-card');
+    expect(within(cardAfterFirst).getByText('당근')).toBeTruthy();
+    expect(within(cardAfterFirst).getByText(/브론즈/)).toBeTruthy();
+
+    // Advance partway through the first timer — overlay still showing
+    await act(async () => {
+      jest.advanceTimersByTime(MASTERY_RANK_UP_CELEBRATION_DURATION_MS - 500);
+    });
+    expect(screen.getByText('숙련도 달성!')).toBeTruthy();
+
+    // Second rank-up: target plot-cell-1 (wheat) directly, independent of DOM order.
+    fireEvent.press(within(screen.getByTestId('plot-cell-1')).getByText('GET'));
+    const cardAfterSecond = screen.getByTestId('mastery-rank-up-card');
+    expect(within(cardAfterSecond).getByText('밀')).toBeTruthy();
+    expect(within(cardAfterSecond).getByText(/브론즈/)).toBeTruthy();
+
+    // Old timer would have expired by now but the reset timer is still running
+    await act(async () => {
+      jest.advanceTimersByTime(600);
+    });
+    expect(screen.getByText('숙련도 달성!')).toBeTruthy();
+
+    // Full duration from the second rank-up elapses — overlay gone
+    await act(async () => {
+      jest.advanceTimersByTime(MASTERY_RANK_UP_CELEBRATION_DURATION_MS);
+    });
+    expect(screen.queryByText('숙련도 달성!')).toBeNull();
+  });
+
+  test('collects every ripe plot in one tap via the Harvest All shortcut', async () => {
+    const screen = await renderGame(createReadyHarvestState());
+
+    await waitFor(() => expect(screen.getByText('50G')).toBeTruthy());
+
+    // Two ripe carrots surface the batch shortcut in place of the tool hint.
+    expect(screen.getByText('🧺 모두 수확 2')).toBeTruthy();
+    fireEvent.press(screen.getByLabelText('🧺 모두 수확 2'));
+
+    // Both plots collected at once: +14G each, with a single batch toast.
+    await waitFor(() => expect(screen.getByText('78G')).toBeTruthy());
+    expect(screen.getByText(/한 번에 수확했어요/)).toBeTruthy();
+    // No ripe plots remain, so neither the GET badge nor the shortcut shows.
+    expect(screen.queryByText('GET')).toBeNull();
+    expect(screen.queryByText(/모두 수확/)).toBeNull();
   });
 
   test('auto-harvests and replants through the game tick when automation is unlocked', async () => {
@@ -622,5 +794,261 @@ describe('FarmGame UI flow', () => {
     fireEvent.press(screen.getAllByText('GET')[0]!);
 
     expect(screen.getByText(`${formatMoney(readyHarvestState.gold + carrotRevenue * 3)}G`)).toBeTruthy();
+  });
+
+  test('greets a returning player with an offline progress recap', async () => {
+    mockPersistence.readLastSeenAt.mockResolvedValueOnce(NOW - 2 * 60 * 60 * 1000);
+    const screen = await renderGame(createReadyHarvestState());
+
+    await waitFor(() => expect(screen.getByText('다시 오셨네요!')).toBeTruthy());
+    expect(screen.getByText('수확을 기다리는 작물')).toBeTruthy();
+    expect(screen.getByText('2칸')).toBeTruthy();
+    // The recap is marked as seen immediately so a quick reload won't replay it.
+    expect(mockPersistence.writeLastSeenAt).toHaveBeenCalled();
+
+    fireEvent.press(screen.getByText('농장으로 가기'));
+    await waitFor(() => expect(screen.queryByText('다시 오셨네요!')).toBeNull());
+  });
+
+  test('does not show the recap after only a brief absence', async () => {
+    mockPersistence.readLastSeenAt.mockResolvedValueOnce(NOW - 30_000);
+    const screen = await renderGame(createReadyHarvestState());
+
+    await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+    expect(screen.queryByText('다시 오셨네요!')).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Unit tests for getNextAreaGoal – pure function, no RN rendering needed.
+// ---------------------------------------------------------------------------
+describe('getNextAreaGoal', () => {
+  const { getNextAreaGoal } = farmGameModule;
+
+  // Helpers for building targeted game states.
+  const withGold = (state: GameState, gold: number): GameState => ({ ...state, gold });
+  const withHarvested = (state: GameState, keys: readonly CropKey[]): GameState => ({
+    ...state,
+    harvestedCropKeys: [...keys],
+  });
+  const withUpgrades = (state: GameState, level: number): GameState => ({
+    ...state,
+    upgrades: { speed: level, profit: level },
+  });
+  const withUnlocked = (state: GameState, areaKeys: readonly AreaKey[]): GameState => ({
+    ...state,
+    unlockedAreas: [...areaKeys],
+  });
+
+  // getNextAreaGoal uses FARM_AREAS.find() and relies on sequential (non-gated)
+  // areas being ordered by ascending unlock cost so find() returns the correct
+  // next milestone. This test locks in that invariant so a reordering in
+  // balance.json is caught before it silently breaks the goal logic.
+  test('sequential areas in FARM_AREAS are ordered by ascending unlock cost', () => {
+    const sequential = FARM_AREAS.filter((a) => a.unlock.gate == null);
+    for (let i = 1; i < sequential.length; i++) {
+      expect(sequential[i]!.unlock.cost).toBeGreaterThanOrEqual(sequential[i - 1]!.unlock.cost);
+    }
+  });
+
+  // Four distinct crop keys that satisfy the vegetable_field harvest requirement (4).
+  const FOUR_CROPS = ['carrot', 'wheat', 'potato', 'onion'] as const satisfies readonly CropKey[];
+
+  test('returns null when all sequential areas are unlocked, even if gated areas remain locked', () => {
+    // Unlock every area that has no gate. Gated areas (e.g. hybrid_greenhouse with
+    // gate='breeding_lab') must be excluded from the sequential scan so they never
+    // become the returned goal — verified here by leaving them locked.
+    const sequentialAreaKeys = FARM_AREAS.filter((a) => a.unlock.gate == null).map((a) => a.key);
+    const hasGatedArea = FARM_AREAS.some((a) => a.unlock.gate != null);
+    expect(hasGatedArea).toBe(true); // guard: test only makes sense when gated areas exist
+    const state = withUnlocked(createInitialState(), sequentialAreaKeys);
+    expect(getNextAreaGoal(state)).toBeNull();
+  });
+
+  test('returns harvest kind when harvest ratio is the worst bottleneck', () => {
+    // Initial state: gold=50 (ratio≈0.17 vs 300 needed), harvested=0 (ratio=0 vs 4 needed).
+    // Harvest ratio (0) < gold ratio (~0.17) → harvest is the bottleneck.
+    const state = createInitialState();
+    const result = getNextAreaGoal(state);
+    expect(result).toMatchObject({ kind: 'harvest', areaKey: 'vegetable_field', current: 0, total: 4 });
+  });
+
+  test('returns gold kind when harvest is met but gold is the bottleneck', () => {
+    // harvest=4/4 (ok), gold=100/300 (not ok), upgrade=1/1 (ok) → gold.
+    const state = withHarvested(withGold(createInitialState(), 100), [...FOUR_CROPS]);
+    const result = getNextAreaGoal(state);
+    expect(result).toMatchObject({ kind: 'gold', areaKey: 'vegetable_field', current: 100, total: 300 });
+  });
+
+  test('returns upgrade kind when both gold and harvest are met but upgrade level is too low', () => {
+    // fruit_field needs upgradeLevel 3. We unlock vegetable_field and set gold/harvest
+    // to satisfy fruit_field's gold (15000) and harvest (10) requirements but keep
+    // the upgrade level at 1 (min of speed/profit).
+    const tenCrops = ['carrot','wheat','potato','onion','corn','tomato','pepper','mushroom','rice','strawberry'] as const satisfies readonly CropKey[];
+    const state = withUpgrades(
+      withHarvested(
+        withGold(
+          withUnlocked(createInitialState(), ['starter_field', 'vegetable_field']),
+          20_000
+        ),
+        tenCrops
+      ),
+      1 // minUpgradeLevel=1 < 3 required
+    );
+    const result = getNextAreaGoal(state);
+    expect(result).toMatchObject({ kind: 'upgrade', areaKey: 'fruit_field', current: 1, total: 3 });
+  });
+
+  test('returns ready kind when every requirement for the next area is met', () => {
+    // vegetable_field: 300G, 4 crops, Lv.1 – all satisfied.
+    const state = withHarvested(withGold(createInitialState(), 300), [...FOUR_CROPS]);
+    const result = getNextAreaGoal(state);
+    expect(result).toMatchObject({ kind: 'ready', areaKey: 'vegetable_field' });
+  });
+
+  test('gold wins the tie when goldRatio equals harvestRatio', () => {
+    // gold=150 → ratio 0.5 (150/300); harvested=2 → ratio 0.5 (2/4).
+    // When ratios are equal the gold branch fires first because its condition
+    // uses <=, giving gold priority over harvest in ties.
+    const state = withHarvested(withGold(createInitialState(), 150), ['carrot', 'wheat']);
+    const result = getNextAreaGoal(state);
+    expect(result).toMatchObject({ kind: 'gold', areaKey: 'vegetable_field' });
+  });
+
+  test('boundary: reaching the exact gold threshold switches to ready', () => {
+    const state = withHarvested(withGold(createInitialState(), 300), [...FOUR_CROPS]);
+    expect(getNextAreaGoal(state)).toMatchObject({ kind: 'ready' });
+  });
+
+  test('boundary: one gold short of the threshold stays as gold', () => {
+    const state = withHarvested(withGold(createInitialState(), 299), [...FOUR_CROPS]);
+    const result = getNextAreaGoal(state);
+    expect(result).toMatchObject({ kind: 'gold', current: 299, total: 300 });
+  });
+
+  test('upgrade bottleneck is detected even when requiredUpgradeLevel is 1', () => {
+    // Prior bug: upgradeRatio used `> 1` guard so level-1 requirements always got
+    // ratio=1 (treated as "satisfied"). With the fix (`> 0`) a current level of 0
+    // now correctly computes ratio=0 and surfaces the upgrade bottleneck.
+    // This state is hypothetical (initial saves start at Lv.1) but validates the
+    // formula is safe across all non-negative upgrade levels.
+    const state = {
+      ...withHarvested(withGold(createInitialState(), 100), [...FOUR_CROPS]),
+      upgrades: { speed: 0, profit: 0 }, // getMinUpgradeLevel → 0
+    };
+    // vegetable_field needs Lv.1; current is 0 → upgradeOk=false, upgradeRatio=0.
+    // gold: 100/300≈0.33. harvest: 4/4=1 (ok). upgrade: 0/1=0.
+    // upgrade ratio (0) < gold ratio (0.33) → kind=upgrade.
+    const result = getNextAreaGoal(state);
+    expect(result).toMatchObject({ kind: 'upgrade', areaKey: 'vegetable_field', current: 0, total: 1 });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// UI tests for NextGoalBar component
+// ---------------------------------------------------------------------------
+describe('NextGoalBar', () => {
+  test('shows the ready state bar and opens the shop when tapped', async () => {
+    // vegetable_field requirements: 300G + 4 crop types + Lv.1 upgrade (already met at start).
+    const readyAreaState: GameState = {
+      ...createInitialState(),
+      gold: 300,
+      harvestedCropKeys: ['carrot', 'wheat', 'potato', 'onion'] satisfies CropKey[],
+    };
+    const screen = await renderGame(readyAreaState);
+
+    // The ready bar should appear once the game loads.
+    await waitFor(() =>
+      expect(screen.getByText('🔓 채소 밭 해금 준비 완료! 상점에서 열기')).toBeTruthy()
+    );
+
+    // Shop must be closed before the tap (guard against false positive).
+    expect(screen.queryByText('농장 관리소')).toBeNull();
+
+    // Press the Pressable directly via testID so we validate the onPress wiring,
+    // not just that a Text node exists inside the component.
+    fireEvent.press(screen.getByTestId('next-goal-bar'));
+
+    expect(screen.getByText('농장 관리소')).toBeTruthy();
+  });
+
+  test('harvest-kind bar opens the shop when tapped', async () => {
+    // Initial state: gold=50, no crops harvested → harvest is the bottleneck.
+    const screen = await renderGame(null);
+
+    await waitFor(() => expect(screen.getByText('50G')).toBeTruthy());
+
+    expect(screen.queryByText('농장 관리소')).toBeNull();
+    fireEvent.press(screen.getByTestId('next-goal-bar'));
+    expect(screen.getByText('농장 관리소')).toBeTruthy();
+  });
+
+  test('gold-kind bar opens the shop when tapped', async () => {
+    // harvest=4/4 (ok), gold=100/300 (not ok) → gold kind.
+    const goldState: GameState = {
+      ...createInitialState(),
+      gold: 100,
+      harvestedCropKeys: ['carrot', 'wheat', 'potato', 'onion'] satisfies CropKey[],
+    };
+    const screen = await renderGame(goldState);
+
+    await waitFor(() => expect(screen.getByText('100G')).toBeTruthy());
+
+    expect(screen.queryByText('농장 관리소')).toBeNull();
+    fireEvent.press(screen.getByTestId('next-goal-bar'));
+    expect(screen.getByText('농장 관리소')).toBeTruthy();
+  });
+
+  test('upgrade-kind bar opens the shop when tapped', async () => {
+    // gold=300/300 (ok), harvest=4/4 (ok), upgrade=0/1 (not ok) → upgrade kind.
+    const upgradeState: GameState = {
+      ...createInitialState(),
+      gold: 300,
+      harvestedCropKeys: ['carrot', 'wheat', 'potato', 'onion'] satisfies CropKey[],
+      upgrades: { speed: 0, profit: 0 },
+    };
+    const screen = await renderGame(upgradeState);
+
+    await waitFor(() => expect(screen.getByText('300G')).toBeTruthy());
+
+    expect(screen.queryByText('농장 관리소')).toBeNull();
+    fireEvent.press(screen.getByTestId('next-goal-bar'));
+    expect(screen.getByText('농장 관리소')).toBeTruthy();
+  });
+
+  test('shows seed selection hint when all unlocked plots are empty and harvest tool is selected', async () => {
+    const screen = await renderGame(null);
+
+    await waitFor(() => expect(screen.getByText('50G')).toBeTruthy());
+
+    // All 6 plots are empty and harvest tool is selected by default →
+    // the hint should guide the player to pick a seed, not prompt harvesting.
+    expect(screen.getByText('🌱 아래에서 씨앗을 골라 빈 밭에 심어보세요!')).toBeTruthy();
+    expect(screen.queryByText('밭을 눌러 수확할 수 있어요.')).toBeNull();
+  });
+
+  test('switches back to harvest hint once any plot has a crop', async () => {
+    const screen = await renderGame(null);
+
+    await waitFor(() => expect(screen.getByText('50G')).toBeTruthy());
+    expect(screen.getByText('🌱 아래에서 씨앗을 골라 빈 밭에 심어보세요!')).toBeTruthy();
+
+    // Plant a carrot in the first plot, then switch back to harvest tool.
+    fireEvent.press(screen.getByText('당근'));
+    fireEvent.press(screen.getAllByText('빈 밭')[0]!);
+
+    // Advance past the plant-pop animation (PLANT_POP_DURATION_MS = 320 ms) so
+    // the GrowingCropIcon callback fires inside act() and avoids a dangling
+    // state-update warning that would leak into subsequent tests.
+    await act(async () => {
+      jest.advanceTimersByTime(400);
+    });
+
+    // Switch back to harvest tool — now one plot is growing.
+    fireEvent.press(screen.getByText('수확'));
+
+    // One plot is now growing → seed hint replaced by harvest hint.
+    expect(screen.queryByText('🌱 아래에서 씨앗을 골라 빈 밭에 심어보세요!')).toBeNull();
+    expect(screen.getByText('밭을 눌러 수확할 수 있어요.')).toBeTruthy();
   });
 });

@@ -6,9 +6,11 @@ import { detectRuntimeLocale } from '../farm/i18n';
 import { useAppsInTossFarmAudio } from '../farm/platform/appsInTossAudio';
 import { useFullScreenAd } from '../farm/platform/fullScreenAd';
 import {
+  readLastSeenAt,
   readPersistedGameSettings,
   readPersistedGameState,
   removePersistedGameState,
+  writeLastSeenAt,
   writePersistedGameSettings,
   writePersistedGameState,
 } from '../farm/storage';
@@ -23,6 +25,8 @@ const appsInTossPersistence = {
   removePersistedGameState,
   readPersistedGameSettings,
   writePersistedGameSettings,
+  readLastSeenAt,
+  writeLastSeenAt,
 };
 
 function Page() {
