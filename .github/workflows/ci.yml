@@ -3,6 +3,7 @@ name: Validate
 on:
   pull_request:
     branches:
+      - main
       - develop
     paths-ignore:
       - '**.md'
