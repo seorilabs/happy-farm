@@ -1363,13 +1363,18 @@ export default function FarmGame({
         { now, rng: () => roll }
       );
       if (result.status === 'blocked') {
-        // Idempotent restore — calling comboAtTap assignment twice (StrictMode
-        // double-invoke) produces the same result, unlike a decrement.
-        harvestComboRef.current = comboAtTap;
+        // CAS-style restore: only undo this tap's increment if a later tap hasn't
+        // already advanced the ref further. This is both StrictMode-safe (idempotent
+        // on double-invoke: first call restores, second call's check fails → no-op)
+        // and safe for rapid successive taps (doesn't clobber a later tap's value).
+        if (harvestComboRef.current === comboAtTap + 1) harvestComboRef.current = comboAtTap;
         return state;
       }
       const event = result.events[0];
       if (event?.type !== 'cropHarvested') {
+        // harvestCrop command always produces cropHarvested on success, but restore
+        // defensively in case that ever changes.
+        if (harvestComboRef.current === comboAtTap + 1) harvestComboRef.current = comboAtTap;
         return result.state;
       }
 
