@@ -153,6 +153,7 @@ export const COMBO_LEGENDARY_THRESHOLD = 10;
 export const MASTERY_RANK_UP_CELEBRATION_DURATION_MS = 2600;
 export const PRESTIGE_GRADUATION_CELEBRATION_DURATION_MS = 3500;
 export const FIRST_HARVEST_CELEBRATION_DURATION_MS = 3200;
+export const AREA_UNLOCK_CELEBRATION_DURATION_MS = 2800;
 const SHEET_DISMISS_DRAG_DISTANCE = 96;
 const SHEET_DISMISS_VELOCITY = 1.1;
 const SHEET_DISMISS_TRANSLATE_Y = 520;
@@ -346,6 +347,12 @@ type FirstHarvestNotice = {
   goldFormatted: string;
 };
 
+type AreaUnlockNotice = {
+  id: number;
+  areaName: string;
+  cropCount: number;
+};
+
 // One-shot floating "+gold" feedback spawned at the tapped plot on a manual
 // harvest. Auto-harvest stays silent so the burst always maps to a finger tap.
 type HarvestPop = {
@@ -453,6 +460,9 @@ export default function FarmGame({
   const [firstHarvestNotice, setFirstHarvestNotice] = useState<FirstHarvestNotice | null>(null);
   const firstHarvestTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const firstHarvestNoticeIdRef = useRef(0);
+  const [areaUnlockNotice, setAreaUnlockNotice] = useState<AreaUnlockNotice | null>(null);
+  const areaUnlockTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const areaUnlockNoticeIdRef = useRef(0);
   // Per-plot "just planted" tokens. Bumped only on a manual plant so the fresh
   // sprout bounces in (auto-replant and save-load stay silent). Keyed by index.
   const [plantPulses, setPlantPulses] = useState<Record<number, number>>({});
@@ -600,6 +610,24 @@ export default function FarmGame({
       firstHarvestTimerRef.current = null;
     }
     setFirstHarvestNotice(null);
+  }, []);
+  const showAreaUnlockCelebration = useCallback((notice: Omit<AreaUnlockNotice, 'id'>) => {
+    if (areaUnlockTimerRef.current != null) {
+      clearTimeout(areaUnlockTimerRef.current);
+    }
+    areaUnlockNoticeIdRef.current += 1;
+    setAreaUnlockNotice({ ...notice, id: areaUnlockNoticeIdRef.current });
+    areaUnlockTimerRef.current = setTimeout(() => {
+      setAreaUnlockNotice(null);
+      areaUnlockTimerRef.current = null;
+    }, AREA_UNLOCK_CELEBRATION_DURATION_MS);
+  }, []);
+  const dismissAreaUnlockCelebration = useCallback(() => {
+    if (areaUnlockTimerRef.current != null) {
+      clearTimeout(areaUnlockTimerRef.current);
+      areaUnlockTimerRef.current = null;
+    }
+    setAreaUnlockNotice(null);
   }, []);
   const closeSheet = useCallback(() => {
     setActiveSheet(null);
@@ -1999,6 +2027,13 @@ export default function FarmGame({
               analytics={farmAnalytics}
               onDone={toast}
               onMilestone={() => void maybeShowMilestoneAd()}
+              onAreaUnlocked={(areaKey) => {
+                const area = FARM_AREAS.find((a) => a.key === areaKey);
+                if (area == null) return;
+                const areaLabel = getLocalizedAreaLabel(areaKey);
+                const cropCount = areaCropCounts[areaKey] ?? 0;
+                showAreaUnlockCelebration({ areaName: areaLabel.name, cropCount });
+              }}
             />
 
             <Text style={styles.sheetSectionTitle}>{messages.researchSection}</Text>
@@ -2226,6 +2261,14 @@ export default function FarmGame({
           notice={firstHarvestNotice}
           messages={messages}
           onDismiss={dismissFirstHarvestCelebration}
+        />
+      ) : null}
+      {areaUnlockNotice != null ? (
+        <AreaUnlockOverlay
+          key={areaUnlockNotice.id}
+          notice={areaUnlockNotice}
+          messages={messages}
+          onDismiss={dismissAreaUnlockCelebration}
         />
       ) : null}
     </View>
@@ -2586,6 +2629,81 @@ function FirstHarvestOverlay({
             +{notice.goldFormatted}G
           </Animated.Text>
           <Text style={styles.firstHarvestSubtitle}>{messages.firstHarvestSubtitle}</Text>
+        </Animated.View>
+      </View>
+    </Pressable>
+  );
+}
+
+// Celebration overlay shown when the player unlocks a new farm area in the shop.
+// The card springs in from below; the area emoji bounces with extra energy;
+// the crop count fades up after a short delay so the reward reads last.
+// Auto-dismisses after AREA_UNLOCK_CELEBRATION_DURATION_MS; tap to dismiss early.
+function AreaUnlockOverlay({
+  notice,
+  messages,
+  onDismiss,
+}: {
+  notice: AreaUnlockNotice;
+  messages: FarmMessages;
+  onDismiss: () => void;
+}) {
+  const cardScale = useRef(new Animated.Value(0.4)).current;
+  const iconScale = useRef(new Animated.Value(0.1)).current;
+  const cropCountEntrance = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const anim = Animated.parallel([
+      Animated.spring(cardScale, {
+        toValue: 1,
+        damping: 14,
+        stiffness: 270,
+        mass: 0.8,
+        useNativeDriver: true,
+      }),
+      Animated.sequence([
+        Animated.delay(80),
+        Animated.spring(iconScale, {
+          toValue: 1,
+          damping: 7,
+          stiffness: 180,
+          mass: 0.5,
+          useNativeDriver: true,
+        }),
+      ]),
+      Animated.sequence([
+        Animated.delay(300),
+        Animated.spring(cropCountEntrance, {
+          toValue: 1,
+          damping: 12,
+          stiffness: 260,
+          useNativeDriver: true,
+        }),
+      ]),
+    ]);
+    anim.start();
+    return () => anim.stop();
+  }, [cardScale, iconScale, cropCountEntrance]);
+
+  const cropCountTranslateY = cropCountEntrance.interpolate({ inputRange: [0, 1], outputRange: [10, 0] });
+
+  return (
+    <Pressable testID="area-unlock-overlay" style={StyleSheet.absoluteFill} onPress={onDismiss}>
+      <View style={styles.areaUnlockCenter} pointerEvents="none">
+        <Animated.View testID="area-unlock-card" style={[styles.areaUnlockCard, { transform: [{ scale: cardScale }] }]}>
+          <Text style={styles.areaUnlockTitle}>{messages.areaUnlockOverlayTitle}</Text>
+          <Animated.Text style={[styles.areaUnlockIcon, { transform: [{ scale: iconScale }] }]}>🌾</Animated.Text>
+          <Text style={styles.areaUnlockName}>{notice.areaName}</Text>
+          {notice.cropCount > 0 && (
+            <Animated.Text
+              style={[
+                styles.areaUnlockCropCount,
+                { opacity: cropCountEntrance, transform: [{ translateY: cropCountTranslateY }] },
+              ]}
+            >
+              {messages.areaUnlockOverlayCropCount(notice.cropCount)}
+            </Animated.Text>
+          )}
         </Animated.View>
       </View>
     </Pressable>
@@ -3630,6 +3748,7 @@ function ShopAreaUnlockRows({
   analytics,
   onDone,
   onMilestone,
+  onAreaUnlocked,
 }: {
   gameState: GameState;
   locale: SupportedLocale;
@@ -3639,6 +3758,7 @@ function ShopAreaUnlockRows({
   analytics: FarmAnalytics;
   onDone: (msg: string) => void;
   onMilestone: () => void;
+  onAreaUnlocked: (areaKey: AreaKey) => void;
 }) {
   const lockedAreas = FARM_AREAS.filter((area) => !isAreaUnlocked(gameState, area.key));
   // Gated areas (research-unlocked) sit outside the sequential progression.
@@ -3696,6 +3816,7 @@ function ShopAreaUnlockRows({
             context: getAnalyticsContext(gameState),
           });
           onDone(messages.areaOpenedToast(areaLabel.name));
+          onAreaUnlocked(area.key);
           onMilestone();
         }}
       />
@@ -4687,6 +4808,51 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#92400e',
+    marginTop: 2,
+  },
+  areaUnlockCenter: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingBottom: 60,
+  },
+  areaUnlockCard: {
+    width: 272,
+    paddingHorizontal: 28,
+    paddingVertical: 28,
+    borderRadius: 22,
+    backgroundColor: '#f0fdf4',
+    borderWidth: 2,
+    borderColor: '#86efac',
+    alignItems: 'center',
+    gap: 6,
+    shadowColor: '#16a34a',
+    shadowOpacity: 0.2,
+    shadowRadius: 28,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 14,
+  },
+  areaUnlockTitle: {
+    fontSize: 15,
+    fontWeight: '900',
+    color: '#166534',
+    letterSpacing: 0.2,
+  },
+  areaUnlockIcon: {
+    fontSize: 68,
+    lineHeight: 76,
+    marginVertical: 4,
+  },
+  areaUnlockName: {
+    fontSize: 22,
+    fontWeight: '900',
+    color: '#15803d',
+    letterSpacing: 0.1,
+  },
+  areaUnlockCropCount: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#166534',
     marginTop: 2,
   },
 });

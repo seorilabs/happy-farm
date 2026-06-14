@@ -218,6 +218,8 @@ const KO_FARM_MESSAGES = {
   newCropBadge: 'NEW',
   firstHarvestTitle: '첫 수확 완료! 🎉',
   firstHarvestSubtitle: '농부의 길이 시작됐어요!',
+  areaUnlockOverlayTitle: '새 구역 개방! 🗺️',
+  areaUnlockOverlayCropCount: (n: number) => `작물 ${n}종 추가`,
 };
 
 export type FarmMessages = typeof KO_FARM_MESSAGES;
@@ -425,6 +427,8 @@ const EN_FARM_MESSAGES: FarmMessages = {
   newCropBadge: 'NEW',
   firstHarvestTitle: 'First Harvest! 🎉',
   firstHarvestSubtitle: 'Your farming journey has begun!',
+  areaUnlockOverlayTitle: 'New Area Unlocked! 🗺️',
+  areaUnlockOverlayCropCount: (n: number) => `${n} new crops added`,
 };
 
 const FARM_MESSAGES: Record<SupportedLocale, FarmMessages> = {
