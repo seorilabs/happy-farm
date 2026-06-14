@@ -274,6 +274,12 @@ type MutationFlashHandle = {
   flash: (mutationKey: 'golden' | 'rainbow') => void;
 };
 
+// Imperative handle to show the new-crop discovery banner. Keeping crop data
+// in the call avoids any shared state and lets the overlay mount lazily.
+type DiscoveryBannerHandle = {
+  show: (icon: string, name: string) => void;
+};
+
 const defaultFarmAnalytics = createFarmAnalytics();
 const defaultFarmAudio: FarmGameAudio = {
   isSupported: false,
@@ -348,6 +354,7 @@ export default function FarmGame({
   const plantPulseTokenRef = useRef(0);
   const harvestFxRef = useRef<HarvestFxHandle>(null);
   const mutationFlashRef = useRef<MutationFlashHandle>(null);
+  const discoveryBannerRef = useRef<DiscoveryBannerHandle>(null);
   const goldPulseRef = useRef<Animated.Value | null>(null);
   if (goldPulseRef.current == null) {
     goldPulseRef.current = new Animated.Value(0);
@@ -612,6 +619,10 @@ export default function FarmGame({
         if (mutKey === 'golden' || mutKey === 'rainbow') {
           mutationFlashRef.current?.flash(mutKey);
         }
+      }
+      if (event.isNewCropDiscovery) {
+        const crop = getCrop(event.cropKey);
+        discoveryBannerRef.current?.show(crop.icon, getLocalizedCropName(event.cropKey));
       }
       // A celebratory double-buzz marks rare moments (mutation, mastery rank-up,
       // active boost); ordinary harvests keep the light single tap. The pattern
@@ -1671,6 +1682,12 @@ export default function FarmGame({
 
       <MutationFlashOverlay ref={mutationFlashRef} />
 
+      <DiscoveryBanner
+        ref={discoveryBannerRef}
+        title={messages.newCropDiscoveryTitle}
+        subtitle={messages.newCropDiscoverySubtitle}
+      />
+
       {harvestCombo >= 2 ? (
         <View pointerEvents="none" style={styles.comboOverlay}>
           <ComboDisplay count={harvestCombo} messages={messages} />
@@ -2092,6 +2109,94 @@ function ComboDisplay({ count, messages }: { count: number; messages: FarmMessag
     </Animated.View>
   );
 }
+
+// Slide-up banner that celebrates the first harvest of a new crop type.
+// Rendered via an imperative handle so the banner can animate in/out without
+// lifting crop state into FarmGame or triggering a full re-render.
+const DiscoveryBanner = React.forwardRef<
+  DiscoveryBannerHandle,
+  { title: string; subtitle: string }
+>(function DiscoveryBanner({ title, subtitle }, ref) {
+  const [entry, setEntry] = useState<{ icon: string; name: string } | null>(null);
+  const translateYRef = useRef<Animated.Value | null>(null);
+  if (translateYRef.current == null) {
+    translateYRef.current = new Animated.Value(80);
+  }
+  const translateY = translateYRef.current;
+
+  const opacityRef = useRef<Animated.Value | null>(null);
+  if (opacityRef.current == null) {
+    opacityRef.current = new Animated.Value(0);
+  }
+  const opacity = opacityRef.current;
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      show(icon: string, name: string) {
+        setEntry({ icon, name });
+        translateY.stopAnimation();
+        translateY.setValue(80);
+        opacity.stopAnimation();
+        opacity.setValue(0);
+        Animated.sequence([
+          Animated.parallel([
+            Animated.timing(translateY, {
+              toValue: 0,
+              duration: 320,
+              easing: Easing.out(Easing.back(1.6)),
+              useNativeDriver: true,
+            }),
+            Animated.timing(opacity, {
+              toValue: 1,
+              duration: 200,
+              easing: Easing.out(Easing.quad),
+              useNativeDriver: true,
+            }),
+          ]),
+          Animated.delay(1800),
+          Animated.parallel([
+            Animated.timing(translateY, {
+              toValue: -20,
+              duration: 340,
+              easing: Easing.in(Easing.quad),
+              useNativeDriver: true,
+            }),
+            Animated.timing(opacity, {
+              toValue: 0,
+              duration: 280,
+              easing: Easing.in(Easing.quad),
+              useNativeDriver: true,
+            }),
+          ]),
+        ]).start(({ finished }) => {
+          if (finished) {
+            setEntry(null);
+          }
+        });
+      },
+    }),
+    [translateY, opacity]
+  );
+
+  if (entry == null) {
+    return null;
+  }
+
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[styles.discoveryBanner, { transform: [{ translateY }], opacity }]}
+    >
+      <Text style={styles.discoveryBannerIcon}>{entry.icon}</Text>
+      <View>
+        <Text style={styles.discoveryBannerTitle}>{title}</Text>
+        <Text style={styles.discoveryBannerName}>{entry.name}</Text>
+        <Text style={styles.discoveryBannerSubtitle}>{subtitle}</Text>
+      </View>
+    </Animated.View>
+  );
+});
 
 // Full-screen flash overlay for rare mutation harvests. Two overlay layers
 // (golden and rainbow) driven independently so both can coexist without shared
@@ -3229,6 +3334,48 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     zIndex: 8,
+  },
+  discoveryBanner: {
+    position: 'absolute',
+    bottom: 160,
+    left: 20,
+    right: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    backgroundColor: 'rgba(17, 24, 39, 0.94)',
+    borderRadius: 18,
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+    zIndex: 15,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    elevation: 8,
+  },
+  discoveryBannerIcon: {
+    fontSize: 44,
+  },
+  discoveryBannerTitle: {
+    color: '#86efac',
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+    marginBottom: 1,
+  },
+  discoveryBannerName: {
+    color: '#ffffff',
+    fontSize: 20,
+    fontWeight: '900',
+    lineHeight: 24,
+  },
+  discoveryBannerSubtitle: {
+    color: 'rgba(209, 213, 219, 0.8)',
+    fontSize: 13,
+    fontWeight: '500',
+    marginTop: 2,
   },
   toast: {
     position: 'absolute',
