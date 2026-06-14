@@ -1785,7 +1785,7 @@ export default function FarmGame({
             // are computed once per tile per tick instead of once for each.
             const growth = getPlotGrowthDisplay(gameState, plot);
             const masteryRankIcon =
-              plot.state !== 0 && plot.cropType != null
+              (plot.state === 1 || plot.state === 2) && plot.cropType != null
                 ? getMasteryStatus(gameState, plot.cropType).rank?.icon
                 : undefined;
             return (

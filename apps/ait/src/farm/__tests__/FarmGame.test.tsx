@@ -318,7 +318,7 @@ describe('FarmGame UI flow', () => {
     const masteryState: GameState = {
       ...base,
       // 10 carrot harvests => Bronze rank (🥉) for tier-1 crops
-      harvestCounts: { carrot: 10 },
+      harvestCounts: { ...base.harvestCounts, carrot: 10 },
       plots: base.plots.map((plot, index) =>
         index === 0
           ? { ...plot, cropType: 'carrot' as CropKey, startTime: NOW, state: 1 as const }
@@ -327,8 +327,9 @@ describe('FarmGame UI flow', () => {
     };
     const screen = await renderGame(masteryState);
 
-    await waitFor(() => expect(screen.getByTestId('plot-cell-0')).toBeTruthy());
-    expect(within(screen.getByTestId('plot-cell-0')).getByText('🥉')).toBeTruthy();
+    await waitFor(() =>
+      expect(within(screen.getByTestId('plot-cell-0')).getByText('🥉')).toBeTruthy()
+    );
   });
 
   test('renders the shared farm UI in English when the saved locale is en-US', async () => {
