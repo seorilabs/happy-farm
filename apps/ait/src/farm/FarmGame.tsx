@@ -145,6 +145,9 @@ const HARVEST_ALL_MIN_COUNT = 2;
 const COMBO_WINDOW_MS = 1500;
 const COMBO_GREAT_THRESHOLD = 5;
 const COMBO_LEGENDARY_THRESHOLD = 10;
+// Gold bonus ratios applied on top of the base harvest value while in combo.
+const COMBO_GREAT_BONUS_RATIO = 0.1;
+const COMBO_LEGENDARY_BONUS_RATIO = 0.25;
 const SHEET_DISMISS_DRAG_DISTANCE = 96;
 const SHEET_DISMISS_VELOCITY = 1.1;
 const SHEET_DISMISS_TRANSLATE_Y = 520;
@@ -241,6 +244,7 @@ type PendingFarmCommandEffect =
       event: CropHarvestedGameEvent;
       now: number;
       shouldShowHarvestBonusNudge: boolean;
+      comboBonus: number;
     }
   | {
       id: number;
@@ -336,6 +340,9 @@ export default function FarmGame({
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [harvestCombo, setHarvestCombo] = useState(0);
   const comboTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Ref-shadowed combo count so harvestCrop can read the current streak
+  // synchronously inside the setGameState updater without a stale closure.
+  const harvestComboRef = useRef(0);
   // Per-plot "just planted" tokens. Bumped only on a manual plant so the fresh
   // sprout bounces in (auto-replant and save-load stay silent). Keyed by index.
   const [plantPulses, setPlantPulses] = useState<Record<number, number>>({});
@@ -422,8 +429,10 @@ export default function FarmGame({
     if (comboTimerRef.current != null) {
       clearTimeout(comboTimerRef.current);
     }
-    setHarvestCombo((prev) => prev + count);
+    harvestComboRef.current += count;
+    setHarvestCombo(harvestComboRef.current);
     comboTimerRef.current = setTimeout(() => {
+      harvestComboRef.current = 0;
       setHarvestCombo(0);
       comboTimerRef.current = null;
     }, COMBO_WINDOW_MS);
@@ -583,11 +592,12 @@ export default function FarmGame({
         setActiveSheet({ type: 'harvestBonus' });
       }
       const isSpecialHarvest = event.mutation != null || event.newMasteryRank != null || event.boostActive;
-      if (event.goldGained > 0) {
+      const totalGoldShown = event.goldGained + effect.comboBonus;
+      if (totalGoldShown > 0) {
         harvestFxRef.current?.spawn(
           event.plotIndex,
-          `+${formatMoney(event.goldGained, locale)}`,
-          isSpecialHarvest ? 'special' : 'normal'
+          `+${formatMoney(totalGoldShown, locale)}`,
+          isSpecialHarvest || effect.comboBonus > 0 ? 'special' : 'normal'
         );
         pulseGold();
       }
@@ -1034,6 +1044,7 @@ export default function FarmGame({
       clearTimeout(comboTimerRef.current);
       comboTimerRef.current = null;
     }
+    harvestComboRef.current = 0;
     setHarvestCombo(0);
     setGameState((state) => prestigeFarm(state, prestigeArchetype, now)?.state ?? state);
     setSelectedArea(FIRST_AREA.key);
@@ -1212,6 +1223,7 @@ export default function FarmGame({
       clearTimeout(comboTimerRef.current);
       comboTimerRef.current = null;
     }
+    harvestComboRef.current = 0;
     setHarvestCombo(0);
     setGameState(createInitialState());
     setSelectedArea(FIRST_AREA.key);
@@ -1246,6 +1258,9 @@ export default function FarmGame({
   function harvestCrop(index: number) {
     const now = Date.now();
     const effectId = ++commandEffectIdRef.current;
+    // Capture the current combo streak synchronously before any state update;
+    // the updater below runs asynchronously so reading state here is safe.
+    const comboAtTap = harvestComboRef.current;
     setGameState((state) => {
       const roll = Math.random();
       const result = executeFarmGameCommand(
@@ -1257,20 +1272,46 @@ export default function FarmGame({
         return state;
       }
       const event = result.events[0];
-      if (event?.type === 'cropHarvested') {
-        pendingCommandEffectsRef.current.push({
-          id: effectId,
-          type: 'cropHarvested',
-          event,
-          now,
-          shouldShowHarvestBonusNudge:
-            rewardedAd.isAdReady &&
-            getRewardedAdLimitStatus(result.state, 'harvestBonusAd', now).allowed &&
-            getHarvestBonusPromptStatus(result.state, now).allowed &&
-            !event.boostActive,
-        });
+      if (event?.type !== 'cropHarvested') {
+        return result.state;
       }
-      return result.state;
+
+      // Combo gold bonus: applied only to gold harvests (not donations) so the
+      // RP flow stays untouched. Uses the streak depth at the moment of tap so
+      // back-to-back harvests feel progressively more rewarding.
+      let comboBonus = 0;
+      let nextState = result.state;
+      if (!event.donated && event.goldGained > 0) {
+        if (comboAtTap >= COMBO_LEGENDARY_THRESHOLD) {
+          comboBonus = Math.floor(event.goldGained * COMBO_LEGENDARY_BONUS_RATIO);
+        } else if (comboAtTap >= COMBO_GREAT_THRESHOLD) {
+          comboBonus = Math.floor(event.goldGained * COMBO_GREAT_BONUS_RATIO);
+        }
+        if (comboBonus > 0) {
+          nextState = {
+            ...result.state,
+            gold: result.state.gold + comboBonus,
+            lifetimeStats: {
+              ...result.state.lifetimeStats,
+              totalGoldEarned: result.state.lifetimeStats.totalGoldEarned + comboBonus,
+            },
+          };
+        }
+      }
+
+      pendingCommandEffectsRef.current.push({
+        id: effectId,
+        type: 'cropHarvested',
+        event,
+        now,
+        comboBonus,
+        shouldShowHarvestBonusNudge:
+          rewardedAd.isAdReady &&
+          getRewardedAdLimitStatus(result.state, 'harvestBonusAd', now).allowed &&
+          getHarvestBonusPromptStatus(result.state, now).allowed &&
+          !event.boostActive,
+      });
+      return nextState;
     });
     setCommandEffectVersion((version) => version + 1);
   }
