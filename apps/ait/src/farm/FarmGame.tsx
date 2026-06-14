@@ -443,6 +443,10 @@ export default function FarmGame({
   const [harvestCombo, setHarvestCombo] = useState(0);
   const comboTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevComboRef = useRef(0);
+  // Ref-backed combo counter: updated synchronously on every tap so rapid
+  // consecutive harvests (faster than a React re-render) always see the correct
+  // tier, rather than all reading the same stale state value from the closure.
+  const harvestComboRef = useRef(0);
   const [masteryRankUpNotice, setMasteryRankUpNotice] = useState<MasteryRankUpNotice | null>(null);
   const masteryRankUpTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const masteryNoticeIdRef = useRef(0);
@@ -537,8 +541,10 @@ export default function FarmGame({
     if (comboTimerRef.current != null) {
       clearTimeout(comboTimerRef.current);
     }
-    setHarvestCombo((prev) => prev + count);
+    harvestComboRef.current += count;
+    setHarvestCombo(harvestComboRef.current);
     comboTimerRef.current = setTimeout(() => {
+      harvestComboRef.current = 0;
       setHarvestCombo(0);
       comboTimerRef.current = null;
     }, COMBO_WINDOW_MS);
@@ -804,7 +810,8 @@ export default function FarmGame({
       if (gameSettings.soundEffectsEnabled && audio.isSupported) {
         void audio.playHarvest();
       }
-      incrementCombo(1);
+      // Combo is now advanced synchronously in harvestCrop (before setGameState)
+      // so rapid taps get correct per-tap tiers. No increment needed here.
     }
   }, [
     analyticsContext,
@@ -1236,6 +1243,7 @@ export default function FarmGame({
       clearTimeout(comboTimerRef.current);
       comboTimerRef.current = null;
     }
+    harvestComboRef.current = 0;
     setHarvestCombo(0);
     setGameState((state) => prestigeFarm(state, prestigeArchetype, now)?.state ?? state);
     setSelectedArea(FIRST_AREA.key);
@@ -1416,6 +1424,7 @@ export default function FarmGame({
       clearTimeout(comboTimerRef.current);
       comboTimerRef.current = null;
     }
+    harvestComboRef.current = 0;
     setHarvestCombo(0);
     setGameState(createInitialState());
     setSelectedArea(FIRST_AREA.key);
@@ -1450,9 +1459,22 @@ export default function FarmGame({
   function harvestCrop(index: number) {
     const now = Date.now();
     const effectId = ++commandEffectIdRef.current;
-    // Capture the current combo before the state update so the multiplier
-    // reflects the streak that was already built (it increments after this tap).
-    const comboMultiplier = getComboGoldMultiplier(harvestCombo);
+    // Read the multiplier from the ref, then advance it synchronously. Using the
+    // ref (not the harvestCombo state value) means rapid taps that fire before
+    // React re-renders each see the up-to-date tier rather than the same stale
+    // render-closure value. The combo timer is also reset here so the window is
+    // anchored to this tap, not to the deferred effects flush.
+    const comboMultiplier = getComboGoldMultiplier(harvestComboRef.current);
+    if (comboTimerRef.current != null) {
+      clearTimeout(comboTimerRef.current);
+    }
+    harvestComboRef.current += 1;
+    setHarvestCombo(harvestComboRef.current);
+    comboTimerRef.current = setTimeout(() => {
+      harvestComboRef.current = 0;
+      setHarvestCombo(0);
+      comboTimerRef.current = null;
+    }, COMBO_WINDOW_MS);
     setGameState((state) => {
       const roll = Math.random();
       const result = executeFarmGameCommand(

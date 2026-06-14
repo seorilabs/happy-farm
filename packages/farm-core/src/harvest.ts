@@ -178,7 +178,9 @@ export function performHarvest(gameState: GameState, plotIndex: number, options:
   // research points instead of gold.
   const donated = gameState.automationSettings.donationModeEnabled;
   const raw = options.comboMultiplier;
-  const comboMultiplier = typeof raw === 'number' && isFinite(raw) && raw >= 1 ? raw : 1;
+  // Cap at 10 (well above the game's max of 1.15) so a pathologically large but
+  // finite value can't drive saleValue * comboMultiplier to Infinity.
+  const comboMultiplier = typeof raw === 'number' && isFinite(raw) && raw >= 1 && raw <= 10 ? raw : 1;
   const goldGained = donated ? 0 : Math.floor(saleValue * comboMultiplier);
   const rpGained = donated ? getDonationRp(gameState, saleValue) : 0;
 
