@@ -547,6 +547,15 @@ function farmUIReducer(state: FarmUIState, action: FarmUIAction): FarmUIState {
         pendingHarvestAllEffect,
       };
     }
+
+    default: {
+      // Exhaustive guard: TypeScript enforces all union variants are handled
+      // above; this branch is unreachable but keeps the function return-complete
+      // for strict compilers and future action type additions.
+      const _: never = action;
+      void _;
+      return state;
+    }
   }
 }
 
@@ -568,13 +577,8 @@ export default function FarmGame({
   const [gameSettings, setGameSettings] = useState<FarmGameSettings>(DEFAULT_FARM_GAME_SETTINGS);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [harvestCombo, setHarvestCombo] = useState(0);
   const comboTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevComboRef = useRef(0);
-  // Ref-backed combo counter: updated synchronously on every tap so rapid
-  // consecutive harvests (faster than a React re-render) always see the correct
-  // tier, rather than all reading the same stale state value from the closure.
-  const harvestComboRef = useRef(0);
   const [masteryRankUpNotice, setMasteryRankUpNotice] = useState<MasteryRankUpNotice | null>(null);
   const masteryRankUpTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const masteryNoticeIdRef = useRef(0);
@@ -631,6 +635,10 @@ export default function FarmGame({
   }));
   // Backward-compat aliases so the rest of the component is unchanged.
   const gameState = farmState.game;
+  // Combo displayed to the player — same source as the bonus multiplier the reducer
+  // computes. Pending effects count committed-but-not-yet-drained taps so the
+  // display updates in the same render that the reducer commits each harvest.
+  const comboDisplay = farmState.comboCount + farmState.pendingHarvestEffects.length;
   const setGameState = useCallback(
     (next: GameState | ((prev: GameState) => GameState)) => {
       farmDispatch({ type: 'SET_GAME', updater: typeof next === 'function' ? next : () => next });
@@ -678,18 +686,15 @@ export default function FarmGame({
       }),
     ]).start();
   }, [goldPulse]);
-  // Single entry point for all combo advances (manual tap and harvest-all).
-  // Centralising here ensures harvestCrop and the effects flush share identical
-  // ref/timer semantics and can't diverge or accidentally overwrite each other.
-  const advanceCombo = useCallback((count: number) => {
+  // Resets the combo expiry window. Called after every committed harvest so the
+  // 1500 ms window is always anchored to the most recent harvest, not dispatch time.
+  // Combo counting is fully managed by farmUIReducer (comboCount field), so this
+  // function only owns the timer — no state or ref bookkeeping needed here.
+  const advanceCombo = useCallback(() => {
     if (comboTimerRef.current != null) {
       clearTimeout(comboTimerRef.current);
     }
-    harvestComboRef.current += count;
-    setHarvestCombo(harvestComboRef.current);
     comboTimerRef.current = setTimeout(() => {
-      harvestComboRef.current = 0;
-      setHarvestCombo(0);
       comboTimerRef.current = null;
       farmDispatch({ type: 'RESET_COMBO' });
     }, COMBO_WINDOW_MS);
@@ -763,12 +768,13 @@ export default function FarmGame({
   }, []);
 
   useEffect(() => {
+    const curr = farmState.comboCount;
     const prev = prevComboRef.current;
-    prevComboRef.current = harvestCombo;
+    prevComboRef.current = curr;
     if (!gameSettings.soundEffectsEnabled || !audio.isSupported) return;
-    if (harvestCombo === 0) return;
+    if (curr === 0) return;
     const prevTier = prev < COMBO_GREAT_THRESHOLD ? 0 : prev < COMBO_LEGENDARY_THRESHOLD ? 1 : 2;
-    const currTier = harvestCombo < COMBO_GREAT_THRESHOLD ? 0 : harvestCombo < COMBO_LEGENDARY_THRESHOLD ? 1 : 2;
+    const currTier = curr < COMBO_GREAT_THRESHOLD ? 0 : curr < COMBO_LEGENDARY_THRESHOLD ? 1 : 2;
     if (currTier > prevTier) {
       // Single-action design: when a batch harvest jumps combo past multiple tiers
       // at once, we play only the highest tier reached. This preserves a meaningful
@@ -782,7 +788,7 @@ export default function FarmGame({
         // Synchronous throws from SFX are non-critical.
       }
     }
-  }, [harvestCombo, audio, gameSettings.soundEffectsEnabled]);
+  }, [farmState.comboCount, audio, gameSettings.soundEffectsEnabled]);
 
   const analyticsContext = useCallback(
     (state = gameState) => getGameAnalyticsContext(state, sessionStartedAtRef.current),
@@ -921,7 +927,7 @@ export default function FarmGame({
       if (gameSettings.soundEffectsEnabled && audio.isSupported) {
         void audio.playHarvest();
       }
-      advanceCombo(1);
+      advanceCombo();
     }
     farmDispatch({ type: 'DRAIN_HARVEST_EFFECTS' });
   }, [
@@ -985,7 +991,7 @@ export default function FarmGame({
       if (gameSettings.soundEffectsEnabled && audio.isSupported) {
         void audio.playHarvest();
       }
-      advanceCombo(effect.harvestedCount);
+      advanceCombo();
     }
     farmDispatch({ type: 'DRAIN_HARVEST_ALL_EFFECT' });
   }, [
@@ -1417,9 +1423,7 @@ export default function FarmGame({
       clearTimeout(comboTimerRef.current);
       comboTimerRef.current = null;
     }
-    harvestComboRef.current = 0;
     harvestAllInFlightRef.current = false;
-    setHarvestCombo(0);
     setGameState((state) => prestigeFarm(state, prestigeArchetype, now)?.state ?? state);
     farmDispatch({ type: 'DRAIN_HARVEST_EFFECTS' });
     farmDispatch({ type: 'DRAIN_HARVEST_ALL_EFFECT' });
@@ -1602,9 +1606,7 @@ export default function FarmGame({
       clearTimeout(comboTimerRef.current);
       comboTimerRef.current = null;
     }
-    harvestComboRef.current = 0;
     harvestAllInFlightRef.current = false;
-    setHarvestCombo(0);
     setGameState(createInitialState());
     farmDispatch({ type: 'DRAIN_HARVEST_EFFECTS' });
     farmDispatch({ type: 'DRAIN_HARVEST_ALL_EFFECT' });
@@ -2026,9 +2028,9 @@ export default function FarmGame({
         subtitle={messages.newCropDiscoverySubtitle}
       />
 
-      {harvestCombo >= 2 ? (
+      {comboDisplay >= 2 ? (
         <View pointerEvents="none" style={styles.comboOverlay}>
-          <ComboDisplay count={harvestCombo} messages={messages} donationModeEnabled={gameState.automationSettings.donationModeEnabled} />
+          <ComboDisplay count={comboDisplay} messages={messages} donationModeEnabled={gameState.automationSettings.donationModeEnabled} />
         </View>
       ) : null}
 
