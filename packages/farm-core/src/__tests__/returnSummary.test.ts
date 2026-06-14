@@ -77,4 +77,14 @@ describe('getReturnSummary', () => {
     const summary = getReturnSummary(state, lastSeen, NOW);
     expect(summary?.offlineGold).toBe((3600 * CHAIN_OFFLINE_CAP_MS) / MS_PER_HOUR);
   });
+
+  test('does not count ready crops in locked plots', () => {
+    // Place a ready crop in a locked plot slot (beyond unlockedPlotCount).
+    const base = createInitialState();
+    const lockedPlotIndex = base.unlockedPlotCount; // first locked slot
+    const stateWithLockedReadyCrop = withReadyCrop(lockedPlotIndex, base);
+    const lastSeen = NOW - 2 * MS_PER_HOUR;
+    // Nothing unlocked and ready → summary should be null.
+    expect(getReturnSummary(stateWithLockedReadyCrop, lastSeen, NOW)).toBeNull();
+  });
 });

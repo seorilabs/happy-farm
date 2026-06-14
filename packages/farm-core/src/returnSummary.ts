@@ -42,6 +42,9 @@ export function getReturnSummary(
 
   let readyCropCount = 0;
   for (const plot of gameState.plots) {
+    if (plot.id >= gameState.unlockedPlotCount) {
+      continue;
+    }
     if (plot.state === 2 || isPlotGrowthComplete(gameState, plot, now)) {
       readyCropCount += 1;
     }
