@@ -1533,6 +1533,11 @@ export default function FarmGame({
     }
 
     const now = Date.now();
+    // Intentionally uses harvestCombo (not harvestCombo + 1): Harvest All is a
+    // single tap that collects multiple plots. Applying a per-plot +1 increment
+    // would reward one button press as heavily as N rapid taps, which misrepresents
+    // the player's combo skill. The batch earns whatever multiplier the player
+    // has already built up before pressing the button.
     const comboMultiplier = getComboMultiplier(harvestCombo);
     const effectId = ++commandEffectIdRef.current;
     // One stable roll per plot index — not a flat sequence. Built outside the
