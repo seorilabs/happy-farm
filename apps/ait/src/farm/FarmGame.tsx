@@ -1355,11 +1355,10 @@ export default function FarmGame({
         return result.state;
       }
 
-      // Combo gold bonus: `comboAtTap + 1` is the streak including this harvest
-      // (the ref hasn't been incremented yet at tap time) so the 5th consecutive
-      // harvest correctly enters the Great tier. Donation harvests pass goldGained=0
-      // so computeComboGoldBonus naturally returns 0 — no extra guard needed.
-      const comboBonus = computeComboGoldBonus(comboAtTap + 1, event.goldGained);
+      // Combo gold bonus: applied only to non-donation gold harvests. We check
+      // event.donated explicitly rather than relying on goldGained===0 so the
+      // guard stays valid if donation semantics ever change.
+      const comboBonus = !event.donated ? computeComboGoldBonus(comboAtTap + 1, event.goldGained) : 0;
       const nextState =
         comboBonus > 0
           ? {
