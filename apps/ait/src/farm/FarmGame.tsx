@@ -2427,8 +2427,12 @@ function HarvestPopText({
   const left = col * (tileSize + PLOT_GAP);
   const top = row * (tileSize + PLOT_GAP);
 
+  const isMutationTone = pop.tone === 'golden' || pop.tone === 'rainbow';
   const yTop =
     pop.tone === 'rainbow' ? -tileSize * 0.95 : pop.tone === 'golden' ? -tileSize * 0.78 : -tileSize * 0.55;
+  // Scale start and max are larger for mutation tones to give the jackpot pop extra punch;
+  // normal/special keep their original 0.6 start so existing harvest feel is unchanged.
+  const scaleStart = isMutationTone ? 0.4 : 0.6;
   const scaleMax = pop.tone === 'rainbow' ? 1.65 : pop.tone === 'golden' ? 1.45 : 1.15;
 
   const translateY = progress.interpolate({
@@ -2437,10 +2441,13 @@ function HarvestPopText({
   });
   const scale = progress.interpolate({
     inputRange: [0, 0.25, 1],
-    outputRange: [0.4, scaleMax, 1],
+    outputRange: [scaleStart, scaleMax, 1],
   });
+  // Mutation pops fade in a touch faster (0.1 vs 0.12) and out a touch earlier (0.6
+  // vs 0.65) so the longer animation duration feels proportionate; normal/special keep
+  // the original timing so their feel is unchanged.
   const opacity = progress.interpolate({
-    inputRange: [0, 0.1, 0.6, 1],
+    inputRange: isMutationTone ? [0, 0.1, 0.6, 1] : [0, 0.12, 0.65, 1],
     outputRange: [0, 1, 1, 0],
   });
 
