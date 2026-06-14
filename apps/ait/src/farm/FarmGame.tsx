@@ -184,6 +184,62 @@ function getCropEconomy(cropEconomyByKey: Record<CropKey, CropEconomyEstimate>, 
   return estimate;
 }
 
+type NextGoalCandidate = {
+  label: string;
+  cost: number;
+  progress: number;
+  affordable: boolean;
+};
+
+// Returns the single most relevant next purchase goal so the player always has
+// a visible target on the main screen. Prioritises affordable items (buy now)
+// then the closest-to-affordable item. Area unlocks are only included when gold
+// is the sole remaining requirement so the bar accurately reflects "how much
+// more do you need?".
+function computeNextGoal(
+  gameState: GameState,
+  messages: FarmMessages,
+  getLocalizedAreaLabel: (key: AreaKey) => { name: string }
+): NextGoalCandidate | null {
+  const { gold } = gameState;
+  const candidates: NextGoalCandidate[] = [];
+
+  if (gameState.unlockedPlotCount < MAX_PLOTS) {
+    const cost = getPlotCost(gameState.unlockedPlotCount);
+    candidates.push({ label: messages.shopPlotTitle, cost, progress: Math.min(1, gold / cost), affordable: gold >= cost });
+  }
+
+  const speedCost = getUpgradeCost('speed', gameState.upgrades.speed);
+  candidates.push({ label: messages.speedUpgradeTitle, cost: speedCost, progress: Math.min(1, gold / speedCost), affordable: gold >= speedCost });
+
+  const profitCost = getUpgradeCost('profit', gameState.upgrades.profit);
+  candidates.push({ label: messages.profitUpgradeTitle, cost: profitCost, progress: Math.min(1, gold / profitCost), affordable: gold >= profitCost });
+
+  const nextArea = FARM_AREAS.find((area) => {
+    if (isAreaUnlocked(gameState, area.key)) return false;
+    if (area.unlock.cost === 0) return false;
+    if (area.unlock.gate != null && !gameState.research.unlockedNodes.includes(area.unlock.gate)) return false;
+    return (
+      gameState.harvestedCropKeys.length >= area.unlock.requiredHarvestedCropCount &&
+      getMinUpgradeLevel(gameState) >= area.unlock.requiredUpgradeLevel
+    );
+  });
+  if (nextArea != null) {
+    const cost = nextArea.unlock.cost;
+    candidates.push({ label: getLocalizedAreaLabel(nextArea.key).name, cost, progress: Math.min(1, gold / cost), affordable: gold >= cost });
+  }
+
+  if (candidates.length === 0) return null;
+
+  candidates.sort((a, b) => {
+    if (a.affordable !== b.affordable) return a.affordable ? -1 : 1;
+    if (a.affordable && b.affordable) return a.cost - b.cost;
+    return b.progress - a.progress;
+  });
+
+  return candidates[0] ?? null;
+}
+
 const FIRST_AREA = getFirstArea();
 
 type ActiveSheet =
@@ -897,6 +953,10 @@ export default function FarmGame({
     () => (chainIncome.accruedGold > 0 ? 1 : 0) + (canPrestige(gameState).allowed ? 1 : 0),
     [chainIncome.accruedGold, gameState]
   );
+  const nextGoal = useMemo(
+    () => computeNextGoal(gameState, messages, getLocalizedAreaLabel),
+    [gameState, messages, getLocalizedAreaLabel]
+  );
 
   useEffect(() => {
     const now = Date.now();
@@ -1580,6 +1640,16 @@ export default function FarmGame({
           </View>
         </View>
 
+        {nextGoal != null ? (
+          <NextGoalBar
+            goal={nextGoal}
+            gold={gameState.gold}
+            locale={locale}
+            messages={messages}
+            onPress={openShop}
+          />
+        ) : null}
+
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.navRow}>
           <NavButton label={messages.shopButton} onPress={openShop} />
           <NavButton
@@ -2080,6 +2150,62 @@ function HarvestAllButton({ label, onPress }: { label: string; onPress: () => vo
           {label}
         </Text>
       </Animated.View>
+    </Pressable>
+  );
+}
+
+// Compact progress strip placed between the stats panel and nav row. Shows the
+// single most relevant next purchase goal so the player always has a visible
+// target. Tapping opens the shop directly.
+function NextGoalBar({
+  goal,
+  gold,
+  locale,
+  messages,
+  onPress,
+}: {
+  goal: NextGoalCandidate;
+  gold: number;
+  locale: SupportedLocale;
+  messages: FarmMessages;
+  onPress: () => void;
+}) {
+  const progressRef = useRef<Animated.Value | null>(null);
+  if (progressRef.current == null) {
+    progressRef.current = new Animated.Value(goal.progress);
+  }
+  const progressAnim = progressRef.current;
+
+  useEffect(() => {
+    const animation = Animated.timing(progressAnim, {
+      toValue: goal.progress,
+      duration: 300,
+      easing: Easing.out(Easing.quad),
+      useNativeDriver: true,
+    });
+    animation.start();
+    return () => animation.stop();
+  }, [progressAnim, goal.progress]);
+
+  useEffect(() => {
+    return () => progressAnim.stopAnimation();
+  }, [progressAnim]);
+
+  const goldNeeded = Math.max(0, goal.cost - gold);
+
+  return (
+    <Pressable style={({ pressed }) => [styles.nextGoalBar, pressed && styles.nextGoalBarPressed]} onPress={onPress}>
+      <Text style={styles.nextGoalLabel} numberOfLines={1}>
+        {goal.label}
+      </Text>
+      <View style={styles.nextGoalRight}>
+        <View style={styles.nextGoalProgressTrack}>
+          <Animated.View style={[styles.nextGoalProgressFill, { transform: [{ scaleX: progressAnim }] }]} />
+        </View>
+        <Text style={[styles.nextGoalAmount, goal.affordable && styles.nextGoalAmountReady]}>
+          {goal.affordable ? messages.nextGoalReady : messages.nextGoalNeeded(formatMoney(goldNeeded, locale))}
+        </Text>
+      </View>
     </Pressable>
   );
 }
@@ -3806,6 +3932,55 @@ const styles = StyleSheet.create({
   comboTextLegendary: {
     color: '#ffd23f',
     fontSize: 32,
+  },
+  nextGoalBar: {
+    marginTop: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 8,
+    backgroundColor: '#f0f8ee',
+    borderWidth: 1,
+    borderColor: '#c8e6c2',
+  },
+  nextGoalBarPressed: {
+    opacity: 0.8,
+  },
+  nextGoalLabel: {
+    flex: 1,
+    color: '#253126',
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  nextGoalRight: {
+    flexShrink: 0,
+    alignItems: 'flex-end',
+    gap: 3,
+  },
+  nextGoalProgressTrack: {
+    width: 72,
+    height: 5,
+    borderRadius: 3,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(0, 0, 0, 0.10)',
+  },
+  nextGoalProgressFill: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#2e9e57',
+    transformOrigin: 'left center',
+  },
+  nextGoalAmount: {
+    color: '#667085',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  nextGoalAmountReady: {
+    color: '#247241',
+    fontWeight: '900',
   },
   masteryBackdrop: {
     ...StyleSheet.absoluteFillObject,

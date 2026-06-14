@@ -205,6 +205,8 @@ const KO_FARM_MESSAGES = {
   collectionFullDesc: (discovered: number, total: number) =>
     `모든 작물 ${discovered}/${total}종을 모으면 큰 보상을 받아요.`,
   collectionRewardClaimedToast: (amount: string) => `+${amount}G 도감 보상을 받았어요.`,
+  nextGoalNeeded: (amount: string) => `${amount}G 더 필요`,
+  nextGoalReady: '구매 가능 →',
 };
 
 export type FarmMessages = typeof KO_FARM_MESSAGES;
@@ -400,6 +402,8 @@ const EN_FARM_MESSAGES: FarmMessages = {
   collectionFullTitle: 'Full Collection',
   collectionFullDesc: (discovered, total) => `Collect all ${total} crops (${discovered}/${total}) for a big reward.`,
   collectionRewardClaimedToast: (amount) => `Claimed +${amount}G from your collection.`,
+  nextGoalNeeded: (amount) => `Need ${amount}G more`,
+  nextGoalReady: 'Ready →',
 };
 
 const FARM_MESSAGES: Record<SupportedLocale, FarmMessages> = {

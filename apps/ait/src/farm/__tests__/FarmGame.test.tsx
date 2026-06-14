@@ -364,13 +364,15 @@ describe('FarmGame UI flow', () => {
 
     fireEvent.press(screen.getByText('🏪 상점'));
 
-    fireEvent.press(screen.getByText('밭 개간하기'));
+    // '밭 개간하기' appears both in the NextGoalBar (header) and the shop card;
+    // we target the last instance which is the shop card inside the modal.
+    fireEvent.press(screen.getAllByText('밭 개간하기').at(-1)!);
     expect(screen.getByText('현재 7칸 · 작물을 심을 공간을 1칸 늘려요')).toBeTruthy();
 
-    fireEvent.press(screen.getByText('🧪 고속 성장 비료'));
+    fireEvent.press(screen.getAllByText('🧪 고속 성장 비료').at(-1)!);
     expect(screen.getByText('현재 연구 Lv.1 · 성장속도 Lv.2 / 수익률 Lv.1')).toBeTruthy();
 
-    fireEvent.press(screen.getByText('🚛 판로 개척'));
+    fireEvent.press(screen.getAllByText('🚛 판로 개척').at(-1)!);
     expect(screen.getByText('현재 연구 Lv.2 · 성장속도 Lv.2 / 수익률 Lv.2')).toBeTruthy();
 
     fireEvent.press(screen.getByText('채소 밭 열기'));
