@@ -967,4 +967,48 @@ describe('NextGoalBar', () => {
 
     expect(screen.getByText('농장 관리소')).toBeTruthy();
   });
+
+  test('harvest-kind bar opens the shop when tapped', async () => {
+    // Initial state: gold=50, no crops harvested → harvest is the bottleneck.
+    const screen = await renderGame(null);
+
+    await waitFor(() => expect(screen.getByText('50G')).toBeTruthy());
+
+    expect(screen.queryByText('농장 관리소')).toBeNull();
+    fireEvent.press(screen.getByTestId('next-goal-bar'));
+    expect(screen.getByText('농장 관리소')).toBeTruthy();
+  });
+
+  test('gold-kind bar opens the shop when tapped', async () => {
+    // harvest=4/4 (ok), gold=100/300 (not ok) → gold kind.
+    const goldState: GameState = {
+      ...createInitialState(),
+      gold: 100,
+      harvestedCropKeys: ['carrot', 'wheat', 'potato', 'onion'] as GameState['harvestedCropKeys'],
+    };
+    const screen = await renderGame(goldState);
+
+    await waitFor(() => expect(screen.getByText('100G')).toBeTruthy());
+
+    expect(screen.queryByText('농장 관리소')).toBeNull();
+    fireEvent.press(screen.getByTestId('next-goal-bar'));
+    expect(screen.getByText('농장 관리소')).toBeTruthy();
+  });
+
+  test('upgrade-kind bar opens the shop when tapped', async () => {
+    // gold=300/300 (ok), harvest=4/4 (ok), upgrade=0/1 (not ok) → upgrade kind.
+    const upgradeState: GameState = {
+      ...createInitialState(),
+      gold: 300,
+      harvestedCropKeys: ['carrot', 'wheat', 'potato', 'onion'] as GameState['harvestedCropKeys'],
+      upgrades: { speed: 0, profit: 0 },
+    };
+    const screen = await renderGame(upgradeState);
+
+    await waitFor(() => expect(screen.getByText('300G')).toBeTruthy());
+
+    expect(screen.queryByText('농장 관리소')).toBeNull();
+    fireEvent.press(screen.getByTestId('next-goal-bar'));
+    expect(screen.getByText('농장 관리소')).toBeTruthy();
+  });
 });
