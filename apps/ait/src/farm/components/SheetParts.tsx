@@ -38,6 +38,7 @@ export function ShopCard({
   price,
   disabled,
   priceTone,
+  goldProgress,
   onPress,
 }: {
   title: string;
@@ -45,27 +46,43 @@ export function ShopCard({
   price: string;
   disabled?: boolean;
   priceTone?: 'speed' | 'profit';
+  goldProgress?: number;
   onPress: () => void;
 }) {
+  const showProgress = disabled === true && goldProgress != null && goldProgress > 0 && goldProgress < 1;
+  const fillColor = priceTone === 'speed' ? '#2f7de1' : priceTone === 'profit' ? '#bf7a00' : '#2f8747';
+
   return (
     <Pressable
       disabled={disabled}
       style={[sheetPartStyles.shopCard, disabled && sheetPartStyles.disabledCard]}
       onPress={onPress}
     >
-      <View style={sheetPartStyles.shopTextGroup}>
-        <Text style={sheetPartStyles.shopTitle}>{title}</Text>
-        <Text style={sheetPartStyles.shopDesc}>{desc}</Text>
+      <View style={sheetPartStyles.shopCardRow}>
+        <View style={sheetPartStyles.shopTextGroup}>
+          <Text style={sheetPartStyles.shopTitle}>{title}</Text>
+          <Text style={sheetPartStyles.shopDesc}>{desc}</Text>
+        </View>
+        <Text
+          style={[
+            sheetPartStyles.shopPrice,
+            priceTone === 'speed' && sheetPartStyles.speedPrice,
+            priceTone === 'profit' && sheetPartStyles.profitPrice,
+          ]}
+        >
+          {price}
+        </Text>
       </View>
-      <Text
-        style={[
-          sheetPartStyles.shopPrice,
-          priceTone === 'speed' && sheetPartStyles.speedPrice,
-          priceTone === 'profit' && sheetPartStyles.profitPrice,
-        ]}
-      >
-        {price}
-      </Text>
+      {showProgress ? (
+        <View style={sheetPartStyles.upgradeTrack}>
+          <View
+            style={[
+              sheetPartStyles.upgradeFill,
+              { width: `${Math.round((goldProgress ?? 0) * 100)}%` as `${number}%`, backgroundColor: fillColor },
+            ]}
+          />
+        </View>
+      ) : null}
     </Pressable>
   );
 }
@@ -144,10 +161,25 @@ export const sheetPartStyles = StyleSheet.create({
     borderColor: '#d0d5dd',
     borderRadius: 8,
     backgroundColor: '#ffffff',
+    flexDirection: 'column',
+    justifyContent: 'center',
+  },
+  shopCardRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 12,
+  },
+  upgradeTrack: {
+    marginTop: 8,
+    height: 3,
+    backgroundColor: '#e0e8f0',
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  upgradeFill: {
+    height: 3,
+    borderRadius: 2,
   },
   adCard: {
     borderColor: '#aad8b1',

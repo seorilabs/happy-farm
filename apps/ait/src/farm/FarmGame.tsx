@@ -1030,6 +1030,10 @@ export default function FarmGame({
   // growthAdLimit and harvestBonusAdLimit gate separate flows (plot-tap / post-harvest
   // nudge) that are not accessible from the shop, so only rewardedGoldLimit is relevant.
   const shopAdBadgeCount = rewardedAd.isAdSupported && rewardedAd.isAdReady && rewardedGoldLimit.allowed ? 1 : 0;
+  const upgradeReadyCount =
+    (gameState.gold >= getUpgradeCost('speed', gameState.upgrades.speed) ? 1 : 0) +
+    (gameState.gold >= getUpgradeCost('profit', gameState.upgrades.profit) ? 1 : 0);
+  const shopBadgeCount = shopAdBadgeCount + upgradeReadyCount;
   const growthAdLimit = useMemo(
     () => getRewardedAdLimitStatus(gameState, 'growthAd', Date.now(), locale),
     [gameState, locale, tick]
@@ -1789,7 +1793,7 @@ export default function FarmGame({
         ) : null}
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.navRow}>
-          <NavButton testID="shop-nav-button" label={messages.shopButton} badge={shopAdBadgeCount} onPress={openShop} />
+          <NavButton testID="shop-nav-button" label={messages.shopButton} badge={shopBadgeCount} onPress={openShop} />
           <NavButton
             label={messages.collectionButton}
             badge={claimableCollectionCount}
@@ -3736,6 +3740,7 @@ function ShopUpgradeRow({
   const title = kind === 'speed' ? messages.speedUpgradeTitle : messages.profitUpgradeTitle;
   const desc = kind === 'speed' ? messages.speedUpgradeDesc : messages.profitUpgradeDesc;
   const disabled = gameState.gold < cost;
+  const goldProgress = disabled ? Math.min(1, gameState.gold / cost) : undefined;
 
   return (
     <ShopCard
@@ -3744,6 +3749,7 @@ function ShopUpgradeRow({
       price={`${formatMoney(cost, locale)}G`}
       priceTone={kind}
       disabled={disabled}
+      goldProgress={goldProgress}
       onPress={() => {
         if (disabled) {
           onDone(messages.insufficientGoldToast);
