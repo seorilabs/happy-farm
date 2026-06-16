@@ -71,6 +71,16 @@ export function claimDailyBonus(state: DailyBonusState, now = Date.now()): Daily
 }
 
 /**
+ * 클레임 전 표시용 프리뷰 값을 계산합니다. 상태를 변경하지 않으며 UI 표시에만 사용합니다.
+ */
+export function previewDailyBonus(state: DailyBonusState, now = Date.now()): { streak: number; goldAwarded: number } {
+  const isStreakAlive =
+    state.lastClaimedAt != null && now - state.lastClaimedAt < DAILY_BONUS_STREAK_EXPIRE_MS;
+  const streak = isStreakAlive ? state.streak + 1 : 1;
+  return { streak, goldAwarded: getDailyBonusGold(streak) };
+}
+
+/**
  * 직렬화된 unknown 값을 DailyBonusState로 정규화합니다.
  * 잘못된 값은 초기 상태로 복구됩니다.
  */

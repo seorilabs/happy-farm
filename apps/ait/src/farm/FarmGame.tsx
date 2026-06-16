@@ -118,7 +118,7 @@ import {
   claimDailyBonus,
   getDailyBonusLabel,
   isDailyBonusAvailable,
-  type DailyBonusResult,
+  previewDailyBonus,
   type DailyBonusState,
 } from '../../../../packages/farm-core/src/dailyBonus';
 
@@ -265,7 +265,7 @@ type ActiveSheet =
   | { type: 'growthAd'; plotIndex: number; cropKey: CropKey; remainingMs: number }
   | { type: 'harvestBonus' }
   | { type: 'welcomeBack'; summary: ReturnSummary }
-  | { type: 'dailyBonus'; result: DailyBonusResult }
+  | { type: 'dailyBonus'; pendingState: DailyBonusState }
   | { type: 'resetConfirm' }
   | null;
 
@@ -889,13 +889,10 @@ export default function FarmGame({
 
       // Check and claim the daily login bonus. Only shown when no
       // welcome-back sheet is queued, so the two modals don't stack.
-      if (summary == null && persistence.readDailyBonusState != null) {
+      if (summary == null && persistence.readDailyBonusState != null && persistence.writeDailyBonusState != null) {
         const dailyBonusState = await persistence.readDailyBonusState();
         if (isDailyBonusAvailable(dailyBonusState, now)) {
-          const dailyBonusResult = claimDailyBonus(dailyBonusState, now);
-          if (dailyBonusResult != null) {
-            setActiveSheet({ type: 'dailyBonus', result: dailyBonusResult });
-          }
+          setActiveSheet({ type: 'dailyBonus', pendingState: dailyBonusState });
         }
       }
     }
@@ -2171,29 +2168,35 @@ export default function FarmGame({
           </View>
         ) : null}
 
-        {activeSheet?.type === 'dailyBonus' ? (
-          <View>
-            <View style={styles.welcomeBackRow}>
-              <Text style={styles.welcomeBackIcon}>🎁</Text>
-              <View style={styles.welcomeBackRowText}>
-                <Text style={styles.welcomeBackRowLabel}>
-                  {getDailyBonusLabel(activeSheet.result.streak, activeSheet.result.goldAwarded, locale).streakLabel}
-                </Text>
-                <Text style={styles.welcomeBackRowValue}>
-                  +{formatMoney(activeSheet.result.goldAwarded, locale)}G
-                </Text>
+        {activeSheet?.type === 'dailyBonus' ? (() => {
+          const preview = previewDailyBonus(activeSheet.pendingState);
+          return (
+            <View>
+              <View style={styles.welcomeBackRow}>
+                <Text style={styles.welcomeBackIcon}>🎁</Text>
+                <View style={styles.welcomeBackRowText}>
+                  <Text style={styles.welcomeBackRowLabel}>
+                    {getDailyBonusLabel(preview.streak, preview.goldAwarded, locale).streakLabel}
+                  </Text>
+                  <Text style={styles.welcomeBackRowValue}>
+                    +{formatMoney(preview.goldAwarded, locale)}G
+                  </Text>
+                </View>
               </View>
+              <SheetAction
+                label={messages.dailyBonusClaimAction(formatMoney(preview.goldAwarded, locale))}
+                onPress={() => {
+                  const result = claimDailyBonus(activeSheet.pendingState, Date.now());
+                  if (result != null) {
+                    void persistence.writeDailyBonusState?.(result.newState);
+                    setGameState((prev) => ({ ...prev, gold: prev.gold + result.goldAwarded }));
+                  }
+                  setActiveSheet(null);
+                }}
+              />
             </View>
-            <SheetAction
-              label={messages.dailyBonusClaimAction(formatMoney(activeSheet.result.goldAwarded, locale))}
-              onPress={() => {
-                void persistence.writeDailyBonusState?.(activeSheet.result.newState);
-                setGameState((prev) => ({ ...prev, gold: prev.gold + activeSheet.result.goldAwarded }));
-                setActiveSheet(null);
-              }}
-            />
-          </View>
-        ) : null}
+          );
+        })() : null}
 
         {activeSheet?.type === 'welcomeBack' ? (
           <View>
@@ -3560,7 +3563,7 @@ function getSheetDescription(
     );
   }
   if (activeSheet?.type === 'dailyBonus') {
-    return messages.sheetDescriptionDailyBonus(activeSheet.result.streak);
+    return messages.sheetDescriptionDailyBonus(previewDailyBonus(activeSheet.pendingState).streak);
   }
   if (activeSheet?.type === 'welcomeBack') {
     return messages.sheetDescriptionWelcomeBack(formatDuration(activeSheet.summary.awayMs, locale));
