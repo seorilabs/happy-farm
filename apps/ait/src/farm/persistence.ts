@@ -1,4 +1,5 @@
 import { createInitialState, migrateLoadedState, SAVE_KEY, type GameState } from '../../../../packages/farm-core/src';
+import { normalizeDailyBonusState, type DailyBonusState } from '../../../../packages/farm-core/src/dailyBonus';
 
 import { FARM_GAME_SETTINGS_KEY, normalizeFarmGameSettings, type FarmGameSettings } from './gameSettings';
 import type { KeyValueStorage } from './platform/types';
@@ -8,6 +9,10 @@ import type { KeyValueStorage } from './platform/types';
 // the save blob so it can be refreshed cheaply (heartbeat / app background)
 // without rewriting the whole game state.
 export const LAST_SEEN_KEY = `${SAVE_KEY}.lastSeen`;
+
+// Daily bonus state is stored separately from the game save so it persists
+// across prestige resets and is never wiped by a farm reset.
+export const DAILY_BONUS_KEY = `${SAVE_KEY}.dailyBonus`;
 
 export function createFarmPersistence(storage: KeyValueStorage) {
   return {
@@ -98,6 +103,26 @@ export function createFarmPersistence(storage: KeyValueStorage) {
     async writeLastSeenAt(timestamp: number) {
       try {
         await storage.setItem(LAST_SEEN_KEY, String(timestamp));
+      } catch {
+        // Storage failures must not interrupt gameplay.
+      }
+    },
+
+    async readDailyBonusState(): Promise<DailyBonusState> {
+      try {
+        const raw = await storage.getItem(DAILY_BONUS_KEY);
+        if (raw == null) {
+          return { lastClaimedAt: null, streak: 0 };
+        }
+        return normalizeDailyBonusState(JSON.parse(raw) as unknown);
+      } catch {
+        return { lastClaimedAt: null, streak: 0 };
+      }
+    },
+
+    async writeDailyBonusState(state: DailyBonusState) {
+      try {
+        await storage.setItem(DAILY_BONUS_KEY, JSON.stringify(state));
       } catch {
         // Storage failures must not interrupt gameplay.
       }
