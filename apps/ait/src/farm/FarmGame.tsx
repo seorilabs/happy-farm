@@ -2236,15 +2236,15 @@ export default function FarmGame({
                   .then(() => {
                     // Set lastAppliedBonusClaimedAt so that crash-recovery on the next
                     // load can detect the gold was already reflected (idempotency marker).
+                    // pendingGold is intentionally kept until the auto-save persists
+                    // lastAppliedBonusClaimedAt; the loadSavedGame recovery path clears
+                    // pendingGold once it confirms the game save already reflects the gold.
                     setGameState((prev) => ({
                       ...prev,
                       gold: prev.gold + result.goldAwarded,
                       lastAppliedBonusClaimedAt: result.newState.lastClaimedAt,
                     }));
                     setActiveSheet(null);
-                    // Clear pendingGold. If this fails, the idempotency marker in the
-                    // game save prevents a double-award on the next load.
-                    void persistence.writeDailyBonusState?.({ ...result.newState, pendingGold: 0 }).catch(() => {});
                   })
                   .catch(() => {
                     toast(messages.dailyBonusSaveFailedToast);
