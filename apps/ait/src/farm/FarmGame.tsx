@@ -263,7 +263,7 @@ type ActiveSheet =
   | { type: 'growthAd'; plotIndex: number; cropKey: CropKey; remainingMs: number }
   | { type: 'harvestBonus' }
   | { type: 'welcomeBack'; summary: ReturnSummary }
-  | { type: 'dailyBonus'; openedAt: number }
+  | { type: 'dailyBonus' }
   | { type: 'resetConfirm' }
   | null;
 
@@ -889,7 +889,7 @@ export default function FarmGame({
       if (summary == null) {
         const preview = previewDailyBonus(savedState.dailyBonusState, now);
         if (preview.available) {
-          setActiveSheet({ type: 'dailyBonus', openedAt: now });
+          setActiveSheet({ type: 'dailyBonus' });
         }
       }
     }
@@ -1724,11 +1724,12 @@ export default function FarmGame({
   handlePlotClickRef.current = handlePlotClick;
   const onPlotPress = useCallback((index: number) => handlePlotClickRef.current(index), []);
 
-  // Preview uses the same openedAt timestamp that claimDailyBonus will use on
-  // tap, so displayed streak/gold always matches what will actually be awarded.
+  // Recomputed every render tick (250ms) so displayed streak/gold always
+  // reflects the current time — matching what claimDailyBonus will award
+  // within one tick when the player taps.
   const dailyBonusPreview =
     activeSheet?.type === 'dailyBonus'
-      ? previewDailyBonus(gameState.dailyBonusState, activeSheet.openedAt)
+      ? previewDailyBonus(gameState.dailyBonusState, Date.now())
       : { available: false as const, streak: 1, goldAwarded: 50 };
 
   return (
