@@ -64,6 +64,7 @@ const KO_FARM_MESSAGES = {
   sheetTitleGrowthAd: '즉시 성장',
   sheetTitleHarvestBonus: '수확 보너스',
   sheetTitleWelcomeBack: '다시 오셨네요!',
+  sheetTitleDailyBonus: '오늘의 출석 보너스',
   sheetTitleSettings: '설정',
   sheetTitleResetConfirm: '새로 시작하기',
   sheetTitleShop: '농장 관리소',
@@ -73,6 +74,8 @@ const KO_FARM_MESSAGES = {
     `광고를 보면 ${duration} 동안 수확 보상이 ${multiplier}배로 올라가요.`,
   sheetDescriptionWelcomeBack: (awayDuration: string) =>
     `${awayDuration} 동안 자리를 비운 사이 농장이 부지런히 움직였어요.`,
+  sheetDescriptionDailyBonus: (streak: number) =>
+    streak >= 2 ? `${streak}일 연속 출석을 달성했어요!` : '하루를 시작하며 보너스 골드를 받아요.',
   welcomeBackOfflineLabel: '운영 농장이 모아둔 수익',
   welcomeBackReadyLabel: '수확을 기다리는 작물',
   welcomeBackReadyValue: (count: number) => `${count}칸`,
@@ -218,6 +221,7 @@ const KO_FARM_MESSAGES = {
   newCropBadge: 'NEW',
   firstHarvestTitle: '첫 수확 완료! 🎉',
   firstHarvestSubtitle: '농부의 길이 시작됐어요!',
+  dailyBonusClaimAction: (amount: string) => `+${amount}G 받기`,
 };
 
 export type FarmMessages = typeof KO_FARM_MESSAGES;
@@ -279,6 +283,7 @@ const EN_FARM_MESSAGES: FarmMessages = {
   sheetTitleGrowthAd: 'Grow Now',
   sheetTitleHarvestBonus: 'Harvest Bonus',
   sheetTitleWelcomeBack: 'Welcome Back!',
+  sheetTitleDailyBonus: 'Daily Login Bonus',
   sheetTitleSettings: 'Settings',
   sheetTitleResetConfirm: 'Start Over',
   sheetTitleShop: 'Farm Office',
@@ -286,6 +291,8 @@ const EN_FARM_MESSAGES: FarmMessages = {
   sheetDescriptionHarvestBonus: (duration, multiplier) =>
     `Watch an ad to raise harvest rewards to ${multiplier}x for ${duration}.`,
   sheetDescriptionWelcomeBack: (awayDuration) => `Your farm kept busy while you were away for ${awayDuration}.`,
+  sheetDescriptionDailyBonus: (streak) =>
+    streak >= 2 ? `${streak}-day streak! Keep it up!` : 'Start your day with a bonus gold reward.',
   welcomeBackOfflineLabel: 'Chain farm earnings',
   welcomeBackReadyLabel: 'Crops ready to harvest',
   welcomeBackReadyValue: (count) => `${count} plots`,
@@ -425,6 +432,7 @@ const EN_FARM_MESSAGES: FarmMessages = {
   newCropBadge: 'NEW',
   firstHarvestTitle: 'First Harvest! 🎉',
   firstHarvestSubtitle: 'Your farming journey has begun!',
+  dailyBonusClaimAction: (amount) => `Claim +${amount}G`,
 };
 
 const FARM_MESSAGES: Record<SupportedLocale, FarmMessages> = {
