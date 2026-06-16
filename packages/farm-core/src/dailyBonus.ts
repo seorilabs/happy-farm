@@ -96,7 +96,7 @@ export function previewDailyBonus(state: DailyBonusState, now = Date.now()): { a
  */
 export function normalizeDailyBonusState(value: unknown): DailyBonusState {
   if (typeof value !== 'object' || value == null) {
-    return { lastClaimedAt: null, streak: 0 };
+    return { lastClaimedAt: null, streak: 0, pendingGold: 0 };
   }
   const raw = value as Record<string, unknown>;
   const lastClaimedAt =

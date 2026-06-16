@@ -584,6 +584,7 @@ export function createInitialState(): GameState {
       startTime: null,
       state: 0 as PlotState,
     })),
+    lastAppliedBonusClaimedAt: null,
   };
 }
 

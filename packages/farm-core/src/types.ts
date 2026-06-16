@@ -108,6 +108,9 @@ export type GameState = {
   chainFarms: ChainFarm[];
   research: ResearchState;
   automationSettings: AutomationSettings;
+  // Tracks the lastClaimedAt of the daily bonus most recently applied to this
+  // save so that crash-recovery can skip re-applying an already-reflected bonus.
+  lastAppliedBonusClaimedAt?: number | null;
 };
 
 // Prestige reset boundary. Farm-layer fields are wiped when the player

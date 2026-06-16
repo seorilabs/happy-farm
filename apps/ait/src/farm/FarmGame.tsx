@@ -893,13 +893,20 @@ export default function FarmGame({
       if (summary == null && persistence.readDailyBonusState != null && persistence.writeDailyBonusState != null) {
         const dailyBonusState = await persistence.readDailyBonusState();
 
-        // Recovery: if the app crashed after writeDailyBonusState but before the
-        // game auto-save, pendingGold is still set. Apply it now and clear.
-        // If clearning fails the next load will re-apply (minor double-award risk,
-        // bounded to one bonus amount, accepted as the lesser evil vs gold loss).
+        // Crash recovery: if pendingGold > 0, the claim was saved but the gold
+        // may not have been reflected in the game save yet. Apply it if the game
+        // save's lastAppliedBonusClaimedAt marker doesn't match, ensuring the
+        // recovery is idempotent even if writeDailyBonusState (clear) fails.
         const pendingGold = dailyBonusState.pendingGold ?? 0;
-        if (pendingGold > 0) {
-          setGameState((prev) => ({ ...prev, gold: prev.gold + pendingGold }));
+        const alreadyApplied =
+          savedState.lastAppliedBonusClaimedAt != null &&
+          savedState.lastAppliedBonusClaimedAt === dailyBonusState.lastClaimedAt;
+        if (pendingGold > 0 && !alreadyApplied) {
+          setGameState((prev) => ({
+            ...prev,
+            gold: prev.gold + pendingGold,
+            lastAppliedBonusClaimedAt: dailyBonusState.lastClaimedAt,
+          }));
           void persistence.writeDailyBonusState({ ...dailyBonusState, pendingGold: 0 }).catch(() => {});
         }
 
@@ -2213,10 +2220,16 @@ export default function FarmGame({
                 }
                 persistence.writeDailyBonusState(result.newState)
                   .then(() => {
-                    setGameState((prev) => ({ ...prev, gold: prev.gold + result.goldAwarded }));
+                    // Set lastAppliedBonusClaimedAt so that crash-recovery on the next
+                    // load can detect the gold was already reflected (idempotency marker).
+                    setGameState((prev) => ({
+                      ...prev,
+                      gold: prev.gold + result.goldAwarded,
+                      lastAppliedBonusClaimedAt: result.newState.lastClaimedAt,
+                    }));
                     setActiveSheet(null);
-                    // Clear pendingGold after gold is applied to game state.
-                    // Best-effort: failure is tolerated (next load recovers via pendingGold).
+                    // Clear pendingGold. If this fails, the idempotency marker in the
+                    // game save prevents a double-award on the next load.
                     void persistence.writeDailyBonusState?.({ ...result.newState, pendingGold: 0 }).catch(() => {});
                   })
                   .catch(() => {
