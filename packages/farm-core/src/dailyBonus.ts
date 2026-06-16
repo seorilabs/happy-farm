@@ -1,6 +1,8 @@
 // 일일 출석 보너스 로직
-// 마지막 로그인으로부터 24시간이 지나면 보너스 지급.
-// 연속 출석(streak)이 유지되려면 48시간 이내에 다시 접속해야 합니다.
+// 마지막 수령으로부터 24시간이 지나면 보너스 지급.
+// streak은 "마지막 수령 시각(lastClaimedAt)" 기준으로 관리됩니다.
+// 즉, 48시간 이내에 보너스를 수령하면 streak이 유지됩니다.
+// 앱을 방문하더라도 수령하지 않으면 streak 유지로 간주하지 않습니다.
 
 import { DEFAULT_LOCALE, type SupportedLocale } from './i18n';
 import { getDailyBonusMessages } from './i18n/dailyBonusMessages';

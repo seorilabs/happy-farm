@@ -2186,12 +2186,20 @@ export default function FarmGame({
               <SheetAction
                 label={messages.dailyBonusClaimAction(formatMoney(preview.goldAwarded, locale))}
                 onPress={() => {
-                  const result = claimDailyBonus(activeSheet.pendingState, Date.now());
-                  if (result != null) {
-                    void persistence.writeDailyBonusState?.(result.newState);
-                    setGameState((prev) => ({ ...prev, gold: prev.gold + result.goldAwarded }));
-                  }
+                  // Close sheet first — removes button from DOM, preventing any second tap.
                   setActiveSheet(null);
+                  const result = claimDailyBonus(activeSheet.pendingState, Date.now());
+                  if (result != null && persistence.writeDailyBonusState != null) {
+                    // Write state before awarding gold: if save fails, gold is not added,
+                    // keeping the state consistent and preventing a phantom duplicate on next load.
+                    persistence.writeDailyBonusState(result.newState)
+                      .then(() => {
+                        setGameState((prev) => ({ ...prev, gold: prev.gold + result.goldAwarded }));
+                      })
+                      .catch(() => {
+                        // State save failed silently; gold not awarded.
+                      });
+                  }
                 }}
               />
             </View>
