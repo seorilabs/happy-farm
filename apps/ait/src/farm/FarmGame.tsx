@@ -894,8 +894,6 @@ export default function FarmGame({
         if (isDailyBonusAvailable(dailyBonusState, now)) {
           const dailyBonusResult = claimDailyBonus(dailyBonusState, now);
           if (dailyBonusResult != null) {
-            setGameState((prev) => ({ ...prev, gold: prev.gold + dailyBonusResult.goldAwarded }));
-            void persistence.writeDailyBonusState?.(dailyBonusResult.newState);
             setActiveSheet({ type: 'dailyBonus', result: dailyBonusResult });
           }
         }
@@ -2014,3 +2012,2739 @@ export default function FarmGame({
               getAnalyticsContext={analyticsContext}
               analytics={farmAnalytics}
               onDone={toast}
+              onMilestone={() => void maybeShowMilestoneAd()}
+            />
+
+            <Text style={styles.sheetSectionTitle}>{messages.areaUnlockSection}</Text>
+            <ShopAreaUnlockRows
+              gameState={gameState}
+              locale={locale}
+              messages={messages}
+              setGameState={setGameState}
+              getAnalyticsContext={analyticsContext}
+              analytics={farmAnalytics}
+              onDone={toast}
+              onMilestone={() => void maybeShowMilestoneAd()}
+            />
+
+            <Text style={styles.sheetSectionTitle}>{messages.researchSection}</Text>
+            <Text style={styles.researchSummary}>
+              {messages.researchSummary(researchLevel, gameState.upgrades.speed, gameState.upgrades.profit)}
+            </Text>
+            <ShopUpgradeRow
+              kind="speed"
+              gameState={gameState}
+              locale={locale}
+              messages={messages}
+              setGameState={setGameState}
+              getAnalyticsContext={analyticsContext}
+              analytics={farmAnalytics}
+              onDone={toast}
+              onMilestone={() => void maybeShowMilestoneAd()}
+            />
+            <ShopUpgradeRow
+              kind="profit"
+              gameState={gameState}
+              locale={locale}
+              messages={messages}
+              setGameState={setGameState}
+              getAnalyticsContext={analyticsContext}
+              analytics={farmAnalytics}
+              onDone={toast}
+              onMilestone={() => void maybeShowMilestoneAd()}
+            />
+          </View>
+        ) : null}
+
+        {activeSheet?.type === 'collection' ? (
+          <CollectionSheet
+            gameState={gameState}
+            locale={locale}
+            messages={messages}
+            collectionSummary={collectionSummary}
+            onClaimReward={claimCollectionRewardByKey}
+          />
+        ) : null}
+
+        {activeSheet?.type === 'lab' ? (
+          <LabSheet
+            gameState={gameState}
+            locale={locale}
+            messages={messages}
+            onToggleAutomation={toggleAutomation}
+            onUnlockNode={unlockResearchNode}
+            onBreed={breedHybrid}
+          />
+        ) : null}
+
+        {activeSheet?.type === 'map' ? (
+          <ChainMapSheet
+            gameState={gameState}
+            locale={locale}
+            messages={messages}
+            now={Date.now()}
+            onCollectChain={collectChain}
+            onOpenPrestigeConfirm={openPrestigeConfirm}
+            onBuySkill={purchaseSkill}
+          />
+        ) : null}
+
+        {activeSheet?.type === 'prestigeConfirm' ? (
+          <PrestigeConfirmSheet
+            gameState={gameState}
+            locale={locale}
+            messages={messages}
+            selectedArchetype={prestigeArchetype}
+            onSelectArchetype={setPrestigeArchetype}
+            onConfirm={confirmPrestige}
+            onCancel={openMap}
+          />
+        ) : null}
+
+        {activeSheet?.type === 'achievements' ? (
+          <AchievementsSheet
+            gameState={gameState}
+            locale={locale}
+            messages={messages}
+            onClaim={claimAchievement}
+            onSelectTitle={selectTitle}
+          />
+        ) : null}
+
+        {activeSheet?.type === 'settings' ? (
+          <View>
+            <Text style={styles.sheetSectionTitle}>{messages.soundSection}</Text>
+            <SettingToggle
+              label={messages.soundEffectsLabel}
+              desc={audio.isSupported ? messages.soundEffectsEnabledDesc : messages.soundUnsupportedDesc}
+              value={gameSettings.soundEffectsEnabled && audio.isSupported}
+              disabled={!audio.isSupported}
+              onPress={() => updateGameSettings({ soundEffectsEnabled: !gameSettings.soundEffectsEnabled })}
+            />
+            <SettingToggle
+              label={messages.backgroundMusicLabel}
+              desc={audio.isSupported ? messages.backgroundMusicDesc : messages.soundUnsupportedDesc}
+              value={gameSettings.backgroundMusicEnabled && audio.isSupported}
+              disabled={!audio.isSupported}
+              onPress={() => updateGameSettings({ backgroundMusicEnabled: !gameSettings.backgroundMusicEnabled })}
+            />
+
+            <Text style={styles.sheetSectionTitle}>{messages.languageSection}</Text>
+            <SheetAction
+              label={messages.languageSwitchLabel}
+              secondary
+              onPress={() => updateGameSettings({ locale: locale === 'ko-KR' ? 'en-US' : 'ko-KR' })}
+            />
+            <Text style={sheetPartStyles.settingDesc}>{messages.languageDesc}</Text>
+
+            <Text style={styles.sheetSectionTitle}>{messages.gameDataSection}</Text>
+            <SheetAction label={messages.resetFarmAction} danger onPress={openResetConfirm} />
+          </View>
+        ) : null}
+
+        {activeSheet?.type === 'growthAd' ? (
+          <View>
+            <SheetAction
+              label={growthAdLimit.allowed ? messages.growthAdAction : growthAdLimit.reason}
+              disabled={!rewardedAd.isAdReady || !growthAdLimit.allowed}
+              onPress={() => void completeGrowthWithAd(activeSheet.plotIndex)}
+            />
+            <SheetAction label={messages.waitAction} secondary onPress={() => setActiveSheet(null)} />
+          </View>
+        ) : null}
+
+        {activeSheet?.type === 'harvestBonus' ? (
+          <View>
+            <SheetAction
+              label={
+                harvestBonusAdLimit.allowed
+                  ? messages.harvestBonusAction(
+                      formatRemainingTime(HARVEST_BONUS_BOOST_DURATION_MS, locale),
+                      HARVEST_BONUS_MULTIPLIER
+                    )
+                  : harvestBonusAdLimit.reason
+              }
+              disabled={!rewardedAd.isAdReady || !harvestBonusAdLimit.allowed}
+              onPress={() => void activateHarvestBonusWithAd()}
+            />
+            <SheetAction label={messages.declineAction} secondary onPress={() => setActiveSheet(null)} />
+          </View>
+        ) : null}
+
+        {activeSheet?.type === 'dailyBonus' ? (
+          <View>
+            <View style={styles.welcomeBackRow}>
+              <Text style={styles.welcomeBackIcon}>🎁</Text>
+              <View style={styles.welcomeBackRowText}>
+                <Text style={styles.welcomeBackRowLabel}>
+                  {getDailyBonusLabel(activeSheet.result.streak, activeSheet.result.goldAwarded, locale).streakLabel}
+                </Text>
+                <Text style={styles.welcomeBackRowValue}>
+                  +{formatMoney(activeSheet.result.goldAwarded, locale)}G
+                </Text>
+              </View>
+            </View>
+            <SheetAction
+              label={messages.dailyBonusClaimAction(formatMoney(activeSheet.result.goldAwarded, locale))}
+              onPress={() => {
+                void persistence.writeDailyBonusState?.(activeSheet.result.newState);
+                setGameState((prev) => ({ ...prev, gold: prev.gold + activeSheet.result.goldAwarded }));
+                setActiveSheet(null);
+              }}
+            />
+          </View>
+        ) : null}
+
+        {activeSheet?.type === 'welcomeBack' ? (
+          <View>
+            {activeSheet.summary.offlineGold > 0 ? (
+              <View style={styles.welcomeBackRow}>
+                <Text style={styles.welcomeBackIcon}>💰</Text>
+                <View style={styles.welcomeBackRowText}>
+                  <Text style={styles.welcomeBackRowLabel}>{messages.welcomeBackOfflineLabel}</Text>
+                  <Text style={styles.welcomeBackRowValue}>
+                    +{formatMoney(activeSheet.summary.offlineGold, locale)}G
+                  </Text>
+                </View>
+              </View>
+            ) : null}
+            {activeSheet.summary.readyCropCount > 0 ? (
+              <View style={styles.welcomeBackRow}>
+                <Text style={styles.welcomeBackIcon}>🧺</Text>
+                <View style={styles.welcomeBackRowText}>
+                  <Text style={styles.welcomeBackRowLabel}>{messages.welcomeBackReadyLabel}</Text>
+                  <Text style={styles.welcomeBackRowValue}>
+                    {messages.welcomeBackReadyValue(activeSheet.summary.readyCropCount)}
+                  </Text>
+                </View>
+              </View>
+            ) : null}
+            <SheetAction
+              label={
+                activeSheet.summary.offlineGold > 0
+                  ? messages.welcomeBackCollectAction(formatMoney(activeSheet.summary.offlineGold, locale))
+                  : messages.welcomeBackConfirmAction
+              }
+              onPress={() => dismissWelcomeBack(activeSheet.type === 'welcomeBack' && activeSheet.summary.offlineGold > 0)}
+            />
+          </View>
+        ) : null}
+
+        {activeSheet?.type === 'resetConfirm' ? (
+          <View>
+            <Text style={styles.resetWarning}>{messages.resetWarning}</Text>
+            <TextInput
+              accessibilityLabel={messages.resetInputAccessibilityLabel}
+              autoCapitalize="none"
+              autoCorrect={false}
+              placeholder={messages.resetInputPlaceholder(resetConfirmValue)}
+              style={styles.resetInput}
+              value={resetConfirmText}
+              onChangeText={setResetConfirmText}
+            />
+            <SheetAction
+              label={messages.resetDeleteAction}
+              danger
+              disabled={resetConfirmText !== resetConfirmValue}
+              onPress={() => void confirmReset()}
+            />
+            <SheetAction label={messages.resetKeepAction} secondary onPress={() => setActiveSheet(null)} />
+          </View>
+        ) : null}
+      </Sheet>
+
+      {/* Rendered last so it appears above the Sheet and all other overlays. */}
+      {masteryRankUpNotice != null ? (
+        <MasteryRankUpOverlay
+          key={masteryRankUpNotice.id}
+          notice={masteryRankUpNotice}
+          messages={messages}
+          onDismiss={dismissMasteryRankUpCelebration}
+        />
+      ) : null}
+      {prestigeGraduationNotice != null ? (
+        <PrestigeGraduationOverlay
+          key={prestigeGraduationNotice.id}
+          notice={prestigeGraduationNotice}
+          messages={messages}
+          onDismiss={dismissPrestigeGraduation}
+        />
+      ) : null}
+      {firstHarvestNotice != null ? (
+        <FirstHarvestOverlay
+          key={firstHarvestNotice.id}
+          notice={firstHarvestNotice}
+          messages={messages}
+          onDismiss={dismissFirstHarvestCelebration}
+        />
+      ) : null}
+    </View>
+  );
+}
+
+function NavButton({
+  label,
+  badge,
+  accessibilityLabel,
+  testID,
+  onPress,
+}: {
+  label: string;
+  badge?: number;
+  accessibilityLabel?: string;
+  testID?: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable testID={testID} accessibilityLabel={accessibilityLabel} style={styles.navButton} onPress={onPress}>
+      <Text style={styles.navButtonText}>{label}</Text>
+      {badge != null && badge > 0 ? (
+        <View style={styles.collectionBadge}>
+          <Text style={styles.collectionBadgeText}>{badge}</Text>
+        </View>
+      ) : null}
+    </Pressable>
+  );
+}
+
+// Swaps in for the tool hint the moment a couple of plots ripen, turning a
+// row of individual taps into one satisfying batch harvest. It pops in and
+// breathes gently so the eye catches the call-to-action without nagging.
+function HarvestAllButton({ label, onPress }: { label: string; onPress: () => void }) {
+  const entranceRef = useRef<Animated.Value | null>(null);
+  if (entranceRef.current == null) {
+    entranceRef.current = new Animated.Value(0);
+  }
+  const entrance = entranceRef.current;
+  const pulseRef = useRef<Animated.Value | null>(null);
+  if (pulseRef.current == null) {
+    pulseRef.current = new Animated.Value(0);
+  }
+  const pulse = pulseRef.current;
+
+  useEffect(() => {
+    const animation = Animated.sequence([
+      Animated.timing(entrance, {
+        toValue: 1,
+        duration: 260,
+        easing: Easing.out(Easing.back(2.4)),
+        useNativeDriver: true,
+      }),
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulse, {
+            toValue: 1,
+            duration: 720,
+            easing: Easing.inOut(Easing.quad),
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulse, {
+            toValue: 0,
+            duration: 720,
+            easing: Easing.inOut(Easing.quad),
+            useNativeDriver: true,
+          }),
+        ])
+      ),
+    ]);
+    animation.start();
+    return () => animation.stop();
+  }, [entrance, pulse]);
+
+  const scale = Animated.multiply(
+    entrance.interpolate({ inputRange: [0, 1], outputRange: [0.7, 1] }),
+    pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.05] })
+  );
+
+  return (
+    <Pressable
+      accessibilityLabel={label}
+      hitSlop={6}
+      style={({ pressed }) => [pressed && styles.harvestAllButtonPressed]}
+      onPress={onPress}
+    >
+      <Animated.View style={[styles.harvestAllButton, { opacity: entrance, transform: [{ scale }] }]}>
+        <Text style={styles.harvestAllButtonText} numberOfLines={1}>
+          {label}
+        </Text>
+      </Animated.View>
+    </Pressable>
+  );
+}
+
+// Mastery rank-up celebration: full-screen overlay that marks the moment a crop
+// reaches a new mastery tier (Bronze → Silver → Gold → Prism). The card springs
+// in from below-center; the crop emoji bounces in first, then the rank badge
+// fades in with a slight delay so each element lands in sequence.
+// Auto-dismisses after MASTERY_RANK_UP_CELEBRATION_DURATION_MS; tapping anywhere
+// on the backdrop also dismisses it early.
+function MasteryRankUpOverlay({
+  notice,
+  messages,
+  onDismiss,
+}: {
+  notice: MasteryRankUpNotice;
+  messages: FarmMessages;
+  onDismiss: () => void;
+}) {
+  const backdropRef = useRef<Animated.Value | null>(null);
+  if (backdropRef.current == null) backdropRef.current = new Animated.Value(0);
+  const backdrop = backdropRef.current;
+
+  const cardScaleRef = useRef<Animated.Value | null>(null);
+  if (cardScaleRef.current == null) cardScaleRef.current = new Animated.Value(0.6);
+  const cardScale = cardScaleRef.current;
+
+  const cropScaleRef = useRef<Animated.Value | null>(null);
+  if (cropScaleRef.current == null) cropScaleRef.current = new Animated.Value(0.2);
+  const cropScale = cropScaleRef.current;
+
+  const rankEntranceRef = useRef<Animated.Value | null>(null);
+  if (rankEntranceRef.current == null) rankEntranceRef.current = new Animated.Value(0);
+  const rankEntrance = rankEntranceRef.current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(backdrop, {
+        toValue: 1,
+        duration: 200,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
+      Animated.spring(cardScale, {
+        toValue: 1,
+        damping: 15,
+        stiffness: 280,
+        mass: 0.8,
+        useNativeDriver: true,
+      }),
+      Animated.sequence([
+        Animated.delay(100),
+        Animated.spring(cropScale, {
+          toValue: 1,
+          damping: 9,
+          stiffness: 200,
+          mass: 0.5,
+          useNativeDriver: true,
+        }),
+      ]),
+      Animated.sequence([
+        Animated.delay(260),
+        Animated.spring(rankEntrance, {
+          toValue: 1,
+          damping: 12,
+          stiffness: 260,
+          useNativeDriver: true,
+        }),
+      ]),
+    ]).start();
+
+    return () => {
+      backdrop.stopAnimation();
+      cardScale.stopAnimation();
+      cropScale.stopAnimation();
+      rankEntrance.stopAnimation();
+    };
+  }, [backdrop, cardScale, cropScale, rankEntrance]);
+
+  const rankColor = MASTERY_RANK_COLORS[notice.rankKey];
+
+  const rankEntranceScale = rankEntrance.interpolate({ inputRange: [0, 1], outputRange: [0.4, 1] });
+
+  return (
+    <Pressable testID="mastery-rank-up-overlay" style={StyleSheet.absoluteFill} onPress={onDismiss}>
+      <Animated.View style={[styles.masteryBackdrop, { opacity: backdrop }]} />
+      <View style={styles.masteryCenter} pointerEvents="none">
+        <Animated.View testID="mastery-rank-up-card" style={[styles.masteryCard, { transform: [{ scale: cardScale }] }]}>
+          <Text style={styles.masteryTitle}>{messages.masteryRankUpTitle}</Text>
+          <Animated.Text style={[styles.masteryCropIcon, { transform: [{ scale: cropScale }] }]}>
+            {notice.cropIcon}
+          </Animated.Text>
+          <Animated.Text
+            style={[
+              styles.masteryRankBadge,
+              { color: rankColor, opacity: rankEntrance, transform: [{ scale: rankEntranceScale }] },
+            ]}
+          >
+            {notice.rankIcon} {notice.rankName}
+          </Animated.Text>
+          <Text style={styles.masteryCropName}>{notice.cropName}</Text>
+        </Animated.View>
+      </View>
+    </Pressable>
+  );
+}
+
+// Prestige graduation ceremony: full-screen overlay shown when the player
+// completes a prestige — the game's biggest milestone. The region icon springs
+// in with extra energy; stars slide up from below so the reward reads as the
+// climax. Auto-dismisses after PRESTIGE_GRADUATION_CELEBRATION_DURATION_MS;
+// tapping anywhere on the overlay (backdrop or card) also dismisses early —
+// the inner View uses pointerEvents="none" so all touches reach the Pressable.
+function PrestigeGraduationOverlay({
+  notice,
+  messages,
+  onDismiss,
+}: {
+  notice: PrestigeGraduationNotice;
+  messages: FarmMessages;
+  onDismiss: () => void;
+}) {
+  const backdrop = useRef(new Animated.Value(0)).current;
+  const cardScale = useRef(new Animated.Value(0.5)).current;
+  const iconScale = useRef(new Animated.Value(0.1)).current;
+  const starsEntrance = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const anim = Animated.parallel([
+      Animated.timing(backdrop, {
+        toValue: 1,
+        duration: 220,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
+      Animated.spring(cardScale, {
+        toValue: 1,
+        damping: 14,
+        stiffness: 260,
+        mass: 0.9,
+        useNativeDriver: true,
+      }),
+      Animated.sequence([
+        Animated.delay(80),
+        Animated.spring(iconScale, {
+          toValue: 1,
+          damping: 7,
+          stiffness: 180,
+          mass: 0.6,
+          useNativeDriver: true,
+        }),
+      ]),
+      Animated.sequence([
+        Animated.delay(300),
+        Animated.spring(starsEntrance, {
+          toValue: 1,
+          damping: 11,
+          stiffness: 240,
+          useNativeDriver: true,
+        }),
+      ]),
+    ]);
+    anim.start();
+    return () => anim.stop();
+  }, [backdrop, cardScale, iconScale, starsEntrance]);
+
+  const starsTranslateY = starsEntrance.interpolate({ inputRange: [0, 1], outputRange: [20, 0] });
+
+  return (
+    <Pressable testID="prestige-graduation-overlay" style={StyleSheet.absoluteFill} onPress={onDismiss}>
+      <Animated.View style={[styles.prestigeBackdrop, { opacity: backdrop }]} />
+      <View style={styles.prestigeCenter} pointerEvents="none">
+        <Animated.View
+          testID="prestige-graduation-card"
+          style={[styles.prestigeCard, { transform: [{ scale: cardScale }] }]}
+        >
+          <Text style={styles.prestigeTitle}>{messages.prestigeGraduationTitle}</Text>
+          <Animated.Text style={[styles.prestigeRegionIcon, { transform: [{ scale: iconScale }] }]}>
+            {notice.regionIcon}
+          </Animated.Text>
+          <Text style={styles.prestigeRegionName}>{notice.regionName}</Text>
+          <Animated.Text
+            style={[
+              styles.prestigeStarsBadge,
+              { opacity: starsEntrance, transform: [{ translateY: starsTranslateY }] },
+            ]}
+          >
+            {messages.prestigeGraduationStarsLabel(notice.starsAwarded)}
+          </Animated.Text>
+        </Animated.View>
+      </View>
+    </Pressable>
+  );
+}
+
+// First-harvest ceremony: a warm, compact card that springs in when the player
+// harvests for the very first time. Lighter than the prestige overlay (no
+// full-screen dim) — the farm stays visible so it feels like an "in-world"
+// celebration rather than a modal. Auto-dismisses after
+// FIRST_HARVEST_CELEBRATION_DURATION_MS; tap anywhere to dismiss early.
+function FirstHarvestOverlay({
+  notice,
+  messages,
+  onDismiss,
+}: {
+  notice: FirstHarvestNotice;
+  messages: FarmMessages;
+  onDismiss: () => void;
+}) {
+  const cardScale = useRef(new Animated.Value(0.5)).current;
+  const cropScale = useRef(new Animated.Value(0.1)).current;
+  const goldEntrance = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const anim = Animated.parallel([
+      Animated.spring(cardScale, {
+        toValue: 1,
+        damping: 13,
+        stiffness: 270,
+        mass: 0.8,
+        useNativeDriver: true,
+      }),
+      Animated.sequence([
+        Animated.delay(60),
+        Animated.spring(cropScale, {
+          toValue: 1,
+          damping: 7,
+          stiffness: 200,
+          mass: 0.5,
+          useNativeDriver: true,
+        }),
+      ]),
+      Animated.sequence([
+        Animated.delay(280),
+        Animated.spring(goldEntrance, {
+          toValue: 1,
+          damping: 12,
+          stiffness: 260,
+          useNativeDriver: true,
+        }),
+      ]),
+    ]);
+    anim.start();
+    return () => anim.stop();
+  }, [cardScale, cropScale, goldEntrance]);
+
+  const goldTranslateY = goldEntrance.interpolate({ inputRange: [0, 1], outputRange: [12, 0] });
+
+  return (
+    <Pressable testID="first-harvest-overlay" style={StyleSheet.absoluteFill} onPress={onDismiss}>
+      <View style={styles.firstHarvestCenter} pointerEvents="none">
+        <Animated.View
+          testID="first-harvest-card"
+          style={[styles.firstHarvestCard, { transform: [{ scale: cardScale }] }]}
+        >
+          <Text style={styles.firstHarvestTitle}>{messages.firstHarvestTitle}</Text>
+          <Animated.Text style={[styles.firstHarvestCropIcon, { transform: [{ scale: cropScale }] }]}>
+            {notice.cropIcon}
+          </Animated.Text>
+          <Animated.Text
+            style={[
+              styles.firstHarvestGold,
+              { opacity: goldEntrance, transform: [{ translateY: goldTranslateY }] },
+            ]}
+          >
+            +{notice.goldFormatted}G
+          </Animated.Text>
+          <Text style={styles.firstHarvestSubtitle}>{messages.firstHarvestSubtitle}</Text>
+        </Animated.View>
+      </View>
+    </Pressable>
+  );
+}
+
+// Shows a growing streak counter when the player rapidly harvests multiple
+// plots in quick succession. Punches out on each count update so the number
+// change is unmistakable; tiers escalate icon and color at 5× and 10×.
+// Tier breakthroughs (normal→great, great→legendary) trigger an extra-large
+// burst and a brief wobble so the milestone feels meaningfully different from
+// a regular count increment.
+function ComboDisplay({ count, messages }: { count: number; messages: FarmMessages }) {
+  const scaleRef = useRef<Animated.Value | null>(null);
+  if (scaleRef.current == null) {
+    scaleRef.current = new Animated.Value(0.6);
+  }
+  const scale = scaleRef.current;
+
+  // Fades out as the combo window expires so the player sees "it's ending — tap more!"
+  const expiryRef = useRef<Animated.Value | null>(null);
+  if (expiryRef.current == null) {
+    expiryRef.current = new Animated.Value(1);
+  }
+  const expiry = expiryRef.current;
+
+  const rotateRef = useRef<Animated.Value | null>(null);
+  if (rotateRef.current == null) {
+    rotateRef.current = new Animated.Value(0);
+  }
+  const rotate = rotateRef.current;
+
+  const prevCountRef = useRef(0);
+
+  useEffect(() => {
+    const prevCount = prevCountRef.current;
+    prevCountRef.current = count;
+
+    const isTierUp =
+      (prevCount < COMBO_GREAT_THRESHOLD && count >= COMBO_GREAT_THRESHOLD) ||
+      (prevCount < COMBO_LEGENDARY_THRESHOLD && count >= COMBO_LEGENDARY_THRESHOLD);
+
+    scale.stopAnimation();
+    rotate.stopAnimation();
+    rotate.setValue(0);
+
+    const scaleAnim = Animated.sequence([
+      Animated.timing(scale, {
+        toValue: isTierUp ? 1.65 : 1.25,
+        duration: isTierUp ? 100 : 80,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
+      Animated.spring(scale, {
+        toValue: 1,
+        damping: isTierUp ? 7 : 12,
+        stiffness: isTierUp ? 200 : 240,
+        mass: isTierUp ? 0.8 : 0.6,
+        useNativeDriver: true,
+      }),
+    ]);
+
+    if (isTierUp) {
+      const wobble = Animated.sequence([
+        Animated.timing(rotate, { toValue: 1, duration: 55, useNativeDriver: true }),
+        Animated.timing(rotate, { toValue: -1, duration: 55, useNativeDriver: true }),
+        Animated.timing(rotate, { toValue: 0.5, duration: 45, useNativeDriver: true }),
+        Animated.spring(rotate, { toValue: 0, damping: 10, stiffness: 300, useNativeDriver: true }),
+      ]);
+      Animated.parallel([scaleAnim, wobble]).start();
+    } else {
+      rotate.setValue(0);
+      scaleAnim.start();
+    }
+
+    return () => {
+      scale.stopAnimation();
+      rotate.stopAnimation();
+    };
+  }, [scale, rotate, count]);
+
+  // Reset to fully visible on each harvest, then fade to 25% over the combo window.
+  // The last 40% of the window (600 ms) transitions from fully visible to dim,
+  // signalling "tap fast or lose your combo!" without being distracting early on.
+  useEffect(() => {
+    expiry.stopAnimation();
+    expiry.setValue(1);
+    const animation = Animated.timing(expiry, {
+      toValue: 0,
+      duration: COMBO_WINDOW_MS,
+      easing: Easing.linear,
+      useNativeDriver: true,
+    });
+    animation.start();
+    return () => animation.stop();
+  }, [expiry, count]);
+
+  useEffect(() => {
+    return () => {
+      scale.stopAnimation();
+      expiry.stopAnimation();
+      rotate.stopAnimation();
+    };
+  }, [scale, expiry, rotate, count]);
+
+  const opacity = expiry.interpolate({
+    inputRange: [0, 0.4, 1],
+    outputRange: [0.25, 1, 1],
+  });
+  const rotateInterp = rotate.interpolate({ inputRange: [-1, 0, 1], outputRange: ['-8deg', '0deg', '8deg'] });
+
+  const tier =
+    count >= COMBO_LEGENDARY_THRESHOLD ? 'legendary' : count >= COMBO_GREAT_THRESHOLD ? 'great' : 'normal';
+  const icon = tier === 'legendary' ? '⚡' : tier === 'great' ? '🔥' : '🌾';
+
+  return (
+    <Animated.View
+      style={[
+        styles.comboDisplay,
+        tier === 'great' && styles.comboDisplayGreat,
+        tier === 'legendary' && styles.comboDisplayLegendary,
+        { opacity, transform: [{ scale }, { rotate: rotateInterp }] },
+      ]}
+    >
+      <Text
+        style={[
+          styles.comboText,
+          tier === 'great' && styles.comboTextGreat,
+          tier === 'legendary' && styles.comboTextLegendary,
+        ]}
+      >
+        {icon} {messages.comboLabel(count)}
+      </Text>
+    </Animated.View>
+  );
+}
+
+// Compact progress bar shown in the header that surfaces the single most
+// actionable next milestone (next area unlock) so players have a clear target
+// during crop growth wait times. Tapping it opens the shop directly.
+function NextGoalBar({
+  goal,
+  messages,
+  locale,
+  getAreaName,
+  onPress,
+}: {
+  goal: NonNullable<NextAreaGoal>;
+  messages: FarmMessages;
+  locale: SupportedLocale;
+  getAreaName: (areaKey: AreaKey) => string;
+  onPress: () => void;
+}) {
+  const areaName = getAreaName(goal.areaKey);
+
+  if (goal.kind === 'ready') {
+    return (
+      <Pressable testID="next-goal-bar" style={styles.nextGoalBar} onPress={onPress}>
+        <Text style={styles.nextGoalReadyText} numberOfLines={1}>
+          {messages.nextGoalReady(areaName)}
+        </Text>
+      </Pressable>
+    );
+  }
+
+  let label: string;
+  if (goal.kind === 'gold') {
+    label = messages.nextGoalGold(areaName, formatMoney(goal.total - goal.current, locale));
+  } else if (goal.kind === 'harvest') {
+    label = messages.nextGoalHarvest(areaName, goal.current, goal.total);
+  } else {
+    label = messages.nextGoalUpgrade(areaName, goal.current, goal.total);
+  }
+  const ratio = goal.total > 0 ? Math.max(0, Math.min(goal.current / goal.total, 1)) : 0;
+
+  return (
+    <Pressable testID="next-goal-bar" style={styles.nextGoalBar} onPress={onPress}>
+      <Text style={styles.nextGoalLabel} numberOfLines={1}>
+        {label}
+      </Text>
+      <View style={styles.nextGoalTrack}>
+        <View style={[styles.nextGoalFill, { width: `${Math.round(ratio * 100)}%` }]} />
+      </View>
+    </Pressable>
+  );
+}
+
+// Slide-up banner that celebrates the first harvest of a new crop type.
+// Rendered via an imperative handle so the banner can animate in/out without
+// lifting crop state into FarmGame or triggering a full re-render.
+const DiscoveryBanner = React.forwardRef<
+  DiscoveryBannerHandle,
+  { title: string; subtitle: string }
+>(function DiscoveryBanner({ title, subtitle }, ref) {
+  const [entry, setEntry] = useState<{ icon: string; name: string } | null>(null);
+  const translateYRef = useRef<Animated.Value | null>(null);
+  if (translateYRef.current == null) {
+    translateYRef.current = new Animated.Value(80);
+  }
+  const translateY = translateYRef.current;
+
+  const opacityRef = useRef<Animated.Value | null>(null);
+  if (opacityRef.current == null) {
+    opacityRef.current = new Animated.Value(0);
+  }
+  const opacity = opacityRef.current;
+
+  // Holds the running animation so the useEffect cleanup can cancel it, and so
+  // show() can interrupt a still-playing sequence.
+  const animationRef = useRef<Animated.CompositeAnimation | null>(null);
+  // Generation counter: each show() call increments this and closes over the
+  // new value. The completion callback only calls setEntry(null) when its
+  // captured token still matches — stale completions from a previous sequence
+  // (including the Animated.delay timer inside the sequence) are discarded.
+  const animTokenRef = useRef(0);
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+      animationRef.current?.stop();
+    };
+  }, []);
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      show(icon: string, name: string) {
+        // Stop the previous CompositeAnimation first. Calling stopAnimation()
+        // on individual values only pauses value updates; it does NOT cancel
+        // the CompositeAnimation's own delay timer, which could fire
+        // setEntry(null) after the new entry is already showing.
+        animationRef.current?.stop();
+        setEntry({ icon, name });
+        translateY.setValue(80);
+        opacity.setValue(0);
+        const token = ++animTokenRef.current;
+        animationRef.current = Animated.sequence([
+          Animated.parallel([
+            Animated.timing(translateY, {
+              toValue: 0,
+              duration: 320,
+              easing: Easing.out(Easing.back(1.6)),
+              useNativeDriver: true,
+            }),
+            Animated.timing(opacity, {
+              toValue: 1,
+              duration: 200,
+              easing: Easing.out(Easing.quad),
+              useNativeDriver: true,
+            }),
+          ]),
+          Animated.delay(1800),
+          Animated.parallel([
+            Animated.timing(translateY, {
+              toValue: -20,
+              duration: 340,
+              easing: Easing.in(Easing.quad),
+              useNativeDriver: true,
+            }),
+            Animated.timing(opacity, {
+              toValue: 0,
+              duration: 280,
+              easing: Easing.in(Easing.quad),
+              useNativeDriver: true,
+            }),
+          ]),
+        ]);
+        animationRef.current.start(({ finished }) => {
+          if (finished && isMountedRef.current && animTokenRef.current === token) {
+            setEntry(null);
+          }
+        });
+      },
+    }),
+    [translateY, opacity]
+  );
+
+  // Always mounted so the native animated node is live before show() starts
+  // the animation. Returning null when entry == null would create a race:
+  // setEntry() schedules a re-render while the native animation starts
+  // immediately, so the first frames can be lost before the view mounts.
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[styles.discoveryBanner, { transform: [{ translateY }], opacity }]}
+    >
+      {entry != null ? (
+        <>
+          <Text style={styles.discoveryBannerIcon}>{entry.icon}</Text>
+          <View>
+            <Text style={styles.discoveryBannerTitle}>{title}</Text>
+            <Text style={styles.discoveryBannerName}>{entry.name}</Text>
+            <Text style={styles.discoveryBannerSubtitle}>{subtitle}</Text>
+          </View>
+        </>
+      ) : null}
+    </Animated.View>
+  );
+});
+
+// Full-screen flash overlay for rare mutation harvests. Two overlay layers
+// (golden and rainbow) driven independently so both can coexist without shared
+// state; native driver keeps the flash cheap even at the moment of a burst.
+const MutationFlashOverlay = React.forwardRef<MutationFlashHandle>(function MutationFlashOverlay(_, ref) {
+  const goldenOpacityRef = useRef<Animated.Value | null>(null);
+  if (goldenOpacityRef.current == null) {
+    goldenOpacityRef.current = new Animated.Value(0);
+  }
+  const goldenOpacity = goldenOpacityRef.current;
+
+  const rainbowOpacityRef = useRef<Animated.Value | null>(null);
+  if (rainbowOpacityRef.current == null) {
+    rainbowOpacityRef.current = new Animated.Value(0);
+  }
+  const rainbowOpacity = rainbowOpacityRef.current;
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      flash(mutationKey: 'golden' | 'rainbow') {
+        if (mutationKey === 'rainbow') {
+          rainbowOpacity.stopAnimation();
+          rainbowOpacity.setValue(0);
+          // Avoid Animated.delay here: stopAnimation() does not reliably interrupt
+          // a delay stage mid-sequence in React Native, which can cause the opacity
+          // to snap unexpectedly when rapid successive mutations overlap. The 80ms
+          // "hold" is folded into the fade-in duration instead (150 + 80 = 230ms).
+          Animated.sequence([
+            Animated.timing(rainbowOpacity, {
+              toValue: 0.45,
+              duration: 230,
+              easing: Easing.out(Easing.quad),
+              useNativeDriver: true,
+            }),
+            Animated.timing(rainbowOpacity, {
+              toValue: 0,
+              duration: 600,
+              easing: Easing.in(Easing.quad),
+              useNativeDriver: true,
+            }),
+          ]).start();
+        } else {
+          goldenOpacity.stopAnimation();
+          goldenOpacity.setValue(0);
+          Animated.sequence([
+            Animated.timing(goldenOpacity, {
+              toValue: 0.36,
+              duration: 120,
+              easing: Easing.out(Easing.quad),
+              useNativeDriver: true,
+            }),
+            Animated.timing(goldenOpacity, {
+              toValue: 0,
+              duration: 400,
+              easing: Easing.in(Easing.quad),
+              useNativeDriver: true,
+            }),
+          ]).start();
+        }
+      },
+    }),
+    [goldenOpacity, rainbowOpacity]
+  );
+
+  return (
+    <>
+      <Animated.View
+        pointerEvents="none"
+        style={[styles.mutationFlash, { opacity: goldenOpacity, backgroundColor: '#fde68a' }]}
+      />
+      <Animated.View
+        pointerEvents="none"
+        style={[styles.mutationFlash, { opacity: rainbowOpacity, backgroundColor: '#c084fc' }]}
+      />
+    </>
+  );
+});
+
+// Memoized so a tick or a single plot's plant-pulse update never reconciles the
+// other (up to 24) plot subtrees. Relies on stable, index-based callbacks and
+// performPlant/performHarvest keeping untouched plot object refs intact.
+const PlotCell = React.memo(function PlotCell({
+  index,
+  plot,
+  unlocked,
+  progressRatio,
+  growthCountdown,
+  tileSize,
+  messages,
+  plantToken,
+  onPlantPulseDone,
+  onPress,
+}: {
+  index: number;
+  plot: GameState['plots'][number];
+  unlocked: boolean;
+  progressRatio: number;
+  growthCountdown: string | undefined;
+  tileSize: number;
+  messages: FarmMessages;
+  plantToken: number | undefined;
+  onPlantPulseDone: (index: number) => void;
+  onPress: (index: number) => void;
+}) {
+  const tileSizeStyle = { width: tileSize, height: tileSize };
+  const handlePress = () => onPress(index);
+
+  if (!unlocked) {
+    return (
+      <Pressable testID={`plot-cell-${index}`} style={[styles.plotTile, tileSizeStyle, styles.lockedPlot]} onPress={handlePress}>
+        <Text style={styles.lockIcon}>🔒</Text>
+      </Pressable>
+    );
+  }
+
+  if (plot.state === 0) {
+    return (
+      <Pressable testID={`plot-cell-${index}`} style={[styles.plotTile, tileSizeStyle, styles.emptyPlot]} onPress={handlePress}>
+        <Text style={styles.emptyPlotText}>{messages.emptyPlot}</Text>
+      </Pressable>
+    );
+  }
+
+  const crop = plot.cropType != null ? getCrop(plot.cropType) : null;
+  // Reveal the actual crop icon at ≥65% growth so players can see what's
+  // ripening and feel anticipation before the harvest tap.
+  const icon =
+    plot.state === 2 || progressRatio >= 0.65
+      ? (crop?.icon ?? '🌿')
+      : progressRatio >= 0.3
+        ? '🌿'
+        : '🌱';
+
+  return (
+    <Pressable
+      testID={`plot-cell-${index}`}
+      style={[styles.plotTile, tileSizeStyle, plot.state === 2 ? styles.readyPlot : styles.growingPlot]}
+      onPress={handlePress}
+    >
+      {plot.state === 2 ? (
+        <View style={styles.harvestBadge}>
+          <Text style={styles.harvestBadgeText}>{messages.readyBadge}</Text>
+        </View>
+      ) : null}
+      {plot.state === 1 && crop != null && plot.startTime != null ? (
+        <>
+          {growthCountdown != null ? (
+            <View style={[styles.growthTimer, { maxWidth: Math.max(0, tileSize - 10) }]}>
+              <Text style={styles.growthTimerText} numberOfLines={1} ellipsizeMode="tail">
+                {growthCountdown}
+              </Text>
+            </View>
+          ) : null}
+          <GrowthProgressBar progressRatio={progressRatio} />
+        </>
+      ) : null}
+      {plot.state === 2 ? (
+        <ReadyCropIcon icon={icon} phaseSeed={plot.id} />
+      ) : (
+        <GrowingCropIcon
+          icon={icon}
+          plantToken={plantToken}
+          onPlantPulseDone={() => onPlantPulseDone(index)}
+        />
+      )}
+    </Pressable>
+  );
+});
+
+// Ripe crops gently pulse so harvestable plots draw the eye in a full grid,
+// reinforcing the "see ready -> tap" loop. Native-driven loop keeps it cheap
+// even with every plot ripe at once.
+function ReadyCropIcon({ icon, phaseSeed }: { icon: string; phaseSeed: number }) {
+  const pulseRef = useRef<Animated.Value | null>(null);
+  if (pulseRef.current == null) {
+    pulseRef.current = new Animated.Value(0);
+  }
+  const pulse = pulseRef.current;
+
+  useEffect(() => {
+    // Stagger each plot's pulse by a stable per-plot offset so a grid of ripe
+    // crops breathes organically instead of beating in robotic unison.
+    const startDelay = (phaseSeed % 7) * 90;
+    const animation = Animated.sequence([
+      Animated.delay(startDelay),
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulse, {
+            toValue: 1,
+            duration: 650,
+            easing: Easing.inOut(Easing.quad),
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulse, {
+            toValue: 0,
+            duration: 650,
+            easing: Easing.inOut(Easing.quad),
+            useNativeDriver: true,
+          }),
+        ])
+      ),
+    ]);
+    animation.start();
+    return () => animation.stop();
+  }, [pulse, phaseSeed]);
+
+  const scale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.14] });
+
+  return <Animated.Text style={[styles.readyCropIcon, { transform: [{ scale }] }]}>{icon}</Animated.Text>;
+}
+
+// The growing-crop sprout. On a fresh manual plant (plantToken set), it bounces
+// in once so tapping an empty plot feels tactile. Auto-replant and save-load
+// pass no token, so reopening the app never re-pops every growing plot.
+function GrowingCropIcon({
+  icon,
+  plantToken,
+  onPlantPulseDone,
+}: {
+  icon: string;
+  plantToken: number | undefined;
+  onPlantPulseDone: () => void;
+}) {
+  const popRef = useRef<Animated.Value | null>(null);
+  if (popRef.current == null) {
+    popRef.current = new Animated.Value(1);
+  }
+  const pop = popRef.current;
+  const lastTokenRef = useRef<number | undefined>(undefined);
+  const onDoneRef = useRef(onPlantPulseDone);
+  onDoneRef.current = onPlantPulseDone;
+
+  useEffect(() => {
+    if (plantToken == null || plantToken === lastTokenRef.current) {
+      return undefined;
+    }
+    lastTokenRef.current = plantToken;
+    pop.setValue(0);
+    const animation = Animated.timing(pop, {
+      toValue: 1,
+      duration: PLANT_POP_DURATION_MS,
+      easing: Easing.out(Easing.back(2.2)),
+      useNativeDriver: true,
+    });
+    animation.start(({ finished }) => {
+      if (finished) {
+        // Clear the parent token so a later remount never re-triggers the pop.
+        onDoneRef.current();
+      }
+    });
+    return () => animation.stop();
+  }, [plantToken, pop]);
+
+  const scale = pop.interpolate({ inputRange: [0, 1], outputRange: [0.4, 1] });
+  const opacity = pop.interpolate({ inputRange: [0, 0.4, 1], outputRange: [0.2, 1, 1] });
+
+  return (
+    <Animated.Text style={[styles.cropIcon, { opacity, transform: [{ scale }] }]}>{icon}</Animated.Text>
+  );
+}
+
+const HarvestFxOverlay = React.forwardRef<HarvestFxHandle, { tileSize: number }>(function HarvestFxOverlay(
+  { tileSize },
+  ref
+) {
+  const [pops, setPops] = useState<HarvestPop[]>([]);
+  const idRef = useRef(0);
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      spawn(index, label, tone) {
+        const id = (idRef.current += 1);
+        setPops((prev) => {
+          // Cap concurrent pops so rapid tapping can never grow the overlay
+          // unbounded before each pop self-removes at the end of its animation.
+          const next = prev.length >= 8 ? prev.slice(prev.length - 7) : prev;
+          return [...next, { id, index, label, tone }];
+        });
+      },
+    }),
+    []
+  );
+
+  const remove = useCallback((id: number) => {
+    setPops((prev) => prev.filter((pop) => pop.id !== id));
+  }, []);
+
+  return (
+    <>
+      {pops.map((pop) => (
+        <HarvestPopText key={pop.id} pop={pop} tileSize={tileSize} onDone={remove} />
+      ))}
+    </>
+  );
+});
+
+function HarvestPopText({
+  pop,
+  tileSize,
+  onDone,
+}: {
+  pop: HarvestPop;
+  tileSize: number;
+  onDone: (id: number) => void;
+}) {
+  const progressRef = useRef<Animated.Value | null>(null);
+  if (progressRef.current == null) {
+    progressRef.current = new Animated.Value(0);
+  }
+  const progress = progressRef.current;
+  const onDoneRef = useRef(onDone);
+  onDoneRef.current = onDone;
+
+  useEffect(() => {
+    const dur = pop.tone === 'rainbow' ? 1400 : pop.tone === 'golden' ? 1100 : 900;
+    const animation = Animated.timing(progress, {
+      toValue: 1,
+      duration: dur,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    });
+    animation.start(({ finished }) => {
+      if (finished) {
+        onDoneRef.current(pop.id);
+      }
+    });
+    return () => animation.stop();
+  }, [pop.id, pop.tone, progress]);
+
+  const col = pop.index % PLOT_COLUMNS;
+  const row = Math.floor(pop.index / PLOT_COLUMNS);
+  const left = col * (tileSize + PLOT_GAP);
+  const top = row * (tileSize + PLOT_GAP);
+
+  const isMutationTone = pop.tone === 'golden' || pop.tone === 'rainbow';
+  const yTop =
+    pop.tone === 'rainbow' ? -tileSize * 0.95 : pop.tone === 'golden' ? -tileSize * 0.78 : -tileSize * 0.55;
+  // Scale start and max are larger for mutation tones to give the jackpot pop extra punch;
+  // normal/special keep their original 0.6 start so existing harvest feel is unchanged.
+  const scaleStart = isMutationTone ? 0.4 : 0.6;
+  const scaleMax = pop.tone === 'rainbow' ? 1.65 : pop.tone === 'golden' ? 1.45 : 1.15;
+
+  const translateY = progress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [tileSize * 0.2, yTop],
+  });
+  const scale = progress.interpolate({
+    inputRange: [0, 0.25, 1],
+    outputRange: [scaleStart, scaleMax, 1],
+  });
+  // Mutation pops fade in a touch faster (0.1 vs 0.12) and out a touch earlier (0.6
+  // vs 0.65) so the longer animation duration feels proportionate; normal/special keep
+  // the original timing so their feel is unchanged.
+  const opacity = progress.interpolate({
+    inputRange: isMutationTone ? [0, 0.1, 0.6, 1] : [0, 0.12, 0.65, 1],
+    outputRange: [0, 1, 1, 0],
+  });
+
+  const icon = pop.tone === 'rainbow' ? '🌈 ' : pop.tone === 'golden' ? '✨ ' : '';
+
+  return (
+    <View pointerEvents="none" style={[styles.harvestPop, { left, top, width: tileSize, height: tileSize }]}>
+      <Animated.Text
+        style={[
+          styles.harvestPopText,
+          pop.tone === 'special' && styles.harvestPopTextSpecial,
+          pop.tone === 'golden' && styles.harvestPopTextGolden,
+          pop.tone === 'rainbow' && styles.harvestPopTextRainbow,
+          { opacity, transform: [{ translateY }, { scale }] },
+        ]}
+      >
+        {icon}{pop.label}
+      </Animated.Text>
+    </View>
+  );
+}
+
+function GrowthProgressBar({ progressRatio }: { progressRatio: number }) {
+  const progressScaleRef = useRef<Animated.Value | null>(null);
+  if (progressScaleRef.current == null) {
+    progressScaleRef.current = new Animated.Value(progressRatio);
+  }
+  const progressScale = progressScaleRef.current;
+  // Recomputed on every parent re-render (the 250ms game tick), so the bar
+  // advances in small steps instead of one animation spanning the whole grow time.
+  const targetRatio = progressRatio;
+
+  useEffect(() => {
+    if (targetRatio >= 1) {
+      progressScale.stopAnimation();
+      progressScale.setValue(1);
+      return undefined;
+    }
+
+    // Animate only across a single game tick. Driving a native animation over
+    // the full remaining grow time made React Native precompute one frame per
+    // 60fps step of that duration: legend-tier crops (e.g. world_tree, growTime
+    // 5 days) generated millions of frames, freezing the JS thread and crashing
+    // the app the moment such a crop was planted or its save was reloaded.
+    const animation = Animated.timing(progressScale, {
+      toValue: targetRatio,
+      duration: PROGRESS_ANIMATION_DURATION_MS,
+      easing: Easing.linear,
+      useNativeDriver: true,
+    });
+    animation.start();
+
+    return () => {
+      animation.stop();
+    };
+  }, [progressScale, targetRatio]);
+
+  return (
+    <View style={styles.progressTrack}>
+      <Animated.View style={[styles.progressFill, { transform: [{ scaleX: progressScale }] }]} />
+    </View>
+  );
+}
+
+function Sheet({
+  activeSheet,
+  children,
+  description,
+  title,
+  onClose,
+}: {
+  activeSheet: ActiveSheet;
+  children: React.ReactNode;
+  description: string;
+  title: string;
+  onClose: () => void;
+}) {
+  const dragYRef = useRef<Animated.Value | null>(null);
+  if (dragYRef.current == null) {
+    dragYRef.current = new Animated.Value(SHEET_DISMISS_TRANSLATE_Y);
+  }
+  const dragY = dragYRef.current;
+  const wasVisibleRef = useRef(false);
+  const isClosingRef = useRef(false);
+  const dimmedOpacity = dragY.interpolate({
+    inputRange: [0, SHEET_DISMISS_TRANSLATE_Y],
+    outputRange: [1, 0],
+    extrapolate: 'clamp',
+  });
+  const shouldHandleSheetDrag = useCallback((dy: number, dx: number) => dy > 4 && Math.abs(dy) > Math.abs(dx), []);
+  const closeSheetWithAnimation = useCallback(() => {
+    if (isClosingRef.current) {
+      return;
+    }
+
+    isClosingRef.current = true;
+    dragY.stopAnimation();
+    Animated.timing(dragY, {
+      toValue: SHEET_DISMISS_TRANSLATE_Y,
+      duration: SHEET_ANIMATION_DURATION_MS,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start(({ finished }) => {
+      isClosingRef.current = false;
+      if (finished) {
+        onClose();
+      }
+    });
+  }, [dragY, onClose]);
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onStartShouldSetPanResponderCapture: () => true,
+        onMoveShouldSetPanResponder: (_, gestureState) => shouldHandleSheetDrag(gestureState.dy, gestureState.dx),
+        onMoveShouldSetPanResponderCapture: (_, gestureState) =>
+          shouldHandleSheetDrag(gestureState.dy, gestureState.dx),
+        onPanResponderTerminationRequest: () => false,
+        onPanResponderGrant: () => {
+          dragY.stopAnimation();
+        },
+        onPanResponderMove: (_, gestureState) => {
+          dragY.setValue(Math.max(0, gestureState.dy));
+        },
+        onPanResponderRelease: (_, gestureState) => {
+          if (gestureState.dy > SHEET_DISMISS_DRAG_DISTANCE || gestureState.vy > SHEET_DISMISS_VELOCITY) {
+            closeSheetWithAnimation();
+            return;
+          }
+
+          Animated.spring(dragY, {
+            toValue: 0,
+            damping: 18,
+            stiffness: 220,
+            mass: 0.8,
+            useNativeDriver: true,
+          }).start();
+        },
+        onPanResponderTerminate: () => {
+          Animated.spring(dragY, {
+            toValue: 0,
+            damping: 18,
+            stiffness: 220,
+            mass: 0.8,
+            useNativeDriver: true,
+          }).start();
+        },
+      }),
+    [closeSheetWithAnimation, dragY, shouldHandleSheetDrag]
+  );
+
+  useEffect(() => {
+    const isVisible = activeSheet != null;
+
+    if (isVisible && !wasVisibleRef.current) {
+      isClosingRef.current = false;
+      dragY.stopAnimation();
+      dragY.setValue(SHEET_DISMISS_TRANSLATE_Y);
+      Animated.timing(dragY, {
+        toValue: 0,
+        duration: SHEET_ANIMATION_DURATION_MS,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }).start();
+    }
+
+    if (!isVisible) {
+      isClosingRef.current = false;
+      dragY.stopAnimation();
+      dragY.setValue(SHEET_DISMISS_TRANSLATE_Y);
+    }
+
+    wasVisibleRef.current = isVisible;
+  }, [activeSheet, dragY]);
+
+  return (
+    <Modal transparent visible={activeSheet != null} animationType="none" onRequestClose={closeSheetWithAnimation}>
+      <KeyboardAvoidingView behavior="padding" style={styles.modalRoot}>
+        <Animated.View style={[StyleSheet.absoluteFillObject, styles.modalBackdrop, { opacity: dimmedOpacity }]}>
+          <Pressable style={StyleSheet.absoluteFillObject} onPress={closeSheetWithAnimation} />
+        </Animated.View>
+        <Animated.View style={[styles.sheet, { transform: [{ translateY: dragY }] }]}>
+          <View testID="sheet-drag-handle" style={styles.sheetDragArea} {...panResponder.panHandlers}>
+            <View style={styles.sheetHandle} />
+          </View>
+          <Text style={styles.sheetTitle}>{title}</Text>
+          <Text style={styles.sheetDescription}>{description}</Text>
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.sheetContent}>
+            {children}
+          </ScrollView>
+        </Animated.View>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
+function getSheetTitle(activeSheet: ActiveSheet, messages: FarmMessages) {
+  if (activeSheet?.type === 'growthAd') {
+    return messages.sheetTitleGrowthAd;
+  }
+  if (activeSheet?.type === 'achievements') {
+    return messages.sheetTitleAchievements;
+  }
+  if (activeSheet?.type === 'lab') {
+    return messages.sheetTitleLab;
+  }
+  if (activeSheet?.type === 'map') {
+    return messages.sheetTitleMap;
+  }
+  if (activeSheet?.type === 'prestigeConfirm') {
+    return messages.sheetTitlePrestigeConfirm;
+  }
+  if (activeSheet?.type === 'harvestBonus') {
+    return messages.sheetTitleHarvestBonus;
+  }
+  if (activeSheet?.type === 'dailyBonus') {
+    return messages.sheetTitleDailyBonus;
+  }
+  if (activeSheet?.type === 'welcomeBack') {
+    return messages.sheetTitleWelcomeBack;
+  }
+  if (activeSheet?.type === 'settings') {
+    return messages.sheetTitleSettings;
+  }
+  if (activeSheet?.type === 'resetConfirm') {
+    return messages.sheetTitleResetConfirm;
+  }
+  if (activeSheet?.type === 'collection') {
+    return messages.sheetTitleCollection;
+  }
+  return messages.sheetTitleShop;
+}
+
+function getSheetDescription(
+  activeSheet: ActiveSheet,
+  messages: FarmMessages,
+  locale: SupportedLocale,
+  getLocalizedCropName: (cropKey: CropKey) => string,
+  collectionSummary: CollectionSummary
+) {
+  if (activeSheet?.type === 'collection') {
+    return messages.sheetDescriptionCollection(collectionSummary.discoveredCount, collectionSummary.totalCount);
+  }
+  if (activeSheet?.type === 'achievements') {
+    return messages.sheetDescriptionAchievements;
+  }
+  if (activeSheet?.type === 'lab') {
+    return messages.sheetDescriptionLab;
+  }
+  if (activeSheet?.type === 'map') {
+    return messages.sheetDescriptionMap;
+  }
+  if (activeSheet?.type === 'prestigeConfirm') {
+    return messages.sheetDescriptionPrestigeConfirm;
+  }
+  if (activeSheet?.type === 'growthAd') {
+    return messages.sheetDescriptionGrowthAd(
+      getLocalizedCropName(activeSheet.cropKey),
+      formatRemainingTime(activeSheet.remainingMs, locale)
+    );
+  }
+  if (activeSheet?.type === 'harvestBonus') {
+    return messages.sheetDescriptionHarvestBonus(
+      formatRemainingTime(HARVEST_BONUS_BOOST_DURATION_MS, locale),
+      HARVEST_BONUS_MULTIPLIER
+    );
+  }
+  if (activeSheet?.type === 'dailyBonus') {
+    return messages.sheetDescriptionDailyBonus(activeSheet.result.streak);
+  }
+  if (activeSheet?.type === 'welcomeBack') {
+    return messages.sheetDescriptionWelcomeBack(formatDuration(activeSheet.summary.awayMs, locale));
+  }
+  if (activeSheet?.type === 'settings') {
+    return messages.sheetDescriptionSettings;
+  }
+  if (activeSheet?.type === 'resetConfirm') {
+    return messages.sheetDescriptionResetConfirm(messages.resetConfirmText);
+  }
+  return messages.sheetDescriptionShop;
+}
+
+function ToolButton({
+  active,
+  icon,
+  name,
+  cost,
+  roi,
+  affordable,
+  masteryRank,
+  isNew,
+  newLabel,
+  onPress,
+}: {
+  active: boolean;
+  icon: string;
+  name: string;
+  cost?: string;
+  roi?: string;
+  affordable?: boolean;
+  masteryRank?: { icon: string } | null;
+  isNew?: boolean;
+  newLabel?: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable style={[styles.toolButton, active && styles.activeToolButton]} onPress={onPress}>
+      <Text style={styles.toolIcon}>{icon}</Text>
+      <Text style={styles.toolName} numberOfLines={1}>
+        {name}
+      </Text>
+      {cost != null ? (
+        <Text style={[styles.toolCost, affordable === false && styles.toolCostUnaffordable]}>{cost}</Text>
+      ) : null}
+      {roi != null ? <Text style={styles.toolRoi}>{roi}</Text> : null}
+      {masteryRank != null ? (
+        <View pointerEvents="none" style={styles.toolMasteryBadge}>
+          <Text style={styles.toolMasteryBadgeText}>{masteryRank.icon}</Text>
+        </View>
+      ) : null}
+      {isNew === true && newLabel != null ? (
+        <View pointerEvents="none" style={styles.toolNewBadge}>
+          <Text style={styles.toolNewBadgeText}>{newLabel}</Text>
+        </View>
+      ) : null}
+    </Pressable>
+  );
+}
+
+function ShopPlotRow({
+  gameState,
+  locale,
+  messages,
+  setGameState,
+  getAnalyticsContext,
+  analytics,
+  onDone,
+  onMilestone,
+}: {
+  gameState: GameState;
+  locale: SupportedLocale;
+  messages: FarmMessages;
+  setGameState: React.Dispatch<React.SetStateAction<GameState>>;
+  getAnalyticsContext: GetAnalyticsContext;
+  analytics: FarmAnalytics;
+  onDone: (msg: string) => void;
+  onMilestone: () => void;
+}) {
+  const isMax = gameState.unlockedPlotCount >= MAX_PLOTS;
+  const cost = getPlotCost(gameState.unlockedPlotCount);
+  const canBuy = !isMax && gameState.gold >= cost;
+
+  return (
+    <ShopCard
+      title={messages.shopPlotTitle}
+      desc={messages.shopPlotDesc(gameState.unlockedPlotCount)}
+      price={isMax ? messages.completePrice : `${formatMoney(cost, locale)}G`}
+      disabled={isMax || !canBuy}
+      onPress={() => {
+        if (isMax) {
+          onDone(messages.noMoreExpansionToast);
+          return;
+        }
+        if (gameState.gold < cost) {
+          onDone(messages.insufficientGoldToast);
+          return;
+        }
+        setGameState((state) => ({
+          ...state,
+          gold: state.gold - cost,
+          unlockedPlotCount: state.unlockedPlotCount + 1,
+        }));
+        analytics.trackPlotUnlocked({
+          method: 'gold',
+          cost,
+          nextPlotCount: gameState.unlockedPlotCount + 1,
+          context: getAnalyticsContext(gameState),
+        });
+        onDone(messages.plotExpandedToast);
+        onMilestone();
+      }}
+    />
+  );
+}
+
+function ShopAreaUnlockRows({
+  gameState,
+  locale,
+  messages,
+  setGameState,
+  getAnalyticsContext,
+  analytics,
+  onDone,
+  onMilestone,
+}: {
+  gameState: GameState;
+  locale: SupportedLocale;
+  messages: FarmMessages;
+  setGameState: React.Dispatch<React.SetStateAction<GameState>>;
+  getAnalyticsContext: GetAnalyticsContext;
+  analytics: FarmAnalytics;
+  onDone: (msg: string) => void;
+  onMilestone: () => void;
+}) {
+  const lockedAreas = FARM_AREAS.filter((area) => !isAreaUnlocked(gameState, area.key));
+  // Gated areas (research-unlocked) sit outside the sequential progression.
+  const sequentialAreas = lockedAreas.filter((area) => area.unlock.gate == null);
+  const gatedAreas = lockedAreas.filter((area) => area.unlock.gate != null);
+
+  if (lockedAreas.length === 0) {
+    return (
+      <ShopCard
+        title={messages.allAreasUnlockedTitle}
+        desc={messages.allAreasUnlockedDesc}
+        price={messages.completePrice}
+        disabled
+        onPress={() => undefined}
+      />
+    );
+  }
+
+  const renderAreaCard = (area: (typeof FARM_AREAS)[number], isNextArea: boolean) => {
+    const canBuy = isNextArea && canUnlockArea(gameState, area.key);
+    const areaLabel = getAreaLabel(area.key, locale);
+    const requirementText = getAreaUnlockRequirementText(gameState, area.key, locale);
+
+    return (
+      <ShopCard
+        key={area.key}
+        title={messages.areaOpenTitle(areaLabel.name)}
+        desc={`${areaLabel.target} · ${requirementText}`}
+        price={`${formatMoney(area.unlock.cost, locale)}G`}
+        disabled={!canBuy}
+        onPress={() => {
+          analytics.trackAreaUnlockClicked(area.key, getAnalyticsContext(gameState));
+          if (!isNextArea) {
+            onDone(messages.previousAreaRequiredToast);
+            return;
+          }
+          if (!canUnlockArea(gameState, area.key)) {
+            onDone(messages.areaRequirementsMissingToast);
+            return;
+          }
+
+          setGameState((state) => {
+            if (!canUnlockArea(state, area.key)) {
+              return state;
+            }
+            return {
+              ...state,
+              gold: state.gold - area.unlock.cost,
+              unlockedAreas: [...state.unlockedAreas, area.key],
+            };
+          });
+          analytics.trackAreaUnlocked({
+            areaKey: area.key,
+            cost: area.unlock.cost,
+            context: getAnalyticsContext(gameState),
+          });
+          onDone(messages.areaOpenedToast(areaLabel.name));
+          onMilestone();
+        }}
+      />
+    );
+  };
+
+  return (
+    <>
+      {sequentialAreas.map((area, index) => renderAreaCard(area, index === 0))}
+      {gatedAreas.map((area) => renderAreaCard(area, true))}
+    </>
+  );
+}
+
+function ShopUpgradeRow({
+  kind,
+  gameState,
+  locale,
+  messages,
+  setGameState,
+  getAnalyticsContext,
+  analytics,
+  onDone,
+  onMilestone,
+}: {
+  kind: 'speed' | 'profit';
+  gameState: GameState;
+  locale: SupportedLocale;
+  messages: FarmMessages;
+  setGameState: React.Dispatch<React.SetStateAction<GameState>>;
+  getAnalyticsContext: GetAnalyticsContext;
+  analytics: FarmAnalytics;
+  onDone: (msg: string) => void;
+  onMilestone: () => void;
+}) {
+  const level = gameState.upgrades[kind];
+  const cost = getUpgradeCost(kind, level);
+  const title = kind === 'speed' ? messages.speedUpgradeTitle : messages.profitUpgradeTitle;
+  const desc = kind === 'speed' ? messages.speedUpgradeDesc : messages.profitUpgradeDesc;
+  const disabled = gameState.gold < cost;
+  const goldProgress = disabled ? Math.min(1, gameState.gold / cost) : undefined;
+
+  return (
+    <ShopCard
+      title={title}
+      desc={messages.upgradeDescWithLevel(desc, level)}
+      price={`${formatMoney(cost, locale)}G`}
+      priceTone={kind}
+      disabled={disabled}
+      goldProgress={goldProgress}
+      onPress={() => {
+        if (disabled) {
+          onDone(messages.insufficientGoldToast);
+          return;
+        }
+        setGameState((state) => ({
+          ...state,
+          gold: state.gold - cost,
+          upgrades: { ...state.upgrades, [kind]: state.upgrades[kind] + 1 },
+        }));
+        analytics.trackUpgradePurchased({
+          kind,
+          cost,
+          nextLevel: level + 1,
+          context: getAnalyticsContext(gameState),
+        });
+        onDone(messages.researchCompletedToast);
+        onMilestone();
+      }}
+    />
+  );
+}
+
+const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+    backgroundColor: '#f1f8e9',
+  },
+  header: {
+    paddingHorizontal: 16,
+    paddingBottom: 8,
+    backgroundColor: '#ffffff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#d9e7ce',
+  },
+  headerTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    gap: 12,
+  },
+  mobileHeaderTop: {
+    justifyContent: 'space-between',
+  },
+  titleGroup: {
+    minWidth: 0,
+    flexShrink: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  mobileTitleGroup: {
+    flex: 1,
+  },
+  homeIcon: {
+    fontSize: 26,
+  },
+  title: {
+    color: '#253126',
+    fontSize: 20,
+    fontWeight: '800',
+  },
+  subtitle: {
+    alignSelf: 'flex-start',
+    marginTop: 2,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 8,
+    overflow: 'hidden',
+    color: '#247241',
+    backgroundColor: '#dff1df',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  headerActions: {
+    flexShrink: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  subtitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  titleBadge: {
+    marginTop: 2,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 8,
+    overflow: 'hidden',
+    color: '#6f57d9',
+    backgroundColor: '#efeafd',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  starsChip: {
+    minHeight: 34,
+    overflow: 'hidden',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    lineHeight: 34,
+    color: '#8a4b0f',
+    backgroundColor: '#fff3d6',
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  navRow: {
+    gap: 8,
+    paddingTop: 8,
+  },
+  navButton: {
+    minHeight: 34,
+    justifyContent: 'center',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    backgroundColor: '#edf2f7',
+  },
+  navButtonText: {
+    color: '#344054',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  settingsButton: {
+    width: 34,
+    height: 34,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 8,
+    backgroundColor: '#edf2f7',
+  },
+  settingsButtonText: {
+    color: '#4a5568',
+    fontSize: 17,
+    fontWeight: '800',
+  },
+  statsPanel: {
+    marginTop: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 9,
+    borderWidth: 1,
+    borderColor: '#f1d98a',
+    borderRadius: 8,
+    backgroundColor: '#fff8d8',
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  assetRow: {
+    minWidth: 0,
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 9,
+  },
+  assetPulse: {
+    minWidth: 0,
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 9,
+    transformOrigin: 'left center',
+  },
+  coinIcon: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    overflow: 'hidden',
+    backgroundColor: '#f6c343',
+    textAlign: 'center',
+    lineHeight: 30,
+    fontSize: 17,
+  },
+  assetTextGroup: {
+    minWidth: 0,
+    flex: 1,
+  },
+  label: {
+    color: '#667085',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  money: {
+    color: '#7a4b00',
+    fontSize: 24,
+    fontWeight: '900',
+  },
+  summaryColumn: {
+    flexShrink: 0,
+    maxWidth: '48%',
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+  },
+  researchBadge: {
+    overflow: 'hidden',
+    borderRadius: 8,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    color: '#ffffff',
+    backgroundColor: '#6f57d9',
+    fontSize: 11,
+    fontWeight: '900',
+  },
+  productivityText: {
+    marginTop: 3,
+    color: '#247241',
+    fontSize: 12,
+    fontWeight: '900',
+    textAlign: 'right',
+  },
+  statList: {
+    marginTop: 3,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 9,
+  },
+  compactStat: {
+    alignItems: 'flex-end',
+  },
+  profitStat: {
+    color: '#247241',
+    fontSize: 13,
+    fontWeight: '900',
+    textAlign: 'right',
+  },
+  speedStat: {
+    color: '#2f7de1',
+    fontSize: 13,
+    fontWeight: '900',
+    textAlign: 'right',
+  },
+  boostStat: {
+    color: '#b54708',
+    fontSize: 13,
+    fontWeight: '900',
+    textAlign: 'right',
+  },
+  boostRemaining: {
+    marginTop: 1,
+    color: '#8a4b0f',
+    fontSize: 10,
+    fontWeight: '900',
+    textAlign: 'right',
+  },
+  main: {
+    flex: 1,
+  },
+  mainContent: {
+    padding: 16,
+  },
+  plotGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: PLOT_GAP,
+  },
+  harvestPop: {
+    position: 'absolute',
+    zIndex: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  harvestPopText: {
+    color: '#f7b733',
+    fontSize: 18,
+    fontWeight: '900',
+    textShadowColor: 'rgba(31, 41, 55, 0.85)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
+  harvestPopTextSpecial: {
+    color: '#ffd23f',
+    fontSize: 22,
+    textShadowColor: 'rgba(180, 83, 9, 0.95)',
+    textShadowRadius: 4,
+  },
+  harvestPopTextGolden: {
+    color: '#fbbf24',
+    fontSize: 30,
+    textShadowColor: 'rgba(180, 83, 9, 0.95)',
+    textShadowRadius: 8,
+  },
+  harvestPopTextRainbow: {
+    color: '#c084fc',
+    fontSize: 38,
+    textShadowColor: 'rgba(109, 40, 217, 0.95)',
+    textShadowRadius: 10,
+  },
+  mutationFlash: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 8,
+  },
+  discoveryBanner: {
+    position: 'absolute',
+    bottom: 160,
+    left: 20,
+    right: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    backgroundColor: 'rgba(17, 24, 39, 0.94)',
+    borderRadius: 18,
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+    zIndex: 15,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    elevation: 8,
+  },
+  discoveryBannerIcon: {
+    fontSize: 44,
+  },
+  discoveryBannerTitle: {
+    color: '#86efac',
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+    marginBottom: 1,
+  },
+  discoveryBannerName: {
+    color: '#ffffff',
+    fontSize: 20,
+    fontWeight: '900',
+    lineHeight: 24,
+  },
+  discoveryBannerSubtitle: {
+    color: 'rgba(209, 213, 219, 0.8)',
+    fontSize: 13,
+    fontWeight: '500',
+    marginTop: 2,
+  },
+  toast: {
+    position: 'absolute',
+    left: 18,
+    right: 18,
+    zIndex: 20,
+    alignItems: 'center',
+  },
+  toastText: {
+    maxWidth: '100%',
+    overflow: 'hidden',
+    borderRadius: 8,
+    backgroundColor: 'rgba(31, 41, 55, 0.94)',
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '800',
+    lineHeight: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    textAlign: 'center',
+  },
+  plotTile: {
+    borderRadius: 8,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  lockedPlot: {
+    opacity: 0.62,
+    borderColor: '#c7d0d9',
+    backgroundColor: '#e9eef2',
+  },
+  lockIcon: {
+    fontSize: 25,
+    lineHeight: 30,
+  },
+  emptyPlot: {
+    borderColor: '#cdbb98',
+    backgroundColor: '#e7d8bd',
+  },
+  emptyPlotText: {
+    color: '#6b5d48',
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '900',
+  },
+  growingPlot: {
+    borderColor: '#5e4631',
+    backgroundColor: '#7c5e42',
+  },
+  readyPlot: {
+    borderColor: '#73b76e',
+    backgroundColor: '#dff1df',
+  },
+  harvestBadge: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    borderRadius: 8,
+    backgroundColor: '#e5484d',
+  },
+  harvestBadgeText: {
+    color: '#ffffff',
+    fontSize: 10,
+    fontWeight: '900',
+  },
+  growthTimer: {
+    position: 'absolute',
+    top: 5,
+    left: 5,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 7,
+    backgroundColor: 'rgba(0, 0, 0, 0.42)',
+  },
+  growthTimerText: {
+    color: '#ffffff',
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  progressTrack: {
+    position: 'absolute',
+    left: 8,
+    right: 8,
+    bottom: 8,
+    height: 4,
+    borderRadius: 2,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(0, 0, 0, 0.22)',
+  },
+  progressFill: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#76d275',
+    transformOrigin: 'left center',
+  },
+  cropIcon: {
+    fontSize: 28,
+    lineHeight: 32,
+  },
+  readyCropIcon: {
+    fontSize: 32,
+    lineHeight: 36,
+  },
+  toolStrip: {
+    paddingTop: 10,
+    paddingHorizontal: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#d9e7ce',
+    backgroundColor: '#ffffff',
+  },
+  toolHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  toolLabel: {
+    color: '#667085',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  toolHint: {
+    minWidth: 0,
+    flex: 1,
+    color: '#247241',
+    fontSize: 13,
+    fontWeight: '900',
+    textAlign: 'right',
+  },
+  harvestAllButton: {
+    minHeight: 34,
+    justifyContent: 'center',
+    borderRadius: 999,
+    paddingHorizontal: 16,
+    backgroundColor: '#2e9e57',
+    shadowColor: '#1c5f37',
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
+  },
+  harvestAllButtonPressed: {
+    opacity: 0.85,
+  },
+  harvestAllButtonText: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  areaTabs: {
+    gap: 8,
+    paddingTop: 10,
+    paddingBottom: 2,
+  },
+  areaTab: {
+    minHeight: 34,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    borderWidth: 1,
+    borderColor: '#d0d5dd',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    backgroundColor: '#f7fafc',
+  },
+  activeAreaTab: {
+    borderColor: '#4d9d56',
+    backgroundColor: '#edf8ed',
+  },
+  lockedAreaTab: {
+    backgroundColor: '#edf2f7',
+  },
+  areaTabName: {
+    color: '#344054',
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  activeAreaTabName: {
+    color: '#247241',
+  },
+  areaTabCount: {
+    color: '#7b8794',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  toolScroll: {
+    gap: 10,
+    paddingTop: 8,
+    paddingBottom: 4,
+  },
+  toolButton: {
+    width: 82,
+    height: 88,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#d0d5dd',
+    backgroundColor: '#ffffff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 3,
+  },
+  activeToolButton: {
+    borderColor: '#4d9d56',
+    backgroundColor: '#edf8ed',
+  },
+  toolIcon: {
+    fontSize: 24,
+  },
+  toolName: {
+    maxWidth: '100%',
+    color: '#253126',
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  toolCost: {
+    color: '#8f5c00',
+    fontSize: 10,
+    fontWeight: '900',
+  },
+  toolCostUnaffordable: {
+    color: '#b42318',
+  },
+  toolRoi: {
+    color: '#247241',
+    fontSize: 10,
+    fontWeight: '900',
+  },
+  toolMasteryBadge: {
+    position: 'absolute',
+    top: 3,
+    right: 4,
+  },
+  toolMasteryBadgeText: {
+    fontSize: 11,
+    lineHeight: 14,
+  },
+  toolNewBadge: {
+    position: 'absolute',
+    bottom: 4,
+    left: 4,
+    borderRadius: 4,
+    backgroundColor: '#16a34a',
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+  },
+  toolNewBadgeText: {
+    color: '#ffffff',
+    fontSize: 8,
+    fontWeight: '900',
+    lineHeight: 11,
+    letterSpacing: 0.3,
+  },
+  lockedNotice: {
+    width: 260,
+    minHeight: 76,
+    justifyContent: 'center',
+    gap: 4,
+    borderWidth: 1,
+    borderColor: '#c7d0d9',
+    borderStyle: 'dashed',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    backgroundColor: '#f7fafc',
+  },
+  lockedNoticeTitle: {
+    color: '#253126',
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  lockedNoticeDesc: {
+    color: '#667085',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  modalRoot: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  modalBackdrop: {
+    backgroundColor: 'rgba(16, 24, 40, 0.45)',
+  },
+  sheet: {
+    maxHeight: '86%',
+    borderTopLeftRadius: 8,
+    borderTopRightRadius: 8,
+    paddingTop: 0,
+    paddingHorizontal: 20,
+    backgroundColor: '#ffffff',
+  },
+  sheetDragArea: {
+    marginHorizontal: -20,
+    height: SHEET_DRAG_HIT_TARGET_HEIGHT,
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    paddingTop: 10,
+  },
+  sheetHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#d0d5dd',
+  },
+  sheetTitle: {
+    color: '#253126',
+    fontSize: 21,
+    fontWeight: '900',
+  },
+  sheetDescription: {
+    marginTop: 4,
+    color: '#667085',
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: '600',
+  },
+  sheetContent: {
+    paddingTop: 14,
+    paddingBottom: 28,
+  },
+  sheetSectionTitle: {
+    marginTop: 12,
+    marginBottom: 8,
+    color: '#667085',
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  researchSummary: {
+    marginTop: -2,
+    marginBottom: 10,
+    color: '#344054',
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '800',
+  },
+  resetWarning: {
+    marginBottom: 12,
+    padding: 12,
+    borderRadius: 8,
+    color: '#b42318',
+    backgroundColor: '#fff1f0',
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: '700',
+  },
+  welcomeBackRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+    padding: 14,
+    borderRadius: 12,
+    backgroundColor: '#f3faf1',
+    borderWidth: 1,
+    borderColor: '#d6ecd0',
+  },
+  welcomeBackIcon: {
+    fontSize: 28,
+    marginRight: 14,
+  },
+  welcomeBackRowText: {
+    flex: 1,
+  },
+  welcomeBackRowLabel: {
+    color: '#5b6b58',
+    fontSize: 13,
+    fontWeight: '800',
+    marginBottom: 2,
+  },
+  welcomeBackRowValue: {
+    color: '#1f7a3d',
+    fontSize: 20,
+    fontWeight: '900',
+  },
+  resetInput: {
+    minHeight: 48,
+    borderWidth: 1,
+    borderColor: '#d0d5dd',
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    color: '#253126',
+    backgroundColor: '#ffffff',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  collectionBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    minWidth: 18,
+    height: 18,
+    paddingHorizontal: 4,
+    borderRadius: 9,
+    backgroundColor: '#e5484d',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  collectionBadgeText: {
+    color: '#ffffff',
+    fontSize: 10,
+    fontWeight: '900',
+  },
+  comboOverlay: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    // Shift above true center so the combo sits over the plot grid,
+    // not the tool strip. paddingBottom lifts the visual center upward.
+    paddingBottom: 120,
+    zIndex: 9,
+  },
+  comboDisplay: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 24,
+    backgroundColor: 'rgba(31, 41, 55, 0.88)',
+  },
+  comboDisplayGreat: {
+    backgroundColor: 'rgba(154, 52, 18, 0.92)',
+  },
+  comboDisplayLegendary: {
+    backgroundColor: 'rgba(120, 70, 0, 0.95)',
+  },
+  comboText: {
+    color: '#f7b733',
+    fontSize: 24,
+    fontWeight: '900',
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
+  comboTextGreat: {
+    color: '#ff8c42',
+    fontSize: 28,
+  },
+  comboTextLegendary: {
+    color: '#ffd23f',
+    fontSize: 32,
+  },
+  nextGoalBar: {
+    marginTop: 7,
+  },
+  nextGoalLabel: {
+    color: '#4a7c59',
+    fontSize: 11,
+    fontWeight: '800',
+    marginBottom: 4,
+  },
+  nextGoalReadyText: {
+    color: '#1c7538',
+    fontSize: 11,
+    fontWeight: '900',
+    paddingVertical: 2,
+  },
+  nextGoalTrack: {
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: 'rgba(0, 0, 0, 0.08)',
+    overflow: 'hidden',
+  },
+  nextGoalFill: {
+    height: '100%',
+    borderRadius: 2,
+    backgroundColor: '#4caf6a',
+  },
+  masteryBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.58)',
+  },
+  masteryCenter: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingBottom: 80,
+  },
+  masteryCard: {
+    width: 268,
+    paddingHorizontal: 28,
+    paddingVertical: 28,
+    borderRadius: 20,
+    backgroundColor: '#ffffff',
+    alignItems: 'center',
+    gap: 6,
+    shadowColor: '#000000',
+    shadowOpacity: 0.28,
+    shadowRadius: 28,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 14,
+  },
+  masteryTitle: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: '#667085',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+  },
+  masteryCropIcon: {
+    fontSize: 68,
+    lineHeight: 76,
+    marginVertical: 2,
+  },
+  masteryRankBadge: {
+    fontSize: 30,
+    fontWeight: '900',
+  },
+  masteryCropName: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: '#344054',
+    marginTop: 4,
+  },
+  prestigeBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(10, 12, 30, 0.72)',
+  },
+  prestigeCenter: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingBottom: 80,
+  },
+  prestigeCard: {
+    width: 288,
+    paddingHorizontal: 32,
+    paddingVertical: 32,
+    borderRadius: 24,
+    backgroundColor: '#ffffff',
+    alignItems: 'center',
+    gap: 6,
+    shadowColor: '#000000',
+    shadowOpacity: 0.32,
+    shadowRadius: 36,
+    shadowOffset: { width: 0, height: 14 },
+    elevation: 18,
+  },
+  prestigeTitle: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: '#667085',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+  },
+  prestigeRegionIcon: {
+    fontSize: 80,
+    lineHeight: 88,
+    marginVertical: 4,
+  },
+  prestigeRegionName: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: '#344054',
+  },
+  prestigeStarsBadge: {
+    fontSize: 34,
+    fontWeight: '900',
+    color: '#d4860a',
+    marginTop: 6,
+  },
+  firstHarvestCenter: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingBottom: 60,
+  },
+  firstHarvestCard: {
+    width: 260,
+    paddingHorizontal: 24,
+    paddingVertical: 24,
+    borderRadius: 20,
+    backgroundColor: '#fffbeb',
+    borderWidth: 2,
+    borderColor: '#fde68a',
+    alignItems: 'center',
+    gap: 4,
+    shadowColor: '#d97706',
+    shadowOpacity: 0.22,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 12,
+  },
+  firstHarvestTitle: {
+    fontSize: 17,
+    fontWeight: '900',
+    color: '#92400e',
+    letterSpacing: 0.2,
+  },
+  firstHarvestCropIcon: {
+    fontSize: 72,
+    lineHeight: 80,
+    marginVertical: 4,
+  },
+  firstHarvestGold: {
+    fontSize: 26,
+    fontWeight: '900',
+    color: '#d97706',
+  },
+  firstHarvestSubtitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#92400e',
+    marginTop: 2,
+  },
+});
