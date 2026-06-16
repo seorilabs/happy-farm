@@ -893,9 +893,10 @@ export default function FarmGame({
       if (summary == null && persistence.readDailyBonusState != null && persistence.writeDailyBonusState != null) {
         const dailyBonusState = await persistence.readDailyBonusState();
 
-        // Crash recovery: if pendingGold > 0, the claim was saved but the gold
-        // may not have been reflected in the game save yet. The marker
-        // lastAppliedBonusClaimedAt in the game save makes this idempotent.
+        // Crash recovery: if pendingGold > 0, the claim was stored but gold may
+        // not have been reflected in the game save yet. We clear pendingGold
+        // BEFORE applying to memory so that a subsequent crash cannot re-apply
+        // the same gold again (prefer under-awarding over double-awarding).
         const pendingGold = dailyBonusState.pendingGold ?? 0;
         if (pendingGold > 0) {
           const pendingClaimedAt = dailyBonusState.lastClaimedAt;
@@ -910,14 +911,19 @@ export default function FarmGame({
             // Game save already reflects the gold; safe to clear the recovery marker.
             void persistence.writeDailyBonusState({ ...dailyBonusState, pendingGold: 0 }).catch(() => {});
           } else if (isValidClaim) {
-            // Apply gold to memory. Keep pendingGold set so the next load can verify
-            // the game auto-save succeeded before clearing; clearing now would create
-            // a window where a crash loses the gold permanently.
-            setGameState((prev) => ({
-              ...prev,
-              gold: prev.gold + pendingGold,
-              lastAppliedBonusClaimedAt: pendingClaimedAt,
-            }));
+            // Clear pendingGold first so a crash after this point cannot re-apply
+            // the same gold on the next load. If the clear write itself fails,
+            // skip awarding this load and retry next time (pendingGold stays set).
+            try {
+              await persistence.writeDailyBonusState({ ...dailyBonusState, pendingGold: 0 });
+              setGameState((prev) => ({
+                ...prev,
+                gold: prev.gold + pendingGold,
+                lastAppliedBonusClaimedAt: pendingClaimedAt,
+              }));
+            } catch {
+              // Storage write failed; leave pendingGold set to retry on next load.
+            }
           } else {
             // Corrupt claim data (e.g. null lastClaimedAt): discard without awarding.
             void persistence.writeDailyBonusState({ ...dailyBonusState, pendingGold: 0 }).catch(() => {});
