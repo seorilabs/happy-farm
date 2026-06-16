@@ -894,19 +894,27 @@ export default function FarmGame({
         const dailyBonusState = await persistence.readDailyBonusState();
 
         // Crash recovery: if pendingGold > 0, the claim was saved but the gold
-        // may not have been reflected in the game save yet. Apply it if the game
-        // save's lastAppliedBonusClaimedAt marker doesn't match, ensuring the
-        // recovery is idempotent even if writeDailyBonusState (clear) fails.
+        // may not have been reflected in the game save yet. The marker
+        // lastAppliedBonusClaimedAt in the game save makes this idempotent.
         const pendingGold = dailyBonusState.pendingGold ?? 0;
-        const alreadyApplied =
-          savedState.lastAppliedBonusClaimedAt != null &&
-          savedState.lastAppliedBonusClaimedAt === dailyBonusState.lastClaimedAt;
-        if (pendingGold > 0 && !alreadyApplied) {
-          setGameState((prev) => ({
-            ...prev,
-            gold: prev.gold + pendingGold,
-            lastAppliedBonusClaimedAt: dailyBonusState.lastClaimedAt,
-          }));
+        if (pendingGold > 0) {
+          const pendingClaimedAt = dailyBonusState.lastClaimedAt;
+          const isValidClaim =
+            typeof pendingClaimedAt === 'number' &&
+            Number.isFinite(pendingClaimedAt) &&
+            pendingClaimedAt > 0;
+          const alreadyApplied =
+            isValidClaim && savedState.lastAppliedBonusClaimedAt === pendingClaimedAt;
+
+          if (isValidClaim && !alreadyApplied) {
+            setGameState((prev) => ({
+              ...prev,
+              gold: prev.gold + pendingGold,
+              lastAppliedBonusClaimedAt: pendingClaimedAt,
+            }));
+          }
+          // Always converge: clear pendingGold regardless of whether gold was applied,
+          // so subsequent loads don't incur unnecessary IO or risk stale state.
           void persistence.writeDailyBonusState({ ...dailyBonusState, pendingGold: 0 }).catch(() => {});
         }
 
