@@ -8,7 +8,7 @@ import { DEFAULT_LOCALE, type SupportedLocale } from './i18n';
 import { getDailyBonusMessages } from './i18n/dailyBonusMessages';
 
 export const DAILY_BONUS_COOLDOWN_MS = 24 * 60 * 60 * 1000; // 24시간
-export const DAILY_BONUS_STREAK_EXPIRE_MS = 48 * 60 * 60 * 1000; // 48시간 내 미접속 시 streak 초기화
+export const DAILY_BONUS_STREAK_EXPIRE_MS = 48 * 60 * 60 * 1000; // 마지막 수령 후 48시간 내 재수령하지 않으면 streak 초기화
 
 // streak 단계별 보너스 골드
 export const DAILY_BONUS_GOLD_BY_STREAK: Record<number, number> = {

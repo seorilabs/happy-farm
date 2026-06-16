@@ -265,7 +265,7 @@ type ActiveSheet =
   | { type: 'growthAd'; plotIndex: number; cropKey: CropKey; remainingMs: number }
   | { type: 'harvestBonus' }
   | { type: 'welcomeBack'; summary: ReturnSummary }
-  | { type: 'dailyBonus'; pendingState: DailyBonusState }
+  | { type: 'dailyBonus'; pendingState: DailyBonusState; previewStreak: number; previewGold: number }
   | { type: 'resetConfirm' }
   | null;
 
@@ -894,7 +894,8 @@ export default function FarmGame({
       if (summary == null && persistence.readDailyBonusState != null && persistence.writeDailyBonusState != null) {
         const dailyBonusState = await persistence.readDailyBonusState();
         if (isDailyBonusAvailable(dailyBonusState, now)) {
-          setActiveSheet({ type: 'dailyBonus', pendingState: dailyBonusState });
+          const { streak: previewStreak, goldAwarded: previewGold } = previewDailyBonus(dailyBonusState, now);
+          setActiveSheet({ type: 'dailyBonus', pendingState: dailyBonusState, previewStreak, previewGold });
         }
       }
     }
@@ -2170,44 +2171,43 @@ export default function FarmGame({
           </View>
         ) : null}
 
-        {activeSheet?.type === 'dailyBonus' ? (() => {
-          const preview = previewDailyBonus(activeSheet.pendingState);
-          return (
-            <View>
-              <View style={styles.welcomeBackRow}>
-                <Text style={styles.welcomeBackIcon}>🎁</Text>
-                <View style={styles.welcomeBackRowText}>
-                  <Text style={styles.welcomeBackRowLabel}>
-                    {getDailyBonusLabel(preview.streak, preview.goldAwarded, locale).streakLabel}
-                  </Text>
-                  <Text style={styles.welcomeBackRowValue}>
-                    +{formatMoney(preview.goldAwarded, locale)}G
-                  </Text>
-                </View>
+        {activeSheet?.type === 'dailyBonus' ? (
+          <View>
+            <View style={styles.welcomeBackRow}>
+              <Text style={styles.welcomeBackIcon}>🎁</Text>
+              <View style={styles.welcomeBackRowText}>
+                <Text style={styles.welcomeBackRowLabel}>
+                  {getDailyBonusLabel(activeSheet.previewStreak, activeSheet.previewGold, locale).streakLabel}
+                </Text>
+                <Text style={styles.welcomeBackRowValue}>
+                  +{formatMoney(activeSheet.previewGold, locale)}G
+                </Text>
               </View>
-              <SheetAction
-                label={messages.dailyBonusClaimAction(formatMoney(preview.goldAwarded, locale))}
-                onPress={() => {
-                  if (isClaimingDailyBonusRef.current) return;
-                  isClaimingDailyBonusRef.current = true;
-                  setActiveSheet(null);
-                  const result = claimDailyBonus(activeSheet.pendingState, Date.now());
-                  if (result != null && persistence.writeDailyBonusState != null) {
-                    // Write state before awarding gold: if save fails, gold is not added,
-                    // keeping the state consistent and preventing a phantom duplicate on next load.
-                    persistence.writeDailyBonusState(result.newState)
-                      .then(() => {
-                        setGameState((prev) => ({ ...prev, gold: prev.gold + result.goldAwarded }));
-                      })
-                      .catch(() => {
-                        // State save failed; gold not awarded.
-                      });
-                  }
-                }}
-              />
             </View>
-          );
-        })() : null}
+            <SheetAction
+              label={messages.dailyBonusClaimAction(formatMoney(activeSheet.previewGold, locale))}
+              onPress={() => {
+                if (isClaimingDailyBonusRef.current) return;
+                isClaimingDailyBonusRef.current = true;
+                const result = claimDailyBonus(activeSheet.pendingState, Date.now());
+                if (result == null || persistence.writeDailyBonusState == null) {
+                  isClaimingDailyBonusRef.current = false;
+                  setActiveSheet(null);
+                  return;
+                }
+                persistence.writeDailyBonusState(result.newState)
+                  .then(() => {
+                    setGameState((prev) => ({ ...prev, gold: prev.gold + result.goldAwarded }));
+                    setActiveSheet(null);
+                  })
+                  .catch(() => {
+                    // Save failed — reset flag so user can retry.
+                    isClaimingDailyBonusRef.current = false;
+                  });
+              }}
+            />
+          </View>
+        ) : null}
 
         {activeSheet?.type === 'welcomeBack' ? (
           <View>
@@ -3574,7 +3574,7 @@ function getSheetDescription(
     );
   }
   if (activeSheet?.type === 'dailyBonus') {
-    return messages.sheetDescriptionDailyBonus(previewDailyBonus(activeSheet.pendingState).streak);
+    return messages.sheetDescriptionDailyBonus(activeSheet.previewStreak);
   }
   if (activeSheet?.type === 'welcomeBack') {
     return messages.sheetDescriptionWelcomeBack(formatDuration(activeSheet.summary.awayMs, locale));
