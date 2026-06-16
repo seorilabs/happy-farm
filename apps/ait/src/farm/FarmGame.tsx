@@ -892,6 +892,17 @@ export default function FarmGame({
       // welcome-back sheet is queued, so the two modals don't stack.
       if (summary == null && persistence.readDailyBonusState != null && persistence.writeDailyBonusState != null) {
         const dailyBonusState = await persistence.readDailyBonusState();
+
+        // Recovery: if the app crashed after writeDailyBonusState but before the
+        // game auto-save, pendingGold is still set. Apply it now and clear.
+        // If clearning fails the next load will re-apply (minor double-award risk,
+        // bounded to one bonus amount, accepted as the lesser evil vs gold loss).
+        const pendingGold = dailyBonusState.pendingGold ?? 0;
+        if (pendingGold > 0) {
+          setGameState((prev) => ({ ...prev, gold: prev.gold + pendingGold }));
+          void persistence.writeDailyBonusState({ ...dailyBonusState, pendingGold: 0 }).catch(() => {});
+        }
+
         const preview = previewDailyBonus(dailyBonusState, now);
         if (preview.available) {
           setActiveSheet({ type: 'dailyBonus', pendingState: dailyBonusState, previewStreak: preview.streak, previewGold: preview.goldAwarded });
@@ -2204,6 +2215,9 @@ export default function FarmGame({
                   .then(() => {
                     setGameState((prev) => ({ ...prev, gold: prev.gold + result.goldAwarded }));
                     setActiveSheet(null);
+                    // Clear pendingGold after gold is applied to game state.
+                    // Best-effort: failure is tolerated (next load recovers via pendingGold).
+                    void persistence.writeDailyBonusState?.({ ...result.newState, pendingGold: 0 }).catch(() => {});
                   })
                   .catch(() => {
                     toast(messages.dailyBonusSaveFailedToast);

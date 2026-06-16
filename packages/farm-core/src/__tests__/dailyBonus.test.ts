@@ -56,6 +56,11 @@ describe('claimDailyBonus', () => {
     expect(result!.newState.lastClaimedAt).toBe(NOW);
   });
 
+  test('sets pendingGold in newState for crash recovery', () => {
+    const result = claimDailyBonus(fresh, NOW);
+    expect(result!.newState.pendingGold).toBe(result!.goldAwarded);
+  });
+
   test('second claim within 48h gives streak 2 and 75G', () => {
     const state: DailyBonusState = { lastClaimedAt: NOW - H24, streak: 1 };
     const result = claimDailyBonus(state, NOW);
@@ -103,16 +108,26 @@ describe('getDailyBonusGold', () => {
 
 describe('normalizeDailyBonusState', () => {
   test('null returns default state', () => {
-    expect(normalizeDailyBonusState(null)).toEqual({ lastClaimedAt: null, streak: 0 });
+    expect(normalizeDailyBonusState(null)).toEqual({ lastClaimedAt: null, streak: 0, pendingGold: 0 });
   });
 
   test('undefined returns default state', () => {
-    expect(normalizeDailyBonusState(undefined)).toEqual({ lastClaimedAt: null, streak: 0 });
+    expect(normalizeDailyBonusState(undefined)).toEqual({ lastClaimedAt: null, streak: 0, pendingGold: 0 });
   });
 
   test('valid state is returned as-is', () => {
-    const state = { lastClaimedAt: NOW, streak: 2 };
+    const state = { lastClaimedAt: NOW, streak: 2, pendingGold: 50 };
     expect(normalizeDailyBonusState(state)).toEqual(state);
+  });
+
+  test('missing pendingGold defaults to 0', () => {
+    const result = normalizeDailyBonusState({ lastClaimedAt: NOW, streak: 1 });
+    expect(result.pendingGold).toBe(0);
+  });
+
+  test('negative pendingGold is replaced with 0', () => {
+    const result = normalizeDailyBonusState({ lastClaimedAt: NOW, streak: 1, pendingGold: -10 });
+    expect(result.pendingGold).toBe(0);
   });
 
   test('invalid lastClaimedAt is replaced with null', () => {

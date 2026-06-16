@@ -22,6 +22,9 @@ export type DailyBonusState = {
   lastClaimedAt: number | null;
   // 현재 연속 출석 일수
   streak: number;
+  // 클레임은 성공했지만 게임 저장에 아직 반영되지 않은 골드. 0이면 없음.
+  // 다음 로드 시 이 값이 양수이면 자동 복구됩니다.
+  pendingGold?: number;
 };
 
 export type DailyBonusResult = {
@@ -68,6 +71,9 @@ export function claimDailyBonus(state: DailyBonusState, now = Date.now()): Daily
     newState: {
       lastClaimedAt: now,
       streak: newStreak,
+      // pendingGold is set so the next load can recover the award if the app
+      // crashes before the game auto-save reflects it.
+      pendingGold: goldAwarded,
     },
   };
 }
@@ -101,7 +107,11 @@ export function normalizeDailyBonusState(value: unknown): DailyBonusState {
     typeof raw.streak === 'number' && Number.isFinite(raw.streak) && raw.streak >= 0
       ? Math.floor(raw.streak)
       : 0;
-  return { lastClaimedAt, streak };
+  const pendingGold =
+    typeof raw.pendingGold === 'number' && Number.isFinite(raw.pendingGold) && raw.pendingGold > 0
+      ? Math.floor(raw.pendingGold)
+      : 0;
+  return { lastClaimedAt, streak, pendingGold };
 }
 
 /**
