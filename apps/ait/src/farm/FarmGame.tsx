@@ -117,6 +117,7 @@ import {
 import {
   claimDailyBonus,
   getDailyBonusLabel,
+  normalizeDailyBonusState,
   previewDailyBonus,
 } from '../../../../packages/farm-core/src/dailyBonus';
 
@@ -887,7 +888,12 @@ export default function FarmGame({
       // queued. dailyBonusState lives inside the game save so gold and bonus
       // state are always committed atomically — no separate crash-recovery needed.
       if (summary == null) {
-        const preview = previewDailyBonus(savedState.dailyBonusState, now);
+        // Normalize defensively: a custom readPersistedGameState may skip
+        // migrateLoadedState, leaving dailyBonusState absent for old saves.
+        const preview = previewDailyBonus(
+          normalizeDailyBonusState(savedState.dailyBonusState as unknown),
+          now
+        );
         if (preview.available) {
           setActiveSheet({ type: 'dailyBonus' });
         }
