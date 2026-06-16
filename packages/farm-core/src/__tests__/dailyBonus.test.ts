@@ -37,9 +37,18 @@ describe('isDailyBonusAvailable', () => {
     expect(isDailyBonusAvailable(state, NOW)).toBe(true);
   });
 
-  test('future lastClaimedAt is treated as available (invalid/device time jump)', () => {
+  test('future lastClaimedAt is treated as not available (clamped to now, so 0ms elapsed)', () => {
     const state: DailyBonusState = { lastClaimedAt: NOW + H24, streak: 3 };
-    expect(isDailyBonusAvailable(state, NOW)).toBe(true);
+    expect(isDailyBonusAvailable(state, NOW)).toBe(false);
+  });
+
+  test('future lastClaimedAt unlocks after 24h have passed in real time', () => {
+    // safeLastClaimedAt = min(NOW + H24, NOW + H24 + 1) = NOW + H24
+    // elapsed = 1ms < 24h → still locked
+    const state: DailyBonusState = { lastClaimedAt: NOW + H24, streak: 3 };
+    expect(isDailyBonusAvailable(state, NOW + H24 + 1)).toBe(false);
+    // After another full 24h window from lastClaimedAt, unlocks normally
+    expect(isDailyBonusAvailable(state, NOW + H24 + DAILY_BONUS_COOLDOWN_MS)).toBe(true);
   });
 });
 
@@ -97,11 +106,20 @@ describe('claimDailyBonus', () => {
     expect(result!.goldAwarded).toBe(100);
   });
 
-  test('future lastClaimedAt resets streak to 1 (invalid timestamp)', () => {
+  test('future lastClaimedAt returns null (treated as just claimed, cooldown active)', () => {
     const state: DailyBonusState = { lastClaimedAt: NOW + H24, streak: 5 };
-    const result = claimDailyBonus(state, NOW);
-    expect(result!.streak).toBe(1);
-    expect(result!.goldAwarded).toBe(50);
+    expect(claimDailyBonus(state, NOW)).toBeNull();
+  });
+
+  test('future lastClaimedAt: claim succeeds after real 24h passes, preserves streak', () => {
+    // safeLastClaimedAt = min(NOW + H24, NOW + H24 + COOLDOWN) = NOW + H24
+    // elapsed = COOLDOWN → available
+    // streak: safeLastClaimedAt = NOW + H24, elapsed since it = COOLDOWN < H48 → alive
+    const state: DailyBonusState = { lastClaimedAt: NOW + H24, streak: 3 };
+    const result = claimDailyBonus(state, NOW + H24 + DAILY_BONUS_COOLDOWN_MS);
+    expect(result).not.toBeNull();
+    expect(result!.streak).toBe(4);
+    expect(result!.goldAwarded).toBe(100);
   });
 });
 

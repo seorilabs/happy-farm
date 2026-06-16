@@ -2188,13 +2188,16 @@ export default function FarmGame({
             <SheetAction
               label={messages.dailyBonusClaimAction(formatMoney(dailyBonusPreview.goldAwarded, locale))}
               onPress={() => {
-                // openedAt is captured here so display and claim use the same
-                // reference time. The functional updater makes this idempotent:
-                // concurrent taps evaluate claimDailyBonus against the latest
-                // prev.dailyBonusState, so only the first tap can succeed.
-                const openedAt = activeSheet.openedAt;
+                // Claim uses the actual tap time so lastClaimedAt reflects when
+                // the player received the gold (accurate cooldown/streak window).
+                // Display already showed values based on openedAt; the 48h window
+                // makes any discrepancy negligible in practice.
+                // The functional updater makes this idempotent: concurrent taps
+                // evaluate claimDailyBonus against the latest prev.dailyBonusState,
+                // so only the first tap can succeed.
+                const now = Date.now();
                 setGameState((prev) => {
-                  const result = claimDailyBonus(prev.dailyBonusState, openedAt);
+                  const result = claimDailyBonus(prev.dailyBonusState, now);
                   if (result == null) return prev;
                   return {
                     ...prev,
