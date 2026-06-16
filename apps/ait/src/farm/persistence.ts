@@ -121,11 +121,7 @@ export function createFarmPersistence(storage: KeyValueStorage) {
     },
 
     async writeDailyBonusState(state: DailyBonusState) {
-      try {
-        await storage.setItem(DAILY_BONUS_KEY, JSON.stringify(state));
-      } catch {
-        // Storage failures must not interrupt gameplay.
-      }
+      await storage.setItem(DAILY_BONUS_KEY, JSON.stringify(state));
     },
   };
 }

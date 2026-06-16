@@ -2189,11 +2189,17 @@ export default function FarmGame({
               onPress={() => {
                 if (isClaimingDailyBonusRef.current) return;
                 isClaimingDailyBonusRef.current = true;
-                const result = claimDailyBonus(activeSheet.pendingState, Date.now());
+                const now = Date.now();
+                const result = claimDailyBonus(activeSheet.pendingState, now);
                 if (result == null || persistence.writeDailyBonusState == null) {
                   isClaimingDailyBonusRef.current = false;
                   setActiveSheet(null);
                   return;
+                }
+                // If the streak expired while the Sheet was open (edge case), correct the
+                // displayed values so what the user sees matches what is actually awarded.
+                if (result.streak !== activeSheet.previewStreak || result.goldAwarded !== activeSheet.previewGold) {
+                  setActiveSheet({ type: 'dailyBonus', pendingState: activeSheet.pendingState, previewStreak: result.streak, previewGold: result.goldAwarded });
                 }
                 persistence.writeDailyBonusState(result.newState)
                   .then(() => {
