@@ -137,15 +137,23 @@ describe('normalizeDailyBonusState', () => {
 });
 
 describe('previewDailyBonus', () => {
-  test('never claimed previews streak 1 and 50G', () => {
+  test('never claimed: available true, streak 1, 50G', () => {
     const preview = previewDailyBonus(fresh, NOW);
+    expect(preview.available).toBe(true);
     expect(preview.streak).toBe(1);
     expect(preview.goldAwarded).toBe(50);
+  });
+
+  test('within cooldown: available false', () => {
+    const state: DailyBonusState = { lastClaimedAt: NOW - H24 + 1, streak: 1 };
+    const preview = previewDailyBonus(state, NOW);
+    expect(preview.available).toBe(false);
   });
 
   test('within 48h previews streak+1', () => {
     const state: DailyBonusState = { lastClaimedAt: NOW - H24, streak: 2 };
     const preview = previewDailyBonus(state, NOW);
+    expect(preview.available).toBe(true);
     expect(preview.streak).toBe(3);
     expect(preview.goldAwarded).toBe(100);
   });
@@ -153,6 +161,7 @@ describe('previewDailyBonus', () => {
   test('after 48h previews streak reset to 1', () => {
     const state: DailyBonusState = { lastClaimedAt: NOW - H48, streak: 5 };
     const preview = previewDailyBonus(state, NOW);
+    expect(preview.available).toBe(true);
     expect(preview.streak).toBe(1);
     expect(preview.goldAwarded).toBe(50);
   });

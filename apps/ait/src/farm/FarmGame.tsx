@@ -117,7 +117,6 @@ import {
 import {
   claimDailyBonus,
   getDailyBonusLabel,
-  isDailyBonusAvailable,
   previewDailyBonus,
   type DailyBonusState,
 } from '../../../../packages/farm-core/src/dailyBonus';
@@ -893,9 +892,9 @@ export default function FarmGame({
       // welcome-back sheet is queued, so the two modals don't stack.
       if (summary == null && persistence.readDailyBonusState != null && persistence.writeDailyBonusState != null) {
         const dailyBonusState = await persistence.readDailyBonusState();
-        if (isDailyBonusAvailable(dailyBonusState, now)) {
-          const { streak: previewStreak, goldAwarded: previewGold } = previewDailyBonus(dailyBonusState, now);
-          setActiveSheet({ type: 'dailyBonus', pendingState: dailyBonusState, previewStreak, previewGold });
+        const preview = previewDailyBonus(dailyBonusState, now);
+        if (preview.available) {
+          setActiveSheet({ type: 'dailyBonus', pendingState: dailyBonusState, previewStreak: preview.streak, previewGold: preview.goldAwarded });
         }
       }
     }

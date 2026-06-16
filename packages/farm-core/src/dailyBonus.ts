@@ -74,12 +74,14 @@ export function claimDailyBonus(state: DailyBonusState, now = Date.now()): Daily
 
 /**
  * 클레임 전 표시용 프리뷰 값을 계산합니다. 상태를 변경하지 않으며 UI 표시에만 사용합니다.
+ * `available`이 false이면 쿨다운 미충족 상태이므로 보너스를 표시하지 않아야 합니다.
  */
-export function previewDailyBonus(state: DailyBonusState, now = Date.now()): { streak: number; goldAwarded: number } {
+export function previewDailyBonus(state: DailyBonusState, now = Date.now()): { available: boolean; streak: number; goldAwarded: number } {
+  const available = isDailyBonusAvailable(state, now);
   const isStreakAlive =
     state.lastClaimedAt != null && now - state.lastClaimedAt < DAILY_BONUS_STREAK_EXPIRE_MS;
   const streak = isStreakAlive ? state.streak + 1 : 1;
-  return { streak, goldAwarded: getDailyBonusGold(streak) };
+  return { available, streak, goldAwarded: getDailyBonusGold(streak) };
 }
 
 /**
