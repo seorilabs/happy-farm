@@ -471,6 +471,8 @@ export default function FarmGame({
   const mutationFlashRef = useRef<MutationFlashHandle>(null);
   const discoveryBannerRef = useRef<DiscoveryBannerHandle>(null);
   const goldPulseRef = useRef<Animated.Value | null>(null);
+  // Guards against rapid double-tap on the daily bonus claim button.
+  const isClaimingDailyBonusRef = useRef(false);
   if (goldPulseRef.current == null) {
     goldPulseRef.current = new Animated.Value(0);
   }
@@ -2186,7 +2188,8 @@ export default function FarmGame({
               <SheetAction
                 label={messages.dailyBonusClaimAction(formatMoney(preview.goldAwarded, locale))}
                 onPress={() => {
-                  // Close sheet first — removes button from DOM, preventing any second tap.
+                  if (isClaimingDailyBonusRef.current) return;
+                  isClaimingDailyBonusRef.current = true;
                   setActiveSheet(null);
                   const result = claimDailyBonus(activeSheet.pendingState, Date.now());
                   if (result != null && persistence.writeDailyBonusState != null) {
@@ -2197,7 +2200,7 @@ export default function FarmGame({
                         setGameState((prev) => ({ ...prev, gold: prev.gold + result.goldAwarded }));
                       })
                       .catch(() => {
-                        // State save failed silently; gold not awarded.
+                        // State save failed; gold not awarded.
                       });
                   }
                 }}

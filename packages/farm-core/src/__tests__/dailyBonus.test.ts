@@ -70,14 +70,22 @@ describe('claimDailyBonus', () => {
     expect(result!.goldAwarded).toBe(100);
   });
 
-  test('streak resets to 1 if more than 48h elapsed', () => {
+  test('streak resets at exactly 48h boundary', () => {
+    // Condition: now - lastClaimedAt < H48 → at H48 exactly, streak is NOT alive
     const state: DailyBonusState = { lastClaimedAt: NOW - H48, streak: 5 };
     const result = claimDailyBonus(state, NOW);
     expect(result!.streak).toBe(1);
     expect(result!.goldAwarded).toBe(50);
   });
 
-  test('streak preserved when exactly at 48h boundary minus 1ms', () => {
+  test('streak resets when beyond 48h', () => {
+    const state: DailyBonusState = { lastClaimedAt: NOW - H48 - 1000, streak: 5 };
+    const result = claimDailyBonus(state, NOW);
+    expect(result!.streak).toBe(1);
+    expect(result!.goldAwarded).toBe(50);
+  });
+
+  test('streak preserved when 1ms before 48h boundary', () => {
     const state: DailyBonusState = { lastClaimedAt: NOW - H48 + 1, streak: 3 };
     const result = claimDailyBonus(state, NOW);
     expect(result!.streak).toBe(4);
