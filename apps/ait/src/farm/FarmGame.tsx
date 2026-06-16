@@ -2207,7 +2207,7 @@ export default function FarmGame({
                     setActiveSheet(null);
                   })
                   .catch(() => {
-                    // Save failed — gold is not awarded; user can retry.
+                    toast(messages.dailyBonusSaveFailedToast);
                   })
                   .finally(() => {
                     isClaimingDailyBonusRef.current = false;
