@@ -263,7 +263,7 @@ type ActiveSheet =
   | { type: 'growthAd'; plotIndex: number; cropKey: CropKey; remainingMs: number }
   | { type: 'harvestBonus' }
   | { type: 'welcomeBack'; summary: ReturnSummary }
-  | { type: 'dailyBonus'; previewStreak: number; previewGold: number }
+  | { type: 'dailyBonus' }
   | { type: 'resetConfirm' }
   | null;
 
@@ -889,7 +889,7 @@ export default function FarmGame({
       if (summary == null) {
         const preview = previewDailyBonus(savedState.dailyBonusState, now);
         if (preview.available) {
-          setActiveSheet({ type: 'dailyBonus', previewStreak: preview.streak, previewGold: preview.goldAwarded });
+          setActiveSheet({ type: 'dailyBonus' });
         }
       }
     }
@@ -1724,6 +1724,10 @@ export default function FarmGame({
   handlePlotClickRef.current = handlePlotClick;
   const onPlotPress = useCallback((index: number) => handlePlotClickRef.current(index), []);
 
+  // Computed fresh on every render so the displayed values always match what
+  // claimDailyBonus will actually award at the moment the player taps.
+  const dailyBonusPreview = previewDailyBonus(gameState.dailyBonusState, Date.now());
+
   return (
     <View style={styles.root}>
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
@@ -1963,7 +1967,7 @@ export default function FarmGame({
 
       <Sheet
         activeSheet={activeSheet}
-        description={getSheetDescription(activeSheet, messages, locale, getLocalizedCropName, collectionSummary)}
+        description={getSheetDescription(activeSheet, messages, locale, getLocalizedCropName, collectionSummary, dailyBonusPreview.streak)}
         title={getSheetTitle(activeSheet, messages)}
         onClose={closeSheet}
       >
@@ -2171,15 +2175,15 @@ export default function FarmGame({
               <Text style={styles.welcomeBackIcon}>🎁</Text>
               <View style={styles.welcomeBackRowText}>
                 <Text style={styles.welcomeBackRowLabel}>
-                  {getDailyBonusLabel(activeSheet.previewStreak, activeSheet.previewGold, locale).streakLabel}
+                  {getDailyBonusLabel(dailyBonusPreview.streak, dailyBonusPreview.goldAwarded, locale).streakLabel}
                 </Text>
                 <Text style={styles.welcomeBackRowValue}>
-                  +{formatMoney(activeSheet.previewGold, locale)}G
+                  +{formatMoney(dailyBonusPreview.goldAwarded, locale)}G
                 </Text>
               </View>
             </View>
             <SheetAction
-              label={messages.dailyBonusClaimAction(formatMoney(activeSheet.previewGold, locale))}
+              label={messages.dailyBonusClaimAction(formatMoney(dailyBonusPreview.goldAwarded, locale))}
               onPress={() => {
                 const now = Date.now();
                 // Using the functional form of setGameState makes this idempotent:
@@ -3536,7 +3540,8 @@ function getSheetDescription(
   messages: FarmMessages,
   locale: SupportedLocale,
   getLocalizedCropName: (cropKey: CropKey) => string,
-  collectionSummary: CollectionSummary
+  collectionSummary: CollectionSummary,
+  dailyBonusStreak: number
 ) {
   if (activeSheet?.type === 'collection') {
     return messages.sheetDescriptionCollection(collectionSummary.discoveredCount, collectionSummary.totalCount);
@@ -3566,7 +3571,7 @@ function getSheetDescription(
     );
   }
   if (activeSheet?.type === 'dailyBonus') {
-    return messages.sheetDescriptionDailyBonus(activeSheet.previewStreak);
+    return messages.sheetDescriptionDailyBonus(dailyBonusStreak);
   }
   if (activeSheet?.type === 'welcomeBack') {
     return messages.sheetDescriptionWelcomeBack(formatDuration(activeSheet.summary.awayMs, locale));
