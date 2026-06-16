@@ -906,16 +906,22 @@ export default function FarmGame({
           const alreadyApplied =
             isValidClaim && savedState.lastAppliedBonusClaimedAt === pendingClaimedAt;
 
-          if (isValidClaim && !alreadyApplied) {
+          if (alreadyApplied) {
+            // Game save already reflects the gold; safe to clear the recovery marker.
+            void persistence.writeDailyBonusState({ ...dailyBonusState, pendingGold: 0 }).catch(() => {});
+          } else if (isValidClaim) {
+            // Apply gold to memory. Keep pendingGold set so the next load can verify
+            // the game auto-save succeeded before clearing; clearing now would create
+            // a window where a crash loses the gold permanently.
             setGameState((prev) => ({
               ...prev,
               gold: prev.gold + pendingGold,
               lastAppliedBonusClaimedAt: pendingClaimedAt,
             }));
+          } else {
+            // Corrupt claim data (e.g. null lastClaimedAt): discard without awarding.
+            void persistence.writeDailyBonusState({ ...dailyBonusState, pendingGold: 0 }).catch(() => {});
           }
-          // Always converge: clear pendingGold regardless of whether gold was applied,
-          // so subsequent loads don't incur unnecessary IO or risk stale state.
-          void persistence.writeDailyBonusState({ ...dailyBonusState, pendingGold: 0 }).catch(() => {});
         }
 
         const preview = previewDailyBonus(dailyBonusState, now);

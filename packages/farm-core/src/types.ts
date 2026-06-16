@@ -136,6 +136,7 @@ export const META_LAYER_KEYS = [
   'chainFarms',
   'research',
   'automationSettings',
+  'lastAppliedBonusClaimedAt',
 ] as const satisfies readonly (keyof GameState)[];
 
 export type FarmLayerKey = (typeof FARM_LAYER_KEYS)[number];
