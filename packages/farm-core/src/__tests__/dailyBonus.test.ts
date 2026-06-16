@@ -36,6 +36,11 @@ describe('isDailyBonusAvailable', () => {
     const state: DailyBonusState = { lastClaimedAt: NOW - H24 - 1, streak: 1 };
     expect(isDailyBonusAvailable(state, NOW)).toBe(true);
   });
+
+  test('future lastClaimedAt is treated as available (invalid/device time jump)', () => {
+    const state: DailyBonusState = { lastClaimedAt: NOW + H24, streak: 3 };
+    expect(isDailyBonusAvailable(state, NOW)).toBe(true);
+  });
 });
 
 describe('claimDailyBonus', () => {
@@ -90,6 +95,13 @@ describe('claimDailyBonus', () => {
     const result = claimDailyBonus(state, NOW);
     expect(result!.streak).toBe(4);
     expect(result!.goldAwarded).toBe(100);
+  });
+
+  test('future lastClaimedAt resets streak to 1 (invalid timestamp)', () => {
+    const state: DailyBonusState = { lastClaimedAt: NOW + H24, streak: 5 };
+    const result = claimDailyBonus(state, NOW);
+    expect(result!.streak).toBe(1);
+    expect(result!.goldAwarded).toBe(50);
   });
 });
 

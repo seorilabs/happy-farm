@@ -45,6 +45,9 @@ export function getDailyBonusGold(streak: number): number {
  */
 export function isDailyBonusAvailable(state: DailyBonusState, now = Date.now()): boolean {
   if (state.lastClaimedAt == null) return true;
+  // A future timestamp means device time was ahead when the claim was saved.
+  // Treat it as invalid so the player isn't permanently locked out.
+  if (state.lastClaimedAt > now) return true;
   return now - state.lastClaimedAt >= DAILY_BONUS_COOLDOWN_MS;
 }
 
@@ -55,9 +58,12 @@ export function isDailyBonusAvailable(state: DailyBonusState, now = Date.now()):
 export function claimDailyBonus(state: DailyBonusState, now = Date.now()): DailyBonusResult | null {
   if (!isDailyBonusAvailable(state, now)) return null;
 
-  // streak 유지: 마지막 수령 후 48시간 이내에 돌아온 경우
+  // streak 유지: 마지막 수령 후 48시간 이내에 돌아온 경우.
+  // 미래 타임스탬프는 유효하지 않으므로 streak을 초기화한다.
   const isStreakAlive =
-    state.lastClaimedAt != null && now - state.lastClaimedAt < DAILY_BONUS_STREAK_EXPIRE_MS;
+    state.lastClaimedAt != null &&
+    state.lastClaimedAt <= now &&
+    now - state.lastClaimedAt < DAILY_BONUS_STREAK_EXPIRE_MS;
 
   const newStreak = isStreakAlive ? state.streak + 1 : 1;
   const goldAwarded = getDailyBonusGold(newStreak);
@@ -79,7 +85,9 @@ export function claimDailyBonus(state: DailyBonusState, now = Date.now()): Daily
 export function previewDailyBonus(state: DailyBonusState, now = Date.now()): { available: boolean; streak: number; goldAwarded: number } {
   const available = isDailyBonusAvailable(state, now);
   const isStreakAlive =
-    state.lastClaimedAt != null && now - state.lastClaimedAt < DAILY_BONUS_STREAK_EXPIRE_MS;
+    state.lastClaimedAt != null &&
+    state.lastClaimedAt <= now &&
+    now - state.lastClaimedAt < DAILY_BONUS_STREAK_EXPIRE_MS;
   const streak = isStreakAlive ? state.streak + 1 : 1;
   return { available, streak, goldAwarded: getDailyBonusGold(streak) };
 }

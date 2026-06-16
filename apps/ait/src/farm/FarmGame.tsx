@@ -467,8 +467,6 @@ export default function FarmGame({
   const mutationFlashRef = useRef<MutationFlashHandle>(null);
   const discoveryBannerRef = useRef<DiscoveryBannerHandle>(null);
   const goldPulseRef = useRef<Animated.Value | null>(null);
-  // Guards against rapid double-tap on the daily bonus claim button.
-  const isClaimingDailyBonusRef = useRef(false);
   if (goldPulseRef.current == null) {
     goldPulseRef.current = new Animated.Value(0);
   }
@@ -2183,24 +2181,21 @@ export default function FarmGame({
             <SheetAction
               label={messages.dailyBonusClaimAction(formatMoney(activeSheet.previewGold, locale))}
               onPress={() => {
-                if (isClaimingDailyBonusRef.current) return;
-                isClaimingDailyBonusRef.current = true;
                 const now = Date.now();
-                const result = claimDailyBonus(gameState.dailyBonusState, now);
-                if (result == null) {
-                  isClaimingDailyBonusRef.current = false;
-                  setActiveSheet(null);
-                  return;
-                }
-                // Atomically update gold and daily bonus state in one game-save write.
-                // Both are committed together so there is no inconsistency window.
-                setGameState((prev) => ({
-                  ...prev,
-                  gold: prev.gold + result.goldAwarded,
-                  dailyBonusState: result.newState,
-                }));
+                // Using the functional form of setGameState makes this idempotent:
+                // every concurrent tap evaluates claimDailyBonus against the latest
+                // prev.dailyBonusState, so only the first tap can succeed — subsequent
+                // ones find lastClaimedAt already updated and claimDailyBonus returns null.
+                setGameState((prev) => {
+                  const result = claimDailyBonus(prev.dailyBonusState, now);
+                  if (result == null) return prev;
+                  return {
+                    ...prev,
+                    gold: prev.gold + result.goldAwarded,
+                    dailyBonusState: result.newState,
+                  };
+                });
                 setActiveSheet(null);
-                isClaimingDailyBonusRef.current = false;
               }}
             />
           </View>
