@@ -222,7 +222,6 @@ const KO_FARM_MESSAGES = {
   firstHarvestTitle: '첫 수확 완료! 🎉',
   firstHarvestSubtitle: '농부의 길이 시작됐어요!',
   dailyBonusClaimAction: (amount: string) => `+${amount}G 받기`,
-  dailyBonusSaveFailedToast: '보너스 저장에 실패했어요. 다시 시도해 주세요.',
 };
 
 export type FarmMessages = typeof KO_FARM_MESSAGES;
@@ -434,7 +433,6 @@ const EN_FARM_MESSAGES: FarmMessages = {
   firstHarvestTitle: 'First Harvest! 🎉',
   firstHarvestSubtitle: 'Your farming journey has begun!',
   dailyBonusClaimAction: (amount) => `Claim +${amount}G`,
-  dailyBonusSaveFailedToast: 'Failed to save bonus. Please try again.',
 };
 
 const FARM_MESSAGES: Record<SupportedLocale, FarmMessages> = {

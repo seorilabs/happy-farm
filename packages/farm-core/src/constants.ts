@@ -1,4 +1,5 @@
 import type { AreaKey, CollectionRewardKey, CropKey, GameState, PlotState, ResearchNodeKey } from './types';
+import { normalizeDailyBonusState } from './dailyBonus';
 import { COLLECTION_FULL_REWARD_KEY } from './types';
 import { getHarvestedCropKeysInSync, normalizeHarvestCounts, normalizeMutationsDiscovered } from './mastery';
 import {
@@ -584,7 +585,7 @@ export function createInitialState(): GameState {
       startTime: null,
       state: 0 as PlotState,
     })),
-    lastAppliedBonusClaimedAt: null,
+    dailyBonusState: { lastClaimedAt: null, streak: 0 },
   };
 }
 
@@ -721,12 +722,7 @@ export function migrateLoadedState(loaded: Partial<GameState>, base: GameState):
     return area?.unlock.gate == null || merged.research.unlockedNodes.includes(area.unlock.gate);
   });
 
-  merged.lastAppliedBonusClaimedAt =
-    typeof loaded.lastAppliedBonusClaimedAt === 'number' &&
-    Number.isFinite(loaded.lastAppliedBonusClaimedAt) &&
-    loaded.lastAppliedBonusClaimedAt > 0
-      ? loaded.lastAppliedBonusClaimedAt
-      : null;
+  merged.dailyBonusState = normalizeDailyBonusState(loaded.dailyBonusState);
 
   if (merged.unlockedAreas.length === 0) merged.unlockedAreas = INITIAL_AREA_KEYS;
   return merged;

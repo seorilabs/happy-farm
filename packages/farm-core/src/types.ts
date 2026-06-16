@@ -1,4 +1,5 @@
 import balance from './balance.json';
+import type { DailyBonusState } from './dailyBonus';
 
 export type CropKey = (typeof balance.crops)[number]['key'];
 
@@ -108,9 +109,7 @@ export type GameState = {
   chainFarms: ChainFarm[];
   research: ResearchState;
   automationSettings: AutomationSettings;
-  // Tracks the lastClaimedAt of the daily bonus most recently applied to this
-  // save so that crash-recovery can skip re-applying an already-reflected bonus.
-  lastAppliedBonusClaimedAt?: number | null;
+  dailyBonusState: DailyBonusState;
 };
 
 // Prestige reset boundary. Farm-layer fields are wiped when the player
@@ -136,7 +135,7 @@ export const META_LAYER_KEYS = [
   'chainFarms',
   'research',
   'automationSettings',
-  'lastAppliedBonusClaimedAt',
+  'dailyBonusState',
 ] as const satisfies readonly (keyof GameState)[];
 
 export type FarmLayerKey = (typeof FARM_LAYER_KEYS)[number];

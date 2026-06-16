@@ -118,7 +118,6 @@ import {
   claimDailyBonus,
   getDailyBonusLabel,
   previewDailyBonus,
-  type DailyBonusState,
 } from '../../../../packages/farm-core/src/dailyBonus';
 
 import { DEFAULT_FARM_GAME_SETTINGS, normalizeFarmGameSettings, type FarmGameSettings } from './gameSettings';
@@ -264,7 +263,7 @@ type ActiveSheet =
   | { type: 'growthAd'; plotIndex: number; cropKey: CropKey; remainingMs: number }
   | { type: 'harvestBonus' }
   | { type: 'welcomeBack'; summary: ReturnSummary }
-  | { type: 'dailyBonus'; pendingState: DailyBonusState; previewStreak: number; previewGold: number }
+  | { type: 'dailyBonus'; previewStreak: number; previewGold: number }
   | { type: 'resetConfirm' }
   | null;
 
@@ -278,8 +277,6 @@ export type FarmGamePersistence = {
   // welcome-back summary simply never triggers.
   readLastSeenAt?: () => Promise<number | null>;
   writeLastSeenAt?: (timestamp: number) => Promise<void>;
-  readDailyBonusState?: () => Promise<DailyBonusState>;
-  writeDailyBonusState?: (state: DailyBonusState) => Promise<void>;
 };
 
 type UseFarmAd = (adGroupId: string) => RewardedAdController;
@@ -888,51 +885,13 @@ export default function FarmGame({
       // Mark "seen" immediately so a quick reload doesn't replay the recap.
       void persistence.writeLastSeenAt?.(now);
 
-      // Check and claim the daily login bonus. Only shown when no
-      // welcome-back sheet is queued, so the two modals don't stack.
-      if (summary == null && persistence.readDailyBonusState != null && persistence.writeDailyBonusState != null) {
-        const dailyBonusState = await persistence.readDailyBonusState();
-
-        // Crash recovery: if pendingGold > 0, the claim was stored but gold may
-        // not have been reflected in the game save yet. We clear pendingGold
-        // BEFORE applying to memory so that a subsequent crash cannot re-apply
-        // the same gold again (prefer under-awarding over double-awarding).
-        const pendingGold = dailyBonusState.pendingGold ?? 0;
-        if (pendingGold > 0) {
-          const pendingClaimedAt = dailyBonusState.lastClaimedAt;
-          const isValidClaim =
-            typeof pendingClaimedAt === 'number' &&
-            Number.isFinite(pendingClaimedAt) &&
-            pendingClaimedAt > 0;
-          const alreadyApplied =
-            isValidClaim && savedState.lastAppliedBonusClaimedAt === pendingClaimedAt;
-
-          if (alreadyApplied) {
-            // Game save already reflects the gold; safe to clear the recovery marker.
-            void persistence.writeDailyBonusState({ ...dailyBonusState, pendingGold: 0 }).catch(() => {});
-          } else if (isValidClaim) {
-            // Clear pendingGold first so a crash after this point cannot re-apply
-            // the same gold on the next load. If the clear write itself fails,
-            // skip awarding this load and retry next time (pendingGold stays set).
-            try {
-              await persistence.writeDailyBonusState({ ...dailyBonusState, pendingGold: 0 });
-              setGameState((prev) => ({
-                ...prev,
-                gold: prev.gold + pendingGold,
-                lastAppliedBonusClaimedAt: pendingClaimedAt,
-              }));
-            } catch {
-              // Storage write failed; leave pendingGold set to retry on next load.
-            }
-          } else {
-            // Corrupt claim data (e.g. null lastClaimedAt): discard without awarding.
-            void persistence.writeDailyBonusState({ ...dailyBonusState, pendingGold: 0 }).catch(() => {});
-          }
-        }
-
-        const preview = previewDailyBonus(dailyBonusState, now);
+      // Check daily login bonus. Only shown when no welcome-back sheet is
+      // queued. dailyBonusState lives inside the game save so gold and bonus
+      // state are always committed atomically — no separate crash-recovery needed.
+      if (summary == null) {
+        const preview = previewDailyBonus(savedState.dailyBonusState, now);
         if (preview.available) {
-          setActiveSheet({ type: 'dailyBonus', pendingState: dailyBonusState, previewStreak: preview.streak, previewGold: preview.goldAwarded });
+          setActiveSheet({ type: 'dailyBonus', previewStreak: preview.streak, previewGold: preview.goldAwarded });
         }
       }
     }
@@ -2227,37 +2186,21 @@ export default function FarmGame({
                 if (isClaimingDailyBonusRef.current) return;
                 isClaimingDailyBonusRef.current = true;
                 const now = Date.now();
-                const result = claimDailyBonus(activeSheet.pendingState, now);
-                if (result == null || persistence.writeDailyBonusState == null) {
+                const result = claimDailyBonus(gameState.dailyBonusState, now);
+                if (result == null) {
                   isClaimingDailyBonusRef.current = false;
                   setActiveSheet(null);
                   return;
                 }
-                // If the streak expired while the Sheet was open (edge case), correct the
-                // displayed values so what the user sees matches what is actually awarded.
-                if (result.streak !== activeSheet.previewStreak || result.goldAwarded !== activeSheet.previewGold) {
-                  setActiveSheet({ type: 'dailyBonus', pendingState: activeSheet.pendingState, previewStreak: result.streak, previewGold: result.goldAwarded });
-                }
-                persistence.writeDailyBonusState(result.newState)
-                  .then(() => {
-                    // Set lastAppliedBonusClaimedAt so that crash-recovery on the next
-                    // load can detect the gold was already reflected (idempotency marker).
-                    // pendingGold is intentionally kept until the auto-save persists
-                    // lastAppliedBonusClaimedAt; the loadSavedGame recovery path clears
-                    // pendingGold once it confirms the game save already reflects the gold.
-                    setGameState((prev) => ({
-                      ...prev,
-                      gold: prev.gold + result.goldAwarded,
-                      lastAppliedBonusClaimedAt: result.newState.lastClaimedAt,
-                    }));
-                    setActiveSheet(null);
-                  })
-                  .catch(() => {
-                    toast(messages.dailyBonusSaveFailedToast);
-                  })
-                  .finally(() => {
-                    isClaimingDailyBonusRef.current = false;
-                  });
+                // Atomically update gold and daily bonus state in one game-save write.
+                // Both are committed together so there is no inconsistency window.
+                setGameState((prev) => ({
+                  ...prev,
+                  gold: prev.gold + result.goldAwarded,
+                  dailyBonusState: result.newState,
+                }));
+                setActiveSheet(null);
+                isClaimingDailyBonusRef.current = false;
               }}
             />
           </View>
