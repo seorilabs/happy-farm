@@ -263,7 +263,7 @@ type ActiveSheet =
   | { type: 'growthAd'; plotIndex: number; cropKey: CropKey; remainingMs: number }
   | { type: 'harvestBonus' }
   | { type: 'welcomeBack'; summary: ReturnSummary }
-  | { type: 'dailyBonus' }
+  | { type: 'dailyBonus'; openedAt: number }
   | { type: 'resetConfirm' }
   | null;
 
@@ -889,7 +889,7 @@ export default function FarmGame({
       if (summary == null) {
         const preview = previewDailyBonus(savedState.dailyBonusState, now);
         if (preview.available) {
-          setActiveSheet({ type: 'dailyBonus' });
+          setActiveSheet({ type: 'dailyBonus', openedAt: now });
         }
       }
     }
@@ -1724,9 +1724,12 @@ export default function FarmGame({
   handlePlotClickRef.current = handlePlotClick;
   const onPlotPress = useCallback((index: number) => handlePlotClickRef.current(index), []);
 
-  // Computed fresh on every render so the displayed values always match what
-  // claimDailyBonus will actually award at the moment the player taps.
-  const dailyBonusPreview = previewDailyBonus(gameState.dailyBonusState, Date.now());
+  // Preview uses the same openedAt timestamp that claimDailyBonus will use on
+  // tap, so displayed streak/gold always matches what will actually be awarded.
+  const dailyBonusPreview =
+    activeSheet?.type === 'dailyBonus'
+      ? previewDailyBonus(gameState.dailyBonusState, activeSheet.openedAt)
+      : { available: false as const, streak: 1, goldAwarded: 50 };
 
   return (
     <View style={styles.root}>
@@ -2185,13 +2188,13 @@ export default function FarmGame({
             <SheetAction
               label={messages.dailyBonusClaimAction(formatMoney(dailyBonusPreview.goldAwarded, locale))}
               onPress={() => {
-                const now = Date.now();
-                // Using the functional form of setGameState makes this idempotent:
-                // every concurrent tap evaluates claimDailyBonus against the latest
-                // prev.dailyBonusState, so only the first tap can succeed — subsequent
-                // ones find lastClaimedAt already updated and claimDailyBonus returns null.
+                // openedAt is captured here so display and claim use the same
+                // reference time. The functional updater makes this idempotent:
+                // concurrent taps evaluate claimDailyBonus against the latest
+                // prev.dailyBonusState, so only the first tap can succeed.
+                const openedAt = activeSheet.openedAt;
                 setGameState((prev) => {
-                  const result = claimDailyBonus(prev.dailyBonusState, now);
+                  const result = claimDailyBonus(prev.dailyBonusState, openedAt);
                   if (result == null) return prev;
                   return {
                     ...prev,
