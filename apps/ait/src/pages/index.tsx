@@ -1,6 +1,6 @@
 import { createRoute } from '@granite-js/react-native';
 import React from 'react';
-import { FarmGame, detectRuntimeLocale } from '../../../../packages/farm-ui/src';
+import { FarmGame, detectRuntimeLocale, type FarmGameAdGroupIds } from '../../../../packages/farm-ui/src';
 import { appsInTossFarmAnalytics } from '../firebaseWeb';
 import { useAppsInTossFarmAudio } from '../farm/platform/appsInTossAudio';
 import { useFullScreenAd } from '../farm/platform/fullScreenAd';
@@ -16,8 +16,7 @@ import {
 
 const APPS_IN_TOSS_AD_GROUP_IDS = {
   rewarded: 'ait.v2.live.6fc77adf3f034cd6',
-  interstitial: '',
-};
+} satisfies FarmGameAdGroupIds;
 
 export const Route = createRoute('/', {
   component: Page,

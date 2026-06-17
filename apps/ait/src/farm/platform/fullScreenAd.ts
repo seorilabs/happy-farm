@@ -12,7 +12,8 @@ function isFullScreenAdSupported() {
   }
 }
 
-export function useFullScreenAd(adGroupId: string): RewardedAdController {
+export function useFullScreenAd(adGroupId?: string): RewardedAdController {
+  const normalizedAdGroupId = adGroupId?.trim() ?? '';
   const adsEnabled = useAppsInTossAdsEnabled();
   const [isLoaded, setIsLoaded] = useState(false);
   const [isSupported, setIsSupported] = useState(false);
@@ -24,7 +25,7 @@ export function useFullScreenAd(adGroupId: string): RewardedAdController {
     unregisterLoadRef.current = null;
     setIsLoaded(false);
 
-    if (!adsEnabled || adGroupId.length === 0 || !isFullScreenAdSupported()) {
+    if (!adsEnabled || normalizedAdGroupId.length === 0 || !isFullScreenAdSupported()) {
       setIsSupported(false);
       return;
     }
@@ -33,7 +34,7 @@ export function useFullScreenAd(adGroupId: string): RewardedAdController {
 
     try {
       unregisterLoadRef.current = loadFullScreenAd({
-        options: { adGroupId },
+        options: { adGroupId: normalizedAdGroupId },
         onEvent: (event) => {
           if (event.type === 'loaded') {
             setIsLoaded(true);
@@ -47,7 +48,7 @@ export function useFullScreenAd(adGroupId: string): RewardedAdController {
       setIsLoaded(false);
       setIsSupported(false);
     }
-  }, [adGroupId, adsEnabled]);
+  }, [normalizedAdGroupId, adsEnabled]);
 
   useEffect(() => {
     loadAd();
@@ -59,7 +60,7 @@ export function useFullScreenAd(adGroupId: string): RewardedAdController {
 
   const showAd = useCallback(
     () => {
-      const supported = adsEnabled && adGroupId.length > 0 && isFullScreenAdSupported();
+      const supported = adsEnabled && normalizedAdGroupId.length > 0 && isFullScreenAdSupported();
       if (!supported || !isLoaded) {
         return Promise.resolve<RewardedAdShowResult>({ status: supported ? 'notReady' : 'unsupported' });
       }
@@ -83,7 +84,7 @@ export function useFullScreenAd(adGroupId: string): RewardedAdController {
 
         try {
           unregisterShowRef.current = showFullScreenAd({
-            options: { adGroupId },
+            options: { adGroupId: normalizedAdGroupId },
             onEvent: (event) => {
               if (event.type === 'userEarnedReward' && !rewardGranted) {
                 rewardGranted = true;
@@ -104,7 +105,7 @@ export function useFullScreenAd(adGroupId: string): RewardedAdController {
         }
       });
     },
-    [adGroupId, adsEnabled, isLoaded, loadAd]
+    [normalizedAdGroupId, adsEnabled, isLoaded, loadAd]
   );
 
   return { isAdReady: adsEnabled && isSupported && isLoaded, isAdSupported: adsEnabled && isSupported, showAd };

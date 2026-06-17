@@ -281,7 +281,7 @@ export type FarmGamePersistence = {
   writeLastSeenAt?: (timestamp: number) => Promise<void>;
 };
 
-type UseFarmAd = (adGroupId: string) => RewardedAdController;
+type UseFarmAd = (adGroupId?: string) => RewardedAdController;
 type FarmAnalytics = ReturnType<typeof createFarmAnalytics>;
 type FarmGameMarket = 'appsInToss' | 'mobile';
 export type FarmGameAdGroupIds = {
@@ -536,8 +536,8 @@ export default function FarmGame({
   // but the toast/analytics must fire exactly once per graduated level.
   const prestigedLevelsRef = useRef<Set<number>>(new Set());
   const autoHarvestSummaryRef = useRef({ harvestedCount: 0, replantedCount: 0, windowStartedAt: 0 });
-  const rewardedAd = useRewardedAd(adGroupIds.rewarded ?? '');
-  const interstitialAd = useInterstitialAd(adGroupIds.interstitial ?? '');
+  const rewardedAd = useRewardedAd(adGroupIds.rewarded);
+  const interstitialAd = useInterstitialAd(adGroupIds.interstitial);
   const farmAnalytics = analytics;
   const isMobileMarket = market === 'mobile';
   const locale = normalizeLocale(gameSettings.locale);

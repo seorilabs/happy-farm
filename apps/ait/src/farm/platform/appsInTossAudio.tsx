@@ -31,7 +31,7 @@ const HARVEST_VOLUME = 0.85;
 // harvest SFX takes focus away from the BGM player and ExoPlayer pauses it, so
 // only one sound survives. iOS mixes AVPlayer instances natively and the
 // Granite wrapper pins disableFocus=false there.
-const audioFocusProps = Platform.OS === 'android' ? { disableFocus: true } : null;
+const audioFocusProps = Platform.OS === 'android' ? { disableFocus: true } : {};
 
 function keepPlaybackOnAudioFocusChange() {
   // Passing a handler stops the Granite Video wrapper from pausing playback on
