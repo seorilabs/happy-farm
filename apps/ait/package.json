@@ -7,7 +7,7 @@
     "deploy": "ait deploy",
     "test": "jest --config ../../jest.config.js apps/ait --passWithNoTests",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint . ../../packages/farm-core"
+    "lint": "eslint . ../../packages/farm-core ../../packages/farm-ui"
   },
   "dependencies": {
     "@apps-in-toss/framework": "^2.6.0",

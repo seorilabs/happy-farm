@@ -1,4 +1,4 @@
-import { DEFAULT_LOCALE, normalizeLocale, type SupportedLocale } from '../../../../packages/farm-core/src';
+import { DEFAULT_LOCALE, normalizeLocale, type SupportedLocale } from '../../farm-core/src';
 
 export type FarmGameSettings = {
   locale: SupportedLocale;

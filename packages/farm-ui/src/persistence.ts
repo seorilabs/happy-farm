@@ -1,7 +1,12 @@
-import { createInitialState, migrateLoadedState, SAVE_KEY, type GameState } from '../../../../packages/farm-core/src';
+import { createInitialState, migrateLoadedState, SAVE_KEY, type GameState } from '../../farm-core/src';
 
 import { FARM_GAME_SETTINGS_KEY, normalizeFarmGameSettings, type FarmGameSettings } from './gameSettings';
-import type { KeyValueStorage } from './platform/types';
+
+export type KeyValueStorage = {
+  getItem(key: string): Promise<string | null>;
+  setItem(key: string, value: string): Promise<void>;
+  removeItem(key: string): Promise<void>;
+};
 
 // Wall-clock timestamp (ms) of the player's last active moment, used to greet
 // returning players with an offline-progress summary. Stored separately from

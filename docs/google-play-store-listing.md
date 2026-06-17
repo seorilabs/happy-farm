@@ -125,6 +125,8 @@ Play Console에서 직접 확인해야 하는 항목:
 - 한국 배포 시 GRAC 등급 판단: 별도 진행 불필요로 확인
 - production access
 
+Data safety는 Firebase Anonymous Auth의 앱 생성 사용자 식별자와 Firestore 클라우드 저장 백업용 게임 진행 데이터 수집을 반영해야 합니다. 이 데이터는 앱 기능/저장 복구 목적이며 광고 추적 목적 데이터로 취급하지 않습니다.
+
 ## 현재 blocker
 
 - Play Console production access

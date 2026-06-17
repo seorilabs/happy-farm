@@ -8,9 +8,10 @@
 - `pnpm build:android`는 `apps/mobile`의 Android App Bundle을 만듭니다.
 - `apps/ait/granite.config.ts`와 `apps/ait/src/_app.tsx`는 AppsInToss/TDS 런타임에 묶여 있습니다.
 - `packages/farm-core`는 플랫폼 중립 게임 밸런스/타입/analytics 이벤트 정의를 담습니다.
+- `packages/farm-ui`는 React Native 공유 게임 화면, persistence factory, UI i18n catalog를 담습니다.
 - `apps/mobile/android`, `apps/mobile/ios` 표준 React Native 네이티브 프로젝트가 있습니다.
 - Google Play용 `applicationId`는 `com.seorilabs.happyfarm`입니다.
-- `apps/mobile`은 아직 전체 게임 UI/저장소/광고 adapter 포팅 전인 Android/iOS shell입니다.
+- `apps/mobile`은 `packages/farm-ui` 화면에 모바일 storage, Firebase analytics, AdMob, audio adapter를 주입합니다.
 
 따라서 repo를 새로 나누기보다, 이 저장소를 멀티마켓 모노레포로 승격합니다.
 
@@ -25,6 +26,7 @@ happy-farm/
     mobile/          # Android/iOS 표준 React Native 앱
   packages/
     farm-core/       # 플랫폼 중립 게임 상태/밸런스/저장 데이터 migration
+    farm-ui/         # RN 공유 화면/설정/persistence factory/i18n catalog
 ```
 
 Android와 iOS는 별도 앱 폴더로 쪼개지 않고 `apps/mobile`의 네이티브 타깃으로 관리합니다.
@@ -43,8 +45,6 @@ Android와 iOS는 별도 앱 폴더로 쪼개지 않고 `apps/mobile`의 네이�
 
 앱 타깃에 남길 대상:
 
-- `apps/ait/src/farm/FarmGame.tsx`
-- `apps/ait/src/farm/persistence.ts`
 - `apps/ait/src/farm/platform/*`
 - `apps/ait/src/_app.tsx`
 - `apps/ait/src/pages/index.tsx`
@@ -60,7 +60,7 @@ Android와 iOS는 별도 앱 폴더로 쪼개지 않고 `apps/mobile`의 네이�
 - 저장소: AppsInToss `Storage`, 모바일 native storage
 - 광고: AppsInToss fullscreen ad, 모바일 광고 SDK 또는 no-op
 - analytics: 현재 no-op wrapper, 이후 플랫폼별 SDK
-- UI feedback: TDS toast, native toast/snackbar
+- audio/haptics: AppsInToss remote audio, 모바일 native audio
 
 ## 단계
 
@@ -72,6 +72,8 @@ Android와 iOS는 별도 앱 폴더로 쪼개지 않고 `apps/mobile`의 네이�
 6. AIT 앱 파일을 `apps/ait`로 이동
 7. 표준 RN `apps/mobile` 생성 후 Android/iOS 빌드 추가
 8. Google Play/App Store/AppsInToss release guide와 CI를 target별로 분리
+9. 공유 RN 화면과 persistence/i18n을 `packages/farm-ui`로 이동
+10. `check:architecture`로 core/UI/app adapter 경계 회귀를 차단
 
 ## 성공 기준
 
@@ -81,9 +83,12 @@ Android와 iOS는 별도 앱 폴더로 쪼개지 않고 `apps/mobile`의 네이�
 - `pnpm typecheck`
 - `pnpm test`
 - `pnpm build`
-- `pnpm check:play`는 기존 blocker를 유지하면서 core 분리로 인한 새 오류가 없어야 함
+- `pnpm check:architecture`
+- `pnpm check:markets`
+- `pnpm check:markets:build`
+- `pnpm check:play`
 
-`pnpm check:play`가 실패하는 것은 아직 정상입니다. Android 네이티브 프로젝트와 `.aab`는 생겼지만, release signing과 Play 등록값/이미지 blocker가 남아 있습니다.
+`pnpm check:play`는 Android 프로젝트, `.aab`, release signing, 등록값/이미지, AppsInToss import 경계를 함께 확인합니다.
 
 ## 진행 기록
 
@@ -95,13 +100,16 @@ Android와 iOS는 별도 앱 폴더로 쪼개지 않고 `apps/mobile`의 네이�
 - `apps/ait/src/farm/platform/fullScreenAd.ts`에 AppsInToss 전면/보상형 광고 hook을 분리했습니다.
 - `apps/ait/src/farm/platform/analytics.ts`에서 `createFarmAnalytics()`로 앱 타깃별 analytics adapter를 만들 수 있게 했습니다.
 - `apps/mobile` 표준 React Native 0.85 Android/iOS 타깃을 생성했습니다.
-- `apps/mobile`은 `packages/farm-core/src`를 import하는 Android/iOS shell로 시작합니다.
+- `packages/farm-ui`를 추가하고 `FarmGame`, persistence factory, `FarmMessages` catalog를 AIT 앱 밖으로 이동했습니다.
+- `apps/ait`와 `apps/mobile`은 `packages/farm-ui`를 import하고, 각자 storage/ads/analytics/audio adapter만 주입합니다.
+- AppsInToss 광고 그룹 ID는 공유 UI 상수가 아니라 `apps/ait/src/pages/index.tsx` composition root에서 주입합니다.
+- `scripts/check-architecture.mjs`와 `pnpm check:architecture`를 추가했습니다.
 - `pnpm build:android`로 `apps/mobile/android/app/build/outputs/bundle/release/app-release.aab`를 생성했습니다.
-- `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm check:core`, `pnpm check:ait`가 통과했습니다.
+- `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm check:core`, `pnpm check:architecture`, `pnpm check:play`, `pnpm check:ait`가 통과했습니다.
 
 ## AIT workspace dependency 주의
 
-현재 `ait build`의 package version 수집 단계는 pnpm workspace symlink로 연결된 bare package dependency를 처리하지 못합니다. 따라서 `apps/ait`는 `@happy-farm/farm-core`를 `package.json.dependencies`에 넣지 않고 상대 경로로 `packages/farm-core/src`를 import합니다.
+현재 `ait build`의 package version 수집 단계는 pnpm workspace symlink로 연결된 bare package dependency를 처리하지 못합니다. 따라서 `apps/ait`는 `@happy-farm/farm-core`, `@happy-farm/farm-ui`를 `package.json.dependencies`에 넣지 않고 상대 경로로 `packages/*/src`를 import합니다.
 
 나중에 `apps/ait` 또는 `apps/mobile`의 번들러가 workspace dependency를 정상 처리하는지 확인한 뒤 bare package import로 전환합니다.
 

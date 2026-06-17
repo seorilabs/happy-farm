@@ -1,6 +1,6 @@
 import { Storage } from '@apps-in-toss/framework';
 
-import type { KeyValueStorage } from './types';
+import type { KeyValueStorage } from '../../../../../packages/farm-ui/src';
 
 export const appsInTossStorage: KeyValueStorage = {
   getItem: (key) => Storage.getItem(key),

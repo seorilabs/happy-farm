@@ -2,7 +2,7 @@ import { Video, type VideoRef } from '@granite-js/react-native';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Platform, StyleSheet } from 'react-native';
 
-import type { FarmGameAudio } from '../FarmGame';
+import type { FarmGameAudio } from '../../../../../packages/farm-ui/src';
 
 // The Granite runtime cannot load require()-based local assets (its asset
 // registry is a warning stub), so apps-in-toss audio must stream from remote

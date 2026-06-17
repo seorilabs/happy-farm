@@ -295,13 +295,13 @@ const androidProjects = [
     appBuildPath: 'apps/mobile/android/app/build.gradle',
     rootBuildPath: 'apps/mobile/android/build.gradle',
     bundleRoot: 'apps/mobile/android/app/build/outputs/bundle',
-    sourceRoots: ['apps/mobile', 'packages/farm-core'],
+    sourceRoots: ['apps/mobile', 'packages/farm-core', 'packages/farm-ui'],
   },
   {
     appBuildPath: 'apps/mobile/android/app/build.gradle.kts',
     rootBuildPath: 'apps/mobile/android/build.gradle.kts',
     bundleRoot: 'apps/mobile/android/app/build/outputs/bundle',
-    sourceRoots: ['apps/mobile', 'packages/farm-core'],
+    sourceRoots: ['apps/mobile', 'packages/farm-core', 'packages/farm-ui'],
   },
 ];
 const androidProject = androidProjects.find((candidate) => existsSync(repoPath(candidate.appBuildPath)));
@@ -363,7 +363,7 @@ if (aabFiles.length === 0) {
   pass('Android App Bundle(.aab)을 찾았습니다.', aabFiles.join(', '));
 }
 
-const nativeSourceRoots = androidProject?.sourceRoots ?? ['apps/mobile', 'packages/farm-core'];
+const nativeSourceRoots = androidProject?.sourceRoots ?? ['apps/mobile', 'packages/farm-core', 'packages/farm-ui'];
 const sourceFiles = collectFilesFrom(nativeSourceRoots, (path) => {
   return /\.(ts|tsx|js|jsx)$/.test(path) && !path.includes('__tests__') && !/\.(test|spec)\./.test(path);
 });

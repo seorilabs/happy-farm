@@ -3,7 +3,7 @@
 import React from 'react';
 import { act, cleanup, render } from '@testing-library/react-native';
 
-import type { FarmGameAudio } from '../FarmGame';
+import type { FarmGameAudio } from '../../../../../packages/farm-ui/src';
 
 type RecordedVideoProps = {
   source?: { uri?: string; shouldCache?: boolean };

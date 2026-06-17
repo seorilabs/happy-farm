@@ -15,7 +15,7 @@ import {
   type GameState,
   type ResearchNodeKey,
   type SupportedLocale,
-} from '../../../../../packages/farm-core/src';
+} from '../../../farm-core/src';
 
 import type { FarmMessages } from '../i18n';
 import { SettingToggle, ShopCard, sheetPartStyles } from './SheetParts';

@@ -32,6 +32,7 @@
     "contentRating": "completed_in_play_console",
     "targetAudience": "completed_in_play_console",
     "dataSafety": "completed_in_play_console",
+    "dataSafetyNotes": "Firebase Anonymous Auth app-generated user ID and Firestore cloud-save gameplay progress are collected for app functionality/save backup. They are not used for advertising tracking.",
     "ads": "yes",
     "koreaDistribution": "yes",
     "koreaGameRating": "not_required"

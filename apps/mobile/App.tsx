@@ -1,8 +1,7 @@
 import React, { useEffect } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-import FarmGame from '../ait/src/farm/FarmGame';
-import { detectRuntimeLocale } from '../ait/src/farm/i18n';
+import { FarmGame, detectRuntimeLocale } from '../../packages/farm-ui/src';
 import { useAdMobRewardedAd } from './src/ads/adMobRewardedAd';
 import { useMobileFarmAudio } from './src/audio/farmAudio';
 import {
