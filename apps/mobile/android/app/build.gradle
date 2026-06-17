@@ -37,6 +37,19 @@ def requestedTaskNames = gradle.startParameter.taskNames.collect { it.tokenize('
 def requiresUploadKeyProperties = requestedTaskNames.any { taskName ->
     taskName.contains("release") || taskName in ["build", "assemble", "bundle"]
 }
+def requiredUploadKeyPropertyNames = ["storeFile", "storePassword", "keyAlias", "keyPassword"]
+def hasCompleteUploadKeyProperties = {
+    uploadKeyPropertiesFile.exists() && requiredUploadKeyPropertyNames.every { key ->
+        uploadKeyProperties[key]?.toString()?.trim()
+    }
+}
+def requireUploadKeyProperty = { String key ->
+    def value = uploadKeyProperties[key]?.toString()?.trim()
+    if (!value) {
+        throw new GradleException("key.properties missing ${key}. Create it from the upload keystore before building release.")
+    }
+    return value
+}
 def resolveUploadStoreFile = { String storeFilePath ->
     def candidate = new File(storeFilePath)
     return candidate.isAbsolute() ? candidate : new File(rootProject.projectDir, storeFilePath)
@@ -181,15 +194,14 @@ android {
             keyPassword 'android'
         }
         release {
-            if (!uploadKeyPropertiesFile.exists()) {
-                if (requiresUploadKeyProperties) {
-                    throw new GradleException("Missing ${uploadKeyPropertiesFile}. Create it from the upload keystore before building release.")
-                }
-            } else {
-                storeFile resolveUploadStoreFile(uploadKeyProperties['storeFile'] as String)
-                storePassword uploadKeyProperties['storePassword']
-                keyAlias uploadKeyProperties['keyAlias']
-                keyPassword uploadKeyProperties['keyPassword']
+            if (requiresUploadKeyProperties && !uploadKeyPropertiesFile.exists()) {
+                throw new GradleException("Missing ${uploadKeyPropertiesFile}. Create it from the upload keystore before building release.")
+            }
+            if (requiresUploadKeyProperties || hasCompleteUploadKeyProperties()) {
+                storeFile resolveUploadStoreFile(requireUploadKeyProperty("storeFile"))
+                storePassword requireUploadKeyProperty("storePassword")
+                keyAlias requireUploadKeyProperty("keyAlias")
+                keyPassword requireUploadKeyProperty("keyPassword")
             }
         }
     }
