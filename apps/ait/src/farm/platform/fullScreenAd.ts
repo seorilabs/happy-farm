@@ -10,6 +10,14 @@ type PendingShow = {
   resolve: (result: RewardedAdShowResult) => void;
 };
 
+function safeUnregister(unregister: (() => void) | null) {
+  try {
+    unregister?.();
+  } catch {
+    // External SDK cleanup must not prevent the waiting showAd Promise from settling.
+  }
+}
+
 function isFullScreenAdSupported() {
   try {
     return loadFullScreenAd.isSupported() && showFullScreenAd.isSupported();
@@ -28,7 +36,7 @@ export function useFullScreenAd(adGroupId?: string): RewardedAdController {
   const pendingShowRef = useRef<PendingShow | null>(null);
 
   const loadAd = useCallback(() => {
-    unregisterLoadRef.current?.();
+    safeUnregister(unregisterLoadRef.current);
     unregisterLoadRef.current = null;
     setIsLoaded(false);
 
@@ -66,12 +74,16 @@ export function useFullScreenAd(adGroupId?: string): RewardedAdController {
 
       pendingShow.settled = true;
       pendingShowRef.current = null;
-      unregisterShowRef.current?.();
+      safeUnregister(unregisterShowRef.current);
       unregisterShowRef.current = null;
-      if (options.reload !== false) {
-        loadAd();
-      }
       pendingShow.resolve(result);
+      if (options.reload !== false) {
+        try {
+          loadAd();
+        } catch {
+          setIsLoaded(false);
+        }
+      }
     },
     [loadAd]
   );
@@ -80,9 +92,9 @@ export function useFullScreenAd(adGroupId?: string): RewardedAdController {
     loadAd();
     return () => {
       finishPendingShow({ status: 'dismissed' }, { reload: false });
-      unregisterLoadRef.current?.();
+      safeUnregister(unregisterLoadRef.current);
       unregisterLoadRef.current = null;
-      unregisterShowRef.current?.();
+      safeUnregister(unregisterShowRef.current);
       unregisterShowRef.current = null;
     };
   }, [finishPendingShow, loadAd]);
@@ -92,6 +104,9 @@ export function useFullScreenAd(adGroupId?: string): RewardedAdController {
       const supported = adsEnabled && normalizedAdGroupId.length > 0 && isFullScreenAdSupported();
       if (!supported || !isLoaded) {
         return Promise.resolve<RewardedAdShowResult>({ status: supported ? 'notReady' : 'unsupported' });
+      }
+      if (pendingShowRef.current != null && !pendingShowRef.current.settled) {
+        return Promise.resolve<RewardedAdShowResult>({ status: 'notReady' });
       }
 
       setIsLoaded(false);

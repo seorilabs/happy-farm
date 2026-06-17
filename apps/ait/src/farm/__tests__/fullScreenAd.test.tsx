@@ -18,6 +18,7 @@ type FullScreenAdRequest = {
 const mockUnregisterLoad = jest.fn();
 const mockUnregisterShow = jest.fn();
 let latestLoadRequest: FullScreenAdRequest | null = null;
+let latestShowRequest: FullScreenAdRequest | null = null;
 
 const mockLoadFullScreenAd = Object.assign(
   jest.fn((request: FullScreenAdRequest) => {
@@ -27,9 +28,13 @@ const mockLoadFullScreenAd = Object.assign(
   { isSupported: jest.fn(() => true) }
 );
 
-const mockShowFullScreenAd = Object.assign(jest.fn(() => mockUnregisterShow), {
-  isSupported: jest.fn(() => true),
-});
+const mockShowFullScreenAd = Object.assign(
+  jest.fn((request: FullScreenAdRequest) => {
+    latestShowRequest = request;
+    return mockUnregisterShow;
+  }),
+  { isSupported: jest.fn(() => true) }
+);
 
 jest.mock('@apps-in-toss/framework', () => ({
   loadFullScreenAd: mockLoadFullScreenAd,
@@ -52,6 +57,7 @@ function Harness({ onController }: { onController: (controller: RewardedAdContro
 describe('useFullScreenAd', () => {
   beforeEach(() => {
     latestLoadRequest = null;
+    latestShowRequest = null;
     mockUnregisterLoad.mockClear();
     mockUnregisterShow.mockClear();
     mockLoadFullScreenAd.mockClear();
@@ -99,6 +105,103 @@ describe('useFullScreenAd', () => {
     expect(mockShowFullScreenAd).toHaveBeenCalledWith(
       expect.objectContaining({ options: { adGroupId: 'ait.rewarded.test' } })
     );
+
+    await act(async () => {
+      rendered.unmount();
+    });
+    await showPromise;
+
+    expect(result).toEqual({ status: 'dismissed' });
+    expect(mockUnregisterShow).toHaveBeenCalledTimes(1);
+  });
+
+  test('does not replace the in-flight show request on duplicate calls', async () => {
+    const controllerRef: { current?: RewardedAdController } = {};
+    render(
+      <Harness
+        onController={(value) => {
+          controllerRef.current = value;
+        }}
+      />
+    );
+
+    await waitFor(() => {
+      expect(latestLoadRequest).not.toBeNull();
+    });
+    act(() => {
+      latestLoadRequest?.onEvent({ type: 'loaded' });
+    });
+    await waitFor(() => {
+      expect(controllerRef.current?.isAdReady).toBe(true);
+    });
+
+    const controller = controllerRef.current;
+    if (controller == null) {
+      throw new Error('useFullScreenAd did not provide a controller.');
+    }
+
+    let firstResult: RewardedAdShowResult | null = null;
+    let secondResult: RewardedAdShowResult | null = null;
+    let firstPromise: Promise<void> | null = null;
+    let secondPromise: Promise<void> | null = null;
+    await act(async () => {
+      firstPromise = controller.showAd().then((value: RewardedAdShowResult) => {
+        firstResult = value;
+      });
+      secondPromise = controller.showAd().then((value: RewardedAdShowResult) => {
+        secondResult = value;
+      });
+    });
+
+    await secondPromise;
+    expect(secondResult).toEqual({ status: 'notReady' });
+    expect(mockShowFullScreenAd).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      latestShowRequest?.onEvent({ type: 'dismissed' });
+    });
+    await firstPromise;
+
+    expect(firstResult).toEqual({ status: 'dismissed' });
+    expect(mockUnregisterShow).toHaveBeenCalledTimes(1);
+  });
+
+  test('settles an in-flight show request even when SDK unregister throws', async () => {
+    const controllerRef: { current?: RewardedAdController } = {};
+    const rendered = render(
+      <Harness
+        onController={(value) => {
+          controllerRef.current = value;
+        }}
+      />
+    );
+
+    await waitFor(() => {
+      expect(latestLoadRequest).not.toBeNull();
+    });
+    act(() => {
+      latestLoadRequest?.onEvent({ type: 'loaded' });
+    });
+    await waitFor(() => {
+      expect(controllerRef.current?.isAdReady).toBe(true);
+    });
+
+    const controller = controllerRef.current;
+    if (controller == null) {
+      throw new Error('useFullScreenAd did not provide a controller.');
+    }
+
+    mockUnregisterShow.mockImplementationOnce(() => {
+      throw new Error('unregister failed');
+    });
+
+    let result: RewardedAdShowResult | null = null;
+    let showPromise: Promise<void> | null = null;
+    await act(async () => {
+      showPromise = controller.showAd().then((value: RewardedAdShowResult) => {
+        result = value;
+      });
+    });
 
     await act(async () => {
       rendered.unmount();
