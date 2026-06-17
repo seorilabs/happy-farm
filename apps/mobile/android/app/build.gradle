@@ -36,7 +36,7 @@ if (uploadKeyPropertiesFile.exists()) {
 def requestedTaskNames = gradle.startParameter.taskNames.collect { it.tokenize(':').last().toLowerCase(Locale.ROOT) }
 def releaseSigningTaskPattern = ~/^(assemble|bundle|package|sign|install|validatesigning).*release.*$/
 def requiresUploadKeyProperties = requestedTaskNames.any { taskName ->
-    taskName in ["build", "assemble", "bundle"] || taskName ==~ releaseSigningTaskPattern
+    taskName ==~ releaseSigningTaskPattern
 }
 def requiredUploadKeyPropertyNames = ["storeFile", "storePassword", "keyAlias", "keyPassword"]
 def hasCompleteUploadKeyProperties = {
