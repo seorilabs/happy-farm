@@ -187,6 +187,9 @@ importers:
 
   apps/mobile:
     dependencies:
+      '@notifee/react-native':
+        specifier: 9.1.8
+        version: 9.1.8(react-native@0.85.0(@babel/core@7.28.5)(@react-native-community/cli@20.1.0(typescript@5.9.3))(@react-native/jest-preset@0.85.0(@babel/core@7.28.5)(react@19.2.3))(@react-native/metro-config@0.85.0(@babel/core@7.28.5))(@types/react@19.2.0)(react@19.2.3))
       '@react-native-async-storage/async-storage':
         specifier: 2.2.0
         version: 2.2.0(react-native@0.85.0(@babel/core@7.28.5)(@react-native-community/cli@20.1.0(typescript@5.9.3))(@react-native/jest-preset@0.85.0(@babel/core@7.28.5)(react@19.2.3))(@react-native/metro-config@0.85.0(@babel/core@7.28.5))(@types/react@19.2.0)(react@19.2.3))
@@ -2555,6 +2558,11 @@ packages:
   '@nodelib/fs.walk@1.2.8':
     resolution: {integrity: sha512-oGB+UxlgWcgQkgwo8GcEGwemoTFt3FIO9ababBmaGwXIoBKZ+GTy0pP185beGg7Llih/NSHSV2XAs1lnznocSg==}
     engines: {node: '>= 8'}
+
+  '@notifee/react-native@9.1.8':
+    resolution: {integrity: sha512-Az/dueoPerJsbbjRxu8a558wKY+gONUrfoy3Hs++5OqbeMsR0dYe6P+4oN6twrLFyzAhEA1tEoZRvQTFDRmvQg==}
+    peerDependencies:
+      react-native: '*'
 
   '@oxc-transform/binding-android-arm64@0.82.3':
     resolution: {integrity: sha512-25Wh8wRSVMNiGJHeT1kIOKynrXbMoSR5vkhL+j7GyXs+R7tA3Vah574NK86y7k8Ayz7bmddSepue+Mp4/B2bqg==}
@@ -10990,6 +10998,10 @@ snapshots:
     dependencies:
       '@nodelib/fs.scandir': 2.1.5
       fastq: 1.20.1
+
+  '@notifee/react-native@9.1.8(react-native@0.85.0(@babel/core@7.28.5)(@react-native-community/cli@20.1.0(typescript@5.9.3))(@react-native/jest-preset@0.85.0(@babel/core@7.28.5)(react@19.2.3))(@react-native/metro-config@0.85.0(@babel/core@7.28.5))(@types/react@19.2.0)(react@19.2.3))':
+    dependencies:
+      react-native: 0.85.0(@babel/core@7.28.5)(@react-native-community/cli@20.1.0(typescript@5.9.3))(@react-native/jest-preset@0.85.0(@babel/core@7.28.5)(react@19.2.3))(@react-native/metro-config@0.85.0(@babel/core@7.28.5))(@types/react@19.2.0)(react@19.2.3)
 
   '@oxc-transform/binding-android-arm64@0.82.3':
     optional: true

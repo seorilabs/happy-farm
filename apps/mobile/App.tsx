@@ -8,6 +8,7 @@ import {
   initializeMobileFirebaseServices,
   mobileFarmAnalytics,
 } from './src/firebase';
+import { mobileHarvestNotifications } from './src/notifications/harvestNotifications';
 import { mobileFarmPersistence } from './src/storage/farmPersistence';
 
 function App() {
@@ -23,6 +24,7 @@ function App() {
         analytics={mobileFarmAnalytics}
         audio={farmAudio}
         market="mobile"
+        notifications={mobileHarvestNotifications}
         persistence={mobileFarmPersistence}
         preferredLocale={detectRuntimeLocale()}
         useRewardedAd={useAdMobRewardedAd}

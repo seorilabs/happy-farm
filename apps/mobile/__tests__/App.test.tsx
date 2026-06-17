@@ -93,6 +93,19 @@ jest.mock('@react-native-firebase/remote-config', () => ({
   setDefaults: jest.fn(() => Promise.resolve()),
 }));
 
+jest.mock('@notifee/react-native', () => ({
+  __esModule: true,
+  default: {
+    cancelTriggerNotification: jest.fn(() => Promise.resolve()),
+    createChannel: jest.fn(() => Promise.resolve('harvest-ready')),
+    createTriggerNotification: jest.fn(() => Promise.resolve('happy-farm-harvest-ready')),
+    requestPermission: jest.fn(() => Promise.resolve({ authorizationStatus: 1 })),
+  },
+  AndroidImportance: { DEFAULT: 3 },
+  AuthorizationStatus: { AUTHORIZED: 1, PROVISIONAL: 2 },
+  TriggerType: { TIMESTAMP: 0 },
+}));
+
 jest.mock('react-native-google-mobile-ads', () => {
   const rewardedAd = {
     addAdEventsListener: jest.fn(() => jest.fn()),

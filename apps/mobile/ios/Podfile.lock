@@ -3457,6 +3457,11 @@ PODS:
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
     - Yoga
+  - RNNotifee (9.1.8):
+    - React-Core
+    - RNNotifee/NotifeeCore (= 9.1.8)
+  - RNNotifee/NotifeeCore (9.1.8):
+    - React-Core
   - RNSound (0.13.0):
     - hermes-engine
     - RCTRequired
@@ -3564,6 +3569,7 @@ DEPENDENCIES:
   - "RNFBFirestore (from `../node_modules/@react-native-firebase/firestore`)"
   - "RNFBRemoteConfig (from `../node_modules/@react-native-firebase/remote-config`)"
   - RNGoogleMobileAds (from `../node_modules/react-native-google-mobile-ads`)
+  - "RNNotifee (from `../node_modules/@notifee/react-native`)"
   - RNSound (from `../node_modules/react-native-sound`)
   - Yoga (from `../node_modules/react-native/ReactCommon/yoga`)
 
@@ -3766,6 +3772,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/@react-native-firebase/remote-config"
   RNGoogleMobileAds:
     :path: "../node_modules/react-native-google-mobile-ads"
+  RNNotifee:
+    :path: "../node_modules/@notifee/react-native"
   RNSound:
     :path: "../node_modules/react-native-sound"
   Yoga:
@@ -3885,9 +3893,10 @@ SPEC CHECKSUMS:
   RNFBFirestore: 408c0ad13cc4204affa9e99615c24baec2784c92
   RNFBRemoteConfig: 21c592fbbce8130602bbfc42ed493313dc41f71d
   RNGoogleMobileAds: fe6d089a58e2ad76b592486ae44014aa9f12f9b3
+  RNNotifee: 5e3b271e8ea7456a36eec994085543c9adca9168
   RNSound: 79fb9d0b4a20de49e65e657b563982443c1ed21b
   Yoga: e83c3121d079541e69f3c5c623faaaf933fb5812
 
 PODFILE CHECKSUM: 30fc1bf9a613be589b7a78c86c4a0975cb66b8c3
 
-COCOAPODS: 1.15.2
+COCOAPODS: 1.16.2

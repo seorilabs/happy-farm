@@ -127,6 +127,7 @@ describe('farm storage', () => {
       locale: 'en-US',
       soundEffectsEnabled: false,
       backgroundMusicEnabled: true,
+      harvestNotificationsEnabled: false,
     });
 
     expect(mockStorage.setItem).toHaveBeenCalledWith(
@@ -135,6 +136,7 @@ describe('farm storage', () => {
         locale: 'en-US',
         soundEffectsEnabled: false,
         backgroundMusicEnabled: true,
+        harvestNotificationsEnabled: false,
       })
     );
   });
