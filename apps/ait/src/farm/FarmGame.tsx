@@ -114,6 +114,13 @@ import {
   type FarmGameCommandBlockedReason,
   type SupportedLocale,
 } from '../../../../packages/farm-core/src';
+import {
+  claimDailyBonus,
+  getDailyBonusLabel,
+  isDailyBonusAvailable,
+  normalizeDailyBonusState,
+  previewDailyBonus,
+} from '../../../../packages/farm-core/src/dailyBonus';
 
 import { DEFAULT_FARM_GAME_SETTINGS, normalizeFarmGameSettings, type FarmGameSettings } from './gameSettings';
 import { getFarmMessages, type FarmMessages } from './i18n';
@@ -258,6 +265,7 @@ type ActiveSheet =
   | { type: 'growthAd'; plotIndex: number; cropKey: CropKey; remainingMs: number }
   | { type: 'harvestBonus' }
   | { type: 'welcomeBack'; summary: ReturnSummary }
+  | { type: 'dailyBonus' }
   | { type: 'resetConfirm' }
   | null;
 
@@ -863,7 +871,14 @@ export default function FarmGame({
       if (cancelled) {
         return;
       }
-      setGameState(savedState);
+      // Normalize dailyBonusState here so that gameState always holds a valid
+      // DailyBonusState even when a custom readPersistedGameState skips
+      // migrateLoadedState (the TypeScript type says it's DailyBonusState, but
+      // the value may be absent or malformed at runtime).
+      setGameState({
+        ...savedState,
+        dailyBonusState: normalizeDailyBonusState(savedState.dailyBonusState as unknown),
+      });
       setIsSaveLoaded(true);
 
       // Greet returning players with a recap of what waited for them. Computed
@@ -876,6 +891,21 @@ export default function FarmGame({
       }
       // Mark "seen" immediately so a quick reload doesn't replay the recap.
       void persistence.writeLastSeenAt?.(now);
+
+      // Check daily login bonus. Only shown when no welcome-back sheet is
+      // queued. dailyBonusState lives inside the game save so gold and bonus
+      // state are always committed atomically — no separate crash-recovery needed.
+      if (summary == null) {
+        // Normalize defensively: a custom readPersistedGameState may skip
+        // migrateLoadedState, leaving dailyBonusState absent for old saves.
+        const preview = previewDailyBonus(
+          normalizeDailyBonusState(savedState.dailyBonusState as unknown),
+          now
+        );
+        if (preview.available) {
+          setActiveSheet({ type: 'dailyBonus' });
+        }
+      }
     }
 
     void loadSavedGame();
@@ -1708,6 +1738,14 @@ export default function FarmGame({
   handlePlotClickRef.current = handlePlotClick;
   const onPlotPress = useCallback((index: number) => handlePlotClickRef.current(index), []);
 
+  // Recomputed every render tick (250ms) so displayed streak/gold always
+  // reflects the current time — matching what claimDailyBonus will award
+  // within one tick when the player taps.
+  const dailyBonusPreview =
+    activeSheet?.type === 'dailyBonus'
+      ? previewDailyBonus(gameState.dailyBonusState, Date.now())
+      : { available: false as const, streak: 1, goldAwarded: 50 };
+
   return (
     <View style={styles.root}>
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
@@ -1947,7 +1985,7 @@ export default function FarmGame({
 
       <Sheet
         activeSheet={activeSheet}
-        description={getSheetDescription(activeSheet, messages, locale, getLocalizedCropName, collectionSummary)}
+        description={getSheetDescription(activeSheet, messages, locale, getLocalizedCropName, collectionSummary, dailyBonusPreview.streak)}
         title={getSheetTitle(activeSheet, messages)}
         onClose={closeSheet}
       >
@@ -2146,6 +2184,48 @@ export default function FarmGame({
               onPress={() => void activateHarvestBonusWithAd()}
             />
             <SheetAction label={messages.declineAction} secondary onPress={() => setActiveSheet(null)} />
+          </View>
+        ) : null}
+
+        {activeSheet?.type === 'dailyBonus' ? (
+          <View>
+            <View style={styles.welcomeBackRow}>
+              <Text style={styles.welcomeBackIcon}>🎁</Text>
+              <View style={styles.welcomeBackRowText}>
+                <Text style={styles.welcomeBackRowLabel}>
+                  {getDailyBonusLabel(dailyBonusPreview.streak, dailyBonusPreview.goldAwarded, locale).streakLabel}
+                </Text>
+                <Text style={styles.welcomeBackRowValue}>
+                  +{formatMoney(dailyBonusPreview.goldAwarded, locale)}G
+                </Text>
+              </View>
+            </View>
+            <SheetAction
+              label={messages.dailyBonusClaimAction(formatMoney(dailyBonusPreview.goldAwarded, locale))}
+              onPress={() => {
+                const now = Date.now();
+                // Guard against clock reversal or race: if the bonus is no
+                // longer available at tap time, keep the Sheet open rather than
+                // closing it silently with no feedback.
+                if (!isDailyBonusAvailable(gameState.dailyBonusState, now)) {
+                  return;
+                }
+                // The functional updater preserves idempotency: a concurrent
+                // second tap evaluates claimDailyBonus against the already-
+                // updated prev.dailyBonusState and gets null, so gold is only
+                // awarded once.
+                setGameState((prev) => {
+                  const result = claimDailyBonus(prev.dailyBonusState, now);
+                  if (result == null) return prev;
+                  return {
+                    ...prev,
+                    gold: prev.gold + result.goldAwarded,
+                    dailyBonusState: result.newState,
+                  };
+                });
+                setActiveSheet(null);
+              }}
+            />
           </View>
         ) : null}
 
@@ -3461,6 +3541,9 @@ function getSheetTitle(activeSheet: ActiveSheet, messages: FarmMessages) {
   if (activeSheet?.type === 'harvestBonus') {
     return messages.sheetTitleHarvestBonus;
   }
+  if (activeSheet?.type === 'dailyBonus') {
+    return messages.sheetTitleDailyBonus;
+  }
   if (activeSheet?.type === 'welcomeBack') {
     return messages.sheetTitleWelcomeBack;
   }
@@ -3481,7 +3564,8 @@ function getSheetDescription(
   messages: FarmMessages,
   locale: SupportedLocale,
   getLocalizedCropName: (cropKey: CropKey) => string,
-  collectionSummary: CollectionSummary
+  collectionSummary: CollectionSummary,
+  dailyBonusStreak: number
 ) {
   if (activeSheet?.type === 'collection') {
     return messages.sheetDescriptionCollection(collectionSummary.discoveredCount, collectionSummary.totalCount);
@@ -3509,6 +3593,9 @@ function getSheetDescription(
       formatRemainingTime(HARVEST_BONUS_BOOST_DURATION_MS, locale),
       HARVEST_BONUS_MULTIPLIER
     );
+  }
+  if (activeSheet?.type === 'dailyBonus') {
+    return messages.sheetDescriptionDailyBonus(dailyBonusStreak);
   }
   if (activeSheet?.type === 'welcomeBack') {
     return messages.sheetDescriptionWelcomeBack(formatDuration(activeSheet.summary.awayMs, locale));
