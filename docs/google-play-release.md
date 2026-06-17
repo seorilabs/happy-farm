@@ -12,10 +12,10 @@
 - `pnpm build:android`로 `apps/mobile/android/app/build/outputs/bundle/release/app-release.aab`를 생성했습니다.
 - `pnpm --dir apps/ait exec react-native config`의 `project.android`가 `null`입니다.
 - `apps/ait/src/farm/platform/*`는 AppsInToss `Storage`, 전면/보상형 광고 API에 묶여 있습니다.
-- `apps/mobile`은 `packages/farm-core`를 import하는 Android/iOS shell이며, 아직 전체 게임 UI/저장소/광고 adapter 포팅은 끝나지 않았습니다.
+- `packages/farm-ui`는 공유 RN 게임 화면을 담고, `apps/mobile`은 모바일 storage/Firebase/AdMob/audio adapter를 주입합니다.
 - 현재 `.aab`는 `play-store/secrets/happy-farm-upload-key.jks` upload key로 서명됩니다.
 
-따라서 지금은 Play Console 내부 테스트 업로드에 필요한 signed AAB 준비 단계까지 왔지만, 업로드 자동화 전에는 정책/스토어 등록값, 이미지, 모바일 런타임 포팅을 끝내야 합니다.
+따라서 지금은 Play Console 내부 테스트 업로드에 필요한 signed AAB와 repo-local readiness 체크가 준비된 상태입니다.
 
 ## 목표 산출물
 
@@ -32,6 +32,8 @@
 ```bash
 pnpm check:play
 pnpm check:play -- --json
+pnpm check:markets
+pnpm check:markets:build
 python3 /Users/syous/.codex/skills/google-play-store-registration/scripts/validate_play_store_config.py --root .
 python3 /Users/syous/.codex/skills/google-play-store-registration/scripts/validate_play_store_config.py --root . --allow-console-gates
 ```
@@ -43,7 +45,7 @@ python3 /Users/syous/.codex/skills/google-play-store-registration/scripts/valida
 추천 경로는 AppsInToss 앱을 그대로 바꾸지 않고 Google Play용 표준 RN 앱 타깃을 repo 안에 추가하는 것입니다.
 
 - 현재 repo 안에 `apps/mobile/android`를 생성해 Android/iOS dual target으로 운영
-- `packages/farm-core`의 게임 로직을 공유하고, `apps/ait`와 `apps/mobile`에서 플랫폼 adapter만 다르게 구현
+- `packages/farm-core`의 게임 로직과 `packages/farm-ui`의 RN 화면을 공유하고, `apps/ait`와 `apps/mobile`에서 플랫폼 adapter만 다르게 구현
 
 분리 시 교체해야 할 항목:
 
@@ -113,6 +115,10 @@ release signing 상태:
 - 개인정보 처리방침 URL: `https://www.seorilabs.com/privacy`
 - 광고 포함 여부: `yes`
 - 한국 배포 여부: `yes`
+
+데이터 보안 답변에는 AdMob/Firebase 분석 데이터 외에 Firebase Anonymous Auth의 앱 생성 사용자 식별자와 Firestore 클라우드 저장 백업용 게임 진행 데이터를 포함합니다. 사용 목적은 앱 기능(저장 복구)이며, 로컬 저장이 계속 권위 상태입니다.
+
+모바일 앱은 사용자가 설정에서 수확 알림을 켠 경우 Android 13+ `POST_NOTIFICATIONS` 런타임 권한을 요청합니다. 이 알림은 Notifee 기반 기기 로컬 알림이며 FCM token, 서버 push campaign, 추가 개인정보 전송을 사용하지 않습니다. Google Play 데이터 보안 답변에는 별도 수집 데이터로 추가하지 않습니다.
 
 이 앱은 게임이므로 한국에 배포하려면 GRAC 등급 인증 필요 여부를 별도로 확인해야 합니다. 한국 배포를 보류하고 다른 국가 internal/closed test부터 시작하는 선택지도 유지합니다.
 
@@ -215,7 +221,7 @@ gh workflow run deploy-google-play.yml --ref v1.27.0 -f send_to_google_play=true
 
 ### 로컬 AAB 업로드
 
-GitHub Actions를 사용할 수 없어 로컬에서 Google Play 내부 테스트용 AAB를 만들 때는 `pnpm build:android`만 직접 실행하지 않습니다. 릴리즈 태그 기반 런타임 정보가 빠지거나, `apps/ait`/`packages/farm-core`의 shared JS 변경을 Gradle incremental build가 놓치면 `versionCode`만 새 값이고 실제 앱 UI는 오래된 bundle이 들어갈 수 있습니다.
+GitHub Actions를 사용할 수 없어 로컬에서 Google Play 내부 테스트용 AAB를 만들 때는 `pnpm build:android`만 직접 실행하지 않습니다. 릴리즈 태그 기반 런타임 정보가 빠지거나, `packages/farm-core`/`packages/farm-ui`의 shared JS 변경을 Gradle incremental build가 놓치면 `versionCode`만 새 값이고 실제 앱 UI는 오래된 bundle이 들어갈 수 있습니다.
 
 로컬 빌드는 반드시 릴리즈 태그를 지정한 전용 명령을 사용합니다.
 

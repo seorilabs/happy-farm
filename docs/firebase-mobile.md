@@ -2,9 +2,10 @@
 
 Firebase project는 `.firebaserc`의 `happy-farm-tycoon`을 기본값으로 사용합니다.
 
-- Mobile: Analytics, Crashlytics, Remote Config
+- Mobile: Analytics, Crashlytics, Remote Config, Anonymous Auth, Firestore cloud-save backup
 - AppsInToss: Firebase Web App 등록 완료. AIT target은 Firebase Web SDK를 `apps/ait/src/firebaseWeb/*`에서만 import합니다.
-- 미사용: Firestore, Cloud Functions, Authentication
+- 미사용: Cloud Functions, Cloud Messaging
+- Mobile local notifications: Notifee 기반 기기 로컬 수확 알림. FCM token이나 서버 푸시는 사용하지 않습니다.
 
 ## Firebase 앱 등록
 
@@ -59,6 +60,7 @@ Remote Config 템플릿은 repo root의 `remoteconfig.template.json`으로 관�
 analytics_collection_enabled = true
 crashlytics_collection_enabled = true
 mobile_ads_global_enabled = true
+cloud_save_backup_enabled = false
 minimum_supported_version_code = 1
 force_update_url = ""
 remote_balance_enabled = false
@@ -71,6 +73,58 @@ remote_balance_enabled = false
 AppsInToss 보상형 광고는 AppsInToss 광고 그룹 ID가 발급된 뒤 `apps/ait`의 광고 설정에 반영합니다. AIT도 Firebase Web Remote Config에서 `mobile_ads_global_enabled`를 읽습니다.
 
 게임 경제, gold, 저장 데이터는 계속 로컬 권위 상태이며 서버 신뢰값으로 쓰지 않습니다.
+
+## 로컬 수확 알림
+
+모바일 앱은 사용자가 설정에서 `수확 알림`을 켠 경우에만 OS 알림 권한을 요청하고, 현재 심어진 작물 중 가장 빨리 수확 가능한 시점에 단일 로컬 알림을 예약합니다.
+
+- Android 13+에서는 `POST_NOTIFICATIONS` 런타임 권한을 요청합니다.
+- `SCHEDULE_EXACT_ALARM` 권한은 요청하지 않습니다. 알림은 수확 시점 안내용이며 정확한 알람/시계 기능으로 취급하지 않습니다.
+- Firebase Cloud Messaging, 서버 저장 token, 원격 push campaign은 사용하지 않습니다.
+- 알림을 끄거나 수확 예약 대상이 없으면 기존 로컬 trigger notification을 취소합니다.
+
+## 익명 Auth와 클라우드 저장 백업
+
+모바일 앱은 `cloud_save_backup_enabled`가 `true`이고 Firebase 설정이 있는 경우 Firebase Anonymous Auth로 앱 설치 단위 UID를 확보한 뒤 Firestore에 현재 저장 데이터를 백업합니다. 기본값은 `false`이며, Firestore API, Anonymous Auth provider, Firestore rules 배포가 끝난 뒤 Remote Config에서 켭니다.
+
+저장 원칙:
+
+- 로컬 저장이 계속 권위 상태입니다.
+- Firestore 저장본은 복구용 백업본이며 서버 검증/치트 방지 원장으로 사용하지 않습니다.
+- 앱 시작 시 로컬 저장이 없고 같은 Firebase Auth 세션의 Firestore 백업이 있으면 로컬 저장으로 복원합니다.
+- 앱 삭제, 기기 초기화, 계정 linking 없는 기기 이전까지 보장하지 않습니다. 그 범위는 Google/Apple 계정 linking을 별도 기능으로 추가할 때 다룹니다.
+- `packages/farm-core`와 `packages/farm-ui`에는 Firebase SDK를 import하지 않고, 모바일 어댑터가 Auth/Firestore를 담당합니다.
+
+Firestore 경로:
+
+```text
+users/{uid}/saves/current
+```
+
+저장 필드:
+
+```text
+schemaVersion = happy-farm-save-v1
+payloadJson = serialized GameState
+payloadBytes = approximate UTF-8 byte size
+saveHash = client-side hash for diagnostics
+clientRevision = client-side incrementing revision
+clientUpdatedAtMs = client wall-clock timestamp
+deviceId = app-install-scoped device id
+appVersion = releaseInfo.versionName
+platform = mobile
+updatedAt = Firestore server timestamp
+```
+
+Firestore 보안 규칙은 `firestore.rules`에 두며, `request.auth.uid == {uid}`인 사용자만 자신의 `users/{uid}/saves/current` 문서를 읽고 쓸 수 있습니다. 저장 payload는 900KB 이하로 제한합니다.
+
+Auth/Firestore/Remote Config 배포:
+
+```bash
+firebase deploy --only firestore:rules,firestore:indexes,remoteconfig --project happy-farm-tycoon
+```
+
+운영 전 Firebase Console에서 Firestore API/database와 Anonymous provider가 활성화되어 있어야 합니다. 현재 CLI 계정은 `happy-farm-tycoon`의 `firestore.googleapis.com` 활성화 권한이 없으므로, 프로젝트 owner가 먼저 Firestore API를 켜야 합니다. `cloud_save_backup_enabled=false`로 두면 게임은 로컬 저장만 사용합니다.
 
 배포:
 

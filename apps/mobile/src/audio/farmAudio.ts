@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
 import Sound from 'react-native-sound';
 
-import type { FarmGameAudio } from '../../../ait/src/farm/FarmGame';
+import type { FarmGameAudio } from '../../../../packages/farm-ui/src';
 
 const farmBgmLoopSound = 'farm_bgm_loop.wav';
 const harvestCoinSound = 'harvest_coin.wav';
@@ -125,6 +125,17 @@ export function useMobileFarmAudio(): FarmGameAudio {
           return;
         }
         playFromStart(sound);
+      },
+      playComboMilestone: (tier) => {
+        const sound = harvestSoundRef.current;
+        if (sound == null) {
+          return;
+        }
+
+        playFromStart(sound);
+        if (tier === 'legendary') {
+          setTimeout(() => playFromStart(sound), 90);
+        }
       },
       setBackgroundMusicEnabled: (enabled: boolean) => {
         bgmEnabledRef.current = enabled;

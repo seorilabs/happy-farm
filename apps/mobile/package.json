@@ -17,10 +17,13 @@
     "build:android": "sh -c 'if command -v /usr/libexec/java_home >/dev/null 2>&1 && [ -z \"$JAVA_HOME\" ]; then export JAVA_HOME=$(/usr/libexec/java_home -v 17); fi; react-native build-android --mode=release'"
   },
   "dependencies": {
+    "@notifee/react-native": "9.1.8",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-native-firebase/analytics": "24.0.0",
     "@react-native-firebase/app": "24.0.0",
+    "@react-native-firebase/auth": "24.0.0",
     "@react-native-firebase/crashlytics": "24.0.0",
+    "@react-native-firebase/firestore": "24.0.0",
     "@react-native-firebase/remote-config": "24.0.0",
     "@react-native/new-app-screen": "0.85.0",
     "react": "19.2.3",

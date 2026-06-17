@@ -97,6 +97,7 @@ import {
   getPlotCost,
   getPlotGrowthDisplay,
   getPlotRemainingGrowthMs,
+  getPlotRemainingWallClockMs,
   getRewardedAdLimitStatus,
   getUpgradeCost,
   isAreaUnlocked,
@@ -113,14 +114,14 @@ import {
   type CropEconomyEstimate,
   type FarmGameCommandBlockedReason,
   type SupportedLocale,
-} from '../../../../packages/farm-core/src';
+} from '../../farm-core/src';
 import {
   claimDailyBonus,
   getDailyBonusLabel,
   isDailyBonusAvailable,
   normalizeDailyBonusState,
   previewDailyBonus,
-} from '../../../../packages/farm-core/src/dailyBonus';
+} from '../../farm-core/src/dailyBonus';
 
 import { DEFAULT_FARM_GAME_SETTINGS, normalizeFarmGameSettings, type FarmGameSettings } from './gameSettings';
 import { getFarmMessages, type FarmMessages } from './i18n';
@@ -130,8 +131,6 @@ import { CollectionSheet } from './components/CollectionSheet';
 import { LabSheet } from './components/LabSheet';
 import { AdRewardCard, SettingToggle, SheetAction, ShopCard, sheetPartStyles } from './components/SheetParts';
 
-const REWARDED_AD_GROUP_ID = 'ait.v2.live.6fc77adf3f034cd6';
-const INTERSTITIAL_AD_GROUP_ID = '';
 const PLOT_COLUMNS = 4;
 const PLOT_GAP = 10;
 const MAIN_HORIZONTAL_PADDING = 16;
@@ -145,6 +144,7 @@ const AUTO_HARVEST_SUMMARY_INTERVAL_MS = 60_000;
 // welcome-back recap measures the real away gap even if the app is killed
 // without firing a background event.
 const LAST_SEEN_HEARTBEAT_MS = 30_000;
+const HARVEST_NOTIFICATION_MIN_LEAD_MS = 60_000;
 const PROGRESS_ANIMATION_DURATION_MS = GAME_TICK_INTERVAL_MS;
 // Fresh-plant sprout "bounce in" duration.
 const PLANT_POP_DURATION_MS = 320;
@@ -281,9 +281,13 @@ export type FarmGamePersistence = {
   writeLastSeenAt?: (timestamp: number) => Promise<void>;
 };
 
-type UseFarmAd = (adGroupId: string) => RewardedAdController;
+type UseFarmAd = (adGroupId?: string) => RewardedAdController;
 type FarmAnalytics = ReturnType<typeof createFarmAnalytics>;
 type FarmGameMarket = 'appsInToss' | 'mobile';
+export type FarmGameAdGroupIds = {
+  rewarded?: string;
+  interstitial?: string;
+};
 
 export type FarmGameAudio = {
   isSupported: boolean;
@@ -293,14 +297,23 @@ export type FarmGameAudio = {
   setBackgroundMusicEnabled: (enabled: boolean) => void | Promise<void>;
 };
 
+export type FarmGameNotifications = {
+  isSupported: boolean;
+  requestPermission: () => Promise<boolean>;
+  scheduleHarvestReady: (notification: { readyAtMs: number; title: string; body: string }) => Promise<void>;
+  cancelHarvestReady: () => Promise<void>;
+};
+
 export type FarmGameProps = {
   persistence?: FarmGamePersistence;
   analytics?: FarmAnalytics;
   useRewardedAd?: UseFarmAd;
   useInterstitialAd?: UseFarmAd;
   audio?: FarmGameAudio;
+  notifications?: FarmGameNotifications;
   market?: FarmGameMarket;
   preferredLocale?: SupportedLocale;
+  adGroupIds?: FarmGameAdGroupIds;
 };
 
 type GetAnalyticsContext = (state?: GameState) => GameAnalyticsContext;
@@ -389,6 +402,12 @@ const defaultFarmAudio: FarmGameAudio = {
   playComboMilestone: () => undefined,
   setBackgroundMusicEnabled: () => undefined,
 };
+const defaultFarmNotifications: FarmGameNotifications = {
+  isSupported: false,
+  requestPermission: async () => false,
+  scheduleHarvestReady: async () => undefined,
+  cancelHarvestReady: async () => undefined,
+};
 const defaultPersistence: FarmGamePersistence = {
   readPersistedGameState: async () => createInitialState(),
   writePersistedGameState: async () => undefined,
@@ -423,6 +442,28 @@ function getAdFailureReason(result: RewardedAdShowResult) {
   return 'failed_to_show';
 }
 
+function getNextHarvestReadyAt(gameState: GameState, now = Date.now()) {
+  let nextReadyAt: number | null = null;
+
+  for (const plot of gameState.plots) {
+    if (plot.state !== 1 || plot.cropType == null || plot.startTime == null) {
+      continue;
+    }
+
+    const remainingMs = getPlotRemainingWallClockMs(gameState, plot, now);
+    if (remainingMs <= 0) {
+      continue;
+    }
+
+    const readyAt = now + remainingMs;
+    if (nextReadyAt == null || readyAt < nextReadyAt) {
+      nextReadyAt = readyAt;
+    }
+  }
+
+  return nextReadyAt;
+}
+
 function useFarmSafeAreaInsets() {
   try {
     return useSafeAreaInsets();
@@ -437,8 +478,10 @@ export default function FarmGame({
   useRewardedAd = useUnsupportedAd,
   useInterstitialAd = useUnsupportedAd,
   audio = defaultFarmAudio,
+  notifications = defaultFarmNotifications,
   market = 'appsInToss',
   preferredLocale = DEFAULT_LOCALE,
+  adGroupIds = {},
 }: FarmGameProps = {}) {
   const insets = useFarmSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
@@ -493,8 +536,8 @@ export default function FarmGame({
   // but the toast/analytics must fire exactly once per graduated level.
   const prestigedLevelsRef = useRef<Set<number>>(new Set());
   const autoHarvestSummaryRef = useRef({ harvestedCount: 0, replantedCount: 0, windowStartedAt: 0 });
-  const rewardedAd = useRewardedAd(REWARDED_AD_GROUP_ID);
-  const interstitialAd = useInterstitialAd(INTERSTITIAL_AD_GROUP_ID);
+  const rewardedAd = useRewardedAd(adGroupIds.rewarded);
+  const interstitialAd = useInterstitialAd(adGroupIds.interstitial);
   const farmAnalytics = analytics;
   const isMobileMarket = market === 'mobile';
   const locale = normalizeLocale(gameSettings.locale);
@@ -970,6 +1013,38 @@ export default function FarmGame({
   }, [gameSettings, isSettingsLoaded, persistence]);
 
   useEffect(() => {
+    if (!isSaveLoaded || !isSettingsLoaded) {
+      return;
+    }
+
+    if (!notifications.isSupported || !gameSettings.harvestNotificationsEnabled) {
+      void notifications.cancelHarvestReady();
+      return;
+    }
+
+    const now = Date.now();
+    const nextReadyAt = getNextHarvestReadyAt(gameState, now);
+    if (nextReadyAt == null) {
+      void notifications.cancelHarvestReady();
+      return;
+    }
+
+    void notifications.scheduleHarvestReady({
+      readyAtMs: Math.max(nextReadyAt, now + HARVEST_NOTIFICATION_MIN_LEAD_MS),
+      title: messages.harvestReadyNotificationTitle,
+      body: messages.harvestReadyNotificationBody,
+    });
+  }, [
+    gameSettings.harvestNotificationsEnabled,
+    gameState,
+    isSaveLoaded,
+    isSettingsLoaded,
+    messages.harvestReadyNotificationBody,
+    messages.harvestReadyNotificationTitle,
+    notifications,
+  ]);
+
+  useEffect(() => {
     void audio.setBackgroundMusicEnabled(gameSettings.backgroundMusicEnabled && audio.isSupported);
 
     return () => {
@@ -1370,6 +1445,27 @@ export default function FarmGame({
 
   function updateGameSettings(nextSettings: Partial<FarmGameSettings>) {
     setGameSettings((settings) => normalizeFarmGameSettings({ ...settings, ...nextSettings }));
+  }
+
+  async function toggleHarvestNotifications() {
+    if (gameSettings.harvestNotificationsEnabled) {
+      updateGameSettings({ harvestNotificationsEnabled: false });
+      await notifications.cancelHarvestReady();
+      return;
+    }
+
+    if (!notifications.isSupported) {
+      toast(messages.notificationUnsupportedDesc);
+      return;
+    }
+
+    const granted = await notifications.requestPermission();
+    if (!granted) {
+      toast(messages.notificationPermissionDeniedToast);
+      return;
+    }
+
+    updateGameSettings({ harvestNotificationsEnabled: true });
   }
 
   function selectArea(area: AreaKey) {
@@ -2143,6 +2239,15 @@ export default function FarmGame({
               value={gameSettings.backgroundMusicEnabled && audio.isSupported}
               disabled={!audio.isSupported}
               onPress={() => updateGameSettings({ backgroundMusicEnabled: !gameSettings.backgroundMusicEnabled })}
+            />
+
+            <Text style={styles.sheetSectionTitle}>{messages.notificationSection}</Text>
+            <SettingToggle
+              label={messages.harvestNotificationsLabel}
+              desc={notifications.isSupported ? messages.harvestNotificationsDesc : messages.notificationUnsupportedDesc}
+              value={gameSettings.harvestNotificationsEnabled && notifications.isSupported}
+              disabled={!notifications.isSupported}
+              onPress={() => void toggleHarvestNotifications()}
             />
 
             <Text style={styles.sheetSectionTitle}>{messages.languageSection}</Text>

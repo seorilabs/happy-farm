@@ -109,8 +109,8 @@ react {
 }
 
 def sharedJsBundleInputs = [
-    "aitSrc": file("$rootDir/../../ait/src"),
     "farmCoreSrc": file("$rootDir/../../../packages/farm-core/src"),
+    "farmUiSrc": file("$rootDir/../../../packages/farm-ui/src"),
     "mobileApp": file("$rootDir/../App.tsx"),
     "mobileIndex": file("$rootDir/../index.js"),
     "mobileMetroConfig": file("$rootDir/../metro.config.js"),

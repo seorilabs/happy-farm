@@ -1,9 +1,10 @@
-import { DEFAULT_LOCALE, normalizeLocale, type SupportedLocale } from '../../../../packages/farm-core/src';
+import { DEFAULT_LOCALE, normalizeLocale, type SupportedLocale } from '../../farm-core/src';
 
 export type FarmGameSettings = {
   locale: SupportedLocale;
   soundEffectsEnabled: boolean;
   backgroundMusicEnabled: boolean;
+  harvestNotificationsEnabled: boolean;
 };
 
 export const FARM_GAME_SETTINGS_KEY = 'happy-farm:settings:v1';
@@ -12,6 +13,7 @@ export const DEFAULT_FARM_GAME_SETTINGS: FarmGameSettings = {
   locale: DEFAULT_LOCALE,
   soundEffectsEnabled: true,
   backgroundMusicEnabled: false,
+  harvestNotificationsEnabled: false,
 };
 
 export function normalizeFarmGameSettings(
@@ -28,5 +30,9 @@ export function normalizeFarmGameSettings(
       typeof value?.backgroundMusicEnabled === 'boolean'
         ? value.backgroundMusicEnabled
         : DEFAULT_FARM_GAME_SETTINGS.backgroundMusicEnabled,
+    harvestNotificationsEnabled:
+      typeof value?.harvestNotificationsEnabled === 'boolean'
+        ? value.harvestNotificationsEnabled
+        : DEFAULT_FARM_GAME_SETTINGS.harvestNotificationsEnabled,
   };
 }

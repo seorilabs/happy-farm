@@ -62,6 +62,11 @@ jest.mock('@react-native-firebase/analytics', () => ({
   setAnalyticsCollectionEnabled: jest.fn(() => Promise.resolve()),
 }));
 
+jest.mock('@react-native-firebase/auth', () => ({
+  getAuth: jest.fn(() => ({ currentUser: null })),
+  signInAnonymously: jest.fn(() => Promise.resolve({ user: { uid: 'test-user', isAnonymous: true } })),
+}));
+
 jest.mock('@react-native-firebase/crashlytics', () => ({
   getCrashlytics: jest.fn(() => ({})),
   log: jest.fn(),
@@ -69,14 +74,36 @@ jest.mock('@react-native-firebase/crashlytics', () => ({
   setCrashlyticsCollectionEnabled: jest.fn(() => Promise.resolve()),
 }));
 
+jest.mock('@react-native-firebase/firestore', () => ({
+  deleteDoc: jest.fn(() => Promise.resolve()),
+  doc: jest.fn((_firestore, ...path: string[]) => ({ path })),
+  getDoc: jest.fn(() => Promise.resolve({ exists: () => false, data: () => null })),
+  getFirestore: jest.fn(() => ({})),
+  serverTimestamp: jest.fn(() => 'server-timestamp'),
+  setDoc: jest.fn(() => Promise.resolve()),
+}));
+
 jest.mock('@react-native-firebase/remote-config', () => ({
   fetchAndActivate: jest.fn(() => Promise.resolve(false)),
-  getBoolean: jest.fn(() => true),
+  getBoolean: jest.fn((_remoteConfig, key: string) => key !== 'cloud_save_backup_enabled'),
   getNumber: jest.fn(() => 1),
   getRemoteConfig: jest.fn(() => ({})),
   getString: jest.fn(() => ''),
   setConfigSettings: jest.fn(() => Promise.resolve()),
   setDefaults: jest.fn(() => Promise.resolve()),
+}));
+
+jest.mock('@notifee/react-native', () => ({
+  __esModule: true,
+  default: {
+    cancelTriggerNotification: jest.fn(() => Promise.resolve()),
+    createChannel: jest.fn(() => Promise.resolve('harvest-ready')),
+    createTriggerNotification: jest.fn(() => Promise.resolve('happy-farm-harvest-ready')),
+    requestPermission: jest.fn(() => Promise.resolve({ authorizationStatus: 1 })),
+  },
+  AndroidImportance: { DEFAULT: 3 },
+  AuthorizationStatus: { AUTHORIZED: 1, PROVISIONAL: 2 },
+  TriggerType: { TIMESTAMP: 0 },
 }));
 
 jest.mock('react-native-google-mobile-ads', () => {

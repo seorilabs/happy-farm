@@ -1,8 +1,11 @@
 /// <reference types="jest" />
 
 import { MAX_PLOTS, SAVE_KEY, createInitialState } from '../../../../../packages/farm-core/src';
-import { FARM_GAME_SETTINGS_KEY } from '../gameSettings';
-import { createFarmPersistence, LAST_SEEN_KEY } from '../persistence';
+import {
+  FARM_GAME_SETTINGS_KEY,
+  createFarmPersistence,
+  LAST_SEEN_KEY,
+} from '../../../../../packages/farm-ui/src';
 
 const mockStorage = {
   getItem: jest.fn<Promise<string | null>, [string]>(),
@@ -124,6 +127,7 @@ describe('farm storage', () => {
       locale: 'en-US',
       soundEffectsEnabled: false,
       backgroundMusicEnabled: true,
+      harvestNotificationsEnabled: false,
     });
 
     expect(mockStorage.setItem).toHaveBeenCalledWith(
@@ -132,6 +136,7 @@ describe('farm storage', () => {
         locale: 'en-US',
         soundEffectsEnabled: false,
         backgroundMusicEnabled: true,
+        harvestNotificationsEnabled: false,
       })
     );
   });

@@ -20,7 +20,7 @@ import {
   type PrestigeSkillKey,
   type RegionArchetypeKey,
   type SupportedLocale,
-} from '../../../../../packages/farm-core/src';
+} from '../../../farm-core/src';
 
 import type { FarmMessages } from '../i18n';
 import { SheetAction, ShopCard, sheetPartStyles } from './SheetParts';

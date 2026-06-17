@@ -8,10 +8,11 @@
 
 ## 현재 전제
 
-- `apps/mobile`은 `apps/ait/src/farm/FarmGame.tsx`를 공유 화면으로 사용한다.
+- `apps/mobile`과 `apps/ait`는 `packages/farm-ui/src/FarmGame.tsx`를 공유 화면으로 사용한다.
 - `apps/ait`는 AppsInToss, `apps/mobile`은 Google Play/App Store 대상이다.
 - `packages/farm-core`는 플랫폼 중립 게임 로직이다.
 - `packages/farm-core`에는 React Native, AppsInToss, Firebase, Google, Apple SDK를 import하지 않는다.
+- `packages/farm-ui`에는 RN 공유 화면과 UI 문구 catalog만 두고, AppsInToss/Firebase/AdMob/AsyncStorage 같은 market adapter SDK를 import하지 않는다.
 - Google Play/App Store의 기본 언어는 현재 `ko-KR`이다.
 
 ## 원칙
@@ -32,7 +33,7 @@ packages/farm-core/src/i18n/
   labels.en-US.ts
   formatters.ts       # money, duration, count, percent
 
-apps/ait/src/farm/i18n/
+packages/farm-ui/src/i18n/
   messages.ko-KR.ts   # FarmGame UI text
   messages.en-US.ts
   index.ts            # typed t helper
@@ -82,7 +83,7 @@ AIT build가 pnpm workspace bare package import에 민감하므로, 현재 방�
 - formatter test: `formatMoney`, duration, ad limit reason이 locale별 expectation을 만족하는지 확인
 - store config test: Play/App Store locale map에 필수 locale이 있는지 확인
 
-`pnpm check:i18n`은 현재 `FarmGame.tsx`, `apps/ait/src/farm/components/*`(SheetParts, CollectionSheet, AchievementsSheet, LabSheet, ChainMapSheet), `packages/farm-core/src`의 로직 모듈(constants, types, harvest, mastery, modifiers, achievements, prestige, research)의 한글 하드코딩과 Play/App Store 필수 locale map을 검사한다. locale catalog의 key set 일치는 TypeScript typecheck가 잡는다.
+`pnpm check:i18n`은 현재 `packages/farm-ui/src/FarmGame.tsx`, `packages/farm-ui/src/components/*`(SheetParts, CollectionSheet, AchievementsSheet, LabSheet, ChainMapSheet), `packages/farm-core/src`의 로직 모듈(constants, types, harvest, mastery, modifiers, achievements, prestige, research)의 한글 하드코딩과 Play/App Store 필수 locale map을 검사한다. locale catalog의 key set 일치는 TypeScript typecheck가 잡는다.
 
 ## 엔드게임 시스템 라벨 카탈로그
 
@@ -91,7 +92,7 @@ AIT build가 pnpm workspace bare package import에 민감하므로, 현재 방�
 - crop label: 교배 신품종 12종 포함 (`satisfies Record<CropKey, …>`로 누락 시 컴파일 에러)
 - area label: `hybrid_greenhouse` 포함
 - `getMasteryRankLabel`, `getMutationLabel`, `getResearchNodeLabel`, `getRegionArchetypeLabel`, `getPrestigeSkillLabel`, `getAchievementTrackLabel`, `getTitleLabel`
-- 시트 문구/토스트는 `apps/ait/src/farm/i18n/index.ts`의 `FarmMessages`에 ko/en 동시 정의
+- 시트 문구/토스트는 `packages/farm-ui/src/i18n/index.ts`의 `FarmMessages`에 ko/en 동시 정의
 
 ## 검증 명령
 
@@ -103,6 +104,8 @@ pnpm exec jest apps/ait --runInBand
 pnpm --dir apps/mobile exec jest --runInBand
 pnpm lint
 pnpm typecheck
+pnpm check:architecture
+pnpm check:markets
 pnpm check:play -- --json
 pnpm check:app-store -- --json
 ```

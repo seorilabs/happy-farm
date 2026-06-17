@@ -30,7 +30,7 @@ import {
   type RewardedAdController,
   type RewardedAdShowResult,
 } from '../../../../../packages/farm-core/src';
-import { getFarmMessages } from '../i18n';
+import { getFarmMessages } from '../../../../../packages/farm-ui/src';
 
 const NOW = Date.parse('2026-05-27T03:00:00.000Z');
 
@@ -38,7 +38,9 @@ jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
 }));
 
-const farmGameModule = jest.requireActual('../FarmGame') as typeof import('../FarmGame');
+const farmGameModule = jest.requireActual(
+  '../../../../../packages/farm-ui/src/FarmGame'
+) as typeof import('../../../../../packages/farm-ui/src/FarmGame');
 const FarmGame = farmGameModule.default;
 const {
   GAME_TICK_INTERVAL_MS,
@@ -49,8 +51,8 @@ const {
   COMBO_LEGENDARY_THRESHOLD,
 } = farmGameModule;
 const { __setGoldPulseTestHook } = jest.requireActual<
-  typeof import('../farmGoldPulse')
->('../farmGoldPulse');
+  typeof import('../../../../../packages/farm-ui/src/farmGoldPulse')
+>('../../../../../packages/farm-ui/src/farmGoldPulse');
 const mockPersistence = {
   readPersistedGameState: jest.fn<Promise<GameState>, []>(),
   writePersistedGameState: jest.fn<Promise<void>, [GameState]>(),

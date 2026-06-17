@@ -21,6 +21,13 @@
       "description": "Global kill switch for ads across release targets.",
       "valueType": "BOOLEAN"
     },
+    "cloud_save_backup_enabled": {
+      "defaultValue": {
+        "value": "false"
+      },
+      "description": "Enable mobile anonymous Auth and Firestore cloud-save backup after Firestore API/rules/Auth provider are ready. Local save remains authoritative.",
+      "valueType": "BOOLEAN"
+    },
     "mobile_ads_enabled_max_build_number": {
       "defaultValue": {
         "value": "2100000000"

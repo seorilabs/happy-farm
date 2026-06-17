@@ -1,4 +1,4 @@
-import { createFarmPersistence } from './persistence';
+import { createFarmPersistence } from '../../../../packages/farm-ui/src';
 import { appsInTossStorage } from './platform/appsInTossStorage';
 
 const farmPersistence = createFarmPersistence(appsInTossStorage);

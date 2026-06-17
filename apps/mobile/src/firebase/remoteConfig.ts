@@ -15,6 +15,7 @@ export const MOBILE_REMOTE_CONFIG_DEFAULTS = {
   analytics_collection_enabled: true,
   crashlytics_collection_enabled: true,
   mobile_ads_global_enabled: true,
+  cloud_save_backup_enabled: false,
   minimum_supported_version_code: 1,
   force_update_url: '',
   remote_balance_enabled: false,

@@ -8,6 +8,7 @@ import { getRemoteBoolean, initializeMobileRemoteConfig } from './remoteConfig';
 
 export { mobileFarmAnalytics };
 export { getRemoteBoolean, getRemoteNumber, getRemoteString, MOBILE_REMOTE_CONFIG_DEFAULTS } from './remoteConfig';
+export { ensureMobileAnonymousUser } from './auth';
 
 export async function initializeMobileFirebaseServices() {
   if (!isFirebaseConfigured()) {

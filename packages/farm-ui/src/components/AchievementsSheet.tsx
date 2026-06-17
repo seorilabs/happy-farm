@@ -13,7 +13,7 @@ import {
   type GameState,
   type SupportedLocale,
   type TitleKey,
-} from '../../../../../packages/farm-core/src';
+} from '../../../farm-core/src';
 
 import type { FarmMessages } from '../i18n';
 import { SheetAction, sheetPartStyles } from './SheetParts';

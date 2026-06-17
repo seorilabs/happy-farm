@@ -108,11 +108,23 @@
           "otherPurposes"
         ],
         "notes": "AdMob SDK가 IP 주소를 통해 기기의 대략적인 위치를 추정할 수 있고, 광고 성능/타사 광고 및 분석 목적으로 사용될 수 있으므로 타사 광고와 분석을 선택합니다. 게임 기능 자체는 위치를 사용하지 않습니다."
+      },
+      "userId": {
+        "collected": true,
+        "purposes": ["appFunctionality"],
+        "usedForTracking": false,
+        "notes": "Firebase Anonymous Auth가 앱 생성 UID를 사용해 사용자의 Firestore 클라우드 저장 백업 문서를 분리합니다. 사용자가 직접 로그인하지 않으며 광고 추적 목적으로 사용하지 않습니다."
+      },
+      "gameplayProgress": {
+        "collected": true,
+        "purposes": ["appFunctionality"],
+        "usedForTracking": false,
+        "notes": "Firestore cloud-save backup은 로컬 GameState 직렬화 데이터를 저장 복구 목적으로 저장합니다. 서버 검증 원장이나 광고 추적 목적으로 사용하지 않습니다."
       }
     },
     "notes": [
       "App Store Connect 앱 개인정보 답변은 심사 통과 기준으로 완료됨.",
-      "Firebase Analytics, Firebase Crashlytics, Firebase Remote Config, AdMob SDK 구성 변경 시 App Store Connect 앱 개인정보 답변을 재검토합니다.",
+      "Firebase Analytics, Firebase Crashlytics, Firebase Remote Config, Firebase Auth, Firestore, AdMob SDK 구성 변경 시 App Store Connect 앱 개인정보 답변을 재검토합니다.",
       "tracking=yes 기준을 유지합니다. IDFA/ATT 또는 비개인화 광고 정책을 바꾸면 콘솔 답변과 PrivacyInfo.xcprivacy를 함께 확인합니다."
     ]
   },

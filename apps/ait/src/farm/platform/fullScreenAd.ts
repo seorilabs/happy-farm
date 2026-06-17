@@ -4,6 +4,20 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { RewardedAdController, RewardedAdShowResult } from '../../../../../packages/farm-core/src';
 import { useAppsInTossAdsEnabled } from '../../firebaseWeb/remoteConfig';
 
+type PendingShow = {
+  settled: boolean;
+  rewardGranted: boolean;
+  resolve: (result: RewardedAdShowResult) => void;
+};
+
+function safeUnregister(unregister: (() => void) | null) {
+  try {
+    unregister?.();
+  } catch {
+    // External SDK cleanup must not prevent the waiting showAd Promise from settling.
+  }
+}
+
 function isFullScreenAdSupported() {
   try {
     return loadFullScreenAd.isSupported() && showFullScreenAd.isSupported();
@@ -12,19 +26,21 @@ function isFullScreenAdSupported() {
   }
 }
 
-export function useFullScreenAd(adGroupId: string): RewardedAdController {
+export function useFullScreenAd(adGroupId?: string): RewardedAdController {
+  const normalizedAdGroupId = adGroupId?.trim() ?? '';
   const adsEnabled = useAppsInTossAdsEnabled();
   const [isLoaded, setIsLoaded] = useState(false);
   const [isSupported, setIsSupported] = useState(false);
   const unregisterLoadRef = useRef<(() => void) | null>(null);
   const unregisterShowRef = useRef<(() => void) | null>(null);
+  const pendingShowRef = useRef<PendingShow | null>(null);
 
   const loadAd = useCallback(() => {
-    unregisterLoadRef.current?.();
+    safeUnregister(unregisterLoadRef.current);
     unregisterLoadRef.current = null;
     setIsLoaded(false);
 
-    if (!adsEnabled || adGroupId.length === 0 || !isFullScreenAdSupported()) {
+    if (!adsEnabled || normalizedAdGroupId.length === 0 || !isFullScreenAdSupported()) {
       setIsSupported(false);
       return;
     }
@@ -33,7 +49,7 @@ export function useFullScreenAd(adGroupId: string): RewardedAdController {
 
     try {
       unregisterLoadRef.current = loadFullScreenAd({
-        options: { adGroupId },
+        options: { adGroupId: normalizedAdGroupId },
         onEvent: (event) => {
           if (event.type === 'loaded') {
             setIsLoaded(true);
@@ -47,64 +63,83 @@ export function useFullScreenAd(adGroupId: string): RewardedAdController {
       setIsLoaded(false);
       setIsSupported(false);
     }
-  }, [adGroupId, adsEnabled]);
+  }, [normalizedAdGroupId, adsEnabled]);
+
+  const finishPendingShow = useCallback(
+    (result: RewardedAdShowResult, options: { reload?: boolean } = {}) => {
+      const pendingShow = pendingShowRef.current;
+      if (pendingShow == null || pendingShow.settled) {
+        return;
+      }
+
+      pendingShow.settled = true;
+      pendingShowRef.current = null;
+      safeUnregister(unregisterShowRef.current);
+      unregisterShowRef.current = null;
+      pendingShow.resolve(result);
+      if (options.reload !== false) {
+        try {
+          loadAd();
+        } catch {
+          setIsLoaded(false);
+        }
+      }
+    },
+    [loadAd]
+  );
 
   useEffect(() => {
     loadAd();
     return () => {
-      unregisterLoadRef.current?.();
-      unregisterShowRef.current?.();
+      finishPendingShow({ status: 'dismissed' }, { reload: false });
+      safeUnregister(unregisterLoadRef.current);
+      unregisterLoadRef.current = null;
+      safeUnregister(unregisterShowRef.current);
+      unregisterShowRef.current = null;
     };
-  }, [loadAd]);
+  }, [finishPendingShow, loadAd]);
 
   const showAd = useCallback(
     () => {
-      const supported = adsEnabled && adGroupId.length > 0 && isFullScreenAdSupported();
+      const supported = adsEnabled && normalizedAdGroupId.length > 0 && isFullScreenAdSupported();
       if (!supported || !isLoaded) {
         return Promise.resolve<RewardedAdShowResult>({ status: supported ? 'notReady' : 'unsupported' });
+      }
+
+      if (pendingShowRef.current != null && !pendingShowRef.current.settled) {
+        return Promise.resolve<RewardedAdShowResult>({ status: 'notReady' });
       }
 
       setIsLoaded(false);
 
       return new Promise<RewardedAdShowResult>((resolve) => {
-        let settled = false;
-        let rewardGranted = false;
-
-        const finish = (result: RewardedAdShowResult) => {
-          if (settled) {
-            return;
-          }
-          settled = true;
-          unregisterShowRef.current?.();
-          unregisterShowRef.current = null;
-          loadAd();
-          resolve(result);
-        };
+        pendingShowRef.current = { settled: false, rewardGranted: false, resolve };
 
         try {
           unregisterShowRef.current = showFullScreenAd({
-            options: { adGroupId },
+            options: { adGroupId: normalizedAdGroupId },
             onEvent: (event) => {
-              if (event.type === 'userEarnedReward' && !rewardGranted) {
-                rewardGranted = true;
+              const pendingShow = pendingShowRef.current;
+              if (event.type === 'userEarnedReward' && pendingShow != null && !pendingShow.rewardGranted) {
+                pendingShow.rewardGranted = true;
               }
               if (event.type === 'dismissed') {
-                finish(rewardGranted ? { status: 'earned' } : { status: 'dismissed' });
+                finishPendingShow(pendingShow?.rewardGranted ? { status: 'earned' } : { status: 'dismissed' });
               }
               if (event.type === 'failedToShow') {
-                finish({ status: 'failed' });
+                finishPendingShow({ status: 'failed' });
               }
             },
             onError: () => {
-              finish({ status: 'failed' });
+              finishPendingShow({ status: 'failed' });
             },
           });
         } catch {
-          finish({ status: 'failed' });
+          finishPendingShow({ status: 'failed' });
         }
       });
     },
-    [adGroupId, adsEnabled, isLoaded, loadAd]
+    [normalizedAdGroupId, adsEnabled, finishPendingShow, isLoaded]
   );
 
   return { isAdReady: adsEnabled && isSupported && isLoaded, isAdSupported: adsEnabled && isSupported, showAd };
