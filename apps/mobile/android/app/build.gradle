@@ -33,13 +33,14 @@ def uploadKeyProperties = new Properties()
 if (uploadKeyPropertiesFile.exists()) {
     uploadKeyPropertiesFile.withInputStream { uploadKeyProperties.load(it) }
 }
-def requestedTaskNames = gradle.startParameter.taskNames.collect { it.tokenize(':').last().toLowerCase(Locale.ROOT) }
 def releaseSigningTaskPattern = ~/^(assemble|bundle|package|sign|install|validatesigning).*release.*$/
 def taskNameRequiresUploadKeyProperties = { String taskName ->
     taskName.toLowerCase(Locale.ROOT) ==~ releaseSigningTaskPattern
 }
-def requiresUploadKeyProperties = requestedTaskNames.any { taskName ->
-    taskNameRequiresUploadKeyProperties(taskName)
+def requiresUploadKeyProperties = gradle.startParameter.taskNames.any { taskPath ->
+    def segments = taskPath.tokenize(':')
+    if (segments.size() >= 2 && segments[-2] != project.name) return false
+    return taskNameRequiresUploadKeyProperties(segments.last())
 }
 def requiredUploadKeyPropertyNames = ["storeFile", "storePassword", "keyAlias", "keyPassword"]
 def hasCompleteUploadKeyProperties = {
@@ -160,7 +161,7 @@ afterEvaluate {
 }
 
 gradle.taskGraph.whenReady { taskGraph ->
-    if (taskGraph.allTasks.any { taskNameRequiresUploadKeyProperties(it.name) }) {
+    if (taskGraph.allTasks.any { it.project == project && taskNameRequiresUploadKeyProperties(it.name) }) {
         if (!uploadKeyPropertiesFile.exists()) {
             throw new GradleException("Missing ${uploadKeyPropertiesFile}. Create it from the upload keystore before building release.")
         }
