@@ -164,6 +164,26 @@ describe('normalizeDailyBonusState', () => {
     const result = normalizeDailyBonusState({ lastClaimedAt: null, streak: -1 });
     expect(result.streak).toBe(0);
   });
+
+  test('zero lastClaimedAt is replaced with null (epoch time = never claimed)', () => {
+    const result = normalizeDailyBonusState({ lastClaimedAt: 0, streak: 1 });
+    expect(result.lastClaimedAt).toBeNull();
+  });
+
+  test('Infinity lastClaimedAt is replaced with null', () => {
+    const result = normalizeDailyBonusState({ lastClaimedAt: Infinity, streak: 1 });
+    expect(result.lastClaimedAt).toBeNull();
+  });
+
+  test('NaN lastClaimedAt is replaced with null', () => {
+    const result = normalizeDailyBonusState({ lastClaimedAt: NaN, streak: 1 });
+    expect(result.lastClaimedAt).toBeNull();
+  });
+
+  test('Infinity streak is replaced with 0', () => {
+    const result = normalizeDailyBonusState({ lastClaimedAt: null, streak: Infinity });
+    expect(result.streak).toBe(0);
+  });
 });
 
 describe('previewDailyBonus', () => {
