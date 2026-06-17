@@ -33,7 +33,7 @@ def uploadKeyProperties = new Properties()
 if (uploadKeyPropertiesFile.exists()) {
     uploadKeyPropertiesFile.withInputStream { uploadKeyProperties.load(it) }
 }
-def releaseSigningTaskPattern = ~/^(assemblerelease|bundlerelease|packagereleasebundle|signreleasebundle|installrelease|validatesigningrelease)$/
+def releaseSigningTaskPattern = ~/^(assemblerelease|bundlerelease|packagerelease|packagereleasebundle|signrelease|signreleasebundle|installrelease|validatesigningrelease)$/
 def taskRequiresUploadKeyProperties = { String taskName ->
     taskName.toLowerCase(Locale.ROOT) ==~ releaseSigningTaskPattern
 }
