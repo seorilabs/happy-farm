@@ -4,6 +4,12 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { RewardedAdController, RewardedAdShowResult } from '../../../../../packages/farm-core/src';
 import { useAppsInTossAdsEnabled } from '../../firebaseWeb/remoteConfig';
 
+type PendingShow = {
+  settled: boolean;
+  rewardGranted: boolean;
+  resolve: (result: RewardedAdShowResult) => void;
+};
+
 function isFullScreenAdSupported() {
   try {
     return loadFullScreenAd.isSupported() && showFullScreenAd.isSupported();
@@ -19,6 +25,7 @@ export function useFullScreenAd(adGroupId?: string): RewardedAdController {
   const [isSupported, setIsSupported] = useState(false);
   const unregisterLoadRef = useRef<(() => void) | null>(null);
   const unregisterShowRef = useRef<(() => void) | null>(null);
+  const pendingShowRef = useRef<PendingShow | null>(null);
 
   const loadAd = useCallback(() => {
     unregisterLoadRef.current?.();
@@ -50,13 +57,35 @@ export function useFullScreenAd(adGroupId?: string): RewardedAdController {
     }
   }, [normalizedAdGroupId, adsEnabled]);
 
+  const finishPendingShow = useCallback(
+    (result: RewardedAdShowResult, options: { reload?: boolean } = {}) => {
+      const pendingShow = pendingShowRef.current;
+      if (pendingShow == null || pendingShow.settled) {
+        return;
+      }
+
+      pendingShow.settled = true;
+      pendingShowRef.current = null;
+      unregisterShowRef.current?.();
+      unregisterShowRef.current = null;
+      if (options.reload !== false) {
+        loadAd();
+      }
+      pendingShow.resolve(result);
+    },
+    [loadAd]
+  );
+
   useEffect(() => {
     loadAd();
     return () => {
+      finishPendingShow({ status: 'dismissed' }, { reload: false });
       unregisterLoadRef.current?.();
+      unregisterLoadRef.current = null;
       unregisterShowRef.current?.();
+      unregisterShowRef.current = null;
     };
-  }, [loadAd]);
+  }, [finishPendingShow, loadAd]);
 
   const showAd = useCallback(
     () => {
@@ -68,44 +97,33 @@ export function useFullScreenAd(adGroupId?: string): RewardedAdController {
       setIsLoaded(false);
 
       return new Promise<RewardedAdShowResult>((resolve) => {
-        let settled = false;
-        let rewardGranted = false;
-
-        const finish = (result: RewardedAdShowResult) => {
-          if (settled) {
-            return;
-          }
-          settled = true;
-          unregisterShowRef.current?.();
-          unregisterShowRef.current = null;
-          loadAd();
-          resolve(result);
-        };
+        pendingShowRef.current = { settled: false, rewardGranted: false, resolve };
 
         try {
           unregisterShowRef.current = showFullScreenAd({
             options: { adGroupId: normalizedAdGroupId },
             onEvent: (event) => {
-              if (event.type === 'userEarnedReward' && !rewardGranted) {
-                rewardGranted = true;
+              const pendingShow = pendingShowRef.current;
+              if (event.type === 'userEarnedReward' && pendingShow != null && !pendingShow.rewardGranted) {
+                pendingShow.rewardGranted = true;
               }
               if (event.type === 'dismissed') {
-                finish(rewardGranted ? { status: 'earned' } : { status: 'dismissed' });
+                finishPendingShow(pendingShow?.rewardGranted ? { status: 'earned' } : { status: 'dismissed' });
               }
               if (event.type === 'failedToShow') {
-                finish({ status: 'failed' });
+                finishPendingShow({ status: 'failed' });
               }
             },
             onError: () => {
-              finish({ status: 'failed' });
+              finishPendingShow({ status: 'failed' });
             },
           });
         } catch {
-          finish({ status: 'failed' });
+          finishPendingShow({ status: 'failed' });
         }
       });
     },
-    [normalizedAdGroupId, adsEnabled, isLoaded, loadAd]
+    [normalizedAdGroupId, adsEnabled, finishPendingShow, isLoaded]
   );
 
   return { isAdReady: adsEnabled && isSupported && isLoaded, isAdSupported: adsEnabled && isSupported, showAd };
