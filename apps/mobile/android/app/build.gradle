@@ -3,6 +3,7 @@ apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
 
 import org.gradle.api.tasks.PathSensitivity
+import java.util.Locale
 
 def googleServicesConfigFile = file("google-services.json")
 if (googleServicesConfigFile.exists()) {
@@ -30,7 +31,29 @@ def hermesOsBin = System.getProperty("os.name").toLowerCase().contains("mac") ? 
 def uploadKeyPropertiesFile = rootProject.file("key.properties")
 def uploadKeyProperties = new Properties()
 if (uploadKeyPropertiesFile.exists()) {
-    uploadKeyProperties.load(new FileInputStream(uploadKeyPropertiesFile))
+    uploadKeyPropertiesFile.withInputStream { uploadKeyProperties.load(it) }
+}
+def releaseSigningTaskPattern = ~/^(assemblerelease|bundlerelease|packagerelease|packagereleasebundle|signrelease|signreleasebundle|installrelease|validatesigningrelease)$/
+def taskRequiresUploadKeyProperties = { String taskName ->
+    taskName.toLowerCase(Locale.ROOT) ==~ releaseSigningTaskPattern
+}
+def requiredUploadKeyPropertyNames = ["storeFile", "storePassword", "keyAlias", "keyPassword"]
+def hasCompleteUploadKeyProperties = {
+    uploadKeyPropertiesFile.exists() && requiredUploadKeyPropertyNames.every { key ->
+        uploadKeyProperties[key]?.toString()?.trim()
+    }
+}
+def requireUploadKeyPropertiesFile = {
+    if (!uploadKeyPropertiesFile.exists()) {
+        throw new GradleException("Missing ${uploadKeyPropertiesFile}. Create it from the upload keystore before building release.")
+    }
+}
+def requireUploadKeyProperty = { String key ->
+    def value = uploadKeyProperties[key]?.toString()?.trim()
+    if (!value) {
+        throw new GradleException("key.properties missing ${key}. Create it from the upload keystore before building release.")
+    }
+    return value
 }
 def resolveUploadStoreFile = { String storeFilePath ->
     def candidate = new File(storeFilePath)
@@ -137,6 +160,13 @@ afterEvaluate {
     }
 }
 
+gradle.taskGraph.whenReady { taskGraph ->
+    if (taskGraph.allTasks.any { it.project == project && taskRequiresUploadKeyProperties(it.name) }) {
+        requireUploadKeyPropertiesFile()
+        requiredUploadKeyPropertyNames.each { requireUploadKeyProperty(it) }
+    }
+}
+
 /**
  * Set this to true to Run Proguard on Release builds to minify the Java bytecode.
  */
@@ -176,13 +206,12 @@ android {
             keyPassword 'android'
         }
         release {
-            if (!uploadKeyPropertiesFile.exists()) {
-                throw new GradleException("Missing ${uploadKeyPropertiesFile}. Create it from the upload keystore before building release.")
+            if (hasCompleteUploadKeyProperties()) {
+                storeFile resolveUploadStoreFile(requireUploadKeyProperty("storeFile"))
+                storePassword requireUploadKeyProperty("storePassword")
+                keyAlias requireUploadKeyProperty("keyAlias")
+                keyPassword requireUploadKeyProperty("keyPassword")
             }
-            storeFile resolveUploadStoreFile(uploadKeyProperties['storeFile'] as String)
-            storePassword uploadKeyProperties['storePassword']
-            keyAlias uploadKeyProperties['keyAlias']
-            keyPassword uploadKeyProperties['keyPassword']
         }
     }
     buildTypes {

@@ -106,11 +106,13 @@ export function AdRewardCard({
       style={[sheetPartStyles.shopCard, sheetPartStyles.adCard, disabled && sheetPartStyles.disabledCard]}
       onPress={onPress}
     >
-      <View style={sheetPartStyles.shopTextGroup}>
-        <Text style={sheetPartStyles.shopTitle}>{title}</Text>
-        <Text style={sheetPartStyles.shopDesc}>{desc}</Text>
+      <View style={sheetPartStyles.shopCardRow}>
+        <View style={sheetPartStyles.shopTextGroup}>
+          <Text style={sheetPartStyles.shopTitle}>{title}</Text>
+          <Text style={sheetPartStyles.shopDesc}>{desc}</Text>
+        </View>
+        <Text style={sheetPartStyles.shopPrice}>{cta}</Text>
       </View>
-      <Text style={sheetPartStyles.shopPrice}>{cta}</Text>
     </Pressable>
   );
 }

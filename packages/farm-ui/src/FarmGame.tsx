@@ -4522,7 +4522,7 @@ const styles = StyleSheet.create({
   },
   toolNewBadge: {
     position: 'absolute',
-    bottom: 4,
+    top: 4,
     left: 4,
     borderRadius: 4,
     backgroundColor: '#16a34a',
