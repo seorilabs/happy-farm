@@ -3,6 +3,7 @@ apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
 
 import org.gradle.api.tasks.PathSensitivity
+import java.util.Locale
 
 def googleServicesConfigFile = file("google-services.json")
 if (googleServicesConfigFile.exists()) {
@@ -31,6 +32,10 @@ def uploadKeyPropertiesFile = rootProject.file("key.properties")
 def uploadKeyProperties = new Properties()
 if (uploadKeyPropertiesFile.exists()) {
     uploadKeyProperties.load(new FileInputStream(uploadKeyPropertiesFile))
+}
+def requestedTaskNames = gradle.startParameter.taskNames.collect { it.tokenize(':').last().toLowerCase(Locale.ROOT) }
+def requiresUploadKeyProperties = requestedTaskNames.any { taskName ->
+    taskName.contains("release") || taskName in ["build", "assemble", "bundle"]
 }
 def resolveUploadStoreFile = { String storeFilePath ->
     def candidate = new File(storeFilePath)
@@ -177,12 +182,15 @@ android {
         }
         release {
             if (!uploadKeyPropertiesFile.exists()) {
-                throw new GradleException("Missing ${uploadKeyPropertiesFile}. Create it from the upload keystore before building release.")
+                if (requiresUploadKeyProperties) {
+                    throw new GradleException("Missing ${uploadKeyPropertiesFile}. Create it from the upload keystore before building release.")
+                }
+            } else {
+                storeFile resolveUploadStoreFile(uploadKeyProperties['storeFile'] as String)
+                storePassword uploadKeyProperties['storePassword']
+                keyAlias uploadKeyProperties['keyAlias']
+                keyPassword uploadKeyProperties['keyPassword']
             }
-            storeFile resolveUploadStoreFile(uploadKeyProperties['storeFile'] as String)
-            storePassword uploadKeyProperties['storePassword']
-            keyAlias uploadKeyProperties['keyAlias']
-            keyPassword uploadKeyProperties['keyPassword']
         }
     }
     buildTypes {
