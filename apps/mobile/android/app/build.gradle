@@ -37,11 +37,6 @@ def releaseSigningTaskPattern = ~/^(assemblerelease|bundlerelease|packagerelease
 def taskRequiresUploadKeyProperties = { String taskName ->
     taskName.toLowerCase(Locale.ROOT) ==~ releaseSigningTaskPattern
 }
-def requiresUploadKeyProperties = gradle.startParameter.taskNames.any { taskPath ->
-    def segments = taskPath.tokenize(':')
-    if (segments.size() >= 2 && segments[-2] != project.name) return false
-    return taskRequiresUploadKeyProperties(segments.last())
-}
 def requiredUploadKeyPropertyNames = ["storeFile", "storePassword", "keyAlias", "keyPassword"]
 def hasCompleteUploadKeyProperties = {
     uploadKeyPropertiesFile.exists() && requiredUploadKeyPropertyNames.every { key ->
@@ -211,10 +206,7 @@ android {
             keyPassword 'android'
         }
         release {
-            if (requiresUploadKeyProperties) {
-                requireUploadKeyPropertiesFile()
-            }
-            if (requiresUploadKeyProperties || hasCompleteUploadKeyProperties()) {
+            if (hasCompleteUploadKeyProperties()) {
                 storeFile resolveUploadStoreFile(requireUploadKeyProperty("storeFile"))
                 storePassword requireUploadKeyProperty("storePassword")
                 keyAlias requireUploadKeyProperty("keyAlias")
