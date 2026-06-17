@@ -31,7 +31,7 @@ def hermesOsBin = System.getProperty("os.name").toLowerCase().contains("mac") ? 
 def uploadKeyPropertiesFile = rootProject.file("key.properties")
 def uploadKeyProperties = new Properties()
 if (uploadKeyPropertiesFile.exists()) {
-    uploadKeyProperties.load(new FileInputStream(uploadKeyPropertiesFile))
+    uploadKeyPropertiesFile.withInputStream { uploadKeyProperties.load(it) }
 }
 def requestedTaskNames = gradle.startParameter.taskNames.collect { it.tokenize(':').last().toLowerCase(Locale.ROOT) }
 def requiresUploadKeyProperties = requestedTaskNames.any { taskName ->
