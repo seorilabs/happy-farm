@@ -117,6 +117,7 @@ import {
 import {
   claimDailyBonus,
   getDailyBonusLabel,
+  isDailyBonusAvailable,
   normalizeDailyBonusState,
   previewDailyBonus,
 } from '../../../../packages/farm-core/src/dailyBonus';
@@ -870,7 +871,14 @@ export default function FarmGame({
       if (cancelled) {
         return;
       }
-      setGameState(savedState);
+      // Normalize dailyBonusState here so that gameState always holds a valid
+      // DailyBonusState even when a custom readPersistedGameState skips
+      // migrateLoadedState (the TypeScript type says it's DailyBonusState, but
+      // the value may be absent or malformed at runtime).
+      setGameState({
+        ...savedState,
+        dailyBonusState: normalizeDailyBonusState(savedState.dailyBonusState as unknown),
+      });
       setIsSaveLoaded(true);
 
       // Greet returning players with a recap of what waited for them. Computed
@@ -2195,14 +2203,17 @@ export default function FarmGame({
             <SheetAction
               label={messages.dailyBonusClaimAction(formatMoney(dailyBonusPreview.goldAwarded, locale))}
               onPress={() => {
-                // Claim uses the actual tap time so lastClaimedAt reflects when
-                // the player received the gold (accurate cooldown/streak window).
-                // Display already showed values based on openedAt; the 48h window
-                // makes any discrepancy negligible in practice.
-                // The functional updater makes this idempotent: concurrent taps
-                // evaluate claimDailyBonus against the latest prev.dailyBonusState,
-                // so only the first tap can succeed.
                 const now = Date.now();
+                // Guard against clock reversal or race: if the bonus is no
+                // longer available at tap time, keep the Sheet open rather than
+                // closing it silently with no feedback.
+                if (!isDailyBonusAvailable(gameState.dailyBonusState, now)) {
+                  return;
+                }
+                // The functional updater preserves idempotency: a concurrent
+                // second tap evaluates claimDailyBonus against the already-
+                // updated prev.dailyBonusState and gets null, so gold is only
+                // awarded once.
                 setGameState((prev) => {
                   const result = claimDailyBonus(prev.dailyBonusState, now);
                   if (result == null) return prev;
