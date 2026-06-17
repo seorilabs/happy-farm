@@ -35,8 +35,11 @@ if (uploadKeyPropertiesFile.exists()) {
 }
 def requestedTaskNames = gradle.startParameter.taskNames.collect { it.tokenize(':').last().toLowerCase(Locale.ROOT) }
 def releaseSigningTaskPattern = ~/^(assemble|bundle|package|sign|install|validatesigning).*release.*$/
+def taskNameRequiresUploadKeyProperties = { String taskName ->
+    taskName.toLowerCase(Locale.ROOT) ==~ releaseSigningTaskPattern
+}
 def requiresUploadKeyProperties = requestedTaskNames.any { taskName ->
-    taskName ==~ releaseSigningTaskPattern
+    taskNameRequiresUploadKeyProperties(taskName)
 }
 def requiredUploadKeyPropertyNames = ["storeFile", "storePassword", "keyAlias", "keyPassword"]
 def hasCompleteUploadKeyProperties = {
@@ -151,6 +154,20 @@ afterEvaluate {
                 task.inputs.file(inputPath)
                     .withPathSensitivity(PathSensitivity.RELATIVE)
                     .withPropertyName("happyFarmSharedJs.${inputName}")
+            }
+        }
+    }
+}
+
+gradle.taskGraph.whenReady { taskGraph ->
+    if (taskGraph.allTasks.any { taskNameRequiresUploadKeyProperties(it.name) }) {
+        if (!uploadKeyPropertiesFile.exists()) {
+            throw new GradleException("Missing ${uploadKeyPropertiesFile}. Create it from the upload keystore before building release.")
+        }
+        requiredUploadKeyPropertyNames.each { key ->
+            def value = uploadKeyProperties[key]?.toString()?.trim()
+            if (!value) {
+                throw new GradleException("key.properties missing ${key}. Create it from the upload keystore before building release.")
             }
         }
     }
