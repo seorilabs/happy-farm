@@ -70,6 +70,42 @@ describe('useFullScreenAd', () => {
     cleanup();
   });
 
+  test('returns notReady immediately when showAd is called while another show is in flight', async () => {
+    const controllerRef: { current?: RewardedAdController } = {};
+    render(
+      <Harness onController={(value) => { controllerRef.current = value; }} />
+    );
+
+    await waitFor(() => expect(latestLoadRequest).not.toBeNull());
+    act(() => { latestLoadRequest?.onEvent({ type: 'loaded' }); });
+    await waitFor(() => expect(controllerRef.current?.isAdReady).toBe(true));
+
+    const controller = controllerRef.current;
+    if (controller == null) throw new Error('controller not provided');
+
+    let firstResult: RewardedAdShowResult | null = null;
+    let secondResult: RewardedAdShowResult | null = null;
+
+    await act(async () => {
+      // Call showAd twice in the same synchronous tick
+      controller.showAd().then((v) => { firstResult = v; });
+      controller.showAd().then((v) => { secondResult = v; });
+    });
+
+    // Second call should resolve immediately as notReady (in-flight guard)
+    await waitFor(() => expect(secondResult).toEqual({ status: 'notReady' }));
+    // First call is still in flight
+    expect(firstResult).toBeNull();
+    // Only one showFullScreenAd call should have been made
+    expect(mockShowFullScreenAd).toHaveBeenCalledTimes(1);
+
+    // Resolve the first show
+    const showRequest = mockShowFullScreenAd.mock.calls[0]?.[0] as FullScreenAdRequest | undefined;
+    act(() => { showRequest?.onEvent({ type: 'dismissed' }); });
+
+    await waitFor(() => expect(firstResult).toEqual({ status: 'dismissed' }));
+  });
+
   test('settles an in-flight show request when the hook unmounts', async () => {
     const controllerRef: { current?: RewardedAdController } = {};
     const rendered = render(

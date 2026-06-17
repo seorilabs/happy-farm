@@ -105,6 +105,7 @@ export function useFullScreenAd(adGroupId?: string): RewardedAdController {
       if (!supported || !isLoaded) {
         return Promise.resolve<RewardedAdShowResult>({ status: supported ? 'notReady' : 'unsupported' });
       }
+
       if (pendingShowRef.current != null && !pendingShowRef.current.settled) {
         return Promise.resolve<RewardedAdShowResult>({ status: 'notReady' });
       }
