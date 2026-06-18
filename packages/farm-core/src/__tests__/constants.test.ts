@@ -393,4 +393,36 @@ describe('getRewardedGoldAmount', () => {
     };
     expect(getRewardedGoldAmount(stateLevel1)).toBeGreaterThan(getRewardedGoldAmount(stateLevel0));
   });
+
+  test('uses balance.areas definition order, not cost order, to find next goal', () => {
+    // Verifies that each successive non-gated area (in FARM_AREAS order) is
+    // picked as the next goal when all prior ones are unlocked.
+    const nonGatedAreas = FARM_AREAS.filter((a) => a.unlock.gate == null && a.unlock.cost > 0);
+    for (let index = 0; index < nonGatedAreas.length - 1; index += 1) {
+      const unlockedKeys = [
+        ...createInitialState().unlockedAreas,
+        ...nonGatedAreas.slice(0, index + 1).map((a) => a.key),
+      ] as GameState['unlockedAreas'];
+      const state: GameState = { ...createInitialState(), unlockedAreas: unlockedKeys };
+      const nextArea = nonGatedAreas[index + 1]!;
+      const expected = Math.max(
+        REWARDED_GOLD_AMOUNT,
+        Math.floor(nextArea.unlock.cost * balance.ads.rewardedGoldScaling.nextGoalRatio)
+      );
+      expect(getRewardedGoldAmount(state)).toBe(expected);
+    }
+  });
+
+  test('always returns a finite positive integer for abnormal prestige.level values', () => {
+    const nonGatedAreaKeys = balance.areas
+      .filter((a) => a.unlock.gate == null)
+      .map((a) => a.key) as GameState['unlockedAreas'];
+    const baseState: GameState = { ...createInitialState(), unlockedAreas: nonGatedAreaKeys };
+    for (const level of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, -1, 10000]) {
+      const state: GameState = { ...baseState, prestige: { ...baseState.prestige, level } };
+      const result = getRewardedGoldAmount(state);
+      expect(Number.isFinite(result)).toBe(true);
+      expect(result).toBeGreaterThanOrEqual(REWARDED_GOLD_AMOUNT);
+    }
+  });
 });

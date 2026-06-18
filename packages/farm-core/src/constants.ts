@@ -98,9 +98,9 @@ export const GROWTH_AD_COOLDOWN_MS = balance.ads.growthAdCooldownMs;
 export const GROWTH_AD_DAILY_LIMIT = balance.ads.growthAdDailyLimit;
 export const INTERSTITIAL_MILESTONE_COOLDOWN_MS = balance.ads.interstitialMilestoneCooldownMs;
 
-const NON_GATED_AREAS_BY_COST = FARM_AREAS.filter((area) => area.unlock.gate == null && area.unlock.cost > 0).sort(
-  (a, b) => a.unlock.cost - b.unlock.cost
-);
+// Preserves balance.areas definition order so "next area" means the next step
+// in the designed progression, not the cheapest remaining unlock.
+const NON_GATED_AREAS = FARM_AREAS.filter((area) => area.unlock.gate == null && area.unlock.cost > 0);
 
 /**
  * Returns the rewarded-gold ad payout scaled to the player's current
@@ -109,16 +109,24 @@ const NON_GATED_AREAS_BY_COST = FARM_AREAS.filter((area) => area.unlock.gate == 
  * areas are unlocked. The result is always at least REWARDED_GOLD_AMOUNT.
  */
 export function getRewardedGoldAmount(gameState: GameState): number {
-  const nextArea = NON_GATED_AREAS_BY_COST.find((area) => !isAreaUnlocked(gameState, area.key));
+  const nextArea = NON_GATED_AREAS.find((area) => !isAreaUnlocked(gameState, area.key));
+  const prestigeLevel = Number.isFinite(gameState.prestige.level)
+    ? Math.max(0, Math.floor(gameState.prestige.level))
+    : 0;
   const nextGoalCost =
     nextArea != null
       ? nextArea.unlock.cost
       : Math.floor(
           balance.regions.graduation.costBase *
-            Math.pow(balance.regions.graduation.costGrowth, gameState.prestige.level)
+            Math.pow(balance.regions.graduation.costGrowth, prestigeLevel)
         );
-  const scaled = Math.floor(nextGoalCost * balance.ads.rewardedGoldScaling.nextGoalRatio);
-  return Math.max(REWARDED_GOLD_AMOUNT, scaled);
+  const ratio =
+    Number.isFinite(balance.ads.rewardedGoldScaling.nextGoalRatio) &&
+    balance.ads.rewardedGoldScaling.nextGoalRatio > 0
+      ? balance.ads.rewardedGoldScaling.nextGoalRatio
+      : 0.05;
+  const scaled = Math.floor(nextGoalCost * ratio);
+  return Number.isFinite(scaled) ? Math.max(REWARDED_GOLD_AMOUNT, scaled) : REWARDED_GOLD_AMOUNT;
 }
 
 export const INITIAL_AREA_KEYS = FARM_AREAS.filter(
