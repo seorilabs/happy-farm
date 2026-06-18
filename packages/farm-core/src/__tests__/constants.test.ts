@@ -17,6 +17,8 @@ import {
   canUnlockArea,
   createInitialAdUsage,
   createInitialState,
+  getRewardedGoldAmount,
+  REWARDED_GOLD_AMOUNT,
   formatMoney,
   getAreaUnlockRequirementText,
   getCropEconomyEstimate,
@@ -327,5 +329,68 @@ describe('farm ad limits', () => {
     expect(activeBoost.multiplier).toBe(HARVEST_BONUS_MULTIPLIER);
     expect(activeBoost.remainingMs).toBe(HARVEST_BONUS_BOOST_DURATION_MS - 1);
     expect(getHarvestBonusBoostStatus(state, NOW + HARVEST_BONUS_BOOST_DURATION_MS + 1).active).toBe(false);
+  });
+});
+
+describe('getRewardedGoldAmount', () => {
+  test('returns REWARDED_GOLD_AMOUNT floor when next goal scales below it', () => {
+    // Initial state: only starter_field unlocked, next goal = vegetable_field (300G)
+    // 5 % of 300 = 15 < 100 floor
+    const state = createInitialState();
+    expect(getRewardedGoldAmount(state)).toBe(REWARDED_GOLD_AMOUNT);
+  });
+
+  test('scales with next non-gated area cost once vegetable_field is unlocked', () => {
+    // vegetable_field unlocked → next goal = fruit_field (15 000G)
+    // 5 % of 15 000 = 750 > 100 floor
+    const vegetableArea = FARM_AREAS.find((a) => a.key === 'vegetable_field')!;
+    const state: GameState = {
+      ...createInitialState(),
+      unlockedAreas: [...createInitialState().unlockedAreas, vegetableArea.key],
+    };
+    const expected = Math.floor(balance.areas.find((a) => a.key === 'fruit_field')!.unlock.cost * balance.ads.rewardedGoldScaling.nextGoalRatio);
+    expect(getRewardedGoldAmount(state)).toBe(expected);
+    expect(getRewardedGoldAmount(state)).toBeGreaterThan(REWARDED_GOLD_AMOUNT);
+  });
+
+  test('scales with orchard cost when fruit_field is already unlocked', () => {
+    const state: GameState = {
+      ...createInitialState(),
+      unlockedAreas: [...createInitialState().unlockedAreas, 'vegetable_field', 'fruit_field'],
+    };
+    const orchardCost = balance.areas.find((a) => a.key === 'orchard')!.unlock.cost;
+    const expected = Math.floor(orchardCost * balance.ads.rewardedGoldScaling.nextGoalRatio);
+    expect(getRewardedGoldAmount(state)).toBe(expected);
+  });
+
+  test('uses prestige graduation cost when all non-gated areas are unlocked', () => {
+    const nonGatedAreaKeys = balance.areas
+      .filter((a) => a.unlock.gate == null)
+      .map((a) => a.key) as GameState['unlockedAreas'];
+    const state: GameState = {
+      ...createInitialState(),
+      unlockedAreas: nonGatedAreaKeys,
+      prestige: { ...createInitialState().prestige, level: 0 },
+    };
+    const graduationCost = balance.regions.graduation.costBase;
+    const expected = Math.floor(graduationCost * balance.ads.rewardedGoldScaling.nextGoalRatio);
+    expect(getRewardedGoldAmount(state)).toBe(expected);
+    expect(getRewardedGoldAmount(state)).toBeGreaterThan(REWARDED_GOLD_AMOUNT);
+  });
+
+  test('reward grows proportionally at higher prestige levels', () => {
+    const nonGatedAreaKeys = balance.areas
+      .filter((a) => a.unlock.gate == null)
+      .map((a) => a.key) as GameState['unlockedAreas'];
+    const stateLevel0: GameState = {
+      ...createInitialState(),
+      unlockedAreas: nonGatedAreaKeys,
+      prestige: { ...createInitialState().prestige, level: 0 },
+    };
+    const stateLevel1: GameState = {
+      ...stateLevel0,
+      prestige: { ...stateLevel0.prestige, level: 1 },
+    };
+    expect(getRewardedGoldAmount(stateLevel1)).toBeGreaterThan(getRewardedGoldAmount(stateLevel0));
   });
 });

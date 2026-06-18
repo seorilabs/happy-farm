@@ -35,6 +35,9 @@
     "rewardedGoldWindowMs": 900000,
     "rewardedGoldMaxUsesPerWindow": 3,
     "rewardedGoldDailyLimit": 4,
+    "rewardedGoldScaling": {
+      "nextGoalRatio": 0.05
+    },
     "harvestBonusMultiplier": 2,
     "harvestBonusAdCooldownMs": 43200000,
     "harvestBonusBoostDurationMs": 1800000,
