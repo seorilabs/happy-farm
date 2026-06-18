@@ -3,6 +3,7 @@ export * from './analytics';
 export * from './ads';
 export * from './commands';
 export * from './constants';
+export * from './cropOfTheDay';
 export * from './dailyBonus';
 export * from './harvest';
 export * from './mastery';

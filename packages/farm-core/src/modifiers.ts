@@ -11,6 +11,7 @@ import {
 } from './constants';
 import { getMasterySellMultiplier, getMasterySpeedMultiplier } from './mastery';
 import { isCropPlantable } from './research';
+import { getCropOfTheDayStatus } from './cropOfTheDay';
 
 // Prestige skill/region effects are read straight from balance.json here
 // (instead of importing prestige.ts) to keep this module cycle-free for its
@@ -64,10 +65,14 @@ export function getGlobalModifiers(gameState: GameState, now = Date.now()): Glob
 
 export function getCropModifiers(gameState: GameState, cropKey: CropKey, now = Date.now()): CropModifiers {
   const global = getGlobalModifiers(gameState, now);
+  const cotd = getCropOfTheDayStatus(now);
   return {
     ...global,
     speedMultiplier: global.speedMultiplier * getMasterySpeedMultiplier(gameState, cropKey),
-    profitMultiplier: global.profitMultiplier * getMasterySellMultiplier(gameState, cropKey),
+    profitMultiplier:
+      global.profitMultiplier *
+      getMasterySellMultiplier(gameState, cropKey) *
+      (cropKey === cotd.cropKey ? cotd.multiplier : 1),
   };
 }
 
