@@ -1719,9 +1719,11 @@ export default function FarmGame({
         let firstMutationFlash: 'golden' | 'rainbow' | null = null;
         const rankUps: { cropKey: CropKey; rankKey: MasteryRankKey; rankIcon: string }[] = [];
         for (const { outcome } of result.harvests) {
-          if (firstMutationFlash == null) {
-            const mk = outcome.mutation?.key;
-            if (mk === 'rainbow' || mk === 'golden') firstMutationFlash = mk;
+          const mk = outcome.mutation?.key;
+          if (mk === 'rainbow') {
+            firstMutationFlash = 'rainbow';
+          } else if (mk === 'golden' && firstMutationFlash == null) {
+            firstMutationFlash = 'golden';
           }
           if (outcome.newMasteryRank != null) {
             rankUps.push({
