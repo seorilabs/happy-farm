@@ -57,7 +57,7 @@ import {
   HARVEST_BONUS_MULTIPLIER,
   INTERSTITIAL_MILESTONE_COOLDOWN_MS,
   MAX_PLOTS,
-  REWARDED_GOLD_AMOUNT,
+  getRewardedGoldAmount,
   REWARDED_GOLD_MAX_USES_PER_WINDOW,
   REWARDED_GOLD_WINDOW_MS,
   type AreaKey,
@@ -1575,7 +1575,8 @@ export default function FarmGame({
     await interstitialAd.showAd();
   }
 
-  async function rewardGoldFromAd(amount = REWARDED_GOLD_AMOUNT) {
+  async function rewardGoldFromAd() {
+    const amount = getRewardedGoldAmount(gameState);
     await showRewardedAd('rewardedGold', amount, () => {
       setGameState((state) => ({ ...state, gold: state.gold + amount }));
       toast(messages.receivedGoldToast(formatMoney(amount, locale)));
@@ -2128,7 +2129,7 @@ export default function FarmGame({
               <>
                 <Text style={styles.sheetSectionTitle}>{messages.adRewardsSection}</Text>
                 <AdRewardCard
-                  title={messages.rewardedGoldTitle(formatMoney(REWARDED_GOLD_AMOUNT, locale))}
+                  title={messages.rewardedGoldTitle(formatMoney(getRewardedGoldAmount(gameState), locale))}
                   desc={rewardedGoldLimit.allowed ? messages.rewardedGoldReadyDesc(REWARDED_GOLD_WINDOW_MS / 60000, REWARDED_GOLD_MAX_USES_PER_WINDOW) : rewardedGoldLimit.reason}
                   cta={
                     rewardedAd.isAdReady && rewardedGoldLimit.allowed

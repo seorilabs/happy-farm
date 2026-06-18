@@ -97,6 +97,38 @@ export const GROWTH_AD_MAX_SKIP_MS = balance.ads.growthAdMaxSkipMs;
 export const GROWTH_AD_COOLDOWN_MS = balance.ads.growthAdCooldownMs;
 export const GROWTH_AD_DAILY_LIMIT = balance.ads.growthAdDailyLimit;
 export const INTERSTITIAL_MILESTONE_COOLDOWN_MS = balance.ads.interstitialMilestoneCooldownMs;
+
+// Preserves balance.areas definition order so "next area" means the next step
+// in the designed progression, not the cheapest remaining unlock.
+const NON_GATED_AREAS = FARM_AREAS.filter((area) => area.unlock.gate == null && area.unlock.cost > 0);
+
+/**
+ * Returns the rewarded-gold ad payout scaled to the player's current
+ * progression. Uses 5 % of the next area unlock cost as the base amount,
+ * falling back to 5 % of the prestige graduation cost once all non-gated
+ * areas are unlocked. The result is always at least REWARDED_GOLD_AMOUNT.
+ */
+export function getRewardedGoldAmount(gameState: GameState): number {
+  const nextArea = NON_GATED_AREAS.find((area) => !isAreaUnlocked(gameState, area.key));
+  const prestigeLevel = Number.isFinite(gameState.prestige.level)
+    ? Math.max(0, Math.floor(gameState.prestige.level))
+    : 0;
+  const nextGoalCost =
+    nextArea != null
+      ? nextArea.unlock.cost
+      : Math.floor(
+          balance.regions.graduation.costBase *
+            Math.pow(balance.regions.graduation.costGrowth, prestigeLevel)
+        );
+  const ratio =
+    Number.isFinite(balance.ads.rewardedGoldScaling.nextGoalRatio) &&
+    balance.ads.rewardedGoldScaling.nextGoalRatio > 0
+      ? balance.ads.rewardedGoldScaling.nextGoalRatio
+      : 0.05;
+  const scaled = Math.floor(nextGoalCost * ratio);
+  return Number.isFinite(scaled) ? Math.max(REWARDED_GOLD_AMOUNT, scaled) : REWARDED_GOLD_AMOUNT;
+}
+
 export const INITIAL_AREA_KEYS = FARM_AREAS.filter(
   (area) => area.unlock.cost === 0 && area.unlock.gate == null
 ).map((area) => area.key);
