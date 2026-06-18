@@ -331,7 +331,9 @@ type PendingFarmCommandEffect =
   | {
       id: number;
       type: 'harvestedAll';
-      fx: { plotIndex: number; goldGained: number; special: boolean }[];
+      fx: { plotIndex: number; goldGained: number; tone: HarvestPop['tone'] }[];
+      rankUps: { cropKey: CropKey; rankKey: MasteryRankKey; rankIcon: string }[];
+      firstMutationFlash: 'golden' | 'rainbow' | null;
       totalGoldGained: number;
       totalRpGained: number;
       harvestedCount: number;
@@ -766,9 +768,23 @@ export default function FarmGame({
               harvestFxRef.current?.spawn(
                 fx.plotIndex,
                 `+${formatMoney(fx.goldGained, locale)}`,
-                fx.special ? 'special' : 'normal'
+                fx.tone
               );
             }
+          }
+          if (effect.firstMutationFlash != null) {
+            mutationFlashRef.current?.flash(effect.firstMutationFlash);
+          }
+          if (effect.rankUps.length > 0) {
+            const first = effect.rankUps[0];
+            const crop = getCrop(first.cropKey);
+            showMasteryRankUpCelebration({
+              cropIcon: crop.icon,
+              cropName: getLocalizedCropName(first.cropKey),
+              rankKey: first.rankKey,
+              rankIcon: first.rankIcon,
+              rankName: getMasteryRankLabel(first.rankKey, locale).name,
+            });
           }
           // Donation mode converts the batch into research points; key the toast
           // on RP earned (not "gold === 0") so a future zero-value crop still
@@ -1700,14 +1716,33 @@ export default function FarmGame({
       // updater: keep at most one effect per id. (The drain loop also dedupes by
       // id, so feedback never doubles either way — this just keeps the queue clean.)
       if (!pendingCommandEffectsRef.current.some((pending) => pending.id === effectId)) {
+        let firstMutationFlash: 'golden' | 'rainbow' | null = null;
+        const rankUps: { cropKey: CropKey; rankKey: MasteryRankKey; rankIcon: string }[] = [];
+        for (const { outcome } of result.harvests) {
+          if (firstMutationFlash == null) {
+            const mk = outcome.mutation?.key;
+            if (mk === 'rainbow' || mk === 'golden') firstMutationFlash = mk;
+          }
+          if (outcome.newMasteryRank != null) {
+            rankUps.push({
+              cropKey: outcome.cropKey,
+              rankKey: outcome.newMasteryRank.key,
+              rankIcon: outcome.newMasteryRank.icon,
+            });
+          }
+        }
         pendingCommandEffectsRef.current.push({
           id: effectId,
           type: 'harvestedAll',
-          fx: result.harvests.map(({ plotIndex, outcome }) => ({
-            plotIndex,
-            goldGained: outcome.goldGained,
-            special: outcome.mutation != null || outcome.newMasteryRank != null || outcome.boostActive,
-          })),
+          fx: result.harvests.map(({ plotIndex, outcome }) => {
+            const mk = outcome.mutation?.key;
+            const tone: HarvestPop['tone'] =
+              mk === 'rainbow' ? 'rainbow' : mk === 'golden' ? 'golden' :
+              outcome.mutation != null || outcome.newMasteryRank != null || outcome.boostActive ? 'special' : 'normal';
+            return { plotIndex, goldGained: outcome.goldGained, tone };
+          }),
+          rankUps,
+          firstMutationFlash,
           totalGoldGained: result.totalGoldGained,
           totalRpGained: result.totalRpGained,
           harvestedCount: result.harvestedCount,
