@@ -28,8 +28,12 @@ export type CropOfTheDayStatus = {
 // Pure and deterministic: the same day always yields the same crop, and the
 // result changes automatically at UTC midnight with no save-state required.
 export function getCropOfTheDayStatus(now = Date.now()): CropOfTheDayStatus {
+  const safeNow = Number.isFinite(now) ? now : Date.now();
   const cropKeys = Object.keys(CROPS) as CropKey[];
-  const day = Math.floor(now / DAY_MS);
+  if (cropKeys.length === 0) {
+    throw new Error('No crops configured');
+  }
+  const day = Math.floor(safeNow / DAY_MS);
   const index = hashDay(day) % cropKeys.length;
   const cropKey = cropKeys[index]!;
   const windowStartAt = day * DAY_MS;

@@ -75,4 +75,16 @@ describe('getCropOfTheDayStatus', () => {
       expect(Object.keys(CROPS)).toContain(cropKey);
     }
   });
+
+  test('NaN now falls back to current day without throwing', () => {
+    expect(() => getCropOfTheDayStatus(NaN)).not.toThrow();
+    const { cropKey } = getCropOfTheDayStatus(NaN);
+    expect(Object.keys(CROPS)).toContain(cropKey);
+  });
+
+  test('Infinity now falls back to current day without throwing', () => {
+    expect(() => getCropOfTheDayStatus(Infinity)).not.toThrow();
+    const { cropKey } = getCropOfTheDayStatus(Infinity);
+    expect(Object.keys(CROPS)).toContain(cropKey);
+  });
 });
