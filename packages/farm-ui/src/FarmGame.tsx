@@ -527,6 +527,7 @@ export default function FarmGame({
   useEffect(() => () => goldPulse.stopAnimation(), [goldPulse]);
   const lastInterstitialShownAtRef = useRef(0);
   const sessionStartedAtRef = useRef(Date.now());
+  const tickNowMsRef = useRef(Date.now());
   const gameStartTrackedRef = useRef(false);
   const firstSeedSelectedRef = useRef(false);
   const claimedRewardKeysRef = useRef<Set<CollectionRewardKey>>(new Set());
@@ -864,7 +865,7 @@ export default function FarmGame({
         setActiveSheet({ type: 'harvestBonus' });
       }
       const isSpecialHarvest = event.mutation != null || event.newMasteryRank != null || event.boostActive;
-      const isCropOfTheDay = event.cropKey === cropOfTheDay.cropKey;
+      const isCropOfTheDay = event.cropKey === getCropOfTheDayStatus(effect.now).cropKey;
       const mutationKey = event.mutation?.key;
       const popTone: HarvestPop['tone'] =
         mutationKey === 'rainbow'
@@ -1106,7 +1107,10 @@ export default function FarmGame({
   }, [activeSheet, analyticsContext]);
 
   useEffect(() => {
-    const id = setInterval(() => setTick((value) => (value + 1) % 1_000_000), GAME_TICK_INTERVAL_MS);
+    const id = setInterval(() => {
+      tickNowMsRef.current = Date.now();
+      setTick((value) => (value + 1) % 1_000_000);
+    }, GAME_TICK_INTERVAL_MS);
     return () => clearInterval(id);
   }, []);
 
@@ -1166,7 +1170,7 @@ export default function FarmGame({
     [gameState, locale, tick]
   );
   const harvestBonusBoost = useMemo(() => getHarvestBonusBoostStatus(gameState), [gameState, tick]);
-  const cropOfTheDay = useMemo(() => getCropOfTheDayStatus(Date.now()), [tick]);
+  const cropOfTheDay = useMemo(() => getCropOfTheDayStatus(tickNowMsRef.current), [tick]);
   const rawBoostRemainingMs = harvestBonusBoost.remainingMs;
   const safeBoostRemainingMs = Number.isFinite(rawBoostRemainingMs) ? Math.max(0, rawBoostRemainingMs) : 0;
   const farmProductivity = useMemo(
