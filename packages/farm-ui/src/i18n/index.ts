@@ -229,6 +229,8 @@ const KO_FARM_MESSAGES = {
   firstHarvestTitle: '첫 수확 완료! 🎉',
   firstHarvestSubtitle: '농부의 길이 시작됐어요!',
   dailyBonusClaimAction: (amount: string) => `+${amount}G 받기`,
+  cropOfTheDayLabel: '오늘의 작물',
+  cropOfTheDayDesc: (cropName: string, multiplier: number) => `${cropName} · ×${multiplier} 판매 보너스`,
 };
 
 export type FarmMessages = typeof KO_FARM_MESSAGES;
@@ -447,6 +449,8 @@ const EN_FARM_MESSAGES: FarmMessages = {
   firstHarvestTitle: 'First Harvest! 🎉',
   firstHarvestSubtitle: 'Your farming journey has begun!',
   dailyBonusClaimAction: (amount) => `Claim +${amount}G`,
+  cropOfTheDayLabel: 'Crop of the Day',
+  cropOfTheDayDesc: (cropName, multiplier) => `${cropName} · ×${multiplier} sell bonus`,
 };
 
 const FARM_MESSAGES: Record<SupportedLocale, FarmMessages> = {
