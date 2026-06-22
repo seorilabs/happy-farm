@@ -217,6 +217,13 @@ export function createFarmAnalytics(track: TrackGameEvent = noopTrackGameEvent) 
       });
     },
 
+    trackInterstitialShown: (placement: string, context: GameAnalyticsContext) => {
+      track('interstitial_shown', {
+        placement,
+        ...context,
+      });
+    },
+
     trackCollectionScreen: (context: GameAnalyticsContext) => {
       track('collection_screen', context);
     },

@@ -11,7 +11,10 @@ import {
   getGrowthAdSkipMs,
   PLOT_DISCOUNT_AD_DAILY_LIMIT,
   PLOT_DISCOUNT_AD_PERCENT,
+  RETURN_INTERSTITIAL_COOLDOWN_MS,
+  canShowReturnInterstitial,
   getDiscountedPlotCost,
+  recordReturnInterstitial,
   HARVEST_BONUS_AD_COOLDOWN_MS,
   HARVEST_BONUS_BOOST_DURATION_MS,
   HARVEST_BONUS_MULTIPLIER,
@@ -231,6 +234,7 @@ describe('farm save migration', () => {
         boostEndsAt: NOW + HARVEST_BONUS_BOOST_DURATION_MS,
         dailyCount: 0,
       },
+      returnInterstitialAt: null,
     });
   });
 
@@ -325,6 +329,22 @@ describe('farm ad limits', () => {
     // The counter resets on a new day, re-allowing one discount.
     const nextDay = NOW + 24 * 60 * 60 * 1000;
     expect(getRewardedAdLimitStatus(afterOne, 'plotDiscountAd', nextDay).allowed).toBe(true);
+  });
+
+  test('return interstitial respects its persisted cooldown', () => {
+    const base = createInitialState();
+    // Never shown yet → allowed on first return.
+    expect(canShowReturnInterstitial(base, NOW)).toBe(true);
+
+    const afterShow: GameState = { ...base, adUsage: recordReturnInterstitial(base, NOW) };
+    expect(afterShow.adUsage.returnInterstitialAt).toBe(NOW);
+
+    // Inside the cooldown window → suppressed (non-intrusive on frequent returns).
+    expect(canShowReturnInterstitial(afterShow, NOW + 1)).toBe(false);
+    expect(canShowReturnInterstitial(afterShow, NOW + RETURN_INTERSTITIAL_COOLDOWN_MS - 1)).toBe(false);
+
+    // Once the cooldown elapses → allowed again.
+    expect(canShowReturnInterstitial(afterShow, NOW + RETURN_INTERSTITIAL_COOLDOWN_MS)).toBe(true);
   });
 
   test('ad usage normalization rejects future and non-finite timestamps', () => {

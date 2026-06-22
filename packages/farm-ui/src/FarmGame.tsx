@@ -71,6 +71,7 @@ import {
   type RewardedAdController,
   type RewardedAdShowResult,
   type RewardedAdType,
+  canShowReturnInterstitial,
   canUnlockArea,
   claimCollectionReward,
   createFarmAnalytics,
@@ -112,6 +113,7 @@ import {
   performHarvestAll,
   getReadyPlotCount,
   recordHarvestBonusAdPrompt,
+  recordReturnInterstitial,
   recordRewardedAdUsage,
   type CropHarvestedGameEvent,
   type CropPlantedGameEvent,
@@ -1652,6 +1654,7 @@ export default function FarmGame({
       collectChain();
     }
     setActiveSheet(null);
+    void maybeShowReturnAd();
   }
 
   function openPrestigeConfirm() {
@@ -1854,6 +1857,42 @@ export default function FarmGame({
 
     lastInterstitialShownAtRef.current = now;
     await interstitialAd.showAd();
+  }
+
+  // A non-intrusive interstitial on session return, shown after the player has
+  // collected their welcome-back recap. Skipped during the first session /
+  // onboarding, when no ad is ready, or while the persisted return cooldown is
+  // still active, so returning players see it at most once per cooldown window.
+  async function maybeShowReturnAd() {
+    if (onboardingStep != null) {
+      return;
+    }
+    if (!interstitialAd.isAdReady) {
+      return;
+    }
+    const now = Date.now();
+    // Decide and record against the freshest state inside the updater: the
+    // welcome-back dismiss just queued a state change, so the closure gameState
+    // is stale. Gating + stamping atomically keeps the persisted cooldown honest
+    // (a stale snapshot can't replay the ad or reset returnInterstitialAt).
+    // willShow carries the decision out to the side effect below.
+    let willShow = false;
+    setGameState((state) => {
+      if (!state.onboardingCompleted || !canShowReturnInterstitial(state, now)) {
+        return state;
+      }
+      willShow = true;
+      return { ...state, adUsage: recordReturnInterstitial(state, now) };
+    });
+    if (!willShow) {
+      return;
+    }
+    farmAnalytics.trackInterstitialShown('return_welcome_back', analyticsContext());
+    await interstitialAd.showAd();
+    // Stamp the shared milestone throttle only after the ad actually played, so a
+    // milestone interstitial doesn't immediately stack on top of this one — and a
+    // return ad that never showed never suppresses the milestone slot.
+    lastInterstitialShownAtRef.current = Date.now();
   }
 
   async function rewardGoldFromAd() {
