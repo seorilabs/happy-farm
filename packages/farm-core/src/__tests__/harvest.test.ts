@@ -112,6 +112,21 @@ describe('performHarvestAll', () => {
     expect(result.state).toBe(base);
   });
 
+  test('flags the lifetime-first harvest exactly once across batches', () => {
+    const ripe = withRipePlots(createInitialState(), [0, 1, 2]);
+    const first = performHarvestAll(ripe, { now: 0, rng: noMutationRng });
+
+    // A fresh save surfaces the first-harvest "aha" signal on a single outcome,
+    // so the batch (Harvest All) path can fire the celebration just like a tap.
+    const flagged = first.harvests.filter(({ outcome }) => outcome.isFirstMeaningfulHarvest);
+    expect(flagged).toHaveLength(1);
+
+    // Once any crop has been harvested it never fires again, keeping it one-shot.
+    const moreRipe = withRipePlots(first.state, [0, 1]);
+    const second = performHarvestAll(moreRipe, { now: 0, rng: noMutationRng });
+    expect(second.harvests.some(({ outcome }) => outcome.isFirstMeaningfulHarvest)).toBe(false);
+  });
+
   test('skips ripe plots beyond the unlocked range', () => {
     const base = createInitialState();
     const lockedIndex = base.unlockedPlotCount;

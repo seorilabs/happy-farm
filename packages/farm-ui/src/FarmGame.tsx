@@ -352,6 +352,10 @@ type PendingFarmCommandEffect =
       fx: { plotIndex: number; goldGained: number; tone: HarvestPop['tone'] }[];
       rankUps: { cropKey: CropKey; rankKey: MasteryRankKey; rankIcon: string }[];
       firstMutationFlash: 'golden' | 'rainbow' | null;
+      // Carries the lifetime-first-harvest signal when the batch contains it, so
+      // the "aha" celebration fires even if the very first harvest came through
+      // Harvest All (e.g. a new player whose starter plots ripen together).
+      firstHarvest: { cropIcon: string; goldGained: number } | null;
       totalGoldGained: number;
       totalRpGained: number;
       harvestedCount: number;
@@ -825,6 +829,12 @@ export default function FarmGame({
           }
           if (effect.firstMutationFlash != null) {
             mutationFlashRef.current?.flash(effect.firstMutationFlash);
+          }
+          if (effect.firstHarvest != null) {
+            showFirstHarvestCelebration({
+              cropIcon: effect.firstHarvest.cropIcon,
+              goldFormatted: formatMoney(effect.firstHarvest.goldGained, locale),
+            });
           }
           const first = effect.rankUps[0];
           if (first != null) {
@@ -1977,6 +1987,7 @@ export default function FarmGame({
       // id, so feedback never doubles either way — this just keeps the queue clean.)
       if (!pendingCommandEffectsRef.current.some((pending) => pending.id === effectId)) {
         let firstMutationFlash: 'golden' | 'rainbow' | null = null;
+        let firstHarvest: { cropIcon: string; goldGained: number } | null = null;
         const rankUps: { cropKey: CropKey; rankKey: MasteryRankKey; rankIcon: string }[] = [];
         for (const { outcome } of result.harvests) {
           const mk = outcome.mutation?.key;
@@ -1984,6 +1995,9 @@ export default function FarmGame({
             firstMutationFlash = 'rainbow';
           } else if (mk === 'golden' && firstMutationFlash == null) {
             firstMutationFlash = 'golden';
+          }
+          if (outcome.isFirstMeaningfulHarvest) {
+            firstHarvest = { cropIcon: getCrop(outcome.cropKey).icon, goldGained: outcome.goldGained };
           }
           if (outcome.newMasteryRank != null) {
             rankUps.push({
@@ -2005,6 +2019,7 @@ export default function FarmGame({
           }),
           rankUps,
           firstMutationFlash,
+          firstHarvest,
           totalGoldGained: result.totalGoldGained,
           totalRpGained: result.totalRpGained,
           harvestedCount: result.harvestedCount,
