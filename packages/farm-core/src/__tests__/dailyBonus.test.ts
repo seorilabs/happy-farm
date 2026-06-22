@@ -77,11 +77,18 @@ describe('claimDailyBonus', () => {
     expect(result!.goldAwarded).toBe(75);
   });
 
-  test('third claim within 48h gives streak 3 and 100G', () => {
+  test('third claim within 48h gives streak 3 and 90G (base ad reward)', () => {
     const state: DailyBonusState = { lastClaimedAt: NOW - H24, streak: 2 };
     const result = claimDailyBonus(state, NOW);
     expect(result!.streak).toBe(3);
-    expect(result!.goldAwarded).toBe(100);
+    expect(result!.goldAwarded).toBe(90);
+  });
+
+  test('ad reward scales the bonus: streak 3 with adReward 1000 gives 900G', () => {
+    const state: DailyBonusState = { lastClaimedAt: NOW - H24, streak: 2 };
+    const result = claimDailyBonus(state, NOW, 1000);
+    expect(result!.streak).toBe(3);
+    expect(result!.goldAwarded).toBe(900);
   });
 
   test('streak resets at exactly 48h boundary', () => {
@@ -103,7 +110,7 @@ describe('claimDailyBonus', () => {
     const state: DailyBonusState = { lastClaimedAt: NOW - H48 + 1, streak: 3 };
     const result = claimDailyBonus(state, NOW);
     expect(result!.streak).toBe(4);
-    expect(result!.goldAwarded).toBe(100);
+    expect(result!.goldAwarded).toBe(90);
   });
 
   test('future lastClaimedAt returns null (treated as just claimed, cooldown active)', () => {
@@ -119,16 +126,43 @@ describe('claimDailyBonus', () => {
     const result = claimDailyBonus(state, NOW + H24 + DAILY_BONUS_COOLDOWN_MS);
     expect(result).not.toBeNull();
     expect(result!.streak).toBe(4);
-    expect(result!.goldAwarded).toBe(100);
+    expect(result!.goldAwarded).toBe(90);
   });
 });
 
 describe('getDailyBonusGold', () => {
+  // 기본값(광고 보상 골드 미지정)은 초기 광고 보상 100G 기준으로 환산된다.
   test('streak 1 → 50G', () => expect(getDailyBonusGold(1)).toBe(50));
   test('streak 2 → 75G', () => expect(getDailyBonusGold(2)).toBe(75));
-  test('streak 3 → 100G', () => expect(getDailyBonusGold(3)).toBe(100));
-  test('streak 10 → 100G', () => expect(getDailyBonusGold(10)).toBe(100));
+  test('streak 3 → 90G', () => expect(getDailyBonusGold(3)).toBe(90));
+  test('streak 10 → 90G (상한 비율)', () => expect(getDailyBonusGold(10)).toBe(90));
   test('streak 0 → 50G (clamped to 1)', () => expect(getDailyBonusGold(0)).toBe(50));
+
+  test('진행도(광고 보상)에 비례해 스케일링된다', () => {
+    expect(getDailyBonusGold(1, 1000)).toBe(500);
+    expect(getDailyBonusGold(2, 1000)).toBe(750);
+    expect(getDailyBonusGold(3, 1000)).toBe(900);
+  });
+
+  test('어떤 streak/진행도에서도 광고 보상보다 항상 낮다', () => {
+    for (const adReward of [100, 250, 1000, 50000, 1_000_000]) {
+      for (const streak of [1, 2, 3, 5, 50]) {
+        expect(getDailyBonusGold(streak, adReward)).toBeLessThan(adReward);
+      }
+    }
+  });
+
+  test('streak이 오를수록 보너스도 단조 증가한다(상한까지)', () => {
+    expect(getDailyBonusGold(1, 1000)).toBeLessThan(getDailyBonusGold(2, 1000));
+    expect(getDailyBonusGold(2, 1000)).toBeLessThan(getDailyBonusGold(3, 1000));
+    expect(getDailyBonusGold(3, 1000)).toBe(getDailyBonusGold(4, 1000)); // streak 3+ 동일 상한
+  });
+
+  test('비정상 광고 보상 값은 기본 광고 보상으로 폴백한다', () => {
+    expect(getDailyBonusGold(1, Number.NaN)).toBe(50);
+    expect(getDailyBonusGold(1, 0)).toBe(50);
+    expect(getDailyBonusGold(1, -100)).toBe(50);
+  });
 });
 
 describe('normalizeDailyBonusState', () => {
@@ -205,7 +239,7 @@ describe('previewDailyBonus', () => {
     const preview = previewDailyBonus(state, NOW);
     expect(preview.available).toBe(true);
     expect(preview.streak).toBe(3);
-    expect(preview.goldAwarded).toBe(100);
+    expect(preview.goldAwarded).toBe(90);
   });
 
   test('after 48h previews streak reset to 1', () => {
@@ -222,5 +256,13 @@ describe('previewDailyBonus', () => {
     const claim = claimDailyBonus(state, NOW)!;
     expect(preview.streak).toBe(claim.streak);
     expect(preview.goldAwarded).toBe(claim.goldAwarded);
+  });
+
+  test('동일한 광고 보상 골드로 preview와 claim 값이 일치한다', () => {
+    const state: DailyBonusState = { lastClaimedAt: NOW - H24, streak: 1 };
+    const preview = previewDailyBonus(state, NOW, 1000);
+    const claim = claimDailyBonus(state, NOW, 1000)!;
+    expect(preview.goldAwarded).toBe(claim.goldAwarded);
+    expect(preview.goldAwarded).toBe(750);
   });
 });

@@ -48,6 +48,14 @@
     "growthAdDailyLimit": 3,
     "interstitialMilestoneCooldownMs": 180000
   },
+  "dailyBonus": {
+    "agentPurpose": "Daily login bonus scaling. The bonus is a fraction of the progression-scaled rewarded-gold (ad) payout per streak tier, so it grows with the player's next goal while always staying below the ad reward (max ratio < 1) to preserve the ad incentive. Streak structure: 3 tiers (day 1 / day 2 / day 3+).",
+    "adRewardRatioByStreak": {
+      "1": 0.5,
+      "2": 0.75
+    },
+    "adRewardRatioMax": 0.9
+  },
   "mastery": {
     "agentPurpose": "Crop mastery ranks. Cumulative harvest counts per crop reach tier-based thresholds and grant permanent per-crop sell/speed bonuses. Thresholds are indexed by crop tier so slow late-game crops rank up in fewer harvests.",
     "ranks": [
