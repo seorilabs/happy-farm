@@ -100,9 +100,12 @@ jest.mock('@notifee/react-native', () => ({
     createChannel: jest.fn(() => Promise.resolve('harvest-ready')),
     createTriggerNotification: jest.fn(() => Promise.resolve('happy-farm-harvest-ready')),
     requestPermission: jest.fn(() => Promise.resolve({ authorizationStatus: 1 })),
+    getInitialNotification: jest.fn(() => Promise.resolve(null)),
+    onForegroundEvent: jest.fn(() => jest.fn()),
   },
   AndroidImportance: { DEFAULT: 3 },
   AuthorizationStatus: { AUTHORIZED: 1, PROVISIONAL: 2 },
+  EventType: { DISMISSED: 0, PRESS: 1, ACTION_PRESS: 2, DELIVERED: 3 },
   TriggerType: { TIMESTAMP: 0 },
 }));
 

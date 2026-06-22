@@ -14,6 +14,10 @@ export type AnalyticsValue = string | number | boolean;
 
 export type TrackGameEvent = (name: string, params?: Record<string, AnalyticsValue>) => void;
 
+// 복귀 넛지 알림의 종류. 현재 'harvest'만 발송되며, 데일리/오늘의 작물 알림(#76)
+// 도입 시 같은 계약으로 확장할 수 있도록 종류를 미리 정의해 둔다.
+export type FarmNotificationKind = 'harvest' | 'daily_bonus' | 'crop_of_the_day';
+
 export type GameAnalyticsContext = {
   gold: number;
   plot_count: number;
@@ -317,6 +321,77 @@ export function createFarmAnalytics(track: TrackGameEvent = noopTrackGameEvent) 
         total_gold: params.totalGold,
         special_count: params.specialCount,
         ...params.context,
+      });
+    },
+
+    // === 리텐션 계측 (행동 변경 없는 emit 배선) ===
+
+    // 데일리 보너스 수령. streak/보상값으로 H2(데일리 보너스 미스케일) 검증.
+    trackDailyBonusClaimed: (params: { streak: number; rewardValue: number; context: GameAnalyticsContext }) => {
+      track('daily_bonus_claimed', {
+        streak: params.streak,
+        reward_value: params.rewardValue,
+        ...params.context,
+      });
+    },
+
+    // 복귀 요약(welcome back) 노출. 이탈 시간/오프라인 골드/수확 대기 작물 수로
+    // 복귀 동기 부여 효과를 측정.
+    trackReturnSummaryShown: (params: {
+      awayMs: number;
+      offlineGold: number;
+      readyCropCount: number;
+      context: GameAnalyticsContext;
+    }) => {
+      track('return_summary_shown', {
+        away_ms: params.awayMs,
+        offline_gold: params.offlineGold,
+        ready_crop_count: params.readyCropCount,
+        ...params.context,
+      });
+    },
+
+    // 복귀 요약에서 보상을 수령(확인)한 경우. shown 대비 collected 비율로 전환율 측정.
+    trackReturnSummaryCollected: (params: {
+      awayMs: number;
+      offlineGold: number;
+      readyCropCount: number;
+      context: GameAnalyticsContext;
+    }) => {
+      track('return_summary_collected', {
+        away_ms: params.awayMs,
+        offline_gold: params.offlineGold,
+        ready_crop_count: params.readyCropCount,
+        ...params.context,
+      });
+    },
+
+    // 오늘의 작물 수확. 배수 보너스 작물의 실제 수확 빈도를 측정(H4: 첫 수확→리텐션).
+    trackCropOfTheDayHarvested: (params: { cropKey: CropKey; multiplier: number; context: GameAnalyticsContext }) => {
+      track('crop_of_the_day_harvested', {
+        crop: params.cropKey,
+        multiplier: params.multiplier,
+        ...params.context,
+      });
+    },
+
+    // 복귀 넛지 알림 예약. context는 알림 예약 시점의 게임 상태(없을 수도 있음).
+    trackNotificationScheduled: (params: {
+      kind: FarmNotificationKind;
+      leadTimeMs?: number;
+      context?: GameAnalyticsContext;
+    }) => {
+      track('notification_scheduled', {
+        notification_kind: params.kind,
+        ...(params.leadTimeMs != null ? { lead_time_ms: params.leadTimeMs } : {}),
+        ...(params.context ?? {}),
+      });
+    },
+
+    // 복귀 넛지 알림 열림. 앱 로드 이전/직후에 발생할 수 있어 게임 상태 context를 요구하지 않는다.
+    trackNotificationOpened: (params: { kind: FarmNotificationKind }) => {
+      track('notification_opened', {
+        notification_kind: params.kind,
       });
     },
   };
