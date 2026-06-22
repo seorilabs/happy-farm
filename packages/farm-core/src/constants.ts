@@ -618,6 +618,7 @@ export function createInitialState(): GameState {
       state: 0 as PlotState,
     })),
     dailyBonusState: { lastClaimedAt: null, streak: 0 },
+    onboardingCompleted: false,
   };
 }
 
@@ -755,6 +756,13 @@ export function migrateLoadedState(loaded: Partial<GameState>, base: GameState):
   });
 
   merged.dailyBonusState = normalizeDailyBonusState(loaded.dailyBonusState);
+
+  // A save without the flag belongs to a player who already started before
+  // onboarding existed, so treat it as completed and never resurface the
+  // coachmarks. Brand-new players have no save and keep createInitialState's
+  // false value.
+  merged.onboardingCompleted =
+    typeof loaded.onboardingCompleted === 'boolean' ? loaded.onboardingCompleted : true;
 
   if (merged.unlockedAreas.length === 0) merged.unlockedAreas = INITIAL_AREA_KEYS;
   return merged;

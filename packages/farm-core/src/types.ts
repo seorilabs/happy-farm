@@ -110,6 +110,9 @@ export type GameState = {
   research: ResearchState;
   automationSettings: AutomationSettings;
   dailyBonusState: DailyBonusState;
+  // Whether the first-session onboarding guide was completed or skipped. A
+  // one-time flag so the coachmarks show only to new players and never return.
+  onboardingCompleted: boolean;
 };
 
 // Prestige reset boundary. Farm-layer fields are wiped when the player
@@ -136,6 +139,7 @@ export const META_LAYER_KEYS = [
   'research',
   'automationSettings',
   'dailyBonusState',
+  'onboardingCompleted',
 ] as const satisfies readonly (keyof GameState)[];
 
 export type FarmLayerKey = (typeof FARM_LAYER_KEYS)[number];
