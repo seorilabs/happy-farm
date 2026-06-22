@@ -93,10 +93,26 @@ export const HARVEST_BONUS_AD_COOLDOWN_MS = balance.ads.harvestBonusAdCooldownMs
 export const HARVEST_BONUS_BOOST_DURATION_MS = balance.ads.harvestBonusBoostDurationMs;
 export const HARVEST_BONUS_AD_DAILY_LIMIT = balance.ads.harvestBonusAdDailyLimit;
 export const GROWTH_AD_MIN_REMAINING_MS = balance.ads.growthAdMinRemainingMs;
-export const GROWTH_AD_MAX_SKIP_MS = balance.ads.growthAdMaxSkipMs;
+// Tiered growth-skip: one ad removes a flat floor (`SKIP_MS`) or a share
+// (`SKIP_PERCENT`) of the remaining grow time, whichever is larger. Replaces the
+// old hard upper cap so long-duration crops also qualify (partial skip allowed).
+export const GROWTH_AD_SKIP_MS = balance.ads.growthAdSkipMs;
+export const GROWTH_AD_SKIP_PERCENT = balance.ads.growthAdSkipPercent;
 export const GROWTH_AD_COOLDOWN_MS = balance.ads.growthAdCooldownMs;
 export const GROWTH_AD_DAILY_LIMIT = balance.ads.growthAdDailyLimit;
 export const INTERSTITIAL_MILESTONE_COOLDOWN_MS = balance.ads.interstitialMilestoneCooldownMs;
+
+// Raw grow-time milliseconds removed by one growth-skip ad, given the plot's
+// current remaining grow time (the raw scale getPlotRemainingGrowthMs returns).
+// max(flat floor, percent of remaining), never more than the remainder itself —
+// so a near-ready crop is fully skipped while a long crop gets a partial cut.
+export function getGrowthAdSkipMs(remainingMs: number): number {
+  if (remainingMs <= 0) {
+    return 0;
+  }
+  const tier = Math.max(GROWTH_AD_SKIP_MS, Math.floor(remainingMs * GROWTH_AD_SKIP_PERCENT));
+  return Math.min(remainingMs, tier);
+}
 
 // Preserves balance.areas definition order so "next area" means the next step
 // in the designed progression, not the cheapest remaining unlock.

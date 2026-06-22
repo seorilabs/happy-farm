@@ -1,8 +1,28 @@
 /// <reference types="jest" />
 
-import { createInitialState } from '../constants';
-import { getReadyPlotCount, performHarvest, performHarvestAll } from '../harvest';
+import { createInitialState, getGrowthAdSkipMs } from '../constants';
+import {
+  applyGrowthAdSkip,
+  getPlotRemainingGrowthMs,
+  getReadyPlotCount,
+  performHarvest,
+  performHarvestAll,
+} from '../harvest';
 import type { CropKey, GameState, PlotState } from '../types';
+
+// Force a plot into the actively-growing state (state 1) with the given crop and
+// start time, so the growth-skip helper can run without real grow timers.
+function withGrowingPlot(
+  state: GameState,
+  index: number,
+  cropKey: CropKey,
+  startTime: number
+): GameState {
+  const plots = state.plots.map((plot) =>
+    plot.id === index ? { ...plot, cropType: cropKey, startTime, state: 1 as PlotState } : plot
+  );
+  return { ...state, plots };
+}
 
 const STARTER_CROP: CropKey = 'carrot';
 
@@ -135,5 +155,47 @@ describe('performHarvestAll', () => {
 
     expect(result.harvestedCount).toBe(1);
     expect(result.state.plots[lockedIndex]?.state).toBe(2);
+  });
+});
+
+describe('applyGrowthAdSkip', () => {
+  const NOW = 10_000;
+
+  test('fully completes a near-ready crop (remaining within the flat floor)', () => {
+    // Carrot grows in 2s, well under the flat skip floor, so one ad finishes it.
+    const growing = withGrowingPlot(createInitialState(), 0, 'carrot', NOW);
+    const remaining = getPlotRemainingGrowthMs(growing, growing.plots[0]!, NOW);
+    expect(getGrowthAdSkipMs(remaining)).toBe(remaining);
+
+    const result = applyGrowthAdSkip(growing, 0, NOW);
+    expect(result.completed).toBe(true);
+    expect(result.skippedMs).toBe(remaining);
+    expect(result.state.plots[0]?.state).toBe(2);
+  });
+
+  test('partially skips a long crop and keeps it growing', () => {
+    // Cactus grows in 1h; the tier removes a 25% share, leaving it still growing.
+    const growing = withGrowingPlot(createInitialState(), 0, 'cactus', NOW);
+    const before = getPlotRemainingGrowthMs(growing, growing.plots[0]!, NOW);
+    const expectedSkip = getGrowthAdSkipMs(before);
+    expect(expectedSkip).toBeGreaterThan(0);
+    expect(expectedSkip).toBeLessThan(before);
+
+    const result = applyGrowthAdSkip(growing, 0, NOW);
+    expect(result.completed).toBe(false);
+    expect(result.skippedMs).toBe(expectedSkip);
+    expect(result.state.plots[0]?.state).toBe(1);
+
+    // The countdown jumps forward by (about) the skipped amount, no more.
+    const after = getPlotRemainingGrowthMs(result.state, result.state.plots[0]!, NOW);
+    expect(Math.abs(after - (before - expectedSkip))).toBeLessThanOrEqual(2);
+  });
+
+  test('is a no-op on a plot that is not actively growing', () => {
+    const base = createInitialState();
+    const result = applyGrowthAdSkip(base, 0, NOW);
+    expect(result.skippedMs).toBe(0);
+    expect(result.completed).toBe(false);
+    expect(result.state).toBe(base);
   });
 });

@@ -6,6 +6,9 @@ import {
   DEFAULT_GOLD,
   FARM_AREAS,
   GROWTH_AD_COOLDOWN_MS,
+  GROWTH_AD_SKIP_MS,
+  GROWTH_AD_SKIP_PERCENT,
+  getGrowthAdSkipMs,
   HARVEST_BONUS_AD_COOLDOWN_MS,
   HARVEST_BONUS_BOOST_DURATION_MS,
   HARVEST_BONUS_MULTIPLIER,
@@ -275,6 +278,23 @@ describe('farm ad limits', () => {
 
     expect(getRewardedAdLimitStatus(state, 'growthAd', NOW + 1).allowed).toBe(false);
     expect(getRewardedAdLimitStatus(state, 'growthAd', NOW + GROWTH_AD_COOLDOWN_MS + 1).allowed).toBe(true);
+  });
+
+  test('growth ad skip tier: flat floor, percent share, capped at remaining', () => {
+    expect(getGrowthAdSkipMs(0)).toBe(0);
+    expect(getGrowthAdSkipMs(-100)).toBe(0);
+
+    // Remaining below the flat floor → the whole remainder (full skip).
+    expect(getGrowthAdSkipMs(GROWTH_AD_SKIP_MS - 1)).toBe(GROWTH_AD_SKIP_MS - 1);
+
+    // Remaining where the percent share is still below the floor → the floor.
+    expect(getGrowthAdSkipMs(GROWTH_AD_SKIP_MS * 2)).toBe(GROWTH_AD_SKIP_MS);
+
+    // Long crop where the percent share dominates the flat floor.
+    const long = Math.ceil(GROWTH_AD_SKIP_MS / GROWTH_AD_SKIP_PERCENT) * 10;
+    expect(getGrowthAdSkipMs(long)).toBe(Math.floor(long * GROWTH_AD_SKIP_PERCENT));
+    // ...and never removes more than what is left.
+    expect(getGrowthAdSkipMs(long)).toBeLessThan(long);
   });
 
   test('ad usage normalization rejects future and non-finite timestamps', () => {

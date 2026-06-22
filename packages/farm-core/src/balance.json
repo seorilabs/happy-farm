@@ -43,7 +43,8 @@
     "harvestBonusBoostDurationMs": 1800000,
     "harvestBonusAdDailyLimit": 2,
     "growthAdMinRemainingMs": 4000,
-    "growthAdMaxSkipMs": 600000,
+    "growthAdSkipMs": 600000,
+    "growthAdSkipPercent": 0.25,
     "growthAdCooldownMs": 600000,
     "growthAdDailyLimit": 3,
     "interstitialMilestoneCooldownMs": 180000
