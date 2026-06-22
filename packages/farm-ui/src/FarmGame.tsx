@@ -52,8 +52,9 @@ import {
   type RegionArchetypeKey,
   type ResearchNodeKey,
   type TitleKey,
-  GROWTH_AD_MAX_SKIP_MS,
   GROWTH_AD_MIN_REMAINING_MS,
+  applyGrowthAdSkip,
+  getGrowthAdSkipMs,
   HARVEST_BONUS_BOOST_DURATION_MS,
   HARVEST_BONUS_MULTIPLIER,
   INTERSTITIAL_MILESTONE_COOLDOWN_MS,
@@ -2056,9 +2057,11 @@ export default function FarmGame({
       if (plot.state === 1 && plot.cropType != null && plot.startTime != null) {
         const remainingMs = getPlotRemainingGrowthMs(gameState, plot);
 
+        // No upper cap: long-duration crops qualify too and get a partial skip
+        // (see applyGrowthAdSkip). The lower bound just avoids an ad for a crop
+        // that is about to finish on its own anyway.
         if (
           remainingMs >= GROWTH_AD_MIN_REMAINING_MS &&
-          remainingMs <= GROWTH_AD_MAX_SKIP_MS &&
           rewardedAd.isAdSupported
         ) {
           if (growthAdLimit.allowed) {
@@ -2085,18 +2088,20 @@ export default function FarmGame({
   }
 
   async function completeGrowthWithAd(plotIndex: number) {
+    // Preview the tier from the committed state so the toast can name the amount;
+    // the actual mutation runs inside the updater on live state (StrictMode-safe).
+    const previewPlot = gameState.plots[plotIndex];
+    const previewRemaining = previewPlot != null ? getPlotRemainingGrowthMs(gameState, previewPlot) : 0;
+    const previewSkip = getGrowthAdSkipMs(previewRemaining);
+    const willComplete = previewSkip >= previewRemaining;
     await showRewardedAd('growthAd', 1, () => {
-      setGameState((state) => {
-        const plot = state.plots[plotIndex];
-        if (plot == null || plot.state !== 1) {
-          return state;
-        }
-        const next = [...state.plots];
-        next[plotIndex] = { ...plot, state: 2 };
-        return { ...state, plots: next };
-      });
+      setGameState((state) => applyGrowthAdSkip(state, plotIndex).state);
       setActiveSheet(null);
-      toast(messages.growthDoneToast);
+      toast(
+        willComplete
+          ? messages.growthDoneToast
+          : messages.growthSkipToast(formatDuration(previewSkip, locale))
+      );
     });
   }
 
@@ -2608,16 +2613,29 @@ export default function FarmGame({
           </View>
         ) : null}
 
-        {activeSheet?.type === 'growthAd' ? (
-          <View>
-            <SheetAction
-              label={growthAdLimit.allowed ? messages.growthAdAction : growthAdLimit.reason}
-              disabled={!rewardedAd.isAdReady || !growthAdLimit.allowed}
-              onPress={() => void completeGrowthWithAd(activeSheet.plotIndex)}
-            />
-            <SheetAction label={messages.waitAction} secondary onPress={() => setActiveSheet(null)} />
-          </View>
-        ) : null}
+        {activeSheet?.type === 'growthAd'
+          ? (() => {
+              // A short crop is fully skipped (existing label); a long crop only
+              // gets a partial cut, so name the amount the ad removes.
+              const skipMs = getGrowthAdSkipMs(activeSheet.remainingMs);
+              const fullSkip = skipMs >= activeSheet.remainingMs;
+              const actionLabel = growthAdLimit.allowed
+                ? fullSkip
+                  ? messages.growthAdAction
+                  : messages.growthAdSkipAction(formatDuration(skipMs, locale))
+                : growthAdLimit.reason;
+              return (
+                <View>
+                  <SheetAction
+                    label={actionLabel}
+                    disabled={!rewardedAd.isAdReady || !growthAdLimit.allowed}
+                    onPress={() => void completeGrowthWithAd(activeSheet.plotIndex)}
+                  />
+                  <SheetAction label={messages.waitAction} secondary onPress={() => setActiveSheet(null)} />
+                </View>
+              );
+            })()
+          : null}
 
         {activeSheet?.type === 'harvestBonus' ? (
           <View>

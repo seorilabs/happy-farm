@@ -1,5 +1,5 @@
 import type { CropKey, GameState, Plot } from './types';
-import { CROPS, isAreaUnlocked } from './constants';
+import { CROPS, getGrowthAdSkipMs, isAreaUnlocked } from './constants';
 import { getCropModifiers, getCropPurchaseCost } from './modifiers';
 import {
   getCropHarvestCount,
@@ -74,6 +74,48 @@ export function getPlotRemainingGrowthMs(gameState: GameState, plot: Plot, now =
   const crop = getKnownCrop(plot.cropType);
   const { speedMultiplier } = getCropModifiers(gameState, plot.cropType, now);
   return Math.max(0, crop.growTime - (now - plot.startTime) * speedMultiplier);
+}
+
+export type GrowthAdSkipResult = {
+  state: GameState;
+  // Raw grow-time milliseconds actually removed (0 on a no-op).
+  skippedMs: number;
+  // True when the skip covered the whole remainder and the plot is now ready.
+  completed: boolean;
+};
+
+// Applies one tiered growth-skip ad reward to a growing plot. The reward removes
+// getGrowthAdSkipMs(remaining) from the raw remaining grow time: if that covers
+// the whole remainder the plot is marked ready, otherwise the start time is
+// shifted earlier so the countdown jumps forward by exactly the skipped amount
+// (a partial skip for long crops). No-op for a plot that isn't actively growing.
+export function applyGrowthAdSkip(gameState: GameState, plotIndex: number, now = Date.now()): GrowthAdSkipResult {
+  const plot = gameState.plots[plotIndex];
+  if (plot == null || plot.state !== 1 || plot.cropType == null || plot.startTime == null) {
+    return { state: gameState, skippedMs: 0, completed: false };
+  }
+
+  const remaining = getPlotRemainingGrowthMs(gameState, plot, now);
+  const skip = getGrowthAdSkipMs(remaining);
+  if (skip <= 0) {
+    return { state: gameState, skippedMs: 0, completed: false };
+  }
+
+  const nextPlots = [...gameState.plots];
+  const { speedMultiplier } = getCropModifiers(gameState, plot.cropType, now);
+  // Full skip when the tier covers the remainder, or defensively when growth is
+  // frozen (speedMultiplier <= 0 is unreachable in the shipped balance, but a
+  // start-time shift can't move a stalled plot, so just complete it).
+  if (skip >= remaining || speedMultiplier <= 0) {
+    nextPlots[plotIndex] = { ...plot, state: 2 };
+    return { state: { ...gameState, plots: nextPlots }, skippedMs: remaining, completed: true };
+  }
+
+  // Raw remaining = growTime - (now - startTime) * speed. To drop it by `skip`,
+  // grow the raw elapsed by `skip`, i.e. move startTime earlier by skip / speed.
+  const nextStartTime = plot.startTime - Math.round(skip / speedMultiplier);
+  nextPlots[plotIndex] = { ...plot, startTime: nextStartTime };
+  return { state: { ...gameState, plots: nextPlots }, skippedMs: skip, completed: false };
 }
 
 // Wall-clock milliseconds until this plot is harvestable, for the player-facing
