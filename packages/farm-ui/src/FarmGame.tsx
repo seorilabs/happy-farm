@@ -1864,22 +1864,35 @@ export default function FarmGame({
   // onboarding, when no ad is ready, or while the persisted return cooldown is
   // still active, so returning players see it at most once per cooldown window.
   async function maybeShowReturnAd() {
-    if (!gameState.onboardingCompleted || onboardingStep != null) {
+    if (onboardingStep != null) {
       return;
     }
     if (!interstitialAd.isAdReady) {
       return;
     }
     const now = Date.now();
-    if (!canShowReturnInterstitial(gameState, now)) {
+    // Decide and record against the freshest state inside the updater: the
+    // welcome-back dismiss just queued a state change, so the closure gameState
+    // is stale. Gating + stamping atomically keeps the persisted cooldown honest
+    // (a stale snapshot can't replay the ad or reset returnInterstitialAt).
+    // willShow carries the decision out to the side effect below.
+    let willShow = false;
+    setGameState((state) => {
+      if (!state.onboardingCompleted || !canShowReturnInterstitial(state, now)) {
+        return state;
+      }
+      willShow = true;
+      return { ...state, adUsage: recordReturnInterstitial(state, now) };
+    });
+    if (!willShow) {
       return;
     }
-    // Share the milestone throttle too, so a return ad never stacks back-to-back
-    // with a milestone interstitial in the same moment.
-    lastInterstitialShownAtRef.current = now;
-    setGameState((state) => ({ ...state, adUsage: recordReturnInterstitial(state, now) }));
     farmAnalytics.trackInterstitialShown('return_welcome_back', analyticsContext());
     await interstitialAd.showAd();
+    // Stamp the shared milestone throttle only after the ad actually played, so a
+    // milestone interstitial doesn't immediately stack on top of this one — and a
+    // return ad that never showed never suppresses the milestone slot.
+    lastInterstitialShownAtRef.current = Date.now();
   }
 
   async function rewardGoldFromAd() {
