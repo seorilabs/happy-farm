@@ -1,5 +1,6 @@
 /// <reference types="jest" />
 
+import { getRewardedAdPlacement } from '../ads';
 import { createFarmAnalytics, getGameAnalyticsContext } from '../analytics';
 import { createInitialState } from '../constants';
 
@@ -15,11 +16,42 @@ describe('farm analytics adapter contract', () => {
 
     analytics.trackGameStart(context);
     analytics.trackSeedSelected('carrot', 'starter_field', true, context);
-    analytics.trackAdRewardFailed('rewardedGold', 'unsupported', context);
+    analytics.trackAdRewardFailed('rewardedGold', 'shop_gold_reward', 'unsupported', context);
 
     expect(track).toHaveBeenCalledWith('game_start', context);
     expect(track).toHaveBeenCalledWith('first_seed_selected', expect.objectContaining({ crop: 'carrot' }));
-    expect(track).toHaveBeenCalledWith('ad_reward_failed', expect.objectContaining({ reason: 'unsupported' }));
+    expect(track).toHaveBeenCalledWith(
+      'ad_reward_failed',
+      expect.objectContaining({ ad_type: 'rewardedGold', placement: 'shop_gold_reward', reason: 'unsupported' })
+    );
+  });
+
+  test('rewarded-ad funnel events all carry ad_type and placement for per-placement aggregation', () => {
+    const track = jest.fn();
+    const analytics = createFarmAnalytics(track);
+    const context = getGameAnalyticsContext(
+      createInitialState(),
+      Date.parse('2026-05-27T03:00:00.000Z'),
+      Date.parse('2026-05-27T03:00:05.000Z')
+    );
+
+    analytics.trackAdRewardImpression('growthAd', getRewardedAdPlacement('growthAd'), context);
+    analytics.trackAdRewardClick('growthAd', getRewardedAdPlacement('growthAd'), context);
+    analytics.trackAdRewardCompleted({
+      type: 'growthAd',
+      placement: getRewardedAdPlacement('growthAd'),
+      rewardValue: 1,
+      context,
+    });
+    analytics.trackAdLimitBlocked('growthAd', getRewardedAdPlacement('growthAd'), 'daily_limit', context);
+
+    for (const event of ['ad_reward_impression', 'ad_reward_click', 'ad_reward_completed', 'ad_limit_blocked']) {
+      expect(track).toHaveBeenCalledWith(
+        event,
+        expect.objectContaining({ ad_type: 'growthAd', placement: 'growth_ad_sheet' })
+      );
+    }
+    expect(getRewardedAdPlacement('plotDiscountAd')).toBe('shop_plot_discount');
   });
 
   test('리텐션 계측 이벤트를 계약대로 emit한다', () => {

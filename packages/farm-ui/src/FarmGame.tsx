@@ -75,6 +75,7 @@ import {
   canUnlockArea,
   claimCollectionReward,
   createFarmAnalytics,
+  getRewardedAdPlacement,
   createInitialState,
   DEFAULT_LOCALE,
   executeFarmGameCommand,
@@ -1337,14 +1338,14 @@ export default function FarmGame({
   useEffect(() => {
     if (activeSheet?.type === 'shop') {
       const context = analyticsContext();
-      farmAnalytics.trackAdRewardImpression('rewardedGold', 'shop_gold_reward', context);
-      farmAnalytics.trackAdRewardImpression('plotDiscountAd', 'shop_plot_discount', context);
+      farmAnalytics.trackAdRewardImpression('rewardedGold', getRewardedAdPlacement('rewardedGold'), context);
+      farmAnalytics.trackAdRewardImpression('plotDiscountAd', getRewardedAdPlacement('plotDiscountAd'), context);
     }
     if (activeSheet?.type === 'growthAd') {
-      farmAnalytics.trackAdRewardImpression('growthAd', 'growth_ad_sheet', analyticsContext());
+      farmAnalytics.trackAdRewardImpression('growthAd', getRewardedAdPlacement('growthAd'), analyticsContext());
     }
     if (activeSheet?.type === 'harvestBonus') {
-      farmAnalytics.trackAdRewardImpression('harvestBonusAd', 'harvest_bonus_sheet', analyticsContext());
+      farmAnalytics.trackAdRewardImpression('harvestBonusAd', getRewardedAdPlacement('harvestBonusAd'), analyticsContext());
     }
     if (activeSheet?.type === 'collection') {
       farmAnalytics.trackCollectionScreen(analyticsContext());
@@ -1794,9 +1795,12 @@ export default function FarmGame({
   }
 
   async function showRewardedAd(type: RewardedAdType, rewardValue: number, onReward: () => void) {
+    // Tag the whole funnel with the type's canonical placement so blocked/click/
+    // completed/failed all aggregate per placement (single source of truth).
+    const placement = getRewardedAdPlacement(type);
     const limit = getRewardedAdLimitStatus(gameState, type, Date.now(), locale);
     if (!limit.allowed) {
-      farmAnalytics.trackAdLimitBlocked(type, limit.reason, analyticsContext());
+      farmAnalytics.trackAdLimitBlocked(type, placement, limit.reason, analyticsContext());
       toast(limit.reason);
       return false;
     }
@@ -1804,6 +1808,7 @@ export default function FarmGame({
     if (!rewardedAd.isAdReady) {
       farmAnalytics.trackAdRewardFailed(
         type,
+        placement,
         rewardedAd.isAdSupported ? 'not_ready' : 'unsupported',
         analyticsContext()
       );
@@ -1811,13 +1816,13 @@ export default function FarmGame({
       return false;
     }
 
-    farmAnalytics.trackAdRewardClick(type, analyticsContext());
+    farmAnalytics.trackAdRewardClick(type, placement, analyticsContext());
     let result: RewardedAdShowResult;
     try {
       result = await rewardedAd.showAd();
     } catch {
       setActiveSheet(null);
-      farmAnalytics.trackAdRewardFailed(type, 'show_ad_threw', analyticsContext());
+      farmAnalytics.trackAdRewardFailed(type, placement, 'show_ad_threw', analyticsContext());
       toast(messages.adFailedToast);
       return false;
     }
@@ -1828,6 +1833,7 @@ export default function FarmGame({
       onReward();
       farmAnalytics.trackAdRewardCompleted({
         type,
+        placement,
         rewardValue,
         context: analyticsContext(),
       });
@@ -1839,7 +1845,7 @@ export default function FarmGame({
     }
 
     setActiveSheet(null);
-    farmAnalytics.trackAdRewardFailed(type, getAdFailureReason(result), analyticsContext());
+    farmAnalytics.trackAdRewardFailed(type, placement, getAdFailureReason(result), analyticsContext());
     toast(result.status === 'dismissed' ? messages.adDismissedToast : messages.adFailedToast);
 
     return false;
@@ -2133,7 +2139,7 @@ export default function FarmGame({
               remainingMs,
             });
           } else {
-            farmAnalytics.trackAdLimitBlocked('growthAd', growthAdLimit.reason, analyticsContext());
+            farmAnalytics.trackAdLimitBlocked('growthAd', getRewardedAdPlacement('growthAd'), growthAdLimit.reason, analyticsContext());
             toast(growthAdLimit.reason);
           }
         } else {
