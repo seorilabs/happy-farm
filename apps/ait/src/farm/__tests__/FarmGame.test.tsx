@@ -13,6 +13,7 @@ import {
   HARVEST_BONUS_BOOST_DURATION_MS,
   HARVEST_BONUS_MULTIPLIER,
   MAX_PLOTS,
+  PLOT_DISCOUNT_AD_DAILY_LIMIT,
   REWARDED_GOLD_MAX_USES_PER_WINDOW,
   REWARDED_GOLD_WINDOW_MS,
   PRESTIGE_STARS_BASE,
@@ -539,15 +540,16 @@ describe('FarmGame UI flow', () => {
   });
 
   test('hides the shop badge when the rewarded ad rate limit is exhausted', async () => {
-    // Fill the sliding window to trigger the cooldown (REWARDED_GOLD_MAX_USES_PER_WINDOW uses).
-    // rewardedGoldLimit gates the shop's gold reward and free-plot reward. Exhausting the
-    // window should suppress the badge.
+    // The badge lights up when either shop reward is available: the gold reward
+    // (gated by the rewardedGold sliding window) or the plot discount (gated by
+    // its own daily limit). Exhaust both so the badge is suppressed.
     const base = createInitialState();
     const exhaustedState: GameState = {
       ...base,
       adUsage: {
         ...base.adUsage,
         rewardedGoldTimestamps: Array.from({ length: REWARDED_GOLD_MAX_USES_PER_WINDOW }, (_, i) => NOW - i * 10),
+        plotDiscountAd: { lastUsedAt: NOW, dailyCount: PLOT_DISCOUNT_AD_DAILY_LIMIT },
       },
     };
     const rewardedAd = createReadyRewardedAd();
@@ -596,11 +598,15 @@ describe('FarmGame UI flow', () => {
     expect(screen.getByText('당근 심기 · 10G · 투자효율 +40%')).toBeTruthy();
   }, 30_000);
 
-  test('closes the shop sheet after a free plot ad reward', async () => {
+  test('buys a discounted plot after the plot-discount ad and closes the shop', async () => {
     const rewardedAd = createReadyRewardedAd();
-    const screen = await renderGame(null, { useRewardedAd: () => rewardedAd });
+    // Enough gold to afford the discounted plot (the ad no longer gives it free).
+    const screen = await renderGame(
+      { ...createInitialState(), gold: 1000 },
+      { useRewardedAd: () => rewardedAd }
+    );
 
-    await waitFor(() => expect(screen.getByText('50G')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('🏪 상점')).toBeTruthy());
 
     fireEvent.press(screen.getByText('🏪 상점'));
     expect(screen.getByText('농장 관리소')).toBeTruthy();
@@ -610,6 +616,7 @@ describe('FarmGame UI flow', () => {
     await waitFor(() => expect(rewardedAd.showAd).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(screen.queryByText('농장 관리소')).toBeNull());
 
+    // The discounted gold was charged (sink preserved) and a plot was unlocked.
     fireEvent.press(screen.getByText('🏪 상점'));
     expect(screen.getByText('현재 7칸 · 작물을 심을 공간을 1칸 늘려요')).toBeTruthy();
   }, 30_000);

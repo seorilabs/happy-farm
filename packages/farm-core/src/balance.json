@@ -47,6 +47,9 @@
     "growthAdSkipPercent": 0.25,
     "growthAdCooldownMs": 600000,
     "growthAdDailyLimit": 3,
+    "plotDiscountAdPercent": 0.5,
+    "plotDiscountAdDailyLimit": 1,
+    "plotDiscountAdCooldownMs": 0,
     "interstitialMilestoneCooldownMs": 180000
   },
   "dailyBonus": {
