@@ -71,6 +71,7 @@ import {
   type RewardedAdController,
   type RewardedAdShowResult,
   type RewardedAdType,
+  canShowReturnInterstitial,
   canUnlockArea,
   claimCollectionReward,
   createFarmAnalytics,
@@ -112,6 +113,7 @@ import {
   performHarvestAll,
   getReadyPlotCount,
   recordHarvestBonusAdPrompt,
+  recordReturnInterstitial,
   recordRewardedAdUsage,
   type CropHarvestedGameEvent,
   type CropPlantedGameEvent,
@@ -1652,6 +1654,7 @@ export default function FarmGame({
       collectChain();
     }
     setActiveSheet(null);
+    void maybeShowReturnAd();
   }
 
   function openPrestigeConfirm() {
@@ -1853,6 +1856,29 @@ export default function FarmGame({
     }
 
     lastInterstitialShownAtRef.current = now;
+    await interstitialAd.showAd();
+  }
+
+  // A non-intrusive interstitial on session return, shown after the player has
+  // collected their welcome-back recap. Skipped during the first session /
+  // onboarding, when no ad is ready, or while the persisted return cooldown is
+  // still active, so returning players see it at most once per cooldown window.
+  async function maybeShowReturnAd() {
+    if (!gameState.onboardingCompleted || onboardingStep != null) {
+      return;
+    }
+    if (!interstitialAd.isAdReady) {
+      return;
+    }
+    const now = Date.now();
+    if (!canShowReturnInterstitial(gameState, now)) {
+      return;
+    }
+    // Share the milestone throttle too, so a return ad never stacks back-to-back
+    // with a milestone interstitial in the same moment.
+    lastInterstitialShownAtRef.current = now;
+    setGameState((state) => ({ ...state, adUsage: recordReturnInterstitial(state, now) }));
+    farmAnalytics.trackInterstitialShown('return_welcome_back', analyticsContext());
     await interstitialAd.showAd();
   }
 

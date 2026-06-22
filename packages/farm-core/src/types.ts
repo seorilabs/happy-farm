@@ -93,6 +93,9 @@ export type AdUsage = {
     boostEndsAt: number | null;
     dailyCount: number;
   };
+  // Last time the return (welcome-back) interstitial was shown; gates its
+  // cooldown across app restarts. Null until the first return ad fires.
+  returnInterstitialAt: number | null;
 };
 
 export type GameState = {

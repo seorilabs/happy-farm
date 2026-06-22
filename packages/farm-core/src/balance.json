@@ -50,7 +50,8 @@
     "plotDiscountAdPercent": 0.5,
     "plotDiscountAdDailyLimit": 1,
     "plotDiscountAdCooldownMs": 0,
-    "interstitialMilestoneCooldownMs": 180000
+    "interstitialMilestoneCooldownMs": 180000,
+    "returnInterstitialCooldownMs": 21600000
   },
   "dailyBonus": {
     "agentPurpose": "Daily login bonus scaling. The bonus is a fraction of the progression-scaled rewarded-gold (ad) payout per streak tier, so it grows with the player's next goal while always staying below the ad reward (max ratio < 1) to preserve the ad incentive. Streak structure: 3 tiers (day 1 / day 2 / day 3+).",

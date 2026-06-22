@@ -107,6 +107,9 @@ export const PLOT_DISCOUNT_AD_PERCENT = balance.ads.plotDiscountAdPercent;
 export const PLOT_DISCOUNT_AD_DAILY_LIMIT = balance.ads.plotDiscountAdDailyLimit;
 export const PLOT_DISCOUNT_AD_COOLDOWN_MS = balance.ads.plotDiscountAdCooldownMs;
 export const INTERSTITIAL_MILESTONE_COOLDOWN_MS = balance.ads.interstitialMilestoneCooldownMs;
+// Minimum gap between two return (welcome-back) interstitials. Keeps the
+// session-return ad non-intrusive for players who reopen the app often.
+export const RETURN_INTERSTITIAL_COOLDOWN_MS = balance.ads.returnInterstitialCooldownMs;
 
 // Raw grow-time milliseconds removed by one growth-skip ad, given the plot's
 // current remaining grow time (the raw scale getPlotRemainingGrowthMs returns).
@@ -446,6 +449,7 @@ export function createInitialAdUsage(now = Date.now()): GameState['adUsage'] {
     growthAd: { lastUsedAt: null, dailyCount: 0 },
     plotDiscountAd: { lastUsedAt: null, dailyCount: 0 },
     harvestBonusAd: { lastUsedAt: null, lastPromptedAt: null, boostEndsAt: null, dailyCount: 0 },
+    returnInterstitialAt: null,
   };
 }
 
@@ -499,6 +503,24 @@ export function normalizeAdUsage(
       boostEndsAt: isFiniteTimestamp(adUsage?.harvestBonusAd?.boostEndsAt) ? adUsage.harvestBonusAd.boostEndsAt : null,
       dailyCount: normalizeDailyCount(adUsage?.harvestBonusAd?.dailyCount, isSameDay),
     },
+    returnInterstitialAt: isFinitePastTimestamp(adUsage?.returnInterstitialAt, now)
+      ? adUsage.returnInterstitialAt
+      : null,
+  };
+}
+
+// Whether the return (welcome-back) interstitial may fire now: never fired, or
+// the cooldown has elapsed since the last one. Persisted in the save so the gap
+// holds across app restarts (the typical "session return" path).
+export function canShowReturnInterstitial(gameState: GameState, now = Date.now()): boolean {
+  const adUsage = normalizeAdUsage(gameState.adUsage, now);
+  return adUsage.returnInterstitialAt == null || now - adUsage.returnInterstitialAt >= RETURN_INTERSTITIAL_COOLDOWN_MS;
+}
+
+export function recordReturnInterstitial(gameState: GameState, now = Date.now()): GameState['adUsage'] {
+  return {
+    ...normalizeAdUsage(gameState.adUsage, now),
+    returnInterstitialAt: now,
   };
 }
 
