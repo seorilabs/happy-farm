@@ -549,6 +549,10 @@ export default function FarmGame({
   useEffect(() => () => goldPulse.stopAnimation(), [goldPulse]);
   const lastInterstitialShownAtRef = useRef(0);
   const sessionStartedAtRef = useRef(Date.now());
+  // Target time of the last scheduled harvest reminder. This effect re-runs
+  // every tick, so we only emit notification_scheduled when that target
+  // actually changes — otherwise the analytics would be flooded with noise.
+  const lastScheduledHarvestReadyAtRef = useRef<number | null>(null);
   const tickNowMsRef = useRef(Date.now());
   const gameStartTrackedRef = useRef(false);
   const firstSeedSelectedRef = useRef(false);
@@ -893,7 +897,15 @@ export default function FarmGame({
         setActiveSheet({ type: 'harvestBonus' });
       }
       const isSpecialHarvest = event.mutation != null || event.newMasteryRank != null || event.boostActive;
-      const isCropOfTheDay = event.cropKey === getCropOfTheDayStatus(effect.now).cropKey;
+      const cropOfTheDayStatus = getCropOfTheDayStatus(effect.now);
+      const isCropOfTheDay = event.cropKey === cropOfTheDayStatus.cropKey;
+      if (isCropOfTheDay) {
+        farmAnalytics.trackCropOfTheDayHarvested({
+          cropKey: event.cropKey,
+          multiplier: cropOfTheDayStatus.multiplier,
+          context: analyticsContext(),
+        });
+      }
       const mutationKey = event.mutation?.key;
       const popTone: HarvestPop['tone'] =
         mutationKey === 'rainbow'
@@ -978,6 +990,12 @@ export default function FarmGame({
       const summary = getReturnSummary(savedState, lastSeenAt, now);
       if (summary != null) {
         setActiveSheet({ type: 'welcomeBack', summary });
+        farmAnalytics.trackReturnSummaryShown({
+          awayMs: summary.awayMs,
+          offlineGold: summary.offlineGold,
+          readyCropCount: summary.readyCropCount,
+          context: analyticsContext(savedState),
+        });
       }
       // Mark "seen" immediately so a quick reload doesn't replay the recap.
       void persistence.writeLastSeenAt?.(now);
@@ -1144,6 +1162,7 @@ export default function FarmGame({
 
     if (!notifications.isSupported || !gameSettings.harvestNotificationsEnabled) {
       void notifications.cancelHarvestReady();
+      lastScheduledHarvestReadyAtRef.current = null;
       return;
     }
 
@@ -1151,15 +1170,29 @@ export default function FarmGame({
     const nextReadyAt = getNextHarvestReadyAt(gameState, now);
     if (nextReadyAt == null) {
       void notifications.cancelHarvestReady();
+      lastScheduledHarvestReadyAtRef.current = null;
       return;
     }
 
+    const readyAtMs = Math.max(nextReadyAt, now + HARVEST_NOTIFICATION_MIN_LEAD_MS);
     void notifications.scheduleHarvestReady({
-      readyAtMs: Math.max(nextReadyAt, now + HARVEST_NOTIFICATION_MIN_LEAD_MS),
+      readyAtMs,
       title: messages.harvestReadyNotificationTitle,
       body: messages.harvestReadyNotificationBody,
     });
+    // Only measure when the scheduled target changed; the per-tick re-schedule
+    // is noise and would otherwise emit on every render.
+    if (lastScheduledHarvestReadyAtRef.current !== readyAtMs) {
+      lastScheduledHarvestReadyAtRef.current = readyAtMs;
+      farmAnalytics.trackNotificationScheduled({
+        kind: 'harvest',
+        leadTimeMs: Math.max(0, readyAtMs - now),
+        context: analyticsContext(),
+      });
+    }
   }, [
+    analyticsContext,
+    farmAnalytics,
     gameSettings.harvestNotificationsEnabled,
     gameState,
     isSaveLoaded,
@@ -2496,15 +2529,29 @@ export default function FarmGame({
                 // second tap evaluates claimDailyBonus against the already-
                 // updated prev.dailyBonusState and gets null, so gold is only
                 // awarded once.
+                // Capture the actually-applied claim from the functional
+                // updater so analytics fires exactly once: a concurrent second
+                // tap evaluates against the already-updated state, gets null,
+                // and leaves the holder empty — so no duplicate emit. (A holder
+                // object is used so TS keeps the union type after the closure.)
+                const claimHolder: { value: { streak: number; goldAwarded: number } | null } = { value: null };
                 setGameState((prev) => {
                   const result = claimDailyBonus(prev.dailyBonusState, now, getRewardedGoldAmount(prev));
                   if (result == null) return prev;
+                  claimHolder.value = { streak: result.streak, goldAwarded: result.goldAwarded };
                   return {
                     ...prev,
                     gold: prev.gold + result.goldAwarded,
                     dailyBonusState: result.newState,
                   };
                 });
+                if (claimHolder.value != null) {
+                  farmAnalytics.trackDailyBonusClaimed({
+                    streak: claimHolder.value.streak,
+                    rewardValue: claimHolder.value.goldAwarded,
+                    context: analyticsContext(),
+                  });
+                }
                 setActiveSheet(null);
               }}
             />
@@ -2541,7 +2588,17 @@ export default function FarmGame({
                   ? messages.welcomeBackCollectAction(formatMoney(activeSheet.summary.offlineGold, locale))
                   : messages.welcomeBackConfirmAction
               }
-              onPress={() => dismissWelcomeBack(activeSheet.type === 'welcomeBack' && activeSheet.summary.offlineGold > 0)}
+              onPress={() => {
+                if (activeSheet?.type !== 'welcomeBack') return;
+                const summary = activeSheet.summary;
+                farmAnalytics.trackReturnSummaryCollected({
+                  awayMs: summary.awayMs,
+                  offlineGold: summary.offlineGold,
+                  readyCropCount: summary.readyCropCount,
+                  context: analyticsContext(),
+                });
+                dismissWelcomeBack(summary.offlineGold > 0);
+              }}
             />
           </View>
         ) : null}

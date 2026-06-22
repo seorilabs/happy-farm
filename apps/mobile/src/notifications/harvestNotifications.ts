@@ -1,6 +1,7 @@
 import notifee, {
   AndroidImportance,
   AuthorizationStatus,
+  EventType,
   TriggerType,
   type TimestampTrigger,
 } from '@notifee/react-native';
@@ -76,3 +77,28 @@ export const mobileHarvestNotifications: FarmGameNotifications = {
     }
   },
 };
+
+/**
+ * 수확 알림이 열렸을 때(`onOpen`)를 계측하기 위한 구독.
+ * - 콜드 스타트(앱 종료 상태에서 알림 탭으로 실행)는 getInitialNotification으로,
+ * - 포그라운드/백그라운드 복귀 중 알림 탭은 onForegroundEvent(PRESS)로 감지한다.
+ * 반환값은 구독 해제 함수다. 알림 동작 자체는 바꾸지 않고 관찰만 한다.
+ */
+export function registerHarvestNotificationOpenTracking(onOpen: () => void): () => void {
+  notifee
+    .getInitialNotification()
+    .then((initial) => {
+      if (initial?.notification?.id === HARVEST_READY_NOTIFICATION_ID) {
+        onOpen();
+      }
+    })
+    .catch((error: unknown) => {
+      recordNonFatalError(error, 'notifications:initial_notification');
+    });
+
+  return notifee.onForegroundEvent(({ type, detail }) => {
+    if (type === EventType.PRESS && detail.notification?.id === HARVEST_READY_NOTIFICATION_ID) {
+      onOpen();
+    }
+  });
+}
