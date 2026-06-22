@@ -47,6 +47,7 @@ const {
   MASTERY_RANK_UP_CELEBRATION_DURATION_MS,
   PRESTIGE_GRADUATION_CELEBRATION_DURATION_MS,
   FIRST_HARVEST_CELEBRATION_DURATION_MS,
+  ONBOARDING_UNLOCK_SAFETY_TIMEOUT_MS,
   COMBO_GREAT_THRESHOLD,
   COMBO_LEGENDARY_THRESHOLD,
 } = farmGameModule;
@@ -333,6 +334,29 @@ describe('FarmGame UI flow', () => {
         const calls = mockPersistence.writePersistedGameState.mock.calls;
         expect(calls[calls.length - 1]![0].onboardingCompleted).toBe(true);
       });
+    });
+
+    test('auto-finishes the unlock step after the safety timeout', async () => {
+      const screen = await renderGame(null);
+
+      await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+      fireEvent.press(screen.getByText('당근'));
+      await waitFor(() => expect(screen.getByText(messages.onboardingPlantTitle)).toBeTruthy());
+      fireEvent.press(screen.getAllByText('빈 밭')[0]!);
+      await waitFor(() => expect(screen.getByText(messages.onboardingHarvestTitle)).toBeTruthy());
+      await act(async () => {
+        jest.advanceTimersByTime(2500);
+      });
+      await waitFor(() => expect(screen.getByText('GET')).toBeTruthy());
+      fireEvent.press(screen.getByText('GET'));
+      await waitFor(() => expect(screen.getByText(messages.onboardingUnlockTitle)).toBeTruthy());
+
+      // Lingering on the unlock step without growing the farm auto-dismisses the
+      // coachmark once the safety timeout elapses, so it can never stick forever.
+      await act(async () => {
+        jest.advanceTimersByTime(ONBOARDING_UNLOCK_SAFETY_TIMEOUT_MS);
+      });
+      await waitFor(() => expect(screen.queryByTestId('onboarding-coachmark')).toBeNull());
     });
 
     test('skipping hides the guide and persists completion', async () => {

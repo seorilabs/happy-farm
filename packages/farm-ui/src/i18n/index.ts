@@ -240,7 +240,7 @@ const KO_FARM_MESSAGES = {
   onboardingHarvestTitle: '자라면 수확해요',
   onboardingHarvestDesc: '작물이 다 자라면 밭을 눌러 수확하고 골드로 바꿔요.',
   onboardingUnlockTitle: '농장을 넓혀요',
-  onboardingUnlockDesc: '모은 골드로 상점에서 밭을 늘리거나 새 구역을 열어 보세요.',
+  onboardingUnlockDesc: '모은 골드로 상점에서 밭·구역을 열거나 업그레이드해 농장을 키워 보세요.',
 };
 
 export type FarmMessages = typeof KO_FARM_MESSAGES;
@@ -470,7 +470,7 @@ const EN_FARM_MESSAGES: FarmMessages = {
   onboardingHarvestTitle: 'Harvest when ready',
   onboardingHarvestDesc: 'When the crop is ready, tap the plot to harvest and turn it into gold.',
   onboardingUnlockTitle: 'Grow your farm',
-  onboardingUnlockDesc: 'Spend your gold in the Shop to add plots or unlock a new area.',
+  onboardingUnlockDesc: 'Open the Shop to add plots, unlock an area, or buy an upgrade with your gold.',
 };
 
 const FARM_MESSAGES: Record<SupportedLocale, FarmMessages> = {

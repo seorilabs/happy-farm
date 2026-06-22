@@ -162,6 +162,11 @@ export const COMBO_LEGENDARY_THRESHOLD = 10;
 export const MASTERY_RANK_UP_CELEBRATION_DURATION_MS = 2600;
 export const PRESTIGE_GRADUATION_CELEBRATION_DURATION_MS = 3500;
 export const FIRST_HARVEST_CELEBRATION_DURATION_MS = 3200;
+// Safety net for the final onboarding step: if a new player never grows their
+// farm (e.g. keeps spending on something the unlock check doesn't track), the
+// "first unlock" coachmark auto-dismisses after this long so it can never stick
+// around forever.
+export const ONBOARDING_UNLOCK_SAFETY_TIMEOUT_MS = 5 * 60_000;
 const SHEET_DISMISS_DRAG_DISTANCE = 96;
 const SHEET_DISMISS_VELOCITY = 1.1;
 const SHEET_DISMISS_TRANSLATE_Y = 520;
@@ -510,10 +515,20 @@ export default function FarmGame({
   const firstHarvestNoticeIdRef = useRef(0);
   // Current step of the first-session onboarding coachmark; null hides it.
   const [onboardingStep, setOnboardingStep] = useState<OnboardingStep | null>(null);
-  // Guards the one-time onboarding start and snapshots the baseline used to
-  // detect the final "first unlock" step.
+  // Guards the one-time onboarding start.
   const onboardingInitRef = useRef(false);
-  const onboardingBaselineRef = useRef<{ plotCount: number; areaCount: number } | null>(null);
+  // Progression snapshot taken when onboarding starts. The final "first unlock"
+  // step finishes once any of these counters grows — a plot, an area, a growth/
+  // profit upgrade, or a research node/breed — so the guide doesn't stall when a
+  // new player's first purchase isn't a plot or an area.
+  const onboardingBaselineRef = useRef<{
+    plotCount: number;
+    areaCount: number;
+    speedLevel: number;
+    profitLevel: number;
+    researchNodeCount: number;
+    breedCount: number;
+  } | null>(null);
   // Per-plot "just planted" tokens. Bumped only on a manual plant so the fresh
   // sprout bounces in (auto-replant and save-load stay silent). Keyed by index.
   const [plantPulses, setPlantPulses] = useState<Record<number, number>>({});
@@ -1036,12 +1051,19 @@ export default function FarmGame({
     onboardingBaselineRef.current = {
       plotCount: gameState.unlockedPlotCount,
       areaCount: gameState.unlockedAreas.length,
+      speedLevel: gameState.upgrades.speed,
+      profitLevel: gameState.upgrades.profit,
+      researchNodeCount: gameState.research.unlockedNodes.length,
+      breedCount: gameState.research.unlockedBreeds.length,
     };
     setOnboardingStep('selectSeed');
   }, [isSaveLoaded, gameState]);
 
   // Advance to the next step as the player actually performs each action, and
-  // finish onboarding once the final "first unlock" step is done.
+  // finish onboarding once the final "first unlock" step is done. The whole
+  // gameState is a dependency: every setGameState produces a fresh reference, so
+  // this re-runs on every state change and always reads the latest values (no
+  // stale closure, no missed transition).
   useEffect(() => {
     if (onboardingStep == null || gameState.onboardingCompleted) {
       return;
@@ -1060,24 +1082,31 @@ export default function FarmGame({
     }
     if (onboardingStep === 'unlock') {
       const baseline = onboardingBaselineRef.current;
+      // Any farm-growing purchase counts as the "first unlock": a plot, an area,
+      // a growth/profit upgrade, or a research node/breed.
       const unlockedSomething =
         baseline != null &&
         (gameState.unlockedPlotCount > baseline.plotCount ||
-          gameState.unlockedAreas.length > baseline.areaCount);
+          gameState.unlockedAreas.length > baseline.areaCount ||
+          gameState.upgrades.speed > baseline.speedLevel ||
+          gameState.upgrades.profit > baseline.profitLevel ||
+          gameState.research.unlockedNodes.length > baseline.researchNodeCount ||
+          gameState.research.unlockedBreeds.length > baseline.breedCount);
       if (unlockedSomething) {
         finishOnboarding();
       }
     }
-  }, [
-    onboardingStep,
-    selectedTool,
-    gameState.plots,
-    gameState.harvestedCropKeys,
-    gameState.unlockedPlotCount,
-    gameState.unlockedAreas,
-    gameState.onboardingCompleted,
-    finishOnboarding,
-  ]);
+  }, [onboardingStep, selectedTool, gameState, finishOnboarding]);
+
+  // Safety net: never let the final "first unlock" coachmark linger forever. If
+  // the player lingers on this step without growing their farm, auto-finish.
+  useEffect(() => {
+    if (onboardingStep !== 'unlock') {
+      return;
+    }
+    const timer = setTimeout(finishOnboarding, ONBOARDING_UNLOCK_SAFETY_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+  }, [onboardingStep, finishOnboarding]);
 
   // Keep the "last seen" timestamp fresh while the player is active so the
   // welcome-back recap measures the real gap since they left — not the time
@@ -2587,7 +2616,7 @@ function NavButton({
     <Pressable
       testID={testID}
       accessibilityLabel={accessibilityLabel}
-      style={[styles.navButton, highlight && styles.onboardingHighlight]}
+      style={[styles.navButton, highlight && styles.navButtonHighlight]}
       onPress={onPress}
     >
       <Text style={styles.navButtonText}>{label}</Text>
@@ -4213,6 +4242,16 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingHorizontal: 12,
     backgroundColor: '#edf2f7',
+    // A transparent border is always reserved so the onboarding highlight can
+    // recolor it without nudging the neighboring buttons.
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  // Onboarding highlight tuned for the small shop button: recolors the reserved
+  // border and tints the fill instead of adding extra box that clashes.
+  navButtonHighlight: {
+    borderColor: '#4caf6a',
+    backgroundColor: '#e3f3e8',
   },
   navButtonText: {
     color: '#344054',
@@ -4891,12 +4930,14 @@ const styles = StyleSheet.create({
   nextGoalBar: {
     marginTop: 7,
   },
-  // Emphasis border drawn around the target an onboarding coachmark points at
-  // (the plot grid, the seed strip, or the shop button).
+  // Soft emphasis ring for the larger onboarding targets (the plot grid and the
+  // seed strip): a light border plus a faint tint so it reads as a highlight
+  // without the heavy outline clashing with the body design.
   onboardingHighlight: {
     borderRadius: 14,
     borderWidth: 2,
-    borderColor: '#4caf6a',
+    borderColor: '#a6dcb8',
+    backgroundColor: 'rgba(76, 175, 106, 0.08)',
   },
   nextGoalLabel: {
     color: '#4a7c59',
