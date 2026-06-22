@@ -5,6 +5,7 @@ import {
   DAILY_BONUS_STREAK_EXPIRE_MS,
   claimDailyBonus,
   getDailyBonusGold,
+  getDailyBonusReminderAt,
   isDailyBonusAvailable,
   normalizeDailyBonusState,
   previewDailyBonus,
@@ -162,6 +163,32 @@ describe('getDailyBonusGold', () => {
     expect(getDailyBonusGold(1, Number.NaN)).toBe(50);
     expect(getDailyBonusGold(1, 0)).toBe(50);
     expect(getDailyBonusGold(1, -100)).toBe(50);
+  });
+});
+
+describe('getDailyBonusReminderAt', () => {
+  test('never claimed → null (이미 수령 가능, 알림 불필요)', () => {
+    expect(getDailyBonusReminderAt(fresh, NOW)).toBeNull();
+  });
+
+  test('쿨다운 중이면 만료 시각을 반환', () => {
+    const state: DailyBonusState = { lastClaimedAt: NOW, streak: 1 };
+    expect(getDailyBonusReminderAt(state, NOW)).toBe(NOW + H24);
+  });
+
+  test('쿨다운이 막 끝났으면 null (now 시점에 수령 가능)', () => {
+    const state: DailyBonusState = { lastClaimedAt: NOW - H24, streak: 1 };
+    expect(getDailyBonusReminderAt(state, NOW)).toBeNull();
+  });
+
+  test('쿨다운 경과(이미 수령 가능) → null', () => {
+    const state: DailyBonusState = { lastClaimedAt: NOW - H24 - 1000, streak: 1 };
+    expect(getDailyBonusReminderAt(state, NOW)).toBeNull();
+  });
+
+  test('미래 lastClaimedAt은 now로 클램프되어 now+24h를 반환', () => {
+    const state: DailyBonusState = { lastClaimedAt: NOW + H24, streak: 1 };
+    expect(getDailyBonusReminderAt(state, NOW)).toBe(NOW + H24);
   });
 });
 

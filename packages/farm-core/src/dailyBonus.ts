@@ -103,6 +103,21 @@ export function claimDailyBonus(
 }
 
 /**
+ * 데일리 보너스 쿨다운이 끝나는(다시 수령 가능해지는) UTC ms를 반환합니다.
+ * 복귀 유도 알림을 "쿨다운 만료 시점"에 예약하기 위한 순수 계산 함수입니다.
+ * - 한 번도 수령하지 않았으면 이미 수령 가능하므로 알림이 불필요 → null
+ * - 이미 수령 가능(쿨다운 경과) 상태여도 알림 불필요 → null
+ * - 아직 쿨다운 중이면 만료 시각(미래)을 반환
+ * 미래 타임스탬프는 isDailyBonusAvailable과 동일하게 now로 클램프해 시계 조작에 견고합니다.
+ */
+export function getDailyBonusReminderAt(state: DailyBonusState, now = Date.now()): number | null {
+  if (state.lastClaimedAt == null) return null;
+  const safeLastClaimedAt = Math.min(state.lastClaimedAt, now);
+  const readyAt = safeLastClaimedAt + DAILY_BONUS_COOLDOWN_MS;
+  return readyAt > now ? readyAt : null;
+}
+
+/**
  * 클레임 전 표시용 프리뷰 값을 계산합니다. 상태를 변경하지 않으며 UI 표시에만 사용합니다.
  * `available`이 false이면 쿨다운 미충족 상태이므로 보너스를 표시하지 않아야 합니다.
  */

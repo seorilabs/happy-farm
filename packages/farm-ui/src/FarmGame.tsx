@@ -119,6 +119,7 @@ import {
 import {
   claimDailyBonus,
   getDailyBonusLabel,
+  getDailyBonusReminderAt,
   isDailyBonusAvailable,
   normalizeDailyBonusState,
   previewDailyBonus,
@@ -304,11 +305,21 @@ export type FarmGameAudio = {
   setBackgroundMusicEnabled: (enabled: boolean) => void | Promise<void>;
 };
 
+// Comeback-nudge reminders distinct from the per-harvest reminder. Each kind
+// maps to its own platform notification id/channel so it never collides with
+// the harvest notification.
+export type FarmReminderKind = 'dailyBonus' | 'cropOfTheDay';
+
 export type FarmGameNotifications = {
   isSupported: boolean;
   requestPermission: () => Promise<boolean>;
   scheduleHarvestReady: (notification: { readyAtMs: number; title: string; body: string }) => Promise<void>;
   cancelHarvestReady: () => Promise<void>;
+  scheduleReminder: (
+    kind: FarmReminderKind,
+    notification: { readyAtMs: number; title: string; body: string }
+  ) => Promise<void>;
+  cancelReminder: (kind: FarmReminderKind) => Promise<void>;
 };
 
 export type FarmGameProps = {
@@ -416,6 +427,8 @@ const defaultFarmNotifications: FarmGameNotifications = {
   requestPermission: async () => false,
   scheduleHarvestReady: async () => undefined,
   cancelHarvestReady: async () => undefined,
+  scheduleReminder: async () => undefined,
+  cancelReminder: async () => undefined,
 };
 const defaultPersistence: FarmGamePersistence = {
   readPersistedGameState: async () => createInitialState(),
@@ -553,6 +566,10 @@ export default function FarmGame({
   // every tick, so we only emit notification_scheduled when that target
   // actually changes — otherwise the analytics would be flooded with noise.
   const lastScheduledHarvestReadyAtRef = useRef<number | null>(null);
+  // Same dedupe idea for the comeback reminders: only re-emit analytics when a
+  // reminder's target time actually changes, not on every render tick.
+  const lastScheduledDailyReminderAtRef = useRef<number | null>(null);
+  const lastScheduledCropReminderAtRef = useRef<number | null>(null);
   const tickNowMsRef = useRef(Date.now());
   const gameStartTrackedRef = useRef(false);
   const firstSeedSelectedRef = useRef(false);
@@ -1202,6 +1219,80 @@ export default function FarmGame({
     notifications,
   ]);
 
+  // Comeback reminders (R4): nudge players back for the daily bonus and the new
+  // featured crop. Gated by its own toggle, separate from harvest reminders so
+  // the two never conflict (distinct notification ids/channels on the platform).
+  useEffect(() => {
+    if (!isSaveLoaded || !isSettingsLoaded) {
+      return;
+    }
+
+    if (!notifications.isSupported || !gameSettings.comebackRemindersEnabled) {
+      void notifications.cancelReminder('dailyBonus');
+      void notifications.cancelReminder('cropOfTheDay');
+      lastScheduledDailyReminderAtRef.current = null;
+      lastScheduledCropReminderAtRef.current = null;
+      return;
+    }
+
+    const now = Date.now();
+
+    // Daily bonus: fire when the 24h cooldown expires. While never-claimed or
+    // already-claimable, there is nothing to wait for, so cancel any pending one.
+    const dailyReadyAt = getDailyBonusReminderAt(gameState.dailyBonusState, now);
+    if (dailyReadyAt == null) {
+      void notifications.cancelReminder('dailyBonus');
+      lastScheduledDailyReminderAtRef.current = null;
+    } else {
+      const dailyReminderAtMs = Math.max(dailyReadyAt, now + HARVEST_NOTIFICATION_MIN_LEAD_MS);
+      void notifications.scheduleReminder('dailyBonus', {
+        readyAtMs: dailyReminderAtMs,
+        title: messages.dailyBonusReminderNotificationTitle,
+        body: messages.dailyBonusReminderNotificationBody,
+      });
+      if (lastScheduledDailyReminderAtRef.current !== dailyReminderAtMs) {
+        lastScheduledDailyReminderAtRef.current = dailyReminderAtMs;
+        farmAnalytics.trackNotificationScheduled({
+          kind: 'daily_bonus',
+          leadTimeMs: Math.max(0, dailyReminderAtMs - now),
+          context: analyticsContext(),
+        });
+      }
+    }
+
+    // Crop of the day: a single nudge when the next daily window opens (UTC
+    // midnight). One per day keeps it from being intrusive.
+    const cropReminderAtMs = Math.max(
+      getCropOfTheDayStatus(now).windowEndAt,
+      now + HARVEST_NOTIFICATION_MIN_LEAD_MS
+    );
+    void notifications.scheduleReminder('cropOfTheDay', {
+      readyAtMs: cropReminderAtMs,
+      title: messages.cropOfTheDayReminderNotificationTitle,
+      body: messages.cropOfTheDayReminderNotificationBody,
+    });
+    if (lastScheduledCropReminderAtRef.current !== cropReminderAtMs) {
+      lastScheduledCropReminderAtRef.current = cropReminderAtMs;
+      farmAnalytics.trackNotificationScheduled({
+        kind: 'crop_of_the_day',
+        leadTimeMs: Math.max(0, cropReminderAtMs - now),
+        context: analyticsContext(),
+      });
+    }
+  }, [
+    analyticsContext,
+    farmAnalytics,
+    gameSettings.comebackRemindersEnabled,
+    gameState,
+    isSaveLoaded,
+    isSettingsLoaded,
+    messages.cropOfTheDayReminderNotificationBody,
+    messages.cropOfTheDayReminderNotificationTitle,
+    messages.dailyBonusReminderNotificationBody,
+    messages.dailyBonusReminderNotificationTitle,
+    notifications,
+  ]);
+
   useEffect(() => {
     void audio.setBackgroundMusicEnabled(gameSettings.backgroundMusicEnabled && audio.isSupported);
 
@@ -1628,6 +1719,28 @@ export default function FarmGame({
     }
 
     updateGameSettings({ harvestNotificationsEnabled: true });
+  }
+
+  async function toggleComebackReminders() {
+    if (gameSettings.comebackRemindersEnabled) {
+      updateGameSettings({ comebackRemindersEnabled: false });
+      await notifications.cancelReminder('dailyBonus');
+      await notifications.cancelReminder('cropOfTheDay');
+      return;
+    }
+
+    if (!notifications.isSupported) {
+      toast(messages.notificationUnsupportedDesc);
+      return;
+    }
+
+    const granted = await notifications.requestPermission();
+    if (!granted) {
+      toast(messages.notificationPermissionDeniedToast);
+      return;
+    }
+
+    updateGameSettings({ comebackRemindersEnabled: true });
   }
 
   function selectArea(area: AreaKey) {
@@ -2458,6 +2571,13 @@ export default function FarmGame({
               value={gameSettings.harvestNotificationsEnabled && notifications.isSupported}
               disabled={!notifications.isSupported}
               onPress={() => void toggleHarvestNotifications()}
+            />
+            <SettingToggle
+              label={messages.comebackRemindersLabel}
+              desc={notifications.isSupported ? messages.comebackRemindersDesc : messages.notificationUnsupportedDesc}
+              value={gameSettings.comebackRemindersEnabled && notifications.isSupported}
+              disabled={!notifications.isSupported}
+              onPress={() => void toggleComebackReminders()}
             />
 
             <Text style={styles.sheetSectionTitle}>{messages.languageSection}</Text>

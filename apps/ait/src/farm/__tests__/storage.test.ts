@@ -128,6 +128,7 @@ describe('farm storage', () => {
       soundEffectsEnabled: false,
       backgroundMusicEnabled: true,
       harvestNotificationsEnabled: false,
+      comebackRemindersEnabled: false,
     });
 
     expect(mockStorage.setItem).toHaveBeenCalledWith(
@@ -137,6 +138,7 @@ describe('farm storage', () => {
         soundEffectsEnabled: false,
         backgroundMusicEnabled: true,
         harvestNotificationsEnabled: false,
+        comebackRemindersEnabled: false,
       })
     );
   });

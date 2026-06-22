@@ -6,11 +6,26 @@ import notifee, {
   type TimestampTrigger,
 } from '@notifee/react-native';
 
-import type { FarmGameNotifications } from '../../../../packages/farm-ui/src';
+import type { FarmGameNotifications, FarmReminderKind } from '../../../../packages/farm-ui/src';
 import { recordNonFatalError } from '../firebase/crashlytics';
 
 const HARVEST_READY_NOTIFICATION_ID = 'happy-farm-harvest-ready';
 const HARVEST_READY_CHANNEL_ID = 'harvest-ready';
+
+// 복귀 리마인더는 수확 알림과 별도의 id/채널을 써서 서로 덮어쓰지 않는다.
+const COMEBACK_REMINDER_CHANNEL_ID = 'comeback-reminders';
+const COMEBACK_REMINDER_NOTIFICATION_IDS: Record<FarmReminderKind, string> = {
+  dailyBonus: 'happy-farm-daily-bonus',
+  cropOfTheDay: 'happy-farm-crop-of-the-day',
+};
+
+async function ensureComebackReminderChannel() {
+  return notifee.createChannel({
+    id: COMEBACK_REMINDER_CHANNEL_ID,
+    name: 'Comeback reminders',
+    importance: AndroidImportance.DEFAULT,
+  });
+}
 
 function isAuthorized(status: AuthorizationStatus) {
   return status === AuthorizationStatus.AUTHORIZED || status === AuthorizationStatus.PROVISIONAL;
@@ -74,6 +89,43 @@ export const mobileHarvestNotifications: FarmGameNotifications = {
       await notifee.cancelTriggerNotification(HARVEST_READY_NOTIFICATION_ID);
     } catch (error) {
       recordNonFatalError(error, 'notifications:cancel_harvest_ready');
+    }
+  },
+
+  async scheduleReminder(kind, { readyAtMs, title, body }) {
+    try {
+      const channelId = await ensureComebackReminderChannel();
+      const notificationId = COMEBACK_REMINDER_NOTIFICATION_IDS[kind];
+      const trigger: TimestampTrigger = {
+        type: TriggerType.TIMESTAMP,
+        timestamp: readyAtMs,
+      };
+
+      await notifee.cancelTriggerNotification(notificationId);
+      await notifee.createTriggerNotification(
+        {
+          id: notificationId,
+          title,
+          body,
+          android: {
+            channelId,
+            pressAction: {
+              id: 'default',
+            },
+          },
+        },
+        trigger
+      );
+    } catch (error) {
+      recordNonFatalError(error, 'notifications:schedule_reminder');
+    }
+  },
+
+  async cancelReminder(kind) {
+    try {
+      await notifee.cancelTriggerNotification(COMEBACK_REMINDER_NOTIFICATION_IDS[kind]);
+    } catch (error) {
+      recordNonFatalError(error, 'notifications:cancel_reminder');
     }
   },
 };
