@@ -277,6 +277,85 @@ describe('FarmGame UI flow', () => {
     expect(screen.getByText('+14')).toBeTruthy();
   });
 
+  describe('first-session onboarding', () => {
+    const messages = getFarmMessages(DEFAULT_LOCALE);
+
+    test('guides a brand-new player through seed → plant → harvest → unlock', async () => {
+      const screen = await renderGame(null);
+
+      await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+
+      // Step 1: pick a seed.
+      expect(screen.getByTestId('onboarding-coachmark')).toBeTruthy();
+      expect(screen.getByText(messages.onboardingSelectSeedTitle)).toBeTruthy();
+      expect(screen.getByText(messages.onboardingProgress(1, 4))).toBeTruthy();
+      fireEvent.press(screen.getByText('당근'));
+
+      // Step 2: plant it.
+      await waitFor(() => expect(screen.getByText(messages.onboardingPlantTitle)).toBeTruthy());
+      fireEvent.press(screen.getAllByText('빈 밭')[0]!);
+
+      // Step 3: harvest when ready.
+      await waitFor(() => expect(screen.getByText(messages.onboardingHarvestTitle)).toBeTruthy());
+      await act(async () => {
+        jest.advanceTimersByTime(2500);
+      });
+      await waitFor(() => expect(screen.getByText('GET')).toBeTruthy());
+      fireEvent.press(screen.getByText('GET'));
+
+      // Step 4: grow the farm. The guide stays until the player unlocks something.
+      await waitFor(() => expect(screen.getByText(messages.onboardingUnlockTitle)).toBeTruthy());
+      expect(screen.getByText(messages.onboardingProgress(4, 4))).toBeTruthy();
+    });
+
+    test('finishes and persists the flag once the player expands the farm', async () => {
+      // Seed gold so the first plot expansion (300G) is affordable after harvest.
+      const screen = await renderGame({ ...createInitialState(), gold: 1000 });
+
+      await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+      fireEvent.press(screen.getByText('당근'));
+      await waitFor(() => expect(screen.getByText(messages.onboardingPlantTitle)).toBeTruthy());
+      fireEvent.press(screen.getAllByText('빈 밭')[0]!);
+      await waitFor(() => expect(screen.getByText(messages.onboardingHarvestTitle)).toBeTruthy());
+      await act(async () => {
+        jest.advanceTimersByTime(2500);
+      });
+      await waitFor(() => expect(screen.getByText('GET')).toBeTruthy());
+      fireEvent.press(screen.getByText('GET'));
+      await waitFor(() => expect(screen.getByText(messages.onboardingUnlockTitle)).toBeTruthy());
+
+      // Expand a plot from the shop: the final "first unlock" action.
+      fireEvent.press(screen.getByTestId('shop-nav-button'));
+      fireEvent.press(screen.getByText(messages.shopPlotTitle));
+
+      await waitFor(() => expect(screen.queryByTestId('onboarding-coachmark')).toBeNull());
+      await waitFor(() => {
+        const calls = mockPersistence.writePersistedGameState.mock.calls;
+        expect(calls[calls.length - 1]![0].onboardingCompleted).toBe(true);
+      });
+    });
+
+    test('skipping hides the guide and persists completion', async () => {
+      const screen = await renderGame(null);
+
+      await waitFor(() => expect(screen.getByTestId('onboarding-coachmark')).toBeTruthy());
+      fireEvent.press(screen.getByTestId('onboarding-skip'));
+
+      await waitFor(() => expect(screen.queryByTestId('onboarding-coachmark')).toBeNull());
+      await waitFor(() => {
+        const calls = mockPersistence.writePersistedGameState.mock.calls;
+        expect(calls[calls.length - 1]![0].onboardingCompleted).toBe(true);
+      });
+    });
+
+    test('never shows for a returning player whose save is already complete', async () => {
+      const screen = await renderGame({ ...createInitialState(), onboardingCompleted: true });
+
+      await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+      expect(screen.queryByTestId('onboarding-coachmark')).toBeNull();
+    });
+  });
+
   test('pops a sprout and buzzes when a seed is planted on an empty plot', async () => {
     const vibrateSpy = jest.spyOn(Vibration, 'vibrate').mockImplementation(() => undefined);
     try {

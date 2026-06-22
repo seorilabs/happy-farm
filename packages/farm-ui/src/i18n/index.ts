@@ -231,6 +231,16 @@ const KO_FARM_MESSAGES = {
   dailyBonusClaimAction: (amount: string) => `+${amount}G 받기`,
   cropOfTheDayLabel: '오늘의 작물',
   cropOfTheDayDesc: (cropName: string, multiplier: number) => `${cropName} · ×${multiplier} 판매 보너스`,
+  onboardingProgress: (current: number, total: number) => `${current} / ${total}`,
+  onboardingSkip: '건너뛰기',
+  onboardingSelectSeedTitle: '씨앗을 골라요',
+  onboardingSelectSeedDesc: '아래 목록에서 심을 씨앗을 골라 보세요.',
+  onboardingPlantTitle: '빈 밭에 심어요',
+  onboardingPlantDesc: '비어 있는 밭을 눌러 고른 씨앗을 심어요.',
+  onboardingHarvestTitle: '자라면 수확해요',
+  onboardingHarvestDesc: '작물이 다 자라면 밭을 눌러 수확하고 골드로 바꿔요.',
+  onboardingUnlockTitle: '농장을 넓혀요',
+  onboardingUnlockDesc: '모은 골드로 상점에서 밭을 늘리거나 새 구역을 열어 보세요.',
 };
 
 export type FarmMessages = typeof KO_FARM_MESSAGES;
@@ -451,6 +461,16 @@ const EN_FARM_MESSAGES: FarmMessages = {
   dailyBonusClaimAction: (amount) => `Claim +${amount}G`,
   cropOfTheDayLabel: 'Crop of the Day',
   cropOfTheDayDesc: (cropName, multiplier) => `${cropName} · ×${multiplier} sell bonus`,
+  onboardingProgress: (current, total) => `${current} / ${total}`,
+  onboardingSkip: 'Skip',
+  onboardingSelectSeedTitle: 'Pick a seed',
+  onboardingSelectSeedDesc: 'Choose a seed to plant from the strip below.',
+  onboardingPlantTitle: 'Plant it',
+  onboardingPlantDesc: 'Tap an empty plot to plant the seed you picked.',
+  onboardingHarvestTitle: 'Harvest when ready',
+  onboardingHarvestDesc: 'When the crop is ready, tap the plot to harvest and turn it into gold.',
+  onboardingUnlockTitle: 'Grow your farm',
+  onboardingUnlockDesc: 'Spend your gold in the Shop to add plots or unlock a new area.',
 };
 
 const FARM_MESSAGES: Record<SupportedLocale, FarmMessages> = {

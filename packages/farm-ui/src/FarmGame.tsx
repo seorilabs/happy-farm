@@ -129,6 +129,7 @@ import { getFarmMessages, type FarmMessages } from './i18n';
 import { AchievementsSheet } from './components/AchievementsSheet';
 import { ChainMapSheet, PrestigeConfirmSheet } from './components/ChainMapSheet';
 import { CollectionSheet } from './components/CollectionSheet';
+import { FarmOnboarding, type OnboardingStep } from './components/FarmOnboarding';
 import { LabSheet } from './components/LabSheet';
 import { AdRewardCard, SettingToggle, SheetAction, ShopCard, sheetPartStyles } from './components/SheetParts';
 
@@ -507,6 +508,12 @@ export default function FarmGame({
   const [firstHarvestNotice, setFirstHarvestNotice] = useState<FirstHarvestNotice | null>(null);
   const firstHarvestTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const firstHarvestNoticeIdRef = useRef(0);
+  // Current step of the first-session onboarding coachmark; null hides it.
+  const [onboardingStep, setOnboardingStep] = useState<OnboardingStep | null>(null);
+  // Guards the one-time onboarding start and snapshots the baseline used to
+  // detect the final "first unlock" step.
+  const onboardingInitRef = useRef(false);
+  const onboardingBaselineRef = useRef<{ plotCount: number; areaCount: number } | null>(null);
   // Per-plot "just planted" tokens. Bumped only on a manual plant so the fresh
   // sprout bounces in (auto-replant and save-load stay silent). Keyed by index.
   const [plantPulses, setPlantPulses] = useState<Record<number, number>>({});
@@ -655,6 +662,12 @@ export default function FarmGame({
       firstHarvestTimerRef.current = null;
     }
     setFirstHarvestNotice(null);
+  }, []);
+  // Finishes onboarding (shared by complete/skip). Sets the save flag so it
+  // never resurfaces on later launches.
+  const finishOnboarding = useCallback(() => {
+    setOnboardingStep(null);
+    setGameState((state) => (state.onboardingCompleted ? state : { ...state, onboardingCompleted: true }));
   }, []);
   const closeSheet = useCallback(() => {
     setActiveSheet(null);
@@ -1002,6 +1015,69 @@ export default function FarmGame({
     }
     void persistence.writePersistedGameState(gameState);
   }, [gameState, isSaveLoaded, persistence]);
+
+  // Start onboarding once, right after the save loads, only for brand-new
+  // players with no progress at all. (Returning players get onboardingCompleted
+  // set true by migrateLoadedState, and any in-memory state that already has
+  // harvests is treated as experienced too.)
+  useEffect(() => {
+    if (!isSaveLoaded || onboardingInitRef.current) {
+      return;
+    }
+    onboardingInitRef.current = true;
+    const alreadyPlayed =
+      gameState.onboardingCompleted ||
+      gameState.harvestedCropKeys.length > 0 ||
+      gameState.lifetimeStats.totalHarvests > 0 ||
+      gameState.prestige.level > 0;
+    if (alreadyPlayed) {
+      return;
+    }
+    onboardingBaselineRef.current = {
+      plotCount: gameState.unlockedPlotCount,
+      areaCount: gameState.unlockedAreas.length,
+    };
+    setOnboardingStep('selectSeed');
+  }, [isSaveLoaded, gameState]);
+
+  // Advance to the next step as the player actually performs each action, and
+  // finish onboarding once the final "first unlock" step is done.
+  useEffect(() => {
+    if (onboardingStep == null || gameState.onboardingCompleted) {
+      return;
+    }
+    if (onboardingStep === 'selectSeed' && selectedTool !== 'harvest') {
+      setOnboardingStep('plant');
+      return;
+    }
+    if (onboardingStep === 'plant' && gameState.plots.some((plot) => plot.cropType != null)) {
+      setOnboardingStep('harvest');
+      return;
+    }
+    if (onboardingStep === 'harvest' && gameState.harvestedCropKeys.length > 0) {
+      setOnboardingStep('unlock');
+      return;
+    }
+    if (onboardingStep === 'unlock') {
+      const baseline = onboardingBaselineRef.current;
+      const unlockedSomething =
+        baseline != null &&
+        (gameState.unlockedPlotCount > baseline.plotCount ||
+          gameState.unlockedAreas.length > baseline.areaCount);
+      if (unlockedSomething) {
+        finishOnboarding();
+      }
+    }
+  }, [
+    onboardingStep,
+    selectedTool,
+    gameState.plots,
+    gameState.harvestedCropKeys,
+    gameState.unlockedPlotCount,
+    gameState.unlockedAreas,
+    gameState.onboardingCompleted,
+    finishOnboarding,
+  ]);
 
   // Keep the "last seen" timestamp fresh while the player is active so the
   // welcome-back recap measures the real gap since they left — not the time
@@ -1887,6 +1963,11 @@ export default function FarmGame({
       ? previewDailyBonus(gameState.dailyBonusState, Date.now())
       : { available: false as const, streak: 1, goldAwarded: 50 };
 
+  // Outline the target the current onboarding step points at to draw the eye.
+  const onboardingSeedHighlight = onboardingStep === 'selectSeed';
+  const onboardingPlotHighlight = onboardingStep === 'plant' || onboardingStep === 'harvest';
+  const onboardingShopHighlight = onboardingStep === 'unlock';
+
   return (
     <View style={styles.root}>
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
@@ -1978,7 +2059,13 @@ export default function FarmGame({
         ) : null}
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.navRow}>
-          <NavButton testID="shop-nav-button" label={messages.shopButton} badge={shopBadgeCount} onPress={openShop} />
+          <NavButton
+            testID="shop-nav-button"
+            label={messages.shopButton}
+            badge={shopBadgeCount}
+            highlight={onboardingShopHighlight}
+            onPress={openShop}
+          />
           <NavButton
             label={messages.collectionButton}
             badge={claimableCollectionCount}
@@ -2006,8 +2093,12 @@ export default function FarmGame({
         </ScrollView>
       </View>
 
+      {onboardingStep != null ? (
+        <FarmOnboarding step={onboardingStep} messages={messages} onSkip={finishOnboarding} />
+      ) : null}
+
       <ScrollView contentContainerStyle={styles.mainContent} style={styles.main}>
-        <View style={styles.plotGrid}>
+        <View style={[styles.plotGrid, onboardingPlotHighlight && styles.onboardingHighlight]}>
           {gameState.plots.map((plot, index) => {
             // Resolve growth ratio and countdown together so the crop modifiers
             // are computed once per tile per tick instead of once for each.
@@ -2071,7 +2162,12 @@ export default function FarmGame({
           })}
         </ScrollView>
 
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.toolScroll}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={onboardingSeedHighlight ? styles.onboardingHighlight : undefined}
+          contentContainerStyle={styles.toolScroll}
+        >
           <ToolButton
             active={selectedTool === 'harvest'}
             icon="🖐️"
@@ -2477,16 +2573,23 @@ function NavButton({
   badge,
   accessibilityLabel,
   testID,
+  highlight = false,
   onPress,
 }: {
   label: string;
   badge?: number;
   accessibilityLabel?: string;
   testID?: string;
+  highlight?: boolean;
   onPress: () => void;
 }) {
   return (
-    <Pressable testID={testID} accessibilityLabel={accessibilityLabel} style={styles.navButton} onPress={onPress}>
+    <Pressable
+      testID={testID}
+      accessibilityLabel={accessibilityLabel}
+      style={[styles.navButton, highlight && styles.onboardingHighlight]}
+      onPress={onPress}
+    >
       <Text style={styles.navButtonText}>{label}</Text>
       {badge != null && badge > 0 ? (
         <View style={styles.collectionBadge}>
@@ -4787,6 +4890,13 @@ const styles = StyleSheet.create({
   },
   nextGoalBar: {
     marginTop: 7,
+  },
+  // Emphasis border drawn around the target an onboarding coachmark points at
+  // (the plot grid, the seed strip, or the shop button).
+  onboardingHighlight: {
+    borderRadius: 14,
+    borderWidth: 2,
+    borderColor: '#4caf6a',
   },
   nextGoalLabel: {
     color: '#4a7c59',
