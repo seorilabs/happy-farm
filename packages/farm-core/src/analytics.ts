@@ -178,9 +178,14 @@ export function createFarmAnalytics(track: TrackGameEvent = noopTrackGameEvent) 
       });
     },
 
-    trackAdRewardClick: (type: RewardedAdType, context: GameAnalyticsContext) => {
+    // Every rewarded-ad funnel stage carries both ad_type and placement, so a
+    // placement can be tracked end to end (impression → click → completed/failed,
+    // plus blocked) and per-placement fill/completion rates and ARPDAU break down
+    // cleanly. See docs/04-work/ad-analytics.md for the metric definitions.
+    trackAdRewardClick: (type: RewardedAdType, placement: string, context: GameAnalyticsContext) => {
       track('ad_reward_click', {
         ad_type: type,
+        placement,
         ...context,
       });
     },
@@ -193,25 +198,33 @@ export function createFarmAnalytics(track: TrackGameEvent = noopTrackGameEvent) 
       });
     },
 
-    trackAdRewardCompleted: (params: { type: RewardedAdType; rewardValue: number; context: GameAnalyticsContext }) => {
+    trackAdRewardCompleted: (params: {
+      type: RewardedAdType;
+      placement: string;
+      rewardValue: number;
+      context: GameAnalyticsContext;
+    }) => {
       track('ad_reward_completed', {
         ad_type: params.type,
+        placement: params.placement,
         reward_value: params.rewardValue,
         ...params.context,
       });
     },
 
-    trackAdRewardFailed: (type: RewardedAdType, reason: string, context: GameAnalyticsContext) => {
+    trackAdRewardFailed: (type: RewardedAdType, placement: string, reason: string, context: GameAnalyticsContext) => {
       track('ad_reward_failed', {
         ad_type: type,
+        placement,
         reason,
         ...context,
       });
     },
 
-    trackAdLimitBlocked: (type: RewardedAdType, reason: string, context: GameAnalyticsContext) => {
+    trackAdLimitBlocked: (type: RewardedAdType, placement: string, reason: string, context: GameAnalyticsContext) => {
       track('ad_limit_blocked', {
         ad_type: type,
+        placement,
         blocked_reason: reason,
         ...context,
       });

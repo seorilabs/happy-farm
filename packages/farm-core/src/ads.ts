@@ -9,6 +9,20 @@ export const REWARDED_AD_PLACEMENTS = {
 
 export type RewardedAdPlacement = (typeof REWARDED_AD_PLACEMENTS)[keyof typeof REWARDED_AD_PLACEMENTS];
 
+// Single source of truth mapping each rewarded ad type to its surface, so every
+// funnel event (impression → click → completed/failed/blocked) is tagged with a
+// consistent placement and per-placement fill/completion rates stay computable.
+export const REWARDED_AD_PLACEMENT_BY_TYPE: Record<RewardedAdType, RewardedAdPlacement> = {
+  rewardedGold: REWARDED_AD_PLACEMENTS.shopGoldReward,
+  plotDiscountAd: REWARDED_AD_PLACEMENTS.shopPlotDiscount,
+  growthAd: REWARDED_AD_PLACEMENTS.growthSkip,
+  harvestBonusAd: REWARDED_AD_PLACEMENTS.harvestBonus,
+};
+
+export function getRewardedAdPlacement(type: RewardedAdType): RewardedAdPlacement {
+  return REWARDED_AD_PLACEMENT_BY_TYPE[type];
+}
+
 export type RewardedAdReward = {
   type: string;
   amount: number;
