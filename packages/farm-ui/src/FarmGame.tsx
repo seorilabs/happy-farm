@@ -990,7 +990,8 @@ export default function FarmGame({
         // migrateLoadedState, leaving dailyBonusState absent for old saves.
         const preview = previewDailyBonus(
           normalizeDailyBonusState(savedState.dailyBonusState as unknown),
-          now
+          now,
+          getRewardedGoldAmount(savedState)
         );
         if (preview.available) {
           setActiveSheet({ type: 'dailyBonus' });
@@ -1989,7 +1990,7 @@ export default function FarmGame({
   // within one tick when the player taps.
   const dailyBonusPreview =
     activeSheet?.type === 'dailyBonus'
-      ? previewDailyBonus(gameState.dailyBonusState, Date.now())
+      ? previewDailyBonus(gameState.dailyBonusState, Date.now(), getRewardedGoldAmount(gameState))
       : { available: false as const, streak: 1, goldAwarded: 50 };
 
   // Outline the target the current onboarding step points at to draw the eye.
@@ -2496,7 +2497,7 @@ export default function FarmGame({
                 // updated prev.dailyBonusState and gets null, so gold is only
                 // awarded once.
                 setGameState((prev) => {
-                  const result = claimDailyBonus(prev.dailyBonusState, now);
+                  const result = claimDailyBonus(prev.dailyBonusState, now, getRewardedGoldAmount(prev));
                   if (result == null) return prev;
                   return {
                     ...prev,
