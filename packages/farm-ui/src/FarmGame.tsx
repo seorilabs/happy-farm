@@ -777,8 +777,8 @@ export default function FarmGame({
           if (effect.firstMutationFlash != null) {
             mutationFlashRef.current?.flash(effect.firstMutationFlash);
           }
-          if (effect.rankUps.length > 0) {
-            const first = effect.rankUps[0];
+          const first = effect.rankUps[0];
+          if (first != null) {
             const crop = getCrop(first.cropKey);
             showMasteryRankUpCelebration({
               cropIcon: crop.icon,
