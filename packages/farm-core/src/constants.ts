@@ -26,7 +26,7 @@ import {
   type SupportedLocale,
 } from './i18n';
 
-export type RewardedAdType = 'rewardedGold' | 'growthAd' | 'harvestBonusAd';
+export type RewardedAdType = 'rewardedGold' | 'growthAd' | 'harvestBonusAd' | 'plotDiscountAd';
 
 export const FARM_AREAS = balance.areas as Array<{
   key: AreaKey;
@@ -100,6 +100,12 @@ export const GROWTH_AD_SKIP_MS = balance.ads.growthAdSkipMs;
 export const GROWTH_AD_SKIP_PERCENT = balance.ads.growthAdSkipPercent;
 export const GROWTH_AD_COOLDOWN_MS = balance.ads.growthAdCooldownMs;
 export const GROWTH_AD_DAILY_LIMIT = balance.ads.growthAdDailyLimit;
+// Plot-discount ad: replaces the old "free plot" reward. Instead of granting a
+// plot for free (which bypassed the gold sink), one ad buys the next plot at a
+// discount — the player still pays gold — and it is strongly capped per day.
+export const PLOT_DISCOUNT_AD_PERCENT = balance.ads.plotDiscountAdPercent;
+export const PLOT_DISCOUNT_AD_DAILY_LIMIT = balance.ads.plotDiscountAdDailyLimit;
+export const PLOT_DISCOUNT_AD_COOLDOWN_MS = balance.ads.plotDiscountAdCooldownMs;
 export const INTERSTITIAL_MILESTONE_COOLDOWN_MS = balance.ads.interstitialMilestoneCooldownMs;
 
 // Raw grow-time milliseconds removed by one growth-skip ad, given the plot's
@@ -305,6 +311,12 @@ export function getPlotCost(unlockedPlotCount: number) {
   );
 }
 
+// Gold price of the next plot after the plot-discount ad reward. Still a real
+// (reduced) gold cost, so the plot sink is preserved rather than bypassed.
+export function getDiscountedPlotCost(unlockedPlotCount: number) {
+  return Math.floor(getPlotCost(unlockedPlotCount) * (1 - PLOT_DISCOUNT_AD_PERCENT));
+}
+
 export function getUpgradeCost(type: 'speed' | 'profit', level: number) {
   const base = type === 'speed' ? balance.economy.speedUpgradeBaseCost : balance.economy.profitUpgradeBaseCost;
   return Math.floor(base * Math.pow(balance.economy.upgradeCostGrowth, level - 1));
@@ -432,6 +444,7 @@ export function createInitialAdUsage(now = Date.now()): GameState['adUsage'] {
     rewardedGoldTimestamps: [],
     rewardedGoldDailyCount: 0,
     growthAd: { lastUsedAt: null, dailyCount: 0 },
+    plotDiscountAd: { lastUsedAt: null, dailyCount: 0 },
     harvestBonusAd: { lastUsedAt: null, lastPromptedAt: null, boostEndsAt: null, dailyCount: 0 },
   };
 }
@@ -469,6 +482,12 @@ export function normalizeAdUsage(
     growthAd: {
       lastUsedAt: isFinitePastTimestamp(adUsage?.growthAd?.lastUsedAt, now) ? adUsage.growthAd.lastUsedAt : null,
       dailyCount: normalizeDailyCount(adUsage?.growthAd?.dailyCount, isSameDay),
+    },
+    plotDiscountAd: {
+      lastUsedAt: isFinitePastTimestamp(adUsage?.plotDiscountAd?.lastUsedAt, now)
+        ? adUsage.plotDiscountAd.lastUsedAt
+        : null,
+      dailyCount: normalizeDailyCount(adUsage?.plotDiscountAd?.dailyCount, isSameDay),
     },
     harvestBonusAd: {
       lastUsedAt: isFinitePastTimestamp(adUsage?.harvestBonusAd?.lastUsedAt, now)
@@ -508,9 +527,24 @@ export function getRewardedAdLimitStatus(
     return { allowed: true, reason: '' };
   }
 
-  const limit = type === 'growthAd' ? GROWTH_AD_DAILY_LIMIT : HARVEST_BONUS_AD_DAILY_LIMIT;
-  const cooldownMs = type === 'growthAd' ? GROWTH_AD_COOLDOWN_MS : HARVEST_BONUS_AD_COOLDOWN_MS;
-  const usage = type === 'growthAd' ? adUsage.growthAd : adUsage.harvestBonusAd;
+  const limit =
+    type === 'growthAd'
+      ? GROWTH_AD_DAILY_LIMIT
+      : type === 'plotDiscountAd'
+        ? PLOT_DISCOUNT_AD_DAILY_LIMIT
+        : HARVEST_BONUS_AD_DAILY_LIMIT;
+  const cooldownMs =
+    type === 'growthAd'
+      ? GROWTH_AD_COOLDOWN_MS
+      : type === 'plotDiscountAd'
+        ? PLOT_DISCOUNT_AD_COOLDOWN_MS
+        : HARVEST_BONUS_AD_COOLDOWN_MS;
+  const usage =
+    type === 'growthAd'
+      ? adUsage.growthAd
+      : type === 'plotDiscountAd'
+        ? adUsage.plotDiscountAd
+        : adUsage.harvestBonusAd;
 
   if (usage.dailyCount >= limit) {
     return { allowed: false, reason: messages.adDailyLimitReached };
@@ -594,6 +628,16 @@ export function recordRewardedAdUsage(
       growthAd: {
         lastUsedAt: now,
         dailyCount: adUsage.growthAd.dailyCount + 1,
+      },
+    };
+  }
+
+  if (type === 'plotDiscountAd') {
+    return {
+      ...adUsage,
+      plotDiscountAd: {
+        lastUsedAt: now,
+        dailyCount: adUsage.plotDiscountAd.dailyCount + 1,
       },
     };
   }

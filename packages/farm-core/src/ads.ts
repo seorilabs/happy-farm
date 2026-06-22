@@ -2,7 +2,7 @@ import type { RewardedAdType } from './constants';
 
 export const REWARDED_AD_PLACEMENTS = {
   shopGoldReward: 'shop_gold_reward',
-  shopFreePlot: 'shop_free_plot',
+  shopPlotDiscount: 'shop_plot_discount',
   growthSkip: 'growth_ad_sheet',
   harvestBonus: 'harvest_bonus_sheet',
 } as const;

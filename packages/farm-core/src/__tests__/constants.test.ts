@@ -9,6 +9,9 @@ import {
   GROWTH_AD_SKIP_MS,
   GROWTH_AD_SKIP_PERCENT,
   getGrowthAdSkipMs,
+  PLOT_DISCOUNT_AD_DAILY_LIMIT,
+  PLOT_DISCOUNT_AD_PERCENT,
+  getDiscountedPlotCost,
   HARVEST_BONUS_AD_COOLDOWN_MS,
   HARVEST_BONUS_BOOST_DURATION_MS,
   HARVEST_BONUS_MULTIPLIER,
@@ -221,6 +224,7 @@ describe('farm save migration', () => {
       rewardedGoldTimestamps: [NOW - 1000],
       rewardedGoldDailyCount: 0,
       growthAd: { lastUsedAt: null, dailyCount: 0 },
+      plotDiscountAd: { lastUsedAt: null, dailyCount: 0 },
       harvestBonusAd: {
         lastUsedAt: NOW - 1000,
         lastPromptedAt: NOW - 2000,
@@ -295,6 +299,32 @@ describe('farm ad limits', () => {
     expect(getGrowthAdSkipMs(long)).toBe(Math.floor(long * GROWTH_AD_SKIP_PERCENT));
     // ...and never removes more than what is left.
     expect(getGrowthAdSkipMs(long)).toBeLessThan(long);
+  });
+
+  test('plot-discount ad charges reduced gold and is capped at one per day', () => {
+    // Discounted cost is a real (reduced) gold price, never free — the sink stays.
+    const sampleCount = INITIAL_PLOTS + 3;
+    const full = getPlotCost(sampleCount);
+    const discounted = getDiscountedPlotCost(sampleCount);
+    expect(discounted).toBe(Math.floor(full * (1 - PLOT_DISCOUNT_AD_PERCENT)));
+    expect(discounted).toBeGreaterThan(0);
+    expect(discounted).toBeLessThan(full);
+
+    // Daily limit is the strong cap that replaces unlimited free grants.
+    expect(PLOT_DISCOUNT_AD_DAILY_LIMIT).toBe(1);
+    const base = createInitialState();
+    expect(getRewardedAdLimitStatus(base, 'plotDiscountAd', NOW).allowed).toBe(true);
+
+    const afterOne: GameState = {
+      ...base,
+      adUsage: recordRewardedAdUsage(base, 'plotDiscountAd', NOW),
+    };
+    expect(afterOne.adUsage.plotDiscountAd.dailyCount).toBe(1);
+    expect(getRewardedAdLimitStatus(afterOne, 'plotDiscountAd', NOW + 1).allowed).toBe(false);
+
+    // The counter resets on a new day, re-allowing one discount.
+    const nextDay = NOW + 24 * 60 * 60 * 1000;
+    expect(getRewardedAdLimitStatus(afterOne, 'plotDiscountAd', nextDay).allowed).toBe(true);
   });
 
   test('ad usage normalization rejects future and non-finite timestamps', () => {

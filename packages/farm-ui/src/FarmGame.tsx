@@ -59,6 +59,7 @@ import {
   HARVEST_BONUS_MULTIPLIER,
   INTERSTITIAL_MILESTONE_COOLDOWN_MS,
   MAX_PLOTS,
+  PLOT_DISCOUNT_AD_PERCENT,
   getRewardedGoldAmount,
   REWARDED_GOLD_MAX_USES_PER_WINDOW,
   REWARDED_GOLD_WINDOW_MS,
@@ -96,6 +97,7 @@ import {
   getMasteryStatus,
   getMinUpgradeLevel,
   getMutationLabel,
+  getDiscountedPlotCost,
   getPlotCost,
   getPlotGrowthDisplay,
   getPlotRemainingGrowthMs,
@@ -1334,7 +1336,7 @@ export default function FarmGame({
     if (activeSheet?.type === 'shop') {
       const context = analyticsContext();
       farmAnalytics.trackAdRewardImpression('rewardedGold', 'shop_gold_reward', context);
-      farmAnalytics.trackAdRewardImpression('rewardedGold', 'shop_free_plot', context);
+      farmAnalytics.trackAdRewardImpression('plotDiscountAd', 'shop_plot_discount', context);
     }
     if (activeSheet?.type === 'growthAd') {
       farmAnalytics.trackAdRewardImpression('growthAd', 'growth_ad_sheet', analyticsContext());
@@ -1394,10 +1396,19 @@ export default function FarmGame({
     () => getRewardedAdLimitStatus(gameState, 'rewardedGold', Date.now(), locale),
     [gameState, locale, tick]
   );
-  // Both shop ad items (gold reward + free plot) are gated by rewardedGoldLimit.
-  // growthAdLimit and harvestBonusAdLimit gate separate flows (plot-tap / post-harvest
-  // nudge) that are not accessible from the shop, so only rewardedGoldLimit is relevant.
-  const shopAdBadgeCount = rewardedAd.isAdSupported && rewardedAd.isAdReady && rewardedGoldLimit.allowed ? 1 : 0;
+  // The shop gold-reward item is gated by rewardedGoldLimit; the plot-discount
+  // item by its own daily-capped plotDiscountLimit (defined below). The badge
+  // lights up when either reward is currently available.
+  const plotDiscountLimit = useMemo(
+    () => getRewardedAdLimitStatus(gameState, 'plotDiscountAd', Date.now(), locale),
+    [gameState, locale, tick]
+  );
+  const plotDiscountAvailable =
+    plotDiscountLimit.allowed && gameState.unlockedPlotCount < MAX_PLOTS;
+  const shopAdBadgeCount =
+    rewardedAd.isAdSupported && rewardedAd.isAdReady && (rewardedGoldLimit.allowed || plotDiscountAvailable)
+      ? 1
+      : 0;
   const upgradeReadyCount =
     (gameState.gold >= getUpgradeCost('speed', gameState.upgrades.speed) ? 1 : 0) +
     (gameState.gold >= getUpgradeCost('profit', gameState.upgrades.profit) ? 1 : 0);
@@ -1853,26 +1864,37 @@ export default function FarmGame({
     });
   }
 
-  async function rewardFreePlotFromAd() {
+  async function rewardDiscountedPlotFromAd() {
     if (gameState.unlockedPlotCount >= MAX_PLOTS) {
       toast(messages.allPlotsUnlockedToast);
       return;
     }
 
-    await showRewardedAd('rewardedGold', 1, () => {
+    // The ad no longer hands out a free plot; it discounts the next plot's gold
+    // price. The player still pays (reduced) gold, so the plot sink is preserved.
+    // Capacity is checked up front so we never burn the daily-limited ad on a
+    // purchase the player can't afford.
+    const discountedCost = getDiscountedPlotCost(gameState.unlockedPlotCount);
+    if (gameState.gold < discountedCost) {
+      toast(messages.insufficientGoldToast);
+      return;
+    }
+
+    await showRewardedAd('plotDiscountAd', discountedCost, () => {
       setGameState((state) => {
-        if (state.unlockedPlotCount >= MAX_PLOTS) {
+        const cost = getDiscountedPlotCost(state.unlockedPlotCount);
+        if (state.unlockedPlotCount >= MAX_PLOTS || state.gold < cost) {
           return state;
         }
         farmAnalytics.trackPlotUnlocked({
           method: 'ad',
-          cost: 0,
+          cost,
           nextPlotCount: state.unlockedPlotCount + 1,
           context: analyticsContext(state),
         });
-        return { ...state, unlockedPlotCount: state.unlockedPlotCount + 1 };
+        return { ...state, gold: state.gold - cost, unlockedPlotCount: state.unlockedPlotCount + 1 };
       });
-      toast(messages.rewardedPlotToast);
+      toast(messages.rewardedPlotToast(formatMoney(discountedCost, locale)));
     });
   }
 
@@ -2446,14 +2468,21 @@ export default function FarmGame({
                 />
                 <AdRewardCard
                   title={messages.rewardedPlotTitle}
-                  desc={rewardedGoldLimit.allowed ? messages.rewardedPlotReadyDesc : rewardedGoldLimit.reason}
+                  desc={
+                    plotDiscountLimit.allowed
+                      ? messages.rewardedPlotReadyDesc(
+                          Math.round(PLOT_DISCOUNT_AD_PERCENT * 100),
+                          formatMoney(getDiscountedPlotCost(gameState.unlockedPlotCount), locale)
+                        )
+                      : plotDiscountLimit.reason
+                  }
                   cta={
-                    rewardedAd.isAdReady && rewardedGoldLimit.allowed ? messages.rewardOpenCta : messages.rewardWaitCta
+                    rewardedAd.isAdReady && plotDiscountLimit.allowed ? messages.rewardOpenCta : messages.rewardWaitCta
                   }
                   disabled={
-                    !rewardedAd.isAdReady || !rewardedGoldLimit.allowed || gameState.unlockedPlotCount >= MAX_PLOTS
+                    !rewardedAd.isAdReady || !plotDiscountLimit.allowed || gameState.unlockedPlotCount >= MAX_PLOTS
                   }
-                  onPress={() => void rewardFreePlotFromAd()}
+                  onPress={() => void rewardDiscountedPlotFromAd()}
                 />
               </>
             ) : null}
