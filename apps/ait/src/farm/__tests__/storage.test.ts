@@ -127,6 +127,7 @@ describe('farm storage', () => {
       locale: 'en-US',
       soundEffectsEnabled: false,
       backgroundMusicEnabled: true,
+      hapticsEnabled: true,
       harvestNotificationsEnabled: false,
       comebackRemindersEnabled: false,
     });
@@ -137,6 +138,7 @@ describe('farm storage', () => {
         locale: 'en-US',
         soundEffectsEnabled: false,
         backgroundMusicEnabled: true,
+        hapticsEnabled: true,
         harvestNotificationsEnabled: false,
         comebackRemindersEnabled: false,
       })
