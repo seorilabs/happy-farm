@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
 import Sound from 'react-native-sound';
 
+import { logDevWarning } from '../../../../packages/farm-core/src';
 import type { FarmGameAudio } from '../../../../packages/farm-ui/src';
 
 const farmBgmLoopSound = 'farm_bgm_loop.wav';
@@ -24,7 +25,7 @@ function loadSound(
 
   sound = new Sound(asset, Sound.MAIN_BUNDLE, error => {
     if (error != null) {
-      console.warn('Failed to load farm audio asset.', error);
+      logDevWarning('Failed to load farm audio asset.', error);
       return;
     }
 

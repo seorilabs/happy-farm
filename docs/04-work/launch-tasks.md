@@ -172,12 +172,17 @@ flowchart TB
 - **관련 파일:** `packages/farm-core/src/balance.json`, `prestige.ts`
 
 ### [F4] 프로덕션 로그·빌드주입 점검 — `P3` · S
-- **현황:** `console.warn` 잔존(audio), `releaseInfo.ts` 0.0.0 placeholder(CI 주입), `__DEV__`에서 TestIds 광고.
-- **할 일:** 프로덕션 빌드에서 디버그 로그 정리, 버전/Ad Unit ID가 릴리스 빌드에 올바르게 주입되는지 확인·문서화.
+- **현황:** ~~`console.warn` 잔존(audio)~~ → `farm-core/src/devLog.ts`의 `logDevWarning`으로 통합(release `__DEV__=false`에서 no-op). `releaseInfo.ts` 0.0.0 placeholder는 CI 주입 정상, `__DEV__`에서 TestIds 광고는 의도된 동작.
+- **할 일:** ~~프로덕션 빌드에서 디버그 로그 정리, 버전/Ad Unit ID가 릴리스 빌드에 올바르게 주입되는지 확인·문서화.~~ → 완료(아래 점검 결과 참고).
 - **인수조건:**
-  - [ ] 프로덕션 경로 console.warn 정리 또는 로깅 통합
-  - [ ] 릴리스 빌드의 versionName/buildNumber·Ad Unit ID 주입 확인 결과 기록
-- **관련 파일:** `apps/*/src/audio`, `apps/*/src/ads/config.ts`, `packages/farm-core/src/releaseInfo.ts`
+  - [x] 프로덕션 경로 console.warn 정리 또는 로깅 통합 (`logDevWarning` 도입, audio 2곳 라우팅)
+  - [x] 릴리스 빌드의 versionName/buildNumber·Ad Unit ID 주입 확인 결과 기록 (아래)
+- **빌드 주입 점검 결과(2026-06-23):**
+  - **releaseInfo.ts(versionName/buildNumber/gitSha):** 세 배포 워크플로(`deploy-ait`/`deploy-app-store`/`deploy-google-play`)가 빌드 전에 `node scripts/resolve-release-version.mjs --write-release-info`로 git 태그(`vX.Y.Z`)에서 재생성. 레포의 `v0.0.0`은 CI가 덮어쓰는 placeholder가 맞음. analytics(`firebaseWeb/analytics.ts`)·클라우드 백업(`firebase/cloudBackup.ts`)이 `RELEASE_INFO`를 소비.
+  - **Android(versionName/versionCode):** `deploy-google-play.yml`이 `./gradlew :app:bundleRelease -PversionCodeOverride=… -PversionNameOverride=…`로 주입. `build.gradle`은 `versionNameOverride`→env→기본값(`1.0.1`/`2`) 순으로 폴백.
+  - **iOS(CFBundleVersion):** `deploy-app-store.yml`이 `APPLE_BUILD_NUMBER`를 전달하고, 아카이브의 `CFBundleVersion`을 PlistBuddy로 읽어 불일치 시 빌드 실패시키는 검증 단계 보유.
+  - **Ad Unit ID:** `apps/mobile/src/ads/config.ts`가 `__DEV__`면 `TestIds.REWARDED`, 아니면 하드코딩된 프로덕션 단위 ID 사용 → 릴리스(`__DEV__=false`)에서 실 단위 ID. AIT에는 AdMob 미사용(ads 디렉터리 없음). env 주입이 아닌 컴파일타임 분기.
+- **관련 파일:** `apps/*/src/audio`, `apps/mobile/src/ads/config.ts`, `packages/farm-core/src/{devLog,releaseInfo}.ts`, `scripts/resolve-release-version.mjs`, `.github/workflows/deploy-*.yml`
 
 ### [F5] App Store marketingUrl 확정 — `P4` · XS
 - **현황:** `app-store/app-store.config.json:12` `marketingUrl: "확정 필요"` → `check:app-store` WARN.
