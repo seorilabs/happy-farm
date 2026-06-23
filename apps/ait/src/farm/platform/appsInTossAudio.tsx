@@ -2,6 +2,7 @@ import { Video, type VideoRef } from '@granite-js/react-native';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Platform, StyleSheet } from 'react-native';
 
+import { logDevWarning } from '../../../../../packages/farm-core/src';
 import type { FarmGameAudio } from '../../../../../packages/farm-ui/src';
 
 // The Granite runtime cannot load require()-based local assets (its asset
@@ -42,7 +43,7 @@ function keepPlaybackOnAudioFocusChange() {
 // on-device diagnosis (404, blocked host, codec) possible.
 function createPlaybackFailureWarning(uri: string) {
   return (error: unknown) => {
-    console.warn(`Failed to play farm audio source: ${uri}`, error);
+    logDevWarning(`Failed to play farm audio source: ${uri}`, error);
   };
 }
 

@@ -33,5 +33,6 @@ export {
   normalizeLocale,
   type SupportedLocale,
 } from './i18n';
+export * from './devLog';
 export * from './releaseInfo';
 export * from './types';
