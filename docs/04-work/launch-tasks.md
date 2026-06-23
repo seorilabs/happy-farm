@@ -164,11 +164,11 @@ flowchart TB
 - **관련 파일:** `packages/farm-ui/src/gameSettings.ts`, `FarmGame.tsx`, i18n
 
 ### [F3] 후반 오프라인 cap vs 장시간 작물 — `P3` · M
-- **현황:** 오프라인 cap 8h(+스킬), 장시간 작물 12h~4일(`balance.json:101-102,200-214`). 24h 작물은 정확히 24h 뒤 접속 강제 → 기회손실.
-- **할 일:** cap 기본값 확대 또는 장시간 작물 시간 조정으로 일일 접속 압박 완화.
+- **현황:** 오프라인 cap을 8h→24h로 확대(`balance.json` `regions.chain.offlineCapMs`). `offline_cap` 스킬은 그대로 +4h/레벨(최대 40h). 하루 1회 접속이면 체인 수익 손실 0 → 장시간 작물(12h~4일)과의 일일 접속 압박 완화.
+- **할 일:** ~~cap 기본값 확대 또는 장시간 작물 시간 조정으로 일일 접속 압박 완화.~~ → cap 기본값 24h로 확대 완료.
 - **인수조건:**
-  - [ ] 장시간 작물의 오프라인 보상/수확 손실 구조 개선
-  - [ ] 밸런스 테스트 통과
+  - [x] cap 기본값 확대로 일일 접속 압박 완화
+  - [x] 밸런스 테스트 통과
 - **관련 파일:** `packages/farm-core/src/balance.json`, `prestige.ts`
 
 ### [F4] 프로덕션 로그·빌드주입 점검 — `P3` · S

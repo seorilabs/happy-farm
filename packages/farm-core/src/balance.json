@@ -104,7 +104,7 @@
     "fullCompletionReward": 100000000000
   },
   "regions": {
-    "agentPurpose": "Prestige (farm chain) data. Graduating requires the legend_field collection plus gold (costBase * costGrowth^level). The old farm becomes a chain farm paying incomeRatio of its snapshot productivity. Crop sell AND cost scale by scalePerLevel^level (ROI-preserving inflation); archetypes vary growth time vs sale price.",
+    "agentPurpose": "Prestige (farm chain) data. Graduating requires the legend_field collection plus gold (costBase * costGrowth^level). The old farm becomes a chain farm paying incomeRatio of its snapshot productivity. Crop sell AND cost scale by scalePerLevel^level (ROI-preserving inflation); archetypes vary growth time vs sale price. chain.offlineCapMs is the base offline accrual window (24h) so a once-daily player loses no chain income next to multi-day crops; the offline_cap prestige skill extends it (+4h/level, up to 40h).",
     "graduation": {
       "requiredAreaCollection": "legend_field",
       "costBase": 100000000000,
@@ -112,7 +112,7 @@
       "starsBase": 3
     },
     "scalePerLevel": 6,
-    "chain": { "incomeRatio": 0.5, "offlineCapMs": 28800000 },
+    "chain": { "incomeRatio": 0.5, "offlineCapMs": 86400000 },
     "archetypes": [
       { "key": "plains", "icon": "🌾", "growTimeMult": 1, "sellMult": 1 },
       { "key": "highlands", "icon": "⛰️", "growTimeMult": 1.25, "sellMult": 1.35 },
