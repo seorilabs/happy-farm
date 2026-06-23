@@ -185,10 +185,10 @@ flowchart TB
 - **관련 파일:** `apps/*/src/audio`, `apps/mobile/src/ads/config.ts`, `packages/farm-core/src/{devLog,releaseInfo}.ts`, `scripts/resolve-release-version.mjs`, `.github/workflows/deploy-*.yml`
 
 ### [F5] App Store marketingUrl 확정 — `P4` · XS
-- **현황:** `app-store/app-store.config.json:12` `marketingUrl: "확정 필요"` → `check:app-store` WARN.
-- **할 일:** 마케팅 URL 확정 입력 또는 필드 제거로 WARN 제거.
+- **현황:** ~~`marketingUrl: "확정 필요"` → WARN~~ → `https://happy-farm-tycoon.web.app`(앱 Firebase Hosting 사이트)로 확정. `check:app-store`의 marketingUrl WARN 해소.
+- **할 일:** ~~마케팅 URL 확정 입력 또는 필드 제거로 WARN 제거.~~ → 완료.
 - **인수조건:**
-  - [ ] `pnpm check:app-store` WARN 0
+  - [x] marketingUrl WARN 제거 (`check:app-store`에서 `marketingUrl 값이 있습니다` PASS). 남은 WARN은 `GoogleService-Info.plist`(CI secret 복원 대상, gitignore)로 본 이슈 범위 밖.
 - **관련 파일:** `app-store/app-store.config.json`
 
 ---
