@@ -32,7 +32,7 @@
 | 저작권                   | `2026 Seorilabs`                            |
 | 고객지원 이메일          | `cs@seorilabs.com`                          |
 | 지원 URL                 | `https://www.seorilabs.com/support`         |
-| 마케팅 URL               | 확정 필요                                   |
+| 마케팅 URL               | `https://happy-farm-tycoon.web.app`         |
 | 개인정보 처리방침 URL    | `https://www.seorilabs.com/privacy`         |
 | 심사 연락처 이름         | Seorilabs Support                           |
 | 심사 연락처 이메일       | `cs@seorilabs.com`                          |
