@@ -522,6 +522,22 @@ export default function FarmGame({
   const [isSaveLoaded, setIsSaveLoaded] = useState(false);
   const [isSettingsLoaded, setIsSettingsLoaded] = useState(false);
   const [gameSettings, setGameSettings] = useState<FarmGameSettings>(DEFAULT_FARM_GAME_SETTINGS);
+  // Mirror the haptics setting into a ref so the vibrate helper can read the
+  // latest value without being threaded through every effect/callback dep list.
+  const hapticsEnabledRef = useRef(DEFAULT_FARM_GAME_SETTINGS.hapticsEnabled);
+  hapticsEnabledRef.current = gameSettings.hapticsEnabled;
+  // Single entry point that buzzes only when the setting is on. Haptics are
+  // non-critical feedback, so a failure is swallowed to never block gameplay.
+  const triggerHaptic = useCallback((pattern: number | number[]) => {
+    if (!hapticsEnabledRef.current) {
+      return;
+    }
+    try {
+      Vibration.vibrate(pattern);
+    } catch {
+      /* non-critical haptic */
+    }
+  }, []);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [harvestCombo, setHarvestCombo] = useState(0);
@@ -810,7 +826,7 @@ export default function FarmGame({
         plantPulseTokenRef.current += 1;
         const token = plantPulseTokenRef.current;
         setPlantPulses((prev) => ({ ...prev, [event.plotIndex]: token }));
-        Vibration.vibrate(15);
+        triggerHaptic(15);
         farmAnalytics.trackCropPlanted(event.cropKey, event.areaKey, event.cropTier, event.cost, analyticsContext());
         continue;
       }
@@ -871,9 +887,9 @@ export default function FarmGame({
             context: analyticsContext(),
           });
           if (effect.specialCount > 0 && Platform.OS === 'android') {
-            Vibration.vibrate([0, 24, 36, 48]);
+            triggerHaptic([0, 24, 36, 48]);
           } else {
-            Vibration.vibrate(50);
+            triggerHaptic(50);
           }
           if (gameSettings.soundEffectsEnabled && audio.isSupported) {
             void audio.playHarvest();
@@ -972,9 +988,9 @@ export default function FarmGame({
       // entries as wait gaps, so a "short double tap" can't be expressed there -
       // we fall back to the standard single buzz.
       if (isSpecialHarvest && Platform.OS === 'android') {
-        Vibration.vibrate([0, 24, 36, 48]);
+        triggerHaptic([0, 24, 36, 48]);
       } else {
-        Vibration.vibrate(50);
+        triggerHaptic(50);
       }
       if (gameSettings.soundEffectsEnabled && audio.isSupported) {
         void audio.playHarvest();
@@ -995,6 +1011,7 @@ export default function FarmGame({
     showFirstHarvestCelebration,
     showMasteryRankUpCelebration,
     toast,
+    triggerHaptic,
   ]);
 
   useEffect(() => {
@@ -1538,7 +1555,7 @@ export default function FarmGame({
       context: analyticsContext(),
     });
     toast(messages.collectionRewardClaimedToast(formatMoney(preview.awardedGold, locale)));
-    try { Vibration.vibrate(50); } catch { /* non-critical haptic */ }
+    triggerHaptic(50);
     pulseGold();
     _callGoldPulseHook();
     if (gameSettings.soundEffectsEnabled && audio.isSupported) {
@@ -1574,7 +1591,7 @@ export default function FarmGame({
       context: analyticsContext(),
     });
     toast(messages.achievementClaimedToast(preview.starsAwarded));
-    try { Vibration.vibrate(50); } catch { /* non-critical haptic */ }
+    triggerHaptic(50);
     if (gameSettings.soundEffectsEnabled && audio.isSupported) {
       try {
         void Promise.resolve(audio.playHarvest()).catch(() => undefined);
@@ -2656,6 +2673,12 @@ export default function FarmGame({
               value={gameSettings.backgroundMusicEnabled && audio.isSupported}
               disabled={!audio.isSupported}
               onPress={() => updateGameSettings({ backgroundMusicEnabled: !gameSettings.backgroundMusicEnabled })}
+            />
+            <SettingToggle
+              label={messages.hapticsLabel}
+              desc={messages.hapticsDesc}
+              value={gameSettings.hapticsEnabled}
+              onPress={() => updateGameSettings({ hapticsEnabled: !gameSettings.hapticsEnabled })}
             />
 
             <Text style={styles.sheetSectionTitle}>{messages.notificationSection}</Text>
