@@ -77,4 +77,24 @@ describe('getReturnSummary', () => {
     const summary = getReturnSummary(state, lastSeen, NOW);
     expect(summary?.offlineGold).toBe((3600 * CHAIN_OFFLINE_CAP_MS) / MS_PER_HOUR);
   });
+
+  test('flags daily bonus as available when it has never been claimed', () => {
+    const state = withReadyCrop(0, createInitialState());
+    const lastSeen = NOW - 2 * MS_PER_HOUR;
+    const summary = getReturnSummary(state, lastSeen, NOW);
+    expect(summary?.dailyBonusAvailable).toBe(true);
+  });
+
+  test('flags daily bonus as unavailable when claimed within the cooldown', () => {
+    const base = createInitialState();
+    const state = withReadyCrop(0, {
+      ...base,
+      dailyBonusState: { lastClaimedAt: NOW - 1000, streak: 1 },
+    });
+    const lastSeen = NOW - 2 * MS_PER_HOUR;
+    const summary = getReturnSummary(state, lastSeen, NOW);
+    // 수확할 작물이 있어 카드는 노출되지만, 데일리는 쿨다운 중이라 CTA 비노출.
+    expect(summary).not.toBeNull();
+    expect(summary?.dailyBonusAvailable).toBe(false);
+  });
 });

@@ -1457,6 +1457,36 @@ describe('FarmGame UI flow', () => {
     await waitFor(() => expect(screen.queryByText('다시 오셨네요!')).toBeNull());
   });
 
+  test('recap offers a harvest CTA that harvests ready crops immediately', async () => {
+    mockPersistence.readLastSeenAt.mockResolvedValueOnce(NOW - 2 * 60 * 60 * 1000);
+    const screen = await renderGame(createReadyHarvestState());
+
+    await waitFor(() => expect(screen.getByText('다시 오셨네요!')).toBeTruthy());
+    fireEvent.press(screen.getByText('바로 수확하기'));
+
+    await waitFor(() => expect(screen.queryByText('다시 오셨네요!')).toBeNull());
+    // 첫 행동 CTA가 즉시 수확을 실행해 준비 작물(GET)이 남지 않는다.
+    await waitFor(() => expect(screen.queryAllByText('GET')).toHaveLength(0));
+  });
+
+  test('recap offers a daily-bonus CTA that opens the daily sheet', async () => {
+    mockPersistence.readLastSeenAt.mockResolvedValueOnce(NOW - 2 * 60 * 60 * 1000);
+    // 오프라인 체인 수익만 있고 수확 작물은 없는 복귀 상태 → 데일리 클레임이 첫 행동 CTA.
+    const chainState: GameState = {
+      ...createInitialState(),
+      chainFarms: [{ id: 1, archetype: 'plains', goldPerHour: 3600, lastCollectedAt: NOW - 2 * 60 * 60 * 1000 }],
+    };
+    const screen = await renderGame(chainState);
+
+    await waitFor(() => expect(screen.getByText('다시 오셨네요!')).toBeTruthy());
+    fireEvent.press(screen.getByText('데일리 보너스 받기'));
+
+    // 데일리 CTA에서도 오프라인 체인 수익이 수령된다(수금 토스트로 확인).
+    await waitFor(() => expect(screen.getByText(/수금했어요/)).toBeTruthy());
+    // 데일리 보너스 시트로 전환된다.
+    await waitFor(() => expect(screen.getByText('오늘의 출석 보너스')).toBeTruthy());
+  });
+
   test('does not show the recap after only a brief absence', async () => {
     mockPersistence.readLastSeenAt.mockResolvedValueOnce(NOW - 30_000);
     const screen = await renderGame(createReadyHarvestState());

@@ -1,6 +1,7 @@
 import type { GameState } from './types';
 import { getChainIncome } from './prestige';
 import { isPlotGrowthComplete } from './harvest';
+import { isDailyBonusAvailable, normalizeDailyBonusState } from './dailyBonus';
 
 // Minimum time away before a returning player is greeted with the offline
 // progress summary. Short app switches (checking a notification, swapping apps
@@ -15,6 +16,11 @@ export type ReturnSummary = {
   offlineGold: number;
   // Crops sitting ready to harvest right now.
   readyCropCount: number;
+  // Whether the daily login bonus can be claimed right now. Surfaced so the
+  // welcome-back card can offer a "claim daily bonus" first-action CTA without
+  // the player having to hunt for it (the daily sheet is otherwise suppressed
+  // whenever a welcome-back recap is shown).
+  dailyBonusAvailable: boolean;
 };
 
 // Builds the "welcome back" summary shown when a player returns after being
@@ -47,9 +53,14 @@ export function getReturnSummary(
     }
   }
 
+  // The card still only interrupts the player when passive income or ready
+  // crops are waiting; daily-bonus availability alone keeps the existing
+  // (separate) daily sheet path and does not force a welcome-back recap.
   if (offlineGold <= 0 && readyCropCount <= 0) {
     return null;
   }
 
-  return { awayMs, offlineGold, readyCropCount };
+  const dailyBonusAvailable = isDailyBonusAvailable(normalizeDailyBonusState(gameState.dailyBonusState), now);
+
+  return { awayMs, offlineGold, readyCropCount, dailyBonusAvailable };
 }
