@@ -31,6 +31,8 @@ import {
   canUnlockNode,
   claimNextAchievementTier,
   collectChainIncome,
+  acknowledgeResearchOpportunities,
+  hasUnseenResearchOpportunity,
   getBreedingRecipeStatus,
   getChainIncome,
   getClaimableAchievementCount,
@@ -1455,6 +1457,10 @@ export default function FarmGame({
       BREEDING_RECIPES.filter((recipe) => getBreedingRecipeStatus(gameState, recipe).breedable).length,
     [gameState]
   );
+  // 마지막으로 Lab을 연 이후 새로 생긴 해금 기회가 있을 때만 배지를 띄운다. 사용자가 RP를
+  // 모으려고 일부러 미루는 경우 매번 조르지 않도록, 확인한 기회는 다시 표시하지 않는다.
+  const hasUnseenLabOpportunity = useMemo(() => hasUnseenResearchOpportunity(gameState), [gameState]);
+  const labBadgeCount = hasUnseenLabOpportunity ? labActionableCount : 0;
   const selectedAreaLabel = getLocalizedAreaLabel(selectedArea);
   const selectedAreaUnlocked = isAreaUnlocked(gameState, selectedArea);
   const rewardedGoldLimit = useMemo(
@@ -1660,6 +1666,8 @@ export default function FarmGame({
   }
 
   function openLab() {
+    // Lab을 여는 순간 현재 해금 기회를 "확인됨"으로 표시해 진입 유도 배지를 해제한다.
+    setGameState((state) => acknowledgeResearchOpportunities(state));
     setActiveSheet({ type: 'lab' });
   }
 
@@ -2453,7 +2461,7 @@ export default function FarmGame({
           />
           <NavButton
             label={messages.labButton}
-            badge={labActionableCount}
+            badge={labBadgeCount}
             accessibilityLabel={messages.labButtonAccessibilityLabel}
             onPress={openLab}
           />

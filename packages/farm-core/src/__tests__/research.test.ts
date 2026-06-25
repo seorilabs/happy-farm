@@ -14,6 +14,9 @@ import {
   normalizeAutomationSettings,
   normalizeResearchState,
   unlockNode,
+  getResearchOpportunityKeys,
+  hasUnseenResearchOpportunity,
+  acknowledgeResearchOpportunities,
 } from '../research';
 import {
   CROPS,
@@ -275,7 +278,13 @@ describe('gated areas', () => {
     const kept = migrateLoadedState(
       {
         unlockedAreas: ['starter_field', 'hybrid_greenhouse'],
-        research: { points: 0, totalPointsEarned: 0, unlockedNodes: ['breeding_lab'], unlockedBreeds: [] },
+        research: {
+          points: 0,
+          totalPointsEarned: 0,
+          unlockedNodes: ['breeding_lab'],
+          unlockedBreeds: [],
+          acknowledgedOpportunities: [],
+        },
       },
       createInitialState()
     );
@@ -309,6 +318,7 @@ describe('research save migration', () => {
       totalPointsEarned: 0,
       unlockedNodes: [],
       unlockedBreeds: [],
+      acknowledgedOpportunities: [],
     });
 
     const normalized = normalizeResearchState({
@@ -339,7 +349,13 @@ describe('research save migration', () => {
   test('migration is idempotent for research fields', () => {
     const once = migrateLoadedState(
       {
-        research: { points: 50, totalPointsEarned: 80, unlockedNodes: ['breeding_lab'], unlockedBreeds: [] },
+        research: {
+          points: 50,
+          totalPointsEarned: 80,
+          unlockedNodes: ['breeding_lab'],
+          unlockedBreeds: [],
+          acknowledgedOpportunities: [],
+        },
         automationSettings: { autoHarvestEnabled: true, autoReplantEnabled: false, donationModeEnabled: true },
       },
       createInitialState()
@@ -348,5 +364,84 @@ describe('research save migration', () => {
 
     expect(twice.research).toEqual(once.research);
     expect(twice.automationSettings).toEqual(once.automationSettings);
+  });
+});
+
+describe('연구실 진입 유도 배지(발견 기회)', () => {
+  test('RP가 없으면 기회가 없고, 충분하면 해금 가능 노드가 기회로 잡힌다', () => {
+    const base = createInitialState();
+    expect(getResearchOpportunityKeys(base)).toEqual([]);
+    expect(hasUnseenResearchOpportunity(base)).toBe(false);
+
+    const rich: GameState = { ...base, research: { ...base.research, points: 1_000_000 } };
+    const keys = getResearchOpportunityKeys(rich);
+    expect(keys.length).toBeGreaterThan(0);
+    // 모든 기회 키는 node:/breed: 접두사를 가진다.
+    expect(keys.every((key) => key.startsWith('node:') || key.startsWith('breed:'))).toBe(true);
+    expect(hasUnseenResearchOpportunity(rich)).toBe(true);
+  });
+
+  test('확인(acknowledge) 후에는 같은 기회로 배지가 다시 뜨지 않는다', () => {
+    const base = createInitialState();
+    const rich: GameState = { ...base, research: { ...base.research, points: 1_000_000 } };
+
+    const acked = acknowledgeResearchOpportunities(rich);
+    expect(acked.research.acknowledgedOpportunities).toEqual(getResearchOpportunityKeys(rich));
+    expect(hasUnseenResearchOpportunity(acked)).toBe(false);
+  });
+
+  test('확인 목록에 없는 기회가 하나라도 있으면 배지가 뜬다', () => {
+    const base = createInitialState();
+    const rich: GameState = { ...base, research: { ...base.research, points: 1_000_000 } };
+    const keys = getResearchOpportunityKeys(rich);
+    expect(keys.length).toBeGreaterThan(1);
+
+    // 일부만 확인된 상태 → 나머지 기회 때문에 배지 노출.
+    const partial: GameState = { ...rich, research: { ...rich.research, acknowledgedOpportunities: [keys[0]!] } };
+    expect(hasUnseenResearchOpportunity(partial)).toBe(true);
+
+    // 전부 확인 → 배지 해제.
+    const full: GameState = { ...rich, research: { ...rich.research, acknowledgedOpportunities: keys } };
+    expect(hasUnseenResearchOpportunity(full)).toBe(false);
+  });
+
+  test('해금으로 새 선행 충족 노드가 드러나면 다시 미확인 기회가 된다', () => {
+    // 선행이 루트 노드(선행 없음)인 종속 노드를 찾아 시뮬레이션.
+    const dependent = RESEARCH_NODES.find(
+      (node) => node.requires != null && RESEARCH_NODES.find((r) => r.key === node.requires)?.requires == null
+    );
+    if (dependent == null) {
+      return; // 트리에 해당 형태가 없으면 스킵(밸런스 의존).
+    }
+    const base = createInitialState();
+    const rich: GameState = { ...base, research: { ...base.research, points: 1_000_000 } };
+    const acked = acknowledgeResearchOpportunities(rich);
+    expect(hasUnseenResearchOpportunity(acked)).toBe(false);
+
+    // 선행 노드 해금 → 종속 노드가 새 기회로 등장(확인 목록에 없음).
+    const afterUnlock = unlockNode(acked, dependent.requires!);
+    expect(afterUnlock).not.toBeNull();
+    expect(getResearchOpportunityKeys(afterUnlock!)).toContain(`node:${dependent.key}`);
+    expect(hasUnseenResearchOpportunity(afterUnlock!)).toBe(true);
+  });
+
+  test('변화가 없으면 동일 참조를 반환해 불필요한 세이브를 피한다', () => {
+    const base = createInitialState();
+    expect(acknowledgeResearchOpportunities(base)).toBe(base);
+  });
+
+  test('normalizeResearchState는 acknowledgedOpportunities를 기본값[]로 채우고 무효 키를 버린다', () => {
+    expect(normalizeResearchState({}).acknowledgedOpportunities).toEqual([]);
+
+    const validKey = `node:${RESEARCH_NODES[0]!.key}`;
+    const normalized = normalizeResearchState({
+      points: 0,
+      totalPointsEarned: 0,
+      unlockedNodes: [],
+      unlockedBreeds: [],
+      acknowledgedOpportunities: ['node:bogus', 'breed:bogus', 'garbage', 123, validKey, validKey],
+    });
+    // 잘 알려진 키만, 중복 제거되어 남는다.
+    expect(normalized.acknowledgedOpportunities).toEqual([validKey]);
   });
 });

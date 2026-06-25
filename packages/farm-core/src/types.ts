@@ -18,6 +18,10 @@ export type ResearchState = {
   totalPointsEarned: number;
   unlockedNodes: ResearchNodeKey[];
   unlockedBreeds: CropKey[];
+  // 연구실 진입 유도 배지를 위해, 마지막으로 Lab을 열어 "확인"한 시점의 발견 기회
+  // (해금 가능 노드 / 교배 가능 레시피) 키 목록. 현재 기회 중 이 목록에 없는 항목이
+  // 있으면 새 기회로 보고 배지를 띄운다. Lab을 열면 현재 기회로 갱신해 배지를 해제한다.
+  acknowledgedOpportunities: string[];
 };
 
 export type AutomationSettings = {
