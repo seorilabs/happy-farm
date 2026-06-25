@@ -100,6 +100,31 @@ describe('AppsInToss Remote Config 어댑터', () => {
     expect(result.status).toBe('error');
     expect(adapter.getAppsInTossRemoteBoolean('mobile_ads_global_enabled')).toBe(true);
   });
+
+  test('초기화 실패(error) 후에도 재시도가 가능하다', async () => {
+    const adapter = loadAdapter();
+    // 1차: 일시 오류
+    mockFetchAndActivate.mockRejectedValueOnce(new Error('network'));
+    const first = await adapter.initializeAppsInTossRemoteConfig({} as never);
+    expect(first.status).toBe('error');
+
+    // 2차: 정상 활성화(메모이즈가 해제되어 재시도된다)
+    mockGetBoolean.mockReturnValue(false);
+    const second = await adapter.initializeAppsInTossRemoteConfig({} as never);
+    expect(second.status).toBe('ready');
+    expect(mockFetchAndActivate).toHaveBeenCalledTimes(2);
+    expect(adapter.getAppsInTossRemoteBoolean('mobile_ads_global_enabled')).toBe(false);
+  });
+
+  test('미지원으로 끝난 뒤 환경이 바뀌면 재시도로 활성화된다', async () => {
+    mockIsSupported.mockResolvedValueOnce(false);
+    const adapter = loadAdapter();
+    const first = await adapter.initializeAppsInTossRemoteConfig({} as never);
+    expect(first.status).toBe('unsupported');
+
+    const second = await adapter.initializeAppsInTossRemoteConfig({} as never);
+    expect(second.status).toBe('ready');
+  });
 });
 
 describe('어댑터 기본값과 remoteconfig.template.json 정합성', () => {

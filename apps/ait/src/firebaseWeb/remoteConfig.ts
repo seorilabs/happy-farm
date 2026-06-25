@@ -125,7 +125,14 @@ async function initializeRemoteConfig(app: FirebaseApp): Promise<AppsInTossRemot
 }
 
 export function initializeAppsInTossRemoteConfig(app: FirebaseApp = getAppsInTossFirebaseApp()) {
-  initializePromise ??= initializeRemoteConfig(app);
+  // 성공(ready)만 메모이즈한다. 미지원/일시 오류(fetch 실패 등)는 메모이즈를 해제해
+  // 다음 호출에서 재시도할 수 있게 한다(초기화 실패 후 영구 차단 방지).
+  initializePromise ??= initializeRemoteConfig(app).then((result) => {
+    if (result.status !== 'ready') {
+      initializePromise = null;
+    }
+    return result;
+  });
   return initializePromise;
 }
 
