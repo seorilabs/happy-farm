@@ -17,6 +17,9 @@ export function SheetAction({
   return (
     <Pressable
       disabled={disabled}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ disabled: disabled === true }}
       style={[
         sheetPartStyles.sheetAction,
         secondary && sheetPartStyles.secondarySheetAction,
@@ -55,6 +58,9 @@ export function ShopCard({
   return (
     <Pressable
       disabled={disabled}
+      accessibilityRole="button"
+      accessibilityLabel={`${title}, ${desc}, ${price}`}
+      accessibilityState={{ disabled: disabled === true }}
       style={[sheetPartStyles.shopCard, disabled && sheetPartStyles.disabledCard]}
       onPress={onPress}
     >
