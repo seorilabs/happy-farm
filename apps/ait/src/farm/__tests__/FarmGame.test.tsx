@@ -1481,6 +1481,8 @@ describe('FarmGame UI flow', () => {
     await waitFor(() => expect(screen.getByText('다시 오셨네요!')).toBeTruthy());
     fireEvent.press(screen.getByText('데일리 보너스 받기'));
 
+    // 데일리 CTA에서도 오프라인 체인 수익이 수령된다(수금 토스트로 확인).
+    await waitFor(() => expect(screen.getByText(/수금했어요/)).toBeTruthy());
     // 데일리 보너스 시트로 전환된다.
     await waitFor(() => expect(screen.getByText('오늘의 출석 보너스')).toBeTruthy());
   });

@@ -1705,6 +1705,22 @@ export default function FarmGame({
     void maybeShowReturnAd();
   }
 
+  // Shared settlement for the welcome-back action CTAs: record the analytics
+  // event and always sweep any accrued offline chain income into the purse.
+  // Both CTAs (harvest / daily) call this so offline gold is never lost no
+  // matter which first action the player picks.
+  function collectReturnSummaryOffline(summary: ReturnSummary) {
+    farmAnalytics.trackReturnSummaryCollected({
+      awayMs: summary.awayMs,
+      offlineGold: summary.offlineGold,
+      readyCropCount: summary.readyCropCount,
+      context: analyticsContext(),
+    });
+    if (summary.offlineGold > 0) {
+      collectChain();
+    }
+  }
+
   function openPrestigeConfirm() {
     setActiveSheet({ type: 'prestigeConfirm' });
   }
@@ -2906,14 +2922,7 @@ export default function FarmGame({
                 label={messages.welcomeBackHarvestAction}
                 onPress={() => {
                   if (activeSheet?.type !== 'welcomeBack') return;
-                  const summary = activeSheet.summary;
-                  farmAnalytics.trackReturnSummaryCollected({
-                    awayMs: summary.awayMs,
-                    offlineGold: summary.offlineGold,
-                    readyCropCount: summary.readyCropCount,
-                    context: analyticsContext(),
-                  });
-                  if (summary.offlineGold > 0) collectChain();
+                  collectReturnSummaryOffline(activeSheet.summary);
                   setActiveSheet(null);
                   harvestAllCrops();
                   void maybeShowReturnAd();
@@ -2926,14 +2935,7 @@ export default function FarmGame({
                 secondary={activeSheet.summary.readyCropCount > 0}
                 onPress={() => {
                   if (activeSheet?.type !== 'welcomeBack') return;
-                  const summary = activeSheet.summary;
-                  farmAnalytics.trackReturnSummaryCollected({
-                    awayMs: summary.awayMs,
-                    offlineGold: summary.offlineGold,
-                    readyCropCount: summary.readyCropCount,
-                    context: analyticsContext(),
-                  });
-                  if (summary.offlineGold > 0) collectChain();
+                  collectReturnSummaryOffline(activeSheet.summary);
                   // Jump straight to the daily sheet. It is the next interaction, so we skip
                   // the return ad here to avoid covering the claim flow.
                   setActiveSheet({ type: 'dailyBonus' });
