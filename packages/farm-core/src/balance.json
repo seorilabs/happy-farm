@@ -54,12 +54,16 @@
     "returnInterstitialCooldownMs": 21600000
   },
   "dailyBonus": {
-    "agentPurpose": "Daily login bonus scaling. The bonus is a fraction of the progression-scaled rewarded-gold (ad) payout per streak tier, so it grows with the player's next goal while always staying below the ad reward (max ratio < 1) to preserve the ad incentive. Streak structure: 3 tiers (day 1 / day 2 / day 3+).",
+    "agentPurpose": "Daily login bonus scaling. The daily bonus is a fraction of the progression-scaled rewarded-gold (ad) payout per streak tier, so it grows with the player's next goal while always staying below the ad reward (max ratio < 1) to preserve the ad incentive. Streak structure: 3 daily tiers (day 1 / day 2 / day 3+). On top of the daily bonus, a weekly milestone pays an extra reward every `weeklyMilestone.everyDays`-th consecutive day (day 7, 14, 21, ...) as a loyalty reward for long-term retention; it uses the same progression-scaled ad reward times `weeklyMilestone.adRewardRatio`. The milestone is intentionally a multiple of one ad reward, but it is earned only once per weekly streak (not a per-claim ad substitute), so the ad incentive stays intact.",
     "adRewardRatioByStreak": {
       "1": 0.5,
       "2": 0.75
     },
-    "adRewardRatioMax": 0.9
+    "adRewardRatioMax": 0.9,
+    "weeklyMilestone": {
+      "everyDays": 7,
+      "adRewardRatio": 2
+    }
   },
   "mastery": {
     "agentPurpose": "Crop mastery ranks. Cumulative harvest counts per crop reach tier-based thresholds and grant permanent per-crop sell/speed bonuses. Thresholds are indexed by crop tier so slow late-game crops rank up in fewer harvests.",

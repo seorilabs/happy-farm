@@ -3,10 +3,14 @@
 import {
   DAILY_BONUS_COOLDOWN_MS,
   DAILY_BONUS_STREAK_EXPIRE_MS,
+  WEEKLY_MILESTONE_EVERY_DAYS,
   claimDailyBonus,
   getDailyBonusGold,
   getDailyBonusReminderAt,
+  getDailyBonusTotalGold,
+  getWeeklyMilestoneBonus,
   isDailyBonusAvailable,
+  isWeeklyMilestoneStreak,
   normalizeDailyBonusState,
   previewDailyBonus,
   type DailyBonusState,
@@ -163,6 +167,103 @@ describe('getDailyBonusGold', () => {
     expect(getDailyBonusGold(1, Number.NaN)).toBe(50);
     expect(getDailyBonusGold(1, 0)).toBe(50);
     expect(getDailyBonusGold(1, -100)).toBe(50);
+  });
+});
+
+describe('주간 마일스톤 (장기 스트릭 보상)', () => {
+  test('마일스톤 주기는 7일이다', () => {
+    expect(WEEKLY_MILESTONE_EVERY_DAYS).toBe(7);
+  });
+
+  test('isWeeklyMilestoneStreak: 7의 배수만 true', () => {
+    expect(isWeeklyMilestoneStreak(7)).toBe(true);
+    expect(isWeeklyMilestoneStreak(14)).toBe(true);
+    expect(isWeeklyMilestoneStreak(21)).toBe(true);
+    expect(isWeeklyMilestoneStreak(1)).toBe(false);
+    expect(isWeeklyMilestoneStreak(6)).toBe(false);
+    expect(isWeeklyMilestoneStreak(8)).toBe(false);
+    expect(isWeeklyMilestoneStreak(0)).toBe(false);
+  });
+
+  test('getWeeklyMilestoneBonus: 마일스톤이 아니면 0', () => {
+    expect(getWeeklyMilestoneBonus(1)).toBe(0);
+    expect(getWeeklyMilestoneBonus(3)).toBe(0);
+    expect(getWeeklyMilestoneBonus(6)).toBe(0);
+    expect(getWeeklyMilestoneBonus(0)).toBe(0);
+  });
+
+  test('getWeeklyMilestoneBonus: 기본 광고 보상 100G 기준 7일차에 200G', () => {
+    expect(getWeeklyMilestoneBonus(7)).toBe(200);
+    expect(getWeeklyMilestoneBonus(14)).toBe(200);
+  });
+
+  test('getWeeklyMilestoneBonus: 진행도(광고 보상)에 비례 스케일링', () => {
+    expect(getWeeklyMilestoneBonus(7, 1000)).toBe(2000);
+    expect(getWeeklyMilestoneBonus(7, 5000)).toBe(10000);
+  });
+
+  test('getWeeklyMilestoneBonus: 비정상 광고 보상은 기본값으로 폴백', () => {
+    expect(getWeeklyMilestoneBonus(7, Number.NaN)).toBe(200);
+    expect(getWeeklyMilestoneBonus(7, 0)).toBe(200);
+    expect(getWeeklyMilestoneBonus(7, -100)).toBe(200);
+  });
+
+  test('getDailyBonusTotalGold: 일일 보너스 + 마일스톤 합계', () => {
+    // 7일차: 일일 90G(상한 0.9 × 100) + 마일스톤 200G = 290G
+    expect(getDailyBonusTotalGold(7)).toBe(getDailyBonusGold(7) + 200);
+    expect(getDailyBonusTotalGold(7)).toBe(290);
+    // 마일스톤이 아닌 날은 일일 보너스와 동일
+    expect(getDailyBonusTotalGold(3)).toBe(getDailyBonusGold(3));
+  });
+
+  test('일일 보너스 자체는 마일스톤 날에도 광고 보상보다 낮아 광고 인센티브를 보존한다', () => {
+    for (const adReward of [100, 1000, 50000]) {
+      expect(getDailyBonusGold(7, adReward)).toBeLessThan(adReward);
+    }
+  });
+
+  test('claimDailyBonus: 7일 연속 수령 시 마일스톤 보너스가 합산된다', () => {
+    const state: DailyBonusState = { lastClaimedAt: NOW - H24, streak: 6 };
+    const result = claimDailyBonus(state, NOW)!;
+    expect(result.streak).toBe(7);
+    expect(result.isWeeklyMilestone).toBe(true);
+    expect(result.milestoneBonus).toBe(200);
+    expect(result.goldAwarded).toBe(290);
+  });
+
+  test('claimDailyBonus: 마일스톤이 아닌 날은 milestoneBonus 0, 합계는 일일 보너스와 동일', () => {
+    const state: DailyBonusState = { lastClaimedAt: NOW - H24, streak: 2 };
+    const result = claimDailyBonus(state, NOW)!;
+    expect(result.streak).toBe(3);
+    expect(result.isWeeklyMilestone).toBe(false);
+    expect(result.milestoneBonus).toBe(0);
+    expect(result.goldAwarded).toBe(90);
+  });
+
+  test('claimDailyBonus: 마일스톤도 진행도에 비례 스케일링', () => {
+    const state: DailyBonusState = { lastClaimedAt: NOW - H24, streak: 6 };
+    const result = claimDailyBonus(state, NOW, 1000)!;
+    expect(result.milestoneBonus).toBe(2000);
+    // 일일 900G(0.9 × 1000) + 마일스톤 2000G
+    expect(result.goldAwarded).toBe(2900);
+  });
+
+  test('previewDailyBonus: 7일차 마일스톤이 미리보기에도 반영된다', () => {
+    const state: DailyBonusState = { lastClaimedAt: NOW - H24, streak: 6 };
+    const preview = previewDailyBonus(state, NOW);
+    expect(preview.streak).toBe(7);
+    expect(preview.isWeeklyMilestone).toBe(true);
+    expect(preview.milestoneBonus).toBe(200);
+    expect(preview.goldAwarded).toBe(290);
+  });
+
+  test('preview와 claim 값이 마일스톤 날에도 일치한다', () => {
+    const state: DailyBonusState = { lastClaimedAt: NOW - H24, streak: 6 };
+    const preview = previewDailyBonus(state, NOW, 1000);
+    const claim = claimDailyBonus(state, NOW, 1000)!;
+    expect(preview.goldAwarded).toBe(claim.goldAwarded);
+    expect(preview.milestoneBonus).toBe(claim.milestoneBonus);
+    expect(preview.isWeeklyMilestone).toBe(claim.isWeeklyMilestone);
   });
 });
 

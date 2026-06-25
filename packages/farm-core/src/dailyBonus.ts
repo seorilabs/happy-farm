@@ -22,6 +22,13 @@ const DAILY_BONUS_BASE_AD_REWARD_GOLD = balance.ads.rewardedGoldAmount;
 const DAILY_BONUS_AD_REWARD_RATIO_BY_STREAK: Record<number, number> = balance.dailyBonus.adRewardRatioByStreak;
 const DAILY_BONUS_AD_REWARD_RATIO_MAX = balance.dailyBonus.adRewardRatioMax; // streak 3일 이상 상한 비율
 
+// 주간 마일스톤: streak이 everyDays의 배수(7, 14, 21, ...)에 도달할 때마다 지급하는 추가 보상.
+// 일일 보너스(항상 광고 보상 미만)와 별개의 장기 출석 로열티 보상이며, 진행도 스케일된
+// 광고 보상에 비율을 곱하므로 진행도와 함께 커진다. 비율이 1을 넘더라도 주(週) 1회만
+// 지급되므로(매 수령마다 광고를 대체하지 않음) 광고 인센티브는 유지된다.
+export const WEEKLY_MILESTONE_EVERY_DAYS = balance.dailyBonus.weeklyMilestone.everyDays;
+const WEEKLY_MILESTONE_AD_REWARD_RATIO = balance.dailyBonus.weeklyMilestone.adRewardRatio;
+
 export type DailyBonusState = {
   // 마지막으로 보너스를 받은 UTC ms 타임스탬프. null이면 한 번도 받지 않음.
   lastClaimedAt: number | null;
@@ -30,7 +37,12 @@ export type DailyBonusState = {
 };
 
 export type DailyBonusResult = {
+  // 일일 보너스 + 주간 마일스톤 합계(실제 지급 골드).
   goldAwarded: number;
+  // 주간 마일스톤 보너스(해당 streak이 마일스톤이 아니면 0).
+  milestoneBonus: number;
+  // 이번 수령이 주간 마일스톤(7일 배수)인지 여부.
+  isWeeklyMilestone: boolean;
   streak: number;
   newState: DailyBonusState;
 };
@@ -56,6 +68,40 @@ export function getDailyBonusGold(
   const scaled = Math.floor(base * ratio);
   // 광고 보상보다 항상 낮게(비율<1) 유지하면서 최소 1골드는 보장한다.
   return Number.isFinite(scaled) ? Math.max(1, scaled) : DAILY_BONUS_BASE_AD_REWARD_GOLD;
+}
+
+/**
+ * 해당 streak이 주간 마일스톤(everyDays의 양의 배수)인지 확인합니다.
+ */
+export function isWeeklyMilestoneStreak(streak: number): boolean {
+  const clamped = Math.max(0, Math.floor(streak));
+  return clamped > 0 && WEEKLY_MILESTONE_EVERY_DAYS > 0 && clamped % WEEKLY_MILESTONE_EVERY_DAYS === 0;
+}
+
+/**
+ * 주간 마일스톤 추가 보너스를 계산합니다. 마일스톤이 아닌 streak이면 0을 반환합니다.
+ * 일일 보너스와 동일하게 진행도 스케일된 광고 보상에 비례하며, 비정상 광고 보상 값은
+ * 기본 광고 보상으로 폴백합니다.
+ */
+export function getWeeklyMilestoneBonus(
+  streak: number,
+  adRewardGold: number = DAILY_BONUS_BASE_AD_REWARD_GOLD
+): number {
+  if (!isWeeklyMilestoneStreak(streak)) return 0;
+  const base =
+    Number.isFinite(adRewardGold) && adRewardGold > 0 ? adRewardGold : DAILY_BONUS_BASE_AD_REWARD_GOLD;
+  const bonus = Math.floor(base * WEEKLY_MILESTONE_AD_REWARD_RATIO);
+  return Number.isFinite(bonus) ? Math.max(0, bonus) : 0;
+}
+
+/**
+ * 실제 지급되는 데일리 보너스 총액(일일 보너스 + 주간 마일스톤)을 계산합니다.
+ */
+export function getDailyBonusTotalGold(
+  streak: number,
+  adRewardGold: number = DAILY_BONUS_BASE_AD_REWARD_GOLD
+): number {
+  return getDailyBonusGold(streak, adRewardGold) + getWeeklyMilestoneBonus(streak, adRewardGold);
 }
 
 /**
@@ -90,10 +136,13 @@ export function claimDailyBonus(
     now - safeLastClaimedAt < DAILY_BONUS_STREAK_EXPIRE_MS;
 
   const newStreak = isStreakAlive ? state.streak + 1 : 1;
-  const goldAwarded = getDailyBonusGold(newStreak, adRewardGold);
+  const milestoneBonus = getWeeklyMilestoneBonus(newStreak, adRewardGold);
+  const goldAwarded = getDailyBonusGold(newStreak, adRewardGold) + milestoneBonus;
 
   return {
     goldAwarded,
+    milestoneBonus,
+    isWeeklyMilestone: milestoneBonus > 0,
     streak: newStreak,
     newState: {
       lastClaimedAt: now,
@@ -125,14 +174,21 @@ export function previewDailyBonus(
   state: DailyBonusState,
   now = Date.now(),
   adRewardGold: number = DAILY_BONUS_BASE_AD_REWARD_GOLD
-): { available: boolean; streak: number; goldAwarded: number } {
+): { available: boolean; streak: number; goldAwarded: number; milestoneBonus: number; isWeeklyMilestone: boolean } {
   const available = isDailyBonusAvailable(state, now);
   const safeLastClaimedAt = state.lastClaimedAt != null ? Math.min(state.lastClaimedAt, now) : null;
   const isStreakAlive =
     safeLastClaimedAt != null &&
     now - safeLastClaimedAt < DAILY_BONUS_STREAK_EXPIRE_MS;
   const streak = isStreakAlive ? state.streak + 1 : 1;
-  return { available, streak, goldAwarded: getDailyBonusGold(streak, adRewardGold) };
+  const milestoneBonus = getWeeklyMilestoneBonus(streak, adRewardGold);
+  return {
+    available,
+    streak,
+    goldAwarded: getDailyBonusGold(streak, adRewardGold) + milestoneBonus,
+    milestoneBonus,
+    isWeeklyMilestone: milestoneBonus > 0,
+  };
 }
 
 /**
