@@ -76,6 +76,13 @@
       },
       "description": "AppsInToss full-screen (interstitial / welcome-back return) ad group id. Empty disables the placement; set the real AppsInToss ad inventory id to go live without a redeploy.",
       "valueType": "STRING"
+    },
+    "ad_limits_overrides": {
+      "defaultValue": {
+        "value": ""
+      },
+      "description": "JSON object overriding ad frequency caps/cooldowns consumed by farm-core (e.g. {\"rewardedGoldDailyLimit\":6,\"growthAdCooldownMs\":300000}). Only non-negative integer fields are applied; empty/invalid falls back to balance.json defaults. Shared by mobile and AppsInToss.",
+      "valueType": "STRING"
     }
   }
 }
