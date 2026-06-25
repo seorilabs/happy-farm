@@ -552,6 +552,11 @@ export default function FarmGame({
   const [firstHarvestNotice, setFirstHarvestNotice] = useState<FirstHarvestNotice | null>(null);
   const firstHarvestTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const firstHarvestNoticeIdRef = useRef(0);
+  // One-time harvest-notification permission prompt, shown after the first
+  // harvest ("aha") and once onboarding has finished.
+  const [notificationPrompt, setNotificationPrompt] = useState(false);
+  // Guards the prompt decision so it runs only once per mount.
+  const notificationPromptResolvedRef = useRef(false);
   // Current step of the first-session onboarding coachmark; null hides it.
   const [onboardingStep, setOnboardingStep] = useState<OnboardingStep | null>(null);
   // Guards the one-time onboarding start.
@@ -1177,6 +1182,31 @@ export default function FarmGame({
     return () => clearTimeout(timer);
   }, [onboardingStep, finishOnboarding]);
 
+  // Surface the notification permission prompt only after the first harvest
+  // ("aha") AND once onboarding is complete. Gating on onboardingCompleted keeps
+  // it from colliding with the coachmarks. Skip it for players who have already
+  // seen it (harvestNotificationPromptSeen) or whose platform has no support. If
+  // notifications are already enabled, don't ask — just settle the flag.
+  useEffect(() => {
+    if (!isSaveLoaded || notificationPromptResolvedRef.current) return;
+    if (!notifications.isSupported) return;
+    if (gameState.harvestNotificationPromptSeen) return;
+    if (!gameState.onboardingCompleted || gameState.harvestedCropKeys.length === 0) return;
+    notificationPromptResolvedRef.current = true;
+    if (gameSettings.harvestNotificationsEnabled) {
+      markHarvestNotificationPromptSeen();
+      return;
+    }
+    setNotificationPrompt(true);
+  }, [
+    isSaveLoaded,
+    notifications,
+    gameState.harvestNotificationPromptSeen,
+    gameState.onboardingCompleted,
+    gameState.harvestedCropKeys.length,
+    gameSettings.harvestNotificationsEnabled,
+  ]);
+
   // Keep the "last seen" timestamp fresh while the player is active so the
   // welcome-back recap measures the real gap since they left — not the time
   // since their last save-triggering action. A light heartbeat covers the
@@ -1784,6 +1814,33 @@ export default function FarmGame({
     }
 
     updateGameSettings({ comebackRemindersEnabled: true });
+  }
+
+  // Permanently record the prompt as seen so it never reappears (the settings
+  // toggle stays available either way).
+  function markHarvestNotificationPromptSeen() {
+    setGameState((state) =>
+      state.harvestNotificationPromptSeen ? state : { ...state, harvestNotificationPromptSeen: true }
+    );
+  }
+
+  async function acceptNotificationPrompt() {
+    setNotificationPrompt(false);
+    markHarvestNotificationPromptSeen();
+    if (!notifications.isSupported) return;
+    const granted = await notifications.requestPermission();
+    if (!granted) {
+      toast(messages.notificationPermissionDeniedToast);
+      return;
+    }
+    updateGameSettings({ harvestNotificationsEnabled: true });
+  }
+
+  // Dismissing with "Maybe later" also retires the prompt for good, keeping the
+  // decline/re-ask behavior consistent.
+  function declineNotificationPrompt() {
+    setNotificationPrompt(false);
+    markHarvestNotificationPromptSeen();
   }
 
   function selectArea(area: AreaKey) {
@@ -2901,6 +2958,13 @@ export default function FarmGame({
           onDismiss={dismissFirstHarvestCelebration}
         />
       ) : null}
+      {notificationPrompt ? (
+        <NotificationPromptOverlay
+          messages={messages}
+          onAccept={acceptNotificationPrompt}
+          onDecline={declineNotificationPrompt}
+        />
+      ) : null}
     </View>
   );
 }
@@ -3269,6 +3333,49 @@ function FirstHarvestOverlay({
         </Animated.View>
       </View>
     </Pressable>
+  );
+}
+
+// Soft permission prompt shown right after the first harvest. Instead of firing
+// the OS permission dialog immediately, it explains the value first and only
+// calls requestPermission for players who opt in.
+function NotificationPromptOverlay({
+  messages,
+  onAccept,
+  onDecline,
+}: {
+  messages: FarmMessages;
+  onAccept: () => void;
+  onDecline: () => void;
+}) {
+  return (
+    <View testID="notification-prompt-overlay" style={styles.notificationPromptBackdrop}>
+      <View testID="notification-prompt-card" style={styles.notificationPromptCard}>
+        <Text style={styles.notificationPromptIcon}>🔔</Text>
+        <Text style={styles.notificationPromptTitle}>{messages.notificationPromptTitle}</Text>
+        <Text style={styles.notificationPromptDesc}>{messages.notificationPromptDesc}</Text>
+        <View style={styles.notificationPromptActions}>
+          <Pressable
+            testID="notification-prompt-decline"
+            style={[styles.notificationPromptButton, styles.notificationPromptDeclineButton]}
+            onPress={onDecline}
+            accessibilityRole="button"
+            accessibilityLabel={messages.notificationPromptDecline}
+          >
+            <Text style={styles.notificationPromptDeclineText}>{messages.notificationPromptDecline}</Text>
+          </Pressable>
+          <Pressable
+            testID="notification-prompt-accept"
+            style={[styles.notificationPromptButton, styles.notificationPromptAcceptButton]}
+            onPress={onAccept}
+            accessibilityRole="button"
+            accessibilityLabel={messages.notificationPromptAccept}
+          >
+            <Text style={styles.notificationPromptAcceptText}>{messages.notificationPromptAccept}</Text>
+          </Pressable>
+        </View>
+      </View>
+    </View>
   );
 }
 
@@ -5406,5 +5513,75 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#92400e',
     marginTop: 2,
+  },
+  notificationPromptBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 28,
+    backgroundColor: 'rgba(20, 31, 24, 0.45)',
+  },
+  notificationPromptCard: {
+    width: '100%',
+    maxWidth: 320,
+    paddingHorizontal: 24,
+    paddingVertical: 24,
+    borderRadius: 20,
+    backgroundColor: '#ffffff',
+    borderWidth: 2,
+    borderColor: '#4caf6a',
+    alignItems: 'center',
+    gap: 8,
+    shadowColor: '#1c7538',
+    shadowOpacity: 0.22,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 12,
+  },
+  notificationPromptIcon: {
+    fontSize: 44,
+    lineHeight: 52,
+  },
+  notificationPromptTitle: {
+    fontSize: 17,
+    fontWeight: '900',
+    color: '#1c7538',
+    textAlign: 'center',
+  },
+  notificationPromptDesc: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#3f5345',
+    lineHeight: 18,
+    textAlign: 'center',
+  },
+  notificationPromptActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 8,
+    alignSelf: 'stretch',
+  },
+  notificationPromptButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  notificationPromptDeclineButton: {
+    backgroundColor: '#eef4ef',
+  },
+  notificationPromptDeclineText: {
+    color: '#5b6b5f',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  notificationPromptAcceptButton: {
+    backgroundColor: '#4caf6a',
+  },
+  notificationPromptAcceptText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '900',
   },
 });
