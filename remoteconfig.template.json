@@ -4,7 +4,7 @@
       "defaultValue": {
         "value": "true"
       },
-      "description": "Enable Firebase Analytics collection for the mobile app.",
+      "description": "Enable Firebase Analytics collection across release targets (mobile and AppsInToss web).",
       "valueType": "BOOLEAN"
     },
     "crashlytics_collection_enabled": {

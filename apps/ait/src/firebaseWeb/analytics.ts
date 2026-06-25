@@ -1,5 +1,11 @@
 import type { FirebaseApp } from 'firebase/app';
-import { getAnalytics, isSupported, logEvent, type Analytics } from 'firebase/analytics';
+import {
+  getAnalytics,
+  isSupported,
+  logEvent,
+  setAnalyticsCollectionEnabled,
+  type Analytics,
+} from 'firebase/analytics';
 
 import {
   RELEASE_INFO,
@@ -81,5 +87,16 @@ export const trackAppsInTossAnalyticsEvent: TrackGameEvent = (name, params = {})
 
   logEvent(firebaseAnalytics, name, normalizeAnalyticsParams(params));
 };
+
+/**
+ * 원격 설정(analytics_collection_enabled)에 따라 애널리틱스 수집을 켜고 끈다.
+ * 애널리틱스가 아직 준비되지 않았거나 미지원이면 아무 일도 하지 않는다(안전).
+ */
+export function setAppsInTossAnalyticsCollectionEnabled(enabled: boolean) {
+  if (firebaseAnalytics == null) {
+    return;
+  }
+  setAnalyticsCollectionEnabled(firebaseAnalytics, enabled);
+}
 
 export const appsInTossFarmAnalytics = createFarmAnalytics(trackAppsInTossAnalyticsEvent);
