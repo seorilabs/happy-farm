@@ -14,6 +14,31 @@ export type AnalyticsValue = string | number | boolean;
 
 export type TrackGameEvent = (name: string, params?: Record<string, AnalyticsValue>) => void;
 
+// Firebase 애널리틱스(웹 SDK·RN SDK 공통)는 파라미터 값으로 string·number만 받고,
+// boolean이나 NaN/Infinity는 그대로 넣으면 누락·거부된다. ait(웹)·mobile(RN) 어댑터가
+// 각자 같은 변환을 중복 구현하던 것을 공유 레이어로 모아 동작을 일치시킨다.
+export function toFirebaseAnalyticsValue(value: AnalyticsValue): string | number {
+  if (typeof value === 'boolean') {
+    return value ? 1 : 0;
+  }
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : 0;
+  }
+  return value;
+}
+
+// 파라미터 레코드 전체를 Firebase가 받을 수 있는 스칼라로 정규화한다. 플랫폼별
+// 추가 필드(app_market, release_version 등)는 호출부에서 합치면 된다.
+export function toFirebaseAnalyticsParams(
+  params: Record<string, AnalyticsValue> = {}
+): Record<string, string | number> {
+  const normalized: Record<string, string | number> = {};
+  for (const [key, value] of Object.entries(params)) {
+    normalized[key] = toFirebaseAnalyticsValue(value);
+  }
+  return normalized;
+}
+
 // 복귀 넛지 알림의 종류. 현재 'harvest'만 발송되며, 데일리/오늘의 작물 알림(#76)
 // 도입 시 같은 계약으로 확장할 수 있도록 종류를 미리 정의해 둔다.
 export type FarmNotificationKind = 'harvest' | 'daily_bonus' | 'crop_of_the_day';

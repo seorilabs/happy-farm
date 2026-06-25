@@ -1,7 +1,12 @@
 /// <reference types="jest" />
 
 import { getRewardedAdPlacement } from '../ads';
-import { createFarmAnalytics, getGameAnalyticsContext } from '../analytics';
+import {
+  createFarmAnalytics,
+  getGameAnalyticsContext,
+  toFirebaseAnalyticsParams,
+  toFirebaseAnalyticsValue,
+} from '../analytics';
 import { createInitialState } from '../constants';
 
 describe('farm analytics adapter contract', () => {
@@ -101,5 +106,26 @@ describe('farm analytics adapter contract', () => {
     analytics.trackNotificationScheduled({ kind: 'daily_bonus' });
 
     expect(track).toHaveBeenCalledWith('notification_scheduled', { notification_kind: 'daily_bonus' });
+  });
+});
+
+describe('Firebase 애널리틱스 값 정규화(공유 어댑터 헬퍼)', () => {
+  test('boolean은 1/0으로, 비유한 number는 0으로, 그 외는 그대로 변환한다', () => {
+    expect(toFirebaseAnalyticsValue(true)).toBe(1);
+    expect(toFirebaseAnalyticsValue(false)).toBe(0);
+    expect(toFirebaseAnalyticsValue(42)).toBe(42);
+    expect(toFirebaseAnalyticsValue(Number.NaN)).toBe(0);
+    expect(toFirebaseAnalyticsValue(Number.POSITIVE_INFINITY)).toBe(0);
+    expect(toFirebaseAnalyticsValue('carrot')).toBe('carrot');
+  });
+
+  test('파라미터 레코드의 모든 값을 Firebase가 받을 수 있는 스칼라로 정규화한다', () => {
+    expect(toFirebaseAnalyticsParams({ enabled: true, count: 3, label: 'shop' })).toEqual({
+      enabled: 1,
+      count: 3,
+      label: 'shop',
+    });
+    // 빈 입력은 빈 객체를 돌려준다(호출부에서 플랫폼 공통 필드와 합칠 수 있도록).
+    expect(toFirebaseAnalyticsParams()).toEqual({});
   });
 });
