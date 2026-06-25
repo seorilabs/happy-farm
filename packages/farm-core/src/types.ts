@@ -125,6 +125,11 @@ export type GameState = {
   // accepts or dismisses it we never ask again (they can still toggle it in
   // settings). A meta-layer flag, so it survives prestige.
   harvestNotificationPromptSeen: boolean;
+  // Whether the one-time "chain income" guide shown after the player's first
+  // graduation (prestige) has been seen. Surfaced once to explain the passive
+  // chain-farm income concept, then never again. A meta-layer flag so it
+  // persists across every subsequent graduation.
+  prestigeGuideSeen: boolean;
 };
 
 // Prestige reset boundary. Farm-layer fields are wiped when the player
@@ -153,6 +158,7 @@ export const META_LAYER_KEYS = [
   'dailyBonusState',
   'onboardingCompleted',
   'harvestNotificationPromptSeen',
+  'prestigeGuideSeen',
 ] as const satisfies readonly (keyof GameState)[];
 
 export type FarmLayerKey = (typeof FARM_LAYER_KEYS)[number];

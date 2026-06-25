@@ -702,6 +702,7 @@ export function createInitialState(): GameState {
     dailyBonusState: { lastClaimedAt: null, streak: 0 },
     onboardingCompleted: false,
     harvestNotificationPromptSeen: false,
+    prestigeGuideSeen: false,
   };
 }
 
@@ -820,6 +821,13 @@ export function migrateLoadedState(loaded: Partial<GameState>, base: GameState):
   merged.activeTitle = normalizeActiveTitle(loaded.activeTitle, merged.claimedAchievements);
   merged.prestige = normalizePrestigeProgress(loaded.prestige);
   merged.lifetimeStats.prestigeCount = Math.max(merged.lifetimeStats.prestigeCount, merged.prestige.level);
+
+  // A save without the flag predates the guide. Treat an already-graduated
+  // player as having seen it (they know the chain-income concept), but let a
+  // legacy player who has never graduated still get the guide on their first
+  // graduation. Brand-new players keep createInitialState's false value.
+  merged.prestigeGuideSeen =
+    typeof loaded.prestigeGuideSeen === 'boolean' ? loaded.prestigeGuideSeen : merged.prestige.level > 0;
   merged.chainFarms = normalizeChainFarms(loaded.chainFarms);
 
   merged.research = normalizeResearchState(loaded.research);

@@ -549,6 +549,11 @@ export default function FarmGame({
   const [prestigeGraduationNotice, setPrestigeGraduationNotice] = useState<PrestigeGraduationNotice | null>(null);
   const prestigeGraduationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prestigeGraduationNoticeIdRef = useRef(0);
+  // One-time "chain income" guide shown after the very first graduation. The
+  // pending ref defers it until the graduation celebration finishes so they
+  // don't stack.
+  const [prestigeGuide, setPrestigeGuide] = useState(false);
+  const prestigeGuidePendingRef = useRef(false);
   const [firstHarvestNotice, setFirstHarvestNotice] = useState<FirstHarvestNotice | null>(null);
   const firstHarvestTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const firstHarvestNoticeIdRef = useRef(0);
@@ -703,6 +708,12 @@ export default function FarmGame({
     prestigeGraduationTimerRef.current = setTimeout(() => {
       setPrestigeGraduationNotice(null);
       prestigeGraduationTimerRef.current = null;
+      // Surface the first-graduation chain-income guide once the celebration
+      // clears, if confirmPrestige flagged it pending for this graduation.
+      if (prestigeGuidePendingRef.current) {
+        prestigeGuidePendingRef.current = false;
+        setPrestigeGuide(true);
+      }
     }, PRESTIGE_GRADUATION_CELEBRATION_DURATION_MS);
   }, []);
   const dismissPrestigeGraduation = useCallback(() => {
@@ -711,6 +722,10 @@ export default function FarmGame({
       prestigeGraduationTimerRef.current = null;
     }
     setPrestigeGraduationNotice(null);
+    if (prestigeGuidePendingRef.current) {
+      prestigeGuidePendingRef.current = false;
+      setPrestigeGuide(true);
+    }
   }, []);
   const showFirstHarvestCelebration = useCallback((notice: Omit<FirstHarvestNotice, 'id'>) => {
     if (firstHarvestTimerRef.current != null) {
@@ -1737,6 +1752,11 @@ export default function FarmGame({
       return;
     }
     prestigedLevelsRef.current.add(guardLevel);
+    // First graduation (level 0 → 1) and guide not yet seen: queue the one-time
+    // chain-income guide to appear once the graduation celebration clears.
+    if (guardLevel === 0 && !gameState.prestigeGuideSeen) {
+      prestigeGuidePendingRef.current = true;
+    }
     // Drop any pending auto-harvest batch so old-farm counts never flush
     // under the new farm's analytics context.
     autoHarvestSummaryRef.current = { harvestedCount: 0, replantedCount: 0, windowStartedAt: 0 };
@@ -1760,6 +1780,12 @@ export default function FarmGame({
       regionName: getRegionArchetypeLabel(prestigeArchetype, locale).name,
       starsAwarded: result.starsAwarded,
     });
+  }
+
+  // Closes the first-graduation guide and persists the flag so it never returns.
+  function dismissPrestigeGuide() {
+    setPrestigeGuide(false);
+    setGameState((state) => (state.prestigeGuideSeen ? state : { ...state, prestigeGuideSeen: true }));
   }
 
   function purchaseSkill(skillKey: PrestigeSkillKey) {
@@ -3019,6 +3045,9 @@ export default function FarmGame({
           onDecline={declineNotificationPrompt}
         />
       ) : null}
+      {prestigeGuide ? (
+        <PrestigeGuideOverlay messages={messages} onDismiss={dismissPrestigeGuide} />
+      ) : null}
     </View>
   );
 }
@@ -3426,6 +3455,38 @@ function NotificationPromptOverlay({
             accessibilityLabel={messages.notificationPromptAccept}
           >
             <Text style={styles.notificationPromptAcceptText}>{messages.notificationPromptAccept}</Text>
+          </Pressable>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+// One-time guide shown right after the player's first graduation, explaining the
+// passive chain-income concept so the prestige reset doesn't feel like a loss.
+// Dismissing it persists prestigeGuideSeen so it never returns.
+function PrestigeGuideOverlay({
+  messages,
+  onDismiss,
+}: {
+  messages: FarmMessages;
+  onDismiss: () => void;
+}) {
+  return (
+    <View testID="prestige-guide-overlay" style={styles.notificationPromptBackdrop}>
+      <View testID="prestige-guide-card" style={styles.notificationPromptCard}>
+        <Text style={styles.notificationPromptIcon}>🔗</Text>
+        <Text style={styles.notificationPromptTitle}>{messages.prestigeGuideTitle}</Text>
+        <Text style={styles.notificationPromptDesc}>{messages.prestigeGuideBody}</Text>
+        <View style={styles.notificationPromptActions}>
+          <Pressable
+            testID="prestige-guide-confirm"
+            style={[styles.notificationPromptButton, styles.notificationPromptAcceptButton]}
+            onPress={onDismiss}
+            accessibilityRole="button"
+            accessibilityLabel={messages.prestigeGuideConfirm}
+          >
+            <Text style={styles.notificationPromptAcceptText}>{messages.prestigeGuideConfirm}</Text>
           </Pressable>
         </View>
       </View>

@@ -138,6 +138,10 @@ const KO_FARM_MESSAGES = {
   harvestedBoostToast: (amount: string, multiplier: number) => `+${amount}G 수확했어요. ×${multiplier} 부스트 적용`,
   prestigeGraduationTitle: '개척 완료!',
   prestigeGraduationStarsLabel: (stars: number) => `★ +${stars}`,
+  prestigeGuideTitle: '체인 수익이 시작됐어요',
+  prestigeGuideBody:
+    '졸업한 농장은 이제 운영 농장이 되어 자동으로 골드를 모아줘요. 자리를 비워도 수익이 쌓이고, 돌아오면 한 번에 수령할 수 있어요.',
+  prestigeGuideConfirm: '알겠어요',
   masteryRankUpTitle: '숙련도 달성!',
   masteryRankUpToast: (cropName: string, rankName: string, rankIcon: string) =>
     `${rankIcon} ${cropName} 숙련도가 ${rankName} 등급이 됐어요!`,
@@ -392,6 +396,10 @@ const EN_FARM_MESSAGES: FarmMessages = {
   harvestedBoostToast: (amount, multiplier) => `Harvested +${amount}G with ${multiplier}x boost.`,
   prestigeGraduationTitle: 'Pioneered!',
   prestigeGraduationStarsLabel: (stars) => `★ +${stars}`,
+  prestigeGuideTitle: 'Chain income unlocked',
+  prestigeGuideBody:
+    'Your graduated farm becomes a chain farm that earns gold automatically. Income keeps piling up while you are away, and you can collect it all when you return.',
+  prestigeGuideConfirm: 'Got it',
   masteryRankUpTitle: 'Mastery Achieved!',
   masteryRankUpToast: (cropName, rankName, rankIcon) => `${rankIcon} ${cropName} mastery reached ${rankName}!`,
   mutationHarvestedToast: (mutationName, mutationIcon, amount) =>
