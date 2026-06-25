@@ -2889,7 +2889,59 @@ export default function FarmGame({
                 </View>
               </View>
             ) : null}
+            {activeSheet.summary.dailyBonusAvailable ? (
+              <View style={styles.welcomeBackRow}>
+                <Text style={styles.welcomeBackIcon}>🎁</Text>
+                <View style={styles.welcomeBackRowText}>
+                  <Text style={styles.welcomeBackRowLabel}>{messages.welcomeBackDailyLabel}</Text>
+                  <Text style={styles.welcomeBackRowValue}>{messages.welcomeBackDailyValue}</Text>
+                </View>
+              </View>
+            ) : null}
+            {/* First-action CTA: harvest right away when crops are ready, otherwise nudge
+                toward the daily-bonus claim. When both apply, harvest leads (core loop) and
+                the daily claim is offered as a secondary CTA. */}
+            {activeSheet.summary.readyCropCount > 0 ? (
+              <SheetAction
+                label={messages.welcomeBackHarvestAction}
+                onPress={() => {
+                  if (activeSheet?.type !== 'welcomeBack') return;
+                  const summary = activeSheet.summary;
+                  farmAnalytics.trackReturnSummaryCollected({
+                    awayMs: summary.awayMs,
+                    offlineGold: summary.offlineGold,
+                    readyCropCount: summary.readyCropCount,
+                    context: analyticsContext(),
+                  });
+                  if (summary.offlineGold > 0) collectChain();
+                  setActiveSheet(null);
+                  harvestAllCrops();
+                  void maybeShowReturnAd();
+                }}
+              />
+            ) : null}
+            {activeSheet.summary.dailyBonusAvailable ? (
+              <SheetAction
+                label={messages.welcomeBackDailyAction}
+                secondary={activeSheet.summary.readyCropCount > 0}
+                onPress={() => {
+                  if (activeSheet?.type !== 'welcomeBack') return;
+                  const summary = activeSheet.summary;
+                  farmAnalytics.trackReturnSummaryCollected({
+                    awayMs: summary.awayMs,
+                    offlineGold: summary.offlineGold,
+                    readyCropCount: summary.readyCropCount,
+                    context: analyticsContext(),
+                  });
+                  if (summary.offlineGold > 0) collectChain();
+                  // Jump straight to the daily sheet. It is the next interaction, so we skip
+                  // the return ad here to avoid covering the claim flow.
+                  setActiveSheet({ type: 'dailyBonus' });
+                }}
+              />
+            ) : null}
             <SheetAction
+              secondary={activeSheet.summary.readyCropCount > 0 || activeSheet.summary.dailyBonusAvailable}
               label={
                 activeSheet.summary.offlineGold > 0
                   ? messages.welcomeBackCollectAction(formatMoney(activeSheet.summary.offlineGold, locale))
