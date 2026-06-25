@@ -10,6 +10,7 @@ import {
 import {
   RELEASE_INFO,
   createFarmAnalytics,
+  toFirebaseAnalyticsParams,
   type AnalyticsValue,
   type TrackGameEvent,
 } from '../../../../packages/farm-core/src';
@@ -21,13 +22,6 @@ type AppsInTossAnalyticsInitResult =
 
 let firebaseAnalytics: Analytics | null = null;
 let initializePromise: Promise<AppsInTossAnalyticsInitResult> | null = null;
-
-function normalizeAnalyticsValue(value: AnalyticsValue) {
-  if (typeof value === 'boolean') {
-    return value ? 1 : 0;
-  }
-  return value;
-}
 
 function isDevBuild() {
   return typeof __DEV__ !== 'undefined' && __DEV__;
@@ -44,11 +38,9 @@ function normalizeAnalyticsParams(params: Record<string, AnalyticsValue> = {}) {
     normalizedParams.debug_mode = 1;
   }
 
-  for (const [key, value] of Object.entries(params)) {
-    normalizedParams[key] = normalizeAnalyticsValue(value);
-  }
-
-  return normalizedParams;
+  // 호출부가 넘긴 파라미터는 공유 정규화 헬퍼로 변환하되, 시장 공통 필드는
+  // 호출부 값으로 덮어쓸 수 있도록 뒤에 합친다(기존 동작 유지).
+  return { ...normalizedParams, ...toFirebaseAnalyticsParams(params) };
 }
 
 function normalizeErrorReason(error: unknown) {
