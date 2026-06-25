@@ -17,6 +17,7 @@ import {
   normalizeResearchState,
 } from './research';
 import balance from './balance.json';
+import { getAdLimits } from './adLimits';
 import {
   DEFAULT_LOCALE,
   formatDuration,
@@ -514,7 +515,10 @@ export function normalizeAdUsage(
 // holds across app restarts (the typical "session return" path).
 export function canShowReturnInterstitial(gameState: GameState, now = Date.now()): boolean {
   const adUsage = normalizeAdUsage(gameState.adUsage, now);
-  return adUsage.returnInterstitialAt == null || now - adUsage.returnInterstitialAt >= RETURN_INTERSTITIAL_COOLDOWN_MS;
+  return (
+    adUsage.returnInterstitialAt == null ||
+    now - adUsage.returnInterstitialAt >= getAdLimits().returnInterstitialCooldownMs
+  );
 }
 
 export function recordReturnInterstitial(gameState: GameState, now = Date.now()): GameState['adUsage'] {
@@ -532,13 +536,14 @@ export function getRewardedAdLimitStatus(
 ) {
   const adUsage = normalizeAdUsage(gameState.adUsage, now);
   const messages = getCoreMessages(locale);
+  const limits = getAdLimits();
 
   if (type === 'rewardedGold') {
-    if (adUsage.rewardedGoldDailyCount >= REWARDED_GOLD_DAILY_LIMIT) {
+    if (adUsage.rewardedGoldDailyCount >= limits.rewardedGoldDailyLimit) {
       return { allowed: false, reason: messages.adDailyLimitReached };
     }
 
-    if (adUsage.rewardedGoldTimestamps.length >= REWARDED_GOLD_MAX_USES_PER_WINDOW) {
+    if (adUsage.rewardedGoldTimestamps.length >= limits.rewardedGoldMaxUsesPerWindow) {
       const oldestTimestamp = Math.min(...adUsage.rewardedGoldTimestamps);
       const remainingMs = REWARDED_GOLD_WINDOW_MS - (now - oldestTimestamp);
       return {
@@ -551,16 +556,16 @@ export function getRewardedAdLimitStatus(
 
   const limit =
     type === 'growthAd'
-      ? GROWTH_AD_DAILY_LIMIT
+      ? limits.growthAdDailyLimit
       : type === 'plotDiscountAd'
-        ? PLOT_DISCOUNT_AD_DAILY_LIMIT
-        : HARVEST_BONUS_AD_DAILY_LIMIT;
+        ? limits.plotDiscountAdDailyLimit
+        : limits.harvestBonusAdDailyLimit;
   const cooldownMs =
     type === 'growthAd'
-      ? GROWTH_AD_COOLDOWN_MS
+      ? limits.growthAdCooldownMs
       : type === 'plotDiscountAd'
-        ? PLOT_DISCOUNT_AD_COOLDOWN_MS
-        : HARVEST_BONUS_AD_COOLDOWN_MS;
+        ? limits.plotDiscountAdCooldownMs
+        : limits.harvestBonusAdCooldownMs;
   const usage =
     type === 'growthAd'
       ? adUsage.growthAd
@@ -590,13 +595,12 @@ export function getHarvestBonusPromptStatus(
   const adUsage = normalizeAdUsage(gameState.adUsage, now);
   const messages = getCoreMessages(locale);
   const { lastPromptedAt } = adUsage.harvestBonusAd;
+  const cooldownMs = getAdLimits().harvestBonusAdCooldownMs;
 
-  if (lastPromptedAt != null && now - lastPromptedAt < HARVEST_BONUS_AD_COOLDOWN_MS) {
+  if (lastPromptedAt != null && now - lastPromptedAt < cooldownMs) {
     return {
       allowed: false,
-      reason: messages.harvestBonusPromptCooldown(
-        formatDuration(HARVEST_BONUS_AD_COOLDOWN_MS - (now - lastPromptedAt), locale)
-      ),
+      reason: messages.harvestBonusPromptCooldown(formatDuration(cooldownMs - (now - lastPromptedAt), locale)),
     };
   }
 

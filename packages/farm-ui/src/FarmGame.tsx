@@ -57,7 +57,7 @@ import {
   getGrowthAdSkipMs,
   HARVEST_BONUS_BOOST_DURATION_MS,
   HARVEST_BONUS_MULTIPLIER,
-  INTERSTITIAL_MILESTONE_COOLDOWN_MS,
+  getAdLimits,
   MAX_PLOTS,
   PLOT_DISCOUNT_AD_PERCENT,
   getRewardedGoldAmount,
@@ -1973,7 +1973,7 @@ export default function FarmGame({
     }
 
     const now = Date.now();
-    if (now - lastInterstitialShownAtRef.current < INTERSTITIAL_MILESTONE_COOLDOWN_MS) {
+    if (now - lastInterstitialShownAtRef.current < getAdLimits().interstitialMilestoneCooldownMs) {
       return;
     }
 

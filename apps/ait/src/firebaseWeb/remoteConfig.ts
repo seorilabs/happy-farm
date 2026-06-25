@@ -10,6 +10,7 @@ import {
 } from 'firebase/remote-config';
 import { useEffect, useState } from 'react';
 
+import { applyAdLimitsOverrides, parseAdLimitsOverrides } from '../../../../packages/farm-core/src';
 import { getAppsInTossFirebaseApp } from './app';
 
 // 원격값 미수신/미지원/오류 시 사용할 안전 기본값(키·타입·기본값은 mobile 어댑터 및
@@ -22,12 +23,16 @@ export const APPS_IN_TOSS_REMOTE_CONFIG_DEFAULTS = {
   // 동작해 전면 광고가 노출되지 않는다(운영에서 실제 AppsInToss 광고 인벤토리 ID를
   // 주입하면 코드 변경 없이 즉시 활성화된다).
   appsintoss_interstitial_ad_group_id: '',
+  // 광고 빈도·cap 오버라이드(JSON 오브젝트 문자열). 빈 문자열/무효 시 farm-core 기본값
+  // 폴백. 예: '{"rewardedGoldDailyLimit":6,"growthAdCooldownMs":300000}'.
+  ad_limits_overrides: '',
 } as const;
 
 export type AppsInTossRemoteConfigKey = keyof typeof APPS_IN_TOSS_REMOTE_CONFIG_DEFAULTS;
 
 const ADS_ENABLED_KEY: AppsInTossRemoteConfigKey = 'mobile_ads_global_enabled';
 const INTERSTITIAL_AD_GROUP_ID_KEY: AppsInTossRemoteConfigKey = 'appsintoss_interstitial_ad_group_id';
+const AD_LIMITS_OVERRIDES_KEY: AppsInTossRemoteConfigKey = 'ad_limits_overrides';
 const CONFIG_FETCH_TIMEOUT_MS = 10_000;
 const DEV_MINIMUM_FETCH_INTERVAL_MS = 5 * 60 * 1000;
 const RELEASE_MINIMUM_FETCH_INTERVAL_MS = 15 * 60 * 1000;
@@ -122,6 +127,8 @@ async function initializeRemoteConfig(app: FirebaseApp): Promise<AppsInTossRemot
     await fetchAndActivate(remoteConfig);
     activeRemoteConfig = remoteConfig;
     publishAdsEnabled(getAppsInTossRemoteBoolean(ADS_ENABLED_KEY));
+    // 광고 빈도·cap 원격 오버라이드를 farm-core에 적용(무효/미설정 시 기본값 폴백).
+    applyAdLimitsOverrides(parseAdLimitsOverrides(getAppsInTossRemoteString(AD_LIMITS_OVERRIDES_KEY)));
 
     return { status: 'ready', adsEnabled };
   } catch (error) {

@@ -8,6 +8,7 @@ import {
   setDefaults,
 } from '@react-native-firebase/remote-config';
 
+import { applyAdLimitsOverrides, parseAdLimitsOverrides } from '../../../../packages/farm-core/src';
 import { isFirebaseConfigured } from './app';
 import { recordNonFatalError } from './crashlytics';
 
@@ -19,6 +20,8 @@ export const MOBILE_REMOTE_CONFIG_DEFAULTS = {
   minimum_supported_version_code: 1,
   force_update_url: '',
   remote_balance_enabled: false,
+  // 광고 빈도·cap 오버라이드(JSON 오브젝트 문자열). 빈 문자열/무효 시 farm-core 기본값 폴백.
+  ad_limits_overrides: '',
 } as const;
 
 export type MobileRemoteConfigKey = keyof typeof MOBILE_REMOTE_CONFIG_DEFAULTS;
@@ -46,6 +49,8 @@ export async function initializeMobileRemoteConfig() {
     await setDefaults(remoteConfig, MOBILE_REMOTE_CONFIG_DEFAULTS);
 
     const activated = await fetchAndActivate(remoteConfig);
+    // 광고 빈도·cap 원격 오버라이드를 farm-core에 적용(무효/미설정 시 기본값 폴백).
+    applyAdLimitsOverrides(parseAdLimitsOverrides(getRemoteString('ad_limits_overrides')));
     return { status: 'ready' as const, activated };
   } catch (error) {
     recordNonFatalError(error, 'remote_config:init');
