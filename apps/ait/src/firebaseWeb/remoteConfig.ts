@@ -18,11 +18,16 @@ import { getAppsInTossFirebaseApp } from './app';
 export const APPS_IN_TOSS_REMOTE_CONFIG_DEFAULTS = {
   mobile_ads_global_enabled: true,
   analytics_collection_enabled: true,
+  // 전면/복귀(welcomeBack) 광고 그룹 ID. 빈 문자열이면 fullScreenAd 경로가 미지원으로
+  // 동작해 전면 광고가 노출되지 않는다(운영에서 실제 AppsInToss 광고 인벤토리 ID를
+  // 주입하면 코드 변경 없이 즉시 활성화된다).
+  appsintoss_interstitial_ad_group_id: '',
 } as const;
 
 export type AppsInTossRemoteConfigKey = keyof typeof APPS_IN_TOSS_REMOTE_CONFIG_DEFAULTS;
 
 const ADS_ENABLED_KEY: AppsInTossRemoteConfigKey = 'mobile_ads_global_enabled';
+const INTERSTITIAL_AD_GROUP_ID_KEY: AppsInTossRemoteConfigKey = 'appsintoss_interstitial_ad_group_id';
 const CONFIG_FETCH_TIMEOUT_MS = 10_000;
 const DEV_MINIMUM_FETCH_INTERVAL_MS = 5 * 60 * 1000;
 const RELEASE_MINIMUM_FETCH_INTERVAL_MS = 15 * 60 * 1000;
@@ -159,4 +164,28 @@ export function useAppsInTossAdsEnabled() {
   }, []);
 
   return isEnabled;
+}
+
+/**
+ * AIT 전면/복귀 광고에 사용할 광고 그룹 ID를 원격값에서 읽어 반환한다.
+ * 원격 활성화 전/미설정 시 빈 문자열을 반환하며, 이 경우 fullScreenAd 경로가
+ * 미지원으로 동작해 전면 광고가 노출되지 않는다. 초기화가 끝나면 최신 원격값으로
+ * 재렌더해, 운영에서 ID를 주입하면 재배포 없이 지면이 활성화된다.
+ */
+export function useAppsInTossInterstitialAdGroupId(): string {
+  const [adGroupId, setAdGroupId] = useState<string>(() => getAppsInTossRemoteString(INTERSTITIAL_AD_GROUP_ID_KEY));
+
+  useEffect(() => {
+    let cancelled = false;
+    void initializeAppsInTossRemoteConfig().then(() => {
+      if (!cancelled) {
+        setAdGroupId(getAppsInTossRemoteString(INTERSTITIAL_AD_GROUP_ID_KEY));
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  return adGroupId;
 }

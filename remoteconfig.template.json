@@ -69,6 +69,13 @@
       },
       "description": "Reserved flag for future remote balance tuning. Do not use as an authoritative economy control.",
       "valueType": "BOOLEAN"
+    },
+    "appsintoss_interstitial_ad_group_id": {
+      "defaultValue": {
+        "value": ""
+      },
+      "description": "AppsInToss full-screen (interstitial / welcome-back return) ad group id. Empty disables the placement; set the real AppsInToss ad inventory id to go live without a redeploy.",
+      "valueType": "STRING"
     }
   }
 }
