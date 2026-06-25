@@ -142,13 +142,32 @@ describe('어댑터 기본값과 remoteconfig.template.json 정합성', () => {
 
   test('불리언 기본값은 템플릿 valueType(BOOLEAN)/defaultValue와 일치한다', async () => {
     const adapter = loadAdapter();
-    const defaults = adapter.APPS_IN_TOSS_REMOTE_CONFIG_DEFAULTS as Record<string, boolean>;
+    const defaults = adapter.APPS_IN_TOSS_REMOTE_CONFIG_DEFAULTS as Record<string, boolean | string>;
     for (const [key, value] of Object.entries(defaults)) {
+      if (typeof value !== 'boolean') continue;
       const param = templateParams[key];
       expect(param).toBeDefined();
       if (param == null) continue;
       expect(param.valueType).toBe('BOOLEAN');
       expect(param.defaultValue.value).toBe(String(value));
     }
+  });
+
+  test('문자열 기본값은 템플릿 valueType(STRING)/defaultValue와 일치한다', async () => {
+    const adapter = loadAdapter();
+    const defaults = adapter.APPS_IN_TOSS_REMOTE_CONFIG_DEFAULTS as Record<string, boolean | string>;
+    for (const [key, value] of Object.entries(defaults)) {
+      if (typeof value !== 'string') continue;
+      const param = templateParams[key];
+      expect(param).toBeDefined();
+      if (param == null) continue;
+      expect(param.valueType).toBe('STRING');
+      expect(param.defaultValue.value).toBe(value);
+    }
+  });
+
+  test('전면 광고 그룹 ID 기본값은 빈 문자열이다(미설정 시 지면 비활성)', async () => {
+    const adapter = loadAdapter();
+    expect(adapter.APPS_IN_TOSS_REMOTE_CONFIG_DEFAULTS.appsintoss_interstitial_ad_group_id).toBe('');
   });
 });
