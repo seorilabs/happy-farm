@@ -75,6 +75,13 @@ const KO_FARM_MESSAGES = {
   resetKeepAction: '계속 이어서 할게요',
   emptyPlot: '빈 밭',
   readyBadge: 'GET',
+  // 접근성(a11y): 밭 타일은 이모지/배지뿐이라 스크린 리더용 상태 라벨을 따로 제공한다.
+  plotLockedAccessibilityLabel: (plotNumber: number) => `${plotNumber}번 밭, 잠김. 상점에서 열 수 있어요.`,
+  plotEmptyAccessibilityLabel: (plotNumber: number) => `${plotNumber}번 밭, 비어 있음. 선택한 작물을 심어요.`,
+  plotGrowingAccessibilityLabel: (cropName: string, remaining?: string) =>
+    remaining != null ? `${cropName}, 자라는 중. 약 ${remaining} 남음.` : `${cropName}, 자라는 중.`,
+  plotReadyAccessibilityLabel: (cropName: string) => `${cropName}, 수확 준비 완료. 눌러서 수확해요.`,
+  sheetCloseAccessibilityLabel: '닫기',
   sheetTitleGrowthAd: '즉시 성장',
   sheetTitleHarvestBonus: '수확 보너스',
   sheetTitleWelcomeBack: '다시 오셨네요!',
@@ -335,6 +342,12 @@ const EN_FARM_MESSAGES: FarmMessages = {
   resetKeepAction: 'Keep playing',
   emptyPlot: 'Empty',
   readyBadge: 'GET',
+  plotLockedAccessibilityLabel: (plotNumber) => `Plot ${plotNumber}, locked. Unlock it in the shop.`,
+  plotEmptyAccessibilityLabel: (plotNumber) => `Plot ${plotNumber}, empty. Plant the selected crop.`,
+  plotGrowingAccessibilityLabel: (cropName, remaining) =>
+    remaining != null ? `${cropName}, growing. About ${remaining} left.` : `${cropName}, growing.`,
+  plotReadyAccessibilityLabel: (cropName) => `${cropName}, ready to harvest. Tap to harvest.`,
+  sheetCloseAccessibilityLabel: 'Close',
   sheetTitleGrowthAd: 'Grow Now',
   sheetTitleHarvestBonus: 'Harvest Bonus',
   sheetTitleWelcomeBack: 'Welcome Back!',

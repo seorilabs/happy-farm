@@ -420,6 +420,20 @@ describe('FarmGame UI flow', () => {
     expect(screen.getAllByText('빈 밭')).toHaveLength(6);
   });
 
+  test('exposes accessibility labels on plant, harvest, and locked plots', async () => {
+    const messages = getFarmMessages(DEFAULT_LOCALE);
+    const screen = await renderGame(createReadyHarvestState());
+
+    await waitFor(() => expect(screen.getByText('50G')).toBeTruthy());
+
+    // The two ripe carrot tiles announce a harvest call-to-action with the crop name.
+    expect(screen.getAllByLabelText(messages.plotReadyAccessibilityLabel('당근'))).toHaveLength(2);
+    // Plots 1-2 hold ripe carrots, so plot #3 is the first unlocked empty tile.
+    expect(screen.getByLabelText(messages.plotEmptyAccessibilityLabel(3))).toBeTruthy();
+    // Tiles past the unlocked count expose a locked label that points at the shop.
+    expect(screen.getByLabelText(messages.plotLockedAccessibilityLabel(7))).toBeTruthy();
+  });
+
   test('renders the shared farm UI in English when the saved locale is en-US', async () => {
     const screen = await renderGame(null, {}, { locale: 'en-US' });
 

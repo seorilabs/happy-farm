@@ -2500,6 +2500,7 @@ export default function FarmGame({
                 }
                 tileSize={plotTileSize}
                 messages={messages}
+                cropName={plot.cropType != null ? getLocalizedCropName(plot.cropType) : undefined}
                 plantToken={plantPulses[index]}
                 onPlantPulseDone={clearPlantPulse}
                 onPress={onPlotPress}
@@ -2615,6 +2616,7 @@ export default function FarmGame({
         activeSheet={activeSheet}
         description={getSheetDescription(activeSheet, messages, locale, getLocalizedCropName, collectionSummary, dailyBonusPreview.streak)}
         title={getSheetTitle(activeSheet, messages)}
+        closeLabel={messages.sheetCloseAccessibilityLabel}
         onClose={closeSheet}
       >
         {activeSheet?.type === 'shop' ? (
@@ -3883,6 +3885,7 @@ const PlotCell = React.memo(function PlotCell({
   growthCountdown,
   tileSize,
   messages,
+  cropName,
   plantToken,
   onPlantPulseDone,
   onPress,
@@ -3894,16 +3897,26 @@ const PlotCell = React.memo(function PlotCell({
   growthCountdown: string | undefined;
   tileSize: number;
   messages: FarmMessages;
+  cropName: string | undefined;
   plantToken: number | undefined;
   onPlantPulseDone: (index: number) => void;
   onPress: (index: number) => void;
 }) {
   const tileSizeStyle = { width: tileSize, height: tileSize };
   const handlePress = () => onPress(index);
+  // Announce plots with a human-readable 1-based number for screen readers.
+  const plotNumber = index + 1;
 
   if (!unlocked) {
     return (
-      <Pressable testID={`plot-cell-${index}`} style={[styles.plotTile, tileSizeStyle, styles.lockedPlot]} onPress={handlePress}>
+      <Pressable
+        testID={`plot-cell-${index}`}
+        accessibilityRole="button"
+        accessibilityLabel={messages.plotLockedAccessibilityLabel(plotNumber)}
+        accessibilityState={{ disabled: true }}
+        style={[styles.plotTile, tileSizeStyle, styles.lockedPlot]}
+        onPress={handlePress}
+      >
         <Text style={styles.lockIcon}>🔒</Text>
       </Pressable>
     );
@@ -3911,13 +3924,27 @@ const PlotCell = React.memo(function PlotCell({
 
   if (plot.state === 0) {
     return (
-      <Pressable testID={`plot-cell-${index}`} style={[styles.plotTile, tileSizeStyle, styles.emptyPlot]} onPress={handlePress}>
+      <Pressable
+        testID={`plot-cell-${index}`}
+        accessibilityRole="button"
+        accessibilityLabel={messages.plotEmptyAccessibilityLabel(plotNumber)}
+        style={[styles.plotTile, tileSizeStyle, styles.emptyPlot]}
+        onPress={handlePress}
+      >
         <Text style={styles.emptyPlotText}>{messages.emptyPlot}</Text>
       </Pressable>
     );
   }
 
   const crop = plot.cropType != null ? getCrop(plot.cropType) : null;
+  // Fall back to the empty-plot label when the crop name is missing (unreachable
+  // by type, but guards against an empty accessibility label).
+  const plotAccessibilityLabel =
+    cropName == null
+      ? messages.plotEmptyAccessibilityLabel(plotNumber)
+      : plot.state === 2
+        ? messages.plotReadyAccessibilityLabel(cropName)
+        : messages.plotGrowingAccessibilityLabel(cropName, growthCountdown);
   // Reveal the actual crop icon at ≥65% growth so players can see what's
   // ripening and feel anticipation before the harvest tap.
   const icon =
@@ -3930,6 +3957,8 @@ const PlotCell = React.memo(function PlotCell({
   return (
     <Pressable
       testID={`plot-cell-${index}`}
+      accessibilityRole="button"
+      accessibilityLabel={plotAccessibilityLabel}
       style={[styles.plotTile, tileSizeStyle, plot.state === 2 ? styles.readyPlot : styles.growingPlot]}
       onPress={handlePress}
     >
@@ -4219,12 +4248,14 @@ function Sheet({
   children,
   description,
   title,
+  closeLabel,
   onClose,
 }: {
   activeSheet: ActiveSheet;
   children: React.ReactNode;
   description: string;
   title: string;
+  closeLabel: string;
   onClose: () => void;
 }) {
   const dragYRef = useRef<Animated.Value | null>(null);
@@ -4329,7 +4360,12 @@ function Sheet({
     <Modal transparent visible={activeSheet != null} animationType="none" onRequestClose={closeSheetWithAnimation}>
       <KeyboardAvoidingView behavior="padding" style={styles.modalRoot}>
         <Animated.View style={[StyleSheet.absoluteFillObject, styles.modalBackdrop, { opacity: dimmedOpacity }]}>
-          <Pressable style={StyleSheet.absoluteFillObject} onPress={closeSheetWithAnimation} />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={closeLabel}
+            style={StyleSheet.absoluteFillObject}
+            onPress={closeSheetWithAnimation}
+          />
         </Animated.View>
         <Animated.View style={[styles.sheet, { transform: [{ translateY: dragY }] }]}>
           <View testID="sheet-drag-handle" style={styles.sheetDragArea} {...panResponder.panHandlers}>
@@ -4457,7 +4493,13 @@ function ToolButton({
   onPress: () => void;
 }) {
   return (
-    <Pressable style={[styles.toolButton, active && styles.activeToolButton]} onPress={onPress}>
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={cost != null ? `${name}, ${cost}` : name}
+      accessibilityState={{ selected: active }}
+      style={[styles.toolButton, active && styles.activeToolButton]}
+      onPress={onPress}
+    >
       <Text style={styles.toolIcon}>{icon}</Text>
       <Text style={styles.toolName} numberOfLines={1}>
         {name}
