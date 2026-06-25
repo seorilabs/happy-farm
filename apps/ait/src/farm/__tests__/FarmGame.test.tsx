@@ -1029,6 +1029,42 @@ describe('FarmGame UI flow', () => {
     await waitFor(() => expect(screen.queryByTestId('prestige-graduation-overlay')).toBeNull());
   });
 
+  test('shows the chain-income guide once after the first graduation and persists dismissal', async () => {
+    const screen = await renderGame(createPrestigeReadyState());
+
+    await triggerPrestige(screen);
+    // 졸업 축하가 끝난 뒤에 가이드가 노출된다(겹치지 않음).
+    await waitFor(() => expect(screen.getByTestId('prestige-graduation-overlay')).toBeTruthy());
+    await act(async () => {
+      jest.advanceTimersByTime(PRESTIGE_GRADUATION_CELEBRATION_DURATION_MS);
+    });
+
+    await waitFor(() => expect(screen.getByTestId('prestige-guide-overlay')).toBeTruthy());
+    expect(screen.getByText(prestigeMessages.prestigeGuideTitle)).toBeTruthy();
+
+    // 확인하면 닫히고 플래그가 저장되어 재노출되지 않는다.
+    fireEvent.press(screen.getByTestId('prestige-guide-confirm'));
+    await waitFor(() => expect(screen.queryByTestId('prestige-guide-overlay')).toBeNull());
+    await waitFor(() =>
+      expect(mockPersistence.writePersistedGameState).toHaveBeenCalledWith(
+        expect.objectContaining({ prestigeGuideSeen: true })
+      )
+    );
+  });
+
+  test('does not show the chain-income guide when it was already seen', async () => {
+    const screen = await renderGame({ ...createPrestigeReadyState(), prestigeGuideSeen: true });
+
+    await triggerPrestige(screen);
+    await waitFor(() => expect(screen.getByTestId('prestige-graduation-overlay')).toBeTruthy());
+    await act(async () => {
+      jest.advanceTimersByTime(PRESTIGE_GRADUATION_CELEBRATION_DURATION_MS);
+    });
+
+    await waitFor(() => expect(screen.queryByTestId('prestige-graduation-overlay')).toBeNull());
+    expect(screen.queryByTestId('prestige-guide-overlay')).toBeNull();
+  });
+
   test('keeps reset behind the settings sheet', async () => {
     const screen = await renderGame(null);
 

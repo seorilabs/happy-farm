@@ -253,6 +253,28 @@ describe('farm save migration', () => {
     expect(migrated.unlockedPlotCount).toBe(INITIAL_PLOTS);
     expect(migrated.upgrades).toEqual({ speed: 1, profit: 1 });
   });
+
+  test('prestigeGuideSeen backfills from prestige level for legacy saves', () => {
+    const base = createInitialState();
+    // 플래그 없는 레거시 + 이미 졸업(level>0): 개념을 아는 유저로 보고 본 것 처리.
+    const graduated = migrateLoadedState(
+      { prestige: { ...base.prestige, level: 2 } } as Partial<GameState>,
+      base
+    );
+    expect(graduated.prestigeGuideSeen).toBe(true);
+    // 플래그 없는 레거시 + 미졸업: 첫 졸업 때 가이드가 노출되도록 false 유지.
+    const ungraduated = migrateLoadedState(
+      { prestige: { ...base.prestige, level: 0 } } as Partial<GameState>,
+      base
+    );
+    expect(ungraduated.prestigeGuideSeen).toBe(false);
+    // 명시 저장값은 레벨과 무관하게 그대로 존중.
+    const explicit = migrateLoadedState(
+      { prestigeGuideSeen: false, prestige: { ...base.prestige, level: 5 } } as Partial<GameState>,
+      base
+    );
+    expect(explicit.prestigeGuideSeen).toBe(false);
+  });
 });
 
 describe('farm ad limits', () => {
