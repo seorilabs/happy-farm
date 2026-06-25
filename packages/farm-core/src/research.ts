@@ -139,7 +139,45 @@ export function breedCrop(gameState: GameState, cropKey: CropKey): GameState | n
 }
 
 export function createInitialResearchState(): ResearchState {
-  return { points: 0, totalPointsEarned: 0, unlockedNodes: [], unlockedBreeds: [] };
+  return { points: 0, totalPointsEarned: 0, unlockedNodes: [], unlockedBreeds: [], acknowledgedOpportunities: [] };
+}
+
+// 연구실 진입 유도 배지용: 지금 당장 행동 가능한 "발견 기회"의 안정적 키 목록.
+// - node:<키>  해금 비용/선행 조건을 충족해 지금 해금 가능한 연구 노드
+// - breed:<작물> 노드·부모 발견·RP를 모두 충족해 지금 교배 가능한 레시피
+export function getResearchOpportunityKeys(gameState: GameState): string[] {
+  const keys: string[] = [];
+  for (const node of RESEARCH_NODES) {
+    if (canUnlockNode(gameState, node.key)) {
+      keys.push(`node:${node.key}`);
+    }
+  }
+  for (const recipe of BREEDING_RECIPES) {
+    if (getBreedingRecipeStatus(gameState, recipe).breedable) {
+      keys.push(`breed:${recipe.crop}`);
+    }
+  }
+  return keys;
+}
+
+// 현재 기회 중 마지막 확인 이후 새로 생긴 것이 하나라도 있으면 true(배지 노출 조건).
+export function hasUnseenResearchOpportunity(gameState: GameState): boolean {
+  const acknowledged = gameState.research.acknowledgedOpportunities;
+  return getResearchOpportunityKeys(gameState).some((key) => !acknowledged.includes(key));
+}
+
+// 현재 기회를 "확인됨"으로 표시해 배지를 해제한다(Lab을 열 때 호출). 변화가 없으면
+// 동일 참조를 반환해 불필요한 상태 갱신/세이브를 피한다.
+export function acknowledgeResearchOpportunities(gameState: GameState): GameState {
+  const keys = getResearchOpportunityKeys(gameState);
+  const current = gameState.research.acknowledgedOpportunities;
+  if (keys.length === current.length && keys.every((key) => current.includes(key))) {
+    return gameState;
+  }
+  return {
+    ...gameState,
+    research: { ...gameState.research, acknowledgedOpportunities: keys },
+  };
 }
 
 export function createInitialAutomationSettings(): AutomationSettings {
@@ -177,12 +215,35 @@ export function normalizeResearchState(value: unknown): ResearchState {
         .filter((cropKey, index, items) => items.indexOf(cropKey) === index)
     : [];
 
+  // 잘 알려진 형식(node:<노드>/breed:<레시피 작물>)의 키만 남기고 중복 제거. 형식 변경/
+  // 콘텐츠 삭제로 무효해진 항목은 버려 목록이 무한정 커지거나 오염되지 않게 한다.
+  const acknowledgedOpportunities = Array.isArray(loaded.acknowledgedOpportunities)
+    ? loaded.acknowledgedOpportunities
+        .filter(isKnownOpportunityKey)
+        .filter((key, index, items) => items.indexOf(key) === index)
+    : [];
+
   return {
     points,
     totalPointsEarned: Math.max(points, normalizePoints(loaded.totalPointsEarned)),
     unlockedNodes: reachableNodes,
     unlockedBreeds,
+    acknowledgedOpportunities,
   };
+}
+
+function isKnownOpportunityKey(value: unknown): value is string {
+  if (typeof value !== 'string') {
+    return false;
+  }
+  if (value.startsWith('node:')) {
+    return isKnownNodeKey(value.slice('node:'.length));
+  }
+  if (value.startsWith('breed:')) {
+    const cropKey = value.slice('breed:'.length);
+    return isKnownCropKey(cropKey) && BREEDING_RECIPES.some((recipe) => recipe.crop === cropKey);
+  }
+  return false;
 }
 
 export function normalizeAutomationSettings(value: unknown): AutomationSettings {
