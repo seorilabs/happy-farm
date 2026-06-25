@@ -141,6 +141,15 @@ flowchart TB
   - [ ] 분석 문서/대시보드 기준 정리
 - **관련 파일:** `packages/farm-core/src/analytics.ts`, `ads.ts`
 
+### [M8] 광고 제거 IAP / 보상 패스 BM 검토(스파이크) — `P3` · M
+- **현황:** 수익화가 광고 only. 광고 거부 성향 유저를 흡수할 비광고 옵션 미검토.
+- **할 일:** 광고 제거 IAP/보상 패스 타당성 스파이크(LTV·캐니벌라이제이션·구현 비용)와 후속 범위 정의.
+- **인수조건:**
+  - [x] BM 옵션 비교/권고안 문서 작성 → `docs/04-work/monetization-bm-spike.md`
+  - [x] 후속 구현 범위 정의(동 문서 5절: P0 결제 토대 → P1 광고 제거 → P2 분석 → P3 AIT 결제 조사 → P4 보상 패스)
+- **결론:** 광고 제거(영구 1회성) IAP를 1차 추진, 보상 패스는 결제 토대 안정 후 2차 보류. AIT 결제는 별도 조사.
+- **관련 파일:** `docs/04-work/monetization-bm-spike.md`, `packages/farm-core/src/ads.ts`
+
 ---
 
 ## 기능·품질 (Feature / Quality)
