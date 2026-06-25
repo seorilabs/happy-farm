@@ -120,6 +120,11 @@ export type GameState = {
   // Whether the first-session onboarding guide was completed or skipped. A
   // one-time flag so the coachmarks show only to new players and never return.
   onboardingCompleted: boolean;
+  // Whether the one-time harvest-notification permission prompt — shown right
+  // after the first harvest ("aha") — has already been surfaced. Once the player
+  // accepts or dismisses it we never ask again (they can still toggle it in
+  // settings). A meta-layer flag, so it survives prestige.
+  harvestNotificationPromptSeen: boolean;
 };
 
 // Prestige reset boundary. Farm-layer fields are wiped when the player
@@ -147,6 +152,7 @@ export const META_LAYER_KEYS = [
   'automationSettings',
   'dailyBonusState',
   'onboardingCompleted',
+  'harvestNotificationPromptSeen',
 ] as const satisfies readonly (keyof GameState)[];
 
 export type FarmLayerKey = (typeof FARM_LAYER_KEYS)[number];

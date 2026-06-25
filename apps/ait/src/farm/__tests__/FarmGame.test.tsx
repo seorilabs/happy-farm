@@ -31,7 +31,7 @@ import {
   type RewardedAdController,
   type RewardedAdShowResult,
 } from '../../../../../packages/farm-core/src';
-import { getFarmMessages } from '../../../../../packages/farm-ui/src';
+import { getFarmMessages, type FarmGameNotifications } from '../../../../../packages/farm-ui/src';
 
 const NOW = Date.parse('2026-05-27T03:00:00.000Z');
 
@@ -1661,5 +1661,104 @@ describe('NextGoalBar', () => {
     expect(screen.queryByText('농장 관리소')).toBeNull();
     fireEvent.press(screen.getByTestId('next-goal-bar'));
     expect(screen.getByText('농장 관리소')).toBeTruthy();
+  });
+
+  describe('harvest notification permission prompt', () => {
+    const promptMessages = getFarmMessages();
+
+    function createNotificationsMock(
+      overrides: Partial<FarmGameNotifications> = {}
+    ): FarmGameNotifications {
+      return {
+        isSupported: true,
+        requestPermission: jest.fn(async () => true),
+        scheduleHarvestReady: jest.fn(async () => undefined),
+        cancelHarvestReady: jest.fn(async () => undefined),
+        scheduleReminder: jest.fn(async () => undefined),
+        cancelReminder: jest.fn(async () => undefined),
+        ...overrides,
+      };
+    }
+
+    // A player who has just had their first harvest and finished onboarding, but
+    // has never been shown the notification prompt — the exact aha window.
+    function createPostAhaState(): GameState {
+      return {
+        ...createInitialState(),
+        onboardingCompleted: true,
+        harvestedCropKeys: ['carrot'] satisfies CropKey[],
+        harvestNotificationPromptSeen: false,
+      };
+    }
+
+    test('surfaces the prompt after the first harvest once onboarding is done', async () => {
+      const notifications = createNotificationsMock();
+      const screen = await renderGame(createPostAhaState(), { notifications });
+
+      await waitFor(() => expect(screen.getByTestId('notification-prompt-card')).toBeTruthy());
+      expect(screen.getByText(promptMessages.notificationPromptTitle)).toBeTruthy();
+    });
+
+    test('requests permission and enables harvest notifications on accept', async () => {
+      const notifications = createNotificationsMock();
+      const screen = await renderGame(createPostAhaState(), { notifications });
+
+      await waitFor(() => expect(screen.getByTestId('notification-prompt-card')).toBeTruthy());
+      fireEvent.press(screen.getByTestId('notification-prompt-accept'));
+
+      await waitFor(() => expect(notifications.requestPermission).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(screen.queryByTestId('notification-prompt-card')).toBeNull());
+      await waitFor(() =>
+        expect(mockPersistence.writePersistedGameSettings).toHaveBeenCalledWith(
+          expect.objectContaining({ harvestNotificationsEnabled: true })
+        )
+      );
+    });
+
+    test('retires the prompt without asking permission on decline', async () => {
+      const notifications = createNotificationsMock();
+      const screen = await renderGame(createPostAhaState(), { notifications });
+
+      await waitFor(() => expect(screen.getByTestId('notification-prompt-card')).toBeTruthy());
+      fireEvent.press(screen.getByTestId('notification-prompt-decline'));
+
+      await waitFor(() => expect(screen.queryByTestId('notification-prompt-card')).toBeNull());
+      expect(notifications.requestPermission).not.toHaveBeenCalled();
+      await waitFor(() =>
+        expect(mockPersistence.writePersistedGameState).toHaveBeenCalledWith(
+          expect.objectContaining({ harvestNotificationPromptSeen: true })
+        )
+      );
+    });
+
+    test('never re-asks once the prompt has been seen', async () => {
+      const notifications = createNotificationsMock();
+      const screen = await renderGame(
+        { ...createPostAhaState(), harvestNotificationPromptSeen: true },
+        { notifications }
+      );
+
+      await waitFor(() => expect(screen.getByText('50G')).toBeTruthy());
+      expect(screen.queryByTestId('notification-prompt-card')).toBeNull();
+    });
+
+    test('does not surface the prompt while onboarding is still in progress', async () => {
+      const notifications = createNotificationsMock();
+      const screen = await renderGame(
+        { ...createPostAhaState(), onboardingCompleted: false },
+        { notifications }
+      );
+
+      await waitFor(() => expect(screen.getByText('50G')).toBeTruthy());
+      expect(screen.queryByTestId('notification-prompt-card')).toBeNull();
+    });
+
+    test('skips the prompt when the platform does not support notifications', async () => {
+      const notifications = createNotificationsMock({ isSupported: false });
+      const screen = await renderGame(createPostAhaState(), { notifications });
+
+      await waitFor(() => expect(screen.getByText('50G')).toBeTruthy());
+      expect(screen.queryByTestId('notification-prompt-card')).toBeNull();
+    });
   });
 });

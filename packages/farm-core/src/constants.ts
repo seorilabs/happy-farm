@@ -701,6 +701,7 @@ export function createInitialState(): GameState {
     })),
     dailyBonusState: { lastClaimedAt: null, streak: 0 },
     onboardingCompleted: false,
+    harvestNotificationPromptSeen: false,
   };
 }
 
@@ -845,6 +846,13 @@ export function migrateLoadedState(loaded: Partial<GameState>, base: GameState):
   // false value.
   merged.onboardingCompleted =
     typeof loaded.onboardingCompleted === 'boolean' ? loaded.onboardingCompleted : true;
+
+  // A save without the flag belongs to a player who already started before this
+  // prompt existed, so treat it as already seen to avoid surprising them with a
+  // sudden ask. Only brand-new players (no save) keep createInitialState's false
+  // value and get the prompt at the optimal moment right after their first harvest.
+  merged.harvestNotificationPromptSeen =
+    typeof loaded.harvestNotificationPromptSeen === 'boolean' ? loaded.harvestNotificationPromptSeen : true;
 
   if (merged.unlockedAreas.length === 0) merged.unlockedAreas = INITIAL_AREA_KEYS;
   return merged;
