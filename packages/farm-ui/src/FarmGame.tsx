@@ -80,6 +80,7 @@ import {
   getRewardedAdPlacement,
   createInitialState,
   DEFAULT_LOCALE,
+  SUPPORTED_LOCALES,
   executeFarmGameCommand,
   formatDuration,
   formatHourlyGold,
@@ -626,6 +627,12 @@ export default function FarmGame({
   const locale = normalizeLocale(gameSettings.locale);
   const messages = useMemo(() => getFarmMessages(locale), [locale]);
   const resetConfirmValue = messages.resetConfirmText;
+  // The language picker shows each language by its own endonym, so these labels
+  // read the same regardless of the currently active locale.
+  const languageOptionLabels: Record<SupportedLocale, string> = {
+    'ko-KR': messages.languageOptionKo,
+    'en-US': messages.languageOptionEn,
+  };
   const getLocalizedCropName = useCallback((cropKey: CropKey) => getCropLabel(cropKey, locale).name, [locale]);
   const getLocalizedAreaLabel = useCallback((areaKey: AreaKey) => getAreaLabel(areaKey, locale), [locale]);
 
@@ -2805,11 +2812,26 @@ export default function FarmGame({
             />
 
             <Text style={styles.sheetSectionTitle}>{messages.languageSection}</Text>
-            <SheetAction
-              label={messages.languageSwitchLabel}
-              secondary
-              onPress={() => updateGameSettings({ locale: locale === 'ko-KR' ? 'en-US' : 'ko-KR' })}
-            />
+            <View style={styles.languageOptions}>
+              {SUPPORTED_LOCALES.map((option) => {
+                const active = locale === option;
+                return (
+                  <Pressable
+                    key={option}
+                    testID={`language-option-${option}`}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: active }}
+                    accessibilityLabel={languageOptionLabels[option]}
+                    style={[styles.languageOption, active && styles.activeLanguageOption]}
+                    onPress={() => updateGameSettings({ locale: option })}
+                  >
+                    <Text style={[styles.languageOptionText, active && styles.activeLanguageOptionText]}>
+                      {languageOptionLabels[option]}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
             <Text style={sheetPartStyles.settingDesc}>{messages.languageDesc}</Text>
 
             <Text style={styles.sheetSectionTitle}>{messages.gameDataSection}</Text>

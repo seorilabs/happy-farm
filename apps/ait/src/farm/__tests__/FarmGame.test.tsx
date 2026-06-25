@@ -1096,6 +1096,31 @@ describe('FarmGame UI flow', () => {
     expect(screen.getByText('새로 시작하기')).toBeTruthy();
   });
 
+  test('switches and persists the UI language from the settings language selector', async () => {
+    const screen = await renderGame(null);
+
+    await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+
+    fireEvent.press(screen.getByLabelText('설정'));
+    // 언어 섹션과 두 언어 옵션(한국어/English)이 노출된다.
+    expect(screen.getByText('언어')).toBeTruthy();
+    expect(screen.getByTestId('language-option-ko-KR')).toBeTruthy();
+    expect(screen.getByTestId('language-option-en-US')).toBeTruthy();
+
+    // 영어 옵션을 선택하면 UI가 즉시 영어로 전환된다.
+    fireEvent.press(screen.getByTestId('language-option-en-US'));
+
+    await waitFor(() => expect(screen.getByText('Happy Farm')).toBeTruthy());
+    expect(screen.queryByText('행복 농장')).toBeNull();
+
+    // 선택한 언어가 설정 저장소에 반영(저장)된다.
+    await waitFor(() =>
+      expect(mockPersistence.writePersistedGameSettings).toHaveBeenCalledWith(
+        expect.objectContaining({ locale: 'en-US' })
+      )
+    );
+  });
+
   test('plays the harvest sound when audio is supported', async () => {
     const lateGame = createLateGameState();
     const playHarvest = jest.fn();

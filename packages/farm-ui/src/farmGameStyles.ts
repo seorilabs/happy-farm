@@ -668,6 +668,33 @@ export const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '900',
   },
+  languageOptions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  languageOption: {
+    flex: 1,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#d0d5dd',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    backgroundColor: '#f7fafc',
+  },
+  activeLanguageOption: {
+    borderColor: '#4d9d56',
+    backgroundColor: '#edf8ed',
+  },
+  languageOptionText: {
+    color: '#344054',
+    fontSize: 14,
+    fontWeight: '900',
+  },
+  activeLanguageOptionText: {
+    color: '#247241',
+  },
   researchSummary: {
     marginTop: -2,
     marginBottom: 10,
