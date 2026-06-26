@@ -56,6 +56,11 @@ const sequentialAreas = areas.filter((area) => area.unlock?.gate == null);
 for (let index = 1; index < sequentialAreas.length; index += 1) {
   const prev = sequentialAreas[index - 1];
   const curr = sequentialAreas[index];
+  // 구조가 어긋나면(TypeError로 가드가 비정상 종료되지 않도록) 명시적 실패로 적재.
+  if (prev.unlock == null || curr.unlock == null) {
+    check(false, `구역 ${prev.key}/${curr.key}: unlock 정보가 없습니다.`);
+    continue;
+  }
   check(
     curr.unlock.cost > prev.unlock.cost,
     `구역 해금 비용은 진행 순서대로 증가해야 합니다: ${prev.key}(${prev.unlock.cost}) → ${curr.key}(${curr.unlock.cost}).`
@@ -77,6 +82,11 @@ const MIN_ROI = 1.1;
 const MAX_ROI = 10;
 for (const crop of crops) {
   const label = crop?.key ?? '(이름 없음)';
+  // 필수 수치 필드가 빠지면 이후 산술(`sell/cost` 등)이 NaN/TypeError가 되므로 먼저 거른다.
+  if (!isFiniteNumber(crop?.cost) || !isFiniteNumber(crop?.sell) || !isFiniteNumber(crop?.growTime)) {
+    check(false, `작물 ${label}: cost/sell/growTime이 모두 유효한 숫자여야 합니다.`);
+    continue;
+  }
   check(crop.cost > 0 && crop.sell > 0 && crop.growTime > 0, `작물 ${label}: cost/sell/growTime은 모두 0보다 커야 합니다.`);
   check(crop.sell > crop.cost, `작물 ${label}: 판매가(${crop.sell})는 씨앗 비용(${crop.cost})보다 커야 합니다(양의 마진).`);
   const roi = crop.sell / crop.cost;
@@ -85,22 +95,33 @@ for (const crop of crops) {
   check(areaKeys.has(crop.area), `작물 ${label}: area "${crop.area}"가 정의된 구역이 아닙니다.`);
 }
 
-// 4) 데일리 보너스: 광고 인센티브 보존을 위해 모든 ad-reward 비율이 1 미만.
+// 4) 데일리 보너스: 광고 인센티브 보존을 위해 일일 ad-reward 비율이 1 미만.
 const dailyBonus = balance.dailyBonus ?? {};
-const ratioByStreak = Object.values(dailyBonus.adRewardRatioByStreak ?? {});
-for (const [streak, ratio] of Object.entries(dailyBonus.adRewardRatioByStreak ?? {})) {
+const streakRatioEntries = Object.entries(dailyBonus.adRewardRatioByStreak ?? {});
+for (const [streak, ratio] of streakRatioEntries) {
   check(ratio > 0 && ratio < 1, `dailyBonus.adRewardRatioByStreak[${streak}](${ratio})는 0 초과 1 미만이어야 합니다(광고 인센티브 보존).`);
 }
-check(
-  dailyBonus.adRewardRatioMax > 0 && dailyBonus.adRewardRatioMax < 1,
-  `dailyBonus.adRewardRatioMax(${dailyBonus.adRewardRatioMax})는 0 초과 1 미만이어야 합니다.`
-);
-check(
-  ratioByStreak.every((ratio) => ratio <= dailyBonus.adRewardRatioMax),
-  'dailyBonus.adRewardRatioByStreak의 모든 값은 adRewardRatioMax 이하여야 합니다.'
-);
+// adRewardRatioMax를 먼저 (0,1)로 검증한 뒤, 그것이 유효할 때만 streak 값과의
+// 일관성(모든 streak 비율 ≤ Max)을 검사한다. Max가 비정상이면 보조 검사가 항상
+// 통과해 무의미해지므로 순서를 분리한다.
+const adRewardRatioMaxValid = dailyBonus.adRewardRatioMax > 0 && dailyBonus.adRewardRatioMax < 1;
+check(adRewardRatioMaxValid, `dailyBonus.adRewardRatioMax(${dailyBonus.adRewardRatioMax})는 0 초과 1 미만이어야 합니다.`);
+if (adRewardRatioMaxValid) {
+  check(
+    streakRatioEntries.every(([, ratio]) => ratio <= dailyBonus.adRewardRatioMax),
+    'dailyBonus.adRewardRatioByStreak의 모든 값은 adRewardRatioMax 이하여야 합니다.'
+  );
+}
 check((dailyBonus.weeklyMilestone?.everyDays ?? 0) > 0, 'dailyBonus.weeklyMilestone.everyDays는 0보다 커야 합니다.');
-check((dailyBonus.weeklyMilestone?.adRewardRatio ?? 0) > 0, 'dailyBonus.weeklyMilestone.adRewardRatio는 0보다 커야 합니다.');
+// 주간 마일스톤은 설계상(balance.json agentPurpose 참조) 광고 보상의 "배수"라서
+// 1 이상이 정상(현재 2)이다. 따라서 1 미만 상한은 적용하지 않고, 광고 가치를
+// 무너뜨리는 비정상 폭주만 잡도록 합리적 상한(≤ 10)을 둔다.
+const WEEKLY_MILESTONE_RATIO_MAX = 10;
+const weeklyMilestoneRatio = dailyBonus.weeklyMilestone?.adRewardRatio ?? 0;
+check(
+  weeklyMilestoneRatio > 0 && weeklyMilestoneRatio <= WEEKLY_MILESTONE_RATIO_MAX,
+  `dailyBonus.weeklyMilestone.adRewardRatio(${weeklyMilestoneRatio})는 0 초과 ${WEEKLY_MILESTONE_RATIO_MAX} 이하여야 합니다.`
+);
 
 // 5) 마스터리: 랭크 보너스 비감소 + 티어별 임계값 순증가.
 const ranks = balance.mastery?.ranks ?? [];
@@ -133,12 +154,23 @@ for (const kind of kinds) {
   check(kind.sellMultiplier > 1, `변이 ${kind.key}: sellMultiplier는 1보다 커야 합니다.`);
   check(kind.baseChance > 0 && kind.baseChance < 1, `변이 ${kind.key}: baseChance는 0 초과 1 미만이어야 합니다.`);
 }
-for (let index = 1; index < kinds.length; index += 1) {
-  check(
-    kinds[index].sellMultiplier > kinds[index - 1].sellMultiplier &&
-      kinds[index].baseChance < kinds[index - 1].baseChance,
-    `변이는 뒤로 갈수록 더 희귀(배수↑·확률↓)해야 합니다: ${kinds[index - 1].key} → ${kinds[index].key}.`
-  );
+// 배열 순서에 의존하지 않고 모든 쌍에 대해 "배수↑ ⟺ 확률↓" 관계만 강제한다.
+// 이렇게 하면 같은 단계의 변이가 공존하거나 변이가 추가/재정렬되어도, 더 큰
+// 보상이 더 흔해지는 역전(광고/희소성 가치 붕괴)만 정확히 잡는다.
+for (let i = 0; i < kinds.length; i += 1) {
+  for (let j = i + 1; j < kinds.length; j += 1) {
+    const a = kinds[i];
+    const b = kinds[j];
+    if (a.sellMultiplier === b.sellMultiplier) {
+      continue;
+    }
+    const richer = a.sellMultiplier > b.sellMultiplier ? a : b;
+    const cheaper = a.sellMultiplier > b.sellMultiplier ? b : a;
+    check(
+      richer.baseChance < cheaper.baseChance,
+      `변이 희귀도 역전: 더 큰 배수의 ${richer.key}가 더 낮은 확률이어야 합니다(${richer.key} vs ${cheaper.key}).`
+    );
+  }
 }
 
 // 7) 프레스티지/체인.
