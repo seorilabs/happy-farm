@@ -2450,6 +2450,19 @@ export default function FarmGame({
   handlePlotClickRef.current = handlePlotClick;
   const onPlotPress = useCallback((index: number) => handlePlotClickRef.current(index), []);
 
+  // Stable, key-based tool selection so memoized ToolButtons keep referential
+  // equality across the 250ms tick. selectCrop closes over fast-changing state,
+  // so route through a ref instead of threading it as a useCallback dep.
+  const selectToolRef = useRef<(toolKey: ToolKey) => void>(() => undefined);
+  selectToolRef.current = (toolKey: ToolKey) => {
+    if (toolKey === 'harvest') {
+      setSelectedTool('harvest');
+      return;
+    }
+    selectCrop(toolKey);
+  };
+  const onSelectTool = useCallback((toolKey: ToolKey) => selectToolRef.current(toolKey), []);
+
   // Recomputed every render tick (250ms) so displayed streak/gold always
   // reflects the current time — matching what claimDailyBonus will award
   // within one tick when the player taps.
@@ -2668,7 +2681,8 @@ export default function FarmGame({
             active={selectedTool === 'harvest'}
             icon="🖐️"
             name={messages.harvestTool}
-            onPress={() => setSelectedTool('harvest')}
+            toolKey="harvest"
+            onSelect={onSelectTool}
           />
           {visibleCropKeys.map((key) => {
             const crop = getCrop(key);
@@ -2684,10 +2698,11 @@ export default function FarmGame({
                 cost={formatMoney(cropCost, locale)}
                 roi={messages.roi(formatSignedPercent(getCropEconomy(cropEconomyByKey, key).roiPercent, locale))}
                 affordable={gameState.gold >= cropCost}
-                masteryRank={masteryRank}
+                masteryIcon={masteryRank?.icon}
                 isNew={isNew}
                 newLabel={messages.newCropBadge}
-                onPress={() => selectCrop(key)}
+                toolKey={key}
+                onSelect={onSelectTool}
               />
             );
           })}
@@ -4607,17 +4622,23 @@ function getSheetDescription(
   return messages.sheetDescriptionShop;
 }
 
-function ToolButton({
+// Memoized so the per-area crop row skips the 250ms idle tick: all props are
+// primitives and onSelect/toolKey are stable, so unchanged buttons keep
+// referential equality and never re-render until cost/affordability/selection
+// actually changes. (masteryRank is passed as a primitive icon string to avoid
+// the object-identity churn that would otherwise defeat the memo every render.)
+const ToolButton = React.memo(function ToolButton({
   active,
   icon,
   name,
   cost,
   roi,
   affordable,
-  masteryRank,
+  masteryIcon,
   isNew,
   newLabel,
-  onPress,
+  toolKey,
+  onSelect,
 }: {
   active: boolean;
   icon: string;
@@ -4625,10 +4646,11 @@ function ToolButton({
   cost?: string;
   roi?: string;
   affordable?: boolean;
-  masteryRank?: { icon: string } | null;
+  masteryIcon?: string;
   isNew?: boolean;
   newLabel?: string;
-  onPress: () => void;
+  toolKey: ToolKey;
+  onSelect: (toolKey: ToolKey) => void;
 }) {
   return (
     <Pressable
@@ -4636,7 +4658,7 @@ function ToolButton({
       accessibilityLabel={cost != null ? `${name}, ${cost}` : name}
       accessibilityState={{ selected: active }}
       style={[styles.toolButton, active && styles.activeToolButton]}
-      onPress={onPress}
+      onPress={() => onSelect(toolKey)}
     >
       <Text style={styles.toolIcon}>{icon}</Text>
       <Text style={styles.toolName} numberOfLines={1}>
@@ -4646,9 +4668,9 @@ function ToolButton({
         <Text style={[styles.toolCost, affordable === false && styles.toolCostUnaffordable]}>{cost}</Text>
       ) : null}
       {roi != null ? <Text style={styles.toolRoi}>{roi}</Text> : null}
-      {masteryRank != null ? (
+      {masteryIcon != null ? (
         <View pointerEvents="none" style={styles.toolMasteryBadge}>
-          <Text style={styles.toolMasteryBadgeText}>{masteryRank.icon}</Text>
+          <Text style={styles.toolMasteryBadgeText}>{masteryIcon}</Text>
         </View>
       ) : null}
       {isNew === true && newLabel != null ? (
@@ -4658,7 +4680,7 @@ function ToolButton({
       ) : null}
     </Pressable>
   );
-}
+});
 
 function ShopPlotRow({
   gameState,
