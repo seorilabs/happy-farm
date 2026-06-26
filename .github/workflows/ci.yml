@@ -44,6 +44,9 @@ jobs:
       - name: Lint AIT and shared core
         run: pnpm --dir apps/ait lint
 
+      - name: Check balance regression
+        run: pnpm check:balance
+
       - name: Test shared core
         run: pnpm check:core
 
@@ -74,6 +77,9 @@ jobs:
 
       - name: Check i18n coverage
         run: pnpm check:i18n
+
+      - name: Check balance regression
+        run: pnpm check:balance
 
       - name: Typecheck mobile app
         run: pnpm --dir apps/mobile typecheck
