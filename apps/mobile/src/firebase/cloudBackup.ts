@@ -17,32 +17,48 @@ import {
   type CloudSaveDocument,
   type CloudSaveStore,
 } from './cloudBackupCore';
+import { runWithNetworkPolicy } from './network';
 import { getRemoteBoolean } from './remoteConfig';
 
 const CLOUD_SAVE_ENABLED_KEY = 'cloud_save_backup_enabled';
 
+// Firestore 호출은 게임 로딩(클라우드 복원)을 막을 수 있으므로 타임아웃·재시도를
+// 건다. 모든 경로는 고정 문서('current')에 대한 멱등 연산이라 재시도가 안전하다.
+// 타임아웃/최종 실패 에러는 cloudBackupCore의 try/catch로 전파되어 Crashlytics에
+// 일관되게 기록된다.
 const firestoreCloudSaveStore: CloudSaveStore = {
   async readCurrentSave(uid: string) {
-    const snapshot = await getDoc(doc(getFirestore(), 'users', uid, 'saves', 'current'));
-    if (!snapshot.exists()) {
-      return null;
-    }
-    return snapshot.data() as CloudSaveDocument;
+    return runWithNetworkPolicy(
+      async () => {
+        const snapshot = await getDoc(doc(getFirestore(), 'users', uid, 'saves', 'current'));
+        if (!snapshot.exists()) {
+          return null;
+        }
+        return snapshot.data() as CloudSaveDocument;
+      },
+      { label: 'firestore:read_current_save' }
+    );
   },
 
   async writeCurrentSave(uid: string, document: CloudSaveDocument) {
-    await setDoc(
-      doc(getFirestore(), 'users', uid, 'saves', 'current'),
-      {
-        ...document,
-        updatedAt: serverTimestamp(),
-      },
-      { merge: true }
+    await runWithNetworkPolicy(
+      () =>
+        setDoc(
+          doc(getFirestore(), 'users', uid, 'saves', 'current'),
+          {
+            ...document,
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true }
+        ),
+      { label: 'firestore:write_current_save' }
     );
   },
 
   async deleteCurrentSave(uid: string) {
-    await deleteDoc(doc(getFirestore(), 'users', uid, 'saves', 'current'));
+    await runWithNetworkPolicy(() => deleteDoc(doc(getFirestore(), 'users', uid, 'saves', 'current')), {
+      label: 'firestore:delete_current_save',
+    });
   },
 };
 

@@ -2,6 +2,7 @@ import { getAuth, signInAnonymously } from '@react-native-firebase/auth';
 
 import { isFirebaseConfigured } from './app';
 import { recordNonFatalError } from './crashlytics';
+import { runWithNetworkPolicy } from './network';
 
 export type MobileAnonymousUser = {
   uid: string;
@@ -33,7 +34,12 @@ export async function ensureMobileAnonymousUser(): Promise<MobileAnonymousUser |
       return currentUser;
     }
 
-    signInPromise ??= signInAnonymously(auth)
+    // 익명 로그인은 클라우드 저장의 선행 단계라 무한 대기를 막아야 한다. 동일
+    // 디바이스의 익명 로그인은 멱등하므로 타임아웃 후 제한적 재시도가 안전하다.
+    signInPromise ??= runWithNetworkPolicy(() => signInAnonymously(auth), {
+      label: 'auth:anonymous_sign_in',
+      retries: 1,
+    })
       .then((credential) => normalizeUser(credential.user))
       .catch((error: unknown) => {
         if (!authFailureRecorded) {
