@@ -79,6 +79,7 @@ import {
   createFarmAnalytics,
   getRewardedAdPlacement,
   createInitialState,
+  migrateLoadedState,
   DEFAULT_LOCALE,
   SUPPORTED_LOCALES,
   executeFarmGameCommand,
@@ -141,7 +142,7 @@ import { ChainMapSheet, PrestigeConfirmSheet } from './components/ChainMapSheet'
 import { CollectionSheet } from './components/CollectionSheet';
 import { FarmOnboarding, type OnboardingStep } from './components/FarmOnboarding';
 import { LabSheet } from './components/LabSheet';
-import { AdRewardCard, SettingToggle, SheetAction, ShopCard, sheetPartStyles } from './components/SheetParts';
+import { AdRewardCard, CloudSaveSection, SettingToggle, SheetAction, ShopCard, sheetPartStyles } from './components/SheetParts';
 import { MAIN_HORIZONTAL_PADDING, PLOT_COLUMNS, PLOT_GAP } from './farmGameLayout';
 import { styles } from './farmGameStyles';
 
@@ -329,8 +330,27 @@ export type FarmGameNotifications = {
   cancelReminder: (kind: FarmReminderKind) => Promise<void>;
 };
 
+// User-triggered cloud backup/restore from settings. Distinct from the automatic
+// backup wired inside persistence: this adapter surfaces an explicit entry point
+// and result status in the UI. When isSupported is false the settings section is
+// hidden entirely (AIT / default).
+export type FarmCloudSaveBackupOutcome =
+  | { status: 'disabled' | 'signed_out' | 'error' }
+  | { status: 'backed_up'; clientRevision: number };
+
+export type FarmCloudSaveRestoreOutcome =
+  | { status: 'disabled' | 'signed_out' | 'missing' | 'invalid' | 'error' }
+  | { status: 'restored'; clientRevision: number; gameState: GameState };
+
+export type FarmCloudSave = {
+  isSupported: boolean;
+  backupNow: (gameState: GameState) => Promise<FarmCloudSaveBackupOutcome>;
+  restoreFromCloud: () => Promise<FarmCloudSaveRestoreOutcome>;
+};
+
 export type FarmGameProps = {
   persistence?: FarmGamePersistence;
+  cloudSave?: FarmCloudSave;
   analytics?: FarmAnalytics;
   useRewardedAd?: UseFarmAd;
   useInterstitialAd?: UseFarmAd;
@@ -441,6 +461,11 @@ const defaultFarmNotifications: FarmGameNotifications = {
   scheduleReminder: async () => undefined,
   cancelReminder: async () => undefined,
 };
+const defaultCloudSave: FarmCloudSave = {
+  isSupported: false,
+  backupNow: async () => ({ status: 'disabled' }),
+  restoreFromCloud: async () => ({ status: 'disabled' }),
+};
 const defaultPersistence: FarmGamePersistence = {
   readPersistedGameState: async () => createInitialState(),
   writePersistedGameState: async () => undefined,
@@ -507,6 +532,7 @@ function useFarmSafeAreaInsets() {
 
 export default function FarmGame({
   persistence = defaultPersistence,
+  cloudSave = defaultCloudSave,
   analytics = defaultFarmAnalytics,
   useRewardedAd = useUnsupportedAd,
   useInterstitialAd = useUnsupportedAd,
@@ -520,6 +546,10 @@ export default function FarmGame({
   const { width: windowWidth } = useWindowDimensions();
   const [activeSheet, setActiveSheet] = useState<ActiveSheet>(null);
   const [resetConfirmText, setResetConfirmText] = useState('');
+  // Cloud backup/restore: in-flight guard against double taps, plus the last
+  // result notice shown in the settings section.
+  const [cloudSaveBusy, setCloudSaveBusy] = useState(false);
+  const [cloudSaveNotice, setCloudSaveNotice] = useState<string | null>(null);
   const [isSaveLoaded, setIsSaveLoaded] = useState(false);
   const [isSettingsLoaded, setIsSettingsLoaded] = useState(false);
   const [gameSettings, setGameSettings] = useState<FarmGameSettings>(DEFAULT_FARM_GAME_SETTINGS);
@@ -2094,6 +2124,79 @@ export default function FarmGame({
     toast(messages.resetDoneToast);
   }
 
+  function cloudBackupOutcomeMessage(status: FarmCloudSaveBackupOutcome['status']) {
+    switch (status) {
+      case 'backed_up':
+        return messages.cloudBackupDoneToast;
+      case 'disabled':
+        return messages.cloudSaveDisabledToast;
+      case 'signed_out':
+        return messages.cloudSaveSignedOutToast;
+      default:
+        return messages.cloudSaveErrorToast;
+    }
+  }
+
+  function cloudRestoreOutcomeMessage(status: FarmCloudSaveRestoreOutcome['status']) {
+    switch (status) {
+      case 'restored':
+        return messages.cloudRestoreDoneToast;
+      case 'missing':
+        return messages.cloudRestoreMissingToast;
+      case 'invalid':
+        return messages.cloudRestoreInvalidToast;
+      case 'disabled':
+        return messages.cloudSaveDisabledToast;
+      case 'signed_out':
+        return messages.cloudSaveSignedOutToast;
+      default:
+        return messages.cloudSaveErrorToast;
+    }
+  }
+
+  async function backupToCloud() {
+    if (cloudSaveBusy) {
+      return;
+    }
+    setCloudSaveBusy(true);
+    setCloudSaveNotice(messages.cloudBackupInProgress);
+    try {
+      const outcome = await cloudSave.backupNow(gameState);
+      const notice = cloudBackupOutcomeMessage(outcome.status);
+      setCloudSaveNotice(notice);
+      toast(notice);
+    } finally {
+      setCloudSaveBusy(false);
+    }
+  }
+
+  async function restoreFromCloud() {
+    if (cloudSaveBusy) {
+      return;
+    }
+    setCloudSaveBusy(true);
+    setCloudSaveNotice(messages.cloudRestoreInProgress);
+    try {
+      const outcome = await cloudSave.restoreFromCloud();
+      if (outcome.status === 'restored') {
+        // The cloud payload may come from an older app version, so run it through
+        // the same migration/normalization as the load path before showing it.
+        const restored = migrateLoadedState(outcome.gameState, createInitialState());
+        setGameState({
+          ...restored,
+          dailyBonusState: normalizeDailyBonusState(restored.dailyBonusState as unknown),
+        });
+        setSelectedArea(FIRST_AREA.key);
+        setSelectedTool('harvest');
+      }
+      const notice = cloudRestoreOutcomeMessage(outcome.status);
+      setCloudSaveNotice(notice);
+      toast(notice);
+    } finally {
+      setCloudSaveBusy(false);
+    }
+  }
+
   function plantCrop(index: number, cropKey: CropKey) {
     const now = Date.now();
     const effectId = ++commandEffectIdRef.current;
@@ -2833,6 +2936,19 @@ export default function FarmGame({
               })}
             </View>
             <Text style={sheetPartStyles.settingDesc}>{messages.languageDesc}</Text>
+
+            {cloudSave.isSupported ? (
+              <CloudSaveSection
+                title={messages.cloudBackupSection}
+                desc={messages.cloudBackupDesc}
+                notice={cloudSaveNotice}
+                backupLabel={messages.cloudBackupAction}
+                restoreLabel={messages.cloudRestoreAction}
+                busy={cloudSaveBusy}
+                onBackup={() => void backupToCloud()}
+                onRestore={() => void restoreFromCloud()}
+              />
+            ) : null}
 
             <Text style={styles.sheetSectionTitle}>{messages.gameDataSection}</Text>
             <SheetAction label={messages.resetFarmAction} danger onPress={openResetConfirm} />

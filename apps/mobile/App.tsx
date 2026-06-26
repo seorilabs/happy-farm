@@ -12,7 +12,7 @@ import {
   mobileHarvestNotifications,
   registerHarvestNotificationOpenTracking,
 } from './src/notifications/harvestNotifications';
-import { mobileFarmPersistence } from './src/storage/farmPersistence';
+import { mobileCloudSave, mobileFarmPersistence } from './src/storage/farmPersistence';
 
 function App() {
   const farmAudio = useMobileFarmAudio();
@@ -33,6 +33,7 @@ function App() {
       <FarmGame
         analytics={mobileFarmAnalytics}
         audio={farmAudio}
+        cloudSave={mobileCloudSave}
         market="mobile"
         notifications={mobileHarvestNotifications}
         persistence={mobileFarmPersistence}

@@ -1,6 +1,11 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import { createFarmPersistence, type FarmGamePersistence } from '../../../../packages/farm-ui/src';
+import {
+  createFarmPersistence,
+  type FarmCloudSave,
+  type FarmGamePersistence,
+} from '../../../../packages/farm-ui/src';
+import { isFirebaseConfigured } from '../firebase/app';
 import { createDefaultMobileCloudSaveBackup } from '../firebase/cloudBackup';
 
 const asyncStorage = {
@@ -34,4 +39,13 @@ export const mobileFarmPersistence: FarmGamePersistence = {
   writePersistedGameSettings: localFarmPersistence.writePersistedGameSettings,
   readLastSeenAt: localFarmPersistence.readLastSeenAt,
   writeLastSeenAt: localFarmPersistence.writeLastSeenAt,
+};
+
+// Manual backup/restore entry point for the settings screen. Shares the same
+// instance as the automatic backup so device-id/revision metadata stays in sync.
+// When Firebase is not configured, isSupported is false and the section is hidden.
+export const mobileCloudSave: FarmCloudSave = {
+  isSupported: isFirebaseConfigured(),
+  backupNow: (gameState) => cloudSaveBackup.backupNow(gameState),
+  restoreFromCloud: () => cloudSaveBackup.restoreFromCloud(),
 };
