@@ -50,6 +50,19 @@ export type CloudSaveRestoreResult =
   | { status: 'disabled' | 'local_exists' | 'signed_out' | 'missing' | 'invalid' | 'error' }
   | { status: 'restored'; clientRevision: number };
 
+// Result of the settings "Back up now" button. Skips the debounce queue and
+// uploads the passed state immediately.
+export type CloudSaveManualBackupResult =
+  | { status: 'disabled' | 'signed_out' | 'error' }
+  | { status: 'backed_up'; clientRevision: number };
+
+// Result of the settings "Restore from cloud" button. Pulls the cloud save and
+// overwrites the local save regardless of whether one exists, returning the
+// parsed game state so the UI can reflect it immediately.
+export type CloudSaveManualRestoreResult =
+  | { status: 'disabled' | 'signed_out' | 'missing' | 'invalid' | 'error' }
+  | { status: 'restored'; clientRevision: number; gameState: GameState };
+
 function getNow(dependencies: CloudSaveBackupDependencies) {
   return dependencies.now?.() ?? Date.now();
 }
@@ -190,23 +203,23 @@ export function createMobileCloudSaveBackup(dependencies: CloudSaveBackupDepende
     }
   }
 
-  async function backupNow(gameState: GameState) {
+  async function backupNow(gameState: GameState): Promise<CloudSaveManualBackupResult> {
     if (!dependencies.isEnabled()) {
-      return { status: 'disabled' as const };
+      return { status: 'disabled' };
     }
 
     try {
       const user = await dependencies.ensureUser();
       if (user == null) {
-        return { status: 'signed_out' as const };
+        return { status: 'signed_out' };
       }
 
       const document = await buildCloudSaveDocument(gameState, dependencies);
       await dependencies.store.writeCurrentSave(user.uid, document);
-      return { status: 'backed_up' as const, clientRevision: document.clientRevision };
+      return { status: 'backed_up', clientRevision: document.clientRevision };
     } catch (error) {
       recordError(error, 'cloud_save:backup');
-      return { status: 'error' as const };
+      return { status: 'error' };
     }
   }
 
@@ -271,6 +284,39 @@ export function createMobileCloudSaveBackup(dependencies: CloudSaveBackupDepende
     }
   }
 
+  // Triggered when the user explicitly taps "Restore" in settings. Unlike
+  // restoreLatestLocalSaveIfMissing, this overwrites the local save even when one
+  // exists (treated as an explicit intent).
+  async function restoreFromCloud(): Promise<CloudSaveManualRestoreResult> {
+    if (!dependencies.isEnabled()) {
+      return { status: 'disabled' };
+    }
+
+    try {
+      const user = await dependencies.ensureUser();
+      if (user == null) {
+        return { status: 'signed_out' };
+      }
+
+      const document = await dependencies.store.readCurrentSave(user.uid);
+      if (document == null) {
+        return { status: 'missing' };
+      }
+
+      if (!isCloudSaveDocument(document) || !isValidSavePayload(document.payloadJson)) {
+        return { status: 'invalid' };
+      }
+
+      const gameState = JSON.parse(document.payloadJson) as GameState;
+      await dependencies.storage.setItem(SAVE_KEY, document.payloadJson);
+      await dependencies.storage.setItem(CLOUD_SAVE_REVISION_KEY, String(document.clientRevision));
+      return { status: 'restored', clientRevision: document.clientRevision, gameState };
+    } catch (error) {
+      recordError(error, 'cloud_save:manual_restore');
+      return { status: 'error' };
+    }
+  }
+
   async function deleteBackup() {
     pendingState = null;
     clearPendingTimer();
@@ -303,6 +349,8 @@ export function createMobileCloudSaveBackup(dependencies: CloudSaveBackupDepende
     scheduleBackup,
     flushPendingBackup,
     restoreLatestLocalSaveIfMissing,
+    backupNow,
+    restoreFromCloud,
     deleteBackup,
   };
 }
