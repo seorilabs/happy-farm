@@ -276,6 +276,9 @@ const KO_FARM_MESSAGES = {
   dailyBonusClaimAction: (amount: string) => `+${amount}G 받기`,
   cropOfTheDayLabel: '오늘의 작물',
   cropOfTheDayDesc: (cropName: string, multiplier: number) => `${cropName} · ×${multiplier} 판매 보너스`,
+  weeklyEventLabel: '주말 작물 축제',
+  weeklyEventDesc: (themeName: string, multiplier: number, remaining: string) =>
+    `${themeName} ×${multiplier} 판매 · 종료까지 ${remaining}`,
   onboardingProgress: (current: number, total: number) => `${current} / ${total}`,
   onboardingSkip: '건너뛰기',
   onboardingSelectSeedTitle: '씨앗을 골라요',
@@ -549,6 +552,9 @@ const EN_FARM_MESSAGES: FarmMessages = {
   dailyBonusClaimAction: (amount) => `Claim +${amount}G`,
   cropOfTheDayLabel: 'Crop of the Day',
   cropOfTheDayDesc: (cropName, multiplier) => `${cropName} · ×${multiplier} sell bonus`,
+  weeklyEventLabel: 'Weekend Crop Festival',
+  weeklyEventDesc: (themeName, multiplier, remaining) =>
+    `${themeName} ×${multiplier} sell · ends in ${remaining}`,
   onboardingProgress: (current, total) => `${current} / ${total}`,
   onboardingSkip: 'Skip',
   onboardingSelectSeedTitle: 'Pick a seed',

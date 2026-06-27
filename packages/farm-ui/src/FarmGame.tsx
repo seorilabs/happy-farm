@@ -27,6 +27,7 @@ import {
   breedCrop,
   buySkill,
   getCropOfTheDayStatus,
+  getWeeklyEventStatus,
   canPrestige,
   canUnlockNode,
   claimNextAchievementTier,
@@ -1534,6 +1535,7 @@ export default function FarmGame({
   );
   const harvestBonusBoost = useMemo(() => getHarvestBonusBoostStatus(gameState), [gameState, tick]);
   const cropOfTheDay = useMemo(() => getCropOfTheDayStatus(tickNowMsRef.current), [tick]);
+  const weeklyEvent = useMemo(() => getWeeklyEventStatus(tickNowMsRef.current), [tick]);
   const rawBoostRemainingMs = harvestBonusBoost.remainingMs;
   const safeBoostRemainingMs = Number.isFinite(rawBoostRemainingMs) ? Math.max(0, rawBoostRemainingMs) : 0;
   const farmProductivity = useMemo(
@@ -2585,6 +2587,18 @@ export default function FarmGame({
                 {getCrop(cropOfTheDay.cropKey).icon} {getLocalizedCropName(cropOfTheDay.cropKey)} ×{cropOfTheDay.multiplier}
               </Text>
             </View>
+            {weeklyEvent.active ? (
+              <View style={styles.cotdRow} testID="weekly-event-banner">
+                <Text style={styles.label}>🎉 {messages.weeklyEventLabel}</Text>
+                <Text style={styles.cotdText} numberOfLines={1}>
+                  {messages.weeklyEventDesc(
+                    getLocalizedAreaLabel(weeklyEvent.areaKey).name,
+                    weeklyEvent.multiplier,
+                    formatRemainingTime(Math.max(0, weeklyEvent.windowEndAt - tickNowMsRef.current), locale)
+                  )}
+                </Text>
+              </View>
+            ) : null}
           </View>
         </View>
 
