@@ -1376,18 +1376,22 @@ export default function FarmGame({
     }
 
     // Crop of the day: a single nudge when the next daily window opens (UTC
-    // midnight). One per day keeps it from being intrusive.
+    // midnight). One per day keeps it from being intrusive. Only (re)schedule
+    // when the target time actually changes — this effect depends on the whole
+    // gameState and re-runs on every tick, so an unconditional call would churn
+    // notifee with a redundant cancel+create even though windowEndAt is stable.
+    // Toggle-off resets the ref in the cancel branch above (daily 분기와 일관).
     const cropReminderAtMs = Math.max(
       getCropOfTheDayStatus(now).windowEndAt,
       now + HARVEST_NOTIFICATION_MIN_LEAD_MS
     );
-    void notifications.scheduleReminder('cropOfTheDay', {
-      readyAtMs: cropReminderAtMs,
-      title: messages.cropOfTheDayReminderNotificationTitle,
-      body: messages.cropOfTheDayReminderNotificationBody,
-    });
     if (lastScheduledCropReminderAtRef.current !== cropReminderAtMs) {
       lastScheduledCropReminderAtRef.current = cropReminderAtMs;
+      void notifications.scheduleReminder('cropOfTheDay', {
+        readyAtMs: cropReminderAtMs,
+        title: messages.cropOfTheDayReminderNotificationTitle,
+        body: messages.cropOfTheDayReminderNotificationBody,
+      });
       farmAnalytics.trackNotificationScheduled({
         kind: 'crop_of_the_day',
         leadTimeMs: Math.max(0, cropReminderAtMs - now),
