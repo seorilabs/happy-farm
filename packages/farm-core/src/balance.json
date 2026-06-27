@@ -146,7 +146,7 @@
     ]
   },
   "breeding": {
-    "agentPurpose": "Crossbreeding recipes. Hybrid stats follow cost=(parents cost sum)*1.5, sell=(parents sell sum)*1.8, growTime=max(parents)*0.8, tier 10. Both parents must be discovered; advanced recipes need the breeding_advanced node.",
+    "agentPurpose": "Crossbreeding recipes. Hybrid stats follow cost=(parents cost sum)*1.5, sell=(parents sell sum)*1.8, growTime=max(parents)*0.8, tier 10. Exception: the four low-tier-parent first-tier recipes (crystalberry/sun_grape/royal_potato/frost_blueberry) are floored above the pure parent-sum, because their tier 3~4 parents would otherwise yield outputs worth a fraction of the orchard-tier crops the player has already passed when unlocking hybrid_greenhouse (gold 5M + RP). Their cost/sell are re-derived so netProfitPerHour sits in the [orchard-best, greenhouse-best] band (worth the unlock, without overtaking normal-area progression); growTime stays parent-derived. Both parents must be discovered; advanced recipes need the breeding_advanced node.",
     "recipes": [
       { "crop": "crystalberry", "parents": ["strawberry", "melon"], "rpCost": 17000, "advanced": false },
       { "crop": "sun_grape", "parents": ["grape", "sunflower"], "rpCost": 29000, "advanced": false },
@@ -217,10 +217,10 @@
     { "key": "moonflower", "name": "달빛꽃", "cost": 120000000, "sell": 400000000, "growTime": 86400000, "icon": "🌙", "tier": 8, "area": "legend_field" },
     { "key": "rainbow_tree", "name": "무지개나무", "cost": 400000000, "sell": 1500000000, "growTime": 345600000, "icon": "🌈", "tier": 9, "area": "legend_field" },
     { "key": "world_tree", "name": "세계수", "cost": 1200000000, "sell": 5000000000, "growTime": 432000000, "icon": "🌳", "tier": 9, "area": "legend_field" },
-    { "key": "crystalberry", "name": "수정베리", "cost": 14400, "sell": 34830, "growTime": 168000, "icon": "🍬", "tier": 10, "area": "hybrid_greenhouse" },
-    { "key": "sun_grape", "name": "태양포도", "cost": 23250, "sell": 57600, "growTime": 224000, "icon": "🌞", "tier": 10, "area": "hybrid_greenhouse" },
-    { "key": "royal_potato", "name": "왕실감자", "cost": 27082, "sell": 70348, "growTime": 192000, "icon": "👑", "tier": 10, "area": "hybrid_greenhouse" },
-    { "key": "frost_blueberry", "name": "서리블루베리", "cost": 11475, "sell": 26910, "growTime": 120000, "icon": "❄️", "tier": 10, "area": "hybrid_greenhouse" },
+    { "key": "crystalberry", "name": "수정베리", "cost": 68000, "sell": 170000, "growTime": 168000, "icon": "🍬", "tier": 10, "area": "hybrid_greenhouse" },
+    { "key": "sun_grape", "name": "태양포도", "cost": 91000, "sell": 227500, "growTime": 224000, "icon": "🌞", "tier": 10, "area": "hybrid_greenhouse" },
+    { "key": "royal_potato", "name": "왕실감자", "cost": 78000, "sell": 195000, "growTime": 192000, "icon": "👑", "tier": 10, "area": "hybrid_greenhouse" },
+    { "key": "frost_blueberry", "name": "서리블루베리", "cost": 49000, "sell": 122500, "growTime": 120000, "icon": "❄️", "tier": 10, "area": "hybrid_greenhouse" },
     { "key": "ember_pepper", "name": "불꽃고추", "cost": 2400780, "sell": 9001584, "growTime": 2880000, "icon": "🔥", "tier": 10, "area": "hybrid_greenhouse" },
     { "key": "cloud_rice", "name": "구름쌀", "cost": 3901650, "sell": 15123510, "growTime": 5760000, "icon": "☁️", "tier": 10, "area": "hybrid_greenhouse" },
     { "key": "prism_melon", "name": "프리즘멜론", "cost": 10812000, "sell": 45029520, "growTime": 11520000, "icon": "🔮", "tier": 10, "area": "hybrid_greenhouse" },
