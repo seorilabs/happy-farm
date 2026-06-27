@@ -1,7 +1,18 @@
 /// <reference types="jest" />
 
-import { createInitialState } from '../constants';
-import { getReturnSummary, RETURN_SUMMARY_MIN_AWAY_MS } from '../returnSummary';
+import {
+  createInitialState,
+  getCropEconomyEstimate,
+  getProfitMultiplier,
+  getSpeedMultiplier,
+  OFFLINE_INCOME_CAP_MS,
+  OFFLINE_INCOME_EFFICIENCY_RATIO,
+} from '../constants';
+import {
+  getActiveFarmOfflineGold,
+  getReturnSummary,
+  RETURN_SUMMARY_MIN_AWAY_MS,
+} from '../returnSummary';
 import { CHAIN_OFFLINE_CAP_MS } from '../prestige';
 import type { CropKey, GameState } from '../types';
 
@@ -17,6 +28,27 @@ function withReadyCrop(plotIndex: number, base: GameState): GameState {
       : plot
   );
   return { ...base, plots };
+}
+
+// Plant a growing crop (state 1) in a plot so it contributes pre-prestige
+// offline income.
+function withGrowingCrop(plotIndex: number, cropKey: CropKey, base: GameState): GameState {
+  const plots = base.plots.map((plot, index) =>
+    index === plotIndex ? { ...plot, cropType: cropKey, startTime: NOW, state: 1 as const } : plot
+  );
+  return { ...base, plots };
+}
+
+// Expected hourly pre-prestige rate for a set of growing crops at base upgrades.
+function expectedGoldPerHour(cropKeys: CropKey[], base: GameState): number {
+  const speedMultiplier = getSpeedMultiplier(base.upgrades.speed);
+  const profitMultiplier = getProfitMultiplier(base.upgrades.profit);
+  const sum = cropKeys.reduce(
+    (acc, cropKey) =>
+      acc + getCropEconomyEstimate(cropKey, { speedMultiplier, profitMultiplier }).netProfitPerHour,
+    0
+  );
+  return sum * OFFLINE_INCOME_EFFICIENCY_RATIO;
 }
 
 function withChainFarm(goldPerHour: number, lastCollectedAt: number, base: GameState): GameState {
@@ -76,6 +108,64 @@ describe('getReturnSummary', () => {
     const lastSeen = NOW - 100 * MS_PER_HOUR;
     const summary = getReturnSummary(state, lastSeen, NOW);
     expect(summary?.offlineGold).toBe((3600 * CHAIN_OFFLINE_CAP_MS) / MS_PER_HOUR);
+  });
+
+  test('accrues pre-prestige offline gold from growing plots even without chain farms', () => {
+    const base = createInitialState();
+    const state = withGrowingCrop(1, 'wheat', withGrowingCrop(0, 'wheat', base));
+    const lastSeen = NOW - 2 * MS_PER_HOUR;
+
+    const summary = getReturnSummary(state, lastSeen, NOW);
+    expect(summary).not.toBeNull();
+    const expected = Math.floor((expectedGoldPerHour(['wheat', 'wheat'], base) * 2 * MS_PER_HOUR) / MS_PER_HOUR);
+    expect(expected).toBeGreaterThan(0);
+    expect(summary?.offlineGold).toBe(expected);
+  });
+
+  test('pre-prestige offline gold is capped at the offline window', () => {
+    const base = createInitialState();
+    const state = withGrowingCrop(0, 'wheat', base);
+    // Away far beyond the cap: accrual must clamp to OFFLINE_INCOME_CAP_MS.
+    const lastSeen = NOW - 1000 * MS_PER_HOUR;
+
+    const summary = getReturnSummary(state, lastSeen, NOW);
+    const cappedExpected = Math.floor((expectedGoldPerHour(['wheat'], base) * OFFLINE_INCOME_CAP_MS) / MS_PER_HOUR);
+    expect(summary?.offlineGold).toBe(cappedExpected);
+
+    // A longer absence must not pay more than the cap.
+    const longerSummary = getReturnSummary(state, NOW - 5000 * MS_PER_HOUR, NOW);
+    expect(longerSummary?.offlineGold).toBe(cappedExpected);
+  });
+
+  test('pre-prestige offline gold adds to chain income', () => {
+    const base = createInitialState();
+    const withChain = withChainFarm(3600, NOW - 2 * MS_PER_HOUR, base);
+    const state = withGrowingCrop(0, 'wheat', withChain);
+    const lastSeen = NOW - 2 * MS_PER_HOUR;
+
+    const summary = getReturnSummary(state, lastSeen, NOW);
+    const activeFarm = Math.floor((expectedGoldPerHour(['wheat'], base) * 2 * MS_PER_HOUR) / MS_PER_HOUR);
+    expect(summary?.offlineGold).toBe(7200 + activeFarm);
+  });
+
+  test('getActiveFarmOfflineGold is pure and defends against bad windows and empty farms', () => {
+    const base = createInitialState();
+    const planted = withGrowingCrop(0, 'wheat', base);
+
+    // Empty/idle farm earns nothing (no growing plots).
+    expect(getActiveFarmOfflineGold(base, 2 * MS_PER_HOUR)).toBe(0);
+    // Ready (state 2) crops are not "growing" and do not accrue.
+    expect(getActiveFarmOfflineGold(withReadyCrop(0, base), 2 * MS_PER_HOUR)).toBe(0);
+    // Non-positive / non-finite away windows are rejected.
+    expect(getActiveFarmOfflineGold(planted, 0)).toBe(0);
+    expect(getActiveFarmOfflineGold(planted, -5 * MS_PER_HOUR)).toBe(0);
+    expect(getActiveFarmOfflineGold(planted, Number.NaN)).toBe(0);
+    expect(getActiveFarmOfflineGold(planted, Number.POSITIVE_INFINITY)).toBe(0);
+
+    // A finite, very long window clamps to the cap (sanity vs the Infinity guard).
+    expect(getActiveFarmOfflineGold(planted, 10 * OFFLINE_INCOME_CAP_MS)).toBe(
+      Math.floor((expectedGoldPerHour(['wheat'], base) * OFFLINE_INCOME_CAP_MS) / MS_PER_HOUR)
+    );
   });
 
   test('flags daily bonus as available when it has never been claimed', () => {

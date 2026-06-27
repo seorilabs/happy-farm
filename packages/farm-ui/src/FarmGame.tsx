@@ -31,6 +31,7 @@ import {
   canUnlockNode,
   claimNextAchievementTier,
   collectChainIncome,
+  creditActiveFarmOfflineGold,
   acknowledgeResearchOpportunities,
   hasUnseenResearchOpportunity,
   getBreedingRecipeStatus,
@@ -1759,9 +1760,12 @@ export default function FarmGame({
   // Closes the welcome-back recap. When passive income piled up while away we
   // sweep it straight into the player's purse so the recap doubles as a
   // one-tap collect — returning should feel like an instant reward, not a chore.
-  function dismissWelcomeBack(collectOffline: boolean) {
-    if (collectOffline) {
+  function dismissWelcomeBack(summary: ReturnSummary | null) {
+    if (summary != null && summary.offlineGold > 0) {
+      // Chain farms reset their own timestamps; the active farm's pre-prestige
+      // accrual is swept in based on the same away window.
       collectChain();
+      setGameState((state) => creditActiveFarmOfflineGold(state, summary.awayMs).state);
     }
     setActiveSheet(null);
     void maybeShowReturnAd();
@@ -1780,6 +1784,7 @@ export default function FarmGame({
     });
     if (summary.offlineGold > 0) {
       collectChain();
+      setGameState((state) => creditActiveFarmOfflineGold(state, summary.awayMs).state);
     }
   }
 
@@ -3149,7 +3154,7 @@ export default function FarmGame({
                   readyCropCount: summary.readyCropCount,
                   context: analyticsContext(),
                 });
-                dismissWelcomeBack(summary.offlineGold > 0);
+                dismissWelcomeBack(summary);
               }}
             />
           </View>

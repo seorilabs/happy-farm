@@ -30,6 +30,11 @@
     "upgradeCostGrowth": 1.92,
     "upgradeStep": 0.1
   },
+  "offlineIncome": {
+    "agentPurpose": "Pre-prestige (active-farm) offline income. The idle-genre promise — earning while away — previously applied only to post-prestige chain farms, so most early/mid players accrued nothing offline. While away, each currently-growing plot accrues a fraction (efficiencyRatio) of its crop's netProfitPerHour, capped to capMs so a long absence can't snowball. Tied to actually-planted plots (not a hypothetical best-crop-on-all-plots estimate) so an empty or under-invested farm earns nothing and early balance isn't trivialized. capMs mirrors regions.chain.offlineCapMs (24h) so a once-daily player loses nothing.",
+    "efficiencyRatio": 0.4,
+    "capMs": 86400000
+  },
   "ads": {
     "rewardedGoldAmount": 100,
     "rewardedGoldWindowMs": 900000,

@@ -48,6 +48,18 @@ check(economy.profitUpgradeBaseCost > 0, 'economy.profitUpgradeBaseCost는 0보�
 check(economy.upgradeCostGrowth > 1, 'economy.upgradeCostGrowth는 1보다 커야 합니다(업그레이드 가격은 우상향).');
 check(economy.upgradeStep > 0, 'economy.upgradeStep은 0보다 커야 합니다.');
 
+// 1-b) 프레스티지 이전 오프라인 수익: 효율계수는 (0,1)로 능동 플레이 가치를 보존하고,
+// cap은 양수여야 무한 누적(스노볼)을 막는다.
+const offlineIncome = balance.offlineIncome ?? {};
+check(
+  isFiniteNumber(offlineIncome.efficiencyRatio) && offlineIncome.efficiencyRatio > 0 && offlineIncome.efficiencyRatio < 1,
+  `offlineIncome.efficiencyRatio(${offlineIncome.efficiencyRatio})는 0 초과 1 미만이어야 합니다(능동 플레이 가치 보존).`
+);
+check(
+  isFiniteNumber(offlineIncome.capMs) && offlineIncome.capMs > 0,
+  'offlineIncome.capMs는 0보다 커야 합니다(오프라인 누적 상한).'
+);
+
 // 2) 구역 해금 곡선: 메인 진행 구역(gate 없는 구역)의 해금 비용/요구치는 단조 증가/비감소.
 const areas = Array.isArray(balance.areas) ? balance.areas : [];
 check(areas.length > 0, 'areas는 비어 있을 수 없습니다.');
