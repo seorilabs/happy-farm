@@ -133,6 +133,44 @@ for (let index = 0; index < jumpRatios.length; index += 1) {
   }
 }
 
+// 2-c) 컬렉션 보상 곡선: 진행 구역(gate 없는)의 areaCompletionReward는
+//  (1) 진행 순서대로 단조 비감소이고,
+//  (2) "다음 진행 구역 해금비의 약 1/2"(0.4~0.6) 규칙을 따른다.
+// 단, 첫 구역(starter)은 초반 부스트로 1/2 규칙 예외, 마지막 진행 구역(legend)은
+// 다음 진행 구역이 없어 졸업비(graduation.costBase)의 1/2을 기준으로 삼는다.
+// gate 구역(hybrid 등)은 선형 진행 밖이라 두 검사 모두에서 제외(sequentialAreas).
+const areaRewards = balance.collection?.areaCompletionReward ?? {};
+const graduationCostBase = balance.regions?.graduation?.costBase ?? 0;
+for (let index = 1; index < sequentialAreas.length; index += 1) {
+  const prevReward = areaRewards[sequentialAreas[index - 1].key];
+  const currReward = areaRewards[sequentialAreas[index].key];
+  if (!isFiniteNumber(prevReward) || !isFiniteNumber(currReward)) {
+    continue;
+  }
+  check(
+    currReward >= prevReward,
+    `컬렉션 보상은 진행 순서대로 감소하면 안 됩니다: ${sequentialAreas[index - 1].key}(${prevReward}) → ${sequentialAreas[index].key}(${currReward}).`
+  );
+}
+for (let index = 1; index < sequentialAreas.length; index += 1) {
+  const area = sequentialAreas[index];
+  const reward = areaRewards[area.key];
+  if (!isFiniteNumber(reward)) {
+    continue;
+  }
+  // 다음 진행 구역의 해금비(없으면 졸업비)를 1/2 규칙의 기준으로 삼는다.
+  const next = sequentialAreas[index + 1];
+  const referenceCost = next != null ? next.unlock?.cost : graduationCostBase;
+  if (!isFiniteNumber(referenceCost) || referenceCost <= 0) {
+    continue;
+  }
+  const ratio = reward / referenceCost;
+  check(
+    ratio >= 0.4 && ratio <= 0.6,
+    `컬렉션 보상 ${area.key}(${reward})는 기준 해금비(${referenceCost})의 약 1/2(0.4~0.6 배)이어야 합니다(현재 ×${ratio.toFixed(2)}).`
+  );
+}
+
 // 3) 작물: 양수 값 + 양의 마진(sell > cost) + 합리적 ROI 밴드 + 유효 구역/티어 참조.
 const crops = Array.isArray(balance.crops) ? balance.crops : [];
 check(crops.length > 0, 'crops는 비어 있을 수 없습니다.');
