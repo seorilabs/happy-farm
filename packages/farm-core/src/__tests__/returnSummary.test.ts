@@ -206,18 +206,25 @@ describe('creditActiveFarmOfflineGold', () => {
     expect(next.lifetimeStats.totalGoldEarned).toBe(state.lifetimeStats.totalGoldEarned + expected);
   });
 
-  test('is a no-op (state unchanged) when nothing accrued', () => {
+  test('is a no-op (grantedGold 0, identical state reference) for every degenerate input', () => {
     const base = createInitialState();
-    // No growing plots → nothing accrues; returns the same state reference.
+    const planted = withGrowingCrop(0, 'wheat', base);
+
+    // No growing plots → nothing accrues regardless of the (valid) away window.
     const empty = creditActiveFarmOfflineGold(base, 2 * MS_PER_HOUR);
     expect(empty.grantedGold).toBe(0);
-    expect(empty.state).toBe(base);
+    expect(empty.state).toBe(base); // same reference, not a copy
 
-    // Bad away window → also a no-op.
-    const planted = withGrowingCrop(0, 'wheat', base);
-    const bad = creditActiveFarmOfflineGold(planted, -1);
-    expect(bad.grantedGold).toBe(0);
-    expect(bad.state).toBe(planted);
+    // Every degenerate away window is rejected even with a growing plot present,
+    // and must return the input state by reference (no allocation, no mutation).
+    for (const badAwayMs of [0, -1, -5 * MS_PER_HOUR, Number.NaN, Number.POSITIVE_INFINITY]) {
+      const result = creditActiveFarmOfflineGold(planted, badAwayMs);
+      expect(result.grantedGold).toBe(0);
+      expect(result.state).toBe(planted);
+      // Purity: the input is never mutated.
+      expect(result.state.gold).toBe(planted.gold);
+      expect(result.state.lifetimeStats.totalGoldEarned).toBe(planted.lifetimeStats.totalGoldEarned);
+    }
   });
 });
 
