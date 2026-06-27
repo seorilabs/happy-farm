@@ -12,6 +12,7 @@ export * from './modifiers';
 export * from './prestige';
 export * from './research';
 export * from './returnSummary';
+export * from './weeklyEvent';
 export {
   DEFAULT_LOCALE,
   SUPPORTED_LOCALES,

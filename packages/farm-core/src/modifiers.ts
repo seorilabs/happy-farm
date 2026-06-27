@@ -12,6 +12,7 @@ import {
 import { getMasterySellMultiplier, getMasterySpeedMultiplier } from './mastery';
 import { isCropPlantable } from './research';
 import { getCropOfTheDayStatus } from './cropOfTheDay';
+import { getWeeklyEventMultiplier } from './weeklyEvent';
 
 // Prestige skill/region effects are read straight from balance.json here
 // (instead of importing prestige.ts) to keep this module cycle-free for its
@@ -69,10 +70,13 @@ export function getCropModifiers(gameState: GameState, cropKey: CropKey, now = D
   return {
     ...global,
     speedMultiplier: global.speedMultiplier * getMasterySpeedMultiplier(gameState, cropKey),
+    // Sale multipliers stack multiplicatively: a crop that is both the crop of
+    // the day and in the weekend festival's featured area earns cotd × festival.
     profitMultiplier:
       global.profitMultiplier *
       getMasterySellMultiplier(gameState, cropKey) *
-      (cropKey === cotd.cropKey ? cotd.multiplier : 1),
+      (cropKey === cotd.cropKey ? cotd.multiplier : 1) *
+      getWeeklyEventMultiplier(cropKey, now),
   };
 }
 
