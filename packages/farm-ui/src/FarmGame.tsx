@@ -1768,15 +1768,19 @@ export default function FarmGame({
       return;
     }
     const now = Date.now();
-    const chain = collectChainIncome(gameState, now);
+    // Read (not settle) the chain accrual purely to drive the toast/analytics,
+    // then settle chain + active farm exactly once inside collectReturnOfflineGold.
+    // getChainIncome is non-mutating, so chain is settled a single time (no double
+    // computation) while keeping chain-collected feedback at parity with collectChain.
+    const chainGold = getChainIncome(gameState, now).accruedGold;
     setGameState((state) => collectReturnOfflineGold(state, summary.awayMs, now).state);
-    if (chain != null) {
+    if (chainGold > 0) {
       farmAnalytics.trackChainCollected({
-        collectedGold: chain.collectedGold,
+        collectedGold: chainGold,
         farmCount: gameState.chainFarms.length,
         context: analyticsContext(),
       });
-      toast(messages.chainCollectedToast(formatMoney(chain.collectedGold, locale)));
+      toast(messages.chainCollectedToast(formatMoney(chainGold, locale)));
     }
   }
 
