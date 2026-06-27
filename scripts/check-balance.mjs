@@ -93,6 +93,46 @@ for (let index = 1; index < sequentialAreas.length; index += 1) {
   );
 }
 
+// 2-b) 구역 해금비 점프 배율 곡선: 단계별 배율(curr.cost / prev.cost)이 완만한
+// 단조 비감소 곡선이어야 한다. 중간 구간이 가파르다가 후반에 급등하는 스파이크
+// (역전)는 진행 벽을 만들고 컬렉션 보상 곡선까지 왜곡하므로 금지한다. 첫 유료
+// 점프(채소→과일)는 초반 이탈 구간과 겹쳐 상한을 더 낮게(≤35), 후반 최대 점프는
+// ≤45로 제한한다. prev.cost가 0인 전환(무료→첫 유료)은 배율이 정의되지 않으므로 제외.
+const FIRST_JUMP_RATIO_MAX = 35;
+const LATE_JUMP_RATIO_MAX = 45;
+const jumpRatios = [];
+for (let index = 1; index < sequentialAreas.length; index += 1) {
+  const prev = sequentialAreas[index - 1];
+  const curr = sequentialAreas[index];
+  if (prev.unlock == null || curr.unlock == null || !(prev.unlock.cost > 0) || !(curr.unlock.cost > 0)) {
+    continue;
+  }
+  jumpRatios.push({ from: prev.key, to: curr.key, ratio: curr.unlock.cost / prev.unlock.cost });
+}
+for (let index = 0; index < jumpRatios.length; index += 1) {
+  const { from, to, ratio } = jumpRatios[index];
+  // 모든 점프 배율은 후반 상한(≤45)을 넘지 않는다(과도 스파이크 금지).
+  check(
+    ratio <= LATE_JUMP_RATIO_MAX,
+    `구역 해금비 점프 배율이 과도합니다: ${from}→${to}(×${ratio.toFixed(1)})는 ${LATE_JUMP_RATIO_MAX} 이하여야 합니다.`
+  );
+  // 첫 유료 점프는 초반 이탈 구간과 겹쳐 더 낮은 상한(≤35)을 적용한다.
+  if (index === 0) {
+    check(
+      ratio <= FIRST_JUMP_RATIO_MAX,
+      `첫 유료 구역 점프 배율이 과도합니다: ${from}→${to}(×${ratio.toFixed(1)})는 ${FIRST_JUMP_RATIO_MAX} 이하여야 합니다.`
+    );
+  }
+  // 배율은 단조 비감소여야 한다(중간이 완만하다가 후반에 급등하는 역전 금지).
+  if (index > 0) {
+    const prevRatio = jumpRatios[index - 1];
+    check(
+      ratio >= prevRatio.ratio - 1e-9,
+      `구역 해금비 점프 배율이 역전했습니다(단조 비감소 위반): ${prevRatio.from}→${prevRatio.to}(×${prevRatio.ratio.toFixed(1)}) 이후 ${from}→${to}(×${ratio.toFixed(1)}).`
+    );
+  }
+}
+
 // 3) 작물: 양수 값 + 양의 마진(sell > cost) + 합리적 ROI 밴드 + 유효 구역/티어 참조.
 const crops = Array.isArray(balance.crops) ? balance.crops : [];
 check(crops.length > 0, 'crops는 비어 있을 수 없습니다.');

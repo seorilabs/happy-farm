@@ -111,6 +111,29 @@ describe('farm balance and model invariants', () => {
     expect(formatMoney(Number.POSITIVE_INFINITY)).toBe('0');
   });
 
+  test('area unlock-cost jump multipliers form a gentle monotone curve without spikes', () => {
+    // 진행 구역(gate 없는) 해금비의 단계별 배율이 단조 비감소이고, 첫 유료 점프는
+    // 초반 이탈 구간을 고려해 ≤35, 후반 최대 점프는 ≤45여야 한다(진행 벽 방지).
+    const sequential = FARM_AREAS.filter((area) => area.unlock.gate == null);
+    const ratios: number[] = [];
+    for (let index = 1; index < sequential.length; index += 1) {
+      const prevCost = sequential[index - 1]!.unlock.cost;
+      const currCost = sequential[index]!.unlock.cost;
+      if (prevCost > 0 && currCost > 0) {
+        ratios.push(currCost / prevCost);
+      }
+    }
+
+    expect(ratios.length).toBeGreaterThan(0);
+    expect(ratios[0]!).toBeLessThanOrEqual(35); // 첫 유료 점프 상한
+    for (let index = 0; index < ratios.length; index += 1) {
+      expect(ratios[index]!).toBeLessThanOrEqual(45); // 과도 스파이크 금지
+      if (index > 0) {
+        expect(ratios[index]!).toBeGreaterThanOrEqual(ratios[index - 1]!); // 단조 비감소(역전 금지)
+      }
+    }
+  });
+
   test('area unlock checks require gold, harvested variety, and minimum research level', () => {
     const state = createInitialState();
     const nextArea = FARM_AREAS.find((area) => area.unlock.cost > 0);
@@ -468,8 +491,8 @@ describe('getRewardedGoldAmount', () => {
   });
 
   test('scales with next non-gated area cost once vegetable_field is unlocked', () => {
-    // vegetable_field unlocked → next goal = fruit_field (15 000G)
-    // 5 % of 15 000 = 750 > 100 floor
+    // vegetable_field unlocked → next goal = fruit_field (9 000G)
+    // 5 % of 9 000 = 450 > 100 floor
     const vegetableArea = FARM_AREAS.find((a) => a.key === 'vegetable_field')!;
     const state: GameState = {
       ...createInitialState(),

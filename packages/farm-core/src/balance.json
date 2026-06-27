@@ -12,11 +12,11 @@
   "areas": [
     { "key": "starter_field", "name": "초보 밭", "target": "0~10분", "description": "짧은 성장 시간으로 심기-수확 재미를 학습시키는 구역", "unlock": { "cost": 0, "requiredHarvestedCropCount": 0, "requiredUpgradeLevel": 1 } },
     { "key": "vegetable_field", "name": "채소 밭", "target": "10~30분", "description": "초반 이후 작물 다양성을 체감시키는 구역", "unlock": { "cost": 300, "requiredHarvestedCropCount": 4, "requiredUpgradeLevel": 1 } },
-    { "key": "fruit_field", "name": "풍요 밭", "target": "30분~2시간", "description": "과일과 꽃 작물로 재방문과 광고 보상이 의미 있어지는 중반 구역", "unlock": { "cost": 15000, "requiredHarvestedCropCount": 10, "requiredUpgradeLevel": 3 } },
-    { "key": "orchard", "name": "과수원", "target": "2시간~1일", "description": "긴 성장 시간과 큰 보상을 제공하는 장기 작물 구역", "unlock": { "cost": 500000, "requiredHarvestedCropCount": 16, "requiredUpgradeLevel": 8 } },
-    { "key": "greenhouse", "name": "온실", "target": "1~3일", "description": "희귀 작물과 자동화 업그레이드의 명분이 되는 구역", "unlock": { "cost": 15000000, "requiredHarvestedCropCount": 20, "requiredUpgradeLevel": 12 } },
-    { "key": "mystic_field", "name": "신비 밭", "target": "3~7일", "description": "최상위 작물과 컬렉션 목표를 제공하는 구역", "unlock": { "cost": 400000000, "requiredHarvestedCropCount": 24, "requiredUpgradeLevel": 18 } },
-    { "key": "legend_field", "name": "전설 구역", "target": "7일 이상", "description": "프레스티지와 시즌 운영의 장기 목표 구역", "unlock": { "cost": 25000000000, "requiredHarvestedCropCount": 26, "requiredUpgradeLevel": 24 } },
+    { "key": "fruit_field", "name": "풍요 밭", "target": "30분~2시간", "description": "과일과 꽃 작물로 재방문과 광고 보상이 의미 있어지는 중반 구역", "unlock": { "cost": 9000, "requiredHarvestedCropCount": 10, "requiredUpgradeLevel": 3 } },
+    { "key": "orchard", "name": "과수원", "target": "2시간~1일", "description": "긴 성장 시간과 큰 보상을 제공하는 장기 작물 구역", "unlock": { "cost": 300000, "requiredHarvestedCropCount": 16, "requiredUpgradeLevel": 8 } },
+    { "key": "greenhouse", "name": "온실", "target": "1~3일", "description": "희귀 작물과 자동화 업그레이드의 명분이 되는 구역", "unlock": { "cost": 11000000, "requiredHarvestedCropCount": 20, "requiredUpgradeLevel": 12 } },
+    { "key": "mystic_field", "name": "신비 밭", "target": "3~7일", "description": "최상위 작물과 컬렉션 목표를 제공하는 구역", "unlock": { "cost": 440000000, "requiredHarvestedCropCount": 24, "requiredUpgradeLevel": 18 } },
+    { "key": "legend_field", "name": "전설 구역", "target": "7일 이상", "description": "프레스티지와 시즌 운영의 장기 목표 구역", "unlock": { "cost": 18000000000, "requiredHarvestedCropCount": 26, "requiredUpgradeLevel": 24 } },
     { "key": "hybrid_greenhouse", "name": "교배 온실", "target": "연구 해금", "description": "연구로 해금한 신품종을 재배하는 특수 구역", "unlock": { "cost": 5000000, "requiredHarvestedCropCount": 20, "requiredUpgradeLevel": 10, "gate": "breeding_lab" } }
   ],
   "economy": {
@@ -102,11 +102,11 @@
     "agentPurpose": "Crop collection (도감) completion rewards. One-time gold payouts per area and for full completion. Roughly half the next area unlock cost for progression areas; tune via sim before shipping.",
     "areaCompletionReward": {
       "starter_field": 500,
-      "vegetable_field": 8000,
-      "fruit_field": 250000,
-      "orchard": 7000000,
-      "greenhouse": 200000000,
-      "mystic_field": 12000000000,
+      "vegetable_field": 4500,
+      "fruit_field": 150000,
+      "orchard": 5500000,
+      "greenhouse": 220000000,
+      "mystic_field": 9000000000,
       "legend_field": 50000000000,
       "hybrid_greenhouse": 25000000000
     },
