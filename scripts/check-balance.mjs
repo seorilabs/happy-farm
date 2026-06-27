@@ -51,9 +51,15 @@ check(economy.upgradeStep > 0, 'economy.upgradeStep은 0보다 커야 합니다.
 // 1-b) 프레스티지 이전 오프라인 수익: 효율계수는 (0,1)로 능동 플레이 가치를 보존하고,
 // cap은 양수여야 무한 누적(스노볼)을 막는다.
 const offlineIncome = balance.offlineIncome ?? {};
+// 효율계수 상한은 0.5: 오프라인 수익이 능동 플레이의 절반을 넘지 않아야 방치가
+// 능동을 추월하지 않는다. (0,1)만 검사하면 0.4→5 같은 폭주가 cap만큼 스노볼되어도
+// 통과하므로, 설계 상한(0.5)을 명시적으로 강제한다.
+const OFFLINE_EFFICIENCY_RATIO_MAX = 0.5;
 check(
-  isFiniteNumber(offlineIncome.efficiencyRatio) && offlineIncome.efficiencyRatio > 0 && offlineIncome.efficiencyRatio < 1,
-  `offlineIncome.efficiencyRatio(${offlineIncome.efficiencyRatio})는 0 초과 1 미만이어야 합니다(능동 플레이 가치 보존).`
+  isFiniteNumber(offlineIncome.efficiencyRatio) &&
+    offlineIncome.efficiencyRatio > 0 &&
+    offlineIncome.efficiencyRatio <= OFFLINE_EFFICIENCY_RATIO_MAX,
+  `offlineIncome.efficiencyRatio(${offlineIncome.efficiencyRatio})는 0 초과 ${OFFLINE_EFFICIENCY_RATIO_MAX} 이하여야 합니다(능동 플레이 가치 보존).`
 );
 check(
   isFiniteNumber(offlineIncome.capMs) && offlineIncome.capMs > 0,

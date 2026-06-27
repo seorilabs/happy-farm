@@ -1,5 +1,5 @@
 import type { GameState } from './types';
-import { getChainIncome } from './prestige';
+import { collectChainIncome, getChainIncome } from './prestige';
 import { isPlotGrowthComplete } from './harvest';
 import { isDailyBonusAvailable, normalizeDailyBonusState } from './dailyBonus';
 import {
@@ -94,6 +94,31 @@ export function creditActiveFarmOfflineGold(
       },
     },
     grantedGold,
+  };
+}
+
+// Settles ALL offline gold owed on return in a single state transition: the
+// post-prestige chain accrual and the active farm's pre-prestige accrual,
+// together. Keeping both in one function makes them inseparable — there is no
+// caller path that can collect one while withholding the other, which is the
+// invariant the welcome-back recap relies on. Returns the credited state plus a
+// breakdown so the caller can drive feedback (toast/analytics). Pure.
+export function collectReturnOfflineGold(
+  gameState: GameState,
+  awayMs: number,
+  now = Date.now()
+): { state: GameState; collectedGold: number; chainGold: number; activeFarmGold: number } {
+  const chain = collectChainIncome(gameState, now);
+  const afterChain = chain?.state ?? gameState;
+  const chainGold = chain?.collectedGold ?? 0;
+
+  const active = creditActiveFarmOfflineGold(afterChain, awayMs);
+
+  return {
+    state: active.state,
+    collectedGold: chainGold + active.grantedGold,
+    chainGold,
+    activeFarmGold: active.grantedGold,
   };
 }
 

@@ -9,6 +9,8 @@ import {
   OFFLINE_INCOME_EFFICIENCY_RATIO,
 } from '../constants';
 import {
+  collectReturnOfflineGold,
+  creditActiveFarmOfflineGold,
   getActiveFarmOfflineGold,
   getReturnSummary,
   RETURN_SUMMARY_MIN_AWAY_MS,
@@ -186,5 +188,67 @@ describe('getReturnSummary', () => {
     // 수확할 작물이 있어 카드는 노출되지만, 데일리는 쿨다운 중이라 CTA 비노출.
     expect(summary).not.toBeNull();
     expect(summary?.dailyBonusAvailable).toBe(false);
+  });
+});
+
+describe('creditActiveFarmOfflineGold', () => {
+  test('credits the accrued amount into gold and lifetime earnings', () => {
+    const base = createInitialState();
+    const state = withGrowingCrop(0, 'wheat', base);
+    const awayMs = 2 * MS_PER_HOUR;
+
+    const expected = getActiveFarmOfflineGold(state, awayMs);
+    expect(expected).toBeGreaterThan(0);
+
+    const { state: next, grantedGold } = creditActiveFarmOfflineGold(state, awayMs);
+    expect(grantedGold).toBe(expected);
+    expect(next.gold).toBe(state.gold + expected);
+    expect(next.lifetimeStats.totalGoldEarned).toBe(state.lifetimeStats.totalGoldEarned + expected);
+  });
+
+  test('is a no-op (state unchanged) when nothing accrued', () => {
+    const base = createInitialState();
+    // No growing plots → nothing accrues; returns the same state reference.
+    const empty = creditActiveFarmOfflineGold(base, 2 * MS_PER_HOUR);
+    expect(empty.grantedGold).toBe(0);
+    expect(empty.state).toBe(base);
+
+    // Bad away window → also a no-op.
+    const planted = withGrowingCrop(0, 'wheat', base);
+    const bad = creditActiveFarmOfflineGold(planted, -1);
+    expect(bad.grantedGold).toBe(0);
+    expect(bad.state).toBe(planted);
+  });
+});
+
+describe('collectReturnOfflineGold', () => {
+  test('settles chain and active-farm gold together in one transition', () => {
+    const base = createInitialState();
+    const state = withGrowingCrop(0, 'wheat', withChainFarm(3600, NOW - 2 * MS_PER_HOUR, base));
+    const awayMs = 2 * MS_PER_HOUR;
+
+    const activeFarm = getActiveFarmOfflineGold(state, awayMs);
+    expect(activeFarm).toBeGreaterThan(0);
+
+    const result = collectReturnOfflineGold(state, awayMs, NOW);
+    expect(result.chainGold).toBe(7200);
+    expect(result.activeFarmGold).toBe(activeFarm);
+    expect(result.collectedGold).toBe(7200 + activeFarm);
+    expect(result.state.gold).toBe(state.gold + 7200 + activeFarm);
+    // Chain timestamp reset so the same window can't be double-collected.
+    expect(result.state.chainFarms[0]!.lastCollectedAt).toBe(NOW);
+    const second = collectReturnOfflineGold(result.state, 0, NOW);
+    expect(second.collectedGold).toBe(0);
+  });
+
+  test('matches the summary offlineGold the welcome-back card displays', () => {
+    const base = createInitialState();
+    const state = withGrowingCrop(1, 'wheat', withGrowingCrop(0, 'wheat', base));
+    const lastSeen = NOW - 3 * MS_PER_HOUR;
+
+    const summary = getReturnSummary(state, lastSeen, NOW);
+    const settled = collectReturnOfflineGold(state, summary!.awayMs, NOW);
+    // What the card promises (offlineGold) is exactly what settlement credits.
+    expect(settled.collectedGold).toBe(summary?.offlineGold);
   });
 });

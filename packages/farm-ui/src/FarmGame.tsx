@@ -31,7 +31,7 @@ import {
   canUnlockNode,
   claimNextAchievementTier,
   collectChainIncome,
-  creditActiveFarmOfflineGold,
+  collectReturnOfflineGold,
   acknowledgeResearchOpportunities,
   hasUnseenResearchOpportunity,
   getBreedingRecipeStatus,
@@ -1757,24 +1757,44 @@ export default function FarmGame({
     toast(messages.chainCollectedToast(formatMoney(collected.collectedGold, locale)));
   }
 
+  // Settles every kind of offline gold owed on return — chain accrual and the
+  // active farm's pre-prestige accrual — in one inseparable step via the core
+  // collectReturnOfflineGold. Binding them here is the fix for the asymmetry
+  // where the two could be collected independently: there is exactly one path,
+  // so chain and active gold are always swept together or not at all. The chain
+  // toast/analytics mirror the standalone collectChain for parity.
+  function settleReturnOffline(summary: ReturnSummary) {
+    if (summary.offlineGold <= 0) {
+      return;
+    }
+    const now = Date.now();
+    const chain = collectChainIncome(gameState, now);
+    setGameState((state) => collectReturnOfflineGold(state, summary.awayMs, now).state);
+    if (chain != null) {
+      farmAnalytics.trackChainCollected({
+        collectedGold: chain.collectedGold,
+        farmCount: gameState.chainFarms.length,
+        context: analyticsContext(),
+      });
+      toast(messages.chainCollectedToast(formatMoney(chain.collectedGold, locale)));
+    }
+  }
+
   // Closes the welcome-back recap. When passive income piled up while away we
   // sweep it straight into the player's purse so the recap doubles as a
   // one-tap collect — returning should feel like an instant reward, not a chore.
   function dismissWelcomeBack(summary: ReturnSummary | null) {
-    if (summary != null && summary.offlineGold > 0) {
-      // Chain farms reset their own timestamps; the active farm's pre-prestige
-      // accrual is swept in based on the same away window.
-      collectChain();
-      setGameState((state) => creditActiveFarmOfflineGold(state, summary.awayMs).state);
+    if (summary != null) {
+      settleReturnOffline(summary);
     }
     setActiveSheet(null);
     void maybeShowReturnAd();
   }
 
   // Shared settlement for the welcome-back action CTAs: record the analytics
-  // event and always sweep any accrued offline chain income into the purse.
-  // Both CTAs (harvest / daily) call this so offline gold is never lost no
-  // matter which first action the player picks.
+  // event and always sweep any accrued offline income into the purse. Both CTAs
+  // (harvest / daily) call this so offline gold is never lost no matter which
+  // first action the player picks.
   function collectReturnSummaryOffline(summary: ReturnSummary) {
     farmAnalytics.trackReturnSummaryCollected({
       awayMs: summary.awayMs,
@@ -1782,10 +1802,7 @@ export default function FarmGame({
       readyCropCount: summary.readyCropCount,
       context: analyticsContext(),
     });
-    if (summary.offlineGold > 0) {
-      collectChain();
-      setGameState((state) => creditActiveFarmOfflineGold(state, summary.awayMs).state);
-    }
+    settleReturnOffline(summary);
   }
 
   function openPrestigeConfirm() {
