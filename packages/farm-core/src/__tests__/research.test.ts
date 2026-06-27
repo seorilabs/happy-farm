@@ -53,16 +53,31 @@ describe('breeding balance invariants', () => {
   });
 
   test('hybrid stats follow the breeding formula from their parents', () => {
+    // 저티어(tier 3~4) 부모를 쓰는 첫 신품종은 순수 부모합 공식대로면 동시대
+    // 과수원 작물의 1/5~1/10 수준이라 교배 온실 해금비(5M+RP)를 회수할 수 없다.
+    // 그래서 cost/sell을 공식값 "위로" 상향(floor)한 예외다(이슈 #151,
+    // balance.json breeding.agentPurpose 참조). growTime/tier는 여전히 공식을 따른다.
+    const flooredFirstTier = new Set<CropKey>(['crystalberry', 'sun_grape', 'royal_potato', 'frost_blueberry']);
+
     for (const recipe of BREEDING_RECIPES) {
       const hybrid = CROPS[recipe.crop]!;
       const [firstParent, secondParent] = recipe.parents.map((parent) => CROPS[parent]!);
       const costSum = firstParent!.cost + secondParent!.cost;
       const sellSum = firstParent!.sell + secondParent!.sell;
+      const formulaCost = Math.floor(costSum * 1.5);
+      const formulaSell = Math.round(sellSum * 1.8);
 
-      expect(hybrid.cost).toBe(Math.floor(costSum * 1.5));
-      expect(hybrid.sell).toBe(Math.round(sellSum * 1.8));
       expect(hybrid.growTime).toBe(Math.round(Math.max(firstParent!.growTime, secondParent!.growTime) * 0.8));
       expect(hybrid.tier).toBe(10);
+
+      if (flooredFirstTier.has(recipe.crop)) {
+        // 예외: 순수 부모합 공식보다 높게 상향되어 있어야 한다(역마진 콘텐츠 방지).
+        expect(hybrid.cost).toBeGreaterThan(formulaCost);
+        expect(hybrid.sell).toBeGreaterThan(formulaSell);
+      } else {
+        expect(hybrid.cost).toBe(formulaCost);
+        expect(hybrid.sell).toBe(formulaSell);
+      }
     }
   });
 });

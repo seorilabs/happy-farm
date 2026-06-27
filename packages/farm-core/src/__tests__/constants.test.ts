@@ -174,6 +174,41 @@ describe('farm balance and model invariants', () => {
     expect(productivity.plotCount).toBe(state.unlockedPlotCount);
     expect(productivity.netProfitPerHour).toBeGreaterThan(0);
   });
+
+  test('first-tier hybrid crops stay competitive with their unlock-era economy', () => {
+    // 교배 온실(hybrid_greenhouse)은 골드 5M + RP 투자로 해금된다. 따라서 첫 신품종의
+    // 시간당 순이익이 동시대 비교군(과수원 tier 최상위) 이상이어야 투자 회수가 가능하고,
+    // 동시에 다음 정규 구역(온실)의 최상위 작물을 추월하지 않아야 진행 동기가 유지된다.
+    const firstTierHybrids: CropKey[] = ['crystalberry', 'frost_blueberry', 'sun_grape', 'royal_potato'];
+
+    const perHour = (cropKey: CropKey) =>
+      getCropEconomyEstimate(cropKey, { speedMultiplier: 1, profitMultiplier: 1 }).netProfitPerHour;
+
+    const perHourByArea = (areaKey: string) =>
+      cropKeys()
+        .filter((cropKey) => CROPS[cropKey]!.area === areaKey)
+        .map(perHour);
+
+    const orchardBest = Math.max(...perHourByArea('orchard'));
+    const greenhouseBest = Math.max(...perHourByArea('greenhouse'));
+    expect(orchardBest).toBeGreaterThan(0);
+    expect(greenhouseBest).toBeGreaterThan(orchardBest);
+
+    for (const hybridKey of firstTierHybrids) {
+      const crop = CROPS[hybridKey];
+      if (crop == null) {
+        throw new Error(`Farm balance must include first-tier hybrid ${hybridKey}.`);
+      }
+      // 판매가는 동시대 비교군과 같은 자릿수(6자리) 범위여야 한다.
+      expect(crop.sell).toBeGreaterThanOrEqual(100000);
+
+      const hybridPerHour = perHour(hybridKey);
+      // 비교군(과수원 최상위) 이상: 투자 회수 가능.
+      expect(hybridPerHour).toBeGreaterThanOrEqual(orchardBest);
+      // 상한(온실 최상위 이하): 정규 구역 진행을 무의미하게 추월하지 않음.
+      expect(hybridPerHour).toBeLessThanOrEqual(greenhouseBest);
+    }
+  });
 });
 
 describe('farm save migration', () => {
