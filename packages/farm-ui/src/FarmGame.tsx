@@ -1780,11 +1780,13 @@ export default function FarmGame({
     }
   }
 
-  // Closes the welcome-back recap. When passive income piled up while away we
-  // sweep it straight into the player's purse so the recap doubles as a
-  // one-tap collect — returning should feel like an instant reward, not a chore.
-  function dismissWelcomeBack(summary: ReturnSummary | null) {
-    if (summary != null) {
+  // Closes the welcome-back recap. The recap's sole dismiss affordance is the
+  // "collect" button (it doubles as a one-tap collect — returning should feel
+  // like an instant reward, not a chore), so collectOffline is an explicit
+  // accept signal: offline gold — chain AND active farm together — is settled
+  // only when the player actually collects, never on a hypothetical close path.
+  function dismissWelcomeBack(summary: ReturnSummary | null, collectOffline: boolean) {
+    if (collectOffline && summary != null) {
       settleReturnOffline(summary);
     }
     setActiveSheet(null);
@@ -3171,7 +3173,7 @@ export default function FarmGame({
                   readyCropCount: summary.readyCropCount,
                   context: analyticsContext(),
                 });
-                dismissWelcomeBack(summary);
+                dismissWelcomeBack(summary, summary.offlineGold > 0);
               }}
             />
           </View>
