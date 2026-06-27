@@ -21,6 +21,7 @@ import {
   createFarmAnalytics,
   createInitialState,
   formatMoney,
+  getActiveFarmOfflineGold,
   getAreaCropKeys,
   getMasteryThresholds,
   getPrestigeCost,
@@ -277,6 +278,69 @@ describe('FarmGame UI flow', () => {
     expect(screen.getAllByText('빈 밭')).toHaveLength(6);
     // Harvesting spawns a floating "+gold" burst at the tapped plot (gained 14G).
     expect(screen.getByText('+14')).toBeTruthy();
+  });
+
+  describe('welcome-back offline settlement', () => {
+    const messages = getFarmMessages(DEFAULT_LOCALE);
+    const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
+
+    function withGrowingPlot(cropKey: CropKey, base: GameState): GameState {
+      return {
+        ...base,
+        plots: base.plots.map((plot, index) =>
+          index === 0 ? { ...plot, cropType: cropKey, startTime: NOW, state: 1 as const } : plot
+        ),
+      };
+    }
+
+    function withReadyPlot(cropKey: CropKey, base: GameState): GameState {
+      return {
+        ...base,
+        plots: base.plots.map((plot, index) =>
+          index === 0 ? { ...plot, cropType: cropKey, startTime: NOW - 60000, state: 2 as const } : plot
+        ),
+      };
+    }
+
+    test('collect branch (collectOffline=true): grants the active-farm offline gold into the purse', async () => {
+      const state = withGrowingPlot('wheat' as CropKey, createInitialState());
+      mockPersistence.readLastSeenAt.mockResolvedValueOnce(NOW - TWO_HOURS_MS);
+
+      const offlineGold = getActiveFarmOfflineGold(state, TWO_HOURS_MS);
+      expect(offlineGold).toBeGreaterThan(0);
+
+      const screen = await renderGame(state);
+
+      const collectLabel = messages.welcomeBackCollectAction(formatMoney(offlineGold, DEFAULT_LOCALE));
+      await waitFor(() => expect(screen.getByText(collectLabel)).toBeTruthy());
+      // Starting gold is on display before collecting.
+      expect(screen.getByText(`${formatMoney(state.gold, DEFAULT_LOCALE)}G`)).toBeTruthy();
+
+      fireEvent.press(screen.getByText(collectLabel));
+
+      // The offline gold was swept into the purse.
+      await waitFor(() =>
+        expect(screen.getByText(`${formatMoney(state.gold + offlineGold, DEFAULT_LOCALE)}G`)).toBeTruthy()
+      );
+    });
+
+    test('close branch (collectOffline=false): pressing confirm with no offline gold grants nothing', async () => {
+      // Ready crop but no growing plots → offlineGold 0, so the bottom button is
+      // the plain confirm ("농장으로 가기") and settlement must not run.
+      const state = withReadyPlot('carrot' as CropKey, createInitialState());
+      mockPersistence.readLastSeenAt.mockResolvedValueOnce(NOW - TWO_HOURS_MS);
+
+      const screen = await renderGame(state);
+
+      await waitFor(() => expect(screen.getByText(messages.welcomeBackConfirmAction)).toBeTruthy());
+      // No offline-earnings row when nothing accrued.
+      expect(screen.queryByText(messages.welcomeBackOfflineLabel)).toBeNull();
+
+      fireEvent.press(screen.getByText(messages.welcomeBackConfirmAction));
+
+      // Gold is unchanged: the close path settles nothing.
+      expect(screen.getByText(`${formatMoney(state.gold, DEFAULT_LOCALE)}G`)).toBeTruthy();
+    });
   });
 
   describe('first-session onboarding', () => {

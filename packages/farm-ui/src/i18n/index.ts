@@ -112,7 +112,7 @@ const KO_FARM_MESSAGES = {
     `${awayDuration} 동안 자리를 비운 사이 농장이 부지런히 움직였어요.`,
   sheetDescriptionDailyBonus: (streak: number) =>
     streak >= 2 ? `${streak}일 연속 출석을 달성했어요!` : '하루를 시작하며 보너스 골드를 받아요.',
-  welcomeBackOfflineLabel: '운영 농장이 모아둔 수익',
+  welcomeBackOfflineLabel: '자리를 비운 동안 모은 수익',
   welcomeBackReadyLabel: '수확을 기다리는 작물',
   welcomeBackReadyValue: (count: number) => `${count}칸`,
   welcomeBackCollectAction: (amount: string) => `+${amount}G 받고 시작하기`,
@@ -391,7 +391,7 @@ const EN_FARM_MESSAGES: FarmMessages = {
   sheetDescriptionWelcomeBack: (awayDuration) => `Your farm kept busy while you were away for ${awayDuration}.`,
   sheetDescriptionDailyBonus: (streak) =>
     streak >= 2 ? `${streak}-day streak! Keep it up!` : 'Start your day with a bonus gold reward.',
-  welcomeBackOfflineLabel: 'Chain farm earnings',
+  welcomeBackOfflineLabel: 'Earnings while you were away',
   welcomeBackReadyLabel: 'Crops ready to harvest',
   welcomeBackReadyValue: (count) => `${count} plots`,
   welcomeBackCollectAction: (amount) => `Collect +${amount}G and play`,

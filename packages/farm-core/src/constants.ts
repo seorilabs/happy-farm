@@ -163,6 +163,10 @@ const MS_PER_HOUR = 60 * 60 * 1000;
 export const COLLECTION_AREA_REWARDS = balance.collection.areaCompletionReward as Record<AreaKey, number>;
 export const COLLECTION_FULL_REWARD = balance.collection.fullCompletionReward as number;
 
+// Pre-prestige offline income tuning (see balance.json offlineIncome).
+export const OFFLINE_INCOME_EFFICIENCY_RATIO = balance.offlineIncome.efficiencyRatio;
+export const OFFLINE_INCOME_CAP_MS = balance.offlineIncome.capMs;
+
 const CROP_KEYS_BY_AREA: Record<AreaKey, CropKey[]> = FARM_AREAS.reduce(
   (acc, area) => {
     acc[area.key] = (Object.keys(CROPS) as CropKey[]).filter((cropKey) => getKnownCrop(cropKey).area === area.key);
