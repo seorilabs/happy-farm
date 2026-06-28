@@ -439,5 +439,35 @@ export function createFarmAnalytics(track: TrackGameEvent = noopTrackGameEvent) 
         notification_kind: params.kind,
       });
     },
+
+    // === 첫 세션 온보딩 단계 퍼널 (#159) ===
+    // 4단계 코치마크(selectSeed→plant→harvest→unlock)의 단계별 진입/이탈을 GA4로
+    // 특정하기 위한 계측. step은 단계 키, step_index는 1부터 시작하는 진행 번호다.
+
+    // 온보딩 단계 진입(노출). 어느 단계에서 막히는지 단계별 도달률을 산출한다.
+    trackOnboardingStepView: (params: { step: string; stepIndex: number; context: GameAnalyticsContext }) => {
+      track('onboarding_step_view', {
+        step: params.step,
+        step_index: params.stepIndex,
+        ...params.context,
+      });
+    },
+
+    // 온보딩 건너뛰기. 어느 단계에서 사용자가 코치마크를 포기했는지 측정한다.
+    trackOnboardingSkip: (params: { skippedStep: string; stepIndex: number; context: GameAnalyticsContext }) => {
+      track('onboarding_skip', {
+        skipped_step: params.skippedStep,
+        step_index: params.stepIndex,
+        ...params.context,
+      });
+    },
+
+    // 온보딩 완료(마지막 unlock 단계까지 자연 종료 또는 안전 타임아웃 종료).
+    // 건너뛰기로 끝난 경우는 trackOnboardingSkip만 발생하고 이 이벤트는 발생하지 않는다.
+    trackOnboardingComplete: (params: { context: GameAnalyticsContext }) => {
+      track('onboarding_complete', {
+        ...params.context,
+      });
+    },
   };
 }
