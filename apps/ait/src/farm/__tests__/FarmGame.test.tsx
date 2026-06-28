@@ -424,17 +424,77 @@ describe('FarmGame UI flow', () => {
       await waitFor(() => expect(screen.queryByTestId('onboarding-coachmark')).toBeNull());
     });
 
-    test('skipping hides the guide and persists completion', async () => {
-      const screen = await renderGame(null);
+    test('keeps skip hidden until the first plant, then ends the guide on harvest', async () => {
+      // #159: 신규 사용자 다수가 첫 파종 전에 코치마크를 건너뛰고 이탈하므로,
+      // selectSeed·plant 단계에서는 건너뛰기를 숨기고 첫 파종 이후에만 노출한다.
+      const track = jest.fn();
+      const screen = await renderGame(null, { analytics: createFarmAnalytics(track) });
 
       await waitFor(() => expect(screen.getByTestId('onboarding-coachmark')).toBeTruthy());
-      fireEvent.press(screen.getByTestId('onboarding-skip'));
+      // selectSeed 단계: 건너뛰기 없음.
+      expect(screen.queryByTestId('onboarding-skip')).toBeNull();
+
+      fireEvent.press(screen.getByText('당근'));
+      await waitFor(() => expect(screen.getByText(messages.onboardingPlantTitle)).toBeTruthy());
+      // plant 단계: 여전히 건너뛰기 없음.
+      expect(screen.queryByTestId('onboarding-skip')).toBeNull();
+
+      fireEvent.press(screen.getAllByText('빈 밭')[0]!);
+      await waitFor(() => expect(screen.getByText(messages.onboardingHarvestTitle)).toBeTruthy());
+      // harvest 단계: 첫 파종을 마쳤으니 건너뛰기가 나타난다.
+      const skip = await screen.findByTestId('onboarding-skip');
+      fireEvent.press(skip);
 
       await waitFor(() => expect(screen.queryByTestId('onboarding-coachmark')).toBeNull());
       await waitFor(() => {
         const calls = mockPersistence.writePersistedGameState.mock.calls;
         expect(calls[calls.length - 1]![0].onboardingCompleted).toBe(true);
       });
+      // 건너뛴 단계가 onboarding_skip으로 계측된다(완료가 아닌 이탈로 분리).
+      expect(track).toHaveBeenCalledWith('onboarding_skip', expect.objectContaining({ skipped_step: 'harvest' }));
+      expect(track).not.toHaveBeenCalledWith('onboarding_complete', expect.anything());
+    });
+
+    test('emits the step-view funnel and a complete (not skip) event through the full flow', async () => {
+      // #159: 어느 단계에서 막히는지 GA4로 특정할 수 있도록 단계별 노출/완료를 계측한다.
+      const track = jest.fn();
+      const screen = await renderGame(
+        { ...createInitialState(), gold: 1000 },
+        { analytics: createFarmAnalytics(track) }
+      );
+
+      await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+      expect(track).toHaveBeenCalledWith(
+        'onboarding_step_view',
+        expect.objectContaining({ step: 'selectSeed', step_index: 1 })
+      );
+
+      fireEvent.press(screen.getByText('당근'));
+      await waitFor(() => expect(screen.getByText(messages.onboardingPlantTitle)).toBeTruthy());
+      expect(track).toHaveBeenCalledWith(
+        'onboarding_step_view',
+        expect.objectContaining({ step: 'plant', step_index: 2 })
+      );
+
+      fireEvent.press(screen.getAllByText('빈 밭')[0]!);
+      await waitFor(() => expect(screen.getByText(messages.onboardingHarvestTitle)).toBeTruthy());
+      await act(async () => {
+        jest.advanceTimersByTime(2500);
+      });
+      await waitFor(() => expect(screen.getByText('GET')).toBeTruthy());
+      fireEvent.press(screen.getByText('GET'));
+      await waitFor(() => expect(screen.getByText(messages.onboardingUnlockTitle)).toBeTruthy());
+      expect(track).toHaveBeenCalledWith(
+        'onboarding_step_view',
+        expect.objectContaining({ step: 'unlock', step_index: 4 })
+      );
+
+      // 농장 확장으로 자연 완료 → onboarding_complete (skip 아님).
+      fireEvent.press(screen.getByTestId('shop-nav-button'));
+      fireEvent.press(screen.getByText(messages.shopPlotTitle));
+      await waitFor(() => expect(screen.queryByTestId('onboarding-coachmark')).toBeNull());
+      expect(track).toHaveBeenCalledWith('onboarding_complete', expect.anything());
+      expect(track).not.toHaveBeenCalledWith('onboarding_skip', expect.anything());
     });
 
     test('never shows for a returning player whose save is already complete', async () => {
@@ -679,10 +739,7 @@ describe('FarmGame UI flow', () => {
   test('buys a discounted plot after the plot-discount ad and closes the shop', async () => {
     const rewardedAd = createReadyRewardedAd();
     // Enough gold to afford the discounted plot (the ad no longer gives it free).
-    const screen = await renderGame(
-      { ...createInitialState(), gold: 1000 },
-      { useRewardedAd: () => rewardedAd }
-    );
+    const screen = await renderGame({ ...createInitialState(), gold: 1000 }, { useRewardedAd: () => rewardedAd });
 
     await waitFor(() => expect(screen.getByText('🏪 상점')).toBeTruthy());
 
@@ -1212,9 +1269,7 @@ describe('FarmGame UI flow', () => {
     const firstAreaKey = firstArea.key;
     const firstAreaReward = COLLECTION_AREA_REWARDS[firstAreaKey];
     if (firstAreaReward == null) throw new Error(`No collection reward defined for area ${firstAreaKey}`);
-    const claimButtonLabel = claimMessages.collectionClaimAction(
-      formatMoney(firstAreaReward, DEFAULT_LOCALE)
-    );
+    const claimButtonLabel = claimMessages.collectionClaimAction(formatMoney(firstAreaReward, DEFAULT_LOCALE));
 
     // createLateGameState() discovers all crops, making all area collection rewards
     // claimable. A fresh instance is created per test to prevent state bleed if
@@ -1302,7 +1357,9 @@ describe('FarmGame UI flow', () => {
     });
 
     test('claim flow completes when playHarvest throws synchronously', async () => {
-      const playHarvest = jest.fn(() => { throw new Error('audio error'); });
+      const playHarvest = jest.fn(() => {
+        throw new Error('audio error');
+      });
       const screen = await renderAndClaim(playHarvest, { soundEffectsEnabled: true });
       await waitFor(() => expect(screen.getByText(claimMessages.collectionClaimedLabel)).toBeTruthy());
       await waitFor(() => expect(onGoldPulse).toHaveBeenCalledTimes(1));
@@ -1340,10 +1397,7 @@ describe('FarmGame UI flow', () => {
       vibrateSpy.mockRestore();
     });
 
-    async function renderAndClaimAchievement(
-      playHarvest: jest.Mock,
-      savedSettings: unknown
-    ) {
+    async function renderAndClaimAchievement(playHarvest: jest.Mock, savedSettings: unknown) {
       const claimMessages = getFarmMessages();
       const track = getHarvestTrack();
       const claimLabel = claimMessages.achievementClaimAction(track.starsPerTier);
@@ -1359,9 +1413,7 @@ describe('FarmGame UI flow', () => {
         },
         savedSettings
       );
-      fireEvent.press(
-        screen.getByLabelText(claimMessages.achievementsButtonAccessibilityLabel)
-      );
+      fireEvent.press(screen.getByLabelText(claimMessages.achievementsButtonAccessibilityLabel));
       await waitFor(() => expect(screen.getByText(claimLabel)).toBeTruthy());
       vibrateSpy.mockClear(); // reset count so only the claim press is counted
       fireEvent.press(screen.getByText(claimLabel));
@@ -1407,9 +1459,7 @@ describe('FarmGame UI flow', () => {
       },
     });
 
-    await waitFor(() =>
-      expect(screen.getAllByText('GET').length).toBeGreaterThanOrEqual(COMBO_GREAT_THRESHOLD)
-    );
+    await waitFor(() => expect(screen.getAllByText('GET').length).toBeGreaterThanOrEqual(COMBO_GREAT_THRESHOLD));
 
     for (let i = 0; i < COMBO_GREAT_THRESHOLD; i++) {
       fireEvent.press(screen.getAllByText('GET')[0]!);
@@ -1433,9 +1483,7 @@ describe('FarmGame UI flow', () => {
       },
     });
 
-    await waitFor(() =>
-      expect(screen.getAllByText('GET').length).toBeGreaterThanOrEqual(COMBO_LEGENDARY_THRESHOLD)
-    );
+    await waitFor(() => expect(screen.getAllByText('GET').length).toBeGreaterThanOrEqual(COMBO_LEGENDARY_THRESHOLD));
 
     for (let i = 0; i < COMBO_LEGENDARY_THRESHOLD; i++) {
       fireEvent.press(screen.getAllByText('GET')[0]!);
@@ -1481,9 +1529,7 @@ describe('FarmGame UI flow', () => {
     const lateGame = createLateGameState();
     const screen = await renderGame(lateGame);
 
-    await waitFor(() =>
-      expect(screen.getAllByText('GET').length).toBeGreaterThanOrEqual(COMBO_GREAT_THRESHOLD)
-    );
+    await waitFor(() => expect(screen.getAllByText('GET').length).toBeGreaterThanOrEqual(COMBO_GREAT_THRESHOLD));
 
     for (let i = 0; i < COMBO_GREAT_THRESHOLD; i++) {
       fireEvent.press(screen.getAllByText('GET')[0]!);
@@ -1497,9 +1543,7 @@ describe('FarmGame UI flow', () => {
     const lateGame = createLateGameState();
     const screen = await renderGame(lateGame);
 
-    await waitFor(() =>
-      expect(screen.getAllByText('GET').length).toBeGreaterThanOrEqual(COMBO_LEGENDARY_THRESHOLD)
-    );
+    await waitFor(() => expect(screen.getAllByText('GET').length).toBeGreaterThanOrEqual(COMBO_LEGENDARY_THRESHOLD));
 
     for (let i = 0; i < COMBO_LEGENDARY_THRESHOLD; i++) {
       fireEvent.press(screen.getAllByText('GET')[0]!);
@@ -1700,13 +1744,21 @@ describe('getNextAreaGoal', () => {
     // fruit_field needs upgradeLevel 3. We unlock vegetable_field and set gold/harvest
     // to satisfy fruit_field's gold (15000) and harvest (10) requirements but keep
     // the upgrade level at 1 (min of speed/profit).
-    const tenCrops = ['carrot','wheat','potato','onion','corn','tomato','pepper','mushroom','rice','strawberry'] as const satisfies readonly CropKey[];
+    const tenCrops = [
+      'carrot',
+      'wheat',
+      'potato',
+      'onion',
+      'corn',
+      'tomato',
+      'pepper',
+      'mushroom',
+      'rice',
+      'strawberry',
+    ] as const satisfies readonly CropKey[];
     const state = withUpgrades(
       withHarvested(
-        withGold(
-          withUnlocked(createInitialState(), ['starter_field', 'vegetable_field']),
-          20_000
-        ),
+        withGold(withUnlocked(createInitialState(), ['starter_field', 'vegetable_field']), 20_000),
         tenCrops
       ),
       1 // minUpgradeLevel=1 < 3 required
@@ -1774,9 +1826,7 @@ describe('NextGoalBar', () => {
     const screen = await renderGame(readyAreaState);
 
     // The ready bar should appear once the game loads.
-    await waitFor(() =>
-      expect(screen.getByText('🔓 채소 밭 해금 준비 완료! 상점에서 열기')).toBeTruthy()
-    );
+    await waitFor(() => expect(screen.getByText('🔓 채소 밭 해금 준비 완료! 상점에서 열기')).toBeTruthy());
 
     // Shop must be closed before the tap (guard against false positive).
     expect(screen.queryByText('농장 관리소')).toBeNull();
@@ -1835,9 +1885,7 @@ describe('NextGoalBar', () => {
   describe('harvest notification permission prompt', () => {
     const promptMessages = getFarmMessages();
 
-    function createNotificationsMock(
-      overrides: Partial<FarmGameNotifications> = {}
-    ): FarmGameNotifications {
+    function createNotificationsMock(overrides: Partial<FarmGameNotifications> = {}): FarmGameNotifications {
       return {
         isSupported: true,
         requestPermission: jest.fn(async () => true),
@@ -1913,10 +1961,7 @@ describe('NextGoalBar', () => {
 
     test('does not surface the prompt while onboarding is still in progress', async () => {
       const notifications = createNotificationsMock();
-      const screen = await renderGame(
-        { ...createPostAhaState(), onboardingCompleted: false },
-        { notifications }
-      );
+      const screen = await renderGame({ ...createPostAhaState(), onboardingCompleted: false }, { notifications });
 
       await waitFor(() => expect(screen.getByText('50G')).toBeTruthy());
       expect(screen.queryByTestId('notification-prompt-card')).toBeNull();

@@ -822,6 +822,20 @@ export const styles = StyleSheet.create({
     borderColor: '#a6dcb8',
     backgroundColor: 'rgba(76, 175, 106, 0.08)',
   },
+  // Pulsing overlay ring stacked on the seed strip during the selectSeed step.
+  // A louder green than the static highlight; its opacity is animated so it
+  // breathes to catch a new player's eye. pointerEvents none keeps taps flowing
+  // through to the seed buttons.
+  onboardingSeedPulseRing: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: 14,
+    borderWidth: 2,
+    borderColor: '#2e9e54',
+  },
   nextGoalLabel: {
     color: '#4a7c59',
     fontSize: 11,

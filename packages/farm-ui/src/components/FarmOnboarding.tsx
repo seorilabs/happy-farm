@@ -46,6 +46,11 @@ export function FarmOnboarding({
 }) {
   const { title, description } = getStepText(step, messages);
   const stepIndex = ONBOARDING_STEPS.indexOf(step);
+  // 첫 파종(plant) 완료 전(= selectSeed·plant 단계)에는 건너뛰기를 숨긴다. 신규
+  // 사용자 다수가 첫 씨앗을 심기도 전에 코치마크를 건너뛰고 이탈하는 것을 막아
+  // 핵심 행동(파종)으로의 도달률을 끌어올리기 위함이다(#159). 파종 이후(harvest·
+  // unlock)부터 건너뛰기를 노출한다.
+  const canSkip = step !== 'selectSeed' && step !== 'plant';
 
   // Bob the arrow up and down a little to catch the eye.
   const bounceRef = useRef<Animated.Value | null>(null);
@@ -89,9 +94,11 @@ export function FarmOnboarding({
         </View>
         <View style={styles.aside}>
           <Text style={styles.progress}>{messages.onboardingProgress(stepIndex + 1, ONBOARDING_STEPS.length)}</Text>
-          <Pressable testID="onboarding-skip" hitSlop={8} style={styles.skipButton} onPress={onSkip}>
-            <Text style={styles.skipText}>{messages.onboardingSkip}</Text>
-          </Pressable>
+          {canSkip ? (
+            <Pressable testID="onboarding-skip" hitSlop={8} style={styles.skipButton} onPress={onSkip}>
+              <Text style={styles.skipText}>{messages.onboardingSkip}</Text>
+            </Pressable>
+          ) : null}
         </View>
       </View>
     </View>

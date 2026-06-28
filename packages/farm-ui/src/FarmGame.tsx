@@ -142,7 +142,7 @@ import { getFarmMessages, type FarmMessages } from './i18n';
 import { AchievementsSheet } from './components/AchievementsSheet';
 import { ChainMapSheet, PrestigeConfirmSheet } from './components/ChainMapSheet';
 import { CollectionSheet } from './components/CollectionSheet';
-import { FarmOnboarding, type OnboardingStep } from './components/FarmOnboarding';
+import { FarmOnboarding, ONBOARDING_STEPS, type OnboardingStep } from './components/FarmOnboarding';
 import { LabSheet } from './components/LabSheet';
 import { AdRewardCard, CloudSaveSection, SettingToggle, SheetAction, ShopCard, sheetPartStyles } from './components/SheetParts';
 import { MAIN_HORIZONTAL_PADDING, PLOT_COLUMNS, PLOT_GAP } from './farmGameLayout';
@@ -597,8 +597,26 @@ export default function FarmGame({
   const notificationPromptResolvedRef = useRef(false);
   // Current step of the first-session onboarding coachmark; null hides it.
   const [onboardingStep, setOnboardingStep] = useState<OnboardingStep | null>(null);
+  // Mirror of the current step for stable callbacks (skip handler) that must read
+  // the latest step without being recreated on every render.
+  const onboardingStepRef = useRef<OnboardingStep | null>(null);
+  onboardingStepRef.current = onboardingStep;
+  // Tracks the last step we emitted an onboarding_step_view for, so the funnel
+  // event fires once per step entry instead of on every render tick.
+  const onboardingStepViewedRef = useRef<OnboardingStep | null>(null);
+  // Stable handle to the latest analyticsContext (assigned after it is defined),
+  // so the onboarding skip/complete handlers and safety timeout can build a fresh
+  // context without being recreated on every tick.
+  const analyticsContextRef = useRef<GetAnalyticsContext | null>(null);
   // Guards the one-time onboarding start.
   const onboardingInitRef = useRef(false);
+  // Soft pulse driving the seed-strip emphasis ring while the selectSeed step is
+  // active, so the place to tap reads louder for brand-new players (#159).
+  const seedHighlightPulseRef = useRef<Animated.Value | null>(null);
+  if (seedHighlightPulseRef.current == null) {
+    seedHighlightPulseRef.current = new Animated.Value(0);
+  }
+  const seedHighlightPulse = seedHighlightPulseRef.current;
   // Progression snapshot taken when onboarding starts. The final "first unlock"
   // step finishes once any of these counters grows — a plot, an area, a growth/
   // profit upgrade, or a research node/breed — so the guide doesn't stall when a
@@ -790,6 +808,30 @@ export default function FarmGame({
     setOnboardingStep(null);
     setGameState((state) => (state.onboardingCompleted ? state : { ...state, onboardingCompleted: true }));
   }, []);
+  // User-initiated skip: log which step they bailed on, then finish. Kept stable
+  // by reading the step from a ref so the coachmark's onSkip prop is steady.
+  const skipOnboarding = useCallback(() => {
+    const current = onboardingStepRef.current;
+    const buildContext = analyticsContextRef.current;
+    if (current != null && buildContext != null) {
+      farmAnalytics.trackOnboardingSkip({
+        skippedStep: current,
+        stepIndex: ONBOARDING_STEPS.indexOf(current) + 1,
+        context: buildContext(),
+      });
+    }
+    finishOnboarding();
+  }, [farmAnalytics, finishOnboarding]);
+  // Natural/auto completion (reached the final unlock step or the safety
+  // timeout). Distinct from skip so the funnel separates "finished" from
+  // "gave up". Stable for the safety-timeout effect.
+  const completeOnboarding = useCallback(() => {
+    const buildContext = analyticsContextRef.current;
+    if (buildContext != null) {
+      farmAnalytics.trackOnboardingComplete({ context: buildContext() });
+    }
+    finishOnboarding();
+  }, [farmAnalytics, finishOnboarding]);
   const closeSheet = useCallback(() => {
     setActiveSheet(null);
   }, []);
@@ -852,6 +894,10 @@ export default function FarmGame({
     (state = gameState) => getGameAnalyticsContext(state, sessionStartedAtRef.current),
     [gameState]
   );
+  // Keep the stable ref (declared near the onboarding refs) pointed at the latest
+  // analyticsContext so timers can build a fresh context without depending on
+  // gameState.
+  analyticsContextRef.current = analyticsContext;
 
   useEffect(() => {
     if (pendingCommandEffectsRef.current.length === 0) {
@@ -1221,20 +1267,70 @@ export default function FarmGame({
           gameState.research.unlockedNodes.length > baseline.researchNodeCount ||
           gameState.research.unlockedBreeds.length > baseline.breedCount);
       if (unlockedSomething) {
-        finishOnboarding();
+        completeOnboarding();
       }
     }
-  }, [onboardingStep, selectedTool, gameState, finishOnboarding]);
+  }, [onboardingStep, selectedTool, gameState, completeOnboarding]);
+
+  // Emit the onboarding funnel step-view once per step entry. Guarded by a ref so
+  // it fires only when the step actually changes, not on every render tick (the
+  // effect re-runs each tick because analyticsContext depends on gameState).
+  useEffect(() => {
+    if (onboardingStep == null) {
+      onboardingStepViewedRef.current = null;
+      return;
+    }
+    if (onboardingStepViewedRef.current === onboardingStep) {
+      return;
+    }
+    onboardingStepViewedRef.current = onboardingStep;
+    farmAnalytics.trackOnboardingStepView({
+      step: onboardingStep,
+      stepIndex: ONBOARDING_STEPS.indexOf(onboardingStep) + 1,
+      context: analyticsContext(),
+    });
+  }, [onboardingStep, farmAnalytics, analyticsContext]);
+
+  // Loop a gentle pulse on the seed-strip emphasis ring while the selectSeed step
+  // is active so the place to tap reads louder for brand-new players; stop and
+  // reset when the step moves on. Drives only the overlay ring's opacity (native
+  // driver), so the seed buttons themselves stay fully opaque.
+  useEffect(() => {
+    if (onboardingStep !== 'selectSeed') {
+      seedHighlightPulse.stopAnimation();
+      seedHighlightPulse.setValue(0);
+      return;
+    }
+    const animation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(seedHighlightPulse, {
+          toValue: 1,
+          duration: 720,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(seedHighlightPulse, {
+          toValue: 0,
+          duration: 720,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    animation.start();
+    return () => animation.stop();
+  }, [onboardingStep, seedHighlightPulse]);
 
   // Safety net: never let the final "first unlock" coachmark linger forever. If
-  // the player lingers on this step without growing their farm, auto-finish.
+  // the player lingers on this step without growing their farm, auto-finish (this
+  // still counts as a completion for the funnel, not a skip).
   useEffect(() => {
     if (onboardingStep !== 'unlock') {
       return;
     }
-    const timer = setTimeout(finishOnboarding, ONBOARDING_UNLOCK_SAFETY_TIMEOUT_MS);
+    const timer = setTimeout(completeOnboarding, ONBOARDING_UNLOCK_SAFETY_TIMEOUT_MS);
     return () => clearTimeout(timer);
-  }, [onboardingStep, finishOnboarding]);
+  }, [onboardingStep, completeOnboarding]);
 
   // Surface the notification permission prompt only after the first harvest
   // ("aha") AND once onboarding is complete. Gating on onboardingCompleted keeps
@@ -2648,7 +2744,7 @@ export default function FarmGame({
       </View>
 
       {onboardingStep != null ? (
-        <FarmOnboarding step={onboardingStep} messages={messages} onSkip={finishOnboarding} />
+        <FarmOnboarding step={onboardingStep} messages={messages} onSkip={skipOnboarding} />
       ) : null}
 
       <ScrollView contentContainerStyle={styles.mainContent} style={styles.main}>
@@ -2717,50 +2813,56 @@ export default function FarmGame({
           })}
         </ScrollView>
 
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={onboardingSeedHighlight ? styles.onboardingHighlight : undefined}
-          contentContainerStyle={styles.toolScroll}
-        >
-          <ToolButton
-            active={selectedTool === 'harvest'}
-            icon="🖐️"
-            name={messages.harvestTool}
-            toolKey="harvest"
-            onSelect={onSelectTool}
-          />
-          {visibleCropKeys.map((key) => {
-            const crop = getCrop(key);
-            const cropCost = getCropPurchaseCost(gameState, key);
-            const masteryRank = getMasteryStatus(gameState, key).rank;
-            const isNew = !gameState.harvestedCropKeys.includes(key);
-            return (
-              <ToolButton
-                key={key}
-                active={selectedTool === key}
-                icon={crop.icon}
-                name={getLocalizedCropName(key)}
-                cost={formatMoney(cropCost, locale)}
-                roi={messages.roi(formatSignedPercent(getCropEconomy(cropEconomyByKey, key).roiPercent, locale))}
-                affordable={gameState.gold >= cropCost}
-                masteryIcon={masteryRank?.icon}
-                isNew={isNew}
-                newLabel={messages.newCropBadge}
-                toolKey={key}
-                onSelect={onSelectTool}
-              />
-            );
-          })}
-          {!selectedAreaUnlocked ? (
-            <Pressable style={styles.lockedNotice} onPress={openShop}>
-              <Text style={styles.lockedNoticeTitle}>{messages.lockedAreaTitle(selectedAreaLabel.name)}</Text>
-              <Text style={styles.lockedNoticeDesc} numberOfLines={2}>
-                {getAreaUnlockRequirementText(gameState, selectedArea, locale)}
-              </Text>
-            </Pressable>
+        <View style={onboardingSeedHighlight ? styles.onboardingHighlight : undefined}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.toolScroll}>
+            <ToolButton
+              active={selectedTool === 'harvest'}
+              icon="🖐️"
+              name={messages.harvestTool}
+              toolKey="harvest"
+              onSelect={onSelectTool}
+            />
+            {visibleCropKeys.map((key) => {
+              const crop = getCrop(key);
+              const cropCost = getCropPurchaseCost(gameState, key);
+              const masteryRank = getMasteryStatus(gameState, key).rank;
+              const isNew = !gameState.harvestedCropKeys.includes(key);
+              return (
+                <ToolButton
+                  key={key}
+                  active={selectedTool === key}
+                  icon={crop.icon}
+                  name={getLocalizedCropName(key)}
+                  cost={formatMoney(cropCost, locale)}
+                  roi={messages.roi(formatSignedPercent(getCropEconomy(cropEconomyByKey, key).roiPercent, locale))}
+                  affordable={gameState.gold >= cropCost}
+                  masteryIcon={masteryRank?.icon}
+                  isNew={isNew}
+                  newLabel={messages.newCropBadge}
+                  toolKey={key}
+                  onSelect={onSelectTool}
+                />
+              );
+            })}
+            {!selectedAreaUnlocked ? (
+              <Pressable style={styles.lockedNotice} onPress={openShop}>
+                <Text style={styles.lockedNoticeTitle}>{messages.lockedAreaTitle(selectedAreaLabel.name)}</Text>
+                <Text style={styles.lockedNoticeDesc} numberOfLines={2}>
+                  {getAreaUnlockRequirementText(gameState, selectedArea, locale)}
+                </Text>
+              </Pressable>
+            ) : null}
+          </ScrollView>
+          {onboardingSeedHighlight ? (
+            // Louder green ring whose opacity pulses to draw the eye to the seed
+            // strip during the selectSeed step (#159). Sits above the strip but
+            // lets taps fall through to the seed buttons underneath.
+            <Animated.View
+              pointerEvents="none"
+              style={[styles.onboardingSeedPulseRing, { opacity: seedHighlightPulse }]}
+            />
           ) : null}
-        </ScrollView>
+        </View>
       </View>
 
       {toastMessage != null ? (

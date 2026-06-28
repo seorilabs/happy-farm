@@ -107,6 +107,30 @@ describe('farm analytics adapter contract', () => {
 
     expect(track).toHaveBeenCalledWith('notification_scheduled', { notification_kind: 'daily_bonus' });
   });
+
+  test('온보딩 퍼널 이벤트(step_view·skip·complete)를 계약대로 emit한다 (#159)', () => {
+    const track = jest.fn();
+    const analytics = createFarmAnalytics(track);
+    const context = getGameAnalyticsContext(
+      createInitialState(),
+      Date.parse('2026-05-27T03:00:00.000Z'),
+      Date.parse('2026-05-27T03:00:05.000Z')
+    );
+
+    analytics.trackOnboardingStepView({ step: 'selectSeed', stepIndex: 1, context });
+    analytics.trackOnboardingSkip({ skippedStep: 'harvest', stepIndex: 3, context });
+    analytics.trackOnboardingComplete({ context });
+
+    expect(track).toHaveBeenCalledWith(
+      'onboarding_step_view',
+      expect.objectContaining({ step: 'selectSeed', step_index: 1, gold: context.gold })
+    );
+    expect(track).toHaveBeenCalledWith(
+      'onboarding_skip',
+      expect.objectContaining({ skipped_step: 'harvest', step_index: 3, gold: context.gold })
+    );
+    expect(track).toHaveBeenCalledWith('onboarding_complete', expect.objectContaining({ gold: context.gold }));
+  });
 });
 
 describe('Firebase 애널리틱스 값 정규화(공유 어댑터 헬퍼)', () => {
