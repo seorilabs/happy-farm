@@ -300,6 +300,81 @@ export function performPlant(gameState: GameState, plotIndex: number, cropKey: C
   return { ...gameState, gold: gameState.gold - cost, plots: nextPlots };
 }
 
+// True for a plot that is empty and ready to receive a seed: unlocked and idle.
+function isPlotPlantable(gameState: GameState, plot: Plot | undefined): plot is Plot {
+  return plot != null && plot.id < gameState.unlockedPlotCount && plot.state === 0;
+}
+
+export type PlantAllPreview = {
+  // How many empty unlocked plots could be sown with `cropKey` given current gold.
+  plantableCount: number;
+  // Total gold the above planting would spend (plantableCount × per-seed cost).
+  totalCost: number;
+  // Empty unlocked plots regardless of affordability (drives the min-count gate).
+  emptyPlotCount: number;
+};
+
+// Preview for the manual "Plant All" affordance: how many empty plots the player
+// could fill with `cropKey` and the gold it costs. Pure; the per-seed cost is
+// constant for a given (gameState, cropKey, now), so the affordable count is just
+// gold ÷ cost clamped to the empty-plot count. Returns zeros when the crop can't
+// be planted at all (locked area / unbred hybrid).
+export function getPlantAllPreview(
+  gameState: GameState,
+  cropKey: CropKey,
+  now = Date.now()
+): PlantAllPreview {
+  const crop = getKnownCrop(cropKey);
+  let emptyPlotCount = 0;
+  for (const plot of gameState.plots) {
+    if (isPlotPlantable(gameState, plot)) {
+      emptyPlotCount += 1;
+    }
+  }
+  if (!isAreaUnlocked(gameState, crop.area) || !isCropPlantable(gameState, cropKey)) {
+    return { plantableCount: 0, totalCost: 0, emptyPlotCount };
+  }
+  const cost = getCropPurchaseCost(gameState, cropKey, now);
+  const affordable = cost > 0 ? Math.floor(gameState.gold / cost) : emptyPlotCount;
+  const plantableCount = Math.max(0, Math.min(emptyPlotCount, affordable));
+  return { plantableCount, totalCost: plantableCount * cost, emptyPlotCount };
+}
+
+export type PlantAllResult = {
+  state: GameState;
+  // Number of plots actually sown (0 when nothing was planted).
+  plantedCount: number;
+};
+
+// Manual "Plant All": sows `cropKey` into every empty unlocked plot, in plot
+// order, until gold runs out. Reuses performPlant per plot so validation, cost,
+// and the gold decrement stay identical to single planting (never goes negative).
+// Pure: the caller owns every UI side effect.
+export function performPlantAll(
+  gameState: GameState,
+  cropKey: CropKey,
+  now = Date.now()
+): PlantAllResult {
+  let state = gameState;
+  let plantedCount = 0;
+  for (let plotIndex = 0; plotIndex < state.plots.length; plotIndex += 1) {
+    if (!isPlotPlantable(state, state.plots[plotIndex])) {
+      continue;
+    }
+    const next = performPlant(state, plotIndex, cropKey, now);
+    // performPlant returns null when the crop is unplantable (whole call fails on
+    // the first empty plot) or unaffordable. Since the per-seed cost is constant
+    // for this call, an unaffordable plot means no later plot is affordable either
+    // — stop scanning in both cases.
+    if (next == null) {
+      break;
+    }
+    state = next;
+    plantedCount += 1;
+  }
+  return { state, plantedCount };
+}
+
 // True for a plot the player can harvest right now: unlocked and fully ripe.
 function isPlotHarvestable(gameState: GameState, plot: Plot | undefined): plot is Plot {
   return (

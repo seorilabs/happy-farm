@@ -118,6 +118,8 @@ import {
   isTitleUnlocked,
   normalizeLocale,
   performHarvestAll,
+  performPlantAll,
+  getPlantAllPreview,
   getReadyPlotCount,
   recordHarvestBonusAdPrompt,
   recordReturnInterstitial,
@@ -165,6 +167,10 @@ const PLANT_POP_DURATION_MS = 320;
 // The "Harvest All" shortcut only appears once enough plots are ripe that
 // tapping each one becomes a chore; a single ripe plot is a quick one-tap.
 const HARVEST_ALL_MIN_COUNT = 2;
+// The "Plant All" shortcut mirrors Harvest All: it only appears when a crop tool
+// is selected and at least this many empty plots are waiting, so single-tap
+// planting stays the norm and the batch button is reserved for the chore case.
+const PLANT_ALL_MIN_COUNT = 2;
 // Harvest combo: the window (ms) within which consecutive manual harvests
 // build a streak counter. Tier thresholds gate icon/color escalation and
 // audio milestone cues.
@@ -1663,6 +1669,16 @@ export default function FarmGame({
     [gameState, harvestBonusBoost.multiplier]
   );
   const readyPlotCount = useMemo(() => getReadyPlotCount(gameState), [gameState]);
+  // Plant-all affordance for the currently selected crop tool: how many empty
+  // plots could be sown and the gold it costs. 'harvest' yields zeros so the
+  // button stays hidden. Recomputed each tick so gold/plot changes stay live.
+  const plantAllPreview = useMemo(
+    () =>
+      selectedTool !== 'harvest'
+        ? getPlantAllPreview(gameState, selectedTool, tickNowMsRef.current)
+        : { plantableCount: 0, totalCost: 0, emptyPlotCount: 0 },
+    [gameState, selectedTool, tick]
+  );
   // Blocks a second "Harvest All" tap until the in-flight batch finishes; the
   // command drain effect releases it after each attempt (success or no-op).
   const harvestAllInFlightRef = useRef(false);
@@ -2468,6 +2484,55 @@ export default function FarmGame({
     setCommandEffectVersion((version) => version + 1);
   }
 
+  // Manual "Plant All": sow the selected crop into every empty unlocked plot up to
+  // the gold limit, in one tap. Planting has no random outcome, so (unlike Harvest
+  // All) the feedback is computed from the current state and fired once for the
+  // whole batch — a sprout pop per filled plot, but a single haptic and toast.
+  function plantAllCrops() {
+    if (selectedTool === 'harvest') {
+      return;
+    }
+    const cropKey = selectedTool;
+    const now = Date.now();
+    const preview = getPlantAllPreview(gameState, cropKey, now);
+    if (preview.plantableCount === 0) {
+      return;
+    }
+    // The empty unlocked plots performPlantAll will fill, in plot order, up to the
+    // affordable count — so the sprout pops land on exactly those tiles.
+    const plantedIndices: number[] = [];
+    for (
+      let index = 0;
+      index < gameState.plots.length && plantedIndices.length < preview.plantableCount;
+      index += 1
+    ) {
+      const plot = gameState.plots[index];
+      if (plot != null && plot.id < gameState.unlockedPlotCount && plot.state === 0) {
+        plantedIndices.push(index);
+      }
+    }
+
+    setGameState((state) => performPlantAll(state, cropKey, now).state);
+
+    setPlantPulses((prev) => {
+      const next = { ...prev };
+      for (const index of plantedIndices) {
+        plantPulseTokenRef.current += 1;
+        next[index] = plantPulseTokenRef.current;
+      }
+      return next;
+    });
+    triggerHaptic(15);
+    toast(messages.plantedAllToast(preview.plantableCount));
+    // Keep the planting funnel accurate: one breadcrumb per seed sown, matching
+    // what tapping each plot individually would have logged.
+    const crop = getCrop(cropKey);
+    const cost = getCropPurchaseCost(gameState, cropKey, now);
+    for (let i = 0; i < preview.plantableCount; i += 1) {
+      farmAnalytics.trackCropPlanted(cropKey, crop.area, crop.tier, cost, analyticsContext());
+    }
+  }
+
   function handlePlotClick(index: number) {
     if (index >= gameState.unlockedPlotCount) {
       openShop();
@@ -2786,7 +2851,17 @@ export default function FarmGame({
       <View style={[styles.toolStrip, { paddingBottom: insets.bottom + 10 }]}>
         <View style={styles.toolHeader}>
           <Text style={styles.toolLabel}>{messages.toolLabel}</Text>
-          {readyPlotCount >= HARVEST_ALL_MIN_COUNT ? (
+          {selectedTool !== 'harvest' &&
+          plantAllPreview.plantableCount > 0 &&
+          plantAllPreview.emptyPlotCount >= PLANT_ALL_MIN_COUNT ? (
+            <HarvestAllButton
+              label={messages.plantAllButton(
+                plantAllPreview.plantableCount,
+                formatMoney(plantAllPreview.totalCost, locale)
+              )}
+              onPress={plantAllCrops}
+            />
+          ) : readyPlotCount >= HARVEST_ALL_MIN_COUNT ? (
             <HarvestAllButton
               label={messages.harvestAllButton(readyPlotCount)}
               onPress={harvestAllCrops}

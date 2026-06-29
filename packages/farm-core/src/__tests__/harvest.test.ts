@@ -1,14 +1,23 @@
 /// <reference types="jest" />
 
-import { createInitialState, getGrowthAdSkipMs } from '../constants';
+import { CROPS, createInitialState, getGrowthAdSkipMs } from '../constants';
+import { getCropPurchaseCost } from '../modifiers';
 import {
   applyGrowthAdSkip,
+  getPlantAllPreview,
   getPlotRemainingGrowthMs,
   getReadyPlotCount,
   performHarvest,
   performHarvestAll,
+  performPlantAll,
 } from '../harvest';
 import type { CropKey, GameState, PlotState } from '../types';
+
+// A crop whose area is NOT unlocked at game start — used to exercise the
+// "unplantable crop" guards in plant-all helpers.
+const LOCKED_AREA_CROP: CropKey = (Object.keys(CROPS) as CropKey[]).find(
+  (key) => CROPS[key]!.area !== 'starter_field'
+)!;
 
 // Force a plot into the actively-growing state (state 1) with the given crop and
 // start time, so the growth-skip helper can run without real grow timers.
@@ -196,6 +205,104 @@ describe('applyGrowthAdSkip', () => {
     const result = applyGrowthAdSkip(base, 0, NOW);
     expect(result.skippedMs).toBe(0);
     expect(result.completed).toBe(false);
+    expect(result.state).toBe(base);
+  });
+});
+
+describe('getPlantAllPreview', () => {
+  const NOW = 10_000;
+
+  test('counts empty unlocked plots and clamps the affordable count to gold', () => {
+    const base = createInitialState(); // gold 50, 6 empty unlocked plots
+    const cost = getCropPurchaseCost(base, 'carrot', NOW);
+    const preview = getPlantAllPreview(base, 'carrot', NOW);
+
+    expect(preview.emptyPlotCount).toBe(base.unlockedPlotCount);
+    const affordable = Math.floor(base.gold / cost);
+    expect(preview.plantableCount).toBe(Math.min(base.unlockedPlotCount, affordable));
+    expect(preview.totalCost).toBe(preview.plantableCount * cost);
+    // Sanity: 6 empty plots but only 5 affordable at 50 gold / 10 cost.
+    expect(preview.plantableCount).toBeLessThan(preview.emptyPlotCount);
+  });
+
+  test('plantableCount equals empty plots when gold is plentiful', () => {
+    const base = { ...createInitialState(), gold: 1_000_000 };
+    const preview = getPlantAllPreview(base, 'carrot', NOW);
+    expect(preview.plantableCount).toBe(base.unlockedPlotCount);
+    expect(preview.emptyPlotCount).toBe(base.unlockedPlotCount);
+  });
+
+  test('returns zeros for a crop whose area is not unlocked (still counts empty plots)', () => {
+    const base = { ...createInitialState(), gold: 1_000_000 };
+    const preview = getPlantAllPreview(base, LOCKED_AREA_CROP, NOW);
+    expect(preview.plantableCount).toBe(0);
+    expect(preview.totalCost).toBe(0);
+    expect(preview.emptyPlotCount).toBe(base.unlockedPlotCount);
+  });
+});
+
+describe('performPlantAll', () => {
+  const NOW = 10_000;
+
+  test('plants every empty unlocked plot when gold suffices and deducts exact cost', () => {
+    const base = { ...createInitialState(), gold: 1_000_000 };
+    const cost = getCropPurchaseCost(base, 'carrot', NOW);
+    const result = performPlantAll(base, 'carrot', NOW);
+
+    expect(result.plantedCount).toBe(base.unlockedPlotCount);
+    expect(result.state.gold).toBe(base.gold - base.unlockedPlotCount * cost);
+    for (let id = 0; id < base.unlockedPlotCount; id += 1) {
+      const plot = result.state.plots.find((p) => p.id === id)!;
+      expect(plot.state).toBe(1);
+      expect(plot.cropType).toBe('carrot');
+      expect(plot.startTime).toBe(NOW);
+    }
+  });
+
+  test('plants only as many as gold allows and never goes negative', () => {
+    const base = createInitialState(); // gold 50
+    const cost = getCropPurchaseCost(base, 'carrot', NOW);
+    const affordable = Math.floor(base.gold / cost);
+    const result = performPlantAll(base, 'carrot', NOW);
+
+    expect(result.plantedCount).toBe(affordable);
+    expect(result.state.gold).toBe(base.gold - affordable * cost);
+    expect(result.state.gold).toBeGreaterThanOrEqual(0);
+    // At least one empty plot remains unplanted because gold ran out.
+    const stillEmpty = result.state.plots.filter(
+      (p) => p.id < base.unlockedPlotCount && p.state === 0
+    ).length;
+    expect(stillEmpty).toBe(base.unlockedPlotCount - affordable);
+  });
+
+  test('skips locked plots and plots that are not empty', () => {
+    const base = { ...createInitialState(), gold: 1_000_000 };
+    const lockedId = base.unlockedPlotCount; // first locked plot
+    const seeded: GameState = {
+      ...base,
+      plots: base.plots.map((plot) => {
+        if (plot.id === 0) return { ...plot, cropType: 'carrot', startTime: 0, state: 1 as PlotState };
+        if (plot.id === 1) return { ...plot, cropType: 'carrot', startTime: 0, state: 2 as PlotState };
+        return plot;
+      }),
+    };
+    const result = performPlantAll(seeded, 'carrot', NOW);
+
+    // Only the 4 empty unlocked plots (ids 2..5) get sown.
+    expect(result.plantedCount).toBe(base.unlockedPlotCount - 2);
+    // Growing/ripe plots are untouched.
+    expect(result.state.plots.find((p) => p.id === 0)!.state).toBe(1);
+    expect(result.state.plots.find((p) => p.id === 1)!.state).toBe(2);
+    // Locked plot stays empty even though it is idle.
+    const lockedPlot = result.state.plots.find((p) => p.id === lockedId)!;
+    expect(lockedPlot.state).toBe(0);
+    expect(lockedPlot.cropType).toBeNull();
+  });
+
+  test('unplantable crop plants nothing and leaves state unchanged', () => {
+    const base = { ...createInitialState(), gold: 1_000_000 };
+    const result = performPlantAll(base, LOCKED_AREA_CROP, NOW);
+    expect(result.plantedCount).toBe(0);
     expect(result.state).toBe(base);
   });
 });
