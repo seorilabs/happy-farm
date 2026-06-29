@@ -312,6 +312,78 @@ for (const title of balance.achievements?.titles ?? []) {
   check(Number.isInteger(title.tier) && title.tier > 0, `타이틀 ${title.key}: tier는 양의 정수여야 합니다.`);
 }
 
+// 11) 보상형 광고 정합성: 각 보상 광고의 일일 한도/쿨다운/퍼센트가 유한·합리
+// 범위이고, "일일 한도 ≥ 2인 보상 광고는 쿨다운 > 0"이어야 한다. 한도가 2회
+// 이상인데 쿨다운이 0이면 같은 날 연타가 가능해져 빈도 게이트가 무력화된다.
+// (plotDiscount처럼 한도 1회면 하루 단위 캡이 곧 게이트라 쿨다운 0이 의도된
+// 값 — balance.json ads.agentPurpose 참조.)
+const ads = balance.ads ?? {};
+const rewardedAdGates = [
+  { key: 'growthAd', dailyLimit: ads.growthAdDailyLimit, cooldownMs: ads.growthAdCooldownMs },
+  { key: 'harvestBonusAd', dailyLimit: ads.harvestBonusAdDailyLimit, cooldownMs: ads.harvestBonusAdCooldownMs },
+  { key: 'plotDiscountAd', dailyLimit: ads.plotDiscountAdDailyLimit, cooldownMs: ads.plotDiscountAdCooldownMs },
+];
+for (const gate of rewardedAdGates) {
+  check(
+    Number.isInteger(gate.dailyLimit) && gate.dailyLimit >= 1,
+    `ads.${gate.key}DailyLimit(${gate.dailyLimit})는 1 이상의 정수여야 합니다.`
+  );
+  check(
+    isFiniteNumber(gate.cooldownMs) && gate.cooldownMs >= 0,
+    `ads.${gate.key}CooldownMs(${gate.cooldownMs})는 0 이상의 유한 값이어야 합니다.`
+  );
+  // 한도가 2회 이상이면 쿨다운으로 연타를 막아야 빈도 게이트가 의미를 갖는다.
+  if (Number.isInteger(gate.dailyLimit) && gate.dailyLimit >= 2) {
+    check(
+      isFiniteNumber(gate.cooldownMs) && gate.cooldownMs > 0,
+      `ads.${gate.key}: 일일 한도가 2 이상(${gate.dailyLimit})이면 쿨다운은 0보다 커야 합니다(같은 날 연타 방지).`
+    );
+  }
+}
+
+// rewardedGold는 윈도우 기반 분리 모델: 보상액/윈도우/회수/일일 한도가 유한·합리 범위.
+check(
+  isFiniteNumber(ads.rewardedGoldAmount) && ads.rewardedGoldAmount > 0,
+  `ads.rewardedGoldAmount(${ads.rewardedGoldAmount})는 0보다 커야 합니다.`
+);
+check(
+  isFiniteNumber(ads.rewardedGoldWindowMs) && ads.rewardedGoldWindowMs > 0,
+  `ads.rewardedGoldWindowMs(${ads.rewardedGoldWindowMs})는 0보다 커야 합니다.`
+);
+check(
+  Number.isInteger(ads.rewardedGoldMaxUsesPerWindow) && ads.rewardedGoldMaxUsesPerWindow >= 1,
+  `ads.rewardedGoldMaxUsesPerWindow(${ads.rewardedGoldMaxUsesPerWindow})는 1 이상의 정수여야 합니다.`
+);
+check(
+  Number.isInteger(ads.rewardedGoldDailyLimit) &&
+    ads.rewardedGoldDailyLimit >= (ads.rewardedGoldMaxUsesPerWindow ?? 0),
+  `ads.rewardedGoldDailyLimit(${ads.rewardedGoldDailyLimit})는 윈도우당 한도(${ads.rewardedGoldMaxUsesPerWindow}) 이상이어야 합니다.`
+);
+
+// 퍼센트류는 (0,1] 범위(0이면 보상이 없고 1 초과면 음수 가격/시간이 된다).
+check(
+  isFiniteNumber(ads.plotDiscountAdPercent) && ads.plotDiscountAdPercent > 0 && ads.plotDiscountAdPercent <= 1,
+  `ads.plotDiscountAdPercent(${ads.plotDiscountAdPercent})는 0 초과 1 이하여야 합니다.`
+);
+check(
+  isFiniteNumber(ads.growthAdSkipPercent) && ads.growthAdSkipPercent > 0 && ads.growthAdSkipPercent <= 1,
+  `ads.growthAdSkipPercent(${ads.growthAdSkipPercent})는 0 초과 1 이하여야 합니다.`
+);
+check(
+  isFiniteNumber(ads.harvestBonusMultiplier) && ads.harvestBonusMultiplier > 1,
+  `ads.harvestBonusMultiplier(${ads.harvestBonusMultiplier})는 1보다 커야 합니다.`
+);
+// 나머지 시간/쿨다운류는 모두 유한하고 음수가 아니어야 한다.
+for (const key of [
+  'harvestBonusBoostDurationMs',
+  'growthAdMinRemainingMs',
+  'growthAdSkipMs',
+  'interstitialMilestoneCooldownMs',
+  'returnInterstitialCooldownMs',
+]) {
+  check(isFiniteNumber(ads[key]) && ads[key] >= 0, `ads.${key}(${ads[key]})는 0 이상의 유한 값이어야 합니다.`);
+}
+
 const result = {
   status: failures.length > 0 ? 'fail' : 'pass',
   checked: passes.length + failures.length,

@@ -301,6 +301,20 @@ describe('FarmGame UI flow', () => {
     expect(screen.queryByText('🌱 모두 심기 5 · 50G')).toBeNull();
   });
 
+  test('plot-discount reward desc shows the original price before the discounted one', () => {
+    // Locks the (percent, originalPrice, discountedPrice) arg order so a call-site
+    // mismatch (which still type-checks) can't silently surface a wrong price.
+    const ko = getFarmMessages('ko-KR').rewardedPlotReadyDesc(50, '1,200', '600');
+    expect(ko).toContain('1,200');
+    expect(ko).toContain('600');
+    expect(ko).toContain('50');
+    expect(ko.indexOf('1,200')).toBeLessThan(ko.indexOf('600'));
+
+    const en = getFarmMessages('en-US').rewardedPlotReadyDesc(50, '1,200', '600');
+    expect(en).toContain('50% off');
+    expect(en.indexOf('1,200')).toBeLessThan(en.indexOf('600'));
+  });
+
   describe('welcome-back offline settlement', () => {
     const messages = getFarmMessages(DEFAULT_LOCALE);
     const TWO_HOURS_MS = 2 * 60 * 60 * 1000;

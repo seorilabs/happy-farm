@@ -29,8 +29,8 @@ const KO_FARM_MESSAGES = {
   rewardedGoldTitle: (amount: string) => `광고 보고 ${amount}G 받기`,
   rewardedGoldReadyDesc: (windowMinutes: number, maxUses: number) => `${windowMinutes}분에 최대 ${maxUses}회 받을 수 있어요.`,
   rewardedPlotTitle: '광고 보고 밭 1칸 할인 구매',
-  rewardedPlotReadyDesc: (percent: number, price: string) =>
-    `다음 밭을 ${percent}% 할인가 ${price}G에 열어요. (하루 1회)`,
+  rewardedPlotReadyDesc: (percent: number, originalPrice: string, price: string) =>
+    `다음 밭 원가 ${originalPrice}G → ${price}G (${percent}% 할인). (하루 1회)`,
   rewardReceiveCta: '받기',
   rewardWaitCta: '대기',
   rewardOpenCta: '열기',
@@ -317,7 +317,8 @@ const EN_FARM_MESSAGES: FarmMessages = {
   rewardedGoldReadyDesc: (windowMinutes: number, maxUses: number) =>
     `Up to ${maxUses} ${maxUses === 1 ? 'time' : 'times'} every ${windowMinutes} ${windowMinutes === 1 ? 'minute' : 'minutes'}.`,
   rewardedPlotTitle: 'Watch ad for a plot discount',
-  rewardedPlotReadyDesc: (percent, price) => `Unlock the next plot at ${percent}% off — ${price}G. (once a day)`,
+  rewardedPlotReadyDesc: (percent, originalPrice, price) =>
+    `Next plot ${originalPrice}G → ${price}G (${percent}% off). (once a day)`,
   rewardReceiveCta: 'Claim',
   rewardWaitCta: 'Wait',
   rewardOpenCta: 'Open',
