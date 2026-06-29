@@ -550,6 +550,26 @@ describe('FarmGame UI flow', () => {
     }
   });
 
+  test('advances the growth-stage glyph as a crop matures (sprout → leaf)', async () => {
+    const screen = await renderGame(null);
+
+    await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+    fireEvent.press(screen.getByText('초보 밭'));
+    fireEvent.press(screen.getByText('당근'));
+    fireEvent.press(screen.getAllByText('빈 밭')[0]!);
+
+    // Freshly planted (~0% of the 2s carrot grow time): earliest stage = sprout.
+    expect(screen.getByText('🌱')).toBeTruthy();
+    expect(screen.queryByText('🌿')).toBeNull();
+
+    // ~45% grown crosses the sapling threshold (0.25) → leaf glyph, no more sprout.
+    await act(async () => {
+      jest.advanceTimersByTime(950);
+    });
+    await waitFor(() => expect(screen.getByText('🌿')).toBeTruthy());
+    expect(screen.queryByText('🌱')).toBeNull();
+  });
+
   test('keeps rapid harvest state updates from overwriting each other', async () => {
     const screen = await renderGame(createReadyHarvestState());
 

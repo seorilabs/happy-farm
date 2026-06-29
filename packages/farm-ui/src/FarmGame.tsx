@@ -105,6 +105,9 @@ import {
   getMasteryStatus,
   getMinUpgradeLevel,
   getMutationLabel,
+  getCropGrowthStage,
+  isCropNearlyReady,
+  type CropGrowthStage,
   getDiscountedPlotCost,
   getPlotCost,
   getPlotGrowthDisplay,
@@ -4336,14 +4339,15 @@ const PlotCell = React.memo(function PlotCell({
       : plot.state === 2
         ? messages.plotReadyAccessibilityLabel(cropName)
         : messages.plotGrowingAccessibilityLabel(cropName, growthCountdown);
-  // Reveal the actual crop icon at ≥65% growth so players can see what's
-  // ripening and feel anticipation before the harvest tap.
-  const icon =
-    plot.state === 2 || progressRatio >= 0.65
-      ? (crop?.icon ?? '🌿')
-      : progressRatio >= 0.3
-        ? '🌿'
-        : '🌱';
+  // Four-stage growth reveal (see getCropGrowthStage): a generic sprout, then a
+  // leaf, then a dim/shrunk preview of the crop's own icon (budding), then the
+  // full icon (mature). This lets crops look distinct well before harvest instead
+  // of all sharing 🌱/🌿 until 65%. Ready plots always show the full crop icon.
+  const growthStage: CropGrowthStage = plot.state === 1 ? getCropGrowthStage(progressRatio) : 'mature';
+  const nearlyReady = plot.state === 1 && isCropNearlyReady(progressRatio);
+  const cropIconGlyph = crop?.icon ?? '🌿';
+  const growingGlyph =
+    growthStage === 'sprout' ? '🌱' : growthStage === 'sapling' ? '🌿' : cropIconGlyph;
 
   return (
     <Pressable
@@ -4371,10 +4375,12 @@ const PlotCell = React.memo(function PlotCell({
         </>
       ) : null}
       {plot.state === 2 ? (
-        <ReadyCropIcon icon={icon} phaseSeed={plot.id} />
+        <ReadyCropIcon icon={cropIconGlyph} phaseSeed={plot.id} />
       ) : (
         <GrowingCropIcon
-          icon={icon}
+          icon={growingGlyph}
+          stage={growthStage}
+          nearlyReady={nearlyReady}
           plantToken={plantToken}
           onPlantPulseDone={() => onPlantPulseDone(index)}
         />
@@ -4430,10 +4436,14 @@ function ReadyCropIcon({ icon, phaseSeed }: { icon: string; phaseSeed: number })
 // pass no token, so reopening the app never re-pops every growing plot.
 function GrowingCropIcon({
   icon,
+  stage,
+  nearlyReady,
   plantToken,
   onPlantPulseDone,
 }: {
   icon: string;
+  stage: CropGrowthStage;
+  nearlyReady: boolean;
   plantToken: number | undefined;
   onPlantPulseDone: () => void;
 }) {
@@ -4442,6 +4452,13 @@ function GrowingCropIcon({
     popRef.current = new Animated.Value(1);
   }
   const pop = popRef.current;
+  // Separate looping value for the "almost ready" pulse so it composes with the
+  // one-shot plant pop without fighting over the same driver.
+  const readyPulseRef = useRef<Animated.Value | null>(null);
+  if (readyPulseRef.current == null) {
+    readyPulseRef.current = new Animated.Value(0);
+  }
+  const readyPulse = readyPulseRef.current;
   const lastTokenRef = useRef<number | undefined>(undefined);
   const onDoneRef = useRef(onPlantPulseDone);
   onDoneRef.current = onPlantPulseDone;
@@ -4467,8 +4484,42 @@ function GrowingCropIcon({
     return () => animation.stop();
   }, [plantToken, pop]);
 
-  const scale = pop.interpolate({ inputRange: [0, 1], outputRange: [0.4, 1] });
-  const opacity = pop.interpolate({ inputRange: [0, 0.4, 1], outputRange: [0.2, 1, 1] });
+  useEffect(() => {
+    // Only crops in the final stretch pulse, so a grid of early plots stays calm
+    // and the loop runs on at most the few plots that are about to ripen.
+    if (!nearlyReady) {
+      readyPulse.setValue(0);
+      return undefined;
+    }
+    const animation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(readyPulse, {
+          toValue: 1,
+          duration: 620,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(readyPulse, {
+          toValue: 0,
+          duration: 620,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    animation.start();
+    return () => animation.stop();
+  }, [nearlyReady, readyPulse]);
+
+  // The budding stage shows the crop's own icon as a dim, shrunk preview so the
+  // reveal feels gradual; sprout/sapling glyphs and the mature icon render full.
+  const previewScale = stage === 'budding' ? 0.78 : 1;
+  const previewOpacity = stage === 'budding' ? 0.72 : 1;
+  const popScale = pop.interpolate({ inputRange: [0, 1], outputRange: [0.4, 1] });
+  const popOpacity = pop.interpolate({ inputRange: [0, 0.4, 1], outputRange: [0.2, 1, 1] });
+  const pulseScale = readyPulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.12] });
+  const scale = Animated.multiply(Animated.multiply(popScale, previewScale), pulseScale);
+  const opacity = Animated.multiply(popOpacity, previewOpacity);
 
   return (
     <Animated.Text style={[styles.cropIcon, { opacity, transform: [{ scale }] }]}>{icon}</Animated.Text>

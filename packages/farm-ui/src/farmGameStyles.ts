@@ -388,6 +388,12 @@ export const styles = StyleSheet.create({
   growingPlot: {
     borderColor: '#5e4631',
     backgroundColor: '#7c5e42',
+    // A lighter top edge and a thick dark bottom edge read as a tilled soil ridge
+    // (furrow), so a growing plot is clearly distinct from the flat tan empty plot
+    // even before its crop icon appears.
+    borderTopColor: '#8d6c4d',
+    borderBottomWidth: 4,
+    borderBottomColor: '#4a3526',
   },
   readyPlot: {
     borderColor: '#73b76e',
