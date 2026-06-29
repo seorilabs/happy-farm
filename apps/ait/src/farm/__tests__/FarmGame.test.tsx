@@ -280,6 +280,27 @@ describe('FarmGame UI flow', () => {
     expect(screen.getByText('+14')).toBeTruthy();
   });
 
+  test('plants every affordable empty plot at once via "Plant All"', async () => {
+    // Past onboarding (the batch shortcut is intentionally hidden during the
+    // guided tutorial), with the starter 50 gold and six empty plots.
+    const state: GameState = { ...createInitialState(), onboardingCompleted: true };
+    const screen = await renderGame(state);
+
+    await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+    expect(screen.getByText('50G')).toBeTruthy();
+    expect(screen.getAllByText('빈 밭')).toHaveLength(6);
+
+    fireEvent.press(screen.getByText('당근'));
+    // 50G ÷ 10G ⇒ 5 of the 6 empty plots are affordable.
+    fireEvent.press(screen.getByText('🌱 모두 심기 5 · 50G'));
+
+    // Gold is fully spent and only the one unaffordable plot remains empty.
+    expect(screen.getByText('0G')).toBeTruthy();
+    expect(screen.getAllByText('빈 밭')).toHaveLength(1);
+    // With no gold left to fill the last plot, the shortcut disappears.
+    expect(screen.queryByText('🌱 모두 심기 5 · 50G')).toBeNull();
+  });
+
   describe('welcome-back offline settlement', () => {
     const messages = getFarmMessages(DEFAULT_LOCALE);
     const TWO_HOURS_MS = 2 * 60 * 60 * 1000;

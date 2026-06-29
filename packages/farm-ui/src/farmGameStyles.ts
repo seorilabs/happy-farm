@@ -471,6 +471,16 @@ export const styles = StyleSheet.create({
     fontWeight: '900',
     textAlign: 'right',
   },
+  // Holds the plant hint and the "Plant All" button side by side so the per-crop
+  // ROI hint stays visible while the batch-plant shortcut sits at the right edge.
+  toolHeaderRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 8,
+    flex: 1,
+    minWidth: 0,
+  },
   harvestAllButton: {
     minHeight: 34,
     justifyContent: 'center',

@@ -2851,21 +2851,29 @@ export default function FarmGame({
       <View style={[styles.toolStrip, { paddingBottom: insets.bottom + 10 }]}>
         <View style={styles.toolHeader}>
           <Text style={styles.toolLabel}>{messages.toolLabel}</Text>
-          {selectedTool !== 'harvest' &&
-          plantAllPreview.plantableCount > 0 &&
-          plantAllPreview.emptyPlotCount >= PLANT_ALL_MIN_COUNT ? (
-            <HarvestAllButton
-              label={messages.plantAllButton(
-                plantAllPreview.plantableCount,
-                formatMoney(plantAllPreview.totalCost, locale)
-              )}
-              onPress={plantAllCrops}
-            />
-          ) : readyPlotCount >= HARVEST_ALL_MIN_COUNT ? (
+          {readyPlotCount >= HARVEST_ALL_MIN_COUNT ? (
             <HarvestAllButton
               label={messages.harvestAllButton(readyPlotCount)}
               onPress={harvestAllCrops}
             />
+          ) : selectedTool !== 'harvest' &&
+            onboardingStep == null &&
+            plantAllPreview.plantableCount > 0 &&
+            plantAllPreview.emptyPlotCount >= PLANT_ALL_MIN_COUNT ? (
+            // Keep the per-crop ROI hint and add the batch-plant shortcut beside it
+            // (not in place of it) so selecting a seed never hides its economics.
+            <View style={styles.toolHeaderRight}>
+              <Text style={styles.toolHint} numberOfLines={1}>
+                {toolHint}
+              </Text>
+              <HarvestAllButton
+                label={messages.plantAllButton(
+                  plantAllPreview.plantableCount,
+                  formatMoney(plantAllPreview.totalCost, locale)
+                )}
+                onPress={plantAllCrops}
+              />
+            </View>
           ) : (
             <Text style={styles.toolHint} numberOfLines={1}>
               {toolHint}
