@@ -687,6 +687,9 @@ export default function FarmGame({
   const getLocalizedAreaLabel = useCallback((areaKey: AreaKey) => getAreaLabel(areaKey, locale), [locale]);
 
   const [gameState, setGameState] = useState<GameState>(() => createInitialState());
+  // 콜백 의존성을 늘리지 않고 최신 gameState를 읽기 위한 ref(매 렌더 동기화).
+  const gameStateRef = useRef(gameState);
+  gameStateRef.current = gameState;
   const [selectedTool, setSelectedTool] = useState<ToolKey>('harvest');
   const [selectedArea, setSelectedArea] = useState<AreaKey>(FIRST_AREA.key);
   const [prestigeArchetype, setPrestigeArchetype] = useState<RegionArchetypeKey>(
@@ -1051,7 +1054,8 @@ export default function FarmGame({
         setActiveSheet({ type: 'harvestBonus' });
       }
       const isSpecialHarvest = event.mutation != null || event.newMasteryRank != null || event.boostActive;
-      const cropOfTheDayStatus = getCropOfTheDayStatus(effect.now);
+      // 배너와 동일한 해금 기준으로 오늘의 작물을 판정해야 분석 집계가 어긋나지 않는다.
+      const cropOfTheDayStatus = getCropOfTheDayStatus(effect.now, gameStateRef.current);
       const isCropOfTheDay = event.cropKey === cropOfTheDayStatus.cropKey;
       if (isCropOfTheDay) {
         farmAnalytics.trackCropOfTheDayHarvested({
@@ -1630,7 +1634,10 @@ export default function FarmGame({
     [gameState, locale, tick]
   );
   const harvestBonusBoost = useMemo(() => getHarvestBonusBoostStatus(gameState), [gameState, tick]);
-  const cropOfTheDay = useMemo(() => getCropOfTheDayStatus(tickNowMsRef.current), [tick]);
+  const cropOfTheDay = useMemo(
+    () => getCropOfTheDayStatus(tickNowMsRef.current, gameState),
+    [tick, gameState]
+  );
   const weeklyEvent = useMemo(() => getWeeklyEventStatus(tickNowMsRef.current), [tick]);
   const rawBoostRemainingMs = harvestBonusBoost.remainingMs;
   const safeBoostRemainingMs = Number.isFinite(rawBoostRemainingMs) ? Math.max(0, rawBoostRemainingMs) : 0;
