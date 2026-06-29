@@ -281,6 +281,9 @@ const KO_FARM_MESSAGES = {
   weeklyEventLabel: '주말 작물 축제',
   weeklyEventDesc: (themeName: string, multiplier: number, remaining: string) =>
     `${themeName} ×${multiplier} 판매 · 종료까지 ${remaining}`,
+  weeklyEventTeaserLabel: '다가오는 주말 축제',
+  weeklyEventTeaserDesc: (themeName: string, remaining: string) =>
+    `${themeName} 작물 축제까지 ${remaining}`,
   onboardingProgress: (current: number, total: number) => `${current} / ${total}`,
   onboardingSkip: '건너뛰기',
   onboardingSelectSeedTitle: '씨앗을 골라요',
@@ -560,6 +563,8 @@ const EN_FARM_MESSAGES: FarmMessages = {
   weeklyEventLabel: 'Weekend Crop Festival',
   weeklyEventDesc: (themeName, multiplier, remaining) =>
     `${themeName} ×${multiplier} sell · ends in ${remaining}`,
+  weeklyEventTeaserLabel: 'Upcoming Weekend Festival',
+  weeklyEventTeaserDesc: (themeName, remaining) => `${themeName} crop festival in ${remaining}`,
   onboardingProgress: (current, total) => `${current} / ${total}`,
   onboardingSkip: 'Skip',
   onboardingSelectSeedTitle: 'Pick a seed',

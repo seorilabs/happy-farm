@@ -76,7 +76,7 @@ export function getCropModifiers(gameState: GameState, cropKey: CropKey, now = D
       global.profitMultiplier *
       getMasterySellMultiplier(gameState, cropKey) *
       (cropKey === cotd.cropKey ? cotd.multiplier : 1) *
-      getWeeklyEventMultiplier(cropKey, now),
+      getWeeklyEventMultiplier(cropKey, now, gameState.unlockedAreas),
   };
 }
 

@@ -315,6 +315,23 @@ describe('FarmGame UI flow', () => {
     expect(en.indexOf('1,200')).toBeLessThan(en.indexOf('600'));
   });
 
+  test('shows the upcoming weekend-festival teaser on a weekday', async () => {
+    // Default NOW (set in beforeEach) is a Wednesday → festival inactive → teaser.
+    const screen = await renderGame(null);
+    await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+    expect(screen.getByTestId('weekly-event-teaser')).toBeTruthy();
+    expect(screen.queryByTestId('weekly-event-banner')).toBeNull();
+  });
+
+  test('shows the live festival banner (not the teaser) on the weekend', async () => {
+    // Jump to a Friday (UTC) before rendering → festival live → banner, no teaser.
+    jest.setSystemTime(Date.parse('2026-05-29T12:00:00.000Z'));
+    const screen = await renderGame(null);
+    await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+    expect(screen.getByTestId('weekly-event-banner')).toBeTruthy();
+    expect(screen.queryByTestId('weekly-event-teaser')).toBeNull();
+  });
+
   describe('welcome-back offline settlement', () => {
     const messages = getFarmMessages(DEFAULT_LOCALE);
     const TWO_HOURS_MS = 2 * 60 * 60 * 1000;

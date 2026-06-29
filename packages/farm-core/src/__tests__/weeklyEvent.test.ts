@@ -4,7 +4,10 @@ import { getWeeklyEventStatus, getWeeklyEventMultiplier, WEEKLY_EVENT_MULTIPLIER
 import { CROPS, createInitialState } from '../constants';
 import { getCropModifiers } from '../modifiers';
 import { getCropOfTheDayStatus } from '../cropOfTheDay';
-import type { CropKey } from '../types';
+import type { AreaKey, CropKey } from '../types';
+
+// Every distinct area key, derived from the crop table.
+const ALL_AREAS = [...new Set((Object.keys(CROPS) as CropKey[]).map((key) => CROPS[key]!.area))] as AreaKey[];
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 // 2026-06-26 is a Friday (UTC); the weekend window runs Fri–Sun (3 days).
@@ -68,7 +71,9 @@ describe('getWeeklyEventMultiplier', () => {
 describe('weekly event sale integration', () => {
   test('stacks multiplicatively into the getCropModifiers sale multiplier', () => {
     const state = createInitialState();
-    const status = getWeeklyEventStatus(FRI_NOON);
+    // Match what getCropModifiers feeds the festival lookup (the player's unlocked
+    // areas) so the featured crop we pick is the one the modifier actually boosts.
+    const status = getWeeklyEventStatus(FRI_NOON, state.unlockedAreas);
     const cotd = getCropOfTheDayStatus(FRI_NOON).cropKey;
 
     // A featured-area crop and a non-featured crop, both NOT the crop of the day,
@@ -82,5 +87,68 @@ describe('weekly event sale integration', () => {
     const featuredMult = getCropModifiers(state, featured, FRI_NOON).profitMultiplier;
     const otherMult = getCropModifiers(state, other, FRI_NOON).profitMultiplier;
     expect(featuredMult).toBeCloseTo(otherMult * WEEKLY_EVENT_MULTIPLIER);
+  });
+});
+
+describe('weekly event featured-area restriction (해금 구역만)', () => {
+  // Sample one instant per weekend across ~16 weekends so the deterministic hash
+  // lands on several different draws.
+  const weekends = Array.from({ length: 16 }, (_, i) => FRI_NOON + i * 7 * DAY_MS);
+
+  test('starter-only unlock state always features the starter area', () => {
+    const { unlockedAreas } = createInitialState();
+    for (const now of weekends) {
+      const { areaKey } = getWeeklyEventStatus(now, unlockedAreas);
+      expect(unlockedAreas).toContain(areaKey);
+    }
+  });
+
+  test('the featured area is always within the provided unlocked set', () => {
+    // A two-area unlock set: the draw must never escape it (no gated/locked area).
+    const unlocked: AreaKey[] = ALL_AREAS.slice(0, 2);
+    for (const now of weekends) {
+      const { areaKey } = getWeeklyEventStatus(now, unlocked);
+      expect(unlocked).toContain(areaKey);
+    }
+  });
+
+  test('a wider unlock set can surface areas a narrower one never would', () => {
+    // With every area unlocked the draw can reach a non-starter area at least once,
+    // confirming the restriction widens (not just clamps to starter).
+    const drawn = new Set<AreaKey>();
+    for (const now of weekends) {
+      drawn.add(getWeeklyEventStatus(now, ALL_AREAS).areaKey);
+    }
+    const starter = createInitialState().unlockedAreas;
+    expect([...drawn].some((area) => !starter.includes(area))).toBe(true);
+  });
+
+  test('deterministic for the same instant + same unlock state', () => {
+    const unlocked = createInitialState().unlockedAreas;
+    expect(getWeeklyEventStatus(FRI_NOON, unlocked)).toEqual(getWeeklyEventStatus(FRI_NOON, unlocked));
+  });
+
+  test('weekend active/inactive transition is unaffected by the unlock filter', () => {
+    const unlocked = createInitialState().unlockedAreas;
+    expect(getWeeklyEventStatus(FRI_NOON, unlocked).active).toBe(true);
+    expect(getWeeklyEventStatus(FRI_START - 60_000, unlocked).active).toBe(false);
+    expect(getWeeklyEventStatus(WINDOW_END, unlocked).active).toBe(false);
+  });
+
+  test('empty unlock set falls back to a starter area (never throws/empty)', () => {
+    const { areaKey, cropKeys } = getWeeklyEventStatus(FRI_NOON, []);
+    const starter = createInitialState().unlockedAreas;
+    expect(starter).toContain(areaKey);
+    expect(cropKeys.length).toBeGreaterThan(0);
+  });
+
+  test('multiplier honors the unlocked featured area', () => {
+    const unlocked = createInitialState().unlockedAreas;
+    const { areaKey, cropKeys } = getWeeklyEventStatus(FRI_NOON, unlocked);
+    expect(unlocked).toContain(areaKey);
+    const featured = cropKeys[0]!;
+    expect(getWeeklyEventMultiplier(featured, FRI_NOON, unlocked)).toBe(WEEKLY_EVENT_MULTIPLIER);
+    const other = (Object.keys(CROPS) as CropKey[]).find((key) => CROPS[key]!.area !== areaKey)!;
+    expect(getWeeklyEventMultiplier(other, FRI_NOON, unlocked)).toBe(1);
   });
 });

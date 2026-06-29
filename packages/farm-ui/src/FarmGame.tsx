@@ -1647,7 +1647,10 @@ export default function FarmGame({
     () => getCropOfTheDayStatus(tickNowMsRef.current, gameState),
     [tick, gameState]
   );
-  const weeklyEvent = useMemo(() => getWeeklyEventStatus(tickNowMsRef.current), [tick]);
+  const weeklyEvent = useMemo(
+    () => getWeeklyEventStatus(tickNowMsRef.current, gameState.unlockedAreas),
+    [tick, gameState.unlockedAreas]
+  );
   const rawBoostRemainingMs = harvestBonusBoost.remainingMs;
   const safeBoostRemainingMs = Number.isFinite(rawBoostRemainingMs) ? Math.max(0, rawBoostRemainingMs) : 0;
   const farmProductivity = useMemo(
@@ -2769,7 +2772,19 @@ export default function FarmGame({
                   )}
                 </Text>
               </View>
-            ) : null}
+            ) : (
+              // Weekday teaser: preview the upcoming weekend theme + countdown so
+              // there's a reason to come back before the festival goes live.
+              <View style={styles.cotdRow} testID="weekly-event-teaser">
+                <Text style={styles.label}>🗓️ {messages.weeklyEventTeaserLabel}</Text>
+                <Text style={styles.cotdText} numberOfLines={1}>
+                  {messages.weeklyEventTeaserDesc(
+                    getLocalizedAreaLabel(weeklyEvent.areaKey).name,
+                    formatRemainingTime(Math.max(0, weeklyEvent.windowStartAt - tickNowMsRef.current), locale)
+                  )}
+                </Text>
+              </View>
+            )}
           </View>
         </View>
 
