@@ -6,6 +6,7 @@ export * from './commands';
 export * from './constants';
 export * from './cropOfTheDay';
 export * from './dailyBonus';
+export * from './growthStage';
 export * from './harvest';
 export * from './mastery';
 export * from './modifiers';
