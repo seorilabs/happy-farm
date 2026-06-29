@@ -107,3 +107,34 @@ describe('게이팅 함수가 적용된 오버라이드를 소비한다', () => 
     expect(canShowReturnInterstitial(shown, NOW + 1_000)).toBe(true);
   });
 });
+
+describe('보상형 광고 빈도 게이트 정합성(check-balance 가드와 동일 불변식)', () => {
+  // 일일 한도/쿨다운이 짝지어진 보상 광고들.
+  const gates = [
+    { limit: 'growthAdDailyLimit', cooldown: 'growthAdCooldownMs' },
+    { limit: 'harvestBonusAdDailyLimit', cooldown: 'harvestBonusAdCooldownMs' },
+    { limit: 'plotDiscountAdDailyLimit', cooldown: 'plotDiscountAdCooldownMs' },
+  ] as const;
+
+  test('각 보상 광고의 일일 한도는 1 이상 정수, 쿨다운은 0 이상 유한 값', () => {
+    for (const { limit, cooldown } of gates) {
+      expect(Number.isInteger(DEFAULT_AD_LIMITS[limit])).toBe(true);
+      expect(DEFAULT_AD_LIMITS[limit]).toBeGreaterThanOrEqual(1);
+      expect(Number.isFinite(DEFAULT_AD_LIMITS[cooldown])).toBe(true);
+      expect(DEFAULT_AD_LIMITS[cooldown]).toBeGreaterThanOrEqual(0);
+    }
+  });
+
+  test('일일 한도가 2 이상인 보상 광고는 쿨다운이 0보다 크다(같은 날 연타 방지)', () => {
+    for (const { limit, cooldown } of gates) {
+      if (DEFAULT_AD_LIMITS[limit] >= 2) {
+        expect(DEFAULT_AD_LIMITS[cooldown]).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  test('plotDiscountAd는 일일 한도 1이라 쿨다운 0이 허용된다(하루 단위 캡이 곧 게이트)', () => {
+    expect(DEFAULT_AD_LIMITS.plotDiscountAdDailyLimit).toBe(1);
+    expect(DEFAULT_AD_LIMITS.plotDiscountAdCooldownMs).toBe(0);
+  });
+});

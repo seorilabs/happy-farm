@@ -3007,6 +3007,7 @@ export default function FarmGame({
                     plotDiscountLimit.allowed
                       ? messages.rewardedPlotReadyDesc(
                           Math.round(PLOT_DISCOUNT_AD_PERCENT * 100),
+                          formatMoney(getPlotCost(gameState.unlockedPlotCount), locale),
                           formatMoney(getDiscountedPlotCost(gameState.unlockedPlotCount), locale)
                         )
                       : plotDiscountLimit.reason
