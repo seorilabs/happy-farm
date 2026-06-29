@@ -28,9 +28,33 @@ function hashWeekend(fridayEpochDay: number): number {
   return h >>> 0;
 }
 
-// Areas eligible to be featured (every defined area, gated ones included so the
-// theme rotation stays varied for late-game players too).
+// Every defined area, in declaration order. The featured-area draw indexes into
+// the subset of these the player has actually unlocked (see getEligibleAreas).
 const FEATURABLE_AREAS = balance.areas.map((area) => area.key) as AreaKey[];
+
+// Starter areas (free, ungated) — derived from balance.json at load (always
+// ready, unlike importing constants which would risk a module-init cycle). Used
+// as the defensive fallback when an unlocked-areas list is supplied but empty.
+const STARTER_AREAS = balance.areas
+  .filter((area) => area.unlock?.cost === 0 && area.unlock?.gate == null)
+  .map((area) => area.key) as AreaKey[];
+
+// The pool the weekend theme is drawn from. With no unlockedAreas (legacy
+// callers / pure time queries) every area stays eligible. With a list, only the
+// player's unlocked areas are featurable so the ×1.5 bonus is always reachable;
+// the order (FEATURABLE_AREAS) is preserved so the draw stays deterministic.
+function getEligibleAreas(unlockedAreas?: readonly AreaKey[]): AreaKey[] {
+  if (unlockedAreas == null) {
+    return FEATURABLE_AREAS;
+  }
+  const unlocked = new Set(unlockedAreas);
+  const eligible = FEATURABLE_AREAS.filter((key) => unlocked.has(key));
+  if (eligible.length > 0) {
+    return eligible;
+  }
+  // Corrupt/empty unlock state: fall back to starter so a theme is always defined.
+  return STARTER_AREAS.length > 0 ? STARTER_AREAS : FEATURABLE_AREAS;
+}
 
 // The weekend window + theme, without the (O(crops)) featured-crop list — cheap
 // enough to call on the per-plot hot path.
@@ -42,7 +66,7 @@ type WeeklyEventWindow = {
   windowEndAt: number;
 };
 
-function getWeeklyEventWindow(now: number): WeeklyEventWindow {
+function getWeeklyEventWindow(now: number, unlockedAreas?: readonly AreaKey[]): WeeklyEventWindow {
   const safeNow = Number.isFinite(now) ? now : Date.now();
   const epochDay = Math.floor(safeNow / DAY_MS);
   const dow = dayOfWeek(epochDay);
@@ -61,7 +85,8 @@ function getWeeklyEventWindow(now: number): WeeklyEventWindow {
   const windowStartAt = fridayEpochDay * DAY_MS;
   const windowEndAt = windowStartAt + WEEKEND_LENGTH_DAYS * DAY_MS;
   const active = safeNow >= windowStartAt && safeNow < windowEndAt;
-  const areaKey = FEATURABLE_AREAS[hashWeekend(fridayEpochDay) % FEATURABLE_AREAS.length]!;
+  const eligibleAreas = getEligibleAreas(unlockedAreas);
+  const areaKey = eligibleAreas[hashWeekend(fridayEpochDay) % eligibleAreas.length]!;
 
   return {
     active,
@@ -78,10 +103,15 @@ export type WeeklyEventStatus = WeeklyEventWindow & {
 };
 
 // Returns the weekend-festival status for `now`. Pure and deterministic: the same
-// instant always yields the same theme/multiplier/window with no save state, and
-// the result flips to the next theme automatically at the weekend boundary.
-export function getWeeklyEventStatus(now = Date.now()): WeeklyEventStatus {
-  const window = getWeeklyEventWindow(now);
+// instant (+ unlock state) always yields the same theme/multiplier/window with no
+// save state, and the result flips to the next theme automatically at the weekend
+// boundary. Pass `unlockedAreas` so the featured theme is always an area the
+// player can reach; omit it for a pure time query (legacy/full-pool behavior).
+export function getWeeklyEventStatus(
+  now = Date.now(),
+  unlockedAreas?: readonly AreaKey[]
+): WeeklyEventStatus {
+  const window = getWeeklyEventWindow(now, unlockedAreas);
   const cropKeys = (Object.keys(CROPS) as CropKey[]).filter((cropKey) => CROPS[cropKey]!.area === window.areaKey);
   return { ...window, cropKeys };
 }
@@ -89,8 +119,14 @@ export function getWeeklyEventStatus(now = Date.now()): WeeklyEventStatus {
 // The festival sale multiplier for a single crop at `now`: WEEKLY_EVENT_MULTIPLIER
 // only while the festival is live AND the crop is in the featured area, otherwise
 // 1. Combined multiplicatively with the crop-of-the-day bonus in getCropModifiers.
-export function getWeeklyEventMultiplier(cropKey: CropKey, now = Date.now()): number {
-  const window = getWeeklyEventWindow(now);
+// `unlockedAreas` must match what the UI banner uses so the boosted crop the
+// player sees is the one whose sale actually gets boosted.
+export function getWeeklyEventMultiplier(
+  cropKey: CropKey,
+  now = Date.now(),
+  unlockedAreas?: readonly AreaKey[]
+): number {
+  const window = getWeeklyEventWindow(now, unlockedAreas);
   if (!window.active) {
     return 1;
   }
