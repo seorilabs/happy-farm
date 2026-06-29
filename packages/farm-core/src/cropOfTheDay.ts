@@ -8,10 +8,12 @@ export const CROP_OF_THE_DAY_MULTIPLIER = 2;
 // 심을 수 있으므로 추첨 풀이 비는 비정상 상태의 최종 폴백으로 쓴다.
 // 모듈 간 순환 import 때문에 로드 시점엔 INITIAL_AREA_KEYS가 아직 비어 있을 수
 // 있으므로, 첫 호출 때 지연 계산해 캐시한다.
-let starterCropKeysCache: CropKey[] | null = null;
-function getStarterCropKeys(): CropKey[] {
+// 한 번만 계산해 freeze한 뒤 공유한다 — 호출자가 배열을 변형해 폴백 풀을
+// 오염시키는 일을 막는다(반환 타입도 readonly).
+let starterCropKeysCache: readonly CropKey[] | null = null;
+function getStarterCropKeys(): readonly CropKey[] {
   if (starterCropKeysCache == null) {
-    starterCropKeysCache = INITIAL_AREA_KEYS.flatMap(getAreaCropKeys);
+    starterCropKeysCache = Object.freeze(INITIAL_AREA_KEYS.flatMap(getAreaCropKeys));
   }
   return starterCropKeysCache;
 }
@@ -28,9 +30,11 @@ function getPlantableCropKeys(gameState: GameState): CropKey[] {
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-// Unsigned-32 multiplicative hash of a day index. Uses the Knuth multiplicative
-// constant (nearest prime to 2^32 × φ) so consecutive day numbers scatter
-// unpredictably across the crop list rather than cycling in sequence.
+// XOR-seeded unsigned-32 multiplicative hash of a day index. The multiply step
+// uses the Fibonacci-hashing constant 0x9e3779b9 (≈ 2^32 / φ) so consecutive
+// day numbers scatter across the crop list instead of cycling in sequence; the
+// 0x5a3b7f1e XOR seed merely decorrelates small day indices before mixing (it
+// is an arbitrary seed, not a standard constant).
 function hashDay(day: number): number {
   let h = (day ^ 0x5a3b7f1e) >>> 0;
   h = Math.imul(h, 0x9e3779b9) >>> 0;
@@ -65,7 +69,7 @@ export function getCropOfTheDayStatus(
   if (allCropKeys.length === 0) {
     throw new Error('No crops configured');
   }
-  let cropKeys: CropKey[];
+  let cropKeys: readonly CropKey[];
   if (gameState == null) {
     cropKeys = allCropKeys;
   } else {

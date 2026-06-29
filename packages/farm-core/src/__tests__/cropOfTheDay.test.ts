@@ -125,6 +125,17 @@ describe('getCropOfTheDayStatus with game state (해금 작물만 추첨)', () =
     }
   });
 
+  test('starter만 해금된 상태의 추첨 풀 구성이 정확히 starter 5종과 일치한다', () => {
+    const state = createInitialState();
+    // 충분히 많은 날을 돌려 풀의 모든 구성원이 한 번씩은 추첨되게 한다.
+    const drawn = new Set<CropKey>();
+    for (let d = 0; d < 300; d += 1) {
+      drawn.add(getCropOfTheDayStatus(DAY_START + d * DAY_MS, state).cropKey);
+    }
+    // 풀 = starter 5종 정확히(누락도, 초과도 없음) → 폴백/해금 계산 회귀를 잠근다.
+    expect([...drawn].sort()).toEqual([...STARTER_CROP_KEYS].sort());
+  });
+
   test('반환 작물은 언제나 현재 심을 수 있는 작물이다(미해금 작물 미반환)', () => {
     const state = createInitialState();
     for (let d = 0; d < 60; d += 1) {
