@@ -7,6 +7,7 @@ export * from './constants';
 export * from './cropOfTheDay';
 export * from './dailyBonus';
 export * from './decorations';
+export * from './environment';
 export * from './growthStage';
 export * from './harvest';
 export * from './mastery';

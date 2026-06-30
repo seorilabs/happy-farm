@@ -97,6 +97,8 @@ import {
   getCollectionSummary,
   type CollectionSummary,
   getCropLabel,
+  getEnvironmentTone,
+  getLocalMinutesOfDay,
   getDailyMissionsSnapshot,
   claimMission,
   recordAdWatchProgress,
@@ -1584,6 +1586,14 @@ export default function FarmGame({
     return () => clearInterval(id);
   }, []);
 
+  // Time-of-day backdrop. The 250ms game tick (the `tick` state) already
+  // re-renders this component, so each render reads the current local
+  // minute-of-day and memoizes the tone on the integer minute — the background
+  // color recomputes at most once per minute (no extra interval, no per-tick
+  // churn) and shifts gradually across day/dusk/night.
+  const minutesOfDay = getLocalMinutesOfDay(new Date());
+  const environmentTone = useMemo(() => getEnvironmentTone(minutesOfDay), [minutesOfDay]);
+
   // Header stats show the full modifier stack (upgrades, mastery-independent
   // prestige skills, region scaling) so the display matches the actual math;
   // the ad boost stays on its own line.
@@ -2730,7 +2740,7 @@ export default function FarmGame({
   const onboardingShopHighlight = onboardingStep === 'unlock';
 
   return (
-    <View style={styles.root}>
+    <View testID="farm-root" style={[styles.root, { backgroundColor: environmentTone.backgroundColor }]}>
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <View style={[styles.headerTop, isMobileMarket && styles.mobileHeaderTop]}>
           <View style={[styles.titleGroup, isMobileMarket && styles.mobileTitleGroup]}>
