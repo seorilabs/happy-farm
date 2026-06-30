@@ -114,6 +114,21 @@ export const INTERSTITIAL_MILESTONE_COOLDOWN_MS = balance.ads.interstitialMilest
 // session-return ad non-intrusive for players who reopen the app often.
 export const RETURN_INTERSTITIAL_COOLDOWN_MS = balance.ads.returnInterstitialCooldownMs;
 
+// Harvest combo pacing (canonical balance data). The window is how long after a
+// manual harvest the next one still extends the streak; the thresholds gate the
+// great/legendary tier escalation. Sourced from balance.json so designers tune
+// combo pacing without touching the UI.
+export const COMBO_WINDOW_MS = balance.combo.windowMs;
+export const COMBO_GREAT_THRESHOLD = balance.combo.greatThreshold;
+export const COMBO_LEGENDARY_THRESHOLD = balance.combo.legendaryThreshold;
+// Invariant guard: the great tier must be reached before the legendary tier, or
+// the tier escalation is incoherent. Fail fast on a misconfigured balance file.
+if (!(COMBO_GREAT_THRESHOLD < COMBO_LEGENDARY_THRESHOLD)) {
+  throw new Error(
+    `Invalid combo thresholds: greatThreshold (${COMBO_GREAT_THRESHOLD}) must be < legendaryThreshold (${COMBO_LEGENDARY_THRESHOLD})`
+  );
+}
+
 // Raw grow-time milliseconds removed by one growth-skip ad, given the plot's
 // current remaining grow time (the raw scale getPlotRemainingGrowthMs returns).
 // max(flat floor, percent of remaining), never more than the remainder itself —

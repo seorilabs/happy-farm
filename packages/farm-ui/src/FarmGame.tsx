@@ -97,6 +97,9 @@ import {
   getCollectionSummary,
   type CollectionSummary,
   getCropLabel,
+  COMBO_WINDOW_MS,
+  COMBO_GREAT_THRESHOLD,
+  COMBO_LEGENDARY_THRESHOLD,
   getEnvironmentTone,
   getLocalMinutesOfDay,
   getDailyMissionsSnapshot,
@@ -185,12 +188,10 @@ const HARVEST_ALL_MIN_COUNT = 2;
 // is selected and at least this many empty plots are waiting, so single-tap
 // planting stays the norm and the batch button is reserved for the chore case.
 const PLANT_ALL_MIN_COUNT = 2;
-// Harvest combo: the window (ms) within which consecutive manual harvests
-// build a streak counter. Tier thresholds gate icon/color escalation and
-// audio milestone cues.
-const COMBO_WINDOW_MS = 1500;
-export const COMBO_GREAT_THRESHOLD = 5;
-export const COMBO_LEGENDARY_THRESHOLD = 10;
+// Harvest combo pacing (window + tier thresholds) now lives in balance.json and
+// is imported from farm-core above. Re-exported so existing consumers/tests keep
+// reading the thresholds from this module.
+export { COMBO_GREAT_THRESHOLD, COMBO_LEGENDARY_THRESHOLD };
 export const MASTERY_RANK_UP_CELEBRATION_DURATION_MS = 2600;
 export const PRESTIGE_GRADUATION_CELEBRATION_DURATION_MS = 3500;
 export const FIRST_HARVEST_CELEBRATION_DURATION_MS = 3200;

@@ -187,6 +187,12 @@
       { "key": "gene_artisan", "icon": "🧬", "track": "breed_collector", "tier": 3 }
     ]
   },
+  "combo": {
+    "agentPurpose": "Harvest combo pacing. windowMs is how long after a manual harvest the next one still extends the streak; greatThreshold/legendaryThreshold gate the tier escalation (icon/color/audio). Invariant: greatThreshold < legendaryThreshold. Tune here so combo pacing is data-driven rather than hardcoded in the UI.",
+    "windowMs": 1500,
+    "greatThreshold": 5,
+    "legendaryThreshold": 10
+  },
   "missions": {
     "agentPurpose": "Daily mission rotation. Three deterministic missions per UTC day (one per slot) driving active play: harvest count, harvest-in-featured-area, and watch a rewarded ad. Targets rotate per day via a date hash; the featured area is drawn from the player's unlocked areas. Stateless except for progress/claim tracking in GameState.dailyMissionState (meta layer, survives prestige). Tune targets/rewards here.",
     "slots": [
