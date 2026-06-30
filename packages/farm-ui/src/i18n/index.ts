@@ -39,6 +39,11 @@ const KO_FARM_MESSAGES = {
   researchSection: '농업 연구소',
   researchSummary: (researchLevel: number, speedLevel: number, profitLevel: number) =>
     `현재 연구 Lv.${researchLevel} · 성장속도 Lv.${speedLevel} / 수익률 Lv.${profitLevel}`,
+  decorationSection: '농장 꾸미기',
+  decorationSummary: '남는 골드로 농장을 꾸며 보세요. 효과는 없지만 환생해도 그대로 남아요.',
+  decorationOwnedBadge: '보유 중',
+  decorationOwnedDesc: (description: string) => `${description} (이미 보유 중)`,
+  decorationPurchasedToast: (name: string) => `${name}을(를) 농장에 배치했어요.`,
   soundSection: '사운드',
   notificationSection: '알림',
   languageSection: '언어',
@@ -330,6 +335,11 @@ const EN_FARM_MESSAGES: FarmMessages = {
   researchSection: 'Research Lab',
   researchSummary: (researchLevel, speedLevel, profitLevel) =>
     `Research Lv.${researchLevel} · Growth Lv.${speedLevel} / Profit Lv.${profitLevel}`,
+  decorationSection: 'Decorations',
+  decorationSummary: 'Spend spare gold to decorate your farm. Cosmetic only, and kept across prestige.',
+  decorationOwnedBadge: 'Owned',
+  decorationOwnedDesc: (description) => `${description} (already owned)`,
+  decorationPurchasedToast: (name) => `Placed ${name} on your farm.`,
   soundSection: 'Sound',
   notificationSection: 'Notifications',
   languageSection: 'Language',

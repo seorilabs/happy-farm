@@ -2,6 +2,7 @@ import type {
   AchievementTrackKey,
   AreaKey,
   CropKey,
+  DecorationKey,
   MasteryRankKey,
   MutationKey,
   PrestigeSkillKey,
@@ -172,6 +173,24 @@ const KO_AREA_LABELS = {
     description: '연구로 해금한 신품종을 재배하는 특수 구역',
   },
 } satisfies Record<AreaKey, AreaLabel>;
+
+const KO_DECORATION_LABELS = {
+  signpost: { name: '표지판', description: '농장 입구를 알리는 아담한 표지판' },
+  fence: { name: '울타리', description: '구역을 정돈해 주는 나무 울타리' },
+  scarecrow: { name: '허수아비', description: '밭을 지키는 든든한 허수아비' },
+  flowerbed: { name: '꽃밭', description: '농장을 화사하게 물들이는 꽃밭' },
+  pond: { name: '연못', description: '잔잔한 분위기를 더하는 작은 연못' },
+  lantern: { name: '등불', description: '저녁 농장을 밝히는 따뜻한 등불' },
+} satisfies Record<DecorationKey, DescribedLabel>;
+
+const EN_DECORATION_LABELS = {
+  signpost: { name: 'Signpost', description: 'A tidy sign marking your farm entrance.' },
+  fence: { name: 'Fence', description: 'A wooden fence that tidies up an area.' },
+  scarecrow: { name: 'Scarecrow', description: 'A trusty scarecrow watching over the field.' },
+  flowerbed: { name: 'Flower Bed', description: 'A bright flower bed that livens up the farm.' },
+  pond: { name: 'Pond', description: 'A small pond that adds a calm touch.' },
+  lantern: { name: 'Lantern', description: 'A warm lantern that lights the evening farm.' },
+} satisfies Record<DecorationKey, DescribedLabel>;
 
 const EN_AREA_LABELS = {
   starter_field: {
@@ -371,6 +390,11 @@ const AREA_LABELS: Record<SupportedLocale, Record<AreaKey, AreaLabel>> = {
   'en-US': EN_AREA_LABELS,
 };
 
+const DECORATION_LABELS: Record<SupportedLocale, Record<DecorationKey, DescribedLabel>> = {
+  'ko-KR': KO_DECORATION_LABELS,
+  'en-US': EN_DECORATION_LABELS,
+};
+
 export function getCropLabel(cropKey: CropKey, locale: SupportedLocale = DEFAULT_LOCALE): CropLabel {
   const labels = CROP_LABELS[locale] ?? CROP_LABELS[DEFAULT_LOCALE];
   const label = labels[cropKey] ?? CROP_LABELS[DEFAULT_LOCALE][cropKey];
@@ -385,6 +409,18 @@ export function getAreaLabel(areaKey: AreaKey, locale: SupportedLocale = DEFAULT
   const label = labels[areaKey] ?? AREA_LABELS[DEFAULT_LOCALE][areaKey];
   if (label == null) {
     throw new Error(`Missing area label: ${areaKey}`);
+  }
+  return label;
+}
+
+export function getDecorationLabel(
+  decorationKey: DecorationKey,
+  locale: SupportedLocale = DEFAULT_LOCALE
+): DescribedLabel {
+  const labels = DECORATION_LABELS[locale] ?? DECORATION_LABELS[DEFAULT_LOCALE];
+  const label = labels[decorationKey] ?? DECORATION_LABELS[DEFAULT_LOCALE][decorationKey];
+  if (label == null) {
+    throw new Error(`Missing decoration label: ${decorationKey}`);
   }
   return label;
 }

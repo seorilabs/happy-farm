@@ -11,6 +11,8 @@ export type MutationKey = (typeof balance.mutations.kinds)[number]['key'];
 
 export type ResearchNodeKey = (typeof balance.research.nodes)[number]['key'];
 
+export type DecorationKey = (typeof balance.decorations.items)[number]['key'];
+
 export type BreedingRecipeKey = (typeof balance.breeding.recipes)[number]['crop'];
 
 export type ResearchState = {
@@ -134,6 +136,10 @@ export type GameState = {
   // chain-farm income concept, then never again. A meta-layer flag so it
   // persists across every subsequent graduation.
   prestigeGuideSeen: boolean;
+  // Cosmetic decorations the player has bought and placed on the farm. Purely
+  // self-expression / late-game gold sink — owning a decoration has no gameplay
+  // effect. A meta-layer field so the collection persists across every prestige.
+  placedDecorations: DecorationKey[];
 };
 
 // Prestige reset boundary. Farm-layer fields are wiped when the player
@@ -163,6 +169,7 @@ export const META_LAYER_KEYS = [
   'onboardingCompleted',
   'harvestNotificationPromptSeen',
   'prestigeGuideSeen',
+  'placedDecorations',
 ] as const satisfies readonly (keyof GameState)[];
 
 export type FarmLayerKey = (typeof FARM_LAYER_KEYS)[number];
