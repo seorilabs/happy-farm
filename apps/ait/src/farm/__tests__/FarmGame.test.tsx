@@ -1,7 +1,7 @@
 /// <reference types="jest" />
 
 import React from 'react';
-import { Vibration } from 'react-native';
+import { StyleSheet, Vibration } from 'react-native';
 import { act, cleanup, fireEvent, render, waitFor, within } from '@testing-library/react-native';
 import {
   ACHIEVEMENT_TRACKS,
@@ -23,6 +23,8 @@ import {
   formatMoney,
   getActiveFarmOfflineGold,
   getAreaCropKeys,
+  getEnvironmentTone,
+  getLocalMinutesOfDay,
   getMasteryThresholds,
   getPrestigeCost,
   getRegionArchetypeLabel,
@@ -237,6 +239,29 @@ describe('FarmGame UI flow', () => {
   afterEach(() => {
     cleanup();
     jest.useRealTimers();
+  });
+
+  test('applies the time-of-day environment tone to the top-level background', async () => {
+    const screen = await renderGame(null);
+
+    const rootBackground = () =>
+      StyleSheet.flatten(screen.getByTestId('farm-root').props.style).backgroundColor;
+    const expectedToneNow = () => getEnvironmentTone(getLocalMinutesOfDay(new Date())).backgroundColor;
+
+    // The backdrop reflects the current local time's tone (NOW from beforeEach).
+    expect(rootBackground()).toBe(expectedToneNow());
+    const firstBackground = rootBackground();
+
+    // Advancing 12h lands in a different phase; one game tick re-renders and the
+    // backdrop tracks the new minute's tone (proves the wiring, not just the math).
+    await act(async () => {
+      jest.setSystemTime(NOW + 12 * 60 * 60 * 1000);
+      jest.advanceTimersByTime(GAME_TICK_INTERVAL_MS);
+      await Promise.resolve();
+    });
+
+    expect(rootBackground()).toBe(expectedToneNow());
+    expect(rootBackground()).not.toBe(firstBackground);
   });
 
   test('renders initial farm and supports a plant-grow-harvest loop', async () => {

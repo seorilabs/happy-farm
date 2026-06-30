@@ -2740,7 +2740,7 @@ export default function FarmGame({
   const onboardingShopHighlight = onboardingStep === 'unlock';
 
   return (
-    <View style={[styles.root, { backgroundColor: environmentTone.backgroundColor }]}>
+    <View testID="farm-root" style={[styles.root, { backgroundColor: environmentTone.backgroundColor }]}>
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <View style={[styles.headerTop, isMobileMarket && styles.mobileHeaderTop]}>
           <View style={[styles.titleGroup, isMobileMarket && styles.mobileTitleGroup]}>
