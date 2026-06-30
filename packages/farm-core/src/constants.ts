@@ -10,6 +10,7 @@ import {
 } from './achievements';
 import { createInitialPrestigeProgress, normalizeChainFarms, normalizePrestigeProgress } from './prestige';
 import { createInitialPlacedDecorations, normalizePlacedDecorations } from './decorations';
+import { createInitialDailyMissionState, normalizeDailyMissionState } from './missions';
 import {
   createInitialAutomationSettings,
   createInitialResearchState,
@@ -709,6 +710,7 @@ export function createInitialState(): GameState {
       state: 0 as PlotState,
     })),
     dailyBonusState: { lastClaimedAt: null, streak: 0 },
+    dailyMissionState: createInitialDailyMissionState(),
     onboardingCompleted: false,
     harvestNotificationPromptSeen: false,
     prestigeGuideSeen: false,
@@ -857,6 +859,7 @@ export function migrateLoadedState(loaded: Partial<GameState>, base: GameState):
   });
 
   merged.dailyBonusState = normalizeDailyBonusState(loaded.dailyBonusState);
+  merged.dailyMissionState = normalizeDailyMissionState(loaded.dailyMissionState);
 
   // A save without the flag belongs to a player who already started before
   // onboarding existed, so treat it as completed and never resurface the

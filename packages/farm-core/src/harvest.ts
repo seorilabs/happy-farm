@@ -10,6 +10,7 @@ import {
   type MutationKind,
 } from './mastery';
 import { getDonationRp, isCropPlantable, isNodeUnlocked } from './research';
+import { recordHarvestProgress } from './missions';
 
 export type HarvestOptions = {
   now?: number;
@@ -246,6 +247,9 @@ export function performHarvest(gameState: GameState, plotIndex: number, options:
     harvestedCropKeys,
     harvestCounts,
     mutationsDiscovered,
+    // Every harvest path funnels through here, so daily-mission harvest progress
+    // (total + per-area) is tracked once at the canonical pipeline.
+    dailyMissionState: recordHarvestProgress(gameState.dailyMissionState, crop.area, now, gameState.unlockedAreas),
     research: {
       ...gameState.research,
       points: gameState.research.points + rpGained,
