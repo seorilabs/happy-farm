@@ -8,11 +8,26 @@ import { CROPS } from './constants';
 // recurring reason to come back. Mirrors cropOfTheDay's deterministic-hash design
 // so the same instant always yields the same event with no persistence.
 
-export const WEEKLY_EVENT_MULTIPLIER = 1.5;
+// Festival sale bonus and window length now live in balance.json so live ops can
+// tune event strength/duration without code changes. Defaults stay 1.5 / 3.
+// Both are validated at module load so a malformed balance file fails fast rather
+// than silently producing a broken (zero-length / negative / NaN) festival window.
+export const WEEKLY_EVENT_MULTIPLIER = balance.weeklyEvent.sellMultiplier;
+if (!Number.isFinite(WEEKLY_EVENT_MULTIPLIER) || WEEKLY_EVENT_MULTIPLIER < 1) {
+  throw new Error(
+    `Invalid weeklyEvent.sellMultiplier: ${WEEKLY_EVENT_MULTIPLIER} (must be a finite number >= 1)`
+  );
+}
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-// Friday + Saturday + Sunday.
-const WEEKEND_LENGTH_DAYS = 3;
+// Friday + Saturday + Sunday by default. Must be a positive integer so the active
+// window [windowStart, windowStart + n*DAY) is well-defined.
+const WEEKEND_LENGTH_DAYS = balance.weeklyEvent.weekendLengthDays;
+if (!Number.isInteger(WEEKEND_LENGTH_DAYS) || WEEKEND_LENGTH_DAYS < 1) {
+  throw new Error(
+    `Invalid weeklyEvent.weekendLengthDays: ${WEEKEND_LENGTH_DAYS} (must be a positive integer)`
+  );
+}
 
 // epoch day 0 (1970-01-01) was a Thursday, so dayOfWeek 0=Thu, 1=Fri … 6=Wed.
 function dayOfWeek(epochDay: number): number {

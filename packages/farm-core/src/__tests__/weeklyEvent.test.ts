@@ -4,16 +4,33 @@ import { getWeeklyEventStatus, getWeeklyEventMultiplier, WEEKLY_EVENT_MULTIPLIER
 import { CROPS, createInitialState } from '../constants';
 import { getCropModifiers } from '../modifiers';
 import { getCropOfTheDayStatus } from '../cropOfTheDay';
+import balance from '../balance.json';
 import type { AreaKey, CropKey } from '../types';
 
 // Every distinct area key, derived from the crop table.
 const ALL_AREAS = [...new Set((Object.keys(CROPS) as CropKey[]).map((key) => CROPS[key]!.area))] as AreaKey[];
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-// 2026-06-26 is a Friday (UTC); the weekend window runs Fri–Sun (3 days).
+// 2026-06-26 is a Friday (UTC); the festival window runs from Friday for the
+// balance-configured number of days (default 3 → Fri–Sun). Derive the bounds from
+// balance.json so these assertions track the data instead of a hardcoded 3.
+const WEEKEND_LENGTH_DAYS = balance.weeklyEvent.weekendLengthDays;
 const FRI_START = Date.UTC(2026, 5, 26);
-const WINDOW_END = FRI_START + 3 * DAY_MS; // Monday 00:00 UTC
+const WINDOW_END = FRI_START + WEEKEND_LENGTH_DAYS * DAY_MS;
 const FRI_NOON = FRI_START + 12 * 60 * 60 * 1000;
+
+describe('weeklyEvent balance data', () => {
+  test('multiplier and window length are sourced from balance.json with unchanged defaults', () => {
+    // Multiplier comes from balance.json and keeps the historical 1.5 default.
+    expect(WEEKLY_EVENT_MULTIPLIER).toBe(balance.weeklyEvent.sellMultiplier);
+    expect(balance.weeklyEvent.sellMultiplier).toBe(1.5);
+    // The live window length (Fri–Sun) is driven by balance.json's 3-day default,
+    // reflected in the active window bounds.
+    expect(balance.weeklyEvent.weekendLengthDays).toBe(3);
+    const fri = getWeeklyEventStatus(FRI_NOON);
+    expect(fri.windowEndAt - fri.windowStartAt).toBe(balance.weeklyEvent.weekendLengthDays * DAY_MS);
+  });
+});
 
 describe('getWeeklyEventStatus', () => {
   test('is active across the Fri–Sun window with a stable theme and bounds', () => {
@@ -23,8 +40,13 @@ describe('getWeeklyEventStatus', () => {
     expect(fri.windowEndAt).toBe(WINDOW_END);
     expect(fri.multiplier).toBe(WEEKLY_EVENT_MULTIPLIER);
     expect(fri.cropKeys.length).toBeGreaterThan(0);
-    // Theme + window stay constant for every instant in the same weekend.
-    for (const offset of [0, DAY_MS, 2 * DAY_MS, 3 * DAY_MS - 1]) {
+    // Theme + window stay constant for every instant in the same weekend: the
+    // start of each in-window day plus the final instant before it closes.
+    const inWindowOffsets = [
+      ...Array.from({ length: WEEKEND_LENGTH_DAYS }, (_, day) => day * DAY_MS),
+      WEEKEND_LENGTH_DAYS * DAY_MS - 1,
+    ];
+    for (const offset of inWindowOffsets) {
       const status = getWeeklyEventStatus(FRI_START + offset);
       expect(status.active).toBe(true);
       expect(status.areaKey).toBe(fri.areaKey);
