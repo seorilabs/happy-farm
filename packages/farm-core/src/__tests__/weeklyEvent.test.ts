@@ -4,6 +4,7 @@ import { getWeeklyEventStatus, getWeeklyEventMultiplier, WEEKLY_EVENT_MULTIPLIER
 import { CROPS, createInitialState } from '../constants';
 import { getCropModifiers } from '../modifiers';
 import { getCropOfTheDayStatus } from '../cropOfTheDay';
+import balance from '../balance.json';
 import type { AreaKey, CropKey } from '../types';
 
 // Every distinct area key, derived from the crop table.
@@ -14,6 +15,19 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const FRI_START = Date.UTC(2026, 5, 26);
 const WINDOW_END = FRI_START + 3 * DAY_MS; // Monday 00:00 UTC
 const FRI_NOON = FRI_START + 12 * 60 * 60 * 1000;
+
+describe('weeklyEvent balance data', () => {
+  test('multiplier and window length are sourced from balance.json with unchanged defaults', () => {
+    // Multiplier comes from balance.json and keeps the historical 1.5 default.
+    expect(WEEKLY_EVENT_MULTIPLIER).toBe(balance.weeklyEvent.sellMultiplier);
+    expect(balance.weeklyEvent.sellMultiplier).toBe(1.5);
+    // The live window length (Fri–Sun) is driven by balance.json's 3-day default,
+    // reflected in the active window bounds.
+    expect(balance.weeklyEvent.weekendLengthDays).toBe(3);
+    const fri = getWeeklyEventStatus(FRI_NOON);
+    expect(fri.windowEndAt - fri.windowStartAt).toBe(balance.weeklyEvent.weekendLengthDays * DAY_MS);
+  });
+});
 
 describe('getWeeklyEventStatus', () => {
   test('is active across the Fri–Sun window with a stable theme and bounds', () => {
