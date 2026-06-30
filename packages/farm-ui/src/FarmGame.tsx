@@ -97,6 +97,11 @@ import {
   getCollectionSummary,
   type CollectionSummary,
   getCropLabel,
+  getDecorationLabel,
+  DECORATIONS,
+  canPurchaseDecoration,
+  isDecorationOwned,
+  purchaseDecoration,
   getCropEconomyEstimate,
   getGameAnalyticsContext,
   getHarvestBonusBoostStatus,
@@ -3088,6 +3093,16 @@ export default function FarmGame({
               onDone={toast}
               onMilestone={() => void maybeShowMilestoneAd()}
             />
+
+            <Text style={styles.sheetSectionTitle}>{messages.decorationSection}</Text>
+            <Text style={styles.researchSummary}>{messages.decorationSummary}</Text>
+            <ShopDecorationRows
+              gameState={gameState}
+              locale={locale}
+              messages={messages}
+              setGameState={setGameState}
+              onDone={toast}
+            />
           </View>
         ) : null}
 
@@ -5128,6 +5143,54 @@ function ShopAreaUnlockRows({
     <>
       {sequentialAreas.map((area, index) => renderAreaCard(area, index === 0))}
       {gatedAreas.map((area) => renderAreaCard(area, true))}
+    </>
+  );
+}
+
+function ShopDecorationRows({
+  gameState,
+  locale,
+  messages,
+  setGameState,
+  onDone,
+}: {
+  gameState: GameState;
+  locale: SupportedLocale;
+  messages: FarmMessages;
+  setGameState: React.Dispatch<React.SetStateAction<GameState>>;
+  onDone: (msg: string) => void;
+}) {
+  return (
+    <>
+      {DECORATIONS.map((decoration) => {
+        const label = getDecorationLabel(decoration.key, locale);
+        const owned = isDecorationOwned(gameState.placedDecorations, decoration.key);
+        const affordable = canPurchaseDecoration(gameState, decoration.key);
+        const goldProgress =
+          owned || affordable ? undefined : Math.min(1, gameState.gold / decoration.price);
+
+        return (
+          <ShopCard
+            key={decoration.key}
+            title={`${decoration.icon} ${label.name}`}
+            desc={owned ? messages.decorationOwnedDesc(label.description) : label.description}
+            price={owned ? messages.decorationOwnedBadge : `${formatMoney(decoration.price, locale)}G`}
+            disabled={owned || !affordable}
+            goldProgress={goldProgress}
+            onPress={() => {
+              setGameState((state) => {
+                const next = purchaseDecoration(state, decoration.key);
+                if (next == null) {
+                  onDone(messages.insufficientGoldToast);
+                  return state;
+                }
+                onDone(messages.decorationPurchasedToast(label.name));
+                return next;
+              });
+            }}
+          />
+        );
+      })}
     </>
   );
 }

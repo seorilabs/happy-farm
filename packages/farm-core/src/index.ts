@@ -6,6 +6,7 @@ export * from './commands';
 export * from './constants';
 export * from './cropOfTheDay';
 export * from './dailyBonus';
+export * from './decorations';
 export * from './growthStage';
 export * from './harvest';
 export * from './mastery';
@@ -27,6 +28,7 @@ export {
   getCoreMessages,
   getCropLabel,
   getCropLabels,
+  getDecorationLabel,
   getMasteryRankLabel,
   getMutationLabel,
   getPrestigeSkillLabel,

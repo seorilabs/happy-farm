@@ -9,6 +9,7 @@ import {
   normalizeLifetimeStats,
 } from './achievements';
 import { createInitialPrestigeProgress, normalizeChainFarms, normalizePrestigeProgress } from './prestige';
+import { createInitialPlacedDecorations, normalizePlacedDecorations } from './decorations';
 import {
   createInitialAutomationSettings,
   createInitialResearchState,
@@ -711,6 +712,7 @@ export function createInitialState(): GameState {
     onboardingCompleted: false,
     harvestNotificationPromptSeen: false,
     prestigeGuideSeen: false,
+    placedDecorations: createInitialPlacedDecorations(),
   };
 }
 
@@ -871,5 +873,10 @@ export function migrateLoadedState(loaded: Partial<GameState>, base: GameState):
     typeof loaded.harvestNotificationPromptSeen === 'boolean' ? loaded.harvestNotificationPromptSeen : true;
 
   if (merged.unlockedAreas.length === 0) merged.unlockedAreas = INITIAL_AREA_KEYS;
+
+  // Cosmetic decorations: drop any keys missing from the current catalog and
+  // de-duplicate so a legacy/corrupt save never renders an unknown decoration.
+  merged.placedDecorations = normalizePlacedDecorations(loaded.placedDecorations);
+
   return merged;
 }
