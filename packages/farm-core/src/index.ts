@@ -10,6 +10,7 @@ export * from './decorations';
 export * from './growthStage';
 export * from './harvest';
 export * from './mastery';
+export * from './missions';
 export * from './modifiers';
 export * from './prestige';
 export * from './research';

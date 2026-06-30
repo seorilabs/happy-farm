@@ -1,5 +1,6 @@
 import balance from './balance.json';
 import type { DailyBonusState } from './dailyBonus';
+import type { DailyMissionState } from './missions';
 
 export type CropKey = (typeof balance.crops)[number]['key'];
 
@@ -123,6 +124,11 @@ export type GameState = {
   research: ResearchState;
   automationSettings: AutomationSettings;
   dailyBonusState: DailyBonusState;
+  // Daily mission (today's goals) progress/claim tracking. The missions
+  // themselves are derived deterministically from the date, so only progress and
+  // which slots were claimed need to persist. A meta-layer field so daily
+  // engagement carries across prestige, like dailyBonusState.
+  dailyMissionState: DailyMissionState;
   // Whether the first-session onboarding guide was completed or skipped. A
   // one-time flag so the coachmarks show only to new players and never return.
   onboardingCompleted: boolean;
@@ -166,6 +172,7 @@ export const META_LAYER_KEYS = [
   'research',
   'automationSettings',
   'dailyBonusState',
+  'dailyMissionState',
   'onboardingCompleted',
   'harvestNotificationPromptSeen',
   'prestigeGuideSeen',

@@ -187,6 +187,14 @@
       { "key": "gene_artisan", "icon": "🧬", "track": "breed_collector", "tier": 3 }
     ]
   },
+  "missions": {
+    "agentPurpose": "Daily mission rotation. Three deterministic missions per UTC day (one per slot) driving active play: harvest count, harvest-in-featured-area, and watch a rewarded ad. Targets rotate per day via a date hash; the featured area is drawn from the player's unlocked areas. Stateless except for progress/claim tracking in GameState.dailyMissionState (meta layer, survives prestige). Tune targets/rewards here.",
+    "slots": [
+      { "type": "harvest", "targets": [12, 16, 20, 24, 28], "rewardGold": 300 },
+      { "type": "harvest_area", "targets": [5, 7, 9, 11], "rewardGold": 400 },
+      { "type": "watch_ad", "targets": [1], "rewardGold": 250 }
+    ]
+  },
   "decorations": {
     "agentPurpose": "Late-game gold sink + self-expression. Cosmetic-only farm decorations bought with gold; ownership lives in the meta layer (placedDecorations) and survives prestige. Prices climb so they soak up surplus gold once expansion/upgrades are exhausted. Add new items here (key/icon/price); localized names live in i18n/labels.ts.",
     "items": [

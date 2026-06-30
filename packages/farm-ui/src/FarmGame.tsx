@@ -97,6 +97,9 @@ import {
   getCollectionSummary,
   type CollectionSummary,
   getCropLabel,
+  getDailyMissionsSnapshot,
+  claimMission,
+  recordAdWatchProgress,
   getDecorationLabel,
   DECORATIONS,
   canPurchaseDecoration,
@@ -154,6 +157,7 @@ import { ChainMapSheet, PrestigeConfirmSheet } from './components/ChainMapSheet'
 import { CollectionSheet } from './components/CollectionSheet';
 import { FarmOnboarding, ONBOARDING_STEPS, type OnboardingStep } from './components/FarmOnboarding';
 import { LabSheet } from './components/LabSheet';
+import { MissionsSheet } from './components/MissionsSheet';
 import { AdRewardCard, CloudSaveSection, SettingToggle, SheetAction, ShopCard, sheetPartStyles } from './components/SheetParts';
 import { MAIN_HORIZONTAL_PADDING, PLOT_COLUMNS, PLOT_GAP } from './farmGameLayout';
 import { styles } from './farmGameStyles';
@@ -289,6 +293,7 @@ const FIRST_AREA = getFirstArea();
 type ActiveSheet =
   | { type: 'shop' }
   | { type: 'collection' }
+  | { type: 'missions' }
   | { type: 'achievements' }
   | { type: 'lab' }
   | { type: 'map' }
@@ -1606,6 +1611,15 @@ export default function FarmGame({
   const collectionSummary = useMemo(() => getCollectionSummary(gameState), [gameState]);
   const claimableCollectionCount = collectionSummary.claimableCount;
   const claimableAchievementCount = useMemo(() => getClaimableAchievementCount(gameState), [gameState]);
+  // Daily-mission badge: how many of today's missions are completed and waiting to
+  // be claimed. Recomputed on every state change; the date only flips at midnight.
+  const missionClaimableCount = useMemo(
+    () =>
+      getDailyMissionsSnapshot(gameState.dailyMissionState, Date.now(), gameState.unlockedAreas).missions.filter(
+        (mission) => mission.claimable
+      ).length,
+    [gameState]
+  );
   const labActionableCount = useMemo(
     () =>
       RESEARCH_NODES.filter((node) => canUnlockNode(gameState, node.key)).length +
@@ -1792,6 +1806,30 @@ export default function FarmGame({
 
   function openAchievements() {
     setActiveSheet({ type: 'achievements' });
+  }
+
+  function openMissions() {
+    setActiveSheet({ type: 'missions' });
+  }
+
+  function claimMissionReward(slot: number) {
+    const now = Date.now();
+    // Functional updater keeps the claim idempotent: a concurrent second tap
+    // evaluates claimMission against the already-updated state, gets null, and
+    // leaves gold untouched. The reward is read from the holder for the toast.
+    const rewardHolder: { gold: number | null } = { gold: null };
+    setGameState((prev) => {
+      const beforeGold = prev.gold;
+      const next = claimMission(prev, slot, now);
+      if (next == null) {
+        return prev;
+      }
+      rewardHolder.gold = next.gold - beforeGold;
+      return next;
+    });
+    if (rewardHolder.gold != null) {
+      toast(messages.missionClaimedToast(formatMoney(rewardHolder.gold, locale)));
+    }
   }
 
   function claimAchievement(trackKey: AchievementTrackKey) {
@@ -2163,6 +2201,8 @@ export default function FarmGame({
       setGameState((state) => ({
         ...state,
         adUsage: recordRewardedAdUsage(state, type, rewardedAt),
+        // Any rewarded-ad view counts toward the "watch an ad" daily mission.
+        dailyMissionState: recordAdWatchProgress(state.dailyMissionState, rewardedAt, state.unlockedAreas),
       }));
       return true;
     }
@@ -2812,6 +2852,12 @@ export default function FarmGame({
             onPress={openShop}
           />
           <NavButton
+            label={messages.missionsButton}
+            badge={missionClaimableCount}
+            accessibilityLabel={messages.missionsButtonAccessibilityLabel}
+            onPress={openMissions}
+          />
+          <NavButton
             label={messages.collectionButton}
             badge={claimableCollectionCount}
             accessibilityLabel={messages.collectionButtonAccessibilityLabel}
@@ -3104,6 +3150,16 @@ export default function FarmGame({
               onDone={toast}
             />
           </View>
+        ) : null}
+
+        {activeSheet?.type === 'missions' ? (
+          <MissionsSheet
+            gameState={gameState}
+            locale={locale}
+            messages={messages}
+            now={Date.now()}
+            onClaim={claimMissionReward}
+          />
         ) : null}
 
         {activeSheet?.type === 'collection' ? (
@@ -4889,6 +4945,9 @@ function getSheetTitle(activeSheet: ActiveSheet, messages: FarmMessages) {
   if (activeSheet?.type === 'collection') {
     return messages.sheetTitleCollection;
   }
+  if (activeSheet?.type === 'missions') {
+    return messages.sheetTitleMissions;
+  }
   return messages.sheetTitleShop;
 }
 
@@ -4902,6 +4961,9 @@ function getSheetDescription(
 ) {
   if (activeSheet?.type === 'collection') {
     return messages.sheetDescriptionCollection(collectionSummary.discoveredCount, collectionSummary.totalCount);
+  }
+  if (activeSheet?.type === 'missions') {
+    return messages.sheetDescriptionMissions;
   }
   if (activeSheet?.type === 'achievements') {
     return messages.sheetDescriptionAchievements;
