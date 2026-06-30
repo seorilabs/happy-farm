@@ -104,6 +104,25 @@ describe('progress tracking', () => {
   });
 });
 
+describe('featured area is frozen for the day', () => {
+  test('rollover keeps the same areaKeys when the day is unchanged, even if unlocks change', () => {
+    const rolled = rolloverDailyMissions(createInitialDailyMissionState(), getMissionDayKey(DAY_A), ALL_AREAS);
+    // Same day but a shrunken unlocked set must NOT re-pick the featured area.
+    const sameDay = rolloverDailyMissions(rolled, getMissionDayKey(DAY_A + 5000), [ALL_AREAS[0]!]);
+    expect(sameDay).toBe(rolled);
+    expect(sameDay.areaKeys).toEqual(rolled.areaKeys);
+  });
+
+  test('display and harvest recording agree on the frozen area regardless of unlock drift', () => {
+    const rolled = rolloverDailyMissions(createInitialDailyMissionState(), getMissionDayKey(DAY_A), ALL_AREAS);
+    const snapshot = getDailyMissionsSnapshot(rolled, DAY_A, [ALL_AREAS[0]!]);
+    const areaView = snapshot.missions.find((m) => m.type === 'harvest_area')!;
+    // Harvest in the frozen featured area while unlocks look different — progress still lands.
+    const after = recordHarvestProgress(rolled, areaView.areaKey!, DAY_A, [ALL_AREAS[0]!]);
+    expect(after.progress[areaView.slot]).toBe(1);
+  });
+});
+
 describe('midnight rollover', () => {
   test('same-day re-evaluation preserves progress', () => {
     const start = recordAdWatchProgress(createInitialDailyMissionState(), DAY_A, ALL_AREAS);
@@ -127,7 +146,12 @@ describe('claim guard', () => {
     const mission = getDailyMissions(getMissionDayKey(now), base.unlockedAreas).find((m) => m.slot === slot)!;
     const progress = new Array(3).fill(0);
     progress[slot] = mission.target;
-    const dailyMissionState: DailyMissionState = { dayKey: getMissionDayKey(now), progress, claimedSlots: [] };
+    const dailyMissionState: DailyMissionState = {
+      dayKey: getMissionDayKey(now),
+      areaKeys: new Array(3).fill(null),
+      progress,
+      claimedSlots: [],
+    };
     return { ...base, dailyMissionState };
   }
 
@@ -181,7 +205,12 @@ describe('save migration & prestige', () => {
     const base = createInitialState();
     const withProgress: GameState = {
       ...base,
-      dailyMissionState: { dayKey: getMissionDayKey(DAY_A), progress: [4, 2, 1], claimedSlots: [2] },
+      dailyMissionState: {
+        dayKey: getMissionDayKey(DAY_A),
+        areaKeys: new Array(3).fill(null),
+        progress: [4, 2, 1],
+        claimedSlots: [2],
+      },
     };
     const prestiged = createPrestigedState(withProgress);
     expect(prestiged.dailyMissionState).toEqual(withProgress.dailyMissionState);
