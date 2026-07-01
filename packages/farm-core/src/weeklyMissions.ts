@@ -156,21 +156,38 @@ export function normalizeWeeklyMissionState(value: unknown): WeeklyMissionState 
   return { weekKey, areaKeys, progress, claimedSlots };
 }
 
-// 주가 바뀌었으면(또는 구역 스냅샷이 비정상이면) "이번 주 구역"을 새로 뽑고 진행도/수령을
-// 초기화한다. 같은 주면 areaKeys·진행도를 그대로 보존해 한 주 동안 미션이 불변이다.
+// 주가 바뀌었으면 "이번 주 구역"을 새로 뽑고 진행도/수령을 초기화한다. 같은 주면 진행도/수령을
+// 절대 리셋하지 않는다 — 슬롯 수(WEEKLY_MISSION_COUNT)가 balance 변경으로 늘어나 기존 세이브의
+// 배열 길이가 달라져도, 같은 주 안에서는 누적 진행도/수령을 보존하고 배열 길이만 현재 슬롯 수에
+// 맞춘다(새 슬롯은 null/0으로 패딩, 삭제된 슬롯은 뒤에서 잘림). 이렇게 하지 않으면 새 슬롯 도입
+// 직후 같은 주에 접속만 해도 진행/수령 메타가 통째로 유실된다.
 export function rolloverWeeklyMissions(
   state: WeeklyMissionState,
   weekKey: string,
   unlockedAreas?: readonly AreaKey[]
 ): WeeklyMissionState {
-  if (state.weekKey === weekKey && state.areaKeys.length === WEEKLY_MISSION_COUNT) {
+  if (state.weekKey !== weekKey) {
+    return {
+      weekKey,
+      areaKeys: pickFeaturedAreas(weekKey, unlockedAreas),
+      progress: new Array(WEEKLY_MISSION_COUNT).fill(0),
+      claimedSlots: [],
+    };
+  }
+  // 같은 주 + 배열 길이도 일치 → 그대로(참조 보존).
+  if (state.areaKeys.length === WEEKLY_MISSION_COUNT && state.progress.length === WEEKLY_MISSION_COUNT) {
     return state;
   }
+  // 같은 주지만 슬롯 수가 바뀜: 진행도/수령을 보존한 채 배열만 현재 슬롯 수로 리사이즈한다.
+  const featured = pickFeaturedAreas(weekKey, unlockedAreas);
   return {
     weekKey,
-    areaKeys: pickFeaturedAreas(weekKey, unlockedAreas),
-    progress: new Array(WEEKLY_MISSION_COUNT).fill(0),
-    claimedSlots: [],
+    areaKeys: Array.from(
+      { length: WEEKLY_MISSION_COUNT },
+      (_, index) => state.areaKeys[index] ?? featured[index] ?? null
+    ),
+    progress: Array.from({ length: WEEKLY_MISSION_COUNT }, (_, index) => state.progress[index] ?? 0),
+    claimedSlots: state.claimedSlots.filter((slot) => slot < WEEKLY_MISSION_COUNT),
   };
 }
 
@@ -240,6 +257,8 @@ export type WeeklyMissionsSnapshot = {
 };
 
 // 화면 표시용 스냅샷. now 기준으로 롤오버를 적용한 뒤 각 미션의 진행도·완료·수령·수령가능을 계산한다.
+// now 기본값은 일일 미션 스냅샷과 동일한 규약이다: 호출측(FarmGame/record 경로)은 같은 흐름에서
+// 동일한 now(Date.now()/rewardedAt)를 명시 전달하므로 record와 snapshot이 같은 주 키를 본다.
 export function getWeeklyMissionsSnapshot(
   state: WeeklyMissionState,
   now = Date.now(),

@@ -93,6 +93,19 @@ describe('rollover on the week boundary', () => {
     expect(rolled.progress).toEqual(new Array(WEEK_COUNT).fill(0));
     expect(rolled.claimedSlots).toEqual([]);
   });
+
+  test('same week with shorter arrays (a slot was added later) preserves progress instead of wiping', () => {
+    const key = getMissionWeekKey(MON);
+    // A save persisted before a new weekly slot existed: arrays shorter than the
+    // current slot count. Entering the same week must NOT reset accumulated data.
+    const legacy: WeeklyMissionState = { weekKey: key, areaKeys: [null], progress: [42], claimedSlots: [0] };
+    const rolled = rolloverWeeklyMissions(legacy, key, ALL_AREAS);
+    expect(rolled.weekKey).toBe(key);
+    expect(rolled.progress.length).toBe(WEEK_COUNT);
+    expect(rolled.progress[0]).toBe(42); // preserved, not reset to 0
+    expect(rolled.progress[WEEK_COUNT - 1]).toBe(0); // newly added slot starts at 0
+    expect(rolled.claimedSlots).toContain(0);
+  });
 });
 
 describe('progress accumulation from existing event paths', () => {
