@@ -99,8 +99,10 @@ export function getWheelStatus(state: WheelState, now = Date.now()): WheelStatus
 function clamp01(value: number): number {
   if (!Number.isFinite(value)) return 0;
   if (value < 0) return 0;
-  // rng()가 1을 반환해도 마지막 슬롯 경계를 넘지 않도록 1 미만으로 클램프.
-  if (value >= 1) return 0.999999999;
+  // rng()가 1(또는 그 이상)을 반환해도 [0,1) 범위에 들도록, 1보다 "가능한 한 가까운"
+  // 값으로 클램프한다. 1 - Number.EPSILON은 여전히 1 미만이라 roll < totalWeight가
+  // 유지되어 마지막 슬롯이 정상적으로 선택되며, 마지막 슬롯 확률을 부당하게 깎지 않는다.
+  if (value >= 1) return 1 - Number.EPSILON;
   return value;
 }
 
