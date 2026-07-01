@@ -71,6 +71,17 @@
       "adRewardRatio": 2
     }
   },
+  "wheel": {
+    "agentPurpose": "Daily fortune wheel (free daily spin). One free spin per UTC calendar day (resets at UTC midnight, like cropOfTheDay — not a 24h cooldown). Each spin awards gold = floor(progression-scaled rewarded-gold(ad) payout * slot.goldRatio), so rewards scale with the player's next goal and stay meaningful late-game. Slots are weighted (probability = weight / sum of weights); the jackpot is the rare high-multiplier slot. Reward slots/weights/multipliers are data-driven here so live-ops can tune the wheel (or add RP/ad-multiplier slot types) without code changes. Tune so the expected value stays a modest daily nudge, always below what a full ad-watch loop yields, to preserve the ad incentive.",
+    "slots": [
+      { "key": "gold_small", "icon": "🪙", "weight": 26, "goldRatio": 0.5 },
+      { "key": "gold_normal", "icon": "💰", "weight": 28, "goldRatio": 1 },
+      { "key": "gold_good", "icon": "💵", "weight": 20, "goldRatio": 1.5 },
+      { "key": "gold_great", "icon": "💎", "weight": 15, "goldRatio": 2.5 },
+      { "key": "gold_huge", "icon": "🤑", "weight": 8, "goldRatio": 4 },
+      { "key": "jackpot", "icon": "🎰", "weight": 3, "goldRatio": 10 }
+    ]
+  },
   "mastery": {
     "agentPurpose": "Crop mastery ranks. Cumulative harvest counts per crop reach tier-based thresholds and grant permanent per-crop sell/speed bonuses. Thresholds are indexed by crop tier so slow late-game crops rank up in fewer harvests.",
     "ranks": [

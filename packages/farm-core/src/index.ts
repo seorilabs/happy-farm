@@ -17,6 +17,7 @@ export * from './prestige';
 export * from './research';
 export * from './returnSummary';
 export * from './weeklyEvent';
+export * from './wheel';
 export {
   DEFAULT_LOCALE,
   SUPPORTED_LOCALES,

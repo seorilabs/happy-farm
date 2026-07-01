@@ -111,6 +111,8 @@ import {
   isDecorationOwned,
   purchaseDecoration,
   getPlacedDecorations,
+  getWheelStatus,
+  spinWheel,
   getCropEconomyEstimate,
   getGameAnalyticsContext,
   getHarvestBonusBoostStatus,
@@ -307,6 +309,7 @@ type ActiveSheet =
   | { type: 'harvestBonus' }
   | { type: 'welcomeBack'; summary: ReturnSummary }
   | { type: 'dailyBonus' }
+  | { type: 'wheel' }
   | { type: 'resetConfirm' }
   | null;
 
@@ -595,6 +598,9 @@ export default function FarmGame({
     }
   }, []);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  // The gold won on the most recent wheel spin, shown inline in the wheel sheet
+  // until it is reopened. Null before the player spins (or after reopening).
+  const [wheelSpinResult, setWheelSpinResult] = useState<{ gold: number } | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [harvestCombo, setHarvestCombo] = useState(0);
   const comboTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1824,6 +1830,13 @@ export default function FarmGame({
     setActiveSheet({ type: 'missions' });
   }
 
+  // Clear any prior spin result so reopening the wheel always starts from the
+  // spin prompt (or the cooldown message), never a stale reward.
+  function openWheel() {
+    setWheelSpinResult(null);
+    setActiveSheet({ type: 'wheel' });
+  }
+
   function claimMissionReward(slot: number) {
     const now = Date.now();
     // Functional updater keeps the claim idempotent: a concurrent second tap
@@ -2736,6 +2749,14 @@ export default function FarmGame({
       ? previewDailyBonus(gameState.dailyBonusState, Date.now(), getRewardedGoldAmount(gameState))
       : { available: false as const, streak: 1, goldAwarded: 50 };
 
+  // Wheel spin availability. Recomputed each render tick so the sheet's spin/
+  // cooldown state and the nav badge stay live as UTC midnight passes.
+  const wheelStatus =
+    activeSheet?.type === 'wheel'
+      ? getWheelStatus(gameState.wheelState, Date.now())
+      : { canSpin: false, nextSpinAt: 0 };
+  const wheelSpinReady = getWheelStatus(gameState.wheelState, tickNowMsRef.current).canSpin;
+
   // Outline the target the current onboarding step points at to draw the eye.
   const onboardingSeedHighlight = onboardingStep === 'selectSeed';
   const onboardingPlotHighlight = onboardingStep === 'plant' || onboardingStep === 'harvest';
@@ -2868,6 +2889,12 @@ export default function FarmGame({
             badge={missionClaimableCount}
             accessibilityLabel={messages.missionsButtonAccessibilityLabel}
             onPress={openMissions}
+          />
+          <NavButton
+            label={messages.wheelButton}
+            badge={wheelSpinReady ? 1 : 0}
+            accessibilityLabel={messages.wheelButtonAccessibilityLabel}
+            onPress={openWheel}
           />
           <NavButton
             label={messages.collectionButton}
@@ -3406,6 +3433,67 @@ export default function FarmGame({
                 setActiveSheet(null);
               }}
             />
+          </View>
+        ) : null}
+
+        {activeSheet?.type === 'wheel' ? (
+          <View>
+            <View style={styles.welcomeBackRow}>
+              <Text style={styles.welcomeBackIcon}>{wheelSpinResult != null ? '🎉' : '🎰'}</Text>
+              <View style={styles.welcomeBackRowText}>
+                {wheelSpinResult != null ? (
+                  <>
+                    <Text style={styles.welcomeBackRowLabel}>
+                      {messages.wheelRewardToast(formatMoney(wheelSpinResult.gold, locale))}
+                    </Text>
+                    <Text style={styles.welcomeBackRowValue}>
+                      +{formatMoney(wheelSpinResult.gold, locale)}G
+                    </Text>
+                  </>
+                ) : (
+                  <Text style={styles.welcomeBackRowLabel}>
+                    {wheelStatus.canSpin
+                      ? messages.wheelReadyLabel
+                      : messages.wheelNextSpinLabel(
+                          formatRemainingTime(Math.max(0, wheelStatus.nextSpinAt - Date.now()), locale)
+                        )}
+                  </Text>
+                )}
+              </View>
+            </View>
+            {wheelStatus.canSpin ? (
+              <SheetAction
+                label={messages.wheelSpinAction}
+                onPress={() => {
+                  const now = Date.now();
+                  // Guard against clock reversal or a double-tap race: re-check
+                  // availability at tap time so a second tap can't spin twice.
+                  if (!getWheelStatus(gameState.wheelState, now).canSpin) {
+                    return;
+                  }
+                  // Functional updater keeps the spin idempotent: a concurrent
+                  // second tap evaluates spinWheel against the already-updated
+                  // wheelState, gets null, and awards nothing. The reward is read
+                  // from the holder so the toast/inline result fires exactly once.
+                  const rewardHolder: { gold: number | null } = { gold: null };
+                  setGameState((prev) => {
+                    const result = spinWheel(prev.wheelState, getRewardedGoldAmount(prev), now);
+                    if (result == null) return prev;
+                    rewardHolder.gold = result.reward.gold;
+                    return {
+                      ...prev,
+                      gold: prev.gold + result.reward.gold,
+                      wheelState: result.newState,
+                    };
+                  });
+                  if (rewardHolder.gold != null) {
+                    setWheelSpinResult({ gold: rewardHolder.gold });
+                    pulseGold();
+                    toast(messages.wheelRewardToast(formatMoney(rewardHolder.gold, locale)));
+                  }
+                }}
+              />
+            ) : null}
           </View>
         ) : null}
 
@@ -4946,6 +5034,9 @@ function getSheetTitle(activeSheet: ActiveSheet, messages: FarmMessages) {
   if (activeSheet?.type === 'dailyBonus') {
     return messages.sheetTitleDailyBonus;
   }
+  if (activeSheet?.type === 'wheel') {
+    return messages.sheetTitleWheel;
+  }
   if (activeSheet?.type === 'welcomeBack') {
     return messages.sheetTitleWelcomeBack;
   }
@@ -5004,6 +5095,9 @@ function getSheetDescription(
   }
   if (activeSheet?.type === 'dailyBonus') {
     return messages.sheetDescriptionDailyBonus(dailyBonusStreak);
+  }
+  if (activeSheet?.type === 'wheel') {
+    return messages.sheetDescriptionWheel;
   }
   if (activeSheet?.type === 'welcomeBack') {
     return messages.sheetDescriptionWelcomeBack(formatDuration(activeSheet.summary.awayMs, locale));
