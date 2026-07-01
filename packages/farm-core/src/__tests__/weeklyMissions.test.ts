@@ -105,6 +105,10 @@ describe('rollover on the week boundary', () => {
     expect(rolled.progress[0]).toBe(42); // preserved, not reset to 0
     expect(rolled.progress[WEEK_COUNT - 1]).toBe(0); // newly added slot starts at 0
     expect(rolled.claimedSlots).toContain(0);
+    // Newly padded slots are NOT re-drawn from featured — they stay null (inert)
+    // until the next real week rollover assigns an area from unlocked areas.
+    expect(rolled.areaKeys.length).toBe(WEEK_COUNT);
+    expect(rolled.areaKeys.every((area) => area === null)).toBe(true);
   });
 
   test('same-week resize keeps existing featured areas verbatim (no re-draw) while preserving progress', () => {

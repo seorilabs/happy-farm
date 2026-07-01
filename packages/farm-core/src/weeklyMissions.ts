@@ -178,15 +178,15 @@ export function rolloverWeeklyMissions(
   if (state.areaKeys.length === WEEKLY_MISSION_COUNT && state.progress.length === WEEKLY_MISSION_COUNT) {
     return state;
   }
-  // 같은 주지만 슬롯 수가 바뀜: 기존 슬롯의 areaKey/진행도/수령을 "그대로" 보존하고(재추첨 없음),
-  // 새로 늘어난 인덱스만 채운다 — 기존 harvest_area의 이번 주 구역이 흔들리지 않게. 새 슬롯의
-  // 구역은 해금 구역 풀(pickFeaturedAreas는 unlockedAreas로 후보 제한)에서 뽑아 항상 도달 가능하다.
+  // 같은 주지만 슬롯 수가 바뀜: 기존 슬롯의 areaKey/진행도/수령을 "그대로" 보존하고, 새로 늘어난
+  // 인덱스는 재추첨 없이 null/0으로만 패딩한다. 새 harvest_area 슬롯의 "이번 주 구역"은 다음 주
+  // 롤오버에서 해금 구역 기준으로 배정되며, 그 전까지 areaKey=null이라 진행 매칭에서 자동 제외된다
+  // (같은 주에 featured를 다시 뽑아 기존 구역이 흔들리거나 미해금 구역이 고정되는 일이 없음).
   const oldAreaCount = state.areaKeys.length;
-  const featured = oldAreaCount < WEEKLY_MISSION_COUNT ? pickFeaturedAreas(weekKey, unlockedAreas) : [];
   return {
     weekKey,
     areaKeys: Array.from({ length: WEEKLY_MISSION_COUNT }, (_, index) =>
-      index < oldAreaCount ? (state.areaKeys[index] ?? null) : (featured[index] ?? null)
+      index < oldAreaCount ? (state.areaKeys[index] ?? null) : null
     ),
     progress: Array.from({ length: WEEKLY_MISSION_COUNT }, (_, index) =>
       index < state.progress.length ? (state.progress[index] ?? 0) : 0
@@ -232,7 +232,9 @@ export function recordWeeklyHarvestProgress(
     unlockedAreas,
     (mission) =>
       mission.type === 'harvest' ||
-      (mission.type === 'harvest_area' && mission.areaKey === areaKey) ||
+      // areaKey != null 가드: 롤오버 리사이즈로 패딩된(구역 미배정) harvest_area 슬롯은
+      // 매칭에서 확실히 제외한다.
+      (mission.type === 'harvest_area' && mission.areaKey != null && mission.areaKey === areaKey) ||
       (mission.type === 'donate' && donated)
   );
 }
