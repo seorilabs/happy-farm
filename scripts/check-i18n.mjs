@@ -25,8 +25,36 @@ function assertNoHangul(relativePath) {
   const absolutePath = path.join(root, relativePath);
   const content = fs.readFileSync(absolutePath, 'utf8');
   const lines = content.split(/\r?\n/);
+  // 검사 대상은 "사용자-facing 문자열"이다. 한글 주석은 위반이 아니므로,
+  // 라인 검사 전에 // 라인 주석과 /* */ 블록 주석(여러 줄 포함)을 제거해
+  // 코드/문자열 리터럴에 남은 한글만 위반으로 잡는다.
+  let inBlockComment = false;
   lines.forEach((line, index) => {
-    if (/[가-힣]/.test(line)) {
+    let code = '';
+    let i = 0;
+    while (i < line.length) {
+      if (inBlockComment) {
+        const end = line.indexOf('*/', i);
+        if (end === -1) {
+          i = line.length;
+        } else {
+          inBlockComment = false;
+          i = end + 2;
+        }
+        continue;
+      }
+      if (line.startsWith('//', i)) {
+        break; // 라인 나머지는 주석
+      }
+      if (line.startsWith('/*', i)) {
+        inBlockComment = true;
+        i += 2;
+        continue;
+      }
+      code += line[i];
+      i += 1;
+    }
+    if (/[가-힣]/.test(code)) {
       failures.push(`${relativePath}:${index + 1} 사용자-facing 문자열은 locale catalog를 사용해야 합니다.`);
     }
   });
