@@ -178,15 +178,19 @@ export function rolloverWeeklyMissions(
   if (state.areaKeys.length === WEEKLY_MISSION_COUNT && state.progress.length === WEEKLY_MISSION_COUNT) {
     return state;
   }
-  // 같은 주지만 슬롯 수가 바뀜: 진행도/수령을 보존한 채 배열만 현재 슬롯 수로 리사이즈한다.
-  const featured = pickFeaturedAreas(weekKey, unlockedAreas);
+  // 같은 주지만 슬롯 수가 바뀜: 기존 슬롯의 areaKey/진행도/수령을 "그대로" 보존하고(재추첨 없음),
+  // 새로 늘어난 인덱스만 채운다 — 기존 harvest_area의 이번 주 구역이 흔들리지 않게. 새 슬롯의
+  // 구역은 해금 구역 풀(pickFeaturedAreas는 unlockedAreas로 후보 제한)에서 뽑아 항상 도달 가능하다.
+  const oldAreaCount = state.areaKeys.length;
+  const featured = oldAreaCount < WEEKLY_MISSION_COUNT ? pickFeaturedAreas(weekKey, unlockedAreas) : [];
   return {
     weekKey,
-    areaKeys: Array.from(
-      { length: WEEKLY_MISSION_COUNT },
-      (_, index) => state.areaKeys[index] ?? featured[index] ?? null
+    areaKeys: Array.from({ length: WEEKLY_MISSION_COUNT }, (_, index) =>
+      index < oldAreaCount ? (state.areaKeys[index] ?? null) : (featured[index] ?? null)
     ),
-    progress: Array.from({ length: WEEKLY_MISSION_COUNT }, (_, index) => state.progress[index] ?? 0),
+    progress: Array.from({ length: WEEKLY_MISSION_COUNT }, (_, index) =>
+      index < state.progress.length ? (state.progress[index] ?? 0) : 0
+    ),
     claimedSlots: state.claimedSlots.filter((slot) => slot < WEEKLY_MISSION_COUNT),
   };
 }

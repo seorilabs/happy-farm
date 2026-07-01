@@ -106,6 +106,26 @@ describe('rollover on the week boundary', () => {
     expect(rolled.progress[WEEK_COUNT - 1]).toBe(0); // newly added slot starts at 0
     expect(rolled.claimedSlots).toContain(0);
   });
+
+  test('same-week resize keeps existing featured areas verbatim (no re-draw) while preserving progress', () => {
+    const key = getMissionWeekKey(MON);
+    const missions = getWeeklyMissions(key, ALL_AREAS);
+    const areaSlot = missions.findIndex((m) => m.type === 'harvest_area');
+    const existingArea = missions[areaSlot]!.areaKey!;
+    // Full-length areaKeys carrying the real featured area, but a short progress
+    // array (a partially-migrated save) → triggers the resize branch.
+    const state: WeeklyMissionState = {
+      weekKey: key,
+      areaKeys: missions.map((m) => (m.type === 'harvest_area' ? existingArea : null)),
+      progress: [7],
+      claimedSlots: [],
+    };
+    const rolled = rolloverWeeklyMissions(state, key, ALL_AREAS);
+    // Existing featured area is kept as-is (not re-drawn), progress[0] preserved.
+    expect(rolled.areaKeys[areaSlot]).toBe(existingArea);
+    expect(rolled.progress[0]).toBe(7);
+    expect(rolled.progress.length).toBe(WEEK_COUNT);
+  });
 });
 
 describe('progress accumulation from existing event paths', () => {
