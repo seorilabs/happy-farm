@@ -1,6 +1,7 @@
 import balance from './balance.json';
 import type { DailyBonusState } from './dailyBonus';
 import type { DailyMissionState } from './missions';
+import type { WheelState } from './wheel';
 
 export type CropKey = (typeof balance.crops)[number]['key'];
 
@@ -146,6 +147,11 @@ export type GameState = {
   // self-expression / late-game gold sink — owning a decoration has no gameplay
   // effect. A meta-layer field so the collection persists across every prestige.
   placedDecorations: DecorationKey[];
+  // Daily fortune-wheel spin tracking. Only the last free-spin timestamp needs to
+  // persist; the reward slots are derived deterministically from balance data and
+  // the injected rng. A meta-layer field so the daily spin cadence carries across
+  // prestige, like dailyBonusState.
+  wheelState: WheelState;
 };
 
 // Prestige reset boundary. Farm-layer fields are wiped when the player
@@ -177,6 +183,7 @@ export const META_LAYER_KEYS = [
   'harvestNotificationPromptSeen',
   'prestigeGuideSeen',
   'placedDecorations',
+  'wheelState',
 ] as const satisfies readonly (keyof GameState)[];
 
 export type FarmLayerKey = (typeof FARM_LAYER_KEYS)[number];

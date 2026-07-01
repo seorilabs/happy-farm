@@ -11,6 +11,7 @@ import {
 import { createInitialPrestigeProgress, normalizeChainFarms, normalizePrestigeProgress } from './prestige';
 import { createInitialPlacedDecorations, normalizePlacedDecorations } from './decorations';
 import { createInitialDailyMissionState, normalizeDailyMissionState } from './missions';
+import { createInitialWheelState, normalizeWheelState } from './wheel';
 import {
   createInitialAutomationSettings,
   createInitialResearchState,
@@ -730,6 +731,7 @@ export function createInitialState(): GameState {
     harvestNotificationPromptSeen: false,
     prestigeGuideSeen: false,
     placedDecorations: createInitialPlacedDecorations(),
+    wheelState: createInitialWheelState(),
   };
 }
 
@@ -895,6 +897,10 @@ export function migrateLoadedState(loaded: Partial<GameState>, base: GameState):
   // Cosmetic decorations: drop any keys missing from the current catalog and
   // de-duplicate so a legacy/corrupt save never renders an unknown decoration.
   merged.placedDecorations = normalizePlacedDecorations(loaded.placedDecorations);
+
+  // Daily wheel: a malformed/legacy save (no wheelState) normalizes to "never
+  // spun", so the first spin is immediately available.
+  merged.wheelState = normalizeWheelState(loaded.wheelState);
 
   return merged;
 }
