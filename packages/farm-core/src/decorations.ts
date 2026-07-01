@@ -54,6 +54,19 @@ export function isDecorationOwned(placedDecorations: readonly DecorationKey[], k
   return placedDecorations.includes(key);
 }
 
+// Owned decorations resolved to their catalog entries (key/icon/price) for the
+// farm-screen render layer. Always returns catalog declaration order and drops
+// any unknown/legacy key so the render stays stable regardless of how the save
+// stored the list. Returns [] when nothing is owned so callers can hide the
+// layer entirely.
+export function getPlacedDecorations(state: GameState): Decoration[] {
+  if (state.placedDecorations.length === 0) {
+    return [];
+  }
+  const owned = new Set<DecorationKey>(state.placedDecorations);
+  return DECORATIONS.filter((decoration) => owned.has(decoration.key));
+}
+
 // True only when the decoration exists, the player does not already own it (each
 // is a one-time purchase), and they can afford it.
 export function canPurchaseDecoration(state: GameState, key: DecorationKey): boolean {

@@ -9,6 +9,7 @@ import {
   isKnownDecorationKey,
   normalizePlacedDecorations,
   purchaseDecoration,
+  getPlacedDecorations,
 } from '../decorations';
 import { createInitialState, migrateLoadedState } from '../constants';
 import { createPrestigedState } from '../prestige';
@@ -98,6 +99,27 @@ describe('normalizePlacedDecorations', () => {
     expect(normalizePlacedDecorations(undefined)).toEqual([]);
     expect(normalizePlacedDecorations('fence')).toEqual([]);
     expect(normalizePlacedDecorations(createInitialPlacedDecorations())).toEqual([]);
+  });
+});
+
+describe('getPlacedDecorations (render layer)', () => {
+  test('returns [] when the player owns nothing (layer hidden)', () => {
+    expect(getPlacedDecorations(stateWithGold(0))).toEqual([]);
+  });
+
+  test('resolves owned keys to catalog entries in catalog order', () => {
+    // Store the keys out of catalog order to prove the render order is stable.
+    const state = stateWithGold(0, [SECOND, FIRST]);
+    const placed = getPlacedDecorations(state);
+    expect(placed.map((decoration) => decoration.key)).toEqual([FIRST, SECOND]);
+    // Each entry carries the icon/price needed to render.
+    expect(placed[0]).toEqual(getDecoration(FIRST));
+    expect(placed[1]).toEqual(getDecoration(SECOND));
+  });
+
+  test('drops unknown/legacy keys from the render list', () => {
+    const state = stateWithGold(0, [FIRST, 'removed_in_v2' as DecorationKey]);
+    expect(getPlacedDecorations(state).map((decoration) => decoration.key)).toEqual([FIRST]);
   });
 });
 

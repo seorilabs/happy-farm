@@ -257,6 +257,22 @@ export const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: PLOT_GAP,
   },
+  // Cosmetic decoration strip beneath the plot grid. A soft ground-line border
+  // that reads as the edge of the farm; wraps so a large collection flows onto
+  // multiple rows instead of overflowing.
+  decorationStrip: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 14,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(120, 87, 46, 0.25)',
+  },
+  decorationStripIcon: {
+    fontSize: 26,
+  },
   harvestPop: {
     position: 'absolute',
     zIndex: 15,
