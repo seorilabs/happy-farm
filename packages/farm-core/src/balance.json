@@ -228,7 +228,16 @@
       { "type": "harvest", "targets": [12, 16, 20, 24, 28], "rewardGold": 300 },
       { "type": "harvest_area", "targets": [5, 7, 9, 11], "rewardGold": 400 },
       { "type": "watch_ad", "targets": [1], "rewardGold": 250 }
-    ]
+    ],
+    "weekly": {
+      "agentPurpose": "Weekly mission track layered on top of the 3 daily slots, giving a longer (multi-day) goal horizon so a session has objectives beyond today. Boundary is UTC Monday midnight (see getMissionWeekKey). Targets are fixed per slot (deterministic per week; the harvest_area featured area rotates weekly via a week-key hash). Progress reuses existing event paths: the harvest pipeline (harvest = any harvest, harvest_area = harvest in this week's area, donate = harvest while in donation mode) and rewarded-ad watches (watch_ad). Rewards are gold, intentionally larger than the daily slots (a week's effort) but still bounded so they don't dwarf normal-area progression. Tune targets/rewards here.",
+      "slots": [
+        { "type": "harvest", "target": 150, "rewardGold": 3000 },
+        { "type": "harvest_area", "target": 60, "rewardGold": 4000 },
+        { "type": "watch_ad", "target": 5, "rewardGold": 2500 },
+        { "type": "donate", "target": 30, "rewardGold": 3500 }
+      ]
+    }
   },
   "decorations": {
     "agentPurpose": "Late-game gold sink + self-expression. Cosmetic-only farm decorations bought with gold; ownership lives in the meta layer (placedDecorations) and survives prestige. Prices climb so they soak up surplus gold once expansion/upgrades are exhausted. Add new items here (key/icon/price); localized names live in i18n/labels.ts.",

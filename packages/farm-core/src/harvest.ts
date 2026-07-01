@@ -11,6 +11,7 @@ import {
 } from './mastery';
 import { getDonationRp, isCropPlantable, isNodeUnlocked } from './research';
 import { recordHarvestProgress } from './missions';
+import { recordWeeklyHarvestProgress } from './weeklyMissions';
 
 export type HarvestOptions = {
   now?: number;
@@ -250,6 +251,15 @@ export function performHarvest(gameState: GameState, plotIndex: number, options:
     // Every harvest path funnels through here, so daily-mission harvest progress
     // (total + per-area) is tracked once at the canonical pipeline.
     dailyMissionState: recordHarvestProgress(gameState.dailyMissionState, crop.area, now, gameState.unlockedAreas),
+    // Weekly track shares the same canonical harvest point: total + per-area, plus
+    // the donate slot when this harvest went to research (donation mode).
+    weeklyMissionState: recordWeeklyHarvestProgress(
+      gameState.weeklyMissionState,
+      crop.area,
+      donated,
+      now,
+      gameState.unlockedAreas
+    ),
     research: {
       ...gameState.research,
       points: gameState.research.points + rpGained,

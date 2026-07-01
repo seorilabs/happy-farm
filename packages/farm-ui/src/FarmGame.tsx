@@ -105,6 +105,9 @@ import {
   getDailyMissionsSnapshot,
   claimMission,
   recordAdWatchProgress,
+  getWeeklyMissionsSnapshot,
+  claimWeeklyMission,
+  recordWeeklyAdWatchProgress,
   getDecorationLabel,
   DECORATIONS,
   canPurchaseDecoration,
@@ -1641,6 +1644,9 @@ export default function FarmGame({
     () =>
       getDailyMissionsSnapshot(gameState.dailyMissionState, Date.now(), gameState.unlockedAreas).missions.filter(
         (mission) => mission.claimable
+      ).length +
+      getWeeklyMissionsSnapshot(gameState.weeklyMissionState, Date.now(), gameState.unlockedAreas).missions.filter(
+        (mission) => mission.claimable
       ).length,
     [gameState]
   );
@@ -1863,6 +1869,26 @@ export default function FarmGame({
     setGameState((prev) => {
       const beforeGold = prev.gold;
       const next = claimMission(prev, slot, now);
+      if (next == null) {
+        return prev;
+      }
+      rewardHolder.gold = next.gold - beforeGold;
+      return next;
+    });
+    if (rewardHolder.gold != null) {
+      toast(messages.missionClaimedToast(formatMoney(rewardHolder.gold, locale)));
+    }
+  }
+
+  function claimWeeklyMissionReward(slot: number) {
+    const now = Date.now();
+    // Same idempotent functional-updater pattern as the daily claim: a concurrent
+    // second tap evaluates claimWeeklyMission against the already-updated state,
+    // gets null, and leaves gold untouched. The reward is read for the toast.
+    const rewardHolder: { gold: number | null } = { gold: null };
+    setGameState((prev) => {
+      const beforeGold = prev.gold;
+      const next = claimWeeklyMission(prev, slot, now);
       if (next == null) {
         return prev;
       }
@@ -2243,8 +2269,9 @@ export default function FarmGame({
       setGameState((state) => ({
         ...state,
         adUsage: recordRewardedAdUsage(state, type, rewardedAt),
-        // Any rewarded-ad view counts toward the "watch an ad" daily mission.
+        // Any rewarded-ad view counts toward the "watch an ad" daily + weekly mission.
         dailyMissionState: recordAdWatchProgress(state.dailyMissionState, rewardedAt, state.unlockedAreas),
+        weeklyMissionState: recordWeeklyAdWatchProgress(state.weeklyMissionState, rewardedAt, state.unlockedAreas),
       }));
       return true;
     }
@@ -3248,6 +3275,7 @@ export default function FarmGame({
             messages={messages}
             now={Date.now()}
             onClaim={claimMissionReward}
+            onClaimWeekly={claimWeeklyMissionReward}
           />
         ) : null}
 

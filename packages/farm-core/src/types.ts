@@ -1,6 +1,7 @@
 import balance from './balance.json';
 import type { DailyBonusState } from './dailyBonus';
 import type { DailyMissionState } from './missions';
+import type { WeeklyMissionState } from './weeklyMissions';
 import type { WheelState } from './wheel';
 
 export type CropKey = (typeof balance.crops)[number]['key'];
@@ -130,6 +131,12 @@ export type GameState = {
   // which slots were claimed need to persist. A meta-layer field so daily
   // engagement carries across prestige, like dailyBonusState.
   dailyMissionState: DailyMissionState;
+  // Weekly mission (this week's long-term goals) progress/claim tracking. Like
+  // dailyMissionState, the missions are derived deterministically from the UTC
+  // week, so only progress, which slots were claimed, and this week's featured
+  // area snapshot persist. A meta-layer field so weekly engagement carries across
+  // prestige.
+  weeklyMissionState: WeeklyMissionState;
   // Whether the first-session onboarding guide was completed or skipped. A
   // one-time flag so the coachmarks show only to new players and never return.
   onboardingCompleted: boolean;
@@ -179,6 +186,7 @@ export const META_LAYER_KEYS = [
   'automationSettings',
   'dailyBonusState',
   'dailyMissionState',
+  'weeklyMissionState',
   'onboardingCompleted',
   'harvestNotificationPromptSeen',
   'prestigeGuideSeen',
