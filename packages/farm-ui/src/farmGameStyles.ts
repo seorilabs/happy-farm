@@ -565,6 +565,25 @@ export const styles = StyleSheet.create({
     paddingTop: 8,
     paddingBottom: 4,
   },
+  // Right-aligned sort toggle row above the seed strip.
+  seedSortRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginTop: 2,
+  },
+  seedSortToggle: {
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(120, 87, 46, 0.35)',
+    backgroundColor: 'rgba(255, 255, 255, 0.6)',
+  },
+  seedSortToggleText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#7a572e',
+  },
   toolButton: {
     width: 82,
     height: 88,

@@ -16,6 +16,7 @@ export * from './modifiers';
 export * from './prestige';
 export * from './research';
 export * from './returnSummary';
+export * from './seedSort';
 export * from './weeklyEvent';
 export * from './wheel';
 export {
