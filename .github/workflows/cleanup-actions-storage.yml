@@ -19,7 +19,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: cleanup-artifacts
+  group: cleanup-actions-storage
   cancel-in-progress: false
 
 jobs:

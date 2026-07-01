@@ -26,7 +26,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: happy-farm-create-release-tag
+  group: happy-farm-release-tag
   cancel-in-progress: false
 
 jobs:

@@ -147,9 +147,9 @@ workflow:
 .github/workflows/deploy-google-play.yml
 ```
 
-이 workflow는 릴리즈 태그(`vX.Y.Z`)에서 실행합니다. 태그 push로 자동 실행되면 signed AAB를 만들고 Google Play 내부 테스트 트랙에 draft release로 업로드합니다. 수동 실행(`workflow_dispatch`)도 가능하지만 반드시 릴리즈 태그 ref에서 실행해야 합니다.
+이 workflow는 명시적 실행 전용입니다: `workflow_dispatch` 또는 `deploy-all.yml`/Backoffice·Telegram `/deploy`가 `workflow_call`로 호출합니다. 태그 push로는 자동 실행되지 않습니다. `release_tag` 입력으로 빌드·업로드할 `vX.Y.Z` 릴리즈 태그를 지정하고, 비우면 실행한 ref를 사용합니다.
 
-- 태그 push 실행: signed AAB 빌드 후 Google Play 내부 테스트 트랙에 초안 업로드
+- `release_tag` 지정 실행: 해당 릴리즈 태그를 checkout 후 signed AAB 빌드(업로드 여부는 아래 옵션으로 제어)
 - 수동 실행 + `send_to_google_play=false`: 같은 릴리즈 태그로 signed AAB만 빌드하고 artifact로 보관
 - 수동 실행 + `send_to_google_play=true`: Google Play Developer API로 내부 테스트 트랙에 업로드
 - `after_upload=초안만 만들기`: 첫 자동화 검증용 초안 릴리스 생성
@@ -208,7 +208,7 @@ python3 -m pip install --user google-api-python-client google-auth
 수동 실행 예:
 
 ```bash
-gh workflow run create-release-tag.yml -f bump=minor
+gh workflow run release-tag.yml -f bump=minor
 gh workflow run deploy-google-play.yml --ref v1.27.0 -f send_to_google_play=false
 gh workflow run deploy-google-play.yml --ref v1.27.0 -f send_to_google_play=true -f after_upload='초안만 만들기'
 ```
