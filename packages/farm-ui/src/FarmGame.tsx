@@ -3466,31 +3466,31 @@ export default function FarmGame({
                 label={messages.wheelSpinAction}
                 onPress={() => {
                   const now = Date.now();
-                  // Guard against clock reversal or a double-tap race: re-check
-                  // availability at tap time so a second tap can't spin twice.
+                  // Guard against clock reversal or a stale render: don't spin
+                  // when locked at tap time.
                   if (!getWheelStatus(gameState.wheelState, now).canSpin) {
                     return;
                   }
-                  // Functional updater keeps the spin idempotent: a concurrent
-                  // second tap evaluates spinWheel against the already-updated
-                  // wheelState, gets null, and awards nothing. The reward is read
-                  // from the holder so the toast/inline result fires exactly once.
-                  const rewardHolder: { gold: number | null } = { gold: null };
-                  setGameState((prev) => {
-                    const result = spinWheel(prev.wheelState, getRewardedGoldAmount(prev), now);
-                    if (result == null) return prev;
-                    rewardHolder.gold = result.reward.gold;
-                    return {
-                      ...prev,
-                      gold: prev.gold + result.reward.gold,
-                      wheelState: result.newState,
-                    };
-                  });
-                  if (rewardHolder.gold != null) {
-                    setWheelSpinResult({ gold: rewardHolder.gold });
-                    pulseGold();
-                    toast(messages.wheelRewardToast(formatMoney(rewardHolder.gold, locale)));
+                  // Compute the spin once, synchronously, so the state updater
+                  // stays pure (no side effects inside it — React can double-invoke
+                  // updaters in StrictMode). A null result means it's no longer
+                  // spinnable.
+                  const result = spinWheel(gameState.wheelState, getRewardedGoldAmount(gameState), now);
+                  if (result == null) {
+                    return;
                   }
+                  // Apply with a functional updater that re-checks against the
+                  // latest state, so a second tap landing in the same tick (before
+                  // a re-render) can't double-award: the second apply sees
+                  // lastFreeSpinAt already set for today and returns prev unchanged.
+                  setGameState((prev) =>
+                    getWheelStatus(prev.wheelState, now).canSpin
+                      ? { ...prev, gold: prev.gold + result.reward.gold, wheelState: result.newState }
+                      : prev
+                  );
+                  setWheelSpinResult({ gold: result.reward.gold });
+                  pulseGold();
+                  toast(messages.wheelRewardToast(formatMoney(result.reward.gold, locale)));
                 }}
               />
             ) : null}
