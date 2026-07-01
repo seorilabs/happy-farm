@@ -331,6 +331,8 @@ const KO_ACHIEVEMENT_TRACK_LABELS = {
   prestige_pioneer: { name: '농장 개척' },
   research_devotee: { name: '연구 공헌' },
   breed_collector: { name: '신품종 교배' },
+  collection_curator: { name: '도감 수집' },
+  attendance_devotee: { name: '연속 출석' },
 } satisfies Record<AchievementTrackKey, SimpleLabel>;
 
 const EN_ACHIEVEMENT_TRACK_LABELS = {
@@ -340,6 +342,8 @@ const EN_ACHIEVEMENT_TRACK_LABELS = {
   prestige_pioneer: { name: 'Farms Pioneered' },
   research_devotee: { name: 'Research Points' },
   breed_collector: { name: 'New Breeds' },
+  collection_curator: { name: 'Collection' },
+  attendance_devotee: { name: 'Daily Streak' },
 } satisfies Record<AchievementTrackKey, SimpleLabel>;
 
 const KO_TITLE_LABELS = {
@@ -349,6 +353,8 @@ const KO_TITLE_LABELS = {
   frontier_legend: { name: '개척의 전설' },
   lab_director: { name: '연구소장' },
   gene_artisan: { name: '교배 장인' },
+  master_curator: { name: '도감 마스터' },
+  loyal_farmer: { name: '개근 농부' },
 } satisfies Record<TitleKey, SimpleLabel>;
 
 const EN_TITLE_LABELS = {
@@ -358,6 +364,8 @@ const EN_TITLE_LABELS = {
   frontier_legend: { name: 'Frontier Legend' },
   lab_director: { name: 'Lab Director' },
   gene_artisan: { name: 'Gene Artisan' },
+  master_curator: { name: 'Master Curator' },
+  loyal_farmer: { name: 'Loyal Farmer' },
 } satisfies Record<TitleKey, SimpleLabel>;
 
 const ACHIEVEMENT_TRACK_LABELS: Record<SupportedLocale, Record<AchievementTrackKey, SimpleLabel>> = {
