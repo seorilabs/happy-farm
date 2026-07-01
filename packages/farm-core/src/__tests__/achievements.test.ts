@@ -16,6 +16,7 @@ import {
   normalizeLifetimeStats,
   setActiveTitle,
 } from '../achievements';
+import balance from '../balance.json';
 import { createInitialState, migrateLoadedState } from '../constants';
 import { performHarvest } from '../harvest';
 import type { GameState } from '../types';
@@ -110,6 +111,18 @@ describe('derived achievement tracks', () => {
     expect(claimed?.claimedTier).toBe(1);
     expect(claimed?.starsAwarded).toBe(track.starsPerTier);
     expect(claimed?.state.prestige.stars).toBe(track.starsPerTier);
+  });
+
+  test('collection track base intentionally equals the starter-field crop roster (설계 결정 잠금)', () => {
+    // 설계 결정: collection_curator의 tier 1(base)은 "첫 구역(starter_field) 작물
+    // 도감 완주"와 일치하도록 의도적으로 맞춘 값이다(우연한 일치가 아님, #183).
+    // base를 starter_field 작물 수에서 파생 검증해, 둘 중 하나만 바뀌면(예: starter
+    // 작물 추가/제거, base 임의 조정) 이 테스트가 깨져 의도를 재확인하게 한다.
+    const starterFieldCropCount = (balance.crops as ReadonlyArray<{ area?: string }>).filter(
+      (crop) => crop.area === 'starter_field'
+    ).length;
+    expect(starterFieldCropCount).toBeGreaterThan(0);
+    expect(getTrack('collection_curator').base).toBe(starterFieldCropCount);
   });
 
   test('collection track ignores duplicates and non-collectable keys', () => {
