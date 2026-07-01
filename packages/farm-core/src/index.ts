@@ -18,6 +18,7 @@ export * from './research';
 export * from './returnSummary';
 export * from './seedSort';
 export * from './weeklyEvent';
+export * from './weeklyMissions';
 export * from './wheel';
 export {
   DEFAULT_LOCALE,

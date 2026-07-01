@@ -11,6 +11,7 @@ import {
 import { createInitialPrestigeProgress, normalizeChainFarms, normalizePrestigeProgress } from './prestige';
 import { createInitialPlacedDecorations, normalizePlacedDecorations } from './decorations';
 import { createInitialDailyMissionState, normalizeDailyMissionState } from './missions';
+import { createInitialWeeklyMissionState, normalizeWeeklyMissionState } from './weeklyMissions';
 import { createInitialWheelState, normalizeWheelState } from './wheel';
 import {
   createInitialAutomationSettings,
@@ -727,6 +728,7 @@ export function createInitialState(): GameState {
     })),
     dailyBonusState: { lastClaimedAt: null, streak: 0 },
     dailyMissionState: createInitialDailyMissionState(),
+    weeklyMissionState: createInitialWeeklyMissionState(),
     onboardingCompleted: false,
     harvestNotificationPromptSeen: false,
     prestigeGuideSeen: false,
@@ -877,6 +879,11 @@ export function migrateLoadedState(loaded: Partial<GameState>, base: GameState):
 
   merged.dailyBonusState = normalizeDailyBonusState(loaded.dailyBonusState);
   merged.dailyMissionState = normalizeDailyMissionState(loaded.dailyMissionState);
+  // Mirrors dailyMissionState above: the normalizer is base-independent and falls
+  // back to the initial state for a missing/legacy save (equivalent to base's
+  // createInitialWeeklyMissionState). Intentionally consistent with the other
+  // mission normalizers rather than threading `base` through.
+  merged.weeklyMissionState = normalizeWeeklyMissionState(loaded.weeklyMissionState);
 
   // A save without the flag belongs to a player who already started before
   // onboarding existed, so treat it as completed and never resurface the
