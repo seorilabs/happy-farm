@@ -6,17 +6,35 @@
 // Boundaries: the crop's own icon starts previewing past the halfway mark to
 // build anticipation, and fully shows in the final stretch. Kept in farm-core so
 // the thresholds are unit-tested independently of any rendering.
+import balance from './balance.json';
+
 export type CropGrowthStage = 'sprout' | 'sapling' | 'budding' | 'mature';
 
+export type GrowthStageThresholds = { sapling: number; budding: number; mature: number };
+
+// Guards the stage-ordering invariant the mapping relies on. Exported so it can
+// be unit-tested directly; also called at load below so a bad balance.json edit
+// (out-of-order or non-finite thresholds) fails fast with a clear message
+// instead of silently producing a broken sprout→mature progression.
+export function assertGrowthStageThresholdsValid(thresholds: GrowthStageThresholds): void {
+  const { sapling, budding, mature } = thresholds;
+  if (![sapling, budding, mature].every((value) => Number.isFinite(value))) {
+    throw new Error('growthStage.thresholds must be finite numbers');
+  }
+  if (!(sapling < budding && budding < mature)) {
+    throw new Error(
+      `growthStage.thresholds must satisfy sapling < budding < mature (got sapling=${sapling}, budding=${budding}, mature=${mature})`
+    );
+  }
+}
+
 // Lower bound (inclusive) of each non-sprout stage, as a growth ratio.
-export const CROP_GROWTH_STAGE_THRESHOLDS = {
-  sapling: 0.25,
-  budding: 0.55,
-  mature: 0.8,
-} as const;
+// Data-driven from balance.json (was hardcoded), validated on load.
+export const CROP_GROWTH_STAGE_THRESHOLDS: GrowthStageThresholds = balance.growthStage.thresholds;
+assertGrowthStageThresholdsValid(CROP_GROWTH_STAGE_THRESHOLDS);
 
 // At/after this ratio a still-growing crop shows the "almost ready" cue.
-export const CROP_NEARLY_READY_RATIO = 0.9;
+export const CROP_NEARLY_READY_RATIO = balance.growthStage.nearlyReadyRatio;
 
 // Clamp non-finite input to 0 so a missing/NaN ratio degrades to the earliest
 // stage rather than throwing or skipping ahead.
