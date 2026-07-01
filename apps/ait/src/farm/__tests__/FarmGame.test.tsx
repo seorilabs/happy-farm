@@ -1839,7 +1839,7 @@ describe('getNextAreaGoal', () => {
 
   test('returns upgrade kind when both gold and harvest are met but upgrade level is too low', () => {
     // fruit_field needs upgradeLevel 3. We unlock vegetable_field and set gold/harvest
-    // to satisfy fruit_field's gold (15000) and harvest (10) requirements but keep
+    // to satisfy fruit_field's gold (9000) and harvest (10) requirements but keep
     // the upgrade level at 1 (min of speed/profit).
     const tenCrops = [
       'carrot',
