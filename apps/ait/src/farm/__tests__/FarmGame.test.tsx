@@ -28,6 +28,7 @@ import {
   getMasteryThresholds,
   getPrestigeCost,
   getRegionArchetypeLabel,
+  sortCropKeysForStrip,
   type AreaKey,
   type CropKey,
   type GameState,
@@ -355,6 +356,66 @@ describe('FarmGame UI flow', () => {
     await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
     expect(screen.getByTestId('weekly-event-banner')).toBeTruthy();
     expect(screen.queryByTestId('weekly-event-teaser')).toBeNull();
+  });
+
+  describe('seed-strip sort toggle (#192)', () => {
+    const messages = getFarmMessages(DEFAULT_LOCALE);
+    // Past onboarding so the seed strip is fully interactive (no coachmark gate).
+    const completedState = (): GameState => ({ ...createInitialState(), onboardingCompleted: true });
+    const renderedSeedOrder = (screen: ReturnType<typeof render>) =>
+      screen
+        .getAllByTestId(/^seed-tool-/)
+        .map((node) => (node.props.testID as string).replace('seed-tool-', ''));
+
+    test('shows the toggle for an unlocked multi-crop area and hides it in a locked area', async () => {
+      const screen = await renderGame(completedState());
+      await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+
+      // starter_field (default selection) is unlocked with 5 crops → toggle shown.
+      expect(screen.getByTestId('seed-sort-toggle')).toBeTruthy();
+
+      // A locked area renders no seed buttons, so there is nothing to sort.
+      fireEvent.press(screen.getByTestId('area-tab-vegetable_field'));
+      expect(screen.queryByTestId('seed-sort-toggle')).toBeNull();
+    });
+
+    test('cycles default → profit → growth → default on each press', async () => {
+      const screen = await renderGame(completedState());
+      await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+
+      const toggle = () => screen.getByTestId('seed-sort-toggle');
+      expect(screen.getByText(messages.seedSortLabel(messages.seedSortDefault))).toBeTruthy();
+      fireEvent.press(toggle());
+      expect(screen.getByText(messages.seedSortLabel(messages.seedSortProfit))).toBeTruthy();
+      fireEvent.press(toggle());
+      expect(screen.getByText(messages.seedSortLabel(messages.seedSortGrowth))).toBeTruthy();
+      fireEvent.press(toggle());
+      expect(screen.getByText(messages.seedSortLabel(messages.seedSortDefault))).toBeTruthy();
+    });
+
+    test('reorders the rendered seed buttons to match the pure sorter for the active mode', async () => {
+      const screen = await renderGame(completedState());
+      await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+
+      // Default mode = catalog order; capture it as the source of truth.
+      const defaultOrder = renderedSeedOrder(screen);
+      expect(defaultOrder.length).toBeGreaterThan(1);
+      expect(defaultOrder).toEqual(sortCropKeysForStrip(defaultOrder, 'default', () => 0));
+
+      // Advance to 'growth' (default → profit → growth); growth ignores profit, so
+      // the render must match a growTime-ascending sort of the same keys.
+      fireEvent.press(screen.getByTestId('seed-sort-toggle'));
+      fireEvent.press(screen.getByTestId('seed-sort-toggle'));
+      expect(renderedSeedOrder(screen)).toEqual(
+        sortCropKeysForStrip(defaultOrder, 'growth', () => 0)
+      );
+    });
+
+    test('activates the horizontal scroll indicator on the seed strip', async () => {
+      const screen = await renderGame(completedState());
+      await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+      expect(screen.getByTestId('seed-strip-scroll').props.showsHorizontalScrollIndicator).toBe(true);
+    });
   });
 
   describe('welcome-back offline settlement', () => {
