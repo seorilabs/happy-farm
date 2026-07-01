@@ -1,8 +1,10 @@
+import balance from './balance.json';
 import type { CropKey, GameState } from './types';
 import { CROPS, INITIAL_AREA_KEYS, getAreaCropKeys, isAreaUnlocked } from './constants';
 import { isCropPlantable } from './research';
 
-export const CROP_OF_THE_DAY_MULTIPLIER = 2;
+// Featured-crop sell multiplier, data-driven from balance.json (was hardcoded 2).
+export const CROP_OF_THE_DAY_MULTIPLIER = balance.cropOfTheDay.multiplier;
 
 // starter_field 등 처음부터 열려 있는 구역의 작물 — 어떤 세이브에서도 항상
 // 심을 수 있으므로 추첨 풀이 비는 비정상 상태의 최종 폴백으로 쓴다.

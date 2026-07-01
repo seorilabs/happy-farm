@@ -3,9 +3,11 @@
 import {
   CROP_GROWTH_STAGE_THRESHOLDS,
   CROP_NEARLY_READY_RATIO,
+  assertGrowthStageThresholdsValid,
   getCropGrowthStage,
   isCropNearlyReady,
 } from '../growthStage';
+import balance from '../balance.json';
 
 describe('getCropGrowthStage', () => {
   test('starts at sprout for a freshly planted crop', () => {
@@ -45,6 +47,40 @@ describe('getCropGrowthStage', () => {
     // Finite values outside 0..1 still compare by magnitude.
     expect(getCropGrowthStage(-1)).toBe('sprout');
     expect(getCropGrowthStage(2)).toBe('mature');
+  });
+});
+
+describe('data-driven thresholds (balance.json)', () => {
+  test('exported constants read from balance.json (no code drift, values unchanged)', () => {
+    expect(CROP_GROWTH_STAGE_THRESHOLDS).toEqual(balance.growthStage.thresholds);
+    expect(CROP_NEARLY_READY_RATIO).toBe(balance.growthStage.nearlyReadyRatio);
+    // Pin the shipped values so a balance edit is a deliberate, reviewed change.
+    expect(CROP_GROWTH_STAGE_THRESHOLDS).toEqual({ sapling: 0.25, budding: 0.55, mature: 0.8 });
+    expect(CROP_NEARLY_READY_RATIO).toBe(0.9);
+  });
+
+  test('the shipped thresholds satisfy the ordering invariant', () => {
+    expect(() => assertGrowthStageThresholdsValid(CROP_GROWTH_STAGE_THRESHOLDS)).not.toThrow();
+  });
+});
+
+describe('assertGrowthStageThresholdsValid (load-time invariant)', () => {
+  test('accepts strictly increasing thresholds', () => {
+    expect(() => assertGrowthStageThresholdsValid({ sapling: 0.1, budding: 0.5, mature: 0.9 })).not.toThrow();
+  });
+
+  test('rejects out-of-order thresholds with a clear message', () => {
+    expect(() => assertGrowthStageThresholdsValid({ sapling: 0.5, budding: 0.25, mature: 0.8 })).toThrow(
+      /sapling < budding < mature/
+    );
+    // Equal boundaries are not strictly increasing → rejected.
+    expect(() => assertGrowthStageThresholdsValid({ sapling: 0.25, budding: 0.25, mature: 0.8 })).toThrow();
+  });
+
+  test('rejects non-finite thresholds', () => {
+    expect(() => assertGrowthStageThresholdsValid({ sapling: NaN, budding: 0.5, mature: 0.9 })).toThrow(
+      /finite/
+    );
   });
 });
 

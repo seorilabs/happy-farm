@@ -1,5 +1,6 @@
 /// <reference types="jest" />
 
+import balance from '../balance.json';
 import { CROPS, createInitialState, isAreaUnlocked } from '../constants';
 import { isCropPlantable } from '../research';
 import type { CropKey, GameState } from '../types';
@@ -49,6 +50,10 @@ describe('getCropOfTheDayStatus', () => {
 
   test('CROP_OF_THE_DAY_MULTIPLIER is 2', () => {
     expect(CROP_OF_THE_DAY_MULTIPLIER).toBe(2);
+  });
+
+  test('CROP_OF_THE_DAY_MULTIPLIER is data-driven from balance.json', () => {
+    expect(CROP_OF_THE_DAY_MULTIPLIER).toBe(balance.cropOfTheDay.multiplier);
   });
 
   test('windowStartAt is UTC midnight for the given day', () => {

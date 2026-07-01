@@ -213,6 +213,15 @@
     "greatThreshold": 5,
     "legendaryThreshold": 10
   },
+  "cropOfTheDay": {
+    "agentPurpose": "Crop of the day (today's featured crop). multiplier is the sell-price bonus applied when selling the featured crop for the current UTC day (the featured crop itself rotates via a deterministic date hash, unchanged). Data-driven here so live-ops can tune the featured-crop incentive without code changes, matching the other sell multipliers (weeklyEvent.sellMultiplier, mastery).",
+    "multiplier": 2
+  },
+  "growthStage": {
+    "agentPurpose": "Crop growth-stage visualization tuning. thresholds are the inclusive lower-bound growth ratios (0..1) at which a crop switches visual stage: sprout → sapling → budding → mature. nearlyReadyRatio is the ratio at/after which a still-growing crop shows the 'almost ready' cue. These shape how quickly a crop looks like it's progressing, so they live in the data layer. Invariant (validated on load): sapling < budding < mature.",
+    "thresholds": { "sapling": 0.25, "budding": 0.55, "mature": 0.8 },
+    "nearlyReadyRatio": 0.9
+  },
   "missions": {
     "agentPurpose": "Daily mission rotation. Three deterministic missions per UTC day (one per slot) driving active play: harvest count, harvest-in-featured-area, and watch a rewarded ad. Targets rotate per day via a date hash; the featured area is drawn from the player's unlocked areas. Stateless except for progress/claim tracking in GameState.dailyMissionState (meta layer, survives prestige). Tune targets/rewards here.",
     "slots": [
