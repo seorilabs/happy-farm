@@ -114,6 +114,9 @@ import {
   getWheelStatus,
   spinWheel,
   getCropEconomyEstimate,
+  sortCropKeysForStrip,
+  nextSeedSortMode,
+  type SeedSortMode,
   getGameAnalyticsContext,
   getHarvestBonusBoostStatus,
   getHarvestBonusPromptStatus,
@@ -721,6 +724,9 @@ export default function FarmGame({
   gameStateRef.current = gameState;
   const [selectedTool, setSelectedTool] = useState<ToolKey>('harvest');
   const [selectedArea, setSelectedArea] = useState<AreaKey>(FIRST_AREA.key);
+  // Seed-strip display order. Session-only UI state (no need to persist); the
+  // last-chosen sort is kept while the app is open. See sortCropKeysForStrip.
+  const [seedSortMode, setSeedSortMode] = useState<SeedSortMode>('default');
   const [prestigeArchetype, setPrestigeArchetype] = useState<RegionArchetypeKey>(
     REGION_ARCHETYPES[0]?.key ?? 'plains'
   );
@@ -1710,6 +1716,17 @@ export default function FarmGame({
         {} as Record<CropKey, CropEconomyEstimate>
       ),
     [gameState, harvestBonusBoost.multiplier]
+  );
+  // Seed-strip display order for the selected area. Pure sort in farm-core; the
+  // profit key comes from the already-computed, modifier-aware economy map.
+  const sortedCropKeys = useMemo(
+    () =>
+      sortCropKeysForStrip(
+        visibleCropKeys,
+        seedSortMode,
+        (cropKey) => cropEconomyByKey[cropKey]?.netProfitPerHour ?? 0
+      ),
+    [visibleCropKeys, seedSortMode, cropEconomyByKey]
   );
   const readyPlotCount = useMemo(() => getReadyPlotCount(gameState), [gameState]);
   // Plant-all affordance for the currently selected crop tool: how many empty
@@ -3012,8 +3029,29 @@ export default function FarmGame({
           })}
         </ScrollView>
 
+        {selectedAreaUnlocked && visibleCropKeys.length > 1 ? (
+          <View style={styles.seedSortRow}>
+            <Pressable
+              style={styles.seedSortToggle}
+              onPress={() => setSeedSortMode((mode) => nextSeedSortMode(mode))}
+              accessibilityRole="button"
+              accessibilityLabel={messages.seedSortAccessibilityLabel}
+            >
+              <Text style={styles.seedSortToggleText}>
+                {messages.seedSortLabel(
+                  seedSortMode === 'profit'
+                    ? messages.seedSortProfit
+                    : seedSortMode === 'growth'
+                      ? messages.seedSortGrowth
+                      : messages.seedSortDefault
+                )}
+              </Text>
+            </Pressable>
+          </View>
+        ) : null}
+
         <View style={onboardingSeedHighlight ? styles.onboardingHighlight : undefined}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.toolScroll}>
+          <ScrollView horizontal showsHorizontalScrollIndicator contentContainerStyle={styles.toolScroll}>
             <ToolButton
               active={selectedTool === 'harvest'}
               icon="🖐️"
@@ -3021,7 +3059,7 @@ export default function FarmGame({
               toolKey="harvest"
               onSelect={onSelectTool}
             />
-            {visibleCropKeys.map((key) => {
+            {sortedCropKeys.map((key) => {
               const crop = getCrop(key);
               const cropCost = getCropPurchaseCost(gameState, key);
               const masteryRank = getMasteryStatus(gameState, key).rank;
