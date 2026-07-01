@@ -191,7 +191,7 @@ gh workflow run deploy-app-store.yml --ref develop -f release_tag=v1.1.1 -f uplo
 운영 기준:
 
 - workflow logic은 default branch(`develop`)에서 읽고, 앱 소스는 `release_tag`로 고정합니다.
-- `GITHUB_TOKEN`으로 생성한 tag push는 downstream tag-push workflow를 자동 실행하지 않을 수 있으므로, release tag 생성 후 수동 dispatch로 `release_tag`를 명시합니다.
+- 배포 워크플로는 태그 push로 자동 실행되지 않으므로(명시적 실행 전용), release tag 생성 후 `workflow_dispatch`(또는 `deploy-all`)로 `release_tag`를 명시해 실행합니다.
 - App Store Connect의 SDK validation을 통과하려면 Xcode 26/iOS 26 SDK가 필요합니다. 이 repo의 workflow는 `macos-26` runner를 사용합니다.
 
 workflow가 자동으로 주입하는 값:

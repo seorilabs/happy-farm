@@ -1,11 +1,12 @@
 name: Deploy Google Play
 
 on:
-  push:
-    tags:
-      - 'v*.*.*'
   workflow_dispatch:
     inputs:
+      release_tag:
+        description: '빌드/업로드할 릴리즈 태그 (예: v1.1.0). 비우면 선택한 ref를 사용합니다.'
+        required: false
+        type: string
       send_to_google_play:
         description: 'AAB 빌드 후 Google Play 내부 테스트에 올림'
         required: false
@@ -24,13 +25,34 @@ on:
         required: false
         default: false
         type: boolean
+  workflow_call:
+    inputs:
+      release_tag:
+        description: '빌드/업로드할 릴리즈 태그 (예: v1.1.0). 비우면 선택한 ref를 사용합니다.'
+        required: false
+        type: string
+      send_to_google_play:
+        description: 'AAB 빌드 후 Google Play 내부 테스트에 올림'
+        required: false
+        default: false
+        type: boolean
+      after_upload:
+        description: '업로드 후 처리: "초안만 만들기" 또는 "내부 테스터에게 배포하기"'
+        required: false
+        default: '초안만 만들기'
+        type: string
+      review_later_in_console:
+        description: '검토 제출은 자동으로 하지 않고 Play Console에서 나중에 처리'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
   id-token: write
 
 concurrency:
-  group: happy-farm-google-play-${{ github.ref_name }}
+  group: happy-farm-google-play-${{ inputs.release_tag || github.ref_name }}
   cancel-in-progress: true
 
 jobs:
@@ -45,12 +67,16 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.release_tag || github.ref_name }}
 
       - name: Setup pnpm workspace
         uses: ./.github/actions/setup-pnpm-workspace
 
       - name: Resolve release version
         id: release-version
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
         run: node scripts/resolve-release-version.mjs --github-output --github-step-summary --write-release-info --quiet
 
       - name: Setup Android build
