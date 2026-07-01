@@ -1,6 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
+import { scanHardcodedHangul } from './lib/hangul-scan.js';
+
 const root = process.cwd();
 const requiredLocales = ['ko-KR', 'en-US'];
 const failures = [];
@@ -24,41 +26,21 @@ function requireLocaleMap(configName, mapPath, value) {
 function assertNoHangul(relativePath) {
   const absolutePath = path.join(root, relativePath);
   const content = fs.readFileSync(absolutePath, 'utf8');
-  const lines = content.split(/\r?\n/);
-  // 검사 대상은 "사용자-facing 문자열"이다. 한글 주석은 위반이 아니므로,
-  // 라인 검사 전에 // 라인 주석과 /* */ 블록 주석(여러 줄 포함)을 제거해
-  // 코드/문자열 리터럴에 남은 한글만 위반으로 잡는다.
-  let inBlockComment = false;
-  lines.forEach((line, index) => {
-    let code = '';
-    let i = 0;
-    while (i < line.length) {
-      if (inBlockComment) {
-        const end = line.indexOf('*/', i);
-        if (end === -1) {
-          i = line.length;
-        } else {
-          inBlockComment = false;
-          i = end + 2;
-        }
-        continue;
-      }
-      if (line.startsWith('//', i)) {
-        break; // 라인 나머지는 주석
-      }
-      if (line.startsWith('/*', i)) {
-        inBlockComment = true;
-        i += 2;
-        continue;
-      }
-      code += line[i];
-      i += 1;
-    }
-    if (/[가-힣]/.test(code)) {
-      failures.push(`${relativePath}:${index + 1} 사용자-facing 문자열은 locale catalog를 사용해야 합니다.`);
-    }
-  });
-  passes.push(`${relativePath}에 한글 UI 하드코딩이 없습니다.`);
+  // 검사 대상은 "사용자-facing 문자열 리터럴"이다. 한글 주석(// 라인, /* */ 블록,
+  // /** */ JSDoc)은 위반이 아니다. 문자열 리터럴과 주석은 라인 단위 패턴 매칭으로는
+  // 구분할 수 없으므로(예: const s = "안녕 // 메모"에서 // 뒤를 자르면 문자열 안의
+  // 한글을 놓친다), 파일 전체를 문자 단위 상태 기계로 스캔한다. 자세한 규칙은
+  // scripts/lib/hangul-scan.js 참고. 한글은 문자열/템플릿 리터럴 안에서만 위반이다.
+  const { violations } = scanHardcodedHangul(content);
+  for (const violation of violations) {
+    failures.push(
+      `${relativePath}:${violation.line} 사용자-facing 문자열은 locale catalog를 사용해야 합니다. (하드코딩 한글: ${violation.snippet})`,
+    );
+  }
+  // 파일 단위 통과 메시지는 위반이 하나도 없을 때만 남긴다(집계 정확도).
+  if (violations.length === 0) {
+    passes.push(`${relativePath}에 한글 UI 하드코딩이 없습니다.`);
+  }
 }
 
 const playConfig = readJson('play-store/google-play.config.json');
