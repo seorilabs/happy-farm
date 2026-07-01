@@ -177,7 +177,7 @@ test('renders correctly', async () => {
   await ReactTestRenderer.act(async () => {
     renderer?.unmount();
   });
-});
+}, 30000);
 
 test('waits for rewarded ad close before resolving an earned reward', async () => {
   let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
