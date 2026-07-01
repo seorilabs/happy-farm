@@ -85,12 +85,12 @@ describe('AchievementsSheet', () => {
   });
 
   test('claims a track reward once its stat passes the next threshold', () => {
-    const track = ACHIEVEMENT_TRACKS[0]!;
+    // 누적 스탯 기반(lifetime) 트랙만 골라, 해당 트랙의 스탯을 임계 위로 올려 수령 가능 상태로 만든다.
+    const track = ACHIEVEMENT_TRACKS.find((candidate) => candidate.stat != null)!;
     const base = createInitialState();
-    // 첫 트랙의 누적 스탯만 임계 위로 올려, 해당 트랙만 수령 가능 상태로 만든다.
     const state: GameState = {
       ...base,
-      lifetimeStats: { ...base.lifetimeStats, [track.stat]: Number.MAX_SAFE_INTEGER },
+      lifetimeStats: { ...base.lifetimeStats, [track.stat!]: Number.MAX_SAFE_INTEGER },
     };
     const onClaim = jest.fn();
     const screen = render(

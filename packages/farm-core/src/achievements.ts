@@ -1,10 +1,18 @@
 import balance from './balance.json';
 import type { AchievementTrackKey, GameState, LifetimeStats, TitleKey } from './types';
 
+// Where a track draws its progress value from. `lifetime` reads the cumulative
+// stat named by `stat`; the derived sources compute from already-tracked state so
+// no new persistent field is introduced.
+export type AchievementStatSource = 'lifetime' | 'collection' | 'dailyStreak';
+
 export type AchievementTrack = {
   key: AchievementTrackKey;
   icon: string;
-  stat: keyof LifetimeStats;
+  // Present for lifetime-sourced tracks; omitted for derived sources.
+  stat?: keyof LifetimeStats;
+  // Defaults to 'lifetime' when omitted.
+  source?: AchievementStatSource;
   base: number;
   growth: number;
   starsPerTier: number;
@@ -19,6 +27,42 @@ export type AchievementTitle = {
 
 export const ACHIEVEMENT_TRACKS = balance.achievements.tracks as AchievementTrack[];
 export const ACHIEVEMENT_TITLES = balance.achievements.titles as AchievementTitle[];
+
+// Crops that belong to a farm area make up the collection. The collection screen
+// (getCollectionSummary) counts discoveries area by area, so we mirror that domain
+// here to keep the achievement stat in lockstep. Computed from balance directly to
+// avoid importing constants (which imports this module — a circular dependency).
+const COLLECTABLE_CROP_KEYS: ReadonlySet<string> = new Set(
+  (balance.crops as ReadonlyArray<{ key: string; area?: string }>)
+    .filter((crop) => typeof crop.area === 'string' && crop.area.length > 0)
+    .map((crop) => crop.key)
+);
+
+// Number of distinct collectable crop species the player has discovered — the same
+// figure the collection screen shows as "discovered".
+function getCollectionDiscoveredCount(gameState: GameState): number {
+  const discovered = new Set<string>();
+  for (const cropKey of gameState.harvestedCropKeys) {
+    if (COLLECTABLE_CROP_KEYS.has(cropKey)) {
+      discovered.add(cropKey);
+    }
+  }
+  return discovered.size;
+}
+
+// Resolves a track's current progress value from whichever already-tracked source
+// it draws on, so derived tracks need no new persistent field.
+export function getAchievementStatValue(gameState: GameState, track: AchievementTrack): number {
+  switch (track.source ?? 'lifetime') {
+    case 'collection':
+      return getCollectionDiscoveredCount(gameState);
+    case 'dailyStreak':
+      return Math.max(0, Math.floor(gameState.dailyBonusState.streak));
+    case 'lifetime':
+    default:
+      return track.stat != null ? gameState.lifetimeStats[track.stat] : 0;
+  }
+}
 
 function getKnownTrack(trackKey: AchievementTrackKey): AchievementTrack {
   const track = ACHIEVEMENT_TRACKS.find((candidate) => candidate.key === trackKey);
@@ -62,7 +106,7 @@ export type AchievementTrackStatus = {
 
 export function getAchievementTrackStatus(gameState: GameState, trackKey: AchievementTrackKey): AchievementTrackStatus {
   const track = getKnownTrack(trackKey);
-  const statValue = gameState.lifetimeStats[track.stat];
+  const statValue = getAchievementStatValue(gameState, track);
   const claimedTiers = getClaimedTiers(gameState, trackKey);
 
   // Tiers must be claimed in order; the next tier is the lowest unclaimed one.

@@ -5,6 +5,7 @@ import {
   ACHIEVEMENT_TRACKS,
   claimNextAchievementTier,
   getAchievementClaimKey,
+  getAchievementStatValue,
   getAchievementThreshold,
   getAchievementTrackStatus,
   getClaimableAchievementCount,
@@ -89,6 +90,78 @@ describe('achievement tracks', () => {
   });
 });
 
+describe('derived achievement tracks', () => {
+  test('collection track counts discovered crop species and is claimable at the threshold', () => {
+    const track = getTrack('collection_curator');
+    expect(track.source).toBe('collection');
+    // Five starter-field crops → five discovered species, matching tier 1 (base).
+    const discovered = ['carrot', 'wheat', 'potato', 'onion', 'sweet_potato'] as const;
+    const state: GameState = { ...createInitialState(), harvestedCropKeys: [...discovered] };
+
+    expect(getAchievementStatValue(state, track)).toBe(discovered.length);
+    expect(track.base).toBe(discovered.length);
+
+    const status = getAchievementTrackStatus(state, 'collection_curator');
+    expect(status.statValue).toBe(discovered.length);
+    expect(status.nextTier).toBe(1);
+    expect(status.claimable).toBe(true);
+
+    const claimed = claimNextAchievementTier(state, 'collection_curator');
+    expect(claimed?.claimedTier).toBe(1);
+    expect(claimed?.starsAwarded).toBe(track.starsPerTier);
+    expect(claimed?.state.prestige.stars).toBe(track.starsPerTier);
+  });
+
+  test('collection track ignores duplicates and non-collectable keys', () => {
+    const track = getTrack('collection_curator');
+    const state: GameState = {
+      ...createInitialState(),
+      // Duplicate carrot must not double-count; unknown keys must not count.
+      harvestedCropKeys: ['carrot', 'carrot', 'wheat', 'not_a_real_crop'] as never,
+    };
+    expect(getAchievementStatValue(state, track)).toBe(2);
+  });
+
+  test('daily streak track reads the current attendance streak', () => {
+    const track = getTrack('attendance_devotee');
+    expect(track.source).toBe('dailyStreak');
+    const state: GameState = {
+      ...createInitialState(),
+      dailyBonusState: { lastClaimedAt: 0, streak: track.base },
+    };
+
+    expect(getAchievementStatValue(state, track)).toBe(track.base);
+
+    const status = getAchievementTrackStatus(state, 'attendance_devotee');
+    expect(status.claimable).toBe(true);
+    expect(status.nextTier).toBe(1);
+
+    // Below the threshold nothing is claimable yet.
+    const below: GameState = {
+      ...createInitialState(),
+      dailyBonusState: { lastClaimedAt: 0, streak: track.base - 1 },
+    };
+    expect(getAchievementTrackStatus(below, 'attendance_devotee').claimable).toBe(false);
+  });
+
+  test('a claimed derived tier survives even after the streak resets', () => {
+    const track = getTrack('attendance_devotee');
+    const reached: GameState = {
+      ...createInitialState(),
+      dailyBonusState: { lastClaimedAt: 0, streak: track.base },
+    };
+    const claimed = claimNextAchievementTier(reached, 'attendance_devotee');
+    expect(claimed?.claimedTier).toBe(1);
+
+    // Streak lapses back to 0, but the already-claimed tier stays claimed.
+    const afterReset: GameState = { ...claimed!.state, dailyBonusState: { lastClaimedAt: null, streak: 0 } };
+    const status = getAchievementTrackStatus(afterReset, 'attendance_devotee');
+    expect(status.claimedTierCount).toBe(1);
+    expect(status.nextTier).toBe(2);
+    expect(status.claimable).toBe(false);
+  });
+});
+
 describe('titles', () => {
   test('titles unlock when the referenced tier is claimed and can be equipped', () => {
     const title = ACHIEVEMENT_TITLES[0]!;
@@ -97,7 +170,7 @@ describe('titles', () => {
       getAchievementClaimKey(title.track, index + 1)
     );
     const state: GameState = {
-      ...stateWithStats({ [track.stat]: getAchievementThreshold(track, title.tier) }),
+      ...stateWithStats({ [track.stat!]: getAchievementThreshold(track, title.tier) }),
       claimedAchievements: claimKeys,
     };
 
@@ -107,6 +180,20 @@ describe('titles', () => {
     const equipped = setActiveTitle(state, title.key);
     expect(equipped.activeTitle).toBe(title.key);
     expect(setActiveTitle(equipped, null).activeTitle).toBeNull();
+  });
+
+  test('derived-track titles unlock from their track claims', () => {
+    const title = ACHIEVEMENT_TITLES.find((candidate) => candidate.track === 'attendance_devotee');
+    expect(title).toBeDefined();
+    const claimKeys = Array.from({ length: title!.tier }, (_, index) =>
+      getAchievementClaimKey(title!.track, index + 1)
+    );
+    const state: GameState = { ...createInitialState(), claimedAchievements: claimKeys };
+
+    expect(isTitleUnlocked(state, title!.key)).toBe(true);
+    // One tier short must stay locked.
+    const shortState: GameState = { ...createInitialState(), claimedAchievements: claimKeys.slice(0, -1) };
+    expect(isTitleUnlocked(shortState, title!.key)).toBe(false);
   });
 
   test('locked titles cannot be equipped', () => {
