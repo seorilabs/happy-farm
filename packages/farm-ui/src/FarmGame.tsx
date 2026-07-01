@@ -110,6 +110,7 @@ import {
   canPurchaseDecoration,
   isDecorationOwned,
   purchaseDecoration,
+  getPlacedDecorations,
   getCropEconomyEstimate,
   getGameAnalyticsContext,
   getHarvestBonusBoostStatus,
@@ -2926,6 +2927,7 @@ export default function FarmGame({
           })}
           <HarvestFxOverlay ref={harvestFxRef} tileSize={plotTileSize} />
         </View>
+        <FarmDecorationStrip gameState={gameState} />
       </ScrollView>
 
       <View style={[styles.toolStrip, { paddingBottom: insets.bottom + 10 }]}>
@@ -5217,6 +5219,32 @@ function ShopAreaUnlockRows({
       {sequentialAreas.map((area, index) => renderAreaCard(area, index === 0))}
       {gatedAreas.map((area) => renderAreaCard(area, true))}
     </>
+  );
+}
+
+// Cosmetic layer that surfaces owned decorations on the main farm screen so the
+// gold spent on them is actually visible (the shop copy promises "decorate your
+// farm"). Rendered below the plot grid — never over it — so it can't cover a
+// plant/harvest hit area, and hidden entirely when nothing is owned. Purely
+// decorative, so the whole strip is removed from the accessibility tree to keep
+// it from interrupting the plot-state labels a screen-reader user relies on.
+function FarmDecorationStrip({ gameState }: { gameState: GameState }) {
+  const placed = getPlacedDecorations(gameState);
+  if (placed.length === 0) {
+    return null;
+  }
+  return (
+    <View
+      style={styles.decorationStrip}
+      importantForAccessibility="no-hide-descendants"
+      accessibilityElementsHidden
+    >
+      {placed.map((decoration) => (
+        <Text key={decoration.key} style={styles.decorationStripIcon}>
+          {decoration.icon}
+        </Text>
+      ))}
+    </View>
   );
 }
 
