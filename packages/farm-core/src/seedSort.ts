@@ -23,8 +23,11 @@ export function nextSeedSortMode(mode: SeedSortMode): SeedSortMode {
   return SEED_SORT_MODES[(index + 1) % SEED_SORT_MODES.length]!;
 }
 
-function safeNumber(value: number): number {
-  return Number.isFinite(value) ? value : 0;
+// 비유한(NaN/±Infinity = 알 수 없는) 수익은 정렬 최하위로 보낸다(-Infinity).
+// 음수(비용 > 수확인 손실) 같은 유한 값은 그대로 보존해 실제 순위를 지킨다.
+// 0으로 치환하면 손실 작물이 부당하게 위로 올라오므로 쓰지 않는다.
+function safeProfit(value: number): number {
+  return Number.isFinite(value) ? value : Number.NEGATIVE_INFINITY;
 }
 
 // 미지의/누락 growTime은 맨 뒤로 밀리도록 +Infinity로 취급.
@@ -47,8 +50,11 @@ export function sortCropKeysForStrip(
   const decorated = cropKeys.map((key, index) => ({ key, index }));
   if (mode === 'profit') {
     decorated.sort((a, b) => {
-      const diff = safeNumber(netProfitPerHour(b.key)) - safeNumber(netProfitPerHour(a.key)); // 내림차순
-      return diff !== 0 ? diff : a.index - b.index;
+      const pa = safeProfit(netProfitPerHour(a.key));
+      const pb = safeProfit(netProfitPerHour(b.key));
+      // pa!==pb 가드로 (-Infinity)-(-Infinity)=NaN를 피하고, 값이 같으면
+      // 원본 인덱스로 타이브레이크해 카탈로그 순서를 보존한다.
+      return pa !== pb ? pb - pa : a.index - b.index; // 내림차순
     });
   } else {
     decorated.sort((a, b) => {

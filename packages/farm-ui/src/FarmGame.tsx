@@ -3029,9 +3029,14 @@ export default function FarmGame({
           })}
         </ScrollView>
 
-        {selectedAreaUnlocked && visibleCropKeys.length > 1 ? (
+        {/* visibleCropKeys is [] for a locked area (nothing to sort → toggle hidden);
+            for an unlocked area it holds every area crop INCLUDING breed-locked ones,
+            so the toggle appears whenever 2+ crops exist and can reorder locked crops
+            too (their lock/NEW badges are rendered by ToolButton, unaffected by order). */}
+        {visibleCropKeys.length > 1 ? (
           <View style={styles.seedSortRow}>
             <Pressable
+              testID="seed-sort-toggle"
               style={styles.seedSortToggle}
               onPress={() => setSeedSortMode((mode) => nextSeedSortMode(mode))}
               accessibilityRole="button"
@@ -3051,7 +3056,12 @@ export default function FarmGame({
         ) : null}
 
         <View style={onboardingSeedHighlight ? styles.onboardingHighlight : undefined}>
-          <ScrollView horizontal showsHorizontalScrollIndicator contentContainerStyle={styles.toolScroll}>
+          <ScrollView
+            testID="seed-strip-scroll"
+            horizontal
+            showsHorizontalScrollIndicator
+            contentContainerStyle={styles.toolScroll}
+          >
             <ToolButton
               active={selectedTool === 'harvest'}
               icon="🖐️"
@@ -3067,6 +3077,7 @@ export default function FarmGame({
               return (
                 <ToolButton
                   key={key}
+                  testID={`seed-tool-${key}`}
                   active={selectedTool === key}
                   icon={crop.icon}
                   name={getLocalizedCropName(key)}
@@ -5165,6 +5176,7 @@ const ToolButton = React.memo(function ToolButton({
   isNew,
   newLabel,
   toolKey,
+  testID,
   onSelect,
 }: {
   active: boolean;
@@ -5177,10 +5189,12 @@ const ToolButton = React.memo(function ToolButton({
   isNew?: boolean;
   newLabel?: string;
   toolKey: ToolKey;
+  testID?: string;
   onSelect: (toolKey: ToolKey) => void;
 }) {
   return (
     <Pressable
+      testID={testID}
       accessibilityRole="button"
       accessibilityLabel={cost != null ? `${name}, ${cost}` : name}
       accessibilityState={{ selected: active }}
