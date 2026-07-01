@@ -1,0 +1,64 @@
+name: Static Checks
+
+# org 표준 재사용 워크플로우 caller: main 정적 게이트만 담당.
+# lint/typecheck/test/i18n/balance + mobile typecheck/test.
+# 배포/마켓 업로드는 deploy-*.yml(Release/Tag 트리거)이 담당하며 이 워크플로우는 관여하지 않는다.
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - '**.md'
+      - '**.png'
+      - '**.jpg'
+      - '**.jpeg'
+      - '**.wav'
+      - '**.gitkeep'
+      - 'assets/**'
+      - 'docs/**'
+      - 'play-store/assets/**'
+      - 'play-store/screenshots/**'
+      - '.github/workflows/deploy-*.yml'
+  pull_request:
+    branches:
+      - main
+    paths-ignore:
+      - '**.md'
+      - '**.png'
+      - '**.jpg'
+      - '**.jpeg'
+      - '**.wav'
+      - '**.gitkeep'
+      - 'assets/**'
+      - 'docs/**'
+      - 'play-store/assets/**'
+      - 'play-store/screenshots/**'
+      - '.github/workflows/deploy-*.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: happy-farm-static-checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  static-checks:
+    uses: seorilabs/.github/.github/workflows/rn-static-checks.yml@main
+    secrets: inherit
+    with:
+      runs_on: ${{ github.event.repository.private && 'seorilabs-rpi-arm64' || 'ubuntu-latest' }}
+      package_manager: pnpm
+      pnpm_version: 11.3.0
+      node_version: 24.16.0
+      timeout_minutes: 35
+      install_command: pnpm install --frozen-lockfile
+      check_command: |
+        pnpm lint
+        pnpm typecheck
+        pnpm test
+        pnpm check:i18n
+        pnpm check:balance
+        pnpm --dir apps/mobile typecheck
+        pnpm --dir apps/mobile test --watchAll=false
