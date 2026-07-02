@@ -148,3 +148,55 @@ describe('save migration & prestige', () => {
     expect(prestiged.placedDecorations).toEqual([FIRST]);
   });
 });
+
+// #210: 장식 카탈로그 중·후반 티어 확장. "후반 골드 싱크" 설계 의도에 맞게 카탈로그가
+// 100,000G~수십억G 구간을 커버하고, 가격 오름차순·아이콘/키 유일성·구 카탈로그 세이브의
+// 안정 렌더를 데이터 계약으로 고정한다.
+describe('catalog tier coverage (#210)', () => {
+  test('가격이 카탈로그 선언 순서대로 순증가한다(오름차순 계약)', () => {
+    for (let index = 1; index < DECORATIONS.length; index += 1) {
+      expect(DECORATIONS[index]!.price).toBeGreaterThan(DECORATIONS[index - 1]!.price);
+    }
+  });
+
+  test('카탈로그가 중·후반 구간(100,000G~수십억G)을 커버한다', () => {
+    const prices = DECORATIONS.map((decoration) => decoration.price);
+    // 신규 6종의 하한(100,000G)과 상한(수십억G) 커버.
+    expect(prices.some((price) => price >= 100_000 && price < 10_000_000)).toBe(true);
+    expect(prices.some((price) => price >= 10_000_000 && price < 1_000_000_000)).toBe(true);
+    expect(Math.max(...prices)).toBeGreaterThanOrEqual(10_000_000_000);
+    // 총합이 기존 70,700G에서 유의미하게 확장됐다(후반 잉여 골드 싱크).
+    expect(prices.reduce((sum, price) => sum + price, 0)).toBeGreaterThan(1_000_000_000);
+  });
+
+  test('아이콘도 키처럼 카탈로그 안에서 중복이 없다', () => {
+    const icons = DECORATIONS.map((decoration) => decoration.icon);
+    expect(new Set(icons).size).toBe(icons.length);
+  });
+
+  test('구 카탈로그(확장 전 6종) 세이브가 신규 카탈로그 순서로 안정 렌더된다', () => {
+    // 확장 전 세이브가 가질 수 있는 보유 목록: 기존 6종 일부(저장 순서 뒤섞임 + 잡음 키).
+    const legacySave = ['lantern', 'signpost', 'pond', 'ghost_item', 'signpost'];
+    const normalized = normalizePlacedDecorations(legacySave);
+    // 알 수 없는 키 제거·중복 제거 후 카탈로그 선언 순서로 정렬된다.
+    expect(normalized).toEqual(['signpost', 'pond', 'lantern']);
+
+    // getPlacedDecorations도 같은 순서 계약으로 렌더 목록을 만든다(신규 항목이 카탈로그
+    // 뒤에 추가돼도 기존 보유분의 순서는 변하지 않는다).
+    const state: GameState = { ...createInitialState(), placedDecorations: normalized };
+    expect(getPlacedDecorations(state).map((decoration) => decoration.key)).toEqual([
+      'signpost',
+      'pond',
+      'lantern',
+    ]);
+  });
+
+  test('신규 후반 장식도 구매 경로(부족→불가, 충분→1회 구매)가 동일하게 동작한다', () => {
+    const last = DECORATIONS[DECORATIONS.length - 1]!;
+    expect(canPurchaseDecoration(stateWithGold(last.price - 1), last.key)).toBe(false);
+    const bought = purchaseDecoration(stateWithGold(last.price), last.key);
+    expect(bought).not.toBeNull();
+    expect(bought!.gold).toBe(0);
+    expect(isDecorationOwned(bought!.placedDecorations, last.key)).toBe(true);
+  });
+});

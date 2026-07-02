@@ -181,6 +181,12 @@ const KO_DECORATION_LABELS = {
   flowerbed: { name: '꽃밭', description: '농장을 화사하게 물들이는 꽃밭' },
   pond: { name: '연못', description: '잔잔한 분위기를 더하는 작은 연못' },
   lantern: { name: '등불', description: '저녁 농장을 밝히는 따뜻한 등불' },
+  well: { name: '우물', description: '농장의 중심을 잡아 주는 오래된 우물' },
+  windmill: { name: '풍차', description: '바람을 타고 도는 그림 같은 풍차' },
+  barn: { name: '헛간', description: '수확물이 가득한 붉은 지붕 헛간' },
+  hot_spring: { name: '온천', description: '김이 모락모락 피어오르는 노천 온천' },
+  golden_statue: { name: '황금 동상', description: '농장의 번영을 기리는 눈부신 황금 동상' },
+  rainbow_fountain: { name: '무지개 분수', description: '물줄기마다 무지개가 걸리는 전설의 분수' },
 } satisfies Record<DecorationKey, DescribedLabel>;
 
 const EN_DECORATION_LABELS = {
@@ -190,6 +196,12 @@ const EN_DECORATION_LABELS = {
   flowerbed: { name: 'Flower Bed', description: 'A bright flower bed that livens up the farm.' },
   pond: { name: 'Pond', description: 'A small pond that adds a calm touch.' },
   lantern: { name: 'Lantern', description: 'A warm lantern that lights the evening farm.' },
+  well: { name: 'Well', description: 'An old well that anchors the heart of the farm.' },
+  windmill: { name: 'Windmill', description: 'A picturesque windmill turning in the breeze.' },
+  barn: { name: 'Barn', description: 'A red-roofed barn brimming with the harvest.' },
+  hot_spring: { name: 'Hot Spring', description: 'An open-air spring with steam drifting up.' },
+  golden_statue: { name: 'Golden Statue', description: 'A dazzling statue honoring your farm prosperity.' },
+  rainbow_fountain: { name: 'Rainbow Fountain', description: 'A legendary fountain with a rainbow in every jet.' },
 } satisfies Record<DecorationKey, DescribedLabel>;
 
 const EN_AREA_LABELS = {
