@@ -9,11 +9,25 @@ platform :ios, min_ios_version_supported
 prepare_react_native_project!
 use_modular_headers!
 
-linkage = ENV['USE_FRAMEWORKS']
-if linkage != nil
-  Pod::UI.puts "Configuring Pod with #{linkage}ally linked Frameworks".green
-  use_frameworks! :linkage => linkage.to_sym
-  $RNFirebaseAsStaticFramework = true
+# RNFirebase(Auth/Firestore 등 Swift 모듈)와 gRPC 는 프레임워크 링키지를 요구한다.
+# 미설정 시 static 프레임워크를 기본값으로 하고, USE_FRAMEWORKS 로 override 할 수 있다.
+linkage = ENV['USE_FRAMEWORKS'] || 'static'
+Pod::UI.puts "Configuring Pod with #{linkage}ally linked Frameworks".green
+use_frameworks! :linkage => linkage.to_sym
+$RNFirebaseAsStaticFramework = true
+
+# RNFirebase 브리지 pod(RNFB*)은 clang 모듈로 빌드되면 <Firebase/Firebase.h> umbrella 를
+# 모듈 컨텍스트에서 해석하지 못해 "could not build Objective-C module 'RNFBFirestore'" 로 실패한다.
+# use_frameworks! 하에서도 이 pod 들만 static library 로 강제해 plain ObjC 로 컴파일한다
+# (Expo build-properties 의 forceStaticLinking 과 동일 목적).
+pre_install do |installer|
+  installer.pod_targets.each do |pod|
+    if pod.name.start_with?('RNFB')
+      def pod.build_type
+        Pod::BuildType.static_library
+      end
+    end
+  end
 end
 
 target 'HappyFarmMobile' do

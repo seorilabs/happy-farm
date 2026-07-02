@@ -9,6 +9,8 @@
     "build:ait": "pnpm --dir apps/ait build",
     "build:android": "pnpm --dir apps/mobile build:android",
     "release:android:aab": "node scripts/build-google-play-aab.mjs",
+    "release:ios": "node scripts/build-app-store.mjs",
+    "release:ios:archive": "node scripts/build-app-store.mjs --no-upload",
     "check:core": "jest packages/farm-core --runInBand",
     "check:architecture": "node scripts/check-architecture.mjs",
     "check:ait": "pnpm check:architecture && pnpm --dir apps/ait lint && pnpm --dir apps/ait typecheck && pnpm check:core && pnpm --dir apps/ait test && pnpm --dir apps/ait build",
