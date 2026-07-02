@@ -13,6 +13,7 @@ import {
   rolloverDailyMissions,
   type DailyMissionState,
 } from '../missions';
+import balance from '../balance.json';
 import { CROPS, createInitialState, migrateLoadedState } from '../constants';
 import { performHarvest } from '../harvest';
 import { createPrestigedState } from '../prestige';
@@ -219,5 +220,77 @@ describe('save migration & prestige', () => {
   test('normalizeDailyMissionState falls back for non-objects', () => {
     expect(normalizeDailyMissionState(null)).toEqual(createInitialDailyMissionState());
     expect(normalizeDailyMissionState('nope')).toEqual(createInitialDailyMissionState());
+  });
+});
+
+// #207: 미션 보상 진행도 스케일링. 보상 = max(rewardGoldMin, floor(광고보상 × adRewardRatio)).
+// 주입이 없거나 비정상이면 기본 광고 보상(초기 100G) 기준으로 계산돼 하한(기존 고정값)이
+// 그대로 지급된다 — 초기 체감 유지 계약을 여기서 고정한다.
+describe('progress-scaled rewards (#207)', () => {
+  const SLOTS = balance.missions.slots;
+  const keyA = getMissionDayKey(DAY_A);
+
+  test('주입이 없으면 슬롯별 하한(rewardGoldMin)이 그대로 지급된다(기존 고정 보상과 동일)', () => {
+    const missions = getDailyMissions(keyA, ALL_AREAS);
+    expect(missions.map((m) => m.rewardGold)).toEqual(SLOTS.map((slot) => slot.rewardGoldMin));
+  });
+
+  test('광고 보상이 커지면 보상이 비율대로 스케일되고 항상 그 광고 보상보다 작다', () => {
+    const adGold = 1_000_000; // 과수원 이후 수준의 진행도 스케일 광고 보상
+    const missions = getDailyMissions(keyA, ALL_AREAS, adGold);
+    missions.forEach((mission, index) => {
+      expect(mission.rewardGold).toBe(Math.floor(adGold * SLOTS[index]!.adRewardRatio));
+      // 일일 비율 < 1 계약(check-balance invariant와 쌍): 미션이 광고 시청을 대체하지 않는다.
+      expect(mission.rewardGold).toBeLessThan(adGold);
+    });
+  });
+
+  test('비정상 주입값(NaN/0/음수)은 기본 광고 보상으로 폴백해 하한이 지급된다', () => {
+    for (const bad of [Number.NaN, 0, -5]) {
+      const missions = getDailyMissions(keyA, ALL_AREAS, bad);
+      expect(missions.map((m) => m.rewardGold)).toEqual(SLOTS.map((slot) => slot.rewardGoldMin));
+    }
+  });
+
+  test('수령 시 주입된 광고 보상 기준으로 지급되고 스냅샷 표시 금액과 일치한다', () => {
+    const base = createInitialState();
+    const mission = getDailyMissions(keyA, base.unlockedAreas).find((m) => m.slot === 0)!;
+    const progress = new Array(3).fill(0);
+    progress[0] = mission.target;
+    const state: GameState = {
+      ...base,
+      dailyMissionState: {
+        dayKey: keyA,
+        areaKeys: new Array(3).fill(null),
+        progress,
+        claimedSlots: [],
+      },
+    };
+    const adGold = 250_000;
+    const shown = getDailyMissionsSnapshot(state.dailyMissionState, DAY_A, state.unlockedAreas, adGold).missions.find(
+      (m) => m.slot === 0
+    )!;
+    const claimed = claimMission(state, 0, DAY_A, adGold);
+    expect(claimed).not.toBeNull();
+    expect(claimed!.gold - state.gold).toBe(shown.rewardGold);
+    expect(claimed!.gold - state.gold).toBe(Math.floor(adGold * SLOTS[0]!.adRewardRatio));
+  });
+
+  test('기존 세이브(고정 rewardGold 시절 진행 상태)도 오류 없이 수령된다', () => {
+    // 구 스키마 세이브에는 보상 관련 필드가 저장되지 않으므로(진행도/수령만 저장),
+    // 로드 후 수령이 현행 하한 보상으로 정상 동작함을 고정한다.
+    const base = createInitialState();
+    const legacy = {
+      dailyMissionState: {
+        dayKey: keyA,
+        areaKeys: [null, null, null],
+        progress: [999, 0, 0],
+        claimedSlots: [],
+      },
+    } as unknown as Partial<GameState>;
+    const migrated = migrateLoadedState(legacy, base);
+    const claimed = claimMission(migrated, 0, DAY_A);
+    expect(claimed).not.toBeNull();
+    expect(claimed!.gold - migrated.gold).toBe(SLOTS[0]!.rewardGoldMin);
   });
 });

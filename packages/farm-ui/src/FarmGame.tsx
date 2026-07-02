@@ -1868,7 +1868,8 @@ export default function FarmGame({
     const rewardHolder: { gold: number | null } = { gold: null };
     setGameState((prev) => {
       const beforeGold = prev.gold;
-      const next = claimMission(prev, slot, now);
+      // 진행도 스케일 광고 보상을 주입해 시트 표시 금액과 동일한 스케일로 지급한다.
+      const next = claimMission(prev, slot, now, getRewardedGoldAmount(prev));
       if (next == null) {
         return prev;
       }
@@ -1888,7 +1889,8 @@ export default function FarmGame({
     const rewardHolder: { gold: number | null } = { gold: null };
     setGameState((prev) => {
       const beforeGold = prev.gold;
-      const next = claimWeeklyMission(prev, slot, now);
+      // 일일 미션 수령과 동일하게 진행도 스케일 광고 보상을 주입한다.
+      const next = claimWeeklyMission(prev, slot, now, getRewardedGoldAmount(prev));
       if (next == null) {
         return prev;
       }

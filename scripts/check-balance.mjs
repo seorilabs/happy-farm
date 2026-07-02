@@ -238,6 +238,49 @@ check(
   `dailyBonus.weeklyMilestone.adRewardRatio(${weeklyMilestoneRatio})는 0 초과 ${WEEKLY_MILESTONE_RATIO_MAX} 이하여야 합니다.`
 );
 
+// 4-b) 미션 보상 스케일링(#207): 보상 = max(rewardGoldMin, floor(광고보상 × adRewardRatio)).
+// 일일 슬롯 비율은 1 미만이어야 스케일 구간에서 미션이 보상형 광고를 대체하지 않는다.
+// 주간 슬롯은 "한 주의 노력"이라 1 이상을 허용하되 상한(≤5)으로 본편 진행 압도를 막는다.
+// rewardGoldMin(초반 체감 보존 하한)은 0 이상 유한값이어야 한다.
+const WEEKLY_MISSION_AD_REWARD_RATIO_MIN = 1;
+const WEEKLY_MISSION_AD_REWARD_RATIO_MAX = 5;
+const dailyMissionSlots = balance.missions?.slots ?? [];
+check(dailyMissionSlots.length > 0, 'missions.slots는 비어 있을 수 없습니다.');
+for (const slot of dailyMissionSlots) {
+  const label = slot?.type ?? '(타입 없음)';
+  check(
+    isFiniteNumber(slot.adRewardRatio) && slot.adRewardRatio > 0 && slot.adRewardRatio < 1,
+    `일일 미션 ${label}: adRewardRatio(${slot.adRewardRatio})는 0 초과 1 미만이어야 합니다(광고 인센티브 보존).`
+  );
+  check(
+    isFiniteNumber(slot.rewardGoldMin) && slot.rewardGoldMin >= 0,
+    `일일 미션 ${label}: rewardGoldMin(${slot.rewardGoldMin})은 0 이상의 유한 값이어야 합니다.`
+  );
+  check(
+    Array.isArray(slot.targets) && slot.targets.length > 0 && slot.targets.every((t) => Number.isInteger(t) && t > 0),
+    `일일 미션 ${label}: targets는 양의 정수 배열이어야 합니다.`
+  );
+}
+const weeklyMissionSlots = balance.missions?.weekly?.slots ?? [];
+check(weeklyMissionSlots.length > 0, 'missions.weekly.slots는 비어 있을 수 없습니다.');
+for (const slot of weeklyMissionSlots) {
+  const label = slot?.type ?? '(타입 없음)';
+  check(
+    isFiniteNumber(slot.adRewardRatio) &&
+      slot.adRewardRatio >= WEEKLY_MISSION_AD_REWARD_RATIO_MIN &&
+      slot.adRewardRatio <= WEEKLY_MISSION_AD_REWARD_RATIO_MAX,
+    `주간 미션 ${label}: adRewardRatio(${slot.adRewardRatio})는 ${WEEKLY_MISSION_AD_REWARD_RATIO_MIN} 이상 ${WEEKLY_MISSION_AD_REWARD_RATIO_MAX} 이하여야 합니다.`
+  );
+  check(
+    isFiniteNumber(slot.rewardGoldMin) && slot.rewardGoldMin >= 0,
+    `주간 미션 ${label}: rewardGoldMin(${slot.rewardGoldMin})은 0 이상의 유한 값이어야 합니다.`
+  );
+  check(
+    Number.isInteger(slot.target) && slot.target > 0,
+    `주간 미션 ${label}: target(${slot.target})은 양의 정수여야 합니다.`
+  );
+}
+
 // 5) 마스터리: 랭크 보너스 비감소 + 티어별 임계값 순증가.
 const ranks = balance.mastery?.ranks ?? [];
 for (let index = 1; index < ranks.length; index += 1) {

@@ -36,10 +36,32 @@ export type WeeklyMissionState = {
   claimedSlots: number[];
 };
 
-type WeeklySlotConfig = { type: WeeklyMissionType; target: number; rewardGold: number };
+type WeeklySlotConfig = {
+  type: WeeklyMissionType;
+  target: number;
+  // 진행도 스케일 광고 보상 대비 지급 비율. 주간은 "한 주의 노력"이라 1 이상을 허용하되
+  // check-balance가 상한(≤5)을 강제해 주간 골드가 본편 진행을 압도하지 않게 한다.
+  adRewardRatio: number;
+  // 지급 하한. 초반(광고 보상이 아직 작을 때)에는 기존 고정 보상과 동일한 체감을 유지한다.
+  rewardGoldMin: number;
+};
 
 const WEEKLY_SLOTS = balance.missions.weekly.slots as readonly WeeklySlotConfig[];
 const WEEKLY_MISSION_COUNT = WEEKLY_SLOTS.length;
+
+// 진행도 정보(광고 보상 골드) 미주입 시 기본값. dailyBonus/wheel/missions와 동일한 주입
+// 관례(순환 import 회피 — 모듈은 GameState/constants에 의존하지 않음).
+const WEEKLY_MISSION_BASE_AD_REWARD_GOLD = balance.ads.rewardedGoldAmount;
+
+// 슬롯 보상 골드 = max(하한, floor(광고 보상 × 비율)). 비정상 주입값은 기본 광고 보상으로 폴백.
+function getSlotRewardGold(slot: WeeklySlotConfig, adRewardGold?: number): number {
+  const base =
+    adRewardGold != null && Number.isFinite(adRewardGold) && adRewardGold > 0
+      ? adRewardGold
+      : WEEKLY_MISSION_BASE_AD_REWARD_GOLD;
+  const scaled = Math.floor(base * slot.adRewardRatio);
+  return Math.max(slot.rewardGoldMin, Number.isFinite(scaled) ? scaled : 0);
+}
 
 // 미션 추첨 풀(선언 순서 유지). harvest_area의 "이번 주 구역"을 여기서 뽑는다.
 const FEATURABLE_AREAS = balance.areas.map((area) => area.key) as AreaKey[];
@@ -94,21 +116,26 @@ function pickFeaturedAreas(weekKey: string, unlockedAreas?: readonly AreaKey[]):
 }
 
 // 고정된 areaKeys로부터 미션 목록을 결정론적으로 구성한다. 목표치는 슬롯별 고정값이며(주 해시
-// 불필요), 구역은 areaKeys 스냅샷을 그대로 쓴다.
-function resolveMissions(areaKeys: readonly (AreaKey | null)[]): WeeklyMission[] {
+// 불필요), 구역은 areaKeys 스냅샷을 그대로 쓴다. adRewardGold는 보상 표기/지급에만 쓰이고
+// 목표·구역 결정에는 영향을 주지 않는다(진행 매칭 경로는 주입 없이 호출해도 안전).
+function resolveMissions(areaKeys: readonly (AreaKey | null)[], adRewardGold?: number): WeeklyMission[] {
   return WEEKLY_SLOTS.map((slot, index) => ({
     slot: index,
     type: slot.type,
     target: slot.target,
     areaKey: slot.type === 'harvest_area' ? (areaKeys[index] ?? null) : null,
-    rewardGold: slot.rewardGold,
+    rewardGold: getSlotRewardGold(slot, adRewardGold),
   }));
 }
 
 // 해당 주의 주간 미션 "미리보기"를 결정론적으로 반환한다(구역을 즉석 추첨). 같은
-// (weekKey, unlockedAreas)면 항상 동일. UI 프리뷰/테스트용.
-export function getWeeklyMissions(weekKey: string, unlockedAreas?: readonly AreaKey[]): WeeklyMission[] {
-  return resolveMissions(pickFeaturedAreas(weekKey, unlockedAreas));
+// (weekKey, unlockedAreas, adRewardGold)면 항상 동일. UI 프리뷰/테스트용.
+export function getWeeklyMissions(
+  weekKey: string,
+  unlockedAreas?: readonly AreaKey[],
+  adRewardGold?: number
+): WeeklyMission[] {
+  return resolveMissions(pickFeaturedAreas(weekKey, unlockedAreas), adRewardGold);
 }
 
 export function createInitialWeeklyMissionState(): WeeklyMissionState {
@@ -312,11 +339,12 @@ export type WeeklyMissionsSnapshot = {
 export function getWeeklyMissionsSnapshot(
   state: WeeklyMissionState,
   now = Date.now(),
-  unlockedAreas?: readonly AreaKey[]
+  unlockedAreas?: readonly AreaKey[],
+  adRewardGold?: number
 ): WeeklyMissionsSnapshot {
   const weekKey = getMissionWeekKey(now);
   const rolled = rolloverWeeklyMissions(state, weekKey, unlockedAreas);
-  const missions = resolveMissions(rolled.areaKeys).map((mission) => {
+  const missions = resolveMissions(rolled.areaKeys, adRewardGold).map((mission) => {
     const progress = rolled.progress[mission.slot] ?? 0;
     const completed = progress >= mission.target;
     const claimed = rolled.claimedSlots.includes(mission.slot);
@@ -338,8 +366,14 @@ export function canClaimWeeklyMission(
 
 // 주간 미션 보상을 수령해 골드를 지급하고 새 GameState를 반환한다. 미완료·이미 수령·잘못된 슬롯이면
 // null을 반환해 중복 수령/과지급을 막는다. 함수형 업데이터 안에서 호출하면 동시 탭에도 1회만 지급된다.
-export function claimWeeklyMission(gameState: GameState, slot: number, now = Date.now()): GameState | null {
-  const snapshot = getWeeklyMissionsSnapshot(gameState.weeklyMissionState, now, gameState.unlockedAreas);
+// adRewardGold(호출부에서 getRewardedGoldAmount(gameState)를 주입)는 보상 스케일에만 쓰인다.
+export function claimWeeklyMission(
+  gameState: GameState,
+  slot: number,
+  now = Date.now(),
+  adRewardGold?: number
+): GameState | null {
+  const snapshot = getWeeklyMissionsSnapshot(gameState.weeklyMissionState, now, gameState.unlockedAreas, adRewardGold);
   const mission = snapshot.missions.find((candidate) => candidate.slot === slot);
   if (mission == null || !mission.claimable) {
     return null;
