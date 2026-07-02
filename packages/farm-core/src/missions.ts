@@ -21,6 +21,8 @@ export type DailyMission = {
   target: number;
   // harvest_area 미션이 가리키는 "오늘의 구역". 그 외 타입은 null.
   areaKey: AreaKey | null;
+  // 수령 시 지급 골드. 진행도 스케일된 광고 보상(adRewardGold 주입값)에 슬롯 비율을 곱하되,
+  // 스케일 전 초기 체감을 보존하는 하한(rewardGoldMin) 밑으로는 내려가지 않는다.
   rewardGold: number;
 };
 
@@ -39,11 +41,32 @@ export type DailyMissionState = {
 type MissionSlotConfig = {
   type: MissionType;
   targets: number[];
-  rewardGold: number;
+  // 진행도 스케일 광고 보상 대비 지급 비율. 일일 슬롯은 1 미만으로 유지해(check-balance 강제)
+  // 스케일 구간에서 미션이 광고 시청 인센티브를 대체하지 않게 한다.
+  adRewardRatio: number;
+  // 지급 하한. 초반(광고 보상이 아직 작을 때)에는 이 값이 그대로 지급돼 기존 고정 보상과
+  // 동일한 체감을 유지한다.
+  rewardGoldMin: number;
 };
 
 const MISSION_SLOTS = balance.missions.slots as readonly MissionSlotConfig[];
 const DAILY_MISSION_COUNT = MISSION_SLOTS.length;
+
+// 진행도 정보(광고 보상 골드)가 주입되지 않았을 때의 기본값. dailyBonus/wheel과 동일한
+// 관례로, 순환 import(constants.ts ↔ missions.ts)를 피하기 위해 getRewardedGoldAmount는
+// 호출부(FarmGame 등)에서 주입받고 모듈은 GameState/constants에 의존하지 않는다.
+const MISSION_BASE_AD_REWARD_GOLD = balance.ads.rewardedGoldAmount;
+
+// 슬롯 보상 골드 = max(하한, floor(광고 보상 × 비율)). 비정상 주입값(NaN/0 이하)은 기본
+// 광고 보상으로 폴백해 초반 고정값과 동일하게 동작한다.
+function getSlotRewardGold(slot: MissionSlotConfig, adRewardGold?: number): number {
+  const base =
+    adRewardGold != null && Number.isFinite(adRewardGold) && adRewardGold > 0
+      ? adRewardGold
+      : MISSION_BASE_AD_REWARD_GOLD;
+  const scaled = Math.floor(base * slot.adRewardRatio);
+  return Math.max(slot.rewardGoldMin, Number.isFinite(scaled) ? scaled : 0);
+}
 
 // 미션 추첨 풀(선언 순서 유지). harvest_area의 "오늘의 구역"을 여기서 뽑는다.
 const FEATURABLE_AREAS = balance.areas.map((area) => area.key) as AreaKey[];
@@ -101,19 +124,29 @@ function pickFeaturedAreas(dayKey: string, unlockedAreas?: readonly AreaKey[]): 
 
 // 날짜 키 + 고정된 areaKeys로부터 미션 목록을 결정론적으로 구성한다. 목표치는 날짜 해시로
 // 정해지며(watch_ad는 targets=[1] 고정 — 매일 1회 시청), 구역은 areaKeys 스냅샷을 그대로 쓴다.
-function resolveMissions(dayKey: string, areaKeys: readonly (AreaKey | null)[]): DailyMission[] {
+// adRewardGold(진행도 스케일 광고 보상)는 보상 표기/지급에만 쓰이고 목표·구역 결정에는
+// 영향을 주지 않는다(진행 매칭 경로는 주입 없이 호출해도 안전).
+function resolveMissions(
+  dayKey: string,
+  areaKeys: readonly (AreaKey | null)[],
+  adRewardGold?: number
+): DailyMission[] {
   return MISSION_SLOTS.map((slot, index) => {
     const target = slot.targets[hashString(`${dayKey}#${index}`) % slot.targets.length] ?? slot.targets[0] ?? 1;
     const areaKey = slot.type === 'harvest_area' ? (areaKeys[index] ?? null) : null;
-    return { slot: index, type: slot.type, target, areaKey, rewardGold: slot.rewardGold };
+    return { slot: index, type: slot.type, target, areaKey, rewardGold: getSlotRewardGold(slot, adRewardGold) };
   });
 }
 
 // 해당 날짜의 미션 3종 "미리보기"를 결정론적으로 반환한다(구역을 즉석에서 추첨). 실제 진행도
 // 기록/표시는 DailyMissionState.areaKeys에 고정된 구역을 쓰므로, 이 함수는 UI 프리뷰/테스트
-// 용도다. 같은 (dayKey, unlockedAreas)면 항상 동일.
-export function getDailyMissions(dayKey: string, unlockedAreas?: readonly AreaKey[]): DailyMission[] {
-  return resolveMissions(dayKey, pickFeaturedAreas(dayKey, unlockedAreas));
+// 용도다. 같은 (dayKey, unlockedAreas, adRewardGold)면 항상 동일.
+export function getDailyMissions(
+  dayKey: string,
+  unlockedAreas?: readonly AreaKey[],
+  adRewardGold?: number
+): DailyMission[] {
+  return resolveMissions(dayKey, pickFeaturedAreas(dayKey, unlockedAreas), adRewardGold);
 }
 
 export function createInitialDailyMissionState(): DailyMissionState {
@@ -248,14 +281,17 @@ export type DailyMissionsSnapshot = {
 };
 
 // 화면 표시용 스냅샷. now 기준으로 롤오버를 적용한 뒤 각 미션의 진행도·완료·수령·수령가능 여부를 계산한다.
+// adRewardGold를 주입하면 보상 골드가 진행도에 비례 스케일된다(수령 경로와 같은 값을 주입해야
+// 표시 금액과 지급 금액이 일치한다).
 export function getDailyMissionsSnapshot(
   state: DailyMissionState,
   now = Date.now(),
-  unlockedAreas?: readonly AreaKey[]
+  unlockedAreas?: readonly AreaKey[],
+  adRewardGold?: number
 ): DailyMissionsSnapshot {
   const dayKey = getMissionDayKey(now);
   const rolled = rolloverDailyMissions(state, dayKey, unlockedAreas);
-  const missions = resolveMissions(rolled.dayKey, rolled.areaKeys).map((mission) => {
+  const missions = resolveMissions(rolled.dayKey, rolled.areaKeys, adRewardGold).map((mission) => {
     const progress = rolled.progress[mission.slot] ?? 0;
     const completed = progress >= mission.target;
     const claimed = rolled.claimedSlots.includes(mission.slot);
@@ -277,8 +313,14 @@ export function canClaimMission(
 
 // 미션 보상을 수령해 골드를 지급하고 새 GameState를 반환한다. 미완료·이미 수령·잘못된 슬롯이면
 // null을 반환해 중복 수령/과지급을 막는다. 함수형 업데이터 안에서 호출하면 동시 탭에도 1회만 지급된다.
-export function claimMission(gameState: GameState, slot: number, now = Date.now()): GameState | null {
-  const snapshot = getDailyMissionsSnapshot(gameState.dailyMissionState, now, gameState.unlockedAreas);
+// adRewardGold(호출부에서 getRewardedGoldAmount(gameState)를 주입)는 보상 스케일에만 쓰인다.
+export function claimMission(
+  gameState: GameState,
+  slot: number,
+  now = Date.now(),
+  adRewardGold?: number
+): GameState | null {
+  const snapshot = getDailyMissionsSnapshot(gameState.dailyMissionState, now, gameState.unlockedAreas, adRewardGold);
   const mission = snapshot.missions.find((candidate) => candidate.slot === slot);
   if (mission == null || !mission.claimable) {
     return null;

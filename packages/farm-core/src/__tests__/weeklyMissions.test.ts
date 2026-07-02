@@ -13,6 +13,7 @@ import {
   rolloverWeeklyMissions,
   type WeeklyMissionState,
 } from '../weeklyMissions';
+import balance from '../balance.json';
 import { CROPS, createInitialState, migrateLoadedState } from '../constants';
 import { createPrestigedState } from '../prestige';
 import type { AreaKey, CropKey, GameState } from '../types';
@@ -298,5 +299,64 @@ describe('normalization, migration & prestige', () => {
       },
     };
     expect(createPrestigedState(withProgress).weeklyMissionState).toEqual(withProgress.weeklyMissionState);
+  });
+});
+
+// #207: 주간 미션 보상 진행도 스케일링. 일일과 동일한 공식(max(하한, floor(광고보상 × 비율)))
+// 이되, 주간 비율은 1 이상(한 주의 노력 > 광고 1회)이며 check-balance가 상한(≤5)을 강제한다.
+describe('progress-scaled weekly rewards (#207)', () => {
+  const SLOTS = balance.missions.weekly.slots;
+  const weekKey = getMissionWeekKey(MON);
+
+  test('주입이 없으면 슬롯별 하한(rewardGoldMin)이 그대로 지급된다(기존 고정 보상과 동일)', () => {
+    const missions = getWeeklyMissions(weekKey, ALL_AREAS);
+    expect(missions.map((m) => m.rewardGold)).toEqual(SLOTS.map((slot) => slot.rewardGoldMin));
+  });
+
+  test('광고 보상이 커지면 보상이 비율대로 스케일되고 일일 미션보다 크다(주간 ≥ 광고 1회)', () => {
+    const adGold = 1_000_000;
+    const missions = getWeeklyMissions(weekKey, ALL_AREAS, adGold);
+    missions.forEach((mission, index) => {
+      expect(mission.rewardGold).toBe(Math.floor(adGold * SLOTS[index]!.adRewardRatio));
+      // 주간 비율 ≥ 1 계약: 한 주의 노력 보상은 광고 1회 이상의 가치.
+      expect(mission.rewardGold).toBeGreaterThanOrEqual(adGold);
+    });
+  });
+
+  test('비정상 주입값(NaN/0/음수)은 기본 광고 보상으로 폴백해 하한이 지급된다', () => {
+    for (const bad of [Number.NaN, 0, -5]) {
+      const missions = getWeeklyMissions(weekKey, ALL_AREAS, bad);
+      expect(missions.map((m) => m.rewardGold)).toEqual(SLOTS.map((slot) => slot.rewardGoldMin));
+    }
+  });
+
+  test('수령 시 주입된 광고 보상 기준으로 지급되고 스냅샷 표시 금액과 일치한다', () => {
+    const base = createInitialState();
+    const rolled = rolloverWeeklyMissions(base.weeklyMissionState, weekKey, base.unlockedAreas);
+    const target = getWeeklyMissions(weekKey, base.unlockedAreas)[0]!.target;
+    const progress = rolled.progress.map((value, index) => (index === 0 ? target : value));
+    const state: GameState = { ...base, gold: 0, weeklyMissionState: { ...rolled, progress } };
+
+    const adGold = 250_000;
+    const shown = getWeeklyMissionsSnapshot(state.weeklyMissionState, MON, state.unlockedAreas, adGold).missions.find(
+      (m) => m.slot === 0
+    )!;
+    const claimed = claimWeeklyMission(state, 0, MON, adGold);
+    expect(claimed).not.toBeNull();
+    expect(claimed!.gold).toBe(shown.rewardGold);
+    expect(claimed!.gold).toBe(Math.floor(adGold * SLOTS[0]!.adRewardRatio));
+  });
+
+  test('기존 세이브(고정 rewardGold 시절 진행 상태)도 오류 없이 수령된다', () => {
+    const base = createInitialState();
+    const rolled = rolloverWeeklyMissions(base.weeklyMissionState, weekKey, base.unlockedAreas);
+    const target = getWeeklyMissions(weekKey, base.unlockedAreas)[0]!.target;
+    const legacy = {
+      weeklyMissionState: { ...rolled, progress: rolled.progress.map((v, i) => (i === 0 ? target : v)) },
+    } as unknown as Partial<GameState>;
+    const migrated = migrateLoadedState(legacy, base);
+    const claimed = claimWeeklyMission(migrated, 0, MON);
+    expect(claimed).not.toBeNull();
+    expect(claimed!.gold - migrated.gold).toBe(SLOTS[0]!.rewardGoldMin);
   });
 });

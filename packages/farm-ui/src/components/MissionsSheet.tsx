@@ -5,6 +5,7 @@ import {
   formatMoney,
   getAreaLabel,
   getDailyMissionsSnapshot,
+  getRewardedGoldAmount,
   getWeeklyMissionsSnapshot,
   type DailyMissionView,
   type WeeklyMissionView,
@@ -117,8 +118,15 @@ export function MissionsSheet({
   onClaim: (slot: number) => void;
   onClaimWeekly: (slot: number) => void;
 }) {
-  const snapshot = getDailyMissionsSnapshot(gameState.dailyMissionState, now, gameState.unlockedAreas);
-  const weeklySnapshot = getWeeklyMissionsSnapshot(gameState.weeklyMissionState, now, gameState.unlockedAreas);
+  // 보상 표기를 수령 경로(FarmGame의 claim 함수)와 동일한 진행도 스케일 값으로 계산한다.
+  const adRewardGold = getRewardedGoldAmount(gameState);
+  const snapshot = getDailyMissionsSnapshot(gameState.dailyMissionState, now, gameState.unlockedAreas, adRewardGold);
+  const weeklySnapshot = getWeeklyMissionsSnapshot(
+    gameState.weeklyMissionState,
+    now,
+    gameState.unlockedAreas,
+    adRewardGold
+  );
 
   return (
     <View>
