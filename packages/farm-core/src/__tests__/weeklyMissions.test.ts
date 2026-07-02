@@ -230,6 +230,57 @@ describe('normalization, migration & prestige', () => {
     expect(repaired.claimedSlots).toEqual([0]); // dedup + out-of-range dropped
   });
 
+  test('normalizeWeeklyMissionState preserves clean loaded array references (no needless re-allocation)', () => {
+    const clean: WeeklyMissionState = {
+      weekKey: getMissionWeekKey(MON),
+      areaKeys: new Array(WEEK_COUNT).fill(null),
+      progress: Array.from({ length: WEEK_COUNT }, (_, index) => index), // 0 이상 정수
+      claimedSlots: [0, 1],
+    };
+    const normalized = normalizeWeeklyMissionState(clean);
+    // 정규 형태의 배열은 새로 복사하지 않고 입력 참조를 그대로 보존한다.
+    expect(normalized.areaKeys).toBe(clean.areaKeys);
+    expect(normalized.progress).toBe(clean.progress);
+    expect(normalized.claimedSlots).toBe(clean.claimedSlots);
+  });
+
+  test('normalizeWeeklyMissionState rebuilds only the corrupt field, preserving the rest by reference', () => {
+    const dirty = {
+      weekKey: 'w',
+      areaKeys: new Array(WEEK_COUNT).fill(null),
+      progress: new Array(WEEK_COUNT).fill(2.5), // 비정수 → 재생성
+      claimedSlots: [0],
+    };
+    const normalized = normalizeWeeklyMissionState(dirty);
+    expect(normalized.progress).not.toBe(dirty.progress);
+    expect(normalized.progress[0]).toBe(2); // floored
+    // 손상되지 않은 필드는 참조를 유지한다.
+    expect(normalized.areaKeys).toBe(dirty.areaKeys);
+    expect(normalized.claimedSlots).toBe(dirty.claimedSlots);
+  });
+
+  test('normalizeWeeklyMissionState falls back to the provided base for non-objects', () => {
+    const base = createInitialWeeklyMissionState();
+    expect(normalizeWeeklyMissionState(null, base)).toBe(base);
+    expect(normalizeWeeklyMissionState('nope', base)).toBe(base);
+    // base 미지정 시에도 값 동등성은 초기 상태와 일치한다.
+    expect(normalizeWeeklyMissionState(null)).toEqual(createInitialWeeklyMissionState());
+  });
+
+  test('migrateLoadedState threads base and preserves a clean weeklyMissionState by reference', () => {
+    const base = createInitialState();
+    const clean: WeeklyMissionState = {
+      weekKey: getMissionWeekKey(MON),
+      areaKeys: new Array(WEEK_COUNT).fill(null),
+      progress: new Array(WEEK_COUNT).fill(3),
+      claimedSlots: [1],
+    };
+    const migrated = migrateLoadedState({ ...base, weeklyMissionState: clean }, base);
+    expect(migrated.weeklyMissionState.areaKeys).toBe(clean.areaKeys);
+    expect(migrated.weeklyMissionState.progress).toBe(clean.progress);
+    expect(migrated.weeklyMissionState.claimedSlots).toBe(clean.claimedSlots);
+  });
+
   test('a save without weeklyMissionState migrates to the initial state', () => {
     const migrated = migrateLoadedState({} as Partial<GameState>, createInitialState());
     expect(migrated.weeklyMissionState).toEqual(createInitialWeeklyMissionState());
