@@ -150,8 +150,10 @@ describe('check:balance 작물 수익 지배 역전 검출 (findCropDominanceVio
       ['cherry', 'mango', 'pineapple', 'coconut', 'kiwi', 'avocado'],
       // 신비: 선인장이 대나무를 지배하고 천년인삼이 선인장과 동률이던 구간.
       ['cactus', 'bamboo', 'ginseng', 'crystal_flower'],
-      // 전설: 달빛꽃이 무지개나무를 지배하던 구간.
-      ['moonflower', 'rainbow_tree', 'world_tree'],
+      // 전설: 달빛꽃이 무지개나무를 지배하던 구간. 별빛열매(net/h 8.33M)→달빛꽃
+      // (11.67M) 경계는 역전이 아님을 함께 고정한다(리뷰에서 별빛열매 25M 역전
+      // 주장이 있었으나 net/h = (sell-cost)/growTime 기준 8,333,333이다).
+      ['diamond', 'starfruit', 'moonflower', 'rainbow_tree', 'world_tree'],
     ];
     for (const chain of strictlyIncreasingChains) {
       for (let index = 1; index < chain.length; index += 1) {
