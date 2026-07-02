@@ -87,6 +87,21 @@ describe('check:balance 작물 수익 지배 역전 검출 (findCropDominanceVio
     expect(findCropDominanceViolations(balance)).toEqual([]);
   });
 
+  it('연속 동률 뒤에 낮은 작물이 오면 그 작물만 위반이고, 지배자는 동률 최신 작물이다', () => {
+    // A=100, B=100(동률·비위반), C=99 → C 1건. 동률 갱신(>=) 계약이 흔들리면
+    // B가 위반으로 잡히거나 지배자가 A로 남는 회귀가 여기서 드러난다.
+    const balance = makeBalance([
+      { key: 'a', area: 'orchard', cost: 100, sell: 200, growTime: 3_600_000 },
+      { key: 'b', area: 'orchard', cost: 300, sell: 400, growTime: 3_600_000 },
+      { key: 'c', area: 'orchard', cost: 500, sell: 599, growTime: 3_600_000 },
+    ]);
+    const violations = findCropDominanceViolations(balance);
+    expect(violations).toHaveLength(1);
+    expect(violations[0].cropKey).toBe('c');
+    expect(violations[0].dominatedByKey).toBe('b');
+    expect(violations[0].dominatedByNetPerHour).toBe(100);
+  });
+
   it('같은 구역 안에서는 씨앗 비용 순서를 해금 순서로 본다', () => {
     // 목록 순서를 비용 역순으로 넣어도(정렬 계약 검증) 싼 작물이 먼저다.
     const balance = makeBalance([
@@ -115,5 +130,39 @@ describe('check:balance 작물 수익 지배 역전 검출 (findCropDominanceVio
       fs.readFileSync(path.join(__dirname, '..', '..', 'packages', 'farm-core', 'src', 'balance.json'), 'utf8')
     );
     expect(findCropDominanceViolations(balance)).toEqual([]);
+  });
+
+  it('실제 balance.json에서 #206 조정 7종은 각각 직전 해금 작물보다 엄격히 큰 net/h를 갖는다', () => {
+    // 위 "위반 0건" 단정은 동률까지 허용하므로, 이번 조정의 목표였던
+    // "역전 구간의 엄격한 단조 증가"를 조정 작물별로 별도 고정한다.
+    // 사슬은 해금 순서(구역 순 → 구역 내 씨앗 비용 순)의 인접 구간이다.
+    const balance = JSON.parse(
+      fs.readFileSync(path.join(__dirname, '..', '..', 'packages', 'farm-core', 'src', 'balance.json'), 'utf8')
+    );
+    const netPerHourOf = (key: string) => {
+      const crop = balance.crops.find((candidate: { key: string }) => candidate.key === key);
+      expect(crop).toBeDefined();
+      return computeNetPerHour(crop);
+    };
+
+    const strictlyIncreasingChains: string[][] = [
+      // 과수원~온실: 체리가 망고~키위를 지배하던 구간(#206 본문).
+      ['cherry', 'mango', 'pineapple', 'coconut', 'kiwi', 'avocado'],
+      // 신비: 선인장이 대나무를 지배하고 천년인삼이 선인장과 동률이던 구간.
+      ['cactus', 'bamboo', 'ginseng', 'crystal_flower'],
+      // 전설: 달빛꽃이 무지개나무를 지배하던 구간.
+      ['moonflower', 'rainbow_tree', 'world_tree'],
+    ];
+    for (const chain of strictlyIncreasingChains) {
+      for (let index = 1; index < chain.length; index += 1) {
+        const prev = netPerHourOf(chain[index - 1]);
+        const curr = netPerHourOf(chain[index]);
+        // 어느 인접쌍이 깨졌는지 바로 보이도록 키를 메시지에 싣는다.
+        expect({ pair: `${chain[index - 1]} < ${chain[index]}`, increased: curr > prev }).toEqual({
+          pair: `${chain[index - 1]} < ${chain[index]}`,
+          increased: true,
+        });
+      }
+    }
   });
 });

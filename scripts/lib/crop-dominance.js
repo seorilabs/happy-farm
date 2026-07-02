@@ -69,6 +69,9 @@ function findCropDominanceViolations(balance) {
   let best = null;
   for (const crop of candidates) {
     const netPerHour = computeNetPerHour(crop);
+    // 계약: 위반은 "prefix 최고보다 엄격히 낮을 때"만이다. 동률은 지배가 아니므로
+    // 위반이 아니고(아래 >= 갱신과 쌍), 동률 뒤에 더 낮은 작물이 오면 그 작물만
+    // 위반이다(예: A=100, B=100, C=99 → C 1건).
     if (best != null && netPerHour < best.netPerHour) {
       violations.push({
         cropKey: crop.key,
@@ -77,7 +80,12 @@ function findCropDominanceViolations(balance) {
         dominatedByNetPerHour: best.netPerHour,
       });
     }
-    if (best == null || netPerHour > best.netPerHour) {
+    // 계약: 동률(>=)에서도 best를 갱신해 "가장 최근에 그 최고값을 낸 작물"을
+    // 지배자로 보고한다. 갱신 조건을 > 로 좁혀도 위반 집합 자체는 같지만
+    // (동률은 netPerHour가 같아 비교 결과 불변), 동률 처리 의도가 코드에서
+    // 사라져 후속 리팩터가 계약을 흔들기 쉬우므로 >= 로 명시해 둔다.
+    const isNewBest = best == null || netPerHour >= best.netPerHour;
+    if (isNewBest) {
       best = { cropKey: crop.key, netPerHour };
     }
   }
