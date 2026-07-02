@@ -242,14 +242,20 @@
     }
   },
   "decorations": {
-    "agentPurpose": "Late-game gold sink + self-expression. Cosmetic-only farm decorations bought with gold; ownership lives in the meta layer (placedDecorations) and survives prestige. Prices climb so they soak up surplus gold once expansion/upgrades are exhausted. Add new items here (key/icon/price); localized names live in i18n/labels.ts.",
+    "agentPurpose": "Late-game gold sink + self-expression. Cosmetic-only farm decorations bought with gold; ownership lives in the meta layer (placedDecorations) and survives prestige. Prices climb so they soak up surplus gold once expansion/upgrades are exhausted: the catalog now spans every progression band (early 1.2k~35k, then one 'pleasant splurge' per area era — well~rainbow_fountain sit at roughly 1~35% of the next area unlock cost so they never gate progression but always give surplus gold somewhere to go). Keep items sorted by ascending price. Add new items here (key/icon/price); localized names live in i18n/labels.ts.",
     "items": [
       { "key": "signpost", "icon": "🪧", "price": 1200 },
       { "key": "fence", "icon": "🚧", "price": 2500 },
       { "key": "scarecrow", "icon": "🎃", "price": 5000 },
       { "key": "flowerbed", "icon": "🌷", "price": 9000 },
       { "key": "pond", "icon": "⛲", "price": 18000 },
-      { "key": "lantern", "icon": "🏮", "price": 35000 }
+      { "key": "lantern", "icon": "🏮", "price": 35000 },
+      { "key": "well", "icon": "🪣", "price": 100000 },
+      { "key": "windmill", "icon": "🌀", "price": 1000000 },
+      { "key": "barn", "icon": "🛖", "price": 12000000 },
+      { "key": "hot_spring", "icon": "♨️", "price": 150000000 },
+      { "key": "golden_statue", "icon": "🏆", "price": 2000000000 },
+      { "key": "rainbow_fountain", "icon": "🎇", "price": 20000000000 }
     ]
   },
   "crops": [
