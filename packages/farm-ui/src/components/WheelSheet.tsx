@@ -106,8 +106,8 @@ export function WheelSheet({
       }
       stopPulseLoop();
     };
-    // stopPulseLoop는 렌더마다 새로 만들어지지만 ref/Animated.Value만 만지는 안정 로직이다.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // 의존성 없음: stopPulseLoop는 ref/Animated.Value만 만지는 안정 로직이라
+    // 마운트-1회 등록으로 충분하다.
   }, []);
 
   function startSpin() {
