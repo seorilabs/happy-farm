@@ -644,6 +644,28 @@ export function getHarvestBonusBoostStatus(gameState: GameState, now = Date.now(
   };
 }
 
+// 광고 외 경로(룰렛 harvest_boost 슬롯 등)에서 수확 부스트를 부여/연장한다. 만료 판정은
+// 기존 boostEndsAt 경로(getHarvestBonusBoostStatus)를 그대로 타므로 광고 부스트와 동일한
+// 만료 로직으로 동작한다. 중첩 정책은 "연장": 이미 활성인 부스트가 있으면 남은 시간 뒤에
+// 이어 붙는다(비활성이면 now 기준). 광고 사용 카운트/쿨다운/프롬프트에는 영향을 주지 않는다.
+export function extendHarvestBonusBoost(
+  gameState: GameState,
+  durationMs: number,
+  now = Date.now()
+): GameState['adUsage'] {
+  const adUsage = normalizeAdUsage(gameState.adUsage, now);
+  const safeDuration = Number.isFinite(durationMs) && durationMs > 0 ? durationMs : 0;
+  const currentEndsAt = adUsage.harvestBonusAd.boostEndsAt;
+  const base = currentEndsAt != null && currentEndsAt > now ? currentEndsAt : now;
+  return {
+    ...adUsage,
+    harvestBonusAd: {
+      ...adUsage.harvestBonusAd,
+      boostEndsAt: base + safeDuration,
+    },
+  };
+}
+
 export function recordHarvestBonusAdPrompt(gameState: GameState, now = Date.now()): GameState['adUsage'] {
   const adUsage = normalizeAdUsage(gameState.adUsage, now);
 

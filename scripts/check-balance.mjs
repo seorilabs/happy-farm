@@ -281,6 +281,40 @@ for (const slot of weeklyMissionSlots) {
   );
 }
 
+// 4-c) 룰렛 슬롯(#209): 타입별 필수 필드와 가중치를 검증한다. type 누락은 gold로
+// 정규화되는 하위 호환 데이터이므로 허용하되, 미지원 type·비양수 비율/가중치는 fail.
+const WHEEL_SLOT_TYPES = new Set(['gold', 'rp', 'harvest_boost']);
+const wheelSlots = balance.wheel?.slots ?? [];
+check(wheelSlots.length > 0, 'wheel.slots는 비어 있을 수 없습니다.');
+check(
+  new Set(wheelSlots.map((slot) => slot?.key)).size === wheelSlots.length,
+  'wheel.slots의 key는 중복될 수 없습니다.'
+);
+for (const slot of wheelSlots) {
+  const label = slot?.key ?? '(키 없음)';
+  check(
+    isFiniteNumber(slot.weight) && slot.weight > 0,
+    `룰렛 슬롯 ${label}: weight(${slot.weight})는 0보다 커야 합니다.`
+  );
+  check(
+    slot.type == null || WHEEL_SLOT_TYPES.has(slot.type),
+    `룰렛 슬롯 ${label}: type "${slot.type}"은 지원 타입(gold/rp/harvest_boost)이 아닙니다.`
+  );
+  const effectiveType = WHEEL_SLOT_TYPES.has(slot.type) ? slot.type : 'gold';
+  if (effectiveType === 'gold') {
+    check(
+      isFiniteNumber(slot.goldRatio) && slot.goldRatio > 0,
+      `룰렛 슬롯 ${label}: gold 슬롯은 goldRatio(${slot.goldRatio})가 0보다 커야 합니다.`
+    );
+  }
+  if (effectiveType === 'rp') {
+    check(
+      isFiniteNumber(slot.rpRatio) && slot.rpRatio > 0,
+      `룰렛 슬롯 ${label}: rp 슬롯은 rpRatio(${slot.rpRatio})가 0보다 커야 합니다.`
+    );
+  }
+}
+
 // 5) 마스터리: 랭크 보너스 비감소 + 티어별 임계값 순증가.
 const ranks = balance.mastery?.ranks ?? [];
 for (let index = 1; index < ranks.length; index += 1) {
