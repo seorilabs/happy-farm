@@ -17,16 +17,30 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 // 진행도 정보가 없을 때 쓰는 기본 광고 보상(초기 100G). dailyBonus와 동일한 폴백.
 const WHEEL_BASE_GOLD_FALLBACK = balance.ads.rewardedGoldAmount;
+// RP 슬롯 지급량 계산에 쓰는 기부 RP 비율. research.ts를 import하지 않고 balance에서
+// 직접 읽어 모듈을 cycle-free로 유지한다(modifiers.ts의 prestige 접근과 동일한 관례).
+const WHEEL_DONATION_RP_RATE = balance.research.donationRpRate;
+// harvest_boost 슬롯의 부스트 지속시간(기존 보상형 광고 부스트와 동일 값·동일 만료 경로).
+export const WHEEL_HARVEST_BOOST_DURATION_MS = balance.ads.harvestBonusBoostDurationMs;
+
+// 슬롯 보상 타입. 데이터에 type이 없으면 gold로 정규화한다(기존 balance 하위 호환).
+export const WHEEL_SLOT_TYPES = ['gold', 'rp', 'harvest_boost'] as const;
+export type WheelSlotType = (typeof WHEEL_SLOT_TYPES)[number];
 
 export type WheelSlot = {
-  // 슬롯 식별자(분석/디버그용). 보상은 goldRatio로 결정된다.
+  // 슬롯 식별자(분석/디버그용).
   key: string;
   // 슬롯 아이콘(UI 표시용).
   icon: string;
   // 추첨 가중치(양수). 확률 = weight / 전체 weight 합.
   weight: number;
-  // 진행도 스케일된 광고 보상 대비 지급 배수. 보상 골드 = floor(baseGold × goldRatio).
-  goldRatio: number;
+  // 보상 타입(gold/rp/harvest_boost). 정규화 후에는 항상 존재한다.
+  type: WheelSlotType;
+  // gold 슬롯: 진행도 스케일된 광고 보상 대비 지급 배수. 보상 골드 = floor(baseGold × goldRatio).
+  goldRatio?: number;
+  // rp 슬롯: 지급 RP = max(1, floor(baseGold × donationRpRate × rpRatio)) — 광고 보상만큼의
+  // 골드를 기부했을 때 얻는 RP의 rpRatio배로, 진행도에 비례한다.
+  rpRatio?: number;
 };
 
 export type WheelState = {
@@ -41,18 +55,37 @@ export type WheelStatus = {
   nextSpinAt: number;
 };
 
-export type WheelReward = {
-  slotKey: string;
-  gold: number;
-};
+// 타입별 보상 유니언. 적용(골드 가산/RP 가산/부스트 연장)은 호출부(FarmGame)에서 분기한다.
+export type WheelReward =
+  | { type: 'gold'; slotKey: string; gold: number }
+  | { type: 'rp'; slotKey: string; rp: number }
+  | { type: 'harvest_boost'; slotKey: string; durationMs: number };
 
 export type WheelSpinResult = {
   reward: WheelReward;
   newState: WheelState;
 };
 
-// balance.json의 룰렛 슬롯 카탈로그(선언 순서 유지). UI는 이 순서로 슬롯을 표시한다.
-export const WHEEL_SLOTS: readonly WheelSlot[] = balance.wheel.slots as readonly WheelSlot[];
+// balance 슬롯 데이터를 정규화한다: type 누락은 gold(하위 호환), 미지원 type도 gold로
+// 강제해 런타임에서 항상 세 타입 중 하나만 흐르게 한다(잘못된 데이터는 check:balance가 fail).
+export function normalizeWheelSlot(raw: {
+  key: string;
+  icon: string;
+  weight: number;
+  type?: string;
+  goldRatio?: number;
+  rpRatio?: number;
+}): WheelSlot {
+  const type = (WHEEL_SLOT_TYPES as readonly string[]).includes(raw.type ?? '')
+    ? (raw.type as WheelSlotType)
+    : 'gold';
+  return { key: raw.key, icon: raw.icon, weight: raw.weight, type, goldRatio: raw.goldRatio, rpRatio: raw.rpRatio };
+}
+
+// balance.json의 룰렛 슬롯 카탈로그(선언 순서 유지, 정규화 적용). UI는 이 순서로 슬롯을 표시한다.
+export const WHEEL_SLOTS: readonly WheelSlot[] = (
+  balance.wheel.slots as ReadonlyArray<Parameters<typeof normalizeWheelSlot>[0]>
+).map(normalizeWheelSlot);
 
 export function createInitialWheelState(): WheelState {
   return { lastFreeSpinAt: null };
@@ -130,11 +163,41 @@ export function pickWheelSlot(rng: () => number): WheelSlot {
   return slots[slots.length - 1]!;
 }
 
-// 슬롯 배수와 진행도 스케일된 광고 보상으로 실제 지급 골드를 계산한다.
+// 비율 필드 누락/비정상(0 이하·NaN) 방어: 1(광고 1회 등가 배수)로 폴백한다.
+// 0으로 두면 max(1, floor(base×0)) = 1G/1RP로 떨어져 진행도 스케일이 통째로
+// 사라지는 조용한 오지급이 된다. 이런 데이터는 check:balance가 fail로 막지만,
+// 런타임에 새어 들어와도 최소한 진행도 비례 보상이 유지되게 한다.
+function safeRewardRatio(ratio: number | undefined): number {
+  return ratio != null && Number.isFinite(ratio) && ratio > 0 ? ratio : 1;
+}
+
+// 슬롯 배수와 진행도 스케일된 광고 보상으로 실제 지급 골드를 계산한다(gold 슬롯 전용).
 export function getWheelSlotGold(slot: WheelSlot, baseGold: number = WHEEL_BASE_GOLD_FALLBACK): number {
   const base = Number.isFinite(baseGold) && baseGold > 0 ? baseGold : WHEEL_BASE_GOLD_FALLBACK;
-  const gold = Math.floor(base * slot.goldRatio);
+  const gold = Math.floor(base * safeRewardRatio(slot.goldRatio));
   return Number.isFinite(gold) ? Math.max(1, gold) : WHEEL_BASE_GOLD_FALLBACK;
+}
+
+// rp 슬롯의 지급 RP를 계산한다. "광고 보상만큼의 골드를 기부했을 때 얻는 RP" ×
+// rpRatio로, 광고 보상과 같은 진행도 스케일을 탄다. 최소 1 RP 보장.
+export function getWheelSlotRp(slot: WheelSlot, baseGold: number = WHEEL_BASE_GOLD_FALLBACK): number {
+  const base = Number.isFinite(baseGold) && baseGold > 0 ? baseGold : WHEEL_BASE_GOLD_FALLBACK;
+  const rp = Math.floor(base * WHEEL_DONATION_RP_RATE * safeRewardRatio(slot.rpRatio));
+  return Number.isFinite(rp) ? Math.max(1, rp) : 1;
+}
+
+// 슬롯의 타입별 보상을 계산한다. spinWheel과 UI 표기가 같은 계산을 공유해
+// "표시 금액 = 지급 금액"을 보장한다.
+export function getWheelSlotReward(slot: WheelSlot, baseGold: number = WHEEL_BASE_GOLD_FALLBACK): WheelReward {
+  switch (slot.type) {
+    case 'rp':
+      return { type: 'rp', slotKey: slot.key, rp: getWheelSlotRp(slot, baseGold) };
+    case 'harvest_boost':
+      return { type: 'harvest_boost', slotKey: slot.key, durationMs: WHEEL_HARVEST_BOOST_DURATION_MS };
+    case 'gold':
+    default:
+      return { type: 'gold', slotKey: slot.key, gold: getWheelSlotGold(slot, baseGold) };
+  }
 }
 
 /**
@@ -157,9 +220,8 @@ export function spinWheel(
   }
   const safeNow = Number.isFinite(now) ? now : Date.now();
   const slot = pickWheelSlot(rng);
-  const gold = getWheelSlotGold(slot, baseGold);
   return {
-    reward: { slotKey: slot.key, gold },
+    reward: getWheelSlotReward(slot, baseGold),
     newState: { lastFreeSpinAt: safeNow },
   };
 }

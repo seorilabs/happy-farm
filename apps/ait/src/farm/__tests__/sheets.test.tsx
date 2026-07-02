@@ -19,6 +19,7 @@ import {
   getRewardedGoldAmount,
   getSkillLevel,
   getWheelSlotGold,
+  getWheelSlotReward,
   WHEEL_SLOTS,
   type GameState,
 } from '../../../../../packages/farm-core/src';
@@ -237,7 +238,7 @@ describe('WheelSheet', () => {
   test('스핀 탭 즉시 보상이 확정되고, 감속 연출 종료 후에 결과가 노출된다', () => {
     const state = createInitialState();
     const winner = WHEEL_SLOTS[2]!;
-    const onSpin = jest.fn(() => ({ slotKey: winner.key, gold: 12345 }));
+    const onSpin = jest.fn(() => ({ type: 'gold' as const, slotKey: winner.key, gold: 12345 }));
     const onRevealed = jest.fn();
     const screen = renderWheel(state, onSpin, onRevealed);
 
@@ -253,14 +254,14 @@ describe('WheelSheet', () => {
     });
     // 연출 종료: 결과 카드 + 호출부 알림(토스트/펄스용) 1회.
     expect(onRevealed).toHaveBeenCalledTimes(1);
-    expect(onRevealed).toHaveBeenCalledWith(12345);
+    expect(onRevealed).toHaveBeenCalledWith({ type: 'gold', slotKey: winner.key, gold: 12345 });
     expect(screen.getByTestId('wheel-result')).toBeTruthy();
     expect(screen.getByText(`+${formatMoney(12345, LOCALE)}G`)).toBeTruthy();
   });
 
   test('연출 중 재탭해도 스핀 커밋은 1회다(이중 지급 없음)', () => {
     const state = createInitialState();
-    const onSpin = jest.fn(() => ({ slotKey: WHEEL_SLOTS[0]!.key, gold: 100 }));
+    const onSpin = jest.fn(() => ({ type: 'gold' as const, slotKey: WHEEL_SLOTS[0]!.key, gold: 100 }));
     const screen = renderWheel(state, onSpin, jest.fn());
 
     const action = screen.getByText(messages.wheelSpinAction);
@@ -273,7 +274,7 @@ describe('WheelSheet', () => {
 
   test('연출 중 시트가 언마운트돼도 에러 없이 정리되고 보상 커밋은 유지된다', () => {
     const state = createInitialState();
-    const onSpin = jest.fn(() => ({ slotKey: WHEEL_SLOTS[5]!.key, gold: 777 }));
+    const onSpin = jest.fn(() => ({ type: 'gold' as const, slotKey: WHEEL_SLOTS[5]!.key, gold: 777 }));
     const onRevealed = jest.fn();
     const screen = renderWheel(state, onSpin, onRevealed);
 
@@ -293,7 +294,7 @@ describe('WheelSheet', () => {
     // 테스트의 gameState는 onSpin 목이 갱신하지 않으므로 canSpin이 계속 true다 —
     // 결과 카드가 떠 있어도 버튼이 다시 노출되는 자정 롤오버 경로를 그대로 흉내 낸다.
     const state = createInitialState();
-    const onSpin = jest.fn(() => ({ slotKey: WHEEL_SLOTS[1]!.key, gold: 200 }));
+    const onSpin = jest.fn(() => ({ type: 'gold' as const, slotKey: WHEEL_SLOTS[1]!.key, gold: 200 }));
     const onRevealed = jest.fn();
     const screen = renderWheel(state, onSpin, onRevealed);
 
@@ -312,6 +313,37 @@ describe('WheelSheet', () => {
     });
     expect(onRevealed).toHaveBeenCalledTimes(2);
     expect(screen.getByTestId('wheel-result')).toBeTruthy();
+  });
+
+  test('rp/harvest_boost 슬롯도 릴에 타입별 보상 표기(RP·×배수/시간)로 노출된다(#209)', () => {
+    const state = createInitialState();
+    const screen = renderWheel(state, jest.fn(), jest.fn());
+    const adGold = getRewardedGoldAmount(state);
+    const rpSlot = WHEEL_SLOTS.find((slot) => slot.type === 'rp')!;
+    const boostSlot = WHEEL_SLOTS.find((slot) => slot.type === 'harvest_boost')!;
+    expect(screen.getByTestId(`wheel-slot-${rpSlot.key}`)).toBeTruthy();
+    expect(screen.getByTestId(`wheel-slot-${boostSlot.key}`)).toBeTruthy();
+    // rp 슬롯은 지급 경로(getWheelSlotReward)와 같은 계산의 RP 표기를 쓴다.
+    const rpReward = getWheelSlotReward(rpSlot, adGold);
+    if (rpReward.type === 'rp') {
+      expect(screen.getByText(messages.wheelSlotRpValue(formatMoney(rpReward.rp, LOCALE)))).toBeTruthy();
+    }
+  });
+
+  test('rp 슬롯 당첨 시 연출 종료 후 RP 결과 카드가 노출되고 onRevealed에 rp 보상이 전달된다(#209)', () => {
+    const state = createInitialState();
+    const rpSlot = WHEEL_SLOTS.find((slot) => slot.type === 'rp')!;
+    const onSpin = jest.fn(() => ({ type: 'rp' as const, slotKey: rpSlot.key, rp: 42 }));
+    const onRevealed = jest.fn();
+    const screen = renderWheel(state, onSpin, onRevealed);
+
+    fireEvent.press(screen.getByText(messages.wheelSpinAction));
+    act(() => {
+      jest.advanceTimersByTime(SPIN_SETTLE_MS);
+    });
+    expect(onRevealed).toHaveBeenCalledWith({ type: 'rp', slotKey: rpSlot.key, rp: 42 });
+    expect(screen.getByTestId('wheel-result')).toBeTruthy();
+    expect(screen.getByText(messages.wheelRewardRpToast(formatMoney(42, LOCALE)))).toBeTruthy();
   });
 
   test('릴은 한 줄 고정(nowrap)이라 줄바꿈으로 강조 인덱스가 어긋나지 않는다', () => {

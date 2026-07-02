@@ -114,6 +114,7 @@ import {
   isDecorationOwned,
   purchaseDecoration,
   getPlacedDecorations,
+  applyWheelReward,
   getWheelStatus,
   spinWheel,
   getCropEconomyEstimate,
@@ -3536,17 +3537,34 @@ export default function FarmGame({
               // lastFreeSpinAt already set for today and returns prev unchanged.
               // 보상은 이 시점(연출 시작 전)에 확정·지급된다 — 연출 중 시트가 닫혀도
               // 유실/이중 지급이 없다(#208 불변 조건, WheelSheet는 연출만 담당).
+              // 보상 적용은 core의 순수 함수(applyWheelReward)에 위임한다: gold(골드
+              // 가산), rp(연구 포인트 + 누적치 가산), harvest_boost(광고 부스트와
+              // 동일한 만료 경로로 연장). 여기서는 이중지급 가드만 담당.
               setGameState((prev) =>
-                getWheelStatus(prev.wheelState, now).canSpin
-                  ? { ...prev, gold: prev.gold + result.reward.gold, wheelState: result.newState }
-                  : prev
+                getWheelStatus(prev.wheelState, now).canSpin ? applyWheelReward(prev, result, now) : prev
               );
               return result.reward;
             }}
-            onRevealed={(gold) => {
-              // 연출 종료(당첨 슬롯 정지) 후에 토스트/골드 펄스를 노출한다.
-              pulseGold();
-              toast(messages.wheelRewardToast(formatMoney(gold, locale)));
+            onRevealed={(reward) => {
+              // 연출 종료(당첨 슬롯 정지) 후에 타입별 토스트를 노출한다.
+              switch (reward.type) {
+                case 'rp':
+                  toast(messages.wheelRewardRpToast(formatMoney(reward.rp, locale)));
+                  break;
+                case 'harvest_boost':
+                  toast(
+                    messages.wheelRewardBoostToast(
+                      formatRemainingTime(reward.durationMs, locale),
+                      HARVEST_BONUS_MULTIPLIER
+                    )
+                  );
+                  break;
+                case 'gold':
+                default:
+                  pulseGold();
+                  toast(messages.wheelRewardToast(formatMoney(reward.gold, locale)));
+                  break;
+              }
             }}
           />
         ) : null}

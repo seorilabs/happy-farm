@@ -72,14 +72,16 @@
     }
   },
   "wheel": {
-    "agentPurpose": "Daily fortune wheel (free daily spin). One free spin per UTC calendar day (resets at UTC midnight, like cropOfTheDay — not a 24h cooldown). Each spin awards gold = floor(progression-scaled rewarded-gold(ad) payout * slot.goldRatio), so rewards scale with the player's next goal and stay meaningful late-game. Slots are weighted (probability = weight / sum of weights); the jackpot is the rare high-multiplier slot. Reward slots/weights/multipliers are data-driven here so live-ops can tune the wheel (or add RP/ad-multiplier slot types) without code changes. Tune so the expected value stays a modest daily nudge, always below what a full ad-watch loop yields, to preserve the ad incentive.",
+    "agentPurpose": "Daily fortune wheel (free daily spin). One free spin per UTC calendar day (resets at UTC midnight, like cropOfTheDay — not a 24h cooldown). Slots carry a reward type: gold (default when the field is absent — legacy data keeps working), rp (research points = floor(progression-scaled rewarded-gold(ad) payout * research.donationRpRate * rpRatio)), or harvest_boost (extends the same timed harvest boost the rewarded ad grants, ads.harvestBonusBoostDurationMs, stacking by extension). Gold slots award floor(ad payout * goldRatio), so every reward type scales with the player's next goal and stays meaningful late-game. Slots are weighted (probability = weight / sum of weights); the jackpot is the rare high-multiplier slot. Reward slots/weights/multipliers/types are data-driven here so live-ops can tune the wheel without code changes (validated by check:balance). Tune so the expected value stays a modest daily nudge, always below what a full ad-watch loop yields, to preserve the ad incentive.",
     "slots": [
-      { "key": "gold_small", "icon": "🪙", "weight": 26, "goldRatio": 0.5 },
-      { "key": "gold_normal", "icon": "💰", "weight": 28, "goldRatio": 1 },
-      { "key": "gold_good", "icon": "💵", "weight": 20, "goldRatio": 1.5 },
-      { "key": "gold_great", "icon": "💎", "weight": 15, "goldRatio": 2.5 },
+      { "key": "gold_small", "icon": "🪙", "weight": 22, "goldRatio": 0.5 },
+      { "key": "gold_normal", "icon": "💰", "weight": 24, "goldRatio": 1 },
+      { "key": "gold_good", "icon": "💵", "weight": 18, "goldRatio": 1.5 },
+      { "key": "gold_great", "icon": "💎", "weight": 13, "goldRatio": 2.5 },
       { "key": "gold_huge", "icon": "🤑", "weight": 8, "goldRatio": 4 },
-      { "key": "jackpot", "icon": "🎰", "weight": 3, "goldRatio": 10 }
+      { "key": "jackpot", "icon": "🎰", "weight": 3, "goldRatio": 10 },
+      { "key": "research_boon", "icon": "🧪", "weight": 7, "type": "rp", "rpRatio": 2.5 },
+      { "key": "harvest_frenzy", "icon": "⚡", "weight": 5, "type": "harvest_boost" }
     ]
   },
   "mastery": {

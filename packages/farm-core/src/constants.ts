@@ -12,7 +12,7 @@ import { createInitialPrestigeProgress, normalizeChainFarms, normalizePrestigePr
 import { createInitialPlacedDecorations, normalizePlacedDecorations } from './decorations';
 import { createInitialDailyMissionState, normalizeDailyMissionState } from './missions';
 import { createInitialWeeklyMissionState, normalizeWeeklyMissionState } from './weeklyMissions';
-import { createInitialWheelState, normalizeWheelState } from './wheel';
+import { createInitialWheelState, normalizeWheelState, type WheelSpinResult } from './wheel';
 import {
   createInitialAutomationSettings,
   createInitialResearchState,
@@ -642,6 +642,56 @@ export function getHarvestBonusBoostStatus(gameState: GameState, now = Date.now(
     remainingMs,
     endsAt: active ? boostEndsAt : null,
   };
+}
+
+// 광고 외 경로(룰렛 harvest_boost 슬롯 등)에서 수확 부스트를 부여/연장한다. 만료 판정은
+// 기존 boostEndsAt 경로(getHarvestBonusBoostStatus)를 그대로 타므로 광고 부스트와 동일한
+// 만료 로직으로 동작한다. 중첩 정책은 "연장": 이미 활성인 부스트가 있으면 남은 시간 뒤에
+// 이어 붙는다(비활성이면 now 기준). 광고 사용 카운트/쿨다운/프롬프트에는 영향을 주지 않는다.
+export function extendHarvestBonusBoost(
+  gameState: GameState,
+  durationMs: number,
+  now = Date.now()
+): GameState['adUsage'] {
+  const adUsage = normalizeAdUsage(gameState.adUsage, now);
+  const safeDuration = Number.isFinite(durationMs) && durationMs > 0 ? durationMs : 0;
+  const currentEndsAt = adUsage.harvestBonusAd.boostEndsAt;
+  const base = currentEndsAt != null && currentEndsAt > now ? currentEndsAt : now;
+  return {
+    ...adUsage,
+    harvestBonusAd: {
+      ...adUsage.harvestBonusAd,
+      boostEndsAt: base + safeDuration,
+    },
+  };
+}
+
+// 룰렛 스핀 결과를 GameState에 적용한다(#209). 타입별 분기(골드 가산 / RP 가산 —
+// 누적치 totalPointsEarned 포함 / 수확 부스트 연장)를 순수 함수로 모아, UI(FarmGame)는
+// 스핀 가드만 담당하고 보상 적용 규칙은 core 테스트로 고정한다.
+export function applyWheelReward(gameState: GameState, result: WheelSpinResult, now = Date.now()): GameState {
+  const reward = result.reward;
+  switch (reward.type) {
+    case 'rp':
+      return {
+        ...gameState,
+        research: {
+          ...gameState.research,
+          points: gameState.research.points + reward.rp,
+          totalPointsEarned: gameState.research.totalPointsEarned + reward.rp,
+        },
+        wheelState: result.newState,
+      };
+    case 'harvest_boost':
+      return {
+        ...gameState,
+        adUsage: extendHarvestBonusBoost(gameState, reward.durationMs, now),
+        wheelState: result.newState,
+      };
+    case 'gold':
+    default:
+      return { ...gameState, gold: gameState.gold + reward.gold, wheelState: result.newState };
+  }
 }
 
 export function recordHarvestBonusAdPrompt(gameState: GameState, now = Date.now()): GameState['adUsage'] {

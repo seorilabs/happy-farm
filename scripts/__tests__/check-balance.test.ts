@@ -168,3 +168,72 @@ describe('check:balance 작물 수익 지배 역전 검출 (findCropDominanceVio
     }
   });
 });
+
+// @ts-expect-error — .js 검증기 모듈(CommonJS)에는 타입 선언이 없다. 런타임 계약만 검증한다.
+import { findWheelSlotViolations } from '../lib/wheel-slot-checks.js';
+
+// check:balance의 룰렛 슬롯 검증(4-c, #209) 회귀 테스트. 타입별 필수 비율 필드가
+// 빠지면 조용한 오지급(진행도 스케일 소실)으로 이어지므로 데이터 게이트에서 막는다.
+describe('check:balance 룰렛 슬롯 검증 (findWheelSlotViolations)', () => {
+  const validSlots = [
+    { key: 'gold_small', icon: '🪙', weight: 10, goldRatio: 0.5 },
+    { key: 'boon', icon: '🧪', weight: 5, type: 'rp', rpRatio: 2 },
+    { key: 'frenzy', icon: '⚡', weight: 3, type: 'harvest_boost' },
+  ];
+
+  it('유효한 카탈로그(gold/rp/harvest_boost + type 누락 gold)는 위반이 없다', () => {
+    expect(findWheelSlotViolations({ wheel: { slots: validSlots } })).toEqual([]);
+  });
+
+  it('미지원 type은 위반이다', () => {
+    const violations = findWheelSlotViolations({
+      wheel: { slots: [{ key: 'weird', icon: '❓', weight: 1, type: 'gems', goldRatio: 1 }] },
+    });
+    expect(violations.some((message: string) => message.includes('지원 타입'))).toBe(true);
+  });
+
+  it('rp 슬롯의 rpRatio 누락/0 이하는 위반이다(1 RP 오지급 방지)', () => {
+    for (const bad of [undefined, 0, -1]) {
+      const violations = findWheelSlotViolations({
+        wheel: { slots: [{ key: 'boon', icon: '🧪', weight: 1, type: 'rp', rpRatio: bad }] },
+      });
+      expect(violations.some((message: string) => message.includes('rpRatio'))).toBe(true);
+    }
+  });
+
+  it('gold 슬롯(및 type 누락 슬롯)의 goldRatio 누락/음수는 위반이다', () => {
+    for (const slot of [
+      { key: 'g', icon: '🪙', weight: 1, type: 'gold' },
+      { key: 'legacy', icon: '🪙', weight: 1, goldRatio: -2 },
+    ]) {
+      const violations = findWheelSlotViolations({ wheel: { slots: [slot] } });
+      expect(violations.some((message: string) => message.includes('goldRatio'))).toBe(true);
+    }
+  });
+
+  it('중복 key·비양수 weight·빈 카탈로그는 위반이다', () => {
+    expect(
+      findWheelSlotViolations({
+        wheel: {
+          slots: [
+            { key: 'dup', icon: '🪙', weight: 1, goldRatio: 1 },
+            { key: 'dup', icon: '💰', weight: 1, goldRatio: 2 },
+          ],
+        },
+      }).some((message: string) => message.includes('중복'))
+    ).toBe(true);
+    expect(
+      findWheelSlotViolations({ wheel: { slots: [{ key: 'zero', icon: '🪙', weight: 0, goldRatio: 1 }] } }).some(
+        (message: string) => message.includes('weight')
+      )
+    ).toBe(true);
+    expect(findWheelSlotViolations({ wheel: { slots: [] } })).toHaveLength(1);
+  });
+
+  it('실제 balance.json의 슬롯 카탈로그는 위반이 없다', () => {
+    const balance = JSON.parse(
+      fs.readFileSync(path.join(__dirname, '..', '..', 'packages', 'farm-core', 'src', 'balance.json'), 'utf8')
+    );
+    expect(findWheelSlotViolations(balance)).toEqual([]);
+  });
+});

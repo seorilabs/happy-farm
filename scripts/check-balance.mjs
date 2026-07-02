@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { findCropDominanceViolations } from './lib/crop-dominance.js';
+import { findWheelSlotViolations } from './lib/wheel-slot-checks.js';
 
 // balance.json 회귀 가드. balance를 손볼 때 무심코 깨지기 쉬운 핵심 곡선/지표
 // 불변식을 검증하고, 기준에서 벗어나면 CI를 실패시킨다. 게임 동작을 완전히
@@ -280,6 +281,15 @@ for (const slot of weeklyMissionSlots) {
     `주간 미션 ${label}: target(${slot.target})은 양의 정수여야 합니다.`
   );
 }
+
+// 4-c) 룰렛 슬롯(#209): 타입별 필수 필드와 가중치를 검증한다. type 누락은 gold로
+// 정규화되는 하위 호환 데이터이므로 허용하되, 미지원 type·비양수 비율/가중치·중복
+// key는 fail. 판정 로직은 scripts/lib/wheel-slot-checks.js 참조(jest 회귀 테스트 공유).
+const wheelSlotViolations = findWheelSlotViolations(balance);
+check(
+  wheelSlotViolations.length === 0,
+  wheelSlotViolations.length === 0 ? '룰렛 슬롯 카탈로그 유효.' : wheelSlotViolations.join(' ')
+);
 
 // 5) 마스터리: 랭크 보너스 비감소 + 티어별 임계값 순증가.
 const ranks = balance.mastery?.ranks ?? [];

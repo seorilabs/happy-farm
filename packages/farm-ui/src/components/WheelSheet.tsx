@@ -2,11 +2,12 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
 
 import {
+  HARVEST_BONUS_MULTIPLIER,
   WHEEL_SLOTS,
   formatMoney,
   formatRemainingTime,
   getRewardedGoldAmount,
-  getWheelSlotGold,
+  getWheelSlotReward,
   getWheelStatus,
   type GameState,
   type SupportedLocale,
@@ -46,8 +47,8 @@ function buildStepDelays(stepCount: number, totalMs: number): number[] {
 type SpinPlayback = {
   // 당첨 슬롯 인덱스(연출이 멈출 위치).
   winnerIndex: number;
-  // 확정된 보상 골드(연출 종료 후 결과 카드/토스트에 사용).
-  gold: number;
+  // 확정된 타입별 보상(연출 종료 후 결과 카드/토스트에 사용).
+  reward: WheelReward;
 };
 
 export function WheelSheet({
@@ -62,10 +63,10 @@ export function WheelSheet({
   locale: SupportedLocale;
   messages: FarmMessages;
   now: number;
-  // 스핀 커밋(보상 확정 + 골드 반영)을 수행하고 확정 보상을 돌려준다. 스핀 불가면 null.
+  // 스핀 커밋(보상 확정 + 상태 반영)을 수행하고 확정 보상을 돌려준다. 스핀 불가면 null.
   onSpin: () => WheelReward | null;
-  // 연출 종료(당첨 슬롯 정지) 시 1회 호출 — 호출부에서 토스트/골드 펄스에 사용.
-  onRevealed?: (gold: number) => void;
+  // 연출 종료(당첨 슬롯 정지) 시 1회 호출 — 호출부에서 타입별 토스트/펄스에 사용.
+  onRevealed?: (reward: WheelReward) => void;
 }) {
   // 비정상 now(NaN 등) 방어: 상태 판정과 카운트다운이 같은 기준 시각을 쓰게 정규화한다.
   // getWheelStatus는 같은 safeNow로 nextSpinAt을 산출하므로, 쿨다운 중 잔여 시간은
@@ -125,7 +126,7 @@ export function WheelSheet({
     );
     spinningRef.current = true;
     setResult(null);
-    setPlayback({ winnerIndex, gold: reward.gold });
+    setPlayback({ winnerIndex, reward });
     setHighlightIndex(0);
 
     // 재스핀 경로(자정 롤오버 후) 대비: 이전 루프를 먼저 정리해 누적을 막는다.
@@ -156,8 +157,8 @@ export function WheelSheet({
         stopPulseLoop();
         setPlayback(null);
         setHighlightIndex(null);
-        setResult({ winnerIndex, gold: reward.gold });
-        onRevealed?.(reward.gold);
+        setResult({ winnerIndex, reward });
+        onRevealed?.(reward);
       }, delays[step] ?? 0);
     };
     runStep(0);
@@ -166,6 +167,38 @@ export function WheelSheet({
   const highlightScale = pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.18] });
   // 결과 강조(연출 종료 후) 또는 연출 중 하이라이트 인덱스.
   const emphasizedIndex = playback != null ? highlightIndex : (result?.winnerIndex ?? null);
+
+  // 슬롯 셀/결과 카드의 타입별 보상 표기. spinWheel과 같은 계산(getWheelSlotReward)을
+  // 공유해 표시 값과 지급 값이 항상 일치한다.
+  function formatRewardValue(reward: WheelReward): string {
+    switch (reward.type) {
+      case 'rp':
+        return messages.wheelSlotRpValue(formatMoney(reward.rp, locale));
+      case 'harvest_boost':
+        return messages.wheelSlotBoostValue(
+          HARVEST_BONUS_MULTIPLIER,
+          formatRemainingTime(reward.durationMs, locale)
+        );
+      case 'gold':
+      default:
+        return `${formatMoney(reward.gold, locale)}G`;
+    }
+  }
+
+  function formatRewardToastLabel(reward: WheelReward): string {
+    switch (reward.type) {
+      case 'rp':
+        return messages.wheelRewardRpToast(formatMoney(reward.rp, locale));
+      case 'harvest_boost':
+        return messages.wheelRewardBoostToast(
+          formatRemainingTime(reward.durationMs, locale),
+          HARVEST_BONUS_MULTIPLIER
+        );
+      case 'gold':
+      default:
+        return messages.wheelRewardToast(formatMoney(reward.gold, locale));
+    }
+  }
 
   return (
     <View testID="wheel-sheet">
@@ -188,7 +221,7 @@ export function WheelSheet({
             >
               <Text style={styles.reelIcon}>{slot.icon}</Text>
               <Text style={[styles.reelGold, active ? styles.reelGoldActive : null]} numberOfLines={1}>
-                {formatMoney(getWheelSlotGold(slot, adRewardGold), locale)}G
+                {formatRewardValue(getWheelSlotReward(slot, adRewardGold))}
               </Text>
             </Animated.View>
           );
@@ -202,11 +235,11 @@ export function WheelSheet({
             <Text style={styles.statusLabel}>{messages.wheelSpinningLabel}</Text>
           ) : result != null ? (
             <>
-              <Text style={styles.statusLabel}>
-                {messages.wheelRewardToast(formatMoney(result.gold, locale))}
-              </Text>
+              <Text style={styles.statusLabel}>{formatRewardToastLabel(result.reward)}</Text>
               <Text style={styles.statusValue} testID="wheel-result">
-                +{formatMoney(result.gold, locale)}G
+                {/* 부스트는 획득량이 아니라 효과(×배수·시간)라 + 접두를 붙이지 않는다. */}
+                {result.reward.type === 'harvest_boost' ? '' : '+'}
+                {formatRewardValue(result.reward)}
               </Text>
             </>
           ) : (
