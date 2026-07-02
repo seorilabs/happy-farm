@@ -1,6 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
+import { findCropDominanceViolations } from './lib/crop-dominance.js';
+
 // balance.json 회귀 가드. balance를 손볼 때 무심코 깨지기 쉬운 핵심 곡선/지표
 // 불변식을 검증하고, 기준에서 벗어나면 CI를 실패시킨다. 게임 동작을 완전히
 // 시뮬레이션하지는 않고, "명백히 잘못된 밸런스"(역마진 작물, 감소하는 해금 곡선,
@@ -190,6 +192,23 @@ for (const crop of crops) {
   check(Number.isInteger(crop.tier) && crop.tier >= 1 && crop.tier <= 10, `작물 ${label}: tier는 1~10의 정수여야 합니다.`);
   check(areaKeys.has(crop.area), `작물 ${label}: area "${crop.area}"가 정의된 구역이 아닙니다.`);
 }
+
+// 3-b) 작물 수익 지배(dominance) 역전 금지: 선형 진행 구역에서 나중에 해금되는
+// 작물의 net/h가 앞서 해금된 작물의 최고 net/h보다 낮으면 새 구역/티어가 진행
+// 체감을 주지 못한다(#206). 판정/예외(gate 구역 제외, 동률 허용)는
+// scripts/lib/crop-dominance.js 참조.
+const dominanceViolations = findCropDominanceViolations(balance);
+check(
+  dominanceViolations.length === 0,
+  dominanceViolations.length === 0
+    ? '작물 net/h 지배 역전 없음(선형 진행 구역).'
+    : dominanceViolations
+        .map(
+          (v) =>
+            `작물 수익 역전: ${v.cropKey}(net/h ${Math.round(v.netPerHour).toLocaleString('en-US')})가 먼저 해금되는 ${v.dominatedByKey}(net/h ${Math.round(v.dominatedByNetPerHour).toLocaleString('en-US')})에게 지배당합니다.`
+        )
+        .join(' ')
+);
 
 // 4) 데일리 보너스: 광고 인센티브 보존을 위해 일일 ad-reward 비율이 1 미만.
 const dailyBonus = balance.dailyBonus ?? {};
