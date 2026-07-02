@@ -163,10 +163,18 @@ export function pickWheelSlot(rng: () => number): WheelSlot {
   return slots[slots.length - 1]!;
 }
 
+// 비율 필드 누락/비정상(0 이하·NaN) 방어: 1(광고 1회 등가 배수)로 폴백한다.
+// 0으로 두면 max(1, floor(base×0)) = 1G/1RP로 떨어져 진행도 스케일이 통째로
+// 사라지는 조용한 오지급이 된다. 이런 데이터는 check:balance가 fail로 막지만,
+// 런타임에 새어 들어와도 최소한 진행도 비례 보상이 유지되게 한다.
+function safeRewardRatio(ratio: number | undefined): number {
+  return ratio != null && Number.isFinite(ratio) && ratio > 0 ? ratio : 1;
+}
+
 // 슬롯 배수와 진행도 스케일된 광고 보상으로 실제 지급 골드를 계산한다(gold 슬롯 전용).
 export function getWheelSlotGold(slot: WheelSlot, baseGold: number = WHEEL_BASE_GOLD_FALLBACK): number {
   const base = Number.isFinite(baseGold) && baseGold > 0 ? baseGold : WHEEL_BASE_GOLD_FALLBACK;
-  const gold = Math.floor(base * (slot.goldRatio ?? 0));
+  const gold = Math.floor(base * safeRewardRatio(slot.goldRatio));
   return Number.isFinite(gold) ? Math.max(1, gold) : WHEEL_BASE_GOLD_FALLBACK;
 }
 
@@ -174,7 +182,7 @@ export function getWheelSlotGold(slot: WheelSlot, baseGold: number = WHEEL_BASE_
 // rpRatio로, 광고 보상과 같은 진행도 스케일을 탄다. 최소 1 RP 보장.
 export function getWheelSlotRp(slot: WheelSlot, baseGold: number = WHEEL_BASE_GOLD_FALLBACK): number {
   const base = Number.isFinite(baseGold) && baseGold > 0 ? baseGold : WHEEL_BASE_GOLD_FALLBACK;
-  const rp = Math.floor(base * WHEEL_DONATION_RP_RATE * (slot.rpRatio ?? 0));
+  const rp = Math.floor(base * WHEEL_DONATION_RP_RATE * safeRewardRatio(slot.rpRatio));
   return Number.isFinite(rp) ? Math.max(1, rp) : 1;
 }
 

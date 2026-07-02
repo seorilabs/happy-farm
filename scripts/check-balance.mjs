@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { findCropDominanceViolations } from './lib/crop-dominance.js';
+import { findWheelSlotViolations } from './lib/wheel-slot-checks.js';
 
 // balance.json 회귀 가드. balance를 손볼 때 무심코 깨지기 쉬운 핵심 곡선/지표
 // 불변식을 검증하고, 기준에서 벗어나면 CI를 실패시킨다. 게임 동작을 완전히
@@ -282,38 +283,13 @@ for (const slot of weeklyMissionSlots) {
 }
 
 // 4-c) 룰렛 슬롯(#209): 타입별 필수 필드와 가중치를 검증한다. type 누락은 gold로
-// 정규화되는 하위 호환 데이터이므로 허용하되, 미지원 type·비양수 비율/가중치는 fail.
-const WHEEL_SLOT_TYPES = new Set(['gold', 'rp', 'harvest_boost']);
-const wheelSlots = balance.wheel?.slots ?? [];
-check(wheelSlots.length > 0, 'wheel.slots는 비어 있을 수 없습니다.');
+// 정규화되는 하위 호환 데이터이므로 허용하되, 미지원 type·비양수 비율/가중치·중복
+// key는 fail. 판정 로직은 scripts/lib/wheel-slot-checks.js 참조(jest 회귀 테스트 공유).
+const wheelSlotViolations = findWheelSlotViolations(balance);
 check(
-  new Set(wheelSlots.map((slot) => slot?.key)).size === wheelSlots.length,
-  'wheel.slots의 key는 중복될 수 없습니다.'
+  wheelSlotViolations.length === 0,
+  wheelSlotViolations.length === 0 ? '룰렛 슬롯 카탈로그 유효.' : wheelSlotViolations.join(' ')
 );
-for (const slot of wheelSlots) {
-  const label = slot?.key ?? '(키 없음)';
-  check(
-    isFiniteNumber(slot.weight) && slot.weight > 0,
-    `룰렛 슬롯 ${label}: weight(${slot.weight})는 0보다 커야 합니다.`
-  );
-  check(
-    slot.type == null || WHEEL_SLOT_TYPES.has(slot.type),
-    `룰렛 슬롯 ${label}: type "${slot.type}"은 지원 타입(gold/rp/harvest_boost)이 아닙니다.`
-  );
-  const effectiveType = WHEEL_SLOT_TYPES.has(slot.type) ? slot.type : 'gold';
-  if (effectiveType === 'gold') {
-    check(
-      isFiniteNumber(slot.goldRatio) && slot.goldRatio > 0,
-      `룰렛 슬롯 ${label}: gold 슬롯은 goldRatio(${slot.goldRatio})가 0보다 커야 합니다.`
-    );
-  }
-  if (effectiveType === 'rp') {
-    check(
-      isFiniteNumber(slot.rpRatio) && slot.rpRatio > 0,
-      `룰렛 슬롯 ${label}: rp 슬롯은 rpRatio(${slot.rpRatio})가 0보다 커야 합니다.`
-    );
-  }
-}
 
 // 5) 마스터리: 랭크 보너스 비감소 + 티어별 임계값 순증가.
 const ranks = balance.mastery?.ranks ?? [];

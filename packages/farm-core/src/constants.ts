@@ -12,7 +12,7 @@ import { createInitialPrestigeProgress, normalizeChainFarms, normalizePrestigePr
 import { createInitialPlacedDecorations, normalizePlacedDecorations } from './decorations';
 import { createInitialDailyMissionState, normalizeDailyMissionState } from './missions';
 import { createInitialWeeklyMissionState, normalizeWeeklyMissionState } from './weeklyMissions';
-import { createInitialWheelState, normalizeWheelState } from './wheel';
+import { createInitialWheelState, normalizeWheelState, type WheelSpinResult } from './wheel';
 import {
   createInitialAutomationSettings,
   createInitialResearchState,
@@ -664,6 +664,34 @@ export function extendHarvestBonusBoost(
       boostEndsAt: base + safeDuration,
     },
   };
+}
+
+// 룰렛 스핀 결과를 GameState에 적용한다(#209). 타입별 분기(골드 가산 / RP 가산 —
+// 누적치 totalPointsEarned 포함 / 수확 부스트 연장)를 순수 함수로 모아, UI(FarmGame)는
+// 스핀 가드만 담당하고 보상 적용 규칙은 core 테스트로 고정한다.
+export function applyWheelReward(gameState: GameState, result: WheelSpinResult, now = Date.now()): GameState {
+  const reward = result.reward;
+  switch (reward.type) {
+    case 'rp':
+      return {
+        ...gameState,
+        research: {
+          ...gameState.research,
+          points: gameState.research.points + reward.rp,
+          totalPointsEarned: gameState.research.totalPointsEarned + reward.rp,
+        },
+        wheelState: result.newState,
+      };
+    case 'harvest_boost':
+      return {
+        ...gameState,
+        adUsage: extendHarvestBonusBoost(gameState, reward.durationMs, now),
+        wheelState: result.newState,
+      };
+    case 'gold':
+    default:
+      return { ...gameState, gold: gameState.gold + reward.gold, wheelState: result.newState };
+  }
 }
 
 export function recordHarvestBonusAdPrompt(gameState: GameState, now = Date.now()): GameState['adUsage'] {

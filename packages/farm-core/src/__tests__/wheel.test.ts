@@ -16,6 +16,7 @@ import {
 import type { WheelState } from '../wheel';
 import balance from '../balance.json';
 import {
+  applyWheelReward,
   createInitialState,
   extendHarvestBonusBoost,
   getHarvestBonusBoostStatus,
@@ -178,6 +179,87 @@ describe('getWheelSlotReward (타입별 보상, #209)', () => {
       durationMs: balance.ads.harvestBonusBoostDurationMs,
     });
     expect(WHEEL_HARVEST_BOOST_DURATION_MS).toBe(balance.ads.harvestBonusBoostDurationMs);
+  });
+});
+
+describe('비율 필드 누락 폴백(조용한 1RP/1G 오지급 방지)', () => {
+  test('rpRatio가 없거나 0 이하인 rp 슬롯은 비율 1(광고 등가)로 지급된다', () => {
+    const base = 100_000;
+    const adEquivalentRp = Math.floor(base * balance.research.donationRpRate);
+    for (const badRatio of [undefined, 0, -1, Number.NaN]) {
+      const slot = { key: 'x', icon: '🧪', weight: 1, type: 'rp' as const, rpRatio: badRatio };
+      expect(getWheelSlotRp(slot, base)).toBe(adEquivalentRp);
+    }
+  });
+
+  test('goldRatio가 없는 gold 슬롯은 비율 1(광고 등가)로 지급된다', () => {
+    const base = 100_000;
+    const slot = { key: 'x', icon: '🪙', weight: 1, type: 'gold' as const };
+    expect(getWheelSlotGold(slot, base)).toBe(base);
+  });
+});
+
+describe('applyWheelReward (스핀 결과 적용, #209)', () => {
+  const NOW = DAY0 + 1_000;
+
+  test('gold 보상은 골드에 가산되고 wheelState가 갱신된다', () => {
+    const state = createInitialState();
+    const next = applyWheelReward(
+      state,
+      { reward: { type: 'gold', slotKey: 'gold_small', gold: 500 }, newState: { lastFreeSpinAt: NOW } },
+      NOW
+    );
+    expect(next.gold).toBe(state.gold + 500);
+    expect(next.wheelState.lastFreeSpinAt).toBe(NOW);
+  });
+
+  test('rp 보상은 research.points와 totalPointsEarned에 함께 가산돼 즉시 사용 가능하다', () => {
+    const state = createInitialState();
+    const next = applyWheelReward(
+      state,
+      { reward: { type: 'rp', slotKey: 'research_boon', rp: 42 }, newState: { lastFreeSpinAt: NOW } },
+      NOW
+    );
+    expect(next.research.points).toBe(state.research.points + 42);
+    expect(next.research.totalPointsEarned).toBe(state.research.totalPointsEarned + 42);
+    expect(next.gold).toBe(state.gold);
+    expect(next.wheelState.lastFreeSpinAt).toBe(NOW);
+  });
+
+  test('harvest_boost 보상은 광고 부스트와 동일 만료 경로로 활성화된다', () => {
+    const state = createInitialState();
+    const next = applyWheelReward(
+      state,
+      {
+        reward: { type: 'harvest_boost', slotKey: 'harvest_frenzy', durationMs: WHEEL_HARVEST_BOOST_DURATION_MS },
+        newState: { lastFreeSpinAt: NOW },
+      },
+      NOW
+    );
+    expect(next.adUsage.harvestBonusAd.boostEndsAt).toBe(NOW + WHEEL_HARVEST_BOOST_DURATION_MS);
+    expect(getHarvestBonusBoostStatus(next, NOW).active).toBe(true);
+    expect(next.gold).toBe(state.gold);
+  });
+
+  test('스핀(rng 결정적) → 적용까지 이어지는 rp 경로가 진행도 비례 값으로 가산된다', () => {
+    const state = createInitialState();
+    const base = getRewardedGoldAmount(state);
+    // rp 슬롯의 가중치 구간 중앙을 겨냥한 결정적 roll.
+    const total = WHEEL_SLOTS.reduce((sum, slot) => sum + slot.weight, 0);
+    let cumulative = 0;
+    let rpRoll = 0;
+    for (const slot of WHEEL_SLOTS) {
+      if (slot.type === 'rp') {
+        rpRoll = (cumulative + slot.weight / 2) / total;
+        break;
+      }
+      cumulative += slot.weight;
+    }
+    const result = spinWheel(state.wheelState, base, NOW, constRng(rpRoll));
+    expect(result!.reward.type).toBe('rp');
+    const next = applyWheelReward(state, result!, NOW);
+    const rpSlot = WHEEL_SLOTS.find((slot) => slot.type === 'rp')!;
+    expect(next.research.points).toBe(state.research.points + getWheelSlotRp(rpSlot, base));
   });
 });
 

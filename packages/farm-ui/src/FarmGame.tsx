@@ -114,7 +114,7 @@ import {
   isDecorationOwned,
   purchaseDecoration,
   getPlacedDecorations,
-  extendHarvestBonusBoost,
+  applyWheelReward,
   getWheelStatus,
   spinWheel,
   getCropEconomyEstimate,
@@ -3537,36 +3537,12 @@ export default function FarmGame({
               // lastFreeSpinAt already set for today and returns prev unchanged.
               // 보상은 이 시점(연출 시작 전)에 확정·지급된다 — 연출 중 시트가 닫혀도
               // 유실/이중 지급이 없다(#208 불변 조건, WheelSheet는 연출만 담당).
-              // 보상 적용은 타입별 분기: gold(골드 가산), rp(연구 포인트 가산 —
-              // 누적치 totalPointsEarned도 함께), harvest_boost(광고 부스트와 동일한
-              // 만료 경로로 연장).
-              setGameState((prev) => {
-                if (!getWheelStatus(prev.wheelState, now).canSpin) {
-                  return prev;
-                }
-                const reward = result.reward;
-                switch (reward.type) {
-                  case 'rp':
-                    return {
-                      ...prev,
-                      research: {
-                        ...prev.research,
-                        points: prev.research.points + reward.rp,
-                        totalPointsEarned: prev.research.totalPointsEarned + reward.rp,
-                      },
-                      wheelState: result.newState,
-                    };
-                  case 'harvest_boost':
-                    return {
-                      ...prev,
-                      adUsage: extendHarvestBonusBoost(prev, reward.durationMs, now),
-                      wheelState: result.newState,
-                    };
-                  case 'gold':
-                  default:
-                    return { ...prev, gold: prev.gold + reward.gold, wheelState: result.newState };
-                }
-              });
+              // 보상 적용은 core의 순수 함수(applyWheelReward)에 위임한다: gold(골드
+              // 가산), rp(연구 포인트 + 누적치 가산), harvest_boost(광고 부스트와
+              // 동일한 만료 경로로 연장). 여기서는 이중지급 가드만 담당.
+              setGameState((prev) =>
+                getWheelStatus(prev.wheelState, now).canSpin ? applyWheelReward(prev, result, now) : prev
+              );
               return result.reward;
             }}
             onRevealed={(reward) => {
