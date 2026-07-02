@@ -879,11 +879,10 @@ export function migrateLoadedState(loaded: Partial<GameState>, base: GameState):
 
   merged.dailyBonusState = normalizeDailyBonusState(loaded.dailyBonusState);
   merged.dailyMissionState = normalizeDailyMissionState(loaded.dailyMissionState);
-  // Mirrors dailyMissionState above: the normalizer is base-independent and falls
-  // back to the initial state for a missing/legacy save (equivalent to base's
-  // createInitialWeeklyMissionState). Intentionally consistent with the other
-  // mission normalizers rather than threading `base` through.
-  merged.weeklyMissionState = normalizeWeeklyMissionState(loaded.weeklyMissionState);
+  // base.weeklyMissionState를 넘겨 다른 정규화 함수(uniqueKnownAreas/normalizeAdUsage 등)의
+  // base 보존 규약과 통일한다. 정상 세이브는 loaded의 배열 참조를 그대로 보존하고, 없거나 손상된
+  // 세이브만 base(= createInitialWeeklyMissionState)로 폴백한다.
+  merged.weeklyMissionState = normalizeWeeklyMissionState(loaded.weeklyMissionState, base.weeklyMissionState);
 
   // A save without the flag belongs to a player who already started before
   // onboarding existed, so treat it as completed and never resurface the

@@ -124,35 +124,79 @@ function isKnownArea(value: unknown): value is AreaKey {
   return typeof value === 'string' && FEATURABLE_AREA_SET.has(value as AreaKey);
 }
 
-// 직렬화된 unknown 값을 안전한 WeeklyMissionState로 정규화한다(missions.ts의 정규화와 동일 규칙).
-export function normalizeWeeklyMissionState(value: unknown): WeeklyMissionState {
-  if (typeof value !== 'object' || value == null) {
-    return createInitialWeeklyMissionState();
+function isValidWeeklyProgressValue(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0;
+}
+
+function isValidWeeklyClaimedSlot(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0 && value < WEEKLY_MISSION_COUNT;
+}
+
+// areaKeys를 정규화하되, loaded 배열이 이미 "정규 형태"(길이가 슬롯 수와 일치 + 모든 원소가
+// 알려진 구역이거나 null)면 새 배열을 만들지 않고 입력 참조를 그대로 보존한다. 손상 시에만 재생성.
+function normalizeWeeklyAreaKeys(value: unknown, base: (AreaKey | null)[]): (AreaKey | null)[] {
+  if (
+    Array.isArray(value) &&
+    value.length === WEEKLY_MISSION_COUNT &&
+    value.every((candidate) => candidate === null || isKnownArea(candidate))
+  ) {
+    return value as (AreaKey | null)[];
   }
-  const raw = value as Record<string, unknown>;
-  const weekKey = typeof raw.weekKey === 'string' ? raw.weekKey : '';
-  const areaKeysArr = Array.isArray(raw.areaKeys) ? raw.areaKeys : [];
-  const areaKeys = Array.from({ length: WEEKLY_MISSION_COUNT }, (_, index) => {
-    const candidate = areaKeysArr[index];
+  if (!Array.isArray(value)) {
+    return base;
+  }
+  return Array.from({ length: WEEKLY_MISSION_COUNT }, (_, index) => {
+    const candidate = value[index];
     return isKnownArea(candidate) ? candidate : null;
   });
-  const progressArr = Array.isArray(raw.progress) ? raw.progress : [];
-  const progress = Array.from({ length: WEEKLY_MISSION_COUNT }, (_, index) => {
-    const candidate = progressArr[index];
+}
+
+// progress를 정규화하되, loaded 배열이 이미 정규 형태(길이 일치 + 모든 원소가 0 이상 정수)면
+// 입력 참조를 보존한다. 손상 시에만 재생성(음수/비정수/누락은 0으로, 소수는 내림).
+function normalizeWeeklyProgress(value: unknown, base: number[]): number[] {
+  if (Array.isArray(value) && value.length === WEEKLY_MISSION_COUNT && value.every(isValidWeeklyProgressValue)) {
+    return value as number[];
+  }
+  if (!Array.isArray(value)) {
+    return base;
+  }
+  return Array.from({ length: WEEKLY_MISSION_COUNT }, (_, index) => {
+    const candidate = value[index];
     return typeof candidate === 'number' && Number.isFinite(candidate) && candidate >= 0
       ? Math.floor(candidate)
       : 0;
   });
-  const claimedSlots = Array.isArray(raw.claimedSlots)
-    ? [
-        ...new Set(
-          raw.claimedSlots.filter(
-            (slot): slot is number =>
-              typeof slot === 'number' && Number.isInteger(slot) && slot >= 0 && slot < WEEKLY_MISSION_COUNT
-          )
-        ),
-      ]
-    : [];
+}
+
+// claimedSlots를 정규화하되, loaded 배열이 이미 정규 형태(모든 원소가 범위 내 정수 + 중복 없음)면
+// 입력 참조를 보존한다. 손상 시에만 재생성(범위 밖 제거 + 중복 제거).
+function normalizeWeeklyClaimedSlots(value: unknown, base: number[]): number[] {
+  if (!Array.isArray(value)) {
+    return base;
+  }
+  if (value.every(isValidWeeklyClaimedSlot) && new Set(value).size === value.length) {
+    return value as number[];
+  }
+  return [...new Set(value.filter(isValidWeeklyClaimedSlot))];
+}
+
+// 직렬화된 unknown 값을 안전한 WeeklyMissionState로 정규화한다(missions.ts의 정규화와 동일 규칙).
+// base는 폴백 소스이자 참조 보존의 기준이다: 최상위가 비객체이면 base를 그대로 반환하고, 각 필드는
+// loaded가 이미 정규 형태이면 입력 참조를 보존하고 손상 시에만 새 배열을 만든다. 이렇게 하면 정상
+// 세이브를 매 로드마다 새 progress/areaKeys/claimedSlots 참조로 재생성하지 않아 불필요한 리렌더를
+// 막고, 다른 정규화 함수(uniqueKnownAreas/normalizeAdUsage 등)의 base 보존 규약과도 정합한다.
+export function normalizeWeeklyMissionState(
+  value: unknown,
+  base: WeeklyMissionState = createInitialWeeklyMissionState()
+): WeeklyMissionState {
+  if (typeof value !== 'object' || value == null) {
+    return base;
+  }
+  const raw = value as Record<string, unknown>;
+  const weekKey = typeof raw.weekKey === 'string' ? raw.weekKey : base.weekKey;
+  const areaKeys = normalizeWeeklyAreaKeys(raw.areaKeys, base.areaKeys);
+  const progress = normalizeWeeklyProgress(raw.progress, base.progress);
+  const claimedSlots = normalizeWeeklyClaimedSlots(raw.claimedSlots, base.claimedSlots);
   return { weekKey, areaKeys, progress, claimedSlots };
 }
 
