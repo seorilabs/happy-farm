@@ -172,6 +172,7 @@ import { CollectionSheet } from './components/CollectionSheet';
 import { FarmOnboarding, ONBOARDING_STEPS, type OnboardingStep } from './components/FarmOnboarding';
 import { LabSheet } from './components/LabSheet';
 import { MissionsSheet } from './components/MissionsSheet';
+import { WheelSheet } from './components/WheelSheet';
 import { AdRewardCard, CloudSaveSection, SettingToggle, SheetAction, ShopCard, sheetPartStyles } from './components/SheetParts';
 import { MAIN_HORIZONTAL_PADDING, PLOT_COLUMNS, PLOT_GAP } from './farmGameLayout';
 import { styles } from './farmGameStyles';
@@ -604,9 +605,6 @@ export default function FarmGame({
     }
   }, []);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
-  // The gold won on the most recent wheel spin, shown inline in the wheel sheet
-  // until it is reopened. Null before the player spins (or after reopening).
-  const [wheelSpinResult, setWheelSpinResult] = useState<{ gold: number } | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [harvestCombo, setHarvestCombo] = useState(0);
   const comboTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1853,10 +1851,10 @@ export default function FarmGame({
     setActiveSheet({ type: 'missions' });
   }
 
-  // Clear any prior spin result so reopening the wheel always starts from the
-  // spin prompt (or the cooldown message), never a stale reward.
+  // Spin result/animation state lives inside WheelSheet and resets on mount, so
+  // reopening the wheel always starts from the spin prompt (or the cooldown
+  // message), never a stale reward.
   function openWheel() {
-    setWheelSpinResult(null);
     setActiveSheet({ type: 'wheel' });
   }
 
@@ -2795,12 +2793,8 @@ export default function FarmGame({
       ? previewDailyBonus(gameState.dailyBonusState, Date.now(), getRewardedGoldAmount(gameState))
       : { available: false as const, streak: 1, goldAwarded: 50 };
 
-  // Wheel spin availability. Recomputed each render tick so the sheet's spin/
-  // cooldown state and the nav badge stay live as UTC midnight passes.
-  const wheelStatus =
-    activeSheet?.type === 'wheel'
-      ? getWheelStatus(gameState.wheelState, Date.now())
-      : { canSpin: false, nextSpinAt: 0 };
+  // Wheel spin availability for the nav badge. The sheet itself (WheelSheet)
+  // recomputes its own status from gameState + now on every render tick.
   const wheelSpinReady = getWheelStatus(gameState.wheelState, tickNowMsRef.current).canSpin;
 
   // Outline the target the current onboarding step points at to draw the eye.
@@ -3516,64 +3510,45 @@ export default function FarmGame({
         ) : null}
 
         {activeSheet?.type === 'wheel' ? (
-          <View>
-            <View style={styles.welcomeBackRow}>
-              <Text style={styles.welcomeBackIcon}>{wheelSpinResult != null ? '🎉' : '🎰'}</Text>
-              <View style={styles.welcomeBackRowText}>
-                {wheelSpinResult != null ? (
-                  <>
-                    <Text style={styles.welcomeBackRowLabel}>
-                      {messages.wheelRewardToast(formatMoney(wheelSpinResult.gold, locale))}
-                    </Text>
-                    <Text style={styles.welcomeBackRowValue}>
-                      +{formatMoney(wheelSpinResult.gold, locale)}G
-                    </Text>
-                  </>
-                ) : (
-                  <Text style={styles.welcomeBackRowLabel}>
-                    {wheelStatus.canSpin
-                      ? messages.wheelReadyLabel
-                      : messages.wheelNextSpinLabel(
-                          formatRemainingTime(Math.max(0, wheelStatus.nextSpinAt - Date.now()), locale)
-                        )}
-                  </Text>
-                )}
-              </View>
-            </View>
-            {wheelStatus.canSpin ? (
-              <SheetAction
-                label={messages.wheelSpinAction}
-                onPress={() => {
-                  const now = Date.now();
-                  // Guard against clock reversal or a stale render: don't spin
-                  // when locked at tap time.
-                  if (!getWheelStatus(gameState.wheelState, now).canSpin) {
-                    return;
-                  }
-                  // Compute the spin once, synchronously, so the state updater
-                  // stays pure (no side effects inside it — React can double-invoke
-                  // updaters in StrictMode). A null result means it's no longer
-                  // spinnable.
-                  const result = spinWheel(gameState.wheelState, getRewardedGoldAmount(gameState), now);
-                  if (result == null) {
-                    return;
-                  }
-                  // Apply with a functional updater that re-checks against the
-                  // latest state, so a second tap landing in the same tick (before
-                  // a re-render) can't double-award: the second apply sees
-                  // lastFreeSpinAt already set for today and returns prev unchanged.
-                  setGameState((prev) =>
-                    getWheelStatus(prev.wheelState, now).canSpin
-                      ? { ...prev, gold: prev.gold + result.reward.gold, wheelState: result.newState }
-                      : prev
-                  );
-                  setWheelSpinResult({ gold: result.reward.gold });
-                  pulseGold();
-                  toast(messages.wheelRewardToast(formatMoney(result.reward.gold, locale)));
-                }}
-              />
-            ) : null}
-          </View>
+          <WheelSheet
+            gameState={gameState}
+            locale={locale}
+            messages={messages}
+            now={Date.now()}
+            onSpin={() => {
+              const now = Date.now();
+              // Guard against clock reversal or a stale render: don't spin
+              // when locked at tap time.
+              if (!getWheelStatus(gameState.wheelState, now).canSpin) {
+                return null;
+              }
+              // Compute the spin once, synchronously, so the state updater
+              // stays pure (no side effects inside it — React can double-invoke
+              // updaters in StrictMode). A null result means it's no longer
+              // spinnable.
+              const result = spinWheel(gameState.wheelState, getRewardedGoldAmount(gameState), now);
+              if (result == null) {
+                return null;
+              }
+              // Apply with a functional updater that re-checks against the
+              // latest state, so a second tap landing in the same tick (before
+              // a re-render) can't double-award: the second apply sees
+              // lastFreeSpinAt already set for today and returns prev unchanged.
+              // 보상은 이 시점(연출 시작 전)에 확정·지급된다 — 연출 중 시트가 닫혀도
+              // 유실/이중 지급이 없다(#208 불변 조건, WheelSheet는 연출만 담당).
+              setGameState((prev) =>
+                getWheelStatus(prev.wheelState, now).canSpin
+                  ? { ...prev, gold: prev.gold + result.reward.gold, wheelState: result.newState }
+                  : prev
+              );
+              return result.reward;
+            }}
+            onRevealed={(gold) => {
+              // 연출 종료(당첨 슬롯 정지) 후에 토스트/골드 펄스를 노출한다.
+              pulseGold();
+              toast(messages.wheelRewardToast(formatMoney(gold, locale)));
+            }}
+          />
         ) : null}
 
         {activeSheet?.type === 'welcomeBack' ? (
