@@ -287,6 +287,31 @@ describe('WheelSheet', () => {
     expect(onRevealed).not.toHaveBeenCalled();
   });
 
+  test('연출 종료 후에도 canSpin이 열려 있으면(자정 롤오버) 재스핀이 가능하고 펄스/타이머가 재시작된다', () => {
+    // 테스트의 gameState는 onSpin 목이 갱신하지 않으므로 canSpin이 계속 true다 —
+    // 결과 카드가 떠 있어도 버튼이 다시 노출되는 자정 롤오버 경로를 그대로 흉내 낸다.
+    const state = createInitialState();
+    const onSpin = jest.fn(() => ({ slotKey: WHEEL_SLOTS[1]!.key, gold: 200 }));
+    const onRevealed = jest.fn();
+    const screen = renderWheel(state, onSpin, onRevealed);
+
+    fireEvent.press(screen.getByText(messages.wheelSpinAction));
+    act(() => {
+      jest.advanceTimersByTime(SPIN_SETTLE_MS);
+    });
+    expect(onRevealed).toHaveBeenCalledTimes(1);
+
+    // 재스핀: 이전 결과가 지워지고 새 연출이 문제없이 시작·종료된다(루프 핸들 정리 계약).
+    fireEvent.press(screen.getByText(messages.wheelSpinAction));
+    expect(onSpin).toHaveBeenCalledTimes(2);
+    expect(screen.queryByTestId('wheel-result')).toBeNull();
+    act(() => {
+      jest.advanceTimersByTime(SPIN_SETTLE_MS);
+    });
+    expect(onRevealed).toHaveBeenCalledTimes(2);
+    expect(screen.getByTestId('wheel-result')).toBeTruthy();
+  });
+
   test('오늘 이미 스핀했으면 버튼 없이 다음 스핀 카운트다운이 노출된다', () => {
     const base = createInitialState();
     const state: GameState = { ...base, wheelState: { lastFreeSpinAt: NOW } };

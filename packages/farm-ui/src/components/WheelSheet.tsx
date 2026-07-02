@@ -67,7 +67,11 @@ export function WheelSheet({
   // 연출 종료(당첨 슬롯 정지) 시 1회 호출 — 호출부에서 토스트/골드 펄스에 사용.
   onRevealed?: (gold: number) => void;
 }) {
-  const status = getWheelStatus(gameState.wheelState, now);
+  // 비정상 now(NaN 등) 방어: 상태 판정과 카운트다운이 같은 기준 시각을 쓰게 정규화한다.
+  // getWheelStatus는 같은 safeNow로 nextSpinAt을 산출하므로, 쿨다운 중 잔여 시간은
+  // 항상 (0, 24h] 범위다(시계 점프에도 음수/과대 표시가 나오지 않는다).
+  const safeNow = Number.isFinite(now) ? now : Date.now();
+  const status = getWheelStatus(gameState.wheelState, safeNow);
   const adRewardGold = getRewardedGoldAmount(gameState);
 
   // 연출 진행 상태(진행 중이면 non-null). 보상 자체는 이미 확정돼 있다.
@@ -81,6 +85,16 @@ export function WheelSheet({
   const spinningRef = useRef(false);
   // 하이라이트 셀 펄스(0→1 반복). useNativeDriver로 게임 틱과 간섭하지 않는다.
   const pulseAnim = useRef(new Animated.Value(0)).current;
+  // 실행 중인 펄스 루프 핸들. 재스핀(자정 롤오버 후) 시 이전 루프를 명시적으로 stop해
+  // Animated.loop가 누적되지 않게 하고, 언마운트 정리에도 같은 핸들을 쓴다.
+  const pulseLoopRef = useRef<Animated.CompositeAnimation | null>(null);
+
+  function stopPulseLoop() {
+    pulseLoopRef.current?.stop();
+    pulseLoopRef.current = null;
+    pulseAnim.stopAnimation();
+    pulseAnim.setValue(0);
+  }
 
   // 언마운트 시 타이머/애니메이션만 정리한다. 보상은 스핀 시점에 이미 확정·지급됐으므로
   // 연출이 중단돼도 유실되지 않는다(이 계약은 sheets.test.tsx에서 고정).
@@ -88,10 +102,13 @@ export function WheelSheet({
     return () => {
       if (timerRef.current != null) {
         clearTimeout(timerRef.current);
+        timerRef.current = null;
       }
-      pulseAnim.stopAnimation();
+      stopPulseLoop();
     };
-  }, [pulseAnim]);
+    // stopPulseLoop는 렌더마다 새로 만들어지지만 ref/Animated.Value만 만지는 안정 로직이다.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function startSpin() {
     // 연출 중 재탭 가드(보상 커밋은 호출부에서도 이중 방지되지만, 연출 중복 시작도 막는다).
@@ -111,12 +128,15 @@ export function WheelSheet({
     setPlayback({ winnerIndex, gold: reward.gold });
     setHighlightIndex(0);
 
-    Animated.loop(
+    // 재스핀 경로(자정 롤오버 후) 대비: 이전 루프를 먼저 정리해 누적을 막는다.
+    stopPulseLoop();
+    pulseLoopRef.current = Animated.loop(
       Animated.sequence([
         Animated.timing(pulseAnim, { toValue: 1, duration: 160, easing: Easing.out(Easing.quad), useNativeDriver: true }),
         Animated.timing(pulseAnim, { toValue: 0, duration: 160, easing: Easing.in(Easing.quad), useNativeDriver: true }),
       ])
-    ).start();
+    );
+    pulseLoopRef.current.start();
 
     // 마지막 스텝 인덱스가 당첨 슬롯과 합동이 되도록 스텝 수를 정한다:
     // (stepCount - 1) % 슬롯수 === winnerIndex.
@@ -130,9 +150,10 @@ export function WheelSheet({
           return;
         }
         // 연출 종료: 당첨 슬롯에 정지. 결과 카드 노출 + 호출부 알림(토스트/펄스).
+        // 마지막 타이머는 소진됐으므로 ref를 비워 cleanup이 항상 유효한 대상만 가리키게 한다.
+        timerRef.current = null;
         spinningRef.current = false;
-        pulseAnim.stopAnimation();
-        pulseAnim.setValue(0);
+        stopPulseLoop();
         setPlayback(null);
         setHighlightIndex(null);
         setResult({ winnerIndex, gold: reward.gold });
@@ -192,13 +213,17 @@ export function WheelSheet({
             <Text style={styles.statusLabel}>
               {status.canSpin
                 ? messages.wheelReadyLabel
-                : messages.wheelNextSpinLabel(formatRemainingTime(Math.max(0, status.nextSpinAt - now), locale))}
+                : messages.wheelNextSpinLabel(
+                    formatRemainingTime(Math.max(0, status.nextSpinAt - safeNow), locale)
+                  )}
             </Text>
           )}
         </View>
       </View>
 
-      {status.canSpin && playback == null && result == null ? (
+      {/* 결과 카드가 떠 있어도 자정 롤오버로 canSpin이 다시 열리면 재스핀을 허용한다
+          (startSpin이 이전 결과/펄스 루프를 정리하고 새 연출을 시작). */}
+      {status.canSpin && playback == null ? (
         <SheetAction label={messages.wheelSpinAction} onPress={startSpin} />
       ) : null}
     </View>
