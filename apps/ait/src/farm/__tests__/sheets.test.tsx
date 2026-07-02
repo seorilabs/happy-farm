@@ -1,6 +1,7 @@
 /// <reference types="jest" />
 
 import React from 'react';
+import { StyleSheet } from 'react-native';
 import { act, cleanup, fireEvent, render } from '@testing-library/react-native';
 
 import {
@@ -11,6 +12,7 @@ import {
   PRESTIGE_SKILLS,
   createInitialState,
   formatMoney,
+  formatRemainingTime,
   getAreaCropKeys,
   getCollectionSummary,
   getPrestigeSkillLabel,
@@ -263,9 +265,9 @@ describe('WheelSheet', () => {
 
     const action = screen.getByText(messages.wheelSpinAction);
     fireEvent.press(action);
-    // 연출 중에는 버튼이 사라지지만, 같은 틱의 이중 탭을 흉내 내 직접 재호출해도
-    // spinningRef 가드로 onSpin이 다시 불리지 않아야 한다.
-    expect(screen.queryByText(messages.wheelSpinAction)).toBeNull();
+    // 연출 중 버튼은 disabled로 렌더된다(가드가 렌더 단계에서 확정). disabled여도
+    // 이벤트를 강제로 흘려 이중 탭을 흉내 내면 spinningRef가 2차 안전망으로 막는다.
+    fireEvent.press(screen.getByText(messages.wheelSpinAction));
     expect(onSpin).toHaveBeenCalledTimes(1);
   });
 
@@ -310,6 +312,32 @@ describe('WheelSheet', () => {
     });
     expect(onRevealed).toHaveBeenCalledTimes(2);
     expect(screen.getByTestId('wheel-result')).toBeTruthy();
+  });
+
+  test('릴은 한 줄 고정(nowrap)이라 줄바꿈으로 강조 인덱스가 어긋나지 않는다', () => {
+    // 좁은 화면에서 셀이 줄바꿈되면 감속 하이라이트가 멈추는 셀의 시각 위치가 당첨
+    // 슬롯과 어긋난다. nowrap + 균등 flex 분배 계약을 스타일 회귀로 고정한다.
+    const screen = renderWheel(createInitialState(), jest.fn(), jest.fn());
+    const row = StyleSheet.flatten(screen.getByTestId('wheel-reel').props.style);
+    expect(row.flexWrap).toBe('nowrap');
+    const cell = StyleSheet.flatten(screen.getByTestId(`wheel-slot-${WHEEL_SLOTS[0]!.key}`).props.style);
+    expect(cell.flexBasis).toBe(0);
+    expect(cell.flexShrink).toBe(1);
+    expect(cell.minWidth).toBe(0);
+  });
+
+  test('시계 역전(미래 lastFreeSpinAt) 시에도 카운트다운은 24시간 이하로 표시되고 버튼이 없다', () => {
+    const DAY_MS = 24 * 60 * 60 * 1000;
+    const base = createInitialState();
+    // 세이브에 미래 타임스탬프가 남은 역전 상황: getWheelStatus가 now로 클램프해
+    // canSpin=false + 다음 자정 잔여(0~24h)로 정규화한다.
+    const state: GameState = { ...base, wheelState: { lastFreeSpinAt: NOW + 5 * DAY_MS } };
+    const screen = renderWheel(state, jest.fn(), jest.fn());
+    expect(screen.queryByText(messages.wheelSpinAction)).toBeNull();
+    const remaining = (Math.floor(NOW / DAY_MS) + 1) * DAY_MS - NOW;
+    expect(remaining).toBeGreaterThan(0);
+    expect(remaining).toBeLessThanOrEqual(DAY_MS);
+    expect(screen.getByText(messages.wheelNextSpinLabel(formatRemainingTime(remaining, LOCALE)))).toBeTruthy();
   });
 
   test('오늘 이미 스핀했으면 버튼 없이 다음 스핀 카운트다운이 노출된다', () => {

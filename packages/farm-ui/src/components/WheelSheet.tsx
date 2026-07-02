@@ -172,7 +172,7 @@ export function WheelSheet({
       {/* 슬롯 릴: 무엇을 얻을 수 있는지 항상 노출(스핀 동기 부여). 보상은 진행도
           스케일된 광고 보상 × 슬롯 배수로, 상점/수령 경로와 같은 기준 금액이다. */}
       <Text style={styles.reelTitle}>{messages.wheelSlotsTitle}</Text>
-      <View style={styles.reelRow}>
+      <View style={styles.reelRow} testID="wheel-reel">
         {WHEEL_SLOTS.map((slot, index) => {
           const active = emphasizedIndex === index;
           const spinningActive = active && playback != null;
@@ -222,9 +222,11 @@ export function WheelSheet({
       </View>
 
       {/* 결과 카드가 떠 있어도 자정 롤오버로 canSpin이 다시 열리면 재스핀을 허용한다
-          (startSpin이 이전 결과/펄스 루프를 정리하고 새 연출을 시작). */}
-      {status.canSpin && playback == null ? (
-        <SheetAction label={messages.wheelSpinAction} onPress={startSpin} />
+          (startSpin이 이전 결과/펄스 루프를 정리하고 새 연출을 시작). 연출 중에는
+          버튼을 숨기는 대신 disabled로 렌더해, 재탭 가드가 마운트 타이밍(한 프레임
+          윈도우)에 의존하지 않고 렌더 단계에서 확정되게 한다(spinningRef는 이중 안전망). */}
+      {status.canSpin ? (
+        <SheetAction label={messages.wheelSpinAction} disabled={playback != null} onPress={startSpin} />
       ) : null}
     </View>
   );
@@ -237,16 +239,20 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
   },
+  // 릴은 반드시 한 줄이어야 한다(nowrap): 줄바꿈되면 감속 하이라이트가 멈추는 셀의
+  // 시각 위치가 당첨 슬롯과 어긋난다. 셀은 flex 균등 분배 + 축소 허용으로 좁은
+  // 화면에서도 6칸이 한 줄에 들어간다.
   reelRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexWrap: 'nowrap',
     gap: 6,
     marginBottom: 14,
   },
   reelCell: {
-    minWidth: 52,
     flexGrow: 1,
-    flexBasis: '14%',
+    flexShrink: 1,
+    flexBasis: 0,
+    minWidth: 0,
     alignItems: 'center',
     paddingVertical: 8,
     paddingHorizontal: 4,
