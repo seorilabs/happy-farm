@@ -38,5 +38,29 @@ target 'HappyFarmMobile' do
         build_config.build_settings['CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES'] = 'YES'
       end
     end
+
+    # 여러 Pod 의 xcconfig(OTHER_CFLAGS)가
+    #   -fmodule-map-file="${PODS_ROOT}/Headers/Private/grpc/gRPC-Core.modulemap"
+    # 를 참조하지만, CocoaPods 는 gRPC-Core 의 modulemap 을 모듈명 경로(grpc)에
+    # 배치하지 않아 해당 파일이 존재하지 않는다. Xcode 26.4 clang 은 없는
+    # -fmodule-map-file 을 관대하게 넘겼지만 26.5+ clang 은 하드 에러를 내며
+    # "module map file '.../grpc/gRPC-Core.modulemap' not found" 로 archive 가 깨진다.
+    # 실제 modulemap 을 gRPC-Core 헤더 트리(grpc.h 등과 인접, HEADER_SEARCH_PATHS 상
+    # 존재하는 실체 경로)에 복사하고, xcconfig 의 참조 경로를 그 실체 경로로 바꾼다.
+    # 심볼릭이 아니라 실체 파일/경로라 프레시 pod install(CI)에서도 안정적이다.
+    grpc_core_modulemap = File.join(installer.sandbox.root, 'Target Support Files', 'gRPC-Core', 'gRPC-Core.modulemap')
+    grpc_headers_dir = File.join(installer.sandbox.root, 'Headers', 'Private', 'gRPC-Core', 'grpc')
+    if File.exist?(grpc_core_modulemap) && Dir.exist?(grpc_headers_dir)
+      FileUtils.cp(grpc_core_modulemap, File.join(grpc_headers_dir, 'gRPC-Core.modulemap'))
+      support_files_dir = File.join(installer.sandbox.root, 'Target Support Files')
+      Dir.glob(File.join(support_files_dir, '**', '*.xcconfig')).each do |xcconfig|
+        contents = File.read(xcconfig)
+        patched = contents.gsub(
+          'Headers/Private/grpc/gRPC-Core.modulemap',
+          'Headers/Private/gRPC-Core/grpc/gRPC-Core.modulemap',
+        )
+        File.write(xcconfig, patched) if patched != contents
+      end
+    end
   end
 end
