@@ -27,6 +27,15 @@ $RNFirebaseAsStaticFramework = true
 # 로 RNFB 모듈 빌드가 깨진다. RNFB 팟만 static library(비프레임워크)로 강제하면 모듈
 # 빌드를 피해 이 에러가 사라지고, Firebase 팟은 프레임워크로 남아 Swift 헤더를
 # 정상 노출한다(Expo 의 forceStaticLinking 과 동일한 혼합 링키지 전략).
+#
+# [duplicate symbol 안전성 — #220] "RNFBApp 만 static 이고 이를 의존하는 다른 RNFB
+# 팟이 framework 로 남으면 아카이브 단계에서 심볼 중복이 날 수 있다"는 우려가 있으나,
+# 아래 화이트리스트는 접두사('RNFB') 전체를 매칭하므로 RNFBApp/Auth/Analytics/
+# Crashlytics/Firestore/RemoteConfig 등 RNFB 계열 팟이 하나도 빠짐없이 static 으로
+# 확정된다(계열 내부 링키지가 균일). RNFB 심볼은 RNFB 팟에만 존재하고 framework 로
+# 남는 Firebase 코어 팟(FirebaseCore/Auth/...)에는 나타나지 않으므로, static↔framework
+# 경계에서 동일 심볼이 양쪽에 실릴 여지가 없다. 향후 RNFB 팟이 추가돼도 이 접두사
+# 규칙이 자동으로 static 으로 편입시켜 링키지 균일성을 유지한다.
 pre_install do |installer|
   installer.pod_targets.each do |pod|
     # RNFB 접두사 전체 매칭: database/storage/messaging 등 향후 RNFB 패키지가
