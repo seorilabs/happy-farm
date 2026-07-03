@@ -9,12 +9,12 @@
 /* Begin PBXBuildFile section */
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
 		40E37E434038C43594E2C075 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */; };
+		6D2FC3FCFD7C26CDA5EC4F1F /* Pods_HappyFarmMobile.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 710E97E92B3D5637877E805A /* Pods_HappyFarmMobile.framework */; };
 		761780ED2CA45674006654EE /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 761780EC2CA45674006654EE /* AppDelegate.swift */; };
 		81AB9BB82411601600AC10FF /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */; };
 		A17C99000000000000000000 /* farm_bgm_loop.wav in Resources */ = {isa = PBXBuildFile; fileRef = A17C99000000000000000002 /* farm_bgm_loop.wav */; };
 		A17C99000000000000000001 /* harvest_coin.wav in Resources */ = {isa = PBXBuildFile; fileRef = A17C99000000000000000003 /* harvest_coin.wav */; };
 		A17C99DA2C0F4D9AA0000002 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = A17C99D92C0F4D9AA0000001 /* GoogleService-Info.plist */; };
-		F5D1E7B8C9C8DFC32294E6BA /* libPods-HappyFarmMobile.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 8169F59C9AD2DD3FBEAEAC46 /* libPods-HappyFarmMobile.a */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -24,8 +24,8 @@
 		13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = PrivacyInfo.xcprivacy; path = HappyFarmMobile/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		3B4392A12AC88292D35C810B /* Pods-HappyFarmMobile.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-HappyFarmMobile.debug.xcconfig"; path = "Target Support Files/Pods-HappyFarmMobile/Pods-HappyFarmMobile.debug.xcconfig"; sourceTree = "<group>"; };
 		5709B34CF0A7D63546082F79 /* Pods-HappyFarmMobile.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-HappyFarmMobile.release.xcconfig"; path = "Target Support Files/Pods-HappyFarmMobile/Pods-HappyFarmMobile.release.xcconfig"; sourceTree = "<group>"; };
+		710E97E92B3D5637877E805A /* Pods_HappyFarmMobile.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_HappyFarmMobile.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		761780EC2CA45674006654EE /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = HappyFarmMobile/AppDelegate.swift; sourceTree = "<group>"; };
-		8169F59C9AD2DD3FBEAEAC46 /* libPods-HappyFarmMobile.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-HappyFarmMobile.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = LaunchScreen.storyboard; path = HappyFarmMobile/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		A17C99000000000000000002 /* farm_bgm_loop.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; name = farm_bgm_loop.wav; path = ../src/audio/assets/farm_bgm_loop.wav; sourceTree = SOURCE_ROOT; };
 		A17C99000000000000000003 /* harvest_coin.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; name = harvest_coin.wav; path = ../src/audio/assets/harvest_coin.wav; sourceTree = SOURCE_ROOT; };
@@ -38,7 +38,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				F5D1E7B8C9C8DFC32294E6BA /* libPods-HappyFarmMobile.a in Frameworks */,
+				6D2FC3FCFD7C26CDA5EC4F1F /* Pods_HappyFarmMobile.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -64,7 +64,7 @@
 			isa = PBXGroup;
 			children = (
 				ED297162215061F000B7C4FE /* JavaScriptCore.framework */,
-				8169F59C9AD2DD3FBEAEAC46 /* libPods-HappyFarmMobile.a */,
+				710E97E92B3D5637877E805A /* Pods_HappyFarmMobile.framework */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
