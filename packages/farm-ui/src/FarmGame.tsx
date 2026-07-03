@@ -1596,18 +1596,6 @@ export default function FarmGame({
     }
   }, [activeSheet, analyticsContext]);
 
-  // 성장 가속 시트가 열린 뒤 timer tick으로 대상 플롯이 다 자라거나(상태 2) 사라지면
-  // 광고/비료 액션이 모두 사라진 빈 시트가 남지 않도록 시트를 자동으로 닫는다(#227 리뷰).
-  useEffect(() => {
-    if (activeSheet?.type !== 'growthAd') {
-      return;
-    }
-    const plot = gameState.plots[activeSheet.plotIndex];
-    if (plot == null || plot.state !== 1) {
-      setActiveSheet(null);
-    }
-  }, [activeSheet, gameState]);
-
   useEffect(() => {
     const id = setInterval(() => {
       tickNowMsRef.current = Date.now();
@@ -1761,9 +1749,8 @@ export default function FarmGame({
   // Blocks a second "Harvest All" tap until the in-flight batch finishes; the
   // command drain effect releases it after each attempt (success or no-op).
   const harvestAllInFlightRef = useRef(false);
-  // 비료 적용의 성공 부수효과(토스트·시트 닫힘)를 시트 1회 오픈당 한 번만 발화하게
-  // 하는 가드. (이벤트 핸들러는 StrictMode에서 이중 호출되지 않지만, 중복 알림을
-  // 원천 차단하려는 방어적 가드.) 시트가 열릴 때 false로 리셋한다(#227 리뷰).
+  // 비료 성공 부수효과(토스트·시트 닫힘)를 시트 1회 오픈당 한 번만 발화하게 하는
+  // 가드. 시트가 열릴 때 false로 리셋한다(#227 리뷰).
   const fertilizeGuardRef = useRef(false);
   const chainIncome = useMemo(() => getChainIncome(gameState), [gameState, tick]);
   const mapActionableCount = useMemo(
@@ -2704,6 +2691,11 @@ export default function FarmGame({
         // 골드 비료(#227)는 광고 지원 여부와 무관하게 성장 중이면 항상 가능하므로,
         // 광고 스킵 또는 비료 중 하나라도 가능하면 성장 가속 시트를 연다.
         const fertilizerCost = getFertilizerCost(gameState, plot);
+        // 광고 지원 + 일일 한도 도달은 (비료로 시트가 열리든 아니든) 항상 계측한다.
+        const adLimitBlocked = adPathAvailable && !growthAdLimit.allowed;
+        if (adLimitBlocked) {
+          farmAnalytics.trackAdLimitBlocked('growthAd', getRewardedAdPlacement('growthAd'), growthAdLimit.reason, analyticsContext());
+        }
         if ((adPathAvailable && growthAdLimit.allowed) || fertilizerCost > 0) {
           // 새 시트 오픈마다 비료 성공 가드를 리셋해 이번 오픈의 적용을 허용한다.
           fertilizeGuardRef.current = false;
@@ -2713,8 +2705,9 @@ export default function FarmGame({
             cropKey: plot.cropType,
             remainingMs,
           });
-        } else if (adPathAvailable && !growthAdLimit.allowed) {
-          farmAnalytics.trackAdLimitBlocked('growthAd', getRewardedAdPlacement('growthAd'), growthAdLimit.reason, analyticsContext());
+        } else if (adLimitBlocked) {
+          // 시트가 열리지 않는 광고 전용 경로에서만 한도 사유를 토스트로 안내한다
+          // (시트가 열리는 경우엔 시트 안 광고 버튼의 비활성 사유 라벨로 노출됨).
           toast(growthAdLimit.reason);
         } else {
           toast(messages.growingToast);
@@ -2746,41 +2739,36 @@ export default function FarmGame({
     });
   }
 
-  // 골드 비료(#227): 성장 중 플롯의 남은 성장을 골드로 즉시 완료한다. 커밋 상태로
-  // 적용 가능 여부/비용을 먼저 판정(토스트 문구용)하되, 실제 차감·완료는 updater
-  // 안에서 라이브 상태에 재판정해 적용한다 — StrictMode의 updater 이중 실행에도
-  // 멱등(같은 base state → 같은 결과)이고, 성장 tick 등으로 상태가 바뀌었으면
-  // unchanged를 반환해 일관성을 지킨다.
+  // 골드 비료(#227): 성장 중 플롯의 남은 성장을 골드로 즉시 완료한다.
+  //
+  // 상태 갱신과 안내(토스트·시트 닫힘)를 커밋 상태에서 계산한 "단일 결과"에서만
+  // 파생시켜, 둘이 서로 어긋날 여지를 없앤다(preview/updater 이중 판정 제거). 적용된
+  // 결과 상태를 그대로 setGameState에 넘기므로 토스트가 말하는 차감과 실제 차감이
+  // 항상 동일하다. 성공 부수효과는 fertilizeGuardRef로 시트 오픈당 한 번만 발화해
+  // 이벤트 재호출/StrictMode에도 중복 알림이 없다(골드/플롯은 결과 상태 1회 반영).
   function applyFertilizerNow(plotIndex: number) {
     const plot = gameState.plots[plotIndex];
     if (plot == null) {
       return;
     }
-    const preview = applyFertilizer(gameState, plot.id);
-    if (!preview.applied) {
-      // 골드 부족(cost>0)은 시트를 유지해 재시도 가능하게 하고 안내만 한다.
-      // cost===0(이미 완료/남은 성장 없음)은 시트를 닫고 완료 안내를 띄운다.
-      // 성공 경로가 아니므로 '골드 부족'과 '이미 다 자람'을 정확히 구분한다.
-      if (preview.cost > 0) {
-        toast(messages.insufficientGoldToast);
-      } else {
+    const result = applyFertilizer(gameState, plot.id);
+    if (!result.applied) {
+      // 비활성 버튼 우회 호출(a11y/외부 ref) 방어 겸 실패 안내: 골드 부족(cost>0)은
+      // 조용히 무시("비활성 버튼은 입력을 받지 않는다"는 UX 약속 유지), cost===0
+      // (이미 완료/남은 성장 없음)은 시트를 닫고 완료 안내.
+      if (result.cost <= 0) {
         setActiveSheet(null);
         toast(messages.alreadyGrownToast);
       }
       return;
     }
-    // StrictMode가 onPress를 두 번 호출하더라도 성공 부수효과(토스트·시트 닫힘)는
-    // 시트 오픈당 한 번만 발화한다. 골드/플롯 갱신은 updater가 멱등이라 안전하다.
     if (fertilizeGuardRef.current) {
       return;
     }
     fertilizeGuardRef.current = true;
-    setGameState((state) => {
-      const result = applyFertilizer(state, plot.id);
-      return result.applied ? result.state : state;
-    });
+    setGameState(result.state);
     setActiveSheet(null);
-    toast(messages.fertilizerDoneToast(formatMoney(preview.cost, locale)));
+    toast(messages.fertilizerDoneToast(formatMoney(result.cost, locale)));
   }
 
   async function activateHarvestBonusWithAd() {
