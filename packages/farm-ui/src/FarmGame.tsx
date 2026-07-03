@@ -2728,9 +2728,11 @@ export default function FarmGame({
     });
   }
 
-  // 골드 비료(#227): 성장 중 플롯의 남은 성장을 골드로 즉시 완료한다. 광고 스킵과
-  // 동일하게 커밋 상태에서 비용/성공 여부를 미리 보고(토스트 문구용), 실제 차감·완료는
-  // updater 안에서 라이브 상태에 적용해 StrictMode 이중 실행에 안전하게 한다.
+  // 골드 비료(#227): 성장 중 플롯의 남은 성장을 골드로 즉시 완료한다. 커밋 상태로
+  // 적용 가능 여부/비용을 먼저 판정(토스트 문구용)하되, 실제 차감·완료는 updater
+  // 안에서 라이브 상태에 재판정해 적용한다 — StrictMode의 updater 이중 실행에도
+  // 멱등(같은 base state → 같은 결과)이고, 성장 tick 등으로 상태가 바뀌었으면
+  // unchanged를 반환해 일관성을 지킨다.
   function applyFertilizerNow(plotIndex: number) {
     const plot = gameState.plots[plotIndex];
     if (plot == null) {
@@ -2738,10 +2740,21 @@ export default function FarmGame({
     }
     const preview = applyFertilizer(gameState, plot.id);
     if (!preview.applied) {
-      toast(preview.cost > 0 ? messages.insufficientGoldToast : messages.growingToast);
+      // 골드 부족(cost>0)은 시트를 유지해 재시도 가능하게 하고 안내만 한다.
+      // cost===0(이미 완료/남은 성장 없음)은 시트를 닫고 완료 안내를 띄운다.
+      // 성공 경로가 아니므로 '골드 부족'과 '이미 다 자람'을 정확히 구분한다.
+      if (preview.cost > 0) {
+        toast(messages.insufficientGoldToast);
+      } else {
+        setActiveSheet(null);
+        toast(messages.alreadyGrownToast);
+      }
       return;
     }
-    setGameState((state) => applyFertilizer(state, plot.id).state);
+    setGameState((state) => {
+      const result = applyFertilizer(state, plot.id);
+      return result.applied ? result.state : state;
+    });
     setActiveSheet(null);
     toast(messages.fertilizerDoneToast(formatMoney(preview.cost, locale)));
   }
@@ -3486,6 +3499,14 @@ export default function FarmGame({
                       disabled={gameState.gold < fertilizerCost}
                       onPress={() => applyFertilizerNow(activeSheet.plotIndex)}
                     />
+                  ) : null}
+                  {!adPathAvailable && fertilizerCost <= 0 ? (
+                    // 시트가 열린 뒤 tick으로 남은 성장이 0이 되고 광고 경로도 없어
+                    // 가속 옵션이 사라진 경우, 빈 시트 대신 완료 안내를 보여준다(대기
+                    // 버튼으로 닫을 수 있음).
+                    <Text testID="growth-sheet-empty-note" style={styles.sheetSectionTitle}>
+                      {messages.alreadyGrownToast}
+                    </Text>
                   ) : null}
                   <SheetAction label={messages.waitAction} secondary onPress={() => setActiveSheet(null)} />
                 </View>

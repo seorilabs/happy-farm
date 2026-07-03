@@ -444,6 +444,8 @@ describe('FarmGame UI flow', () => {
         onboardingCompleted: true,
         gold: 100_000,
       };
+      // Default useRewardedAd is unsupported (isAdSupported: false), so this also
+      // covers the ad-unsupported (AIT) path: the sheet must open on fertilizer alone.
       const screen = await renderGame(state);
       await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
 
@@ -455,13 +457,17 @@ describe('FarmGame UI flow', () => {
       const fertilizerAction = screen.getByTestId('fertilizer-action');
       expect(fertilizerAction).toBeTruthy();
       expect(fertilizerAction.props.accessibilityLabel).toContain('비료로 바로 키우기');
+      // Ad path is unsupported here, so only the fertilizer action is offered.
+      expect(screen.queryByTestId('growth-ad-action')).toBeNull();
 
       fireEvent.press(fertilizerAction);
 
-      // The gold-fertilizer toast confirms it applied, and gold dropped below the
-      // starting 100,000 (exact cost is data-derived; the decrease is the signal).
+      // The gold-fertilizer toast confirms it applied, gold dropped below the
+      // starting 100,000 (exact cost is data-derived; the decrease is the signal),
+      // and the plot actually transitioned to ripe (state 2 renders the GET action).
       await waitFor(() => expect(screen.getByText(/비료로 바로 키웠어요/)).toBeTruthy());
       expect(screen.queryByText('100,000G')).toBeNull();
+      expect(screen.getByText('GET')).toBeTruthy();
     });
 
     test('disables the fertilizer action when gold is insufficient', async () => {
