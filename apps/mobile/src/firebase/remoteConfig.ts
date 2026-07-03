@@ -4,8 +4,6 @@ import {
   getNumber,
   getRemoteConfig,
   getString,
-  setConfigSettings,
-  setDefaults,
 } from '@react-native-firebase/remote-config';
 
 import { applyAdLimitsOverrides, parseAdLimitsOverrides } from '../../../../packages/farm-core/src';
@@ -42,11 +40,13 @@ export async function initializeMobileRemoteConfig() {
   try {
     const remoteConfig = getRemoteConfig();
 
-    await setConfigSettings(remoteConfig, {
-      fetchTimeMillis: CONFIG_FETCH_TIMEOUT_MS,
+    // RN Firebase v25 모듈러 API: setConfigSettings/setDefaults 함수가 제거되고
+    // Firebase Web SDK 처럼 인스턴스 속성(settings/defaultConfig) 할당으로 바뀌었다.
+    remoteConfig.settings = {
+      fetchTimeoutMillis: CONFIG_FETCH_TIMEOUT_MS,
       minimumFetchIntervalMillis: isDevBuild() ? DEV_MINIMUM_FETCH_INTERVAL_MS : RELEASE_MINIMUM_FETCH_INTERVAL_MS,
-    });
-    await setDefaults(remoteConfig, MOBILE_REMOTE_CONFIG_DEFAULTS);
+    };
+    remoteConfig.defaultConfig = { ...MOBILE_REMOTE_CONFIG_DEFAULTS };
 
     const activated = await fetchAndActivate(remoteConfig);
     // 광고 빈도·cap 원격 오버라이드를 farm-core에 적용(무효/미설정 시 기본값 폴백).
