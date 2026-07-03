@@ -23,6 +23,8 @@ import {
   formatMoney,
   getActiveFarmOfflineGold,
   getAreaCropKeys,
+  getCropOfTheDayStatus,
+  getWeeklyEventStatus,
   getEnvironmentTone,
   getLocalMinutesOfDay,
   getMasteryThresholds,
@@ -356,6 +358,81 @@ describe('FarmGame UI flow', () => {
     await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
     expect(screen.getByTestId('weekly-event-banner')).toBeTruthy();
     expect(screen.queryByTestId('weekly-event-teaser')).toBeNull();
+  });
+
+  describe('seed-strip sell-bonus badges (#226)', () => {
+    const FRIDAY = Date.parse('2026-05-29T12:00:00.000Z');
+    // starter_field 하나만 해금해 두면 주말 축제 추첨 풀이 그 구역으로 고정되고,
+    // 오늘의 작물 추첨 풀도 그 구역 작물로 좁혀져 배지 대상이 결정적이 된다.
+    const badgeState = (): GameState => ({
+      ...createInitialState(),
+      onboardingCompleted: true,
+      unlockedAreas: ['starter_field'] as AreaKey[],
+      gold: 10_000,
+    });
+
+    test('marks only the crop-of-the-day seed with the sell-bonus badge (weekday: no festival)', async () => {
+      // 기본 NOW(수요일)은 축제 비활성 → 오늘의 작물 배지만 떠야 한다.
+      const state = badgeState();
+      const featuredKey = getCropOfTheDayStatus(NOW, state).cropKey;
+      const screen = await renderGame(state);
+      await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+
+      // 오늘의 작물 배지는 정확히 그 작물 하나에만, HUD 배너와 같은 ×2 로 노출된다.
+      const cotdBadges = screen.getAllByTestId(/^seed-bonus-cotd-/);
+      expect(cotdBadges).toHaveLength(1);
+      expect(cotdBadges[0]!.props.testID).toBe(`seed-bonus-cotd-${featuredKey}`);
+      expect(within(cotdBadges[0]!).getByText('⭐×2')).toBeTruthy();
+
+      // 축제 비활성 요일이므로 주말 배지는 어떤 작물에도 없다.
+      expect(screen.queryAllByTestId(/^seed-bonus-weekly-/)).toHaveLength(0);
+    });
+
+    test('marks every featured-area seed with the weekend-festival badge on the weekend', async () => {
+      jest.setSystemTime(FRIDAY);
+      const state = badgeState();
+      const festivalCropKeys = getWeeklyEventStatus(FRIDAY, state.unlockedAreas).cropKeys;
+      expect(festivalCropKeys.length).toBeGreaterThan(1);
+      const screen = await renderGame(state);
+      await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+
+      // 축제 대상 구역(starter_field)의 모든 작물에 ×1.5 축제 배지가 붙는다.
+      for (const cropKey of festivalCropKeys) {
+        const badge = screen.getByTestId(`seed-bonus-weekly-${cropKey}`);
+        expect(within(badge).getByText('🎉×1.5')).toBeTruthy();
+      }
+      expect(screen.getAllByTestId(/^seed-bonus-weekly-/)).toHaveLength(festivalCropKeys.length);
+    });
+
+    test('shows both badges on a crop that is both the daily feature and in the festival area', async () => {
+      jest.setSystemTime(FRIDAY);
+      const state = badgeState();
+      // 풀이 starter_field 로 좁혀져 있어 오늘의 작물도 축제 구역 작물이다 → 두 배지 공존.
+      const featuredKey = getCropOfTheDayStatus(FRIDAY, state).cropKey;
+      const screen = await renderGame(state);
+      await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+
+      expect(within(screen.getByTestId(`seed-bonus-cotd-${featuredKey}`)).getByText('⭐×2')).toBeTruthy();
+      expect(within(screen.getByTestId(`seed-bonus-weekly-${featuredKey}`)).getByText('🎉×1.5')).toBeTruthy();
+    });
+
+    test('exposes the sell bonus in the seed button accessibility label (ko-KR)', async () => {
+      const state = badgeState();
+      const featuredKey = getCropOfTheDayStatus(NOW, state).cropKey;
+      const screen = await renderGame(state);
+      await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+      const label = screen.getByTestId(`seed-tool-${featuredKey}`).props.accessibilityLabel as string;
+      expect(label).toContain(getFarmMessages('ko-KR').cropOfTheDayLabel);
+    });
+
+    test('exposes the sell bonus in the seed button accessibility label (en-US)', async () => {
+      const state = badgeState();
+      const featuredKey = getCropOfTheDayStatus(NOW, state).cropKey;
+      const screen = await renderGame(state, {}, { locale: 'en-US' });
+      await waitFor(() => expect(screen.getByText('Happy Farm')).toBeTruthy());
+      const label = screen.getByTestId(`seed-tool-${featuredKey}`).props.accessibilityLabel as string;
+      expect(label).toContain(getFarmMessages('en-US').cropOfTheDayLabel);
+    });
   });
 
   describe('seed-strip sort toggle (#192)', () => {
