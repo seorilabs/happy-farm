@@ -2,6 +2,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { scanHardcodedHangul } from './lib/hangul-scan.js';
+import { I18N_SCAN_ROOTS, collectI18nScanTargets } from './lib/i18n-scan-targets.js';
+import {
+  APP_STORE_TEXT_LIMITS,
+  PLAY_STORE_TEXT_LIMITS,
+  collectStoreTextLimitViolations,
+} from './lib/store-text-limits.js';
 
 const root = process.cwd();
 const requiredLocales = ['ko-KR', 'en-US'];
@@ -43,11 +49,20 @@ function assertNoHangul(relativePath) {
   }
 }
 
+// 마켓별 스토어 문구 글자수 제한 가드. 제한 초과는 콘솔 제출 단계에서야 드러나므로
+// 번역 추가/수정 시점에 미리 실패시킨다.
+function assertStoreTextLimits(configName, config, limits) {
+  const result = collectStoreTextLimitViolations(configName, config, limits);
+  failures.push(...result.violations);
+  passes.push(...result.passes);
+}
+
 const playConfig = readJson('play-store/google-play.config.json');
 requireLocaleMap('play-store', 'storeListing.appName', playConfig.storeListing?.appName);
 requireLocaleMap('play-store', 'storeListing.shortDescription', playConfig.storeListing?.shortDescription);
 requireLocaleMap('play-store', 'storeListing.fullDescription', playConfig.storeListing?.fullDescription);
 requireLocaleMap('play-store', 'release.notes', playConfig.release?.notes);
+assertStoreTextLimits('play-store', playConfig, PLAY_STORE_TEXT_LIMITS);
 
 const appStoreConfig = readJson('app-store/app-store.config.json');
 requireLocaleMap('app-store', 'storeListing.appName', appStoreConfig.storeListing?.appName);
@@ -56,21 +71,18 @@ requireLocaleMap('app-store', 'storeListing.promotionalText', appStoreConfig.sto
 requireLocaleMap('app-store', 'storeListing.description', appStoreConfig.storeListing?.description);
 requireLocaleMap('app-store', 'storeListing.keywords', appStoreConfig.storeListing?.keywords);
 requireLocaleMap('app-store', 'version.releaseNotes', appStoreConfig.version?.releaseNotes);
+assertStoreTextLimits('app-store', appStoreConfig, APP_STORE_TEXT_LIMITS);
 
-assertNoHangul('packages/farm-ui/src/FarmGame.tsx');
-assertNoHangul('packages/farm-ui/src/components/SheetParts.tsx');
-assertNoHangul('packages/farm-ui/src/components/CollectionSheet.tsx');
-assertNoHangul('packages/farm-ui/src/components/AchievementsSheet.tsx');
-assertNoHangul('packages/farm-ui/src/components/LabSheet.tsx');
-assertNoHangul('packages/farm-ui/src/components/ChainMapSheet.tsx');
-assertNoHangul('packages/farm-core/src/constants.ts');
-assertNoHangul('packages/farm-core/src/achievements.ts');
-assertNoHangul('packages/farm-core/src/prestige.ts');
-assertNoHangul('packages/farm-core/src/research.ts');
-assertNoHangul('packages/farm-core/src/types.ts');
-assertNoHangul('packages/farm-core/src/harvest.ts');
-assertNoHangul('packages/farm-core/src/mastery.ts');
-assertNoHangul('packages/farm-core/src/modifiers.ts');
+// 한글 하드코딩 스캔은 고정 파일 목록 대신 소스 루트 재귀 탐색으로 대상을 수집한다.
+// 새로 추가되는 컴포넌트/모듈이 검사망에서 빠지지 않도록 하기 위함이다(제외 규칙은
+// scripts/lib/i18n-scan-targets.js 참고 — i18n 카탈로그/테스트/타입 선언만 제외).
+const scanTargets = collectI18nScanTargets(root);
+if (scanTargets.length === 0) {
+  failures.push(`한글 하드코딩 스캔 대상이 0개입니다. 스캔 루트(${I18N_SCAN_ROOTS.join(', ')})를 확인하세요.`);
+}
+for (const target of scanTargets) {
+  assertNoHangul(target);
+}
 
 const result = {
   status: failures.length > 0 ? 'fail' : 'pass',

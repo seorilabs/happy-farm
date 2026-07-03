@@ -83,7 +83,9 @@ AIT build가 pnpm workspace bare package import에 민감하므로, 현재 방�
 - formatter test: `formatMoney`, duration, ad limit reason이 locale별 expectation을 만족하는지 확인
 - store config test: Play/App Store locale map에 필수 locale이 있는지 확인
 
-`pnpm check:i18n`은 현재 `packages/farm-ui/src/FarmGame.tsx`, `packages/farm-ui/src/components/*`(SheetParts, CollectionSheet, AchievementsSheet, LabSheet, ChainMapSheet), `packages/farm-core/src`의 로직 모듈(constants, types, harvest, mastery, modifiers, achievements, prestige, research)의 한글 하드코딩과 Play/App Store 필수 locale map을 검사한다. locale catalog의 key set 일치는 TypeScript typecheck가 잡는다.
+`pnpm check:i18n`의 한글 하드코딩 스캔은 고정 파일 목록이 아니라 소스 루트(`packages/farm-ui/src`, `packages/farm-core/src`, `apps/ait/src`, `apps/mobile/src`) 재귀 탐색으로 대상을 수집한다(`scripts/lib/i18n-scan-targets.js`). 새 컴포넌트/모듈은 추가되는 즉시 검사 대상이 되므로, 검사망에서 파일이 빠지는 일이 구조적으로 없다. i18n catalog 디렉터리, 테스트(`__tests__`, `*.test.*`, `*.spec.*`), 타입 선언(`*.d.ts`)만 제외한다.
+
+또한 Play/App Store 필수 locale map 존재 검사에 더해, 마켓별 스토어 문구 글자수 제한(`scripts/lib/store-text-limits.js` — Play: 앱 이름 30/간단한 설명 80/자세한 설명 4000/출시 노트 500, App Store: 이름 30/부제 30/프로모션 텍스트 170/설명 4000/키워드 100/새로운 기능 4000)을 초과하면 실패한다. locale catalog의 key set 일치와 플레이스홀더(메시지 함수 시그니처) 정합은 typed catalog 구조상 TypeScript typecheck가 잡는다.
 
 ## 엔드게임 시스템 라벨 카탈로그
 
