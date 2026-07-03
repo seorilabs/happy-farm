@@ -27,15 +27,16 @@ $RNFirebaseAsStaticFramework = true
 # 로 RNFB 모듈 빌드가 깨진다. RNFB 팟만 static library(비프레임워크)로 강제하면 모듈
 # 빌드를 피해 이 에러가 사라지고, Firebase 팟은 프레임워크로 남아 Swift 헤더를
 # 정상 노출한다(Expo 의 forceStaticLinking 과 동일한 혼합 링키지 전략).
-rnfb_static_library_pods = %w[
-  RNFBApp RNFBAuth RNFBFirestore RNFBAnalytics RNFBCrashlytics RNFBRemoteConfig
-]
 pre_install do |installer|
   installer.pod_targets.each do |pod|
-    next unless rnfb_static_library_pods.include?(pod.name)
-    def pod.build_type
-      Pod::BuildType.static_library
-    end
+    # RNFB 접두사 전체 매칭: database/storage/messaging 등 향후 RNFB 패키지가
+    # 추가돼도 화이트리스트 누락으로 회귀하지 않도록 한다.
+    next unless pod.name.start_with?('RNFB')
+    # Pod::Target#build_type 은 attr_reader(@build_type) 이라 공개 setter 가 없다.
+    # 캐시된 소스 오브 트루스인 @build_type 을 직접 설정해, attr_reader 경유든
+    # 내부 ivar 직접 접근이든 일관되게 static library 로 확정한다(메서드만 싱글턴
+    # 재정의하면 ivar 를 직접 읽는 경로와 어긋날 수 있음).
+    pod.instance_variable_set(:@build_type, Pod::BuildType.static_library)
   end
 end
 
