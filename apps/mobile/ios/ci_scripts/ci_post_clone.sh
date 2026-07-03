@@ -8,7 +8,8 @@
 # 구성한다. 코드 서명은 Xcode Cloud 매니지드 서명이 처리하므로 여기서 다루지 않는다.
 #
 # 필요 환경변수(Xcode Cloud 워크플로의 시크릿):
-#   FIREBASE_IOS_GOOGLE_SERVICE_INFO_PLIST_BASE64 — GoogleService-Info.plist(base64)
+#   FIREBASE_IOS_GOOGLE_SERVICE_INFO_PLIST_BASE64 — (선택) GoogleService-Info.plist(base64).
+#     미설정 시 저장소에 커밋된 GoogleService-Info.plist 를 사용한다.
 
 set -e
 
@@ -30,14 +31,17 @@ echo "▸ JS 의존성 설치 (pnpm workspace — 저장소 루트)"
 cd "${REPO}"
 pnpm install --frozen-lockfile
 
-echo "▸ Firebase iOS 설정 복원 (GoogleService-Info.plist)"
+echo "▸ Firebase iOS 설정 확인 (GoogleService-Info.plist)"
 GS_PLIST="${IOS}/HappyFarmMobile/GoogleService-Info.plist"
 if [ -n "${FIREBASE_IOS_GOOGLE_SERVICE_INFO_PLIST_BASE64}" ]; then
+  # 시크릿이 설정돼 있으면 우선 사용(저장소 커밋본을 덮어씀).
   printf '%s' "${FIREBASE_IOS_GOOGLE_SERVICE_INFO_PLIST_BASE64}" | base64 --decode > "${GS_PLIST}"
   plutil -lint "${GS_PLIST}"
-  echo "  GoogleService-Info.plist 복원 완료"
+  echo "  시크릿에서 복원"
+elif [ -f "${GS_PLIST}" ]; then
+  echo "  저장소 커밋본 사용"
 else
-  echo "  경고: FIREBASE_IOS_GOOGLE_SERVICE_INFO_PLIST_BASE64 미설정 — Firebase 설정 없이 진행" >&2
+  echo "  경고: GoogleService-Info.plist 없음(시크릿 미설정 + 미커밋)" >&2
 fi
 
 echo "▸ CocoaPods 설치 (use_frameworks + RNFB 혼합 링키지)"

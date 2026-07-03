@@ -32,6 +32,7 @@ gha-creds-*.json
 AuthKey_*.p8
 app-store/secrets/
 
-# Firebase client config is restored from CI secrets for release builds.
+# Android Firebase client config is restored from CI secrets (Google Play builds).
 google-services.json
-GoogleService-Info.plist
+# iOS GoogleService-Info.plist 은 저장소(private)에 커밋한다 — 클라이언트 config 라
+# 앱 바이너리에 어차피 포함되고, Xcode Cloud/로컬 빌드가 시크릿 설정 없이 쓰게 한다.
