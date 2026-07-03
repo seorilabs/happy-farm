@@ -1596,6 +1596,18 @@ export default function FarmGame({
     }
   }, [activeSheet, analyticsContext]);
 
+  // 성장 가속 시트가 열린 뒤 timer tick으로 대상 플롯이 다 자라거나(상태 2) 사라지면
+  // 광고/비료 액션이 모두 사라진 빈 시트가 남지 않도록 시트를 자동으로 닫는다(#227 리뷰).
+  useEffect(() => {
+    if (activeSheet?.type !== 'growthAd') {
+      return;
+    }
+    const plot = gameState.plots[activeSheet.plotIndex];
+    if (plot == null || plot.state !== 1) {
+      setActiveSheet(null);
+    }
+  }, [activeSheet, gameState]);
+
   useEffect(() => {
     const id = setInterval(() => {
       tickNowMsRef.current = Date.now();
@@ -1749,6 +1761,10 @@ export default function FarmGame({
   // Blocks a second "Harvest All" tap until the in-flight batch finishes; the
   // command drain effect releases it after each attempt (success or no-op).
   const harvestAllInFlightRef = useRef(false);
+  // 비료 적용의 성공 부수효과(토스트·시트 닫힘)를 시트 1회 오픈당 한 번만 발화하게
+  // 하는 가드. (이벤트 핸들러는 StrictMode에서 이중 호출되지 않지만, 중복 알림을
+  // 원천 차단하려는 방어적 가드.) 시트가 열릴 때 false로 리셋한다(#227 리뷰).
+  const fertilizeGuardRef = useRef(false);
   const chainIncome = useMemo(() => getChainIncome(gameState), [gameState, tick]);
   const mapActionableCount = useMemo(
     () => (chainIncome.accruedGold > 0 ? 1 : 0) + (canPrestige(gameState).allowed ? 1 : 0),
@@ -2689,6 +2705,8 @@ export default function FarmGame({
         // 광고 스킵 또는 비료 중 하나라도 가능하면 성장 가속 시트를 연다.
         const fertilizerCost = getFertilizerCost(gameState, plot);
         if ((adPathAvailable && growthAdLimit.allowed) || fertilizerCost > 0) {
+          // 새 시트 오픈마다 비료 성공 가드를 리셋해 이번 오픈의 적용을 허용한다.
+          fertilizeGuardRef.current = false;
           setActiveSheet({
             type: 'growthAd',
             plotIndex: index,
@@ -2751,6 +2769,12 @@ export default function FarmGame({
       }
       return;
     }
+    // StrictMode가 onPress를 두 번 호출하더라도 성공 부수효과(토스트·시트 닫힘)는
+    // 시트 오픈당 한 번만 발화한다. 골드/플롯 갱신은 updater가 멱등이라 안전하다.
+    if (fertilizeGuardRef.current) {
+      return;
+    }
+    fertilizeGuardRef.current = true;
     setGameState((state) => {
       const result = applyFertilizer(state, plot.id);
       return result.applied ? result.state : state;

@@ -24,6 +24,7 @@ import {
   getActiveFarmOfflineGold,
   getAreaCropKeys,
   getCropOfTheDayStatus,
+  getFertilizerCost,
   getWeeklyEventStatus,
   getEnvironmentTone,
   getLocalMinutesOfDay,
@@ -444,6 +445,11 @@ describe('FarmGame UI flow', () => {
         onboardingCompleted: true,
         gold: 100_000,
       };
+      // Exact cost the component will charge (same pure fn, same NOW), so we can
+      // assert the precise post-fertilize gold rather than just "not 100,000".
+      const expectedCost = getFertilizerCost(state, state.plots[0]!, NOW);
+      expect(expectedCost).toBeGreaterThan(0);
+
       // Default useRewardedAd is unsupported (isAdSupported: false), so this also
       // covers the ad-unsupported (AIT) path: the sheet must open on fertilizer alone.
       const screen = await renderGame(state);
@@ -462,10 +468,10 @@ describe('FarmGame UI flow', () => {
 
       fireEvent.press(fertilizerAction);
 
-      // The gold-fertilizer toast confirms it applied, gold dropped below the
-      // starting 100,000 (exact cost is data-derived; the decrease is the signal),
-      // and the plot actually transitioned to ripe (state 2 renders the GET action).
+      // The gold-fertilizer toast confirms it applied, gold dropped by exactly the
+      // fertilizer cost, and the plot transitioned to ripe (state 2 renders GET).
       await waitFor(() => expect(screen.getByText(/비료로 바로 키웠어요/)).toBeTruthy());
+      expect(screen.getByText(`${formatMoney(100_000 - expectedCost, 'ko-KR')}G`)).toBeTruthy();
       expect(screen.queryByText('100,000G')).toBeNull();
       expect(screen.getByText('GET')).toBeTruthy();
     });
