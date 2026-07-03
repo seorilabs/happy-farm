@@ -23,9 +23,9 @@ IOS="${MOBILE}/ios"
 echo "▸ Node / CocoaPods 설치 (Homebrew)"
 brew install node cocoapods
 
-echo "▸ pnpm 활성화 (corepack, 저장소 핀 버전)"
-corepack enable
-corepack prepare pnpm@11.3.0 --activate
+echo "▸ pnpm 설치 (저장소 핀 버전)"
+# Homebrew node 는 최신 버전에서 corepack 을 번들하지 않으므로 npm 으로 직접 설치한다.
+npm install -g pnpm@11.3.0
 
 echo "▸ JS 의존성 설치 (pnpm workspace — 저장소 루트)"
 cd "${REPO}"
