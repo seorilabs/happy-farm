@@ -639,6 +639,27 @@ export const styles = StyleSheet.create({
     paddingHorizontal: 4,
     paddingVertical: 1,
   },
+  // 판매 보너스 배지 행(#226): 아이콘/이름/가격/ROI 아래 인라인으로 배치해
+  // 상단의 마스터리·NEW 배지(절대 배치)와 겹치지 않게 한다.
+  toolBonusBadgeRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 3,
+  },
+  toolBonusBadge: {
+    borderRadius: 4,
+    backgroundColor: '#fff4e5',
+    borderWidth: 1,
+    borderColor: '#f5a524',
+    paddingHorizontal: 3,
+    paddingVertical: 1,
+  },
+  toolBonusBadgeText: {
+    color: '#8f5c00',
+    fontSize: 8,
+    fontWeight: '900',
+    lineHeight: 11,
+  },
   toolNewBadgeText: {
     color: '#ffffff',
     fontSize: 8,

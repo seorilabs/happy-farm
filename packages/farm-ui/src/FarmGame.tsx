@@ -3098,6 +3098,23 @@ export default function FarmGame({
               const cropCost = getCropPurchaseCost(gameState, key);
               const masteryRank = getMasteryStatus(gameState, key).rank;
               const isNew = !gameState.harvestedCropKeys.includes(key);
+              // 판매 보너스 배지(#226): 씨앗을 고르는 시점에서 어떤 작물이 지금
+              // 보너스 대상인지 바로 보이도록, HUD 배너와 동일한 순수 함수 결과
+              // (cropOfTheDay/weeklyEvent)를 그대로 재사용해 배지 배수를 만든다.
+              // memo(ToolButton) 얕은 비교가 깨지지 않도록 배열이 아닌 문자열
+              // 프리미티브로 넘긴다. 보너스가 없는 작물은 undefined → 동등 비교.
+              const cotdBadge = key === cropOfTheDay.cropKey ? `⭐×${cropOfTheDay.multiplier}` : undefined;
+              const weeklyBadge =
+                weeklyEvent.active && weeklyEvent.cropKeys.includes(key)
+                  ? `🎉×${weeklyEvent.multiplier}`
+                  : undefined;
+              const bonusA11yParts: string[] = [];
+              if (cotdBadge != null) {
+                bonusA11yParts.push(`${messages.cropOfTheDayLabel} ×${cropOfTheDay.multiplier}`);
+              }
+              if (weeklyBadge != null) {
+                bonusA11yParts.push(`${messages.weeklyEventLabel} ×${weeklyEvent.multiplier}`);
+              }
               return (
                 <ToolButton
                   key={key}
@@ -3111,6 +3128,9 @@ export default function FarmGame({
                   masteryIcon={masteryRank?.icon}
                   isNew={isNew}
                   newLabel={messages.newCropBadge}
+                  cotdBadge={cotdBadge}
+                  weeklyBadge={weeklyBadge}
+                  bonusA11yLabel={bonusA11yParts.length > 0 ? bonusA11yParts.join(', ') : undefined}
                   toolKey={key}
                   onSelect={onSelectTool}
                 />
@@ -5198,6 +5218,9 @@ const ToolButton = React.memo(function ToolButton({
   masteryIcon,
   isNew,
   newLabel,
+  cotdBadge,
+  weeklyBadge,
+  bonusA11yLabel,
   toolKey,
   testID,
   onSelect,
@@ -5211,15 +5234,20 @@ const ToolButton = React.memo(function ToolButton({
   masteryIcon?: string;
   isNew?: boolean;
   newLabel?: string;
+  // 판매 보너스 배지 텍스트(예: '⭐×2' / '🎉×1.5'). 없으면 미노출(#226).
+  cotdBadge?: string;
+  weeklyBadge?: string;
+  bonusA11yLabel?: string;
   toolKey: ToolKey;
   testID?: string;
   onSelect: (toolKey: ToolKey) => void;
 }) {
+  const baseA11yLabel = cost != null ? `${name}, ${cost}` : name;
   return (
     <Pressable
       testID={testID}
       accessibilityRole="button"
-      accessibilityLabel={cost != null ? `${name}, ${cost}` : name}
+      accessibilityLabel={bonusA11yLabel != null ? `${baseA11yLabel}, ${bonusA11yLabel}` : baseA11yLabel}
       accessibilityState={{ selected: active }}
       style={[styles.toolButton, active && styles.activeToolButton]}
       onPress={() => onSelect(toolKey)}
@@ -5240,6 +5268,20 @@ const ToolButton = React.memo(function ToolButton({
       {isNew === true && newLabel != null ? (
         <View pointerEvents="none" style={styles.toolNewBadge}>
           <Text style={styles.toolNewBadgeText}>{newLabel}</Text>
+        </View>
+      ) : null}
+      {cotdBadge != null || weeklyBadge != null ? (
+        <View pointerEvents="none" style={styles.toolBonusBadgeRow}>
+          {cotdBadge != null ? (
+            <View testID={`seed-bonus-cotd-${toolKey}`} style={styles.toolBonusBadge}>
+              <Text style={styles.toolBonusBadgeText}>{cotdBadge}</Text>
+            </View>
+          ) : null}
+          {weeklyBadge != null ? (
+            <View testID={`seed-bonus-weekly-${toolKey}`} style={styles.toolBonusBadge}>
+              <Text style={styles.toolBonusBadgeText}>{weeklyBadge}</Text>
+            </View>
+          ) : null}
         </View>
       ) : null}
     </Pressable>
