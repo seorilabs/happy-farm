@@ -435,6 +435,53 @@ describe('FarmGame UI flow', () => {
     });
   });
 
+  describe('gold fertilizer (#227)', () => {
+    test('tapping a growing plot offers the fertilizer action and applying it spends gold + completes growth', async () => {
+      // A wheat plot mid-growth, plenty of gold, past onboarding so the plot is
+      // freely interactive.
+      const state: GameState = {
+        ...createGrowingCropState(),
+        onboardingCompleted: true,
+        gold: 100_000,
+      };
+      const screen = await renderGame(state);
+      await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+
+      // Select a seed tool (so a plot tap isn't treated as a harvest), then tap
+      // the growing plot to open the grow-faster sheet.
+      fireEvent.press(screen.getByText('당근'));
+      fireEvent.press(screen.getByTestId('plot-cell-0'));
+
+      const fertilizerAction = screen.getByTestId('fertilizer-action');
+      expect(fertilizerAction).toBeTruthy();
+      expect(fertilizerAction.props.accessibilityLabel).toContain('비료로 바로 키우기');
+
+      fireEvent.press(fertilizerAction);
+
+      // The gold-fertilizer toast confirms it applied, and gold dropped below the
+      // starting 100,000 (exact cost is data-derived; the decrease is the signal).
+      await waitFor(() => expect(screen.getByText(/비료로 바로 키웠어요/)).toBeTruthy());
+      expect(screen.queryByText('100,000G')).toBeNull();
+    });
+
+    test('disables the fertilizer action when gold is insufficient', async () => {
+      // 1 gold can never cover the minimum fertilizer cost.
+      const state: GameState = {
+        ...createGrowingCropState(),
+        onboardingCompleted: true,
+        gold: 1,
+      };
+      const screen = await renderGame(state);
+      await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+
+      fireEvent.press(screen.getByText('당근'));
+      fireEvent.press(screen.getByTestId('plot-cell-0'));
+
+      const fertilizerAction = screen.getByTestId('fertilizer-action');
+      expect(fertilizerAction.props.accessibilityState?.disabled).toBe(true);
+    });
+  });
+
   describe('seed-strip sort toggle (#192)', () => {
     const messages = getFarmMessages(DEFAULT_LOCALE);
     // Past onboarding so the seed strip is fully interactive (no coachmark gate).

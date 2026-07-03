@@ -456,6 +456,47 @@ for (const key of [
   check(isFiniteNumber(ads[key]) && ads[key] >= 0, `ads.${key}(${ads[key]})는 0 이상의 유한 값이어야 합니다.`);
 }
 
+// 12) 비료(즉시 성장 촉진) 가격 안전성(#227): 계수는 유한·합리 범위이고, 작물별로
+// "비료 비용 > 단축되는 시간 동안의 net 골드 가치"라는 불변식을 만족해야 한다.
+// (fertilizer.ts와 동일한 산정식을 재현: 남은 성장 = 전체 growTime인 최악의 경우,
+// 즉 갓 심은 작물을 즉시 완료시킬 때가 시간 가치가 최대라 이 케이스만 검사하면
+// 모든 부분 단축 케이스도 자동으로 만족한다.) costMultiplier>1이면 순 진행 이득 없음.
+const fertilizer = balance.fertilizer ?? {};
+const fertilizerMultiplierValid =
+  isFiniteNumber(fertilizer.costMultiplier) && fertilizer.costMultiplier > 1;
+check(
+  fertilizerMultiplierValid,
+  `fertilizer.costMultiplier(${fertilizer.costMultiplier})는 1보다 커야 합니다(순 진행 이득 없는 골드 싱크 보장).`
+);
+check(
+  isFiniteNumber(fertilizer.minCost) && fertilizer.minCost >= 1,
+  `fertilizer.minCost(${fertilizer.minCost})는 1 이상의 유한 값이어야 합니다(무료 비료 방지).`
+);
+if (fertilizerMultiplierValid && isFiniteNumber(fertilizer.minCost) && fertilizer.minCost >= 1) {
+  const MS_PER_HOUR = 60 * 60 * 1000;
+  for (const crop of crops) {
+    if (
+      !isFiniteNumber(crop?.cost) ||
+      !isFiniteNumber(crop?.sell) ||
+      !isFiniteNumber(crop?.growTime) ||
+      crop.growTime <= 0
+    ) {
+      continue;
+    }
+    // 기준 배율(speed/profit/harvest/cost = 1)에서의 net 골드 가치. 전체 growTime을
+    // 남은 시간으로 두면 timeValueGold == netProfit 가 되어 최대 시간 가치가 된다.
+    const netProfit = Math.floor(crop.sell) - Math.floor(crop.cost);
+    const effectiveGrowTime = Math.max(1, crop.growTime);
+    const netProfitPerHour = (netProfit / effectiveGrowTime) * MS_PER_HOUR;
+    const timeValueGold = Math.max(0, netProfitPerHour) * (crop.growTime / MS_PER_HOUR);
+    const cost = Math.max(fertilizer.minCost, Math.ceil(timeValueGold * fertilizer.costMultiplier));
+    check(
+      cost > timeValueGold,
+      `비료 가격 불변식 위반: ${crop.key}의 비료 비용(${cost})이 단축 시간 골드 가치(${timeValueGold.toFixed(1)}) 이하입니다(순 진행 이득 발생).`
+    );
+  }
+}
+
 const result = {
   status: failures.length > 0 ? 'fail' : 'pass',
   checked: passes.length + failures.length,

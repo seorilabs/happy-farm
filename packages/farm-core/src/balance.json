@@ -219,6 +219,11 @@
     "agentPurpose": "Crop of the day (today's featured crop). multiplier is the sell-price bonus applied when selling the featured crop for the current UTC day (the featured crop itself rotates via a deterministic date hash, unchanged). Data-driven here so live-ops can tune the featured-crop incentive without code changes, matching the other sell multipliers (weeklyEvent.sellMultiplier, mastery).",
     "multiplier": 2
   },
+  "fertilizer": {
+    "agentPurpose": "골드 소비 비료(즉시 성장 촉진) 튜닝. 성장 중인 밭에 골드를 지불해 남은 성장을 즉시 완료하는 능동 진행 가속 + 잉여 골드 싱크. 비용은 '남은 성장 시간(wall-clock) 동안 그 작물이 벌어들일 net 골드 가치'(getCropEconomyEstimate 기반)에 costMultiplier를 곱하고 올림해 결정적으로 산정하며 최소 minCost 골드를 보장한다. costMultiplier>1 불변식(check-balance가 작물별로 '비료 비용 > 단축 시간 골드 가치' 검증)이 순 진행 이득을 없애 광고 성장 스킵 인센티브·진행 곡선을 무너뜨리지 않는 순수 편의/골드 싱크로 만든다. 실계수는 여기서 튠한다.",
+    "costMultiplier": 1.5,
+    "minCost": 20
+  },
   "growthStage": {
     "agentPurpose": "Crop growth-stage visualization tuning. thresholds are the inclusive lower-bound growth ratios (0..1) at which a crop switches visual stage: sprout → sapling → budding → mature. nearlyReadyRatio is the ratio at/after which a still-growing crop shows the 'almost ready' cue. These shape how quickly a crop looks like it's progressing, so they live in the data layer. Invariant (validated on load): sapling < budding < mature.",
     "thresholds": { "sapling": 0.25, "budding": 0.55, "mature": 0.8 },

@@ -58,6 +58,8 @@ import {
   type TitleKey,
   GROWTH_AD_MIN_REMAINING_MS,
   applyGrowthAdSkip,
+  applyFertilizer,
+  getFertilizerCost,
   getGrowthAdSkipMs,
   HARVEST_BONUS_BOOST_DURATION_MS,
   HARVEST_BONUS_MULTIPLIER,
@@ -2682,21 +2684,20 @@ export default function FarmGame({
         // No upper cap: long-duration crops qualify too and get a partial skip
         // (see applyGrowthAdSkip). The lower bound just avoids an ad for a crop
         // that is about to finish on its own anyway.
-        if (
-          remainingMs >= GROWTH_AD_MIN_REMAINING_MS &&
-          rewardedAd.isAdSupported
-        ) {
-          if (growthAdLimit.allowed) {
-            setActiveSheet({
-              type: 'growthAd',
-              plotIndex: index,
-              cropKey: plot.cropType,
-              remainingMs,
-            });
-          } else {
-            farmAnalytics.trackAdLimitBlocked('growthAd', getRewardedAdPlacement('growthAd'), growthAdLimit.reason, analyticsContext());
-            toast(growthAdLimit.reason);
-          }
+        const adPathAvailable = remainingMs >= GROWTH_AD_MIN_REMAINING_MS && rewardedAd.isAdSupported;
+        // 골드 비료(#227)는 광고 지원 여부와 무관하게 성장 중이면 항상 가능하므로,
+        // 광고 스킵 또는 비료 중 하나라도 가능하면 성장 가속 시트를 연다.
+        const fertilizerCost = getFertilizerCost(gameState, plot);
+        if ((adPathAvailable && growthAdLimit.allowed) || fertilizerCost > 0) {
+          setActiveSheet({
+            type: 'growthAd',
+            plotIndex: index,
+            cropKey: plot.cropType,
+            remainingMs,
+          });
+        } else if (adPathAvailable && !growthAdLimit.allowed) {
+          farmAnalytics.trackAdLimitBlocked('growthAd', getRewardedAdPlacement('growthAd'), growthAdLimit.reason, analyticsContext());
+          toast(growthAdLimit.reason);
         } else {
           toast(messages.growingToast);
         }
@@ -2725,6 +2726,24 @@ export default function FarmGame({
           : messages.growthSkipToast(formatDuration(previewSkip, locale))
       );
     });
+  }
+
+  // 골드 비료(#227): 성장 중 플롯의 남은 성장을 골드로 즉시 완료한다. 광고 스킵과
+  // 동일하게 커밋 상태에서 비용/성공 여부를 미리 보고(토스트 문구용), 실제 차감·완료는
+  // updater 안에서 라이브 상태에 적용해 StrictMode 이중 실행에 안전하게 한다.
+  function applyFertilizerNow(plotIndex: number) {
+    const plot = gameState.plots[plotIndex];
+    if (plot == null) {
+      return;
+    }
+    const preview = applyFertilizer(gameState, plot.id);
+    if (!preview.applied) {
+      toast(preview.cost > 0 ? messages.insufficientGoldToast : messages.growingToast);
+      return;
+    }
+    setGameState((state) => applyFertilizer(state, plot.id).state);
+    setActiveSheet(null);
+    toast(messages.fertilizerDoneToast(formatMoney(preview.cost, locale)));
   }
 
   async function activateHarvestBonusWithAd() {
@@ -3443,13 +3462,31 @@ export default function FarmGame({
                   ? messages.growthAdAction
                   : messages.growthAdSkipAction(formatDuration(skipMs, locale))
                 : growthAdLimit.reason;
+              // 광고 경로는 광고 지원 + 최소 남은 성장 조건을 만족할 때만 노출한다
+              // (비료 단독으로 시트가 열린 경우 광고 버튼은 숨긴다).
+              const adPathAvailable =
+                rewardedAd.isAdSupported && activeSheet.remainingMs >= GROWTH_AD_MIN_REMAINING_MS;
+              // 골드 비료(#227): 성장 중 플롯이면 항상 노출, 가격 표시. 골드 부족 시 비활성.
+              const fertilizerPlot = gameState.plots[activeSheet.plotIndex];
+              const fertilizerCost = fertilizerPlot != null ? getFertilizerCost(gameState, fertilizerPlot) : 0;
               return (
                 <View>
-                  <SheetAction
-                    label={actionLabel}
-                    disabled={!rewardedAd.isAdReady || !growthAdLimit.allowed}
-                    onPress={() => void completeGrowthWithAd(activeSheet.plotIndex)}
-                  />
+                  {adPathAvailable ? (
+                    <SheetAction
+                      testID="growth-ad-action"
+                      label={actionLabel}
+                      disabled={!rewardedAd.isAdReady || !growthAdLimit.allowed}
+                      onPress={() => void completeGrowthWithAd(activeSheet.plotIndex)}
+                    />
+                  ) : null}
+                  {fertilizerCost > 0 ? (
+                    <SheetAction
+                      testID="fertilizer-action"
+                      label={messages.fertilizerAction(formatMoney(fertilizerCost, locale))}
+                      disabled={gameState.gold < fertilizerCost}
+                      onPress={() => applyFertilizerNow(activeSheet.plotIndex)}
+                    />
+                  ) : null}
                   <SheetAction label={messages.waitAction} secondary onPress={() => setActiveSheet(null)} />
                 </View>
               );
