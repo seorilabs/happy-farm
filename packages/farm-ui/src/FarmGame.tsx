@@ -312,6 +312,7 @@ type ActiveSheet =
   | { type: 'shop' }
   | { type: 'collection' }
   | { type: 'missions' }
+  | { type: 'more' }
   | { type: 'stats' }
   | { type: 'achievements' }
   | { type: 'lab' }
@@ -1864,6 +1865,13 @@ export default function FarmGame({
     setActiveSheet({ type: 'missions' });
   }
 
+  // navRow 과밀 정리(#241): 상시 진입점을 상점·미션 2개로 줄이고, 나머지(룰렛·도감·
+  // 연구소·개척·업적)는 '더보기' 시트 한 뎁스 뒤로 묶는다. 각 항목의 배지는 유실되지
+  // 않도록 더보기 버튼에 롤업 합산(moreRollupBadge)으로 노출한다.
+  function openMore() {
+    setActiveSheet({ type: 'more' });
+  }
+
   // 오늘의 작물 chip 탭 → 보조 지표를 모은 '농장 현황' 시트를 연다(#233). 새 navRow
   // 진입점을 늘리지 않고 기존 chip 하나로만 진입한다.
   function openStats() {
@@ -2860,6 +2868,53 @@ export default function FarmGame({
   // recomputes its own status from gameState + now on every render tick.
   const wheelSpinReady = getWheelStatus(gameState.wheelState, tickNowMsRef.current).canSpin;
 
+  // '더보기' 시트로 묶은 진입점(#241). 각 항목의 claimable/actionable 배지를 함께
+  // 들고 다녀서, 더보기 버튼에는 롤업 합산 배지를, 시트 안에서는 항목별 배지를 보여준다.
+  const moreMenuEntries: {
+    key: string;
+    label: string;
+    accessibilityLabel: string;
+    badge: number;
+    onPress: () => void;
+  }[] = [
+    {
+      key: 'wheel',
+      label: messages.wheelButton,
+      accessibilityLabel: messages.wheelButtonAccessibilityLabel,
+      badge: wheelSpinReady ? 1 : 0,
+      onPress: openWheel,
+    },
+    {
+      key: 'collection',
+      label: messages.collectionButton,
+      accessibilityLabel: messages.collectionButtonAccessibilityLabel,
+      badge: claimableCollectionCount,
+      onPress: openCollection,
+    },
+    {
+      key: 'lab',
+      label: messages.labButton,
+      accessibilityLabel: messages.labButtonAccessibilityLabel,
+      badge: labBadgeCount,
+      onPress: openLab,
+    },
+    {
+      key: 'map',
+      label: messages.mapButton,
+      accessibilityLabel: messages.mapButtonAccessibilityLabel,
+      badge: mapActionableCount,
+      onPress: openMap,
+    },
+    {
+      key: 'achievements',
+      label: messages.achievementsButton,
+      accessibilityLabel: messages.achievementsButtonAccessibilityLabel,
+      badge: claimableAchievementCount,
+      onPress: openAchievements,
+    },
+  ];
+  const moreRollupBadge = moreMenuEntries.reduce((sum, entry) => sum + entry.badge, 0);
+
   // Outline the target the current onboarding step points at to draw the eye.
   const onboardingSeedHighlight = onboardingStep === 'selectSeed';
   const onboardingPlotHighlight = onboardingStep === 'plant' || onboardingStep === 'harvest';
@@ -2960,34 +3015,11 @@ export default function FarmGame({
             onPress={openMissions}
           />
           <NavButton
-            label={messages.wheelButton}
-            badge={wheelSpinReady ? 1 : 0}
-            accessibilityLabel={messages.wheelButtonAccessibilityLabel}
-            onPress={openWheel}
-          />
-          <NavButton
-            label={messages.collectionButton}
-            badge={claimableCollectionCount}
-            accessibilityLabel={messages.collectionButtonAccessibilityLabel}
-            onPress={openCollection}
-          />
-          <NavButton
-            label={messages.labButton}
-            badge={labBadgeCount}
-            accessibilityLabel={messages.labButtonAccessibilityLabel}
-            onPress={openLab}
-          />
-          <NavButton
-            label={messages.mapButton}
-            badge={mapActionableCount}
-            accessibilityLabel={messages.mapButtonAccessibilityLabel}
-            onPress={openMap}
-          />
-          <NavButton
-            label={messages.achievementsButton}
-            badge={claimableAchievementCount}
-            accessibilityLabel={messages.achievementsButtonAccessibilityLabel}
-            onPress={openAchievements}
+            testID="more-nav-button"
+            label={messages.moreButton}
+            badge={moreRollupBadge}
+            accessibilityLabel={messages.moreButtonAccessibilityLabel}
+            onPress={openMore}
           />
         </ScrollView>
       </View>
@@ -3332,6 +3364,20 @@ export default function FarmGame({
             onClaim={claimMissionReward}
             onClaimWeekly={claimWeeklyMissionReward}
           />
+        ) : null}
+
+        {activeSheet?.type === 'more' ? (
+          <View style={styles.moreMenu}>
+            {moreMenuEntries.map((entry) => (
+              <MoreMenuButton
+                key={entry.key}
+                label={entry.label}
+                badge={entry.badge}
+                accessibilityLabel={entry.accessibilityLabel}
+                onPress={entry.onPress}
+              />
+            ))}
+          </View>
         ) : null}
 
         {activeSheet?.type === 'stats' ? (
@@ -3844,6 +3890,35 @@ function NavButton({
       {badge != null && badge > 0 ? (
         <View style={styles.collectionBadge}>
           <Text style={styles.collectionBadgeText}>{badge}</Text>
+        </View>
+      ) : null}
+    </Pressable>
+  );
+}
+
+// '더보기' 시트 안의 항목 버튼(#241). navRow에서 내려온 진입점을 전폭 행으로 나열하고,
+// 각 항목의 배지(claimable/actionable)를 우측에 그대로 노출해 발견성을 유지한다.
+function MoreMenuButton({
+  label,
+  badge,
+  accessibilityLabel,
+  onPress,
+}: {
+  label: string;
+  badge?: number;
+  accessibilityLabel?: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityLabel={accessibilityLabel}
+      style={styles.moreMenuButton}
+      onPress={onPress}
+    >
+      <Text style={styles.moreMenuButtonText}>{label}</Text>
+      {badge != null && badge > 0 ? (
+        <View style={styles.moreMenuBadge}>
+          <Text style={styles.moreMenuBadgeText}>{badge}</Text>
         </View>
       ) : null}
     </Pressable>
@@ -5250,6 +5325,9 @@ function getSheetTitle(activeSheet: ActiveSheet, messages: FarmMessages) {
   if (activeSheet?.type === 'missions') {
     return messages.sheetTitleMissions;
   }
+  if (activeSheet?.type === 'more') {
+    return messages.sheetTitleMore;
+  }
   if (activeSheet?.type === 'stats') {
     return messages.sheetTitleStats;
   }
@@ -5269,6 +5347,9 @@ function getSheetDescription(
   }
   if (activeSheet?.type === 'missions') {
     return messages.sheetDescriptionMissions;
+  }
+  if (activeSheet?.type === 'more') {
+    return messages.sheetDescriptionMore;
   }
   if (activeSheet?.type === 'stats') {
     return messages.sheetDescriptionStats;

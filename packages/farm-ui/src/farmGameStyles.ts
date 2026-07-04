@@ -814,6 +814,38 @@ export const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '900',
   },
+  // '더보기' 시트 안의 항목 목록(#241): navRow에서 묶어 내린 진입점을 전폭 행으로 쌓는다.
+  moreMenu: {
+    gap: 8,
+  },
+  moreMenuButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    minHeight: 48,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    backgroundColor: '#edf2f7',
+  },
+  moreMenuButtonText: {
+    color: '#344054',
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  moreMenuBadge: {
+    minWidth: 20,
+    height: 20,
+    paddingHorizontal: 6,
+    borderRadius: 10,
+    backgroundColor: '#e5484d',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  moreMenuBadgeText: {
+    color: '#ffffff',
+    fontSize: 11,
+    fontWeight: '900',
+  },
   comboOverlay: {
     position: 'absolute',
     left: 0,
