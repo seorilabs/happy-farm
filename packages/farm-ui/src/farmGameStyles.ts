@@ -547,22 +547,31 @@ export const styles = StyleSheet.create({
     color: '#7a572e',
   },
   toolButton: {
-    width: 82,
-    height: 88,
+    width: 84,
+    height: 94,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#d0d5dd',
     backgroundColor: '#ffffff',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 3,
+    // 아이콘/이름/가격 주변 여백 확보 + 작물 이모지가 박스 밖으로 튀어나오지
+    // 않도록 클리핑(#237). 배지는 절대 배치라 padding 영향 없이 모서리에 유지.
+    paddingHorizontal: 6,
+    paddingVertical: 6,
+    overflow: 'hidden',
+    gap: 2,
   },
   activeToolButton: {
     borderColor: '#4d9d56',
     backgroundColor: '#edf8ed',
   },
   toolIcon: {
-    fontSize: 24,
+    // lineHeight를 fontSize에 맞춰 명시해 이모지 글리프가 세로로 넘쳐 박스
+    // 경계를 침범하지 않도록 한정한다(#237).
+    fontSize: 22,
+    lineHeight: 26,
+    textAlign: 'center',
   },
   toolName: {
     maxWidth: '100%',
