@@ -178,8 +178,14 @@ import { MissionsSheet } from './components/MissionsSheet';
 import { StatsSheet } from './components/StatsSheet';
 import { WheelSheet } from './components/WheelSheet';
 import { AdRewardCard, CloudSaveSection, SettingToggle, SheetAction, ShopCard, sheetPartStyles } from './components/SheetParts';
-import { MAIN_HORIZONTAL_PADDING, PLOT_COLUMNS, PLOT_GAP } from './farmGameLayout';
+import {
+  MAIN_HORIZONTAL_PADDING,
+  PLOT_COLUMNS,
+  PLOT_GAP,
+  SHEET_CONTENT_BASE_PADDING_BOTTOM,
+} from './farmGameLayout';
 import { styles } from './farmGameStyles';
+import { resolveBottomSafeInset } from './safeArea';
 
 // Game tick: drives idle re-renders so time-based UI (growth, cooldowns) advances.
 // The growth bar animates one tick at a time, so its duration is tied to this value
@@ -577,6 +583,10 @@ export default function FarmGame({
   adGroupIds = {},
 }: FarmGameProps = {}) {
   const insets = useFarmSafeAreaInsets();
+  // AIT(Granite) 호스트는 하단 시스템 UI 인셋을 0으로 보고하는 경우가 있어, 최소
+  // 확보 인셋으로 보정해 하단 스트립/시트/토스트가 시스템 백버튼·제스처 바와
+  // 겹치지 않게 한다(#236). 모바일의 실제 측정값이 더 크면 그대로 유지된다.
+  const bottomSafeInset = resolveBottomSafeInset(insets.bottom);
   const { width: windowWidth } = useWindowDimensions();
   const [activeSheet, setActiveSheet] = useState<ActiveSheet>(null);
   const [resetConfirmText, setResetConfirmText] = useState('');
@@ -3023,7 +3033,7 @@ export default function FarmGame({
         <FarmDecorationStrip gameState={gameState} />
       </ScrollView>
 
-      <View style={[styles.toolStrip, { paddingBottom: insets.bottom + 10 }]}>
+      <View style={[styles.toolStrip, { paddingBottom: bottomSafeInset + 10 }]}>
         <View style={styles.toolHeader}>
           <Text style={styles.toolLabel}>{messages.toolLabel}</Text>
           {readyPlotCount >= HARVEST_ALL_MIN_COUNT ? (
@@ -3183,7 +3193,7 @@ export default function FarmGame({
       </View>
 
       {toastMessage != null ? (
-        <View pointerEvents="none" style={[styles.toast, { bottom: insets.bottom + 142 }]}>
+        <View pointerEvents="none" style={[styles.toast, { bottom: bottomSafeInset + 142 }]}>
           <Text style={styles.toastText}>{toastMessage}</Text>
         </View>
       ) : null}
@@ -3207,6 +3217,7 @@ export default function FarmGame({
         description={getSheetDescription(activeSheet, messages, locale, getLocalizedCropName, collectionSummary, dailyBonusPreview.streak)}
         title={getSheetTitle(activeSheet, messages)}
         closeLabel={messages.sheetCloseAccessibilityLabel}
+        bottomInset={bottomSafeInset}
         onClose={closeSheet}
       >
         {activeSheet?.type === 'shop' ? (
@@ -5051,6 +5062,7 @@ function Sheet({
   description,
   title,
   closeLabel,
+  bottomInset,
   onClose,
 }: {
   activeSheet: ActiveSheet;
@@ -5058,6 +5070,8 @@ function Sheet({
   description: string;
   title: string;
   closeLabel: string;
+  // 하단 시스템 UI와 시트 하단 버튼이 겹치지 않도록 확보할 하단 인셋(#236).
+  bottomInset: number;
   onClose: () => void;
 }) {
   const dragYRef = useRef<Animated.Value | null>(null);
@@ -5175,7 +5189,13 @@ function Sheet({
           </View>
           <Text style={styles.sheetTitle}>{title}</Text>
           <Text style={styles.sheetDescription}>{description}</Text>
-          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.sheetContent}>
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={[
+              styles.sheetContent,
+              { paddingBottom: SHEET_CONTENT_BASE_PADDING_BOTTOM + bottomInset },
+            ]}
+          >
             {children}
           </ScrollView>
         </Animated.View>

@@ -1,6 +1,6 @@
 import { StyleSheet } from 'react-native';
 
-import { PLOT_GAP, SHEET_DRAG_HIT_TARGET_HEIGHT } from './farmGameLayout';
+import { PLOT_GAP, SHEET_CONTENT_BASE_PADDING_BOTTOM, SHEET_DRAG_HIT_TARGET_HEIGHT } from './farmGameLayout';
 
 // FarmGame 컴포넌트의 StyleSheet 정의를 분리한 모듈. 동작/스타일 변경 없이 단일 파일
 // LOC를 줄이기 위해 통째로 추출했다. 컴포넌트와 공유하는 레이아웃 치수만 farmGameLayout에서 가져온다.
@@ -702,7 +702,8 @@ export const styles = StyleSheet.create({
   },
   sheetContent: {
     paddingTop: 14,
-    paddingBottom: 28,
+    // 기본 하단 여백. 실제 렌더 시 하단 safe-area 인셋을 더해 override 한다(#236).
+    paddingBottom: SHEET_CONTENT_BASE_PADDING_BOTTOM,
   },
   sheetSectionTitle: {
     marginTop: 12,
