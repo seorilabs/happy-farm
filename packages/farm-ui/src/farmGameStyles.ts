@@ -1031,7 +1031,10 @@ export const styles = StyleSheet.create({
     marginTop: 2,
   },
   notificationPromptBackdrop: {
-    ...StyleSheet.absoluteFillObject,
+    // flex:1 (not absoluteFill) so the backdrop fills the Modal host: as a direct
+    // Modal child under Fabric, absoluteFillObject collapses to the card height,
+    // pinning the card to the top and dimming only that strip.
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 28,
