@@ -2308,3 +2308,26 @@ describe('NextGoalBar', () => {
     });
   });
 });
+
+// #236: 하단 시스템 UI(백버튼/제스처 바) 겹침 방지 인셋이 하단 콘텐츠에 실제로
+// 적용되는지 회귀 방지. safe-area 모킹이 bottom:0을 반환하므로(위 jest.mock),
+// bottomSafeInset은 최소 확보 인셋(MIN_BOTTOM_SAFE_INSET=24)으로 폴백한다.
+// 보정이 빠지면 raw 0이 쓰여 값이 각각 10/136이 되어야 하므로, 34/160 검증으로
+// bottomSafeInset 배선을 확인할 수 있다.
+describe('하단 safe-area 인셋 적용 (#236)', () => {
+  test('툴 스트립 하단 여백이 보정된 bottomSafeInset(=24)+10 으로 적용된다', async () => {
+    const screen = await renderGame(null);
+
+    await waitFor(() => expect(screen.getByText('50G')).toBeTruthy());
+    const toolStrip = StyleSheet.flatten(screen.getByTestId('tool-strip').props.style);
+    expect(toolStrip.paddingBottom).toBe(34);
+  });
+
+  test('발견 배너 bottom 오프셋이 보정된 bottomSafeInset(=24)+136 으로 적용된다', async () => {
+    const screen = await renderGame(null);
+
+    await waitFor(() => expect(screen.getByText('50G')).toBeTruthy());
+    const banner = StyleSheet.flatten(screen.getByTestId('discovery-banner').props.style);
+    expect(banner.bottom).toBe(160);
+  });
+});

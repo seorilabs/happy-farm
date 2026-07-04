@@ -277,7 +277,8 @@ export const styles = StyleSheet.create({
   },
   discoveryBanner: {
     position: 'absolute',
-    bottom: 160,
+    // bottom 오프셋은 하단 safe-area 인셋을 반영해 런타임에 적용한다(#236). 시스템
+    // 내비/제스처 바와 겹치지 않도록 bottomSafeInset 기반으로 계산.
     left: 20,
     right: 20,
     flexDirection: 'row',

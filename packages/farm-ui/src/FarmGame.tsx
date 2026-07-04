@@ -179,6 +179,7 @@ import { StatsSheet } from './components/StatsSheet';
 import { WheelSheet } from './components/WheelSheet';
 import { AdRewardCard, CloudSaveSection, SettingToggle, SheetAction, ShopCard, sheetPartStyles } from './components/SheetParts';
 import {
+  DISCOVERY_BANNER_BASE_BOTTOM,
   MAIN_HORIZONTAL_PADDING,
   PLOT_COLUMNS,
   PLOT_GAP,
@@ -3033,7 +3034,7 @@ export default function FarmGame({
         <FarmDecorationStrip gameState={gameState} />
       </ScrollView>
 
-      <View style={[styles.toolStrip, { paddingBottom: bottomSafeInset + 10 }]}>
+      <View testID="tool-strip" style={[styles.toolStrip, { paddingBottom: bottomSafeInset + 10 }]}>
         <View style={styles.toolHeader}>
           <Text style={styles.toolLabel}>{messages.toolLabel}</Text>
           {readyPlotCount >= HARVEST_ALL_MIN_COUNT ? (
@@ -3204,6 +3205,7 @@ export default function FarmGame({
         ref={discoveryBannerRef}
         title={messages.newCropDiscoveryTitle}
         subtitle={messages.newCropDiscoverySubtitle}
+        bottomInset={bottomSafeInset}
       />
 
       {harvestCombo >= 2 ? (
@@ -4453,8 +4455,8 @@ function NextGoalBar({
 // lifting crop state into FarmGame or triggering a full re-render.
 const DiscoveryBanner = React.forwardRef<
   DiscoveryBannerHandle,
-  { title: string; subtitle: string }
->(function DiscoveryBanner({ title, subtitle }, ref) {
+  { title: string; subtitle: string; bottomInset: number }
+>(function DiscoveryBanner({ title, subtitle, bottomInset }, ref) {
   const [entry, setEntry] = useState<{ icon: string; name: string } | null>(null);
   const translateYRef = useRef<Animated.Value | null>(null);
   if (translateYRef.current == null) {
@@ -4545,7 +4547,11 @@ const DiscoveryBanner = React.forwardRef<
   return (
     <Animated.View
       pointerEvents="none"
-      style={[styles.discoveryBanner, { transform: [{ translateY }], opacity }]}
+      testID="discovery-banner"
+      style={[
+        styles.discoveryBanner,
+        { bottom: bottomInset + DISCOVERY_BANNER_BASE_BOTTOM, transform: [{ translateY }], opacity },
+      ]}
     >
       {entry != null ? (
         <>
