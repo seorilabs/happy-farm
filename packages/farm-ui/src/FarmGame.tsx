@@ -175,6 +175,7 @@ import { CollectionSheet } from './components/CollectionSheet';
 import { FarmOnboarding, ONBOARDING_STEPS, type OnboardingStep } from './components/FarmOnboarding';
 import { LabSheet } from './components/LabSheet';
 import { MissionsSheet } from './components/MissionsSheet';
+import { StatsSheet } from './components/StatsSheet';
 import { WheelSheet } from './components/WheelSheet';
 import { AdRewardCard, CloudSaveSection, SettingToggle, SheetAction, ShopCard, sheetPartStyles } from './components/SheetParts';
 import { MAIN_HORIZONTAL_PADDING, PLOT_COLUMNS, PLOT_GAP } from './farmGameLayout';
@@ -235,12 +236,6 @@ function getCrop(cropKey: CropKey) {
     throw new Error(`Unknown crop: ${cropKey}`);
   }
   return crop;
-}
-
-// Region scaling can push multipliers far past the upgrade range, so switch
-// to a whole-number display once a decimal stops being informative.
-function formatStatMultiplier(value: number) {
-  return value >= 100 ? `×${Math.round(value).toLocaleString()}` : `×${value.toFixed(1)}`;
 }
 
 // Identifies the single most actionable next milestone for the player: the
@@ -310,6 +305,7 @@ type ActiveSheet =
   | { type: 'shop' }
   | { type: 'collection' }
   | { type: 'missions' }
+  | { type: 'stats' }
   | { type: 'achievements' }
   | { type: 'lab' }
   | { type: 'map' }
@@ -1857,6 +1853,12 @@ export default function FarmGame({
     setActiveSheet({ type: 'missions' });
   }
 
+  // 오늘의 작물 chip 탭 → 보조 지표를 모은 '농장 현황' 시트를 연다(#233). 새 navRow
+  // 진입점을 늘리지 않고 기존 chip 하나로만 진입한다.
+  function openStats() {
+    setActiveSheet({ type: 'stats' });
+  }
+
   // Spin result/animation state lives inside WheelSheet and resets on mount, so
   // reopening the wheel always starts from the spin prompt (or the cooldown
   // message), never a stale reward.
@@ -2900,59 +2902,25 @@ export default function FarmGame({
             </Animated.View>
           </View>
           <View style={styles.summaryColumn}>
-            <Text style={styles.researchBadge}>{messages.researchBadge(researchLevel)}</Text>
             <Text style={styles.productivityText} numberOfLines={1}>
               {messages.productivity(formatHourlyGold(farmProductivity.netProfitPerHour, locale))}
             </Text>
-            <View style={styles.statList}>
-              <View style={styles.compactStat}>
-                <Text style={styles.label}>{messages.profitLabel}</Text>
-                <Text style={styles.profitStat}>{formatStatMultiplier(globalModifiers.profitMultiplier)}</Text>
-              </View>
-              <View style={styles.compactStat}>
-                <Text style={styles.label}>{messages.growthLabel}</Text>
-                <Text style={styles.speedStat}>{formatStatMultiplier(globalModifiers.speedMultiplier)}</Text>
-              </View>
-              {harvestBonusBoost.active ? (
-                <View style={styles.compactStat}>
-                  <Text style={styles.label}>{messages.boostLabel}</Text>
-                  <Text style={styles.boostStat}>×{harvestBonusBoost.multiplier.toFixed(1)}</Text>
-                  <Text testID="boost-remaining" style={styles.boostRemaining}>
-                    {formatRemainingTime(safeBoostRemainingMs, locale)}
-                  </Text>
-                </View>
-              ) : null}
-            </View>
-            <View style={styles.cotdRow}>
-              <Text style={styles.label}>{messages.cropOfTheDayLabel}</Text>
-              <Text style={styles.cotdText} numberOfLines={1}>
-                {getCrop(cropOfTheDay.cropKey).icon} {getLocalizedCropName(cropOfTheDay.cropKey)} ×{cropOfTheDay.multiplier}
+            {/* 오늘의 작물은 재방문 훅이라 한 줄 chip으로 유지하되, 탭하면 보조 지표(연구레벨·
+                수익/성장 배수·수확 부스트·주말 축제 상세)를 모은 '농장 현황' 시트를 연다.
+                이로써 상단 HUD 과밀을 되돌린다(#233). */}
+            <Pressable
+              testID="cotd-chip"
+              accessibilityRole="button"
+              accessibilityLabel={`${messages.cropOfTheDayLabel}, ${getLocalizedCropName(cropOfTheDay.cropKey)}`}
+              hitSlop={6}
+              style={styles.cotdChip}
+              onPress={openStats}
+            >
+              <Text style={styles.cotdChipText} numberOfLines={1}>
+                🌱 {getCrop(cropOfTheDay.cropKey).icon} {getLocalizedCropName(cropOfTheDay.cropKey)} ×
+                {cropOfTheDay.multiplier} ›
               </Text>
-            </View>
-            {weeklyEvent.active ? (
-              <View style={styles.cotdRow} testID="weekly-event-banner">
-                <Text style={styles.label}>🎉 {messages.weeklyEventLabel}</Text>
-                <Text style={styles.cotdText} numberOfLines={1}>
-                  {messages.weeklyEventDesc(
-                    getLocalizedAreaLabel(weeklyEvent.areaKey).name,
-                    weeklyEvent.multiplier,
-                    formatRemainingTime(Math.max(0, weeklyEvent.windowEndAt - tickNowMsRef.current), locale)
-                  )}
-                </Text>
-              </View>
-            ) : (
-              // Weekday teaser: preview the upcoming weekend theme + countdown so
-              // there's a reason to come back before the festival goes live.
-              <View style={styles.cotdRow} testID="weekly-event-teaser">
-                <Text style={styles.label}>🗓️ {messages.weeklyEventTeaserLabel}</Text>
-                <Text style={styles.cotdText} numberOfLines={1}>
-                  {messages.weeklyEventTeaserDesc(
-                    getLocalizedAreaLabel(weeklyEvent.areaKey).name,
-                    formatRemainingTime(Math.max(0, weeklyEvent.windowStartAt - tickNowMsRef.current), locale)
-                  )}
-                </Text>
-              </View>
-            )}
+            </Pressable>
           </View>
         </View>
 
@@ -3350,6 +3318,26 @@ export default function FarmGame({
             now={Date.now()}
             onClaim={claimMissionReward}
             onClaimWeekly={claimWeeklyMissionReward}
+          />
+        ) : null}
+
+        {activeSheet?.type === 'stats' ? (
+          <StatsSheet
+            messages={messages}
+            locale={locale}
+            researchLevel={researchLevel}
+            profitMultiplier={globalModifiers.profitMultiplier}
+            speedMultiplier={globalModifiers.speedMultiplier}
+            boostActive={harvestBonusBoost.active}
+            boostMultiplier={harvestBonusBoost.multiplier}
+            boostRemainingMs={safeBoostRemainingMs}
+            weeklyEventActive={weeklyEvent.active}
+            weeklyEventAreaName={getLocalizedAreaLabel(weeklyEvent.areaKey).name}
+            weeklyEventMultiplier={weeklyEvent.multiplier}
+            weeklyEventRemainingMs={Math.max(
+              0,
+              (weeklyEvent.active ? weeklyEvent.windowEndAt : weeklyEvent.windowStartAt) - tickNowMsRef.current
+            )}
           />
         ) : null}
 
@@ -5236,6 +5224,9 @@ function getSheetTitle(activeSheet: ActiveSheet, messages: FarmMessages) {
   if (activeSheet?.type === 'missions') {
     return messages.sheetTitleMissions;
   }
+  if (activeSheet?.type === 'stats') {
+    return messages.sheetTitleStats;
+  }
   return messages.sheetTitleShop;
 }
 
@@ -5252,6 +5243,9 @@ function getSheetDescription(
   }
   if (activeSheet?.type === 'missions') {
     return messages.sheetDescriptionMissions;
+  }
+  if (activeSheet?.type === 'stats') {
+    return messages.sheetDescriptionStats;
   }
   if (activeSheet?.type === 'achievements') {
     return messages.sheetDescriptionAchievements;

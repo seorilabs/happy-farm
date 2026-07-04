@@ -273,7 +273,8 @@ describe('FarmGame UI flow', () => {
 
     await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
     expect(screen.getByText('50G')).toBeTruthy();
-    expect(screen.getByText('연구 Lv.1')).toBeTruthy();
+    // 연구레벨 배지는 '농장 현황' 시트로 이동(#233) — 메인 화면에 상시 노출되지 않는다.
+    expect(screen.queryByText('연구 Lv.1')).toBeNull();
     expect(screen.getByText(/생산성 약 /)).toBeTruthy();
     expect(screen.queryByText('새 구역 조건')).toBeNull();
     expect(screen.getAllByText('빈 밭')).toHaveLength(6);
@@ -344,21 +345,47 @@ describe('FarmGame UI flow', () => {
     expect(en.indexOf('1,200')).toBeLessThan(en.indexOf('600'));
   });
 
-  test('shows the upcoming weekend-festival teaser on a weekday', async () => {
+  test('shows the upcoming weekend-festival teaser in the stats sheet on a weekday (#233)', async () => {
     // Default NOW (set in beforeEach) is a Wednesday → festival inactive → teaser.
+    // 주말 축제 정보는 이제 상단 HUD가 아니라 '농장 현황' 시트에 있다(#233): chip으로 진입.
     const screen = await renderGame(null);
     await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
-    expect(screen.getByTestId('weekly-event-teaser')).toBeTruthy();
+    expect(screen.queryByTestId('weekly-event-teaser')).toBeNull();
+    fireEvent.press(screen.getByTestId('cotd-chip'));
+    await waitFor(() => expect(screen.getByTestId('weekly-event-teaser')).toBeTruthy());
     expect(screen.queryByTestId('weekly-event-banner')).toBeNull();
   });
 
-  test('shows the live festival banner (not the teaser) on the weekend', async () => {
+  test('shows the live festival banner (not the teaser) in the stats sheet on the weekend (#233)', async () => {
     // Jump to a Friday (UTC) before rendering → festival live → banner, no teaser.
     jest.setSystemTime(Date.parse('2026-05-29T12:00:00.000Z'));
     const screen = await renderGame(null);
     await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
-    expect(screen.getByTestId('weekly-event-banner')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('cotd-chip'));
+    await waitFor(() => expect(screen.getByTestId('weekly-event-banner')).toBeTruthy());
     expect(screen.queryByTestId('weekly-event-teaser')).toBeNull();
+  });
+
+  test('slims the top HUD to gold + net/h + crop-of-the-day chip; secondary stats live behind the stats sheet (#233)', async () => {
+    const messages = getFarmMessages(DEFAULT_LOCALE);
+    const screen = await renderGame(null, { preferredLocale: DEFAULT_LOCALE });
+    await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+
+    // 상시 노출은 시간당 순수익 + 오늘의 작물 chip. 보조 지표(연구레벨·수익/성장 배수)는
+    // 메인 화면에 상시 노출되지 않는다.
+    expect(screen.getByTestId('cotd-chip')).toBeTruthy();
+    expect(screen.queryByTestId('stats-sheet')).toBeNull();
+    expect(screen.queryByText(/연구 Lv\./)).toBeNull();
+    expect(screen.queryByText(messages.profitLabel)).toBeNull();
+    expect(screen.queryByText(messages.growthLabel)).toBeNull();
+
+    // chip 탭 → '농장 현황' 시트가 열리고, 이동한 보조 지표가 시트에 노출된다.
+    fireEvent.press(screen.getByTestId('cotd-chip'));
+    await waitFor(() => expect(screen.getByTestId('stats-sheet')).toBeTruthy());
+    expect(screen.getByText(messages.sheetTitleStats)).toBeTruthy();
+    expect(screen.getByText(/연구 Lv\./)).toBeTruthy();
+    expect(screen.getByText(messages.profitLabel)).toBeTruthy();
+    expect(screen.getByText(messages.growthLabel)).toBeTruthy();
   });
 
   describe('seed-strip sell-bonus badges (#226)', () => {
@@ -862,7 +889,6 @@ describe('FarmGame UI flow', () => {
     const screen = await renderGame(null, {}, { locale: 'en-US' });
 
     await waitFor(() => expect(screen.getByText('Happy Farm')).toBeTruthy());
-    expect(screen.getByText('Research Lv.1')).toBeTruthy();
     expect(screen.getByText(/About /)).toBeTruthy();
     expect(screen.getAllByText('Empty')).toHaveLength(6);
     expect(screen.getByText('Carrot')).toBeTruthy();
@@ -881,14 +907,14 @@ describe('FarmGame UI flow', () => {
     const screen = await renderGame(null, { preferredLocale: 'en-US' }, null);
 
     await waitFor(() => expect(screen.getByText('Happy Farm')).toBeTruthy());
-    expect(screen.getByText('Research Lv.1')).toBeTruthy();
+    expect(screen.getByText(/About /)).toBeTruthy();
   });
 
   test('uses the preferred locale when legacy settings do not include a locale', async () => {
     const screen = await renderGame(null, { preferredLocale: 'en-US' }, { soundEffectsEnabled: false });
 
     await waitFor(() => expect(screen.getByText('Happy Farm')).toBeTruthy());
-    expect(screen.getByText('Research Lv.1')).toBeTruthy();
+    expect(screen.getByText(/About /)).toBeTruthy();
   });
 
   test('renders a late-game save without overflowing critical one-line UI text', async () => {
@@ -1901,18 +1927,24 @@ describe('FarmGame UI flow', () => {
 
     await waitFor(() => expect(rewardedAd.showAd).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(screen.queryByText('수확 보너스')).toBeNull());
+
+    // 부스트가 실제로 다음 수확 골드에 적용되는지(핵심 동작) 먼저 확인한다.
+    fireEvent.press(screen.getAllByText('GET')[0]!);
+    expect(screen.getByText(`${formatMoney(readyHarvestState.gold + carrotRevenue * 3)}G`)).toBeTruthy();
+
+    // 부스트 지표 표기는 상단 HUD가 아니라 '농장 현황' 시트로 이동했다(#233).
+    fireEvent.press(screen.getByTestId('cotd-chip'));
     await waitFor(() => expect(screen.getByText('부스트')).toBeTruthy());
     expect(screen.getByText(`×${HARVEST_BONUS_MULTIPLIER.toFixed(1)}`)).toBeTruthy();
-
-    fireEvent.press(screen.getAllByText('GET')[0]!);
-
-    expect(screen.getByText(`${formatMoney(readyHarvestState.gold + carrotRevenue * 3)}G`)).toBeTruthy();
   });
 
-  test('shows boost multiplier and remaining time in the header when boost is active', async () => {
+  test('shows boost multiplier and remaining time in the stats sheet when boost is active (#233)', async () => {
     const messages = getFarmMessages(DEFAULT_LOCALE);
     const screen = await renderGame(createActiveBoostState(NOW), { preferredLocale: DEFAULT_LOCALE });
 
+    await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+    // 부스트 배수·잔여시간은 '농장 현황' 시트로 이동(#233): chip으로 시트를 연다.
+    fireEvent.press(screen.getByTestId('cotd-chip'));
     await waitFor(() => expect(screen.getByText(messages.boostLabel)).toBeTruthy());
     expect(screen.getByText(`×${HARVEST_BONUS_MULTIPLIER.toFixed(1)}`)).toBeTruthy();
     // Assert the remaining-time element has a non-zero time value.

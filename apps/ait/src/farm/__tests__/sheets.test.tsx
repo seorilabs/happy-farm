@@ -27,6 +27,7 @@ import {
 } from '../../../../../packages/farm-core/src';
 import { getFarmMessages } from '../../../../../packages/farm-ui/src';
 import { CollectionSheet } from '../../../../../packages/farm-ui/src/components/CollectionSheet';
+import { StatsSheet } from '../../../../../packages/farm-ui/src/components/StatsSheet';
 import { AchievementsSheet } from '../../../../../packages/farm-ui/src/components/AchievementsSheet';
 import { LabSheet } from '../../../../../packages/farm-ui/src/components/LabSheet';
 import { ChainMapSheet } from '../../../../../packages/farm-ui/src/components/ChainMapSheet';
@@ -120,6 +121,97 @@ describe('CollectionSheet', () => {
     const claimLabel = messages.collectionClaimAction(formatMoney(COLLECTION_AREA_REWARDS[area.key]!, LOCALE));
     fireEvent.press(screen.getByText(claimLabel));
     expect(onClaimReward).toHaveBeenCalledWith(area.key);
+  });
+});
+
+// #233: 상단 HUD에서 옮겨온 보조 지표 시트. 부스트 활성/비활성, 주말 축제 라이브/티저
+// 분기와 배수 표기를 표시 전용 계약으로 고정한다.
+describe('StatsSheet', () => {
+  const HOUR_MS = 60 * 60 * 1000;
+
+  test('renders research/profit/growth stats and the boost as active with a remaining time', () => {
+    const screen = render(
+      <StatsSheet
+        messages={messages}
+        locale={LOCALE}
+        researchLevel={4}
+        profitMultiplier={1.3}
+        speedMultiplier={1.7}
+        boostActive
+        boostMultiplier={1.5}
+        boostRemainingMs={30 * 60 * 1000}
+        weeklyEventActive={false}
+        weeklyEventAreaName={'초보 농장'}
+        weeklyEventMultiplier={1}
+        weeklyEventRemainingMs={2 * HOUR_MS}
+      />
+    );
+
+    expect(screen.getByTestId('stats-sheet')).toBeTruthy();
+    // 연구 배지는 헤더에서 쓰던 것과 동일한 키를 재사용한다.
+    expect(screen.getByText(messages.researchBadge(4))).toBeTruthy();
+    expect(screen.getByText(messages.profitLabel)).toBeTruthy();
+    expect(screen.getByText('×1.3')).toBeTruthy();
+    expect(screen.getByText(messages.growthLabel)).toBeTruthy();
+    expect(screen.getByText('×1.7')).toBeTruthy();
+    // 부스트 배수는 별도 값으로 표기된다.
+    expect(screen.getByText('×1.5')).toBeTruthy();
+    // 부스트 활성: 배수 + 잔여시간 표기(잔여시간 testID는 헤더에서 옮겨온 것과 동일).
+    expect(screen.getByText(messages.boostLabel)).toBeTruthy();
+    expect(screen.getByTestId('boost-remaining')).toHaveTextContent(/^[1-9]/);
+    // 축제 비활성 요일: 티저가 노출되고 라이브 배너는 없다.
+    expect(screen.getByTestId('weekly-event-teaser')).toBeTruthy();
+    expect(screen.queryByTestId('weekly-event-banner')).toBeNull();
+  });
+
+  test('shows the boost row as inactive and the festival banner when a festival is live', () => {
+    const screen = render(
+      <StatsSheet
+        messages={messages}
+        locale={LOCALE}
+        researchLevel={0}
+        profitMultiplier={1}
+        speedMultiplier={1}
+        boostActive={false}
+        boostMultiplier={1}
+        boostRemainingMs={0}
+        weeklyEventActive
+        weeklyEventAreaName={'초보 농장'}
+        weeklyEventMultiplier={1.5}
+        weeklyEventRemainingMs={5 * HOUR_MS}
+      />
+    );
+
+    // 부스트 비활성: '현재 비활성' 문구가 뜨고 잔여시간 요소는 없다.
+    expect(screen.getByText(messages.statsBoostInactive)).toBeTruthy();
+    expect(screen.queryByTestId('boost-remaining')).toBeNull();
+    // 축제 라이브: 배너가 노출되고 티저는 없다.
+    expect(screen.getByTestId('weekly-event-banner')).toBeTruthy();
+    expect(screen.queryByTestId('weekly-event-teaser')).toBeNull();
+  });
+
+  test('localizes stats content in en-US', () => {
+    const enMessages = getFarmMessages('en-US');
+    const screen = render(
+      <StatsSheet
+        messages={enMessages}
+        locale="en-US"
+        researchLevel={2}
+        profitMultiplier={1}
+        speedMultiplier={1}
+        boostActive={false}
+        boostMultiplier={1}
+        boostRemainingMs={0}
+        weeklyEventActive={false}
+        weeklyEventAreaName={'Starter Farm'}
+        weeklyEventMultiplier={1}
+        weeklyEventRemainingMs={HOUR_MS}
+      />
+    );
+
+    expect(screen.getByText(enMessages.profitLabel)).toBeTruthy();
+    expect(screen.getByText(enMessages.statsBoostInactive)).toBeTruthy();
+    expect(enMessages.statsBoostInactive).toBe('Inactive');
   });
 });
 
