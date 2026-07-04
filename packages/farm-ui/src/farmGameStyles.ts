@@ -185,16 +185,6 @@ export const styles = StyleSheet.create({
     alignItems: 'flex-end',
     justifyContent: 'center',
   },
-  researchBadge: {
-    overflow: 'hidden',
-    borderRadius: 8,
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    color: '#ffffff',
-    backgroundColor: '#6f57d9',
-    fontSize: 11,
-    fontWeight: '900',
-  },
   productivityText: {
     marginTop: 3,
     color: '#247241',
@@ -202,47 +192,19 @@ export const styles = StyleSheet.create({
     fontWeight: '900',
     textAlign: 'right',
   },
-  statList: {
-    marginTop: 3,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 9,
+  // 오늘의 작물 chip: 한 줄 탭 타깃. 보조 지표를 담은 '농장 현황' 시트로 진입한다(#233).
+  cotdChip: {
+    marginTop: 6,
+    maxWidth: '100%',
+    overflow: 'hidden',
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    backgroundColor: '#fdf3e2',
   },
-  compactStat: {
-    alignItems: 'flex-end',
-  },
-  cotdRow: {
-    marginTop: 4,
-    alignItems: 'flex-end',
-  },
-  cotdText: {
+  cotdChipText: {
     color: '#c47d11',
     fontSize: 12,
-    fontWeight: '900',
-    textAlign: 'right',
-  },
-  profitStat: {
-    color: '#247241',
-    fontSize: 13,
-    fontWeight: '900',
-    textAlign: 'right',
-  },
-  speedStat: {
-    color: '#2f7de1',
-    fontSize: 13,
-    fontWeight: '900',
-    textAlign: 'right',
-  },
-  boostStat: {
-    color: '#b54708',
-    fontSize: 13,
-    fontWeight: '900',
-    textAlign: 'right',
-  },
-  boostRemaining: {
-    marginTop: 1,
-    color: '#8a4b0f',
-    fontSize: 10,
     fontWeight: '900',
     textAlign: 'right',
   },
