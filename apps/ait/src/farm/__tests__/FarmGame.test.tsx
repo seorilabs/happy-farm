@@ -24,6 +24,7 @@ import {
   getActiveFarmOfflineGold,
   getAreaCropKeys,
   getCropOfTheDayStatus,
+  getFertilizerCost,
   getWeeklyEventStatus,
   getEnvironmentTone,
   getLocalMinutesOfDay,
@@ -432,6 +433,70 @@ describe('FarmGame UI flow', () => {
       await waitFor(() => expect(screen.getByText('Happy Farm')).toBeTruthy());
       const label = screen.getByTestId(`seed-tool-${featuredKey}`).props.accessibilityLabel as string;
       expect(label).toContain(getFarmMessages('en-US').cropOfTheDayLabel);
+    });
+  });
+
+  describe('gold fertilizer (#227)', () => {
+    test('tapping a growing plot offers the fertilizer action and applying it spends gold + completes growth', async () => {
+      // A wheat plot mid-growth, plenty of gold, past onboarding so the plot is
+      // freely interactive.
+      const state: GameState = {
+        ...createGrowingCropState(),
+        onboardingCompleted: true,
+        gold: 100_000,
+      };
+      // Exact cost the component will charge (same pure fn, same NOW), so we can
+      // assert the precise post-fertilize gold rather than just "not 100,000".
+      const expectedCost = getFertilizerCost(state, state.plots[0]!, NOW);
+      expect(expectedCost).toBeGreaterThan(0);
+
+      // Default useRewardedAd is unsupported (isAdSupported: false), so this also
+      // covers the ad-unsupported (AIT) path: the sheet must open on fertilizer alone.
+      const screen = await renderGame(state);
+      await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+
+      // Select a seed tool (so a plot tap isn't treated as a harvest), then tap
+      // the growing plot to open the grow-faster sheet.
+      fireEvent.press(screen.getByText('당근'));
+      fireEvent.press(screen.getByTestId('plot-cell-0'));
+
+      const fertilizerAction = screen.getByTestId('fertilizer-action');
+      expect(fertilizerAction).toBeTruthy();
+      expect(fertilizerAction.props.accessibilityLabel).toContain('비료로 바로 키우기');
+      // Ad path is unsupported here, so only the fertilizer action is offered.
+      expect(screen.queryByTestId('growth-ad-action')).toBeNull();
+
+      fireEvent.press(fertilizerAction);
+
+      // The gold-fertilizer toast confirms it applied, gold dropped by exactly the
+      // fertilizer cost, and the plot transitioned to ripe (state 2 renders GET).
+      await waitFor(() => expect(screen.getByText(/비료로 바로 키웠어요/)).toBeTruthy());
+      expect(screen.getByText(`${formatMoney(100_000 - expectedCost, 'ko-KR')}G`)).toBeTruthy();
+      expect(screen.queryByText('100,000G')).toBeNull();
+      expect(screen.getByText('GET')).toBeTruthy();
+    });
+
+    test('disables the fertilizer action when gold is insufficient', async () => {
+      // 1 gold can never cover the minimum fertilizer cost.
+      const state: GameState = {
+        ...createGrowingCropState(),
+        onboardingCompleted: true,
+        gold: 1,
+      };
+      const screen = await renderGame(state);
+      await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+
+      fireEvent.press(screen.getByText('당근'));
+      fireEvent.press(screen.getByTestId('plot-cell-0'));
+
+      const fertilizerAction = screen.getByTestId('fertilizer-action');
+      expect(fertilizerAction.props.accessibilityState?.disabled).toBe(true);
+
+      // 비활성 버튼의 onPress가 우회 호출되어도(a11y/testID) 상태를 바꾸지 않는다:
+      // 골드 차감·성장 완료(GET)·성공 토스트 어느 것도 발생하지 않는다.
+      fireEvent.press(fertilizerAction);
+      expect(screen.queryByText('GET')).toBeNull();
+      expect(screen.queryByText(/비료로 바로 키웠어요/)).toBeNull();
     });
   });
 

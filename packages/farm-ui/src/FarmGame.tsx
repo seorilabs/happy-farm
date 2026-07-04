@@ -58,6 +58,8 @@ import {
   type TitleKey,
   GROWTH_AD_MIN_REMAINING_MS,
   applyGrowthAdSkip,
+  applyFertilizer,
+  getFertilizerCost,
   getGrowthAdSkipMs,
   HARVEST_BONUS_BOOST_DURATION_MS,
   HARVEST_BONUS_MULTIPLIER,
@@ -1747,6 +1749,9 @@ export default function FarmGame({
   // Blocks a second "Harvest All" tap until the in-flight batch finishes; the
   // command drain effect releases it after each attempt (success or no-op).
   const harvestAllInFlightRef = useRef(false);
+  // 비료 성공 부수효과(토스트·시트 닫힘)를 시트 1회 오픈당 한 번만 발화하게 하는
+  // 가드. 시트가 열릴 때 false로 리셋한다(#227 리뷰).
+  const fertilizeGuardRef = useRef(false);
   const chainIncome = useMemo(() => getChainIncome(gameState), [gameState, tick]);
   const mapActionableCount = useMemo(
     () => (chainIncome.accruedGold > 0 ? 1 : 0) + (canPrestige(gameState).allowed ? 1 : 0),
@@ -2682,21 +2687,28 @@ export default function FarmGame({
         // No upper cap: long-duration crops qualify too and get a partial skip
         // (see applyGrowthAdSkip). The lower bound just avoids an ad for a crop
         // that is about to finish on its own anyway.
-        if (
-          remainingMs >= GROWTH_AD_MIN_REMAINING_MS &&
-          rewardedAd.isAdSupported
-        ) {
-          if (growthAdLimit.allowed) {
-            setActiveSheet({
-              type: 'growthAd',
-              plotIndex: index,
-              cropKey: plot.cropType,
-              remainingMs,
-            });
-          } else {
-            farmAnalytics.trackAdLimitBlocked('growthAd', getRewardedAdPlacement('growthAd'), growthAdLimit.reason, analyticsContext());
-            toast(growthAdLimit.reason);
-          }
+        const adPathAvailable = remainingMs >= GROWTH_AD_MIN_REMAINING_MS && rewardedAd.isAdSupported;
+        // 골드 비료(#227)는 광고 지원 여부와 무관하게 성장 중이면 항상 가능하므로,
+        // 광고 스킵 또는 비료 중 하나라도 가능하면 성장 가속 시트를 연다.
+        const fertilizerCost = getFertilizerCost(gameState, plot);
+        // 광고 지원 + 일일 한도 도달은 (비료로 시트가 열리든 아니든) 항상 계측한다.
+        const adLimitBlocked = adPathAvailable && !growthAdLimit.allowed;
+        if (adLimitBlocked) {
+          farmAnalytics.trackAdLimitBlocked('growthAd', getRewardedAdPlacement('growthAd'), growthAdLimit.reason, analyticsContext());
+        }
+        if ((adPathAvailable && growthAdLimit.allowed) || fertilizerCost > 0) {
+          // 새 시트 오픈마다 비료 성공 가드를 리셋해 이번 오픈의 적용을 허용한다.
+          fertilizeGuardRef.current = false;
+          setActiveSheet({
+            type: 'growthAd',
+            plotIndex: index,
+            cropKey: plot.cropType,
+            remainingMs,
+          });
+        } else if (adLimitBlocked) {
+          // 시트가 열리지 않는 광고 전용 경로에서만 한도 사유를 토스트로 안내한다
+          // (시트가 열리는 경우엔 시트 안 광고 버튼의 비활성 사유 라벨로 노출됨).
+          toast(growthAdLimit.reason);
         } else {
           toast(messages.growingToast);
         }
@@ -2725,6 +2737,43 @@ export default function FarmGame({
           : messages.growthSkipToast(formatDuration(previewSkip, locale))
       );
     });
+  }
+
+  // 골드 비료(#227): 성장 중 플롯의 남은 성장을 골드로 즉시 완료한다.
+  //
+  // 상태 갱신과 안내(토스트·시트 닫힘)를 커밋 상태에서 계산한 "단일 결과"에서만
+  // 파생시켜, 둘이 서로 어긋날 여지를 없앤다(preview/updater 이중 판정 제거). 적용된
+  // 결과 상태를 그대로 setGameState에 넘기므로 토스트가 말하는 차감과 실제 차감이
+  // 항상 동일하다. 성공 부수효과는 fertilizeGuardRef로 시트 오픈당 한 번만 발화해
+  // 이벤트 재호출/StrictMode에도 중복 알림이 없다(골드/플롯은 결과 상태 1회 반영).
+  function applyFertilizerNow(plotIndex: number) {
+    const plot = gameState.plots[plotIndex];
+    if (plot == null) {
+      return;
+    }
+    // 커밋 상태에서 미리 판정(가격·충분 여부)해 토스트/시트 분기를 정하고, 실제 상태
+    // 변경은 아래 함수형 updater가 라이브 상태에서 다시 적용한다(광고 스킵 경로
+    // completeGrowthWithAd와 동일한 preview + 함수형 updater 구조). concrete state를
+    // 넘기면 그 사이 큐잉된 timer tick의 setGameState를 덮어써 lost update가 나므로,
+    // 반드시 (state) => ... updater로 커밋해 항상 최신 base에 한 번만 적용한다.
+    const preview = applyFertilizer(gameState, plot.id);
+    if (!preview.applied) {
+      // 비활성 버튼 우회 호출(a11y/외부 ref) 방어 겸 실패 안내: 골드 부족(cost>0)은
+      // 조용히 무시("비활성 버튼은 입력을 받지 않는다"는 UX 약속 유지), cost===0
+      // (이미 완료/남은 성장 없음)은 시트를 닫고 완료 안내.
+      if (preview.cost <= 0) {
+        setActiveSheet(null);
+        toast(messages.alreadyGrownToast);
+      }
+      return;
+    }
+    if (fertilizeGuardRef.current) {
+      return;
+    }
+    fertilizeGuardRef.current = true;
+    setGameState((state) => applyFertilizer(state, plot.id).state);
+    setActiveSheet(null);
+    toast(messages.fertilizerDoneToast(formatMoney(preview.cost, locale)));
   }
 
   async function activateHarvestBonusWithAd() {
@@ -3443,13 +3492,39 @@ export default function FarmGame({
                   ? messages.growthAdAction
                   : messages.growthAdSkipAction(formatDuration(skipMs, locale))
                 : growthAdLimit.reason;
+              // 광고 경로는 광고 지원 + 최소 남은 성장 조건을 만족할 때만 노출한다
+              // (비료 단독으로 시트가 열린 경우 광고 버튼은 숨긴다).
+              const adPathAvailable =
+                rewardedAd.isAdSupported && activeSheet.remainingMs >= GROWTH_AD_MIN_REMAINING_MS;
+              // 골드 비료(#227): 성장 중 플롯이면 항상 노출, 가격 표시. 골드 부족 시 비활성.
+              const fertilizerPlot = gameState.plots[activeSheet.plotIndex];
+              const fertilizerCost = fertilizerPlot != null ? getFertilizerCost(gameState, fertilizerPlot) : 0;
               return (
                 <View>
-                  <SheetAction
-                    label={actionLabel}
-                    disabled={!rewardedAd.isAdReady || !growthAdLimit.allowed}
-                    onPress={() => void completeGrowthWithAd(activeSheet.plotIndex)}
-                  />
+                  {adPathAvailable ? (
+                    <SheetAction
+                      testID="growth-ad-action"
+                      label={actionLabel}
+                      disabled={!rewardedAd.isAdReady || !growthAdLimit.allowed}
+                      onPress={() => void completeGrowthWithAd(activeSheet.plotIndex)}
+                    />
+                  ) : null}
+                  {fertilizerCost > 0 ? (
+                    <SheetAction
+                      testID="fertilizer-action"
+                      label={messages.fertilizerAction(formatMoney(fertilizerCost, locale))}
+                      disabled={gameState.gold < fertilizerCost}
+                      onPress={() => applyFertilizerNow(activeSheet.plotIndex)}
+                    />
+                  ) : null}
+                  {!adPathAvailable && fertilizerCost <= 0 ? (
+                    // 시트가 열린 뒤 tick으로 남은 성장이 0이 되고 광고 경로도 없어
+                    // 가속 옵션이 사라진 경우, 빈 시트 대신 완료 안내를 보여준다(대기
+                    // 버튼으로 닫을 수 있음).
+                    <Text testID="growth-sheet-empty-note" style={styles.sheetSectionTitle}>
+                      {messages.alreadyGrownToast}
+                    </Text>
+                  ) : null}
                   <SheetAction label={messages.waitAction} secondary onPress={() => setActiveSheet(null)} />
                 </View>
               );

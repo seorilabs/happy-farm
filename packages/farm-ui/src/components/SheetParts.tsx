@@ -7,15 +7,18 @@ export function SheetAction({
   secondary,
   danger,
   onPress,
+  testID,
 }: {
   label: string;
   disabled?: boolean;
   secondary?: boolean;
   danger?: boolean;
   onPress: () => void;
+  testID?: string;
 }) {
   return (
     <Pressable
+      testID={testID}
       disabled={disabled}
       accessibilityRole="button"
       accessibilityLabel={label}
