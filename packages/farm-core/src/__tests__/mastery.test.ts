@@ -126,6 +126,37 @@ describe('mutations', () => {
     );
     expect(rollMutation(silverState, 'carrot', 0.999)).toBeNull();
   });
+
+  test('gold-gated giant mutation stays locked until the gold rank', () => {
+    const giant = getMutationKind('giant');
+    const thresholds = getMasteryThresholds('carrot');
+
+    // thresholds: [0]=bronze, [1]=silver, [2]=gold, [3]=prism.
+    const silverState = stateWithCounts({ carrot: thresholds[1]! });
+    const goldState = stateWithCounts({ carrot: thresholds[2]! });
+    const prismState = stateWithCounts({ carrot: thresholds[3]! });
+
+    // 실버 이하에선 발견 불가(확률 0).
+    expect(getMutationChance(silverState, 'carrot', giant)).toBe(0);
+    // 골드에서 baseChance로 열리고, 상위 랭크(프리즘)에서 랭크당 가산이 붙는다.
+    expect(getMutationChance(goldState, 'carrot', giant)).toBeCloseTo(giant.baseChance);
+    expect(getMutationChance(prismState, 'carrot', giant)).toBeCloseTo(
+      giant.baseChance + giant.chancePerRankAboveMin * 1
+    );
+  });
+
+  test('prism-gated prism mutation only appears at the prism rank', () => {
+    const prism = getMutationKind('prism');
+    const thresholds = getMasteryThresholds('carrot');
+
+    const goldState = stateWithCounts({ carrot: thresholds[2]! });
+    const prismState = stateWithCounts({ carrot: thresholds[3]! });
+
+    // 최상위 랭크 미만에선 확률 0.
+    expect(getMutationChance(goldState, 'carrot', prism)).toBe(0);
+    // 프리즘 랭크에서 baseChance로 열린다(위 랭크가 없어 가산은 항상 0).
+    expect(getMutationChance(prismState, 'carrot', prism)).toBeCloseTo(prism.baseChance);
+  });
 });
 
 describe('performHarvest with mastery and mutations', () => {
@@ -202,6 +233,10 @@ describe('performHarvest with mastery and mutations', () => {
     const summary = getMutationCollectionSummary(state);
 
     expect(summary.discoveredCount).toBe(3);
+    // 신규 gold/prism 변이(giant/prism)까지 포함해 컬렉션 총량이 산정된다.
+    expect(MUTATION_KINDS.map((kind) => kind.key)).toEqual(
+      expect.arrayContaining(['golden', 'rainbow', 'giant', 'prism'])
+    );
     expect(summary.totalCount).toBe(balance.crops.length * MUTATION_KINDS.length);
   });
 });
