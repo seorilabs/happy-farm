@@ -28,14 +28,26 @@ const FRI_NOON = FRI_START + 12 * 60 * 60 * 1000;
 // The event TYPE rotates deterministically per weekend, independent of the featured
 // area. Scan forward from FRI_NOON (in 1-week steps) for the first weekend whose
 // rotation lands on `typeKey`, so per-type assertions don't hardcode a calendar date.
+//
+// The scan bound is derived from the roster weights (not a fixed 520) so a future
+// weight-skewed type can't silently push its first appearance past the window: a
+// type with probability minWeight/totalWeight is expected once every
+// totalWeight/minWeight weekends, so ~500× that gives an astronomically safe margin
+// while staying fast for the current 1:1 roster. Misses throw with a clear message.
+const WEEKLY_EVENT_TOTAL_WEIGHT = WEEKLY_EVENT_TYPES.reduce((sum, type) => sum + type.weight, 0);
+const WEEKLY_EVENT_MIN_WEIGHT = Math.min(...WEEKLY_EVENT_TYPES.map((type) => type.weight));
+const TYPE_SCAN_WEEKS = Math.max(520, Math.ceil((WEEKLY_EVENT_TOTAL_WEIGHT / WEEKLY_EVENT_MIN_WEIGHT) * 500));
+
 function findWeekendNoonOfType(typeKey: string, unlockedAreas?: AreaKey[]): number {
-  for (let week = 0; week < 520; week += 1) {
+  for (let week = 0; week < TYPE_SCAN_WEEKS; week += 1) {
     const now = FRI_NOON + week * 7 * DAY_MS;
     if (getWeeklyEventStatus(now, unlockedAreas).typeKey === typeKey) {
       return now;
     }
   }
-  throw new Error(`No weekend found for event type "${typeKey}" within the scan window`);
+  throw new Error(
+    `No weekend found for event type "${typeKey}" within ${TYPE_SCAN_WEEKS} weeks (check the weeklyEvent.types roster/weights)`
+  );
 }
 
 const SALE_NOON = findWeekendNoonOfType('sale');
@@ -145,7 +157,7 @@ describe('weekly event type rotation', () => {
 
   test('every configured event type is reachable over enough weekends', () => {
     const seen = new Set<string>();
-    for (let week = 0; week < 520; week += 1) {
+    for (let week = 0; week < TYPE_SCAN_WEEKS; week += 1) {
       seen.add(getWeeklyEventStatus(FRI_NOON + week * 7 * DAY_MS).typeKey);
     }
     for (const type of WEEKLY_EVENT_TYPES) {

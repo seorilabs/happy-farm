@@ -94,14 +94,21 @@ function hashWeekend(fridayEpochDay: number): number {
 // Weighted, deterministic event-type draw for the weekend. Salts the day before
 // hashing so the TYPE rotation is independent of the featured-AREA draw (which
 // hashes the raw fridayEpochDay) — otherwise area and type would move in lockstep.
+//
+// The hash is mapped into [0, totalWeight) in FRACTION space (not `% totalWeight`)
+// so any weight ratio stays exactly proportional: `% totalWeight` would add modulo
+// bias when totalWeight doesn't divide 2^32, undermining the data-driven-weight
+// promise live-ops relies on to tune the roster. hashWeekend ∈ [0, 2^32), so
+// dividing by 2^32 gives a uniform [0, 1) that scales cleanly to any total weight.
 function pickWeeklyEventType(fridayEpochDay: number): WeeklyEventType {
   const totalWeight = WEEKLY_EVENT_TYPES.reduce((sum, type) => sum + type.weight, 0);
-  let remainder = hashWeekend(fridayEpochDay ^ 0x85ebca6b) % totalWeight;
+  const target = (hashWeekend(fridayEpochDay ^ 0x85ebca6b) / 0x100000000) * totalWeight;
+  let cumulative = 0;
   for (const type of WEEKLY_EVENT_TYPES) {
-    if (remainder < type.weight) {
+    cumulative += type.weight;
+    if (target < cumulative) {
       return type;
     }
-    remainder -= type.weight;
   }
   return WEEKLY_EVENT_TYPES[WEEKLY_EVENT_TYPES.length - 1]!;
 }
