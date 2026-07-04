@@ -3023,12 +3023,20 @@ export default function FarmGame({
             // Resolve growth ratio and countdown together so the crop modifiers
             // are computed once per tile per tick instead of once for each.
             const growth = getPlotGrowthDisplay(gameState, plot);
+            const unlocked = index < gameState.unlockedPlotCount;
+            // Fabric (New Architecture) fails to commit the conditional child
+            // swaps inside PlotCell when a plot transitions (empty→growing→ready
+            // or locked→unlocked): the tile background updates but the harvest
+            // badge and crop-icon subtrees stay blank, even though the data is
+            // correct (harvest still yields gold). Initial mount renders fine, so
+            // encoding the render-branch inputs into the key remounts the tile on
+            // transition and forces Fabric down the working mount path.
             return (
               <PlotCell
-                key={plot.id}
+                key={`${plot.id}-${unlocked ? 'u' : 'l'}-${plot.state}`}
                 index={index}
                 plot={plot}
-                unlocked={index < gameState.unlockedPlotCount}
+                unlocked={unlocked}
                 progressRatio={growth.growthRatio}
                 growthCountdown={
                   plot.state === 1 ? formatDuration(growth.remainingWallClockMs, locale) : undefined
@@ -4189,33 +4197,38 @@ function NotificationPromptOverlay({
   onDecline: () => void;
 }) {
   return (
-    <View testID="notification-prompt-overlay" style={styles.notificationPromptBackdrop}>
-      <View testID="notification-prompt-card" style={styles.notificationPromptCard}>
-        <Text style={styles.notificationPromptIcon}>🔔</Text>
-        <Text style={styles.notificationPromptTitle}>{messages.notificationPromptTitle}</Text>
-        <Text style={styles.notificationPromptDesc}>{messages.notificationPromptDesc}</Text>
-        <View style={styles.notificationPromptActions}>
-          <Pressable
-            testID="notification-prompt-decline"
-            style={[styles.notificationPromptButton, styles.notificationPromptDeclineButton]}
-            onPress={onDecline}
-            accessibilityRole="button"
-            accessibilityLabel={messages.notificationPromptDecline}
-          >
-            <Text style={styles.notificationPromptDeclineText}>{messages.notificationPromptDecline}</Text>
-          </Pressable>
-          <Pressable
-            testID="notification-prompt-accept"
-            style={[styles.notificationPromptButton, styles.notificationPromptAcceptButton]}
-            onPress={onAccept}
-            accessibilityRole="button"
-            accessibilityLabel={messages.notificationPromptAccept}
-          >
-            <Text style={styles.notificationPromptAcceptText}>{messages.notificationPromptAccept}</Text>
-          </Pressable>
+    // Fabric renders this absoluteFill overlay in normal flow — pushing the game
+    // UI up with no dim backdrop — when it mounts as a plain View child. Hosting
+    // it in a Modal (the pattern Sheet already uses) restores the true overlay.
+    <Modal transparent visible animationType="fade" onRequestClose={onDecline}>
+      <View testID="notification-prompt-overlay" style={styles.notificationPromptBackdrop}>
+        <View testID="notification-prompt-card" style={styles.notificationPromptCard}>
+          <Text style={styles.notificationPromptIcon}>🔔</Text>
+          <Text style={styles.notificationPromptTitle}>{messages.notificationPromptTitle}</Text>
+          <Text style={styles.notificationPromptDesc}>{messages.notificationPromptDesc}</Text>
+          <View style={styles.notificationPromptActions}>
+            <Pressable
+              testID="notification-prompt-decline"
+              style={[styles.notificationPromptButton, styles.notificationPromptDeclineButton]}
+              onPress={onDecline}
+              accessibilityRole="button"
+              accessibilityLabel={messages.notificationPromptDecline}
+            >
+              <Text style={styles.notificationPromptDeclineText}>{messages.notificationPromptDecline}</Text>
+            </Pressable>
+            <Pressable
+              testID="notification-prompt-accept"
+              style={[styles.notificationPromptButton, styles.notificationPromptAcceptButton]}
+              onPress={onAccept}
+              accessibilityRole="button"
+              accessibilityLabel={messages.notificationPromptAccept}
+            >
+              <Text style={styles.notificationPromptAcceptText}>{messages.notificationPromptAccept}</Text>
+            </Pressable>
+          </View>
         </View>
       </View>
-    </View>
+    </Modal>
   );
 }
 
@@ -4230,24 +4243,28 @@ function PrestigeGuideOverlay({
   onDismiss: () => void;
 }) {
   return (
-    <View testID="prestige-guide-overlay" style={styles.notificationPromptBackdrop}>
-      <View testID="prestige-guide-card" style={styles.notificationPromptCard}>
-        <Text style={styles.notificationPromptIcon}>🔗</Text>
-        <Text style={styles.notificationPromptTitle}>{messages.prestigeGuideTitle}</Text>
-        <Text style={styles.notificationPromptDesc}>{messages.prestigeGuideBody}</Text>
-        <View style={styles.notificationPromptActions}>
-          <Pressable
-            testID="prestige-guide-confirm"
-            style={[styles.notificationPromptButton, styles.notificationPromptAcceptButton]}
-            onPress={onDismiss}
-            accessibilityRole="button"
-            accessibilityLabel={messages.prestigeGuideConfirm}
-          >
-            <Text style={styles.notificationPromptAcceptText}>{messages.prestigeGuideConfirm}</Text>
-          </Pressable>
+    // See NotificationPromptOverlay: Fabric mis-renders this absoluteFill overlay
+    // as normal flow unless it is hosted in a Modal.
+    <Modal transparent visible animationType="fade" onRequestClose={onDismiss}>
+      <View testID="prestige-guide-overlay" style={styles.notificationPromptBackdrop}>
+        <View testID="prestige-guide-card" style={styles.notificationPromptCard}>
+          <Text style={styles.notificationPromptIcon}>🔗</Text>
+          <Text style={styles.notificationPromptTitle}>{messages.prestigeGuideTitle}</Text>
+          <Text style={styles.notificationPromptDesc}>{messages.prestigeGuideBody}</Text>
+          <View style={styles.notificationPromptActions}>
+            <Pressable
+              testID="prestige-guide-confirm"
+              style={[styles.notificationPromptButton, styles.notificationPromptAcceptButton]}
+              onPress={onDismiss}
+              accessibilityRole="button"
+              accessibilityLabel={messages.prestigeGuideConfirm}
+            >
+              <Text style={styles.notificationPromptAcceptText}>{messages.prestigeGuideConfirm}</Text>
+            </Pressable>
+          </View>
         </View>
       </View>
-    </View>
+    </Modal>
   );
 }
 
