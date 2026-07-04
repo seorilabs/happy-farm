@@ -491,6 +491,12 @@ describe('FarmGame UI flow', () => {
 
       const fertilizerAction = screen.getByTestId('fertilizer-action');
       expect(fertilizerAction.props.accessibilityState?.disabled).toBe(true);
+
+      // 비활성 버튼의 onPress가 우회 호출되어도(a11y/testID) 상태를 바꾸지 않는다:
+      // 골드 차감·성장 완료(GET)·성공 토스트 어느 것도 발생하지 않는다.
+      fireEvent.press(fertilizerAction);
+      expect(screen.queryByText('GET')).toBeNull();
+      expect(screen.queryByText(/비료로 바로 키웠어요/)).toBeNull();
     });
   });
 

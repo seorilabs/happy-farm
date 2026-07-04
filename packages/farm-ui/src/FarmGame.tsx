@@ -2751,12 +2751,17 @@ export default function FarmGame({
     if (plot == null) {
       return;
     }
-    const result = applyFertilizer(gameState, plot.id);
-    if (!result.applied) {
+    // 커밋 상태에서 미리 판정(가격·충분 여부)해 토스트/시트 분기를 정하고, 실제 상태
+    // 변경은 아래 함수형 updater가 라이브 상태에서 다시 적용한다(광고 스킵 경로
+    // completeGrowthWithAd와 동일한 preview + 함수형 updater 구조). concrete state를
+    // 넘기면 그 사이 큐잉된 timer tick의 setGameState를 덮어써 lost update가 나므로,
+    // 반드시 (state) => ... updater로 커밋해 항상 최신 base에 한 번만 적용한다.
+    const preview = applyFertilizer(gameState, plot.id);
+    if (!preview.applied) {
       // 비활성 버튼 우회 호출(a11y/외부 ref) 방어 겸 실패 안내: 골드 부족(cost>0)은
       // 조용히 무시("비활성 버튼은 입력을 받지 않는다"는 UX 약속 유지), cost===0
       // (이미 완료/남은 성장 없음)은 시트를 닫고 완료 안내.
-      if (result.cost <= 0) {
+      if (preview.cost <= 0) {
         setActiveSheet(null);
         toast(messages.alreadyGrownToast);
       }
@@ -2766,9 +2771,9 @@ export default function FarmGame({
       return;
     }
     fertilizeGuardRef.current = true;
-    setGameState(result.state);
+    setGameState((state) => applyFertilizer(state, plot.id).state);
     setActiveSheet(null);
-    toast(messages.fertilizerDoneToast(formatMoney(result.cost, locale)));
+    toast(messages.fertilizerDoneToast(formatMoney(preview.cost, locale)));
   }
 
   async function activateHarvestBonusWithAd() {
