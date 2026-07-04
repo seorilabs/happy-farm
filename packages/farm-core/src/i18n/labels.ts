@@ -264,11 +264,15 @@ const EN_MASTERY_RANK_LABELS = {
 const KO_MUTATION_LABELS = {
   golden: { name: '황금' },
   rainbow: { name: '무지개' },
+  giant: { name: '거대' },
+  prism: { name: '프리즘' },
 } satisfies Record<MutationKey, SimpleLabel>;
 
 const EN_MUTATION_LABELS = {
   golden: { name: 'Golden' },
   rainbow: { name: 'Rainbow' },
+  giant: { name: 'Giant' },
+  prism: { name: 'Prism' },
 } satisfies Record<MutationKey, SimpleLabel>;
 
 const KO_REGION_ARCHETYPE_LABELS = {
