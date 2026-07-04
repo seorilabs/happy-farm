@@ -587,6 +587,62 @@ describe('FarmGame UI flow', () => {
     });
   });
 
+  describe("navRow '더보기' 진입점 통합 (#241)", () => {
+    const messages = getFarmMessages(DEFAULT_LOCALE);
+    // 온보딩 코치마크 게이트 없이 navRow가 온전히 상호작용되도록 완료 상태로 시작.
+    const completedState = (): GameState => ({ ...createInitialState(), onboardingCompleted: true });
+
+    test('상시 navRow는 상점·미션·더보기만 노출하고 나머지는 더보기 뒤로 숨긴다', async () => {
+      const screen = await renderGame(completedState());
+      await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+
+      // 상시 노출 진입점: 상점·미션·더보기(3개, 기존 7개에서 감소).
+      expect(screen.getByTestId('shop-nav-button')).toBeTruthy();
+      expect(screen.getByTestId('more-nav-button')).toBeTruthy();
+      expect(screen.getByLabelText(messages.missionsButtonAccessibilityLabel)).toBeTruthy();
+
+      // 묶인 진입점은 더보기를 열기 전엔 렌더 트리에 없다.
+      expect(screen.queryByLabelText(messages.wheelButtonAccessibilityLabel)).toBeNull();
+      expect(screen.queryByLabelText(messages.collectionButtonAccessibilityLabel)).toBeNull();
+      expect(screen.queryByLabelText(messages.labButtonAccessibilityLabel)).toBeNull();
+      expect(screen.queryByLabelText(messages.mapButtonAccessibilityLabel)).toBeNull();
+      expect(screen.queryByLabelText(messages.achievementsButtonAccessibilityLabel)).toBeNull();
+    });
+
+    test('더보기 시트에서 룰렛·도감·연구소·개척·업적에 모두 도달할 수 있다', async () => {
+      const screen = await renderGame(completedState());
+      await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+
+      fireEvent.press(screen.getByTestId('more-nav-button'));
+
+      // 더보기 시트가 열리고 묶인 5개 진입점이 모두 노출된다.
+      expect(screen.getByText(messages.sheetTitleMore)).toBeTruthy();
+      expect(screen.getByLabelText(messages.wheelButtonAccessibilityLabel)).toBeTruthy();
+      expect(screen.getByLabelText(messages.collectionButtonAccessibilityLabel)).toBeTruthy();
+      expect(screen.getByLabelText(messages.labButtonAccessibilityLabel)).toBeTruthy();
+      expect(screen.getByLabelText(messages.mapButtonAccessibilityLabel)).toBeTruthy();
+      expect(screen.getByLabelText(messages.achievementsButtonAccessibilityLabel)).toBeTruthy();
+
+      // 항목 진입점을 누르면 해당 시트로 전환된다(개척 지도로 검증).
+      fireEvent.press(screen.getByLabelText(messages.mapButtonAccessibilityLabel));
+      expect(screen.getByText(messages.sheetTitleMap)).toBeTruthy();
+    });
+
+    test('묶인 항목의 배지가 더보기 버튼에 롤업 합산으로 노출되고 항목별로도 유지된다', async () => {
+      // 신규 완료 상태에선 무료 룰렛 스핀만 준비돼 있어 롤업 배지 = 1로 결정적이다.
+      const screen = await renderGame(completedState());
+      await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+
+      const moreButton = screen.getByTestId('more-nav-button');
+      expect(within(moreButton).getByText('1')).toBeTruthy();
+
+      // 더보기를 열면 룰렛 항목이 자신의 배지(1)를 그대로 유지한다(배지 유실 없음).
+      fireEvent.press(moreButton);
+      const wheelEntry = screen.getByLabelText(messages.wheelButtonAccessibilityLabel);
+      expect(within(wheelEntry).getByText('1')).toBeTruthy();
+    });
+  });
+
   describe('welcome-back offline settlement', () => {
     const messages = getFarmMessages(DEFAULT_LOCALE);
     const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
@@ -1192,6 +1248,8 @@ describe('FarmGame UI flow', () => {
     expect(screen.getByText('숙련도 달성!')).toBeTruthy();
     expect(screen.getByText(/브론즈/)).toBeTruthy();
 
+    // 도감 진입점은 navRow 과밀 정리(#241) 이후 '더보기' 시트 뒤에 있다.
+    fireEvent.press(screen.getByTestId('more-nav-button'));
     fireEvent.press(screen.getByLabelText('작물 도감'));
 
     expect(screen.getByText(`${firstThreshold}/${thresholds[1]}`)).toBeTruthy();
@@ -1405,6 +1463,8 @@ describe('FarmGame UI flow', () => {
 
     await waitFor(() => expect(screen.getByText('★ 0')).toBeTruthy());
 
+    // 개척(지도) 진입점은 navRow 과밀 정리(#241) 이후 '더보기' 시트 뒤에 있다.
+    fireEvent.press(screen.getByTestId('more-nav-button'));
     fireEvent.press(screen.getByText('🗺️ 개척'));
     expect(screen.getByText(/1호 농장/)).toBeTruthy();
 
@@ -1417,6 +1477,7 @@ describe('FarmGame UI flow', () => {
     await waitFor(() => expect(screen.getByText('★ 3')).toBeTruthy());
     expect(screen.getByText('50G')).toBeTruthy();
 
+    fireEvent.press(screen.getByTestId('more-nav-button'));
     fireEvent.press(screen.getByText('🗺️ 개척'));
     // The graduated farm is now part of the chain; the active farm is #2.
     expect(screen.getByText(/2호 농장/)).toBeTruthy();
@@ -1448,6 +1509,8 @@ describe('FarmGame UI flow', () => {
 
   async function triggerPrestige(screen: ReturnType<typeof render>) {
     await waitFor(() => expect(screen.getByTestId('prestige-stars-chip')).toBeTruthy());
+    // 개척(지도) 진입점은 navRow 과밀 정리(#241) 이후 '더보기' 시트 뒤에 있다.
+    fireEvent.press(screen.getByLabelText(prestigeMessages.moreButtonAccessibilityLabel));
     fireEvent.press(screen.getByLabelText(prestigeMessages.mapButtonAccessibilityLabel));
     fireEvent.press(screen.getByText(prestigeMessages.prestigeAction(PRESTIGE_STARS_BASE)));
     fireEvent.press(screen.getByText(`${tundra.icon} ${tundraName}`));
@@ -1628,6 +1691,8 @@ describe('FarmGame UI flow', () => {
         savedSettings
       );
       await waitFor(() => expect(screen.getByText(`${formatMoney(lateGame.gold)}G`)).toBeTruthy());
+      // 도감 진입점은 navRow 과밀 정리(#241) 이후 '더보기' 시트 뒤에 있다.
+      fireEvent.press(screen.getByLabelText(claimMessages.moreButtonAccessibilityLabel));
       fireEvent.press(screen.getByLabelText(claimMessages.collectionButtonAccessibilityLabel));
       await waitFor(() => expect(screen.getByText(claimButtonLabel)).toBeTruthy());
       vibrateSpy.mockClear(); // reset count so only the claim press is counted
@@ -1674,6 +1739,8 @@ describe('FarmGame UI flow', () => {
         { soundEffectsEnabled: true }
       );
       await waitFor(() => expect(screen.getByText(`${formatMoney(lateGame.gold)}G`)).toBeTruthy());
+      // 도감 진입점은 navRow 과밀 정리(#241) 이후 '더보기' 시트 뒤에 있다.
+      fireEvent.press(screen.getByLabelText(claimMessages.moreButtonAccessibilityLabel));
       fireEvent.press(screen.getByLabelText(claimMessages.collectionButtonAccessibilityLabel));
       await waitFor(() => expect(screen.getByText(claimButtonLabel)).toBeTruthy());
       fireEvent.press(screen.getByText(claimButtonLabel));
@@ -1739,6 +1806,8 @@ describe('FarmGame UI flow', () => {
         },
         savedSettings
       );
+      // 업적 진입점은 navRow 과밀 정리(#241) 이후 '더보기' 시트 뒤에 있다.
+      fireEvent.press(screen.getByLabelText(claimMessages.moreButtonAccessibilityLabel));
       fireEvent.press(screen.getByLabelText(claimMessages.achievementsButtonAccessibilityLabel));
       await waitFor(() => expect(screen.getByText(claimLabel)).toBeTruthy());
       vibrateSpy.mockClear(); // reset count so only the claim press is counted
