@@ -7,3 +7,7 @@ export const SHEET_DRAG_HIT_TARGET_HEIGHT = 36;
 // 하단 시트 스크롤 콘텐츠의 기본 하단 여백. 여기에 하단 safe-area 인셋을 더해
 // 시트 하단 버튼이 시스템 내비/제스처 바와 겹치지 않게 한다(#236).
 export const SHEET_CONTENT_BASE_PADDING_BOTTOM = 28;
+// 새 작물 발견 배너의 기본 bottom 오프셋. 여기에 하단 safe-area 인셋을 더해
+// 시스템 내비/제스처 바와 겹치지 않게 한다(#236). 최소 인셋(24) 적용 시 기존
+// 위치(160)와 동일하게 유지된다.
+export const DISCOVERY_BANNER_BASE_BOTTOM = 136;
