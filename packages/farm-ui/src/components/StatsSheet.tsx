@@ -56,6 +56,7 @@ export function StatsSheet({
   weeklyEventActive,
   weeklyEventAreaName,
   weeklyEventMultiplier,
+  weeklyEventAxis,
   weeklyEventRemainingMs,
 }: {
   messages: FarmMessages;
@@ -69,6 +70,8 @@ export function StatsSheet({
   weeklyEventActive: boolean;
   weeklyEventAreaName: string;
   weeklyEventMultiplier: number;
+  // 'speed'면 수확(성장속도) 축제, 그 외('sell')면 판매 축제로 문구를 분기한다.
+  weeklyEventAxis: 'sell' | 'speed';
   weeklyEventRemainingMs: number;
 }) {
   return (
@@ -97,7 +100,7 @@ export function StatsSheet({
       </Text>
       {weeklyEventActive ? (
         <Text style={styles.eventDesc} testID="weekly-event-banner">
-          {messages.weeklyEventDesc(
+          {(weeklyEventAxis === 'speed' ? messages.weeklyEventHarvestDesc : messages.weeklyEventDesc)(
             weeklyEventAreaName,
             weeklyEventMultiplier,
             formatRemainingTime(weeklyEventRemainingMs, locale)

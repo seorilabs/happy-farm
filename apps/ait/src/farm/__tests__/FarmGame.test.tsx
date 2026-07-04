@@ -419,15 +419,18 @@ describe('FarmGame UI flow', () => {
     test('marks every featured-area seed with the weekend-festival badge on the weekend', async () => {
       jest.setSystemTime(FRIDAY);
       const state = badgeState();
-      const festivalCropKeys = getWeeklyEventStatus(FRIDAY, state.unlockedAreas).cropKeys;
+      const status = getWeeklyEventStatus(FRIDAY, state.unlockedAreas);
+      const festivalCropKeys = status.cropKeys;
       expect(festivalCropKeys.length).toBeGreaterThan(1);
+      // 축제 종류(#243)에 따라 배지 아이콘이 달라진다: 판매=🎉, 수확(성장속도)=⚡.
+      const expectedBadge = `${status.axis === 'speed' ? '⚡' : '🎉'}×${status.multiplier}`;
       const screen = await renderGame(state);
       await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
 
-      // 축제 대상 구역(starter_field)의 모든 작물에 ×1.5 축제 배지가 붙는다.
+      // 축제 대상 구역(starter_field)의 모든 작물에 축제 배지가 붙는다.
       for (const cropKey of festivalCropKeys) {
         const badge = screen.getByTestId(`seed-bonus-weekly-${cropKey}`);
-        expect(within(badge).getByText('🎉×1.5')).toBeTruthy();
+        expect(within(badge).getByText(expectedBadge)).toBeTruthy();
       }
       expect(screen.getAllByTestId(/^seed-bonus-weekly-/)).toHaveLength(festivalCropKeys.length);
     });
@@ -437,11 +440,13 @@ describe('FarmGame UI flow', () => {
       const state = badgeState();
       // 풀이 starter_field 로 좁혀져 있어 오늘의 작물도 축제 구역 작물이다 → 두 배지 공존.
       const featuredKey = getCropOfTheDayStatus(FRIDAY, state).cropKey;
+      const status = getWeeklyEventStatus(FRIDAY, state.unlockedAreas);
+      const expectedWeeklyBadge = `${status.axis === 'speed' ? '⚡' : '🎉'}×${status.multiplier}`;
       const screen = await renderGame(state);
       await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
 
       expect(within(screen.getByTestId(`seed-bonus-cotd-${featuredKey}`)).getByText('⭐×2')).toBeTruthy();
-      expect(within(screen.getByTestId(`seed-bonus-weekly-${featuredKey}`)).getByText('🎉×1.5')).toBeTruthy();
+      expect(within(screen.getByTestId(`seed-bonus-weekly-${featuredKey}`)).getByText(expectedWeeklyBadge)).toBeTruthy();
     });
 
     test('exposes the sell bonus in the seed button accessibility label (ko-KR)', async () => {

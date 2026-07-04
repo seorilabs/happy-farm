@@ -341,6 +341,24 @@ for (let i = 0; i < kinds.length; i += 1) {
   }
 }
 
+// 6b) 주말 축제 이벤트 종류: 비어있지 않은 목록, axis는 sell/speed, 배수>=1, 가중치는 양의 정수.
+const weeklyTypes = balance.weeklyEvent?.types ?? [];
+check(Array.isArray(weeklyTypes) && weeklyTypes.length > 0, 'weeklyEvent.types는 비어있지 않은 배열이어야 합니다.');
+for (const type of weeklyTypes) {
+  check(
+    type.axis === 'sell' || type.axis === 'speed',
+    `주말 축제 종류 ${type.key}: axis는 'sell' 또는 'speed'여야 합니다(현재 ${type.axis}).`
+  );
+  check(
+    Number.isFinite(type.multiplier) && type.multiplier >= 1,
+    `주말 축제 종류 ${type.key}: multiplier는 1 이상 유한수여야 합니다.`
+  );
+  check(
+    Number.isInteger(type.weight) && type.weight >= 1,
+    `주말 축제 종류 ${type.key}: weight는 양의 정수여야 합니다.`
+  );
+}
+
 // 7) 프레스티지/체인.
 const graduation = balance.regions?.graduation ?? {};
 check(graduation.costBase > 0, 'regions.graduation.costBase는 0보다 커야 합니다.');

@@ -12,7 +12,7 @@ import {
 import { getMasterySellMultiplier, getMasterySpeedMultiplier } from './mastery';
 import { isCropPlantable } from './research';
 import { getCropOfTheDayStatus } from './cropOfTheDay';
-import { getWeeklyEventMultiplier } from './weeklyEvent';
+import { getWeeklyEventMultiplier, getWeeklyEventSpeedMultiplier } from './weeklyEvent';
 
 // Prestige skill/region effects are read straight from balance.json here
 // (instead of importing prestige.ts) to keep this module cycle-free for its
@@ -69,9 +69,16 @@ export function getCropModifiers(gameState: GameState, cropKey: CropKey, now = D
   const cotd = getCropOfTheDayStatus(now);
   return {
     ...global,
-    speedMultiplier: global.speedMultiplier * getMasterySpeedMultiplier(gameState, cropKey),
+    // A harvest (speed-axis) weekend festival speeds up the featured area's growth;
+    // getWeeklyEventSpeedMultiplier is 1 on non-speed weekends, so sale festivals
+    // leave growth speed unchanged.
+    speedMultiplier:
+      global.speedMultiplier *
+      getMasterySpeedMultiplier(gameState, cropKey) *
+      getWeeklyEventSpeedMultiplier(cropKey, now, gameState.unlockedAreas),
     // Sale multipliers stack multiplicatively: a crop that is both the crop of
-    // the day and in the weekend festival's featured area earns cotd × festival.
+    // the day and in a sale weekend festival's featured area earns cotd × festival.
+    // getWeeklyEventMultiplier is 1 on non-sale weekends.
     profitMultiplier:
       global.profitMultiplier *
       getMasterySellMultiplier(gameState, cropKey) *
