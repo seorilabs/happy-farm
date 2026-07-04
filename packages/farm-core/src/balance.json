@@ -207,9 +207,13 @@
     ]
   },
   "weeklyEvent": {
-    "agentPurpose": "Weekend crop festival tuning. sellMultiplier is the limited-time sale bonus applied to the featured area's crops; weekendLengthDays is how many days (from Friday, UTC) the festival window stays live. The featured area rotation uses a deterministic date hash (unchanged). Tune event strength/duration here for live ops / A-B without code changes.",
+    "agentPurpose": "Weekend crop festival tuning. sellMultiplier is the legacy/default sale bonus (kept for back-compat). weekendLengthDays is how many days (from Friday, UTC) the festival window stays live. types is the event-type roster: each weekend rotates BOTH a featured area (date hash, unchanged) AND an event type (independent date hash) drawn by weight. axis='sell' boosts the featured area's sale price, axis='speed' boosts its growth speed. multiplier(>=1) is the type's bonus, weight(positive int) its draw odds. Tune strength/duration/roster here for live ops / A-B without code changes.",
     "sellMultiplier": 1.5,
-    "weekendLengthDays": 3
+    "weekendLengthDays": 3,
+    "types": [
+      { "key": "sale", "axis": "sell", "multiplier": 1.5, "weight": 1 },
+      { "key": "harvest", "axis": "speed", "multiplier": 1.5, "weight": 1 }
+    ]
   },
   "combo": {
     "agentPurpose": "Harvest combo pacing. windowMs is how long after a manual harvest the next one still extends the streak; greatThreshold/legendaryThreshold gate the tier escalation (icon/color/audio). Invariant: greatThreshold < legendaryThreshold. Tune here so combo pacing is data-driven rather than hardcoded in the UI.",

@@ -337,6 +337,9 @@ const KO_FARM_MESSAGES = {
   weeklyEventLabel: '주말 작물 축제',
   weeklyEventDesc: (themeName: string, multiplier: number, remaining: string) =>
     `${themeName} ×${multiplier} 판매 · 종료까지 ${remaining}`,
+  // 수확(성장속도) 축제: 판매가 아닌 성장속도 배수를 강조한다.
+  weeklyEventHarvestDesc: (themeName: string, multiplier: number, remaining: string) =>
+    `${themeName} ×${multiplier} 성장속도 · 종료까지 ${remaining}`,
   weeklyEventTeaserLabel: '다가오는 주말 축제',
   weeklyEventTeaserDesc: (themeName: string, remaining: string) =>
     `${themeName} 작물 축제까지 ${remaining}`,
@@ -673,6 +676,8 @@ const EN_FARM_MESSAGES: FarmMessages = {
   weeklyEventLabel: 'Weekend Crop Festival',
   weeklyEventDesc: (themeName, multiplier, remaining) =>
     `${themeName} ×${multiplier} sell · ends in ${remaining}`,
+  weeklyEventHarvestDesc: (themeName, multiplier, remaining) =>
+    `${themeName} ×${multiplier} grow speed · ends in ${remaining}`,
   weeklyEventTeaserLabel: 'Upcoming Weekend Festival',
   weeklyEventTeaserDesc: (themeName, remaining) => `${themeName} crop festival in ${remaining}`,
   onboardingProgress: (current, total) => `${current} / ${total}`,

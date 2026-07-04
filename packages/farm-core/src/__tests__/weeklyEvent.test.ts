@@ -1,6 +1,12 @@
 /// <reference types="jest" />
 
-import { getWeeklyEventStatus, getWeeklyEventMultiplier, WEEKLY_EVENT_MULTIPLIER } from '../weeklyEvent';
+import {
+  getWeeklyEventStatus,
+  getWeeklyEventMultiplier,
+  getWeeklyEventSpeedMultiplier,
+  WEEKLY_EVENT_MULTIPLIER,
+  WEEKLY_EVENT_TYPES,
+} from '../weeklyEvent';
 import { CROPS, createInitialState } from '../constants';
 import { getCropModifiers } from '../modifiers';
 import { getCropOfTheDayStatus } from '../cropOfTheDay';
@@ -18,6 +24,22 @@ const WEEKEND_LENGTH_DAYS = balance.weeklyEvent.weekendLengthDays;
 const FRI_START = Date.UTC(2026, 5, 26);
 const WINDOW_END = FRI_START + WEEKEND_LENGTH_DAYS * DAY_MS;
 const FRI_NOON = FRI_START + 12 * 60 * 60 * 1000;
+
+// The event TYPE rotates deterministically per weekend, independent of the featured
+// area. Scan forward from FRI_NOON (in 1-week steps) for the first weekend whose
+// rotation lands on `typeKey`, so per-type assertions don't hardcode a calendar date.
+function findWeekendNoonOfType(typeKey: string, unlockedAreas?: AreaKey[]): number {
+  for (let week = 0; week < 520; week += 1) {
+    const now = FRI_NOON + week * 7 * DAY_MS;
+    if (getWeeklyEventStatus(now, unlockedAreas).typeKey === typeKey) {
+      return now;
+    }
+  }
+  throw new Error(`No weekend found for event type "${typeKey}" within the scan window`);
+}
+
+const SALE_NOON = findWeekendNoonOfType('sale');
+const HARVEST_NOON = findWeekendNoonOfType('harvest');
 
 describe('weeklyEvent balance data', () => {
   test('multiplier and window length are sourced from balance.json with unchanged defaults', () => {
@@ -77,26 +99,69 @@ describe('getWeeklyEventStatus', () => {
   });
 });
 
-describe('getWeeklyEventMultiplier', () => {
-  test('boosts only featured-area crops while the festival is live', () => {
-    const status = getWeeklyEventStatus(FRI_NOON);
+describe('getWeeklyEventMultiplier (sale axis)', () => {
+  test('boosts only featured-area crops on a sale weekend while the festival is live', () => {
+    const status = getWeeklyEventStatus(SALE_NOON);
+    expect(status.axis).toBe('sell');
     const featured = status.cropKeys[0]!;
     const other = (Object.keys(CROPS) as CropKey[]).find((key) => CROPS[key]!.area !== status.areaKey)!;
 
-    expect(getWeeklyEventMultiplier(featured, FRI_NOON)).toBe(WEEKLY_EVENT_MULTIPLIER);
-    expect(getWeeklyEventMultiplier(other, FRI_NOON)).toBe(1);
+    expect(getWeeklyEventMultiplier(featured, SALE_NOON)).toBe(status.multiplier);
+    expect(getWeeklyEventMultiplier(other, SALE_NOON)).toBe(1);
     // Outside the weekend window even a featured crop gets no boost.
     expect(getWeeklyEventMultiplier(featured, WINDOW_END)).toBe(1);
+    // A sale weekend leaves the speed axis untouched.
+    expect(getWeeklyEventSpeedMultiplier(featured, SALE_NOON)).toBe(1);
+  });
+});
+
+describe('getWeeklyEventSpeedMultiplier (harvest axis)', () => {
+  test('boosts only featured-area crops on a harvest weekend and leaves sale untouched', () => {
+    const status = getWeeklyEventStatus(HARVEST_NOON);
+    expect(status.axis).toBe('speed');
+    const featured = status.cropKeys[0]!;
+    const other = (Object.keys(CROPS) as CropKey[]).find((key) => CROPS[key]!.area !== status.areaKey)!;
+
+    expect(getWeeklyEventSpeedMultiplier(featured, HARVEST_NOON)).toBe(status.multiplier);
+    expect(getWeeklyEventSpeedMultiplier(other, HARVEST_NOON)).toBe(1);
+    // A harvest weekend does not touch the sale axis (back-compat: sell stays 1).
+    expect(getWeeklyEventMultiplier(featured, HARVEST_NOON)).toBe(1);
+    // Just before its window opens the harvest boost is inactive → speed axis is 1.
+    const beforeWindow = getWeeklyEventStatus(HARVEST_NOON).windowStartAt - 60_000;
+    expect(getWeeklyEventSpeedMultiplier(featured, beforeWindow)).toBe(1);
+  });
+});
+
+describe('weekly event type rotation', () => {
+  test('the event type is deterministic and stable across the whole weekend window', () => {
+    const fri = getWeeklyEventStatus(SALE_NOON);
+    const weekendStart = fri.windowStartAt;
+    for (let day = 0; day < WEEKEND_LENGTH_DAYS; day += 1) {
+      const status = getWeeklyEventStatus(weekendStart + day * DAY_MS);
+      expect(status.typeKey).toBe(fri.typeKey);
+      expect(status.axis).toBe(fri.axis);
+    }
+  });
+
+  test('every configured event type is reachable over enough weekends', () => {
+    const seen = new Set<string>();
+    for (let week = 0; week < 520; week += 1) {
+      seen.add(getWeeklyEventStatus(FRI_NOON + week * 7 * DAY_MS).typeKey);
+    }
+    for (const type of WEEKLY_EVENT_TYPES) {
+      expect(seen.has(type.key)).toBe(true);
+    }
   });
 });
 
 describe('weekly event sale integration', () => {
-  test('stacks multiplicatively into the getCropModifiers sale multiplier', () => {
+  test('a sale weekend stacks multiplicatively into the getCropModifiers sale multiplier', () => {
     const state = createInitialState();
     // Match what getCropModifiers feeds the festival lookup (the player's unlocked
     // areas) so the featured crop we pick is the one the modifier actually boosts.
-    const status = getWeeklyEventStatus(FRI_NOON, state.unlockedAreas);
-    const cotd = getCropOfTheDayStatus(FRI_NOON).cropKey;
+    const status = getWeeklyEventStatus(SALE_NOON, state.unlockedAreas);
+    expect(status.axis).toBe('sell');
+    const cotd = getCropOfTheDayStatus(SALE_NOON).cropKey;
 
     // A featured-area crop and a non-featured crop, both NOT the crop of the day,
     // so the only differing sale factor is the festival multiplier (mastery is 1
@@ -106,9 +171,29 @@ describe('weekly event sale integration', () => {
       (key) => CROPS[key]!.area !== status.areaKey && key !== cotd
     )!;
 
-    const featuredMult = getCropModifiers(state, featured, FRI_NOON).profitMultiplier;
-    const otherMult = getCropModifiers(state, other, FRI_NOON).profitMultiplier;
-    expect(featuredMult).toBeCloseTo(otherMult * WEEKLY_EVENT_MULTIPLIER);
+    const featuredMods = getCropModifiers(state, featured, SALE_NOON);
+    const otherMods = getCropModifiers(state, other, SALE_NOON);
+    expect(featuredMods.profitMultiplier).toBeCloseTo(otherMods.profitMultiplier * status.multiplier);
+    // Speed axis is unaffected on a sale weekend.
+    expect(featuredMods.speedMultiplier).toBeCloseTo(otherMods.speedMultiplier);
+  });
+
+  test('a harvest weekend stacks into the getCropModifiers speed multiplier, not sale', () => {
+    const state = createInitialState();
+    const status = getWeeklyEventStatus(HARVEST_NOON, state.unlockedAreas);
+    expect(status.axis).toBe('speed');
+
+    const featured = status.cropKeys[0]!;
+    const other = (Object.keys(CROPS) as CropKey[]).find(
+      (key) => CROPS[key]!.area !== status.areaKey
+    )!;
+
+    const featuredMods = getCropModifiers(state, featured, HARVEST_NOON);
+    const otherMods = getCropModifiers(state, other, HARVEST_NOON);
+    // Growth speed of the featured crop is boosted by the festival multiplier.
+    expect(featuredMods.speedMultiplier).toBeCloseTo(otherMods.speedMultiplier * status.multiplier);
+    // Sale price of the featured crop is NOT boosted on a harvest weekend.
+    expect(featuredMods.profitMultiplier).toBeCloseTo(otherMods.profitMultiplier);
   });
 });
 
@@ -164,13 +249,15 @@ describe('weekly event featured-area restriction (해금 구역만)', () => {
     expect(cropKeys.length).toBeGreaterThan(0);
   });
 
-  test('multiplier honors the unlocked featured area', () => {
+  test('multiplier honors the unlocked featured area (sale weekend)', () => {
     const unlocked = createInitialState().unlockedAreas;
-    const { areaKey, cropKeys } = getWeeklyEventStatus(FRI_NOON, unlocked);
+    // Pin to a sale weekend restricted to the unlocked pool so the sell axis applies.
+    const saleNoon = findWeekendNoonOfType('sale', unlocked);
+    const { areaKey, cropKeys, multiplier } = getWeeklyEventStatus(saleNoon, unlocked);
     expect(unlocked).toContain(areaKey);
     const featured = cropKeys[0]!;
-    expect(getWeeklyEventMultiplier(featured, FRI_NOON, unlocked)).toBe(WEEKLY_EVENT_MULTIPLIER);
+    expect(getWeeklyEventMultiplier(featured, saleNoon, unlocked)).toBe(multiplier);
     const other = (Object.keys(CROPS) as CropKey[]).find((key) => CROPS[key]!.area !== areaKey)!;
-    expect(getWeeklyEventMultiplier(other, FRI_NOON, unlocked)).toBe(1);
+    expect(getWeeklyEventMultiplier(other, saleNoon, unlocked)).toBe(1);
   });
 });

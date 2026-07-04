@@ -29,6 +29,54 @@ if (!Number.isInteger(WEEKEND_LENGTH_DAYS) || WEEKEND_LENGTH_DAYS < 1) {
   );
 }
 
+// The event AXIS decides which modifier the weekend boost multiplies: a 'sell'
+// festival lifts the featured area's sale price (legacy behavior); a 'speed'
+// festival lifts its growth speed. Extend here (+ getCropModifiers wiring) to add
+// new axes without touching the rotation/UI plumbing.
+export type WeeklyEventAxis = 'sell' | 'speed';
+
+export type WeeklyEventType = {
+  key: string;
+  axis: WeeklyEventAxis;
+  multiplier: number;
+  weight: number;
+};
+
+// Event-type roster, validated at module load like the multiplier/window above so
+// a malformed balance file fails fast instead of silently producing a broken
+// rotation. Back-compat: a missing/empty roster falls back to the single legacy
+// sale event derived from sellMultiplier, so old balance data behaves unchanged.
+export const WEEKLY_EVENT_TYPES: WeeklyEventType[] = parseWeeklyEventTypes();
+
+function parseWeeklyEventTypes(): WeeklyEventType[] {
+  const raw = (balance.weeklyEvent as { types?: unknown }).types;
+  if (raw == null) {
+    return [{ key: 'sale', axis: 'sell', multiplier: WEEKLY_EVENT_MULTIPLIER, weight: 1 }];
+  }
+  if (!Array.isArray(raw) || raw.length === 0) {
+    throw new Error('Invalid weeklyEvent.types: must be a non-empty array');
+  }
+  return raw.map((entry, index) => {
+    const type = entry as { key?: unknown; axis?: unknown; multiplier?: unknown; weight?: unknown };
+    if (typeof type.key !== 'string' || type.key.length === 0) {
+      throw new Error(`Invalid weeklyEvent.types[${index}].key (must be a non-empty string)`);
+    }
+    if (type.axis !== 'sell' && type.axis !== 'speed') {
+      throw new Error(`Invalid weeklyEvent.types[${index}].axis: ${String(type.axis)} (must be 'sell' or 'speed')`);
+    }
+    if (typeof type.multiplier !== 'number' || !Number.isFinite(type.multiplier) || type.multiplier < 1) {
+      throw new Error(
+        `Invalid weeklyEvent.types[${index}].multiplier: ${String(type.multiplier)} (must be a finite number >= 1)`
+      );
+    }
+    const weight = type.weight ?? 1;
+    if (typeof weight !== 'number' || !Number.isInteger(weight) || weight < 1) {
+      throw new Error(`Invalid weeklyEvent.types[${index}].weight: ${String(weight)} (must be a positive integer)`);
+    }
+    return { key: type.key, axis: type.axis, multiplier: type.multiplier, weight };
+  });
+}
+
 // epoch day 0 (1970-01-01) was a Thursday, so dayOfWeek 0=Thu, 1=Fri … 6=Wed.
 function dayOfWeek(epochDay: number): number {
   return ((epochDay % 7) + 7) % 7;
@@ -41,6 +89,21 @@ function hashWeekend(fridayEpochDay: number): number {
   h = Math.imul(h, 0x9e3779b9) >>> 0;
   h ^= h >>> 16;
   return h >>> 0;
+}
+
+// Weighted, deterministic event-type draw for the weekend. Salts the day before
+// hashing so the TYPE rotation is independent of the featured-AREA draw (which
+// hashes the raw fridayEpochDay) — otherwise area and type would move in lockstep.
+function pickWeeklyEventType(fridayEpochDay: number): WeeklyEventType {
+  const totalWeight = WEEKLY_EVENT_TYPES.reduce((sum, type) => sum + type.weight, 0);
+  let remainder = hashWeekend(fridayEpochDay ^ 0x85ebca6b) % totalWeight;
+  for (const type of WEEKLY_EVENT_TYPES) {
+    if (remainder < type.weight) {
+      return type;
+    }
+    remainder -= type.weight;
+  }
+  return WEEKLY_EVENT_TYPES[WEEKLY_EVENT_TYPES.length - 1]!;
 }
 
 // Every defined area, in declaration order. The featured-area draw indexes into
@@ -76,6 +139,12 @@ function getEligibleAreas(unlockedAreas?: readonly AreaKey[]): AreaKey[] {
 type WeeklyEventWindow = {
   active: boolean;
   areaKey: AreaKey;
+  // The weekend's rotated event type: its key (for type-specific UI copy), its
+  // axis (which modifier the boost feeds), and the multiplier (the type's bonus
+  // while live, else 1). typeKey/axis stay defined even when inactive so the
+  // teaser can preview the upcoming weekend's type.
+  typeKey: string;
+  axis: WeeklyEventAxis;
   multiplier: number;
   windowStartAt: number;
   windowEndAt: number;
@@ -102,11 +171,14 @@ function getWeeklyEventWindow(now: number, unlockedAreas?: readonly AreaKey[]): 
   const active = safeNow >= windowStartAt && safeNow < windowEndAt;
   const eligibleAreas = getEligibleAreas(unlockedAreas);
   const areaKey = eligibleAreas[hashWeekend(fridayEpochDay) % eligibleAreas.length]!;
+  const type = pickWeeklyEventType(fridayEpochDay);
 
   return {
     active,
     areaKey,
-    multiplier: active ? WEEKLY_EVENT_MULTIPLIER : 1,
+    typeKey: type.key,
+    axis: type.axis,
+    multiplier: active ? type.multiplier : 1,
     windowStartAt,
     windowEndAt,
   };
@@ -131,19 +203,41 @@ export function getWeeklyEventStatus(
   return { ...window, cropKeys };
 }
 
-// The festival sale multiplier for a single crop at `now`: WEEKLY_EVENT_MULTIPLIER
-// only while the festival is live AND the crop is in the featured area, otherwise
-// 1. Combined multiplicatively with the crop-of-the-day bonus in getCropModifiers.
-// `unlockedAreas` must match what the UI banner uses so the boosted crop the
-// player sees is the one whose sale actually gets boosted.
+// The festival multiplier for a single crop on a given axis at `now`: the type's
+// multiplier only while the festival is live AND the crop is in the featured area
+// AND the live event's axis matches, otherwise 1. `unlockedAreas` must match what
+// the UI banner uses so the boosted crop the player sees is the one that actually
+// gets boosted.
+function getWeeklyEventAxisMultiplier(
+  cropKey: CropKey,
+  axis: WeeklyEventAxis,
+  now: number,
+  unlockedAreas?: readonly AreaKey[]
+): number {
+  const window = getWeeklyEventWindow(now, unlockedAreas);
+  if (!window.active || window.axis !== axis) {
+    return 1;
+  }
+  return CROPS[cropKey]?.area === window.areaKey ? window.multiplier : 1;
+}
+
+// Sale-axis festival multiplier. Combined multiplicatively with the crop-of-the-day
+// bonus in getCropModifiers. Returns 1 for a non-sale (e.g. harvest/speed) weekend,
+// preserving the legacy sell-only behavior for sale festivals.
 export function getWeeklyEventMultiplier(
   cropKey: CropKey,
   now = Date.now(),
   unlockedAreas?: readonly AreaKey[]
 ): number {
-  const window = getWeeklyEventWindow(now, unlockedAreas);
-  if (!window.active) {
-    return 1;
-  }
-  return CROPS[cropKey]?.area === window.areaKey ? window.multiplier : 1;
+  return getWeeklyEventAxisMultiplier(cropKey, 'sell', now, unlockedAreas);
+}
+
+// Speed-axis festival multiplier (harvest festival): boosts the featured area's
+// growth speed. Returns 1 for a non-speed weekend.
+export function getWeeklyEventSpeedMultiplier(
+  cropKey: CropKey,
+  now = Date.now(),
+  unlockedAreas?: readonly AreaKey[]
+): number {
+  return getWeeklyEventAxisMultiplier(cropKey, 'speed', now, unlockedAreas);
 }

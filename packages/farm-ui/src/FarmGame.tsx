@@ -3172,9 +3172,10 @@ export default function FarmGame({
               // memo(ToolButton) 얕은 비교가 깨지지 않도록 배열이 아닌 문자열
               // 프리미티브로 넘긴다. 보너스가 없는 작물은 undefined → 동등 비교.
               const cotdBadge = key === cropOfTheDay.cropKey ? `⭐×${cropOfTheDay.multiplier}` : undefined;
+              // 판매 축제(sell)는 🎉, 수확 축제(speed)는 ⚡ 배지로 축제 종류를 구분한다.
               const weeklyBadge =
                 weeklyEvent.active && weeklyEvent.cropKeys.includes(key)
-                  ? `🎉×${weeklyEvent.multiplier}`
+                  ? `${weeklyEvent.axis === 'speed' ? '⚡' : '🎉'}×${weeklyEvent.multiplier}`
                   : undefined;
               const bonusA11yParts: string[] = [];
               if (cotdBadge != null) {
@@ -3393,6 +3394,7 @@ export default function FarmGame({
             weeklyEventActive={weeklyEvent.active}
             weeklyEventAreaName={getLocalizedAreaLabel(weeklyEvent.areaKey).name}
             weeklyEventMultiplier={weeklyEvent.multiplier}
+            weeklyEventAxis={weeklyEvent.axis}
             weeklyEventRemainingMs={Math.max(
               0,
               (weeklyEvent.active ? weeklyEvent.windowEndAt : weeklyEvent.windowStartAt) - tickNowMsRef.current

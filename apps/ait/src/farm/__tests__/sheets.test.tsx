@@ -143,6 +143,7 @@ describe('StatsSheet', () => {
         weeklyEventActive={false}
         weeklyEventAreaName={'초보 농장'}
         weeklyEventMultiplier={1}
+        weeklyEventAxis={'sell'}
         weeklyEventRemainingMs={2 * HOUR_MS}
       />
     );
@@ -178,6 +179,7 @@ describe('StatsSheet', () => {
         weeklyEventActive
         weeklyEventAreaName={'초보 농장'}
         weeklyEventMultiplier={1.5}
+        weeklyEventAxis={'sell'}
         weeklyEventRemainingMs={5 * HOUR_MS}
       />
     );
@@ -185,9 +187,36 @@ describe('StatsSheet', () => {
     // 부스트 비활성: '현재 비활성' 문구가 뜨고 잔여시간 요소는 없다.
     expect(screen.getByText(messages.statsBoostInactive)).toBeTruthy();
     expect(screen.queryByTestId('boost-remaining')).toBeNull();
-    // 축제 라이브: 배너가 노출되고 티저는 없다.
-    expect(screen.getByTestId('weekly-event-banner')).toBeTruthy();
+    // 축제 라이브(판매 종류): 판매 배수 문구 배너가 노출되고 티저는 없다.
+    const saleBanner = screen.getByTestId('weekly-event-banner');
+    expect(saleBanner).toHaveTextContent(/판매/);
+    expect(saleBanner).not.toHaveTextContent(/성장속도/);
     expect(screen.queryByTestId('weekly-event-teaser')).toBeNull();
+  });
+
+  test('shows the harvest (speed) festival copy when the live event is a harvest type (#243)', () => {
+    const screen = render(
+      <StatsSheet
+        messages={messages}
+        locale={LOCALE}
+        researchLevel={0}
+        profitMultiplier={1}
+        speedMultiplier={1}
+        boostActive={false}
+        boostMultiplier={1}
+        boostRemainingMs={0}
+        weeklyEventActive
+        weeklyEventAreaName={'초보 농장'}
+        weeklyEventMultiplier={1.5}
+        weeklyEventAxis={'speed'}
+        weeklyEventRemainingMs={5 * HOUR_MS}
+      />
+    );
+
+    // 수확 축제: 판매가 아니라 성장속도 배수를 강조하는 문구가 나온다.
+    const harvestBanner = screen.getByTestId('weekly-event-banner');
+    expect(harvestBanner).toHaveTextContent(/성장속도/);
+    expect(harvestBanner).not.toHaveTextContent(/판매/);
   });
 
   test('localizes stats content in en-US', () => {
@@ -205,6 +234,7 @@ describe('StatsSheet', () => {
         weeklyEventActive={false}
         weeklyEventAreaName={'Starter Farm'}
         weeklyEventMultiplier={1}
+        weeklyEventAxis={'sell'}
         weeklyEventRemainingMs={HOUR_MS}
       />
     );
