@@ -191,6 +191,7 @@ const KO_FARM_MESSAGES = {
   harvestBonusActivatedToast: (duration: string, multiplier: number) =>
     `${duration} 동안 수확 보상이 ${multiplier}배예요.`,
   lockedAreaHint: (areaName: string, requirement: string) => `${areaName} 열기 조건 · ${requirement}`,
+  collectionUnlockHint: (requirement: string) => `🔒 해금 조건: ${requirement}`,
   harvestHint: '밭을 눌러 수확할 수 있어요.',
   harvestAllButton: (count: number) => `🧺 모두 수확 ${count}`,
   harvestAllToast: (amount: string, count: number) => `+${amount}G · ${count}곳 한 번에 수확했어요!`,
@@ -524,6 +525,7 @@ const EN_FARM_MESSAGES: FarmMessages = {
   cropOfTheDayReminderNotificationBody: 'A fresh crop of the day is here — grab the bonus harvest.',
   harvestBonusActivatedToast: (duration, multiplier) => `Harvest rewards are ${multiplier}x for ${duration}.`,
   lockedAreaHint: (areaName, requirement) => `${areaName} requirements · ${requirement}`,
+  collectionUnlockHint: (requirement) => `🔒 Unlock: ${requirement}`,
   harvestHint: 'Tap a plot to harvest.',
   harvestAllButton: (count) => `🧺 Harvest All ${count}`,
   harvestAllToast: (amount, count) => `+${amount}G · harvested ${count} plots at once!`,

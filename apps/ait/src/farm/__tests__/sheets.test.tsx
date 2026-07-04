@@ -14,7 +14,9 @@ import {
   formatMoney,
   formatRemainingTime,
   getAreaCropKeys,
+  getAreaUnlockRequirementText,
   getCollectionSummary,
+  isAreaUnlocked,
   getPrestigeSkillLabel,
   getRewardedGoldAmount,
   getSkillLevel,
@@ -52,6 +54,53 @@ describe('CollectionSheet', () => {
     expect(screen.getByTestId('collection-sheet')).toBeTruthy();
     // 초기 상태에서는 발견한 작물이 없어 ??? 플레이스홀더만 노출된다.
     expect(screen.getAllByText('???').length).toBeGreaterThan(0);
+  });
+
+  test('shows an unlock-condition hint on locked areas and none on unlocked ones (#228)', () => {
+    const state = createInitialState();
+    const lockedArea = FARM_AREAS.find((area) => !isAreaUnlocked(state, area.key))!;
+    const unlockedArea = FARM_AREAS.find((area) => isAreaUnlocked(state, area.key))!;
+    expect(lockedArea).toBeDefined();
+    expect(unlockedArea).toBeDefined();
+
+    const screen = render(
+      <CollectionSheet
+        gameState={state}
+        locale={LOCALE}
+        messages={messages}
+        collectionSummary={getCollectionSummary(state)}
+        onClaimReward={jest.fn()}
+      />
+    );
+
+    // 잠긴 구역: 힌트가 노출되고, 문구는 씨앗 스트립과 동일한 순수 함수 결과를 담는다.
+    const hint = screen.getByTestId(`collection-unlock-hint-${lockedArea.key}`);
+    expect(hint).toBeTruthy();
+    const expectedText = messages.collectionUnlockHint(getAreaUnlockRequirementText(state, lockedArea.key, LOCALE));
+    expect(screen.getByText(expectedText)).toBeTruthy();
+
+    // 해금된 구역: 힌트가 노출되지 않는다.
+    expect(screen.queryByTestId(`collection-unlock-hint-${unlockedArea.key}`)).toBeNull();
+  });
+
+  test('renders the unlock hint in en-US too (#228)', () => {
+    const enMessages = getFarmMessages('en-US');
+    const state = createInitialState();
+    const lockedArea = FARM_AREAS.find((area) => !isAreaUnlocked(state, area.key))!;
+
+    const screen = render(
+      <CollectionSheet
+        gameState={state}
+        locale="en-US"
+        messages={enMessages}
+        collectionSummary={getCollectionSummary(state)}
+        onClaimReward={jest.fn()}
+      />
+    );
+
+    const expectedText = enMessages.collectionUnlockHint(getAreaUnlockRequirementText(state, lockedArea.key, 'en-US'));
+    expect(screen.getByText(expectedText)).toBeTruthy();
+    expect(expectedText).toContain('Unlock');
   });
 
   test('claims an area reward once every crop in that area is discovered', () => {

@@ -7,8 +7,10 @@ import {
   MUTATION_KINDS,
   formatMoney,
   getAreaLabel,
+  getAreaUnlockRequirementText,
   getCropLabel,
   getMasteryStatus,
+  isAreaUnlocked,
   isCropDiscovered,
   isMutationDiscovered,
   type CollectionRewardKey,
@@ -78,6 +80,11 @@ export function CollectionSheet({
     <View testID="collection-sheet">
       {collectionSummary.areas.map((area) => {
         const areaLabel = getAreaLabel(area.areaKey, locale);
+        // 아직 해금하지 않은 구역엔 해금 조건 힌트를 노출해 도감이 다음 진행 목표를
+        // 안내하게 한다(#228). 문구는 씨앗 스트립의 잠금 안내와 동일한 순수 함수
+        // getAreaUnlockRequirementText에서 파생해 표시가 일치한다. 개별 미발견 작물은
+        // 아래에서 그대로 ❓/???로 유지해 작물 정체는 스포일하지 않는다.
+        const areaUnlocked = isAreaUnlocked(gameState, area.areaKey);
         return (
           <View key={area.areaKey} style={styles.collectionArea}>
             <View style={styles.collectionAreaHeader}>
@@ -88,6 +95,15 @@ export function CollectionSheet({
                 {area.completed ? messages.collectionCompletedBadge : `${area.discoveredCount}/${area.totalCount}`}
               </Text>
             </View>
+            {!areaUnlocked ? (
+              <Text
+                testID={`collection-unlock-hint-${area.areaKey}`}
+                style={styles.collectionUnlockHint}
+                numberOfLines={2}
+              >
+                {messages.collectionUnlockHint(getAreaUnlockRequirementText(gameState, area.areaKey, locale))}
+              </Text>
+            ) : null}
             <View style={styles.collectionGrid}>
               {area.cropKeys.map((cropKey) => {
                 const discovered = isCropDiscovered(gameState, cropKey);
@@ -167,6 +183,13 @@ const styles = StyleSheet.create({
   },
   collectionAreaProgressDone: {
     color: '#247241',
+  },
+  collectionUnlockHint: {
+    marginBottom: 8,
+    color: '#8f5c00',
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '800',
   },
   collectionGrid: {
     flexDirection: 'row',
