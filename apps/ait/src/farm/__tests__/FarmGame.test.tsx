@@ -1435,6 +1435,30 @@ describe('FarmGame UI flow', () => {
     expect(screen.queryByText(/모두 수확/)).toBeNull();
   });
 
+  test('harvests then replants in one tap via the Harvest-then-Replant shortcut (#252)', async () => {
+    // 익은 밭 2곳(readyPlotCount >= HARVEST_ALL_MIN_COUNT)에서 결합 버튼이 '전체 수확'
+    // 옆에 함께 노출된다. 기본 도구는 'harvest'이므로 재심 작물은 첫 익은 밭 작물(당근)로
+    // 폴백한다.
+    const screen = await renderGame(createReadyHarvestState());
+    await waitFor(() => expect(screen.getByText('50G')).toBeTruthy());
+
+    expect(screen.getByText('🧺 모두 수확 2')).toBeTruthy();
+    const replantButton = screen.getByTestId('harvest-replant-button');
+    expect(replantButton).toBeTruthy();
+
+    fireEvent.press(replantButton);
+
+    // 당근 2곳 수확(+14G×2 → 78G) 후, 빈 밭 전체(방금 비운 2곳 + 기존 빈 4곳 = 6곳)에
+    // 당근 재심(−10G×6=60G) → 18G. 모든 밭이 성장 중이라 '빈 밭'이 사라지고, 익은 밭이
+    // 없어 수확 단축 버튼도 사라진다.
+    await waitFor(() => expect(screen.getByText('18G')).toBeTruthy());
+    // 결과 토스트가 수확·재심 수를 함께 알린다(부분/전체 인지).
+    expect(screen.getByText(/2곳 수확하고 6곳 다시 심었어요/)).toBeTruthy();
+    expect(screen.queryByText('GET')).toBeNull();
+    expect(screen.queryByText(/모두 수확/)).toBeNull();
+    expect(screen.queryAllByText('빈 밭')).toHaveLength(0);
+  });
+
   test('auto-harvests and replants through the game tick when automation is unlocked', async () => {
     const base = createReadyHarvestState();
     const state: GameState = {

@@ -446,6 +446,10 @@ type PendingFarmCommandEffect =
       totalRpGained: number;
       harvestedCount: number;
       specialCount: number;
+      // Plots re-sown in the same tap by Harvest-then-Replant (#252). >0 switches
+      // the batch toast to the combined harvest+replant variant. 0/undefined for a
+      // plain Harvest All.
+      replantedCount?: number;
     };
 
 type MasteryRankUpNotice = {
@@ -1046,6 +1050,17 @@ export default function FarmGame({
           // reads as a harvest rather than a donation.
           if (effect.totalRpGained > 0) {
             toast(messages.harvestAllDonatedToast(formatMoney(effect.totalRpGained, locale), effect.harvestedCount));
+          } else if (effect.replantedCount != null && effect.replantedCount > 0) {
+            // 수확 후 재심기(#252): 한 탭의 결과(수확·재심 수)를 한 토스트로 알려, 골드
+            // 부족 부분 성공("수확은 됐는데 일부만 재심")도 명확히 인지되게 한다. 두 번의
+            // toast()는 서로 덮어써 마지막 것만 보이므로 결합 메시지 하나로 표시한다.
+            toast(
+              messages.harvestReplantToast(
+                formatMoney(effect.totalGoldGained, locale),
+                effect.harvestedCount,
+                effect.replantedCount
+              )
+            );
           } else {
             toast(messages.harvestAllToast(formatMoney(effect.totalGoldGained, locale), effect.harvestedCount));
           }
@@ -2681,7 +2696,7 @@ export default function FarmGame({
   // Queues the batched "Harvest All" feedback (floating gold per plot, mutation
   // flash, rank-ups, first-harvest aha) for a computed HarvestAllResult. Shared by
   // plain Harvest All and Harvest-then-Replant (#252) so both drive identical FX.
-  function enqueueHarvestAllFeedback(result: HarvestAllResult, effectId: number) {
+  function enqueueHarvestAllFeedback(result: HarvestAllResult, effectId: number, replantedCount = 0) {
     // Guard the queue against a StrictMode/concurrent double-invoke of the updater:
     // keep at most one effect per id. (The drain loop also dedupes by id, so
     // feedback never doubles either way — this just keeps the queue clean.)
@@ -2726,6 +2741,7 @@ export default function FarmGame({
       totalRpGained: result.totalRpGained,
       harvestedCount: result.harvestedCount,
       specialCount: result.specialCount,
+      replantedCount,
     });
   }
 
@@ -2770,7 +2786,7 @@ export default function FarmGame({
         return harvest.harvestedCount > 0 ? harvest.state : state;
       }
       const result = performHarvestAndReplant(state, replantCropKey, { now, rollFor });
-      enqueueHarvestAllFeedback(result.harvest, effectId);
+      enqueueHarvestAllFeedback(result.harvest, effectId, result.plantedCount);
       return result.harvest.harvestedCount > 0 ? result.state : state;
     });
     setCommandEffectVersion((version) => version + 1);
