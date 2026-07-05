@@ -202,6 +202,28 @@ describe('normalizeProductionState', () => {
     expect(normalized.inventory).toEqual({ [cropKey]: 4 });
     expect(normalized.crafting).toEqual({ [FIRST.key]: 123 });
   });
+
+  test('drops fractional inventory that floors to 0 and drops negative startedAt', () => {
+    const c0 = Object.keys(CROPS)[0] as CropKey;
+    const c1 = Object.keys(CROPS)[1] as CropKey;
+    const normalized = normalizeProductionState({
+      inventory: { [c0]: 0.1, [c1]: 2.9 },
+      crafting: { [FIRST.key]: -5 },
+    } as unknown);
+    // 0.1 → floor 0 → "재고 0" 항목을 남기지 않고 제거. 2.9 → 2 유지.
+    expect(normalized.inventory).toEqual({ [c1]: 2 });
+    // 음수 startedAt(손상 세이브)은 제거된다.
+    expect(normalized.crafting).toEqual({});
+  });
+
+  test('getProductionState treats a negative startedAt as idle (readyAt never negative)', () => {
+    // 정규화를 거치지 않고 음수 startedAt을 직접 넣어도 방어된다(idle, readyAt null).
+    const state = stateWith({ inventory: {}, crafting: { [FIRST.key]: -1000 } });
+    const status = getProductionState(state, FIRST.key, 0)!;
+    expect(status.phase).toBe('idle');
+    expect(status.startedAt).toBeNull();
+    expect(status.readyAt).toBeNull();
+  });
 });
 
 describe('meta-layer integration', () => {

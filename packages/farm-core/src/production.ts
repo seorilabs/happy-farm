@@ -79,8 +79,13 @@ export function normalizeProductionState(value: unknown): ProductionState {
   const inventory: CropInventory = {};
   if (typeof raw.inventory === 'object' && raw.inventory != null) {
     for (const [key, amount] of Object.entries(raw.inventory as Record<string, unknown>)) {
-      if (isKnownCropKey(key) && typeof amount === 'number' && Number.isFinite(amount) && amount > 0) {
-        inventory[key] = Math.floor(amount);
+      if (isKnownCropKey(key) && typeof amount === 'number' && Number.isFinite(amount)) {
+        // 먼저 내림한 뒤 양수일 때만 저장한다: 0.1 같은 소수가 floor→0으로 남아
+        // "재고 0" 항목을 만들지 않게 한다(재고는 항상 양의 정수만).
+        const qty = Math.floor(amount);
+        if (qty > 0) {
+          inventory[key] = qty;
+        }
       }
     }
   }
@@ -88,7 +93,9 @@ export function normalizeProductionState(value: unknown): ProductionState {
   const crafting: Partial<Record<ProductionRecipeKey, number>> = {};
   if (typeof raw.crafting === 'object' && raw.crafting != null) {
     for (const [key, startedAt] of Object.entries(raw.crafting as Record<string, unknown>)) {
-      if (isKnownRecipeKey(key) && typeof startedAt === 'number' && Number.isFinite(startedAt)) {
+      // startedAt은 epoch ms라 음수가 될 수 없다. 음수/비유한 값을 버려, 손상된
+      // 세이브가 readyAt(= startedAt + timerMs)을 음수로 만들지 못하게 한다.
+      if (isKnownRecipeKey(key) && typeof startedAt === 'number' && Number.isFinite(startedAt) && startedAt >= 0) {
         crafting[key] = startedAt;
       }
     }
@@ -153,7 +160,11 @@ export function getProductionState(
   }
   const safeNow = Number.isFinite(now) ? now : Date.now();
   const startedAtRaw = state.production.crafting[key];
-  const startedAt = typeof startedAtRaw === 'number' && Number.isFinite(startedAtRaw) ? startedAtRaw : null;
+  // startedAt은 epoch ms(≥0)만 유효하다. 음수/비유한 값은 진행 없음(idle)으로 취급해
+  // readyAt(= startedAt + timerMs)이 항상 유효한 미래/현재 시각만 갖게 한다(정규화가
+  // 거르지 않은 경로로 들어와도 방어).
+  const startedAt =
+    typeof startedAtRaw === 'number' && Number.isFinite(startedAtRaw) && startedAtRaw >= 0 ? startedAtRaw : null;
 
   let phase: ProductionPhase;
   let readyAt: number | null = null;
