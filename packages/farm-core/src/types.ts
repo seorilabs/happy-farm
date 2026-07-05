@@ -1,5 +1,6 @@
 import balance from './balance.json';
 import type { AnimalsState } from './animals';
+import type { ProductionState } from './production';
 import type { DailyBonusState } from './dailyBonus';
 import type { DailyMissionState } from './missions';
 import type { WeeklyMissionState } from './weeklyMissions';
@@ -18,6 +19,8 @@ export type ResearchNodeKey = (typeof balance.research.nodes)[number]['key'];
 export type DecorationKey = (typeof balance.decorations.items)[number]['key'];
 
 export type AnimalKey = (typeof balance.animals.kinds)[number]['key'];
+
+export type ProductionRecipeKey = (typeof balance.production.recipes)[number]['key'];
 
 export type BreedingRecipeKey = (typeof balance.breeding.recipes)[number]['crop'];
 
@@ -167,6 +170,10 @@ export type GameState = {
   // timestamps are deterministic (no rng). A meta-layer field so built coops and
   // any in-progress produce survive every prestige, like placedDecorations.
   animals: AnimalsState;
+  // Crop-processing workshop (#250): the stockpiled-crop inventory (a harvest
+  // byproduct) plus any in-progress crafts. A meta-layer field so the inventory
+  // and running crafts survive every prestige, like placedDecorations/animals.
+  production: ProductionState;
 };
 
 // Prestige reset boundary. Farm-layer fields are wiped when the player
@@ -201,6 +208,7 @@ export const META_LAYER_KEYS = [
   'placedDecorations',
   'wheelState',
   'animals',
+  'production',
 ] as const satisfies readonly (keyof GameState)[];
 
 export type FarmLayerKey = (typeof FARM_LAYER_KEYS)[number];

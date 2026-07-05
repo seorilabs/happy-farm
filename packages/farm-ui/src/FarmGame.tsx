@@ -125,6 +125,11 @@ import {
   feedAnimal,
   collectProduce,
   type AnimalKey,
+  getProductionStates,
+  getProductionRecipeLabel,
+  startCraft,
+  collectCraft,
+  type ProductionRecipeKey,
   getCropEconomyEstimate,
   sortCropKeysForStrip,
   nextSeedSortMode,
@@ -184,6 +189,7 @@ import { MissionsSheet } from './components/MissionsSheet';
 import { StatsSheet } from './components/StatsSheet';
 import { WheelSheet } from './components/WheelSheet';
 import { AnimalsSheet } from './components/AnimalsSheet';
+import { WorkshopSheet } from './components/WorkshopSheet';
 import { AdRewardCard, CloudSaveSection, SettingToggle, SheetAction, ShopCard, sheetPartStyles } from './components/SheetParts';
 import {
   DISCOVERY_BANNER_BASE_BOTTOM,
@@ -332,6 +338,7 @@ type ActiveSheet =
   | { type: 'dailyBonus' }
   | { type: 'wheel' }
   | { type: 'animals' }
+  | { type: 'workshop' }
   | { type: 'resetConfirm' }
   | null;
 
@@ -1936,6 +1943,36 @@ export default function FarmGame({
     });
   }
 
+  // 생산 가공 공방 시트('더보기' 뒤). 가공 시작/수집은 core 순수 함수에 위임하고,
+  // functional updater 안에서 재검증해 이중 차감/이중 수집을 막는다.
+  function openWorkshop() {
+    setActiveSheet({ type: 'workshop' });
+  }
+
+  function startCraftNow(key: ProductionRecipeKey) {
+    setGameState((state) => {
+      const next = startCraft(state, key, Date.now());
+      if (next == null) {
+        toast(messages.workshopNeedIngredientsToast);
+        return state;
+      }
+      toast(messages.workshopStartedToast(getProductionRecipeLabel(key, locale).name));
+      return next;
+    });
+  }
+
+  function collectCraftNow(key: ProductionRecipeKey) {
+    setGameState((state) => {
+      const next = collectCraft(state, key, Date.now());
+      if (next == null) {
+        return state;
+      }
+      pulseGold();
+      toast(messages.workshopCollectedToast(getProductionRecipeLabel(key, locale).name));
+      return next;
+    });
+  }
+
   function claimMissionReward(slot: number) {
     const now = Date.now();
     // Functional updater keeps the claim idempotent: a concurrent second tap
@@ -2924,6 +2961,11 @@ export default function FarmGame({
     (status) => status.phase === 'ready'
   ).length;
 
+  // 수집 준비된 가공품 수 — '공방' 진입점(및 더보기 롤업) 배지로 노출.
+  const workshopReadyCount = getProductionStates(gameState, tickNowMsRef.current).filter(
+    (status) => status.phase === 'ready'
+  ).length;
+
   // '더보기' 시트로 묶은 진입점(#241). 각 항목의 claimable/actionable 배지를 함께
   // 들고 다녀서, 더보기 버튼에는 롤업 합산 배지를, 시트 안에서는 항목별 배지를 보여준다.
   const moreMenuEntries: {
@@ -2960,6 +3002,13 @@ export default function FarmGame({
       accessibilityLabel: messages.animalsButtonAccessibilityLabel,
       badge: animalsReadyCount,
       onPress: openAnimals,
+    },
+    {
+      key: 'workshop',
+      label: messages.workshopButton,
+      accessibilityLabel: messages.workshopButtonAccessibilityLabel,
+      badge: workshopReadyCount,
+      onPress: openWorkshop,
     },
     {
       key: 'map',
@@ -3793,6 +3842,18 @@ export default function FarmGame({
             onPurchase={buyAnimal}
             onFeed={feedAnimalNow}
             onCollect={collectAnimalProduce}
+          />
+        ) : null}
+
+        {activeSheet?.type === 'workshop' ? (
+          <WorkshopSheet
+            gameState={gameState}
+            locale={locale}
+            messages={messages}
+            now={Date.now()}
+            getCropName={getLocalizedCropName}
+            onStart={startCraftNow}
+            onCollect={collectCraftNow}
           />
         ) : null}
 
@@ -5390,6 +5451,9 @@ function getSheetTitle(activeSheet: ActiveSheet, messages: FarmMessages) {
   if (activeSheet?.type === 'animals') {
     return messages.sheetTitleAnimals;
   }
+  if (activeSheet?.type === 'workshop') {
+    return messages.sheetTitleWorkshop;
+  }
   if (activeSheet?.type === 'welcomeBack') {
     return messages.sheetTitleWelcomeBack;
   }
@@ -5466,6 +5530,9 @@ function getSheetDescription(
   }
   if (activeSheet?.type === 'animals') {
     return messages.sheetDescriptionAnimals;
+  }
+  if (activeSheet?.type === 'workshop') {
+    return messages.sheetDescriptionWorkshop;
   }
   if (activeSheet?.type === 'welcomeBack') {
     return messages.sheetDescriptionWelcomeBack(formatDuration(activeSheet.summary.awayMs, locale));

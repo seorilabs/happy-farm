@@ -10,6 +10,7 @@ import {
 } from './achievements';
 import { createInitialPrestigeProgress, normalizeChainFarms, normalizePrestigeProgress } from './prestige';
 import { createInitialAnimalsState, normalizeAnimalsState } from './animals';
+import { createInitialProductionState, normalizeProductionState } from './production';
 import { createInitialPlacedDecorations, normalizePlacedDecorations } from './decorations';
 import { createInitialDailyMissionState, normalizeDailyMissionState } from './missions';
 import { createInitialWeeklyMissionState, normalizeWeeklyMissionState } from './weeklyMissions';
@@ -786,6 +787,7 @@ export function createInitialState(): GameState {
     placedDecorations: createInitialPlacedDecorations(),
     wheelState: createInitialWheelState(),
     animals: createInitialAnimalsState(),
+    production: createInitialProductionState(),
   };
 }
 
@@ -964,6 +966,10 @@ export function migrateLoadedState(loaded: Partial<GameState>, base: GameState):
   // feeding for an un-owned animal, so a legacy/corrupt save loads into a clean,
   // render-stable state. A save without the field starts with no coops.
   merged.animals = normalizeAnimalsState(loaded.animals);
+
+  // Workshop: drop inventory/craft entries missing from the current catalog and
+  // any non-positive/non-finite values. A save without the field starts empty.
+  merged.production = normalizeProductionState(loaded.production);
 
   return merged;
 }

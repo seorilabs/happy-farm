@@ -7,6 +7,7 @@ import type {
   MasteryRankKey,
   MutationKey,
   PrestigeSkillKey,
+  ProductionRecipeKey,
   RegionArchetypeKey,
   ResearchNodeKey,
   TitleKey,
@@ -199,6 +200,18 @@ const EN_ANIMAL_LABELS = {
   chicken: { name: 'Chicken', description: 'A trusty first animal that lays an egg every 20 minutes.' },
   cow: { name: 'Cow', description: 'A big farm helper that gives milk every hour.' },
 } satisfies Record<AnimalKey, DescribedLabel>;
+
+const KO_PRODUCTION_LABELS = {
+  bread: { name: '빵', description: '밀을 구워 만든 든든한 빵' },
+  juice: { name: '주스', description: '토마토를 짜서 만든 새콤한 주스' },
+  pie: { name: '파이', description: '딸기를 듬뿍 올린 달콤한 파이' },
+} satisfies Record<ProductionRecipeKey, DescribedLabel>;
+
+const EN_PRODUCTION_LABELS = {
+  bread: { name: 'Bread', description: 'Hearty bread baked from wheat.' },
+  juice: { name: 'Juice', description: 'Tangy juice pressed from tomatoes.' },
+  pie: { name: 'Pie', description: 'A sweet pie piled with strawberries.' },
+} satisfies Record<ProductionRecipeKey, DescribedLabel>;
 
 const EN_DECORATION_LABELS = {
   signpost: { name: 'Signpost', description: 'A tidy sign marking your farm entrance.' },
@@ -435,6 +448,11 @@ const ANIMAL_LABELS: Record<SupportedLocale, Record<AnimalKey, DescribedLabel>> 
   'en-US': EN_ANIMAL_LABELS,
 };
 
+const PRODUCTION_LABELS: Record<SupportedLocale, Record<ProductionRecipeKey, DescribedLabel>> = {
+  'ko-KR': KO_PRODUCTION_LABELS,
+  'en-US': EN_PRODUCTION_LABELS,
+};
+
 export function getCropLabel(cropKey: CropKey, locale: SupportedLocale = DEFAULT_LOCALE): CropLabel {
   const labels = CROP_LABELS[locale] ?? CROP_LABELS[DEFAULT_LOCALE];
   const label = labels[cropKey] ?? CROP_LABELS[DEFAULT_LOCALE][cropKey];
@@ -470,6 +488,18 @@ export function getAnimalLabel(animalKey: AnimalKey, locale: SupportedLocale = D
   const label = labels[animalKey] ?? ANIMAL_LABELS[DEFAULT_LOCALE][animalKey];
   if (label == null) {
     throw new Error(`Missing animal label: ${animalKey}`);
+  }
+  return label;
+}
+
+export function getProductionRecipeLabel(
+  recipeKey: ProductionRecipeKey,
+  locale: SupportedLocale = DEFAULT_LOCALE
+): DescribedLabel {
+  const labels = PRODUCTION_LABELS[locale] ?? PRODUCTION_LABELS[DEFAULT_LOCALE];
+  const label = labels[recipeKey] ?? PRODUCTION_LABELS[DEFAULT_LOCALE][recipeKey];
+  if (label == null) {
+    throw new Error(`Missing production recipe label: ${recipeKey}`);
   }
   return label;
 }

@@ -16,6 +16,7 @@ export * from './mastery';
 export * from './missions';
 export * from './modifiers';
 export * from './prestige';
+export * from './production';
 export * from './research';
 export * from './returnSummary';
 export * from './seedSort';
@@ -40,6 +41,7 @@ export {
   getMasteryRankLabel,
   getMutationLabel,
   getPrestigeSkillLabel,
+  getProductionRecipeLabel,
   getRegionArchetypeLabel,
   getResearchNodeLabel,
   getTitleLabel,
