@@ -9,6 +9,7 @@ import {
   normalizeLifetimeStats,
 } from './achievements';
 import { createInitialPrestigeProgress, normalizeChainFarms, normalizePrestigeProgress } from './prestige';
+import { createInitialAnimalsState, normalizeAnimalsState } from './animals';
 import { createInitialPlacedDecorations, normalizePlacedDecorations } from './decorations';
 import { createInitialDailyMissionState, normalizeDailyMissionState } from './missions';
 import { createInitialWeeklyMissionState, normalizeWeeklyMissionState } from './weeklyMissions';
@@ -784,6 +785,7 @@ export function createInitialState(): GameState {
     prestigeGuideSeen: false,
     placedDecorations: createInitialPlacedDecorations(),
     wheelState: createInitialWheelState(),
+    animals: createInitialAnimalsState(),
   };
 }
 
@@ -957,6 +959,11 @@ export function migrateLoadedState(loaded: Partial<GameState>, base: GameState):
   // Daily wheel: a malformed/legacy save (no wheelState) normalizes to "never
   // spun", so the first spin is immediately available.
   merged.wheelState = normalizeWheelState(loaded.wheelState);
+
+  // Animals: drop coops/feeding entries missing from the current catalog and any
+  // feeding for an un-owned animal, so a legacy/corrupt save loads into a clean,
+  // render-stable state. A save without the field starts with no coops.
+  merged.animals = normalizeAnimalsState(loaded.animals);
 
   return merged;
 }

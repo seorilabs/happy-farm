@@ -1,4 +1,5 @@
 import balance from './balance.json';
+import type { AnimalsState } from './animals';
 import type { DailyBonusState } from './dailyBonus';
 import type { DailyMissionState } from './missions';
 import type { WeeklyMissionState } from './weeklyMissions';
@@ -15,6 +16,8 @@ export type MutationKey = (typeof balance.mutations.kinds)[number]['key'];
 export type ResearchNodeKey = (typeof balance.research.nodes)[number]['key'];
 
 export type DecorationKey = (typeof balance.decorations.items)[number]['key'];
+
+export type AnimalKey = (typeof balance.animals.kinds)[number]['key'];
 
 export type BreedingRecipeKey = (typeof balance.breeding.recipes)[number]['crop'];
 
@@ -159,6 +162,11 @@ export type GameState = {
   // the injected rng. A meta-layer field so the daily spin cadence carries across
   // prestige, like dailyBonusState.
   wheelState: WheelState;
+  // Animal husbandry (coop/barn) ownership + in-progress feeding. A supplementary
+  // re-visit loop with a cadence distinct from crops. Ownership and feeding
+  // timestamps are deterministic (no rng). A meta-layer field so built coops and
+  // any in-progress produce survive every prestige, like placedDecorations.
+  animals: AnimalsState;
 };
 
 // Prestige reset boundary. Farm-layer fields are wiped when the player
@@ -192,6 +200,7 @@ export const META_LAYER_KEYS = [
   'prestigeGuideSeen',
   'placedDecorations',
   'wheelState',
+  'animals',
 ] as const satisfies readonly (keyof GameState)[];
 
 export type FarmLayerKey = (typeof FARM_LAYER_KEYS)[number];

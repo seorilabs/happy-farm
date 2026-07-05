@@ -1,5 +1,6 @@
 import type {
   AchievementTrackKey,
+  AnimalKey,
   AreaKey,
   CropKey,
   DecorationKey,
@@ -188,6 +189,16 @@ const KO_DECORATION_LABELS = {
   golden_statue: { name: '황금 동상', description: '농장의 번영을 기리는 눈부신 황금 동상' },
   rainbow_fountain: { name: '무지개 분수', description: '물줄기마다 무지개가 걸리는 전설의 분수' },
 } satisfies Record<DecorationKey, DescribedLabel>;
+
+const KO_ANIMAL_LABELS = {
+  chicken: { name: '닭', description: '20분마다 달걀을 낳는 든든한 첫 가축' },
+  cow: { name: '젖소', description: '1시간마다 우유를 내는 농장의 큰 일꾼' },
+} satisfies Record<AnimalKey, DescribedLabel>;
+
+const EN_ANIMAL_LABELS = {
+  chicken: { name: 'Chicken', description: 'A trusty first animal that lays an egg every 20 minutes.' },
+  cow: { name: 'Cow', description: 'A big farm helper that gives milk every hour.' },
+} satisfies Record<AnimalKey, DescribedLabel>;
 
 const EN_DECORATION_LABELS = {
   signpost: { name: 'Signpost', description: 'A tidy sign marking your farm entrance.' },
@@ -419,6 +430,11 @@ const DECORATION_LABELS: Record<SupportedLocale, Record<DecorationKey, Described
   'en-US': EN_DECORATION_LABELS,
 };
 
+const ANIMAL_LABELS: Record<SupportedLocale, Record<AnimalKey, DescribedLabel>> = {
+  'ko-KR': KO_ANIMAL_LABELS,
+  'en-US': EN_ANIMAL_LABELS,
+};
+
 export function getCropLabel(cropKey: CropKey, locale: SupportedLocale = DEFAULT_LOCALE): CropLabel {
   const labels = CROP_LABELS[locale] ?? CROP_LABELS[DEFAULT_LOCALE];
   const label = labels[cropKey] ?? CROP_LABELS[DEFAULT_LOCALE][cropKey];
@@ -445,6 +461,15 @@ export function getDecorationLabel(
   const label = labels[decorationKey] ?? DECORATION_LABELS[DEFAULT_LOCALE][decorationKey];
   if (label == null) {
     throw new Error(`Missing decoration label: ${decorationKey}`);
+  }
+  return label;
+}
+
+export function getAnimalLabel(animalKey: AnimalKey, locale: SupportedLocale = DEFAULT_LOCALE): DescribedLabel {
+  const labels = ANIMAL_LABELS[locale] ?? ANIMAL_LABELS[DEFAULT_LOCALE];
+  const label = labels[animalKey] ?? ANIMAL_LABELS[DEFAULT_LOCALE][animalKey];
+  if (label == null) {
+    throw new Error(`Missing animal label: ${animalKey}`);
   }
   return label;
 }
