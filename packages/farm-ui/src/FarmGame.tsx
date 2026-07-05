@@ -111,6 +111,7 @@ import {
   claimWeeklyMission,
   recordWeeklyAdWatchProgress,
   getDecorationLabel,
+  getAnimalLabel,
   DECORATIONS,
   canPurchaseDecoration,
   isDecorationOwned,
@@ -119,6 +120,11 @@ import {
   applyWheelReward,
   getWheelStatus,
   spinWheel,
+  getAnimalStates,
+  purchaseAnimal,
+  feedAnimal,
+  collectProduce,
+  type AnimalKey,
   getCropEconomyEstimate,
   sortCropKeysForStrip,
   nextSeedSortMode,
@@ -177,6 +183,7 @@ import { LabSheet } from './components/LabSheet';
 import { MissionsSheet } from './components/MissionsSheet';
 import { StatsSheet } from './components/StatsSheet';
 import { WheelSheet } from './components/WheelSheet';
+import { AnimalsSheet } from './components/AnimalsSheet';
 import { AdRewardCard, CloudSaveSection, SettingToggle, SheetAction, ShopCard, sheetPartStyles } from './components/SheetParts';
 import {
   DISCOVERY_BANNER_BASE_BOTTOM,
@@ -324,6 +331,7 @@ type ActiveSheet =
   | { type: 'welcomeBack'; summary: ReturnSummary }
   | { type: 'dailyBonus' }
   | { type: 'wheel' }
+  | { type: 'animals' }
   | { type: 'resetConfirm' }
   | null;
 
@@ -1885,6 +1893,49 @@ export default function FarmGame({
     setActiveSheet({ type: 'wheel' });
   }
 
+  // 동물 사육 시트('더보기' 뒤). 축사 건설/급여/수확은 모두 core의 순수 함수에
+  // 위임하고, 여기서는 상태 반영과 토스트/펄스만 담당한다. 각 액션은 functional
+  // updater 안에서 재검증해 이중 차감/이중 수확을 막는다.
+  function openAnimals() {
+    setActiveSheet({ type: 'animals' });
+  }
+
+  function buyAnimal(key: AnimalKey) {
+    setGameState((state) => {
+      const next = purchaseAnimal(state, key);
+      if (next == null) {
+        toast(messages.insufficientGoldToast);
+        return state;
+      }
+      toast(messages.animalBuiltToast(getAnimalLabel(key, locale).name));
+      return next;
+    });
+  }
+
+  function feedAnimalNow(key: AnimalKey) {
+    setGameState((state) => {
+      const next = feedAnimal(state, key, Date.now());
+      if (next == null) {
+        toast(messages.insufficientGoldToast);
+        return state;
+      }
+      toast(messages.animalFedToast(getAnimalLabel(key, locale).name));
+      return next;
+    });
+  }
+
+  function collectAnimalProduce(key: AnimalKey) {
+    setGameState((state) => {
+      const next = collectProduce(state, key, Date.now());
+      if (next == null) {
+        return state;
+      }
+      pulseGold();
+      toast(messages.animalCollectedToast(getAnimalLabel(key, locale).name));
+      return next;
+    });
+  }
+
   function claimMissionReward(slot: number) {
     const now = Date.now();
     // Functional updater keeps the claim idempotent: a concurrent second tap
@@ -2868,6 +2919,11 @@ export default function FarmGame({
   // recomputes its own status from gameState + now on every render tick.
   const wheelSpinReady = getWheelStatus(gameState.wheelState, tickNowMsRef.current).canSpin;
 
+  // 수확 준비된 동물 수 — '동물' 진입점(및 더보기 롤업) 배지로 노출해 재방문을 유도한다.
+  const animalsReadyCount = getAnimalStates(gameState, tickNowMsRef.current).filter(
+    (status) => status.phase === 'ready'
+  ).length;
+
   // '더보기' 시트로 묶은 진입점(#241). 각 항목의 claimable/actionable 배지를 함께
   // 들고 다녀서, 더보기 버튼에는 롤업 합산 배지를, 시트 안에서는 항목별 배지를 보여준다.
   const moreMenuEntries: {
@@ -2897,6 +2953,13 @@ export default function FarmGame({
       accessibilityLabel: messages.labButtonAccessibilityLabel,
       badge: labBadgeCount,
       onPress: openLab,
+    },
+    {
+      key: 'animals',
+      label: messages.animalsButton,
+      accessibilityLabel: messages.animalsButtonAccessibilityLabel,
+      badge: animalsReadyCount,
+      onPress: openAnimals,
     },
     {
       key: 'map',
@@ -3718,6 +3781,18 @@ export default function FarmGame({
                   break;
               }
             }}
+          />
+        ) : null}
+
+        {activeSheet?.type === 'animals' ? (
+          <AnimalsSheet
+            gameState={gameState}
+            locale={locale}
+            messages={messages}
+            now={Date.now()}
+            onPurchase={buyAnimal}
+            onFeed={feedAnimalNow}
+            onCollect={collectAnimalProduce}
           />
         ) : null}
 
@@ -5312,6 +5387,9 @@ function getSheetTitle(activeSheet: ActiveSheet, messages: FarmMessages) {
   if (activeSheet?.type === 'wheel') {
     return messages.sheetTitleWheel;
   }
+  if (activeSheet?.type === 'animals') {
+    return messages.sheetTitleAnimals;
+  }
   if (activeSheet?.type === 'welcomeBack') {
     return messages.sheetTitleWelcomeBack;
   }
@@ -5385,6 +5463,9 @@ function getSheetDescription(
   }
   if (activeSheet?.type === 'wheel') {
     return messages.sheetDescriptionWheel;
+  }
+  if (activeSheet?.type === 'animals') {
+    return messages.sheetDescriptionAnimals;
   }
   if (activeSheet?.type === 'welcomeBack') {
     return messages.sheetDescriptionWelcomeBack(formatDuration(activeSheet.summary.awayMs, locale));

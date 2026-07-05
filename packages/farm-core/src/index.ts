@@ -1,5 +1,6 @@
 export * from './achievements';
 export * from './adLimits';
+export * from './animals';
 export * from './analytics';
 export * from './ads';
 export * from './commands';
@@ -29,6 +30,7 @@ export {
   formatRemainingTime,
   formatSignedPercent,
   getAchievementTrackLabel,
+  getAnimalLabel,
   getAreaLabel,
   getAreaLabels,
   getCoreMessages,

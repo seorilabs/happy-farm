@@ -515,6 +515,57 @@ if (fertilizerMultiplierValid && isFiniteNumber(fertilizer.minCost) && fertilize
   }
 }
 
+// 13) 동물 사육/생산(#249): 각 동물은 유효 수치를 갖고, 사이클마다 양의 마진
+// (producePrice > feedCost)을 내되, 산출물 net/h((producePrice - feedCost) /
+// produceTimerMs)가 "가장 싼 작물의 net/h"보다 낮아야 한다. 동물은 작물과 다른
+// 주기의 보조 트리클이므로 능동 작물 재배를 지배(dominate)해서는 안 된다.
+const MS_PER_HOUR_ANIMALS = 60 * 60 * 1000;
+const animalKinds = Array.isArray(balance.animals?.kinds) ? balance.animals.kinds : [];
+check(animalKinds.length > 0, 'animals.kinds는 비어 있을 수 없습니다.');
+// 기준 = 유효 작물 중 최소 net/h. 동물 net/h는 이 값보다 엄격히 작아야 한다.
+const cropNetPerHours = crops
+  .filter(
+    (crop) =>
+      isFiniteNumber(crop?.cost) && isFiniteNumber(crop?.sell) && isFiniteNumber(crop?.growTime) && crop.growTime > 0
+  )
+  .map((crop) => ((crop.sell - crop.cost) / crop.growTime) * MS_PER_HOUR_ANIMALS);
+const minCropNetPerHour = cropNetPerHours.length > 0 ? Math.min(...cropNetPerHours) : Infinity;
+const animalKeysSeen = new Set();
+for (const animal of animalKinds) {
+  const label = animal?.key ?? '(이름 없음)';
+  if (
+    !isFiniteNumber(animal?.purchaseCost) ||
+    !isFiniteNumber(animal?.feedCost) ||
+    !isFiniteNumber(animal?.produceTimerMs) ||
+    !isFiniteNumber(animal?.producePrice)
+  ) {
+    check(false, `동물 ${label}: purchaseCost/feedCost/produceTimerMs/producePrice가 모두 유효한 숫자여야 합니다.`);
+    continue;
+  }
+  check(
+    typeof animal.key === 'string' && animal.key.length > 0 && !animalKeysSeen.has(animal.key),
+    `동물 ${label}: key는 비어 있지 않은 고유 문자열이어야 합니다.`
+  );
+  animalKeysSeen.add(animal.key);
+  check(typeof animal.icon === 'string' && animal.icon.length > 0, `동물 ${label}: icon은 비어 있지 않은 문자열이어야 합니다.`);
+  check(
+    typeof animal.produceIcon === 'string' && animal.produceIcon.length > 0,
+    `동물 ${label}: produceIcon은 비어 있지 않은 문자열이어야 합니다.`
+  );
+  check(animal.purchaseCost > 0, `동물 ${label}: purchaseCost는 0보다 커야 합니다.`);
+  check(animal.feedCost > 0, `동물 ${label}: feedCost는 0보다 커야 합니다.`);
+  check(animal.produceTimerMs > 0, `동물 ${label}: produceTimerMs는 0보다 커야 합니다.`);
+  check(
+    animal.producePrice > animal.feedCost,
+    `동물 ${label}: producePrice(${animal.producePrice})는 feedCost(${animal.feedCost})보다 커야 합니다(양의 마진).`
+  );
+  const netPerHour = ((animal.producePrice - animal.feedCost) / animal.produceTimerMs) * MS_PER_HOUR_ANIMALS;
+  check(
+    netPerHour > 0 && netPerHour < minCropNetPerHour,
+    `동물 ${label}: 산출물 net/h(${Math.round(netPerHour)})는 최소 작물 net/h(${Math.round(minCropNetPerHour)})보다 낮아야 합니다(작물 지배 방지).`
+  );
+}
+
 const result = {
   status: failures.length > 0 ? 'fail' : 'pass',
   checked: passes.length + failures.length,
