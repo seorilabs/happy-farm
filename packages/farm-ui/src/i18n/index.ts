@@ -196,6 +196,9 @@ const KO_FARM_MESSAGES = {
   harvestAllButton: (count: number) => `🧺 모두 수확 ${count}`,
   // #252: 수확 후 같은/선택 작물로 빈 밭 재심기를 한 번에.
   harvestReplantButton: '🔁 수확 후 재심기',
+  // 결합 액션 결과 토스트: 수확 수 + 재심 수를 한 번에 알린다(부분 성공 인지용).
+  harvestReplantToast: (amount: string, harvested: number, planted: number) =>
+    `+${amount}G · ${harvested}곳 수확하고 ${planted}곳 다시 심었어요!`,
   harvestAllToast: (amount: string, count: number) => `+${amount}G · ${count}곳 한 번에 수확했어요!`,
   harvestAllDonatedToast: (rp: string, count: number) => `연구에 헌납했어요. +${rp}RP · ${count}곳`,
   plantAllButton: (count: number, cost: string) => `🌱 모두 심기 ${count} · ${cost}G`,
@@ -574,6 +577,8 @@ const EN_FARM_MESSAGES: FarmMessages = {
   harvestHint: 'Tap a plot to harvest.',
   harvestAllButton: (count) => `🧺 Harvest All ${count}`,
   harvestReplantButton: '🔁 Harvest & Replant',
+  harvestReplantToast: (amount, harvested, planted) =>
+    `+${amount}G · Harvested ${harvested} ${harvested === 1 ? 'plot' : 'plots'} and replanted ${planted} ${planted === 1 ? 'plot' : 'plots'}!`,
   harvestAllToast: (amount, count) => `+${amount}G · harvested ${count} plots at once!`,
   harvestAllDonatedToast: (rp, count) => `Donated to research. +${rp}RP · ${count} plots`,
   plantAllButton: (count, cost) => `🌱 Plant All ${count} · ${cost}G`,
