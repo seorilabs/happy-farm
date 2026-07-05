@@ -18,6 +18,7 @@ export * from './modifiers';
 export * from './prestige';
 export * from './production';
 export * from './research';
+export * from './resetBoundary';
 export * from './returnSummary';
 export * from './seedSort';
 export * from './weeklyEvent';

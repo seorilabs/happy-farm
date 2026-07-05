@@ -12,8 +12,7 @@
 //   피하려고 호출부에서 주입받습니다(모듈은 GameState/constants에 의존하지 않음).
 
 import balance from './balance.json';
-
-const DAY_MS = 24 * 60 * 60 * 1000;
+import { getResetDayIndex, getResetDayStart } from './resetBoundary';
 
 // 진행도 정보가 없을 때 쓰는 기본 광고 보상(초기 100G). dailyBonus와 동일한 폴백.
 const WHEEL_BASE_GOLD_FALLBACK = balance.ads.rewardedGoldAmount;
@@ -107,9 +106,10 @@ export function normalizeWheelState(value: unknown): WheelState {
   return { lastFreeSpinAt };
 }
 
-// UTC day-index. 같은 달력일이면 같은 값. cropOfTheDay와 동일한 경계.
+// 리셋 일 인덱스. 같은 리셋 일이면 같은 값. cropOfTheDay와 동일한 리셋 경계(공통
+// getResetDayIndex, 기본 KST 04:00)를 쓴다(#251).
 function dayIndex(ms: number): number {
-  return Math.floor(ms / DAY_MS);
+  return getResetDayIndex(ms);
 }
 
 // 무료 스핀 가능 여부와 다음 가능 시각을 반환한다.
@@ -124,8 +124,8 @@ export function getWheelStatus(state: WheelState, now = Date.now()): WheelStatus
   const canSpin = dayIndex(safeLast) < todayIndex;
   return {
     canSpin,
-    // 이미 오늘 돌렸으면 다음 UTC 자정에 열린다.
-    nextSpinAt: canSpin ? safeNow : (todayIndex + 1) * DAY_MS,
+    // 이미 오늘 돌렸으면 다음 리셋 경계(기본 KST 04:00)에 열린다.
+    nextSpinAt: canSpin ? safeNow : getResetDayStart(todayIndex + 1),
   };
 }
 

@@ -1,6 +1,7 @@
 import balance from './balance.json';
 import type { AreaKey, CropKey } from './types';
 import { CROPS } from './constants';
+import { RESET_OFFSET_MS } from './resetBoundary';
 
 // Weekend crop festival. A purely time-deterministic, save-state-free live event:
 // every weekend (Friday–Sunday, UTC) one area's crops sell for a limited-time
@@ -159,6 +160,10 @@ type WeeklyEventWindow = {
 
 function getWeeklyEventWindow(now: number, unlockedAreas?: readonly AreaKey[]): WeeklyEventWindow {
   const safeNow = Number.isFinite(now) ? now : Date.now();
+  // 요일 판정은 UTC epoch-day 기준을 유지한다(주말이 어느 "금요일"에 걸리는지는 바뀌지
+  // 않는다). 리셋 오프셋은 창 경계에만 적용해(아래) 시작/종료 시각만 KST 04:00 리셋
+  // 경계로 옮긴다 — epoch-day 자체를 오프셋 이동하면 KST 요일이 하루 밀려 축제가
+  // 토요일에 시작하는 부작용이 생기기 때문이다(#251).
   const epochDay = Math.floor(safeNow / DAY_MS);
   const dow = dayOfWeek(epochDay);
 
@@ -173,7 +178,10 @@ function getWeeklyEventWindow(now: number, unlockedAreas?: readonly AreaKey[]): 
     fridayEpochDay = epochDay + daysUntilFriday;
   }
 
-  const windowStartAt = fridayEpochDay * DAY_MS;
+  // 리셋 오프셋 반영(#251): 예전엔 fridayEpochDay*DAY(금 00:00 UTC = 금 09:00 KST)에
+  // 시작했다. 리셋 경계(기본 KST 04:00)에 맞춰 (DAY - offset)만큼 앞당겨, 금요일 04:00
+  // KST부터 창이 열리게 한다(금요일 저녁을 온전히 포함, 출근 시간 09:00 회피).
+  const windowStartAt = fridayEpochDay * DAY_MS - (DAY_MS - RESET_OFFSET_MS);
   const windowEndAt = windowStartAt + WEEKEND_LENGTH_DAYS * DAY_MS;
   const active = safeNow >= windowStartAt && safeNow < windowEndAt;
   const eligibleAreas = getEligibleAreas(unlockedAreas);

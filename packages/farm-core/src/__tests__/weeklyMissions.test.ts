@@ -14,6 +14,7 @@ import {
   type WeeklyMissionState,
 } from '../weeklyMissions';
 import balance from '../balance.json';
+import { getResetDayIndex, getResetDayStart } from '../resetBoundary';
 import { CROPS, createInitialState, migrateLoadedState } from '../constants';
 import { createPrestigedState } from '../prestige';
 import type { AreaKey, CropKey, GameState } from '../types';
@@ -23,28 +24,31 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const WEEK_MS = 7 * DAY_MS;
 const ALL_AREAS = [...new Set((Object.keys(CROPS) as CropKey[]).map((key) => CROPS[key]!.area))] as AreaKey[];
 
-// The UTC-Monday-00:00 start of the week containing `now`, derived from the same
-// formula as getMissionWeekKey (week index = floor((epochDays + 3) / 7)).
+// The reset-week start (absolute ms) of the week containing `now`, derived from
+// the same formula as getMissionWeekKey (week index = floor((resetDays + 3) / 7))
+// but through the shared reset-boundary helpers so it tracks the offset (#251).
 function weekStartMs(now: number): number {
-  const days = Math.floor(now / DAY_MS);
+  const days = getResetDayIndex(now);
   const weekIndex = Math.floor((days + 3) / 7);
-  return (weekIndex * 7 - 3) * DAY_MS;
+  return getResetDayStart(weekIndex * 7 - 3);
 }
 
-const MON = weekStartMs(Date.UTC(2026, 6, 1)); // a concrete week start
+const MON = weekStartMs(Date.UTC(2026, 6, 1)); // a concrete reset-week start
 const WEEK_COUNT = getWeeklyMissions(getMissionWeekKey(MON), ALL_AREAS).length;
 
-describe('getMissionWeekKey (UTC Monday boundary)', () => {
-  test('the derived week start is actually a Monday 00:00 UTC', () => {
-    expect(new Date(MON).getUTCDay()).toBe(1); // 1 = Monday
-    expect(MON % DAY_MS).toBe(0);
+describe('getMissionWeekKey (reset-week boundary)', () => {
+  test('the derived week start is aligned to a reset-day boundary and is a flip point', () => {
+    // MON은 리셋 일 경계에 정렬돼 있다(오프셋 반영).
+    expect(getResetDayStart(getResetDayIndex(MON))).toBe(MON);
+    // 그 직전(리셋 주의 마지막 순간)과는 다른 주 키다.
+    expect(getMissionWeekKey(MON - 1)).not.toBe(getMissionWeekKey(MON));
   });
 
-  test('is stable across the whole Mon→Sun week and flips at the next Monday', () => {
+  test('is stable across the whole reset week and flips at the next boundary', () => {
     const key = getMissionWeekKey(MON);
-    expect(getMissionWeekKey(MON + WEEK_MS - 1)).toBe(key); // Sunday 23:59:59.999
-    expect(getMissionWeekKey(MON - 1)).not.toBe(key); // previous Sunday
-    expect(getMissionWeekKey(MON + WEEK_MS)).not.toBe(key); // next Monday
+    expect(getMissionWeekKey(MON + WEEK_MS - 1)).toBe(key); // 주 마지막 순간
+    expect(getMissionWeekKey(MON - 1)).not.toBe(key); // 이전 주
+    expect(getMissionWeekKey(MON + WEEK_MS)).not.toBe(key); // 다음 주 시작
     // Numerically consecutive.
     expect(Number(getMissionWeekKey(MON + WEEK_MS))).toBe(Number(key) + 1);
   });

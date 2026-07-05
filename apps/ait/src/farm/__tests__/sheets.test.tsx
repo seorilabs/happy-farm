@@ -22,6 +22,8 @@ import {
   getSkillLevel,
   getWheelSlotGold,
   getWheelSlotReward,
+  getResetDayIndex,
+  getResetDayStart,
   WHEEL_SLOTS,
   type GameState,
 } from '../../../../../packages/farm-core/src';
@@ -537,7 +539,8 @@ describe('WheelSheet', () => {
     const state: GameState = { ...base, wheelState: { lastFreeSpinAt: NOW + 5 * DAY_MS } };
     const screen = renderWheel(state, jest.fn(), jest.fn());
     expect(screen.queryByText(messages.wheelSpinAction)).toBeNull();
-    const remaining = (Math.floor(NOW / DAY_MS) + 1) * DAY_MS - NOW;
+    // 다음 스핀은 다음 리셋 경계(기본 KST 04:00)에 열린다(#251).
+    const remaining = getResetDayStart(getResetDayIndex(NOW) + 1) - NOW;
     expect(remaining).toBeGreaterThan(0);
     expect(remaining).toBeLessThanOrEqual(DAY_MS);
     expect(screen.getByText(messages.wheelNextSpinLabel(formatRemainingTime(remaining, LOCALE)))).toBeTruthy();

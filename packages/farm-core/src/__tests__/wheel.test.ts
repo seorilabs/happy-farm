@@ -14,6 +14,7 @@ import {
   spinWheel,
 } from '../wheel';
 import type { WheelState } from '../wheel';
+import { getResetDayIndex, getResetDayStart } from '../resetBoundary';
 import balance from '../balance.json';
 import {
   applyWheelReward,
@@ -30,6 +31,9 @@ import { META_LAYER_KEYS } from '../types';
 const DAY_MS = 24 * 60 * 60 * 1000;
 // An arbitrary UTC midnight (day index 20000) to anchor deterministic day math.
 const DAY0 = 20000 * DAY_MS;
+// 리셋 경계(#251)는 오프셋(기본 KST 04:00) 기준이라 UTC 자정과 다르다. DAY0를 포함하는
+// 리셋 일의 시작 시각을 앵커로 삼아 하루가 온전히 [RESET0, RESET0+24h)에 들어가게 한다.
+const RESET0 = getResetDayStart(getResetDayIndex(DAY0));
 
 // An rng that yields a fixed value (for deterministic slot selection).
 const constRng = (value: number) => () => value;
@@ -85,19 +89,19 @@ describe('getWheelStatus (daily gating + UTC midnight rollover)', () => {
     expect(status.nextSpinAt).toBe(DAY0 + 3_600_000);
   });
 
-  test('after spinning today, the next spin opens at the next UTC midnight', () => {
-    const state: WheelState = { lastFreeSpinAt: DAY0 + 1_000 };
-    const status = getWheelStatus(state, DAY0 + 5_000);
+  test('after spinning today, the next spin opens at the next reset boundary', () => {
+    const state: WheelState = { lastFreeSpinAt: RESET0 + 1_000 };
+    const status = getWheelStatus(state, RESET0 + 5_000);
     expect(status.canSpin).toBe(false);
-    expect(status.nextSpinAt).toBe(DAY0 + DAY_MS);
+    expect(status.nextSpinAt).toBe(RESET0 + DAY_MS);
   });
 
-  test('crossing UTC midnight re-opens the free spin', () => {
-    const state: WheelState = { lastFreeSpinAt: DAY0 + 1_000 };
-    // Same calendar day, later: still locked.
-    expect(getWheelStatus(state, DAY0 + DAY_MS - 1).canSpin).toBe(false);
-    // Next day: available again.
-    expect(getWheelStatus(state, DAY0 + DAY_MS).canSpin).toBe(true);
+  test('crossing the reset boundary re-opens the free spin', () => {
+    const state: WheelState = { lastFreeSpinAt: RESET0 + 1_000 };
+    // Same reset day, later: still locked.
+    expect(getWheelStatus(state, RESET0 + DAY_MS - 1).canSpin).toBe(false);
+    // Next reset day: available again.
+    expect(getWheelStatus(state, RESET0 + DAY_MS).canSpin).toBe(true);
   });
 
   test('future lastFreeSpinAt (clock manipulation) is clamped and stays locked today', () => {
