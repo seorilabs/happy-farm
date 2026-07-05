@@ -566,6 +566,60 @@ for (const animal of animalKinds) {
   );
 }
 
+// 14) 생산 가공 공방(#250): 각 레시피는 유효 입력(존재 작물·양의 정수 수량)을 갖고,
+// 판매가가 입력 작물 판매가 합보다 크며(부가가치), 배수는 [1.2, 4] 밴드 안이다. 또한
+// 실현 net/h(sellPrice / timerMs — 재고 입력은 수확 부산물이라 한계수익이 곧 판매가)가
+// "가장 싼 작물 net/h"보다 낮아야 한다(작물 진행 지배 방지). minCropNetPerHour는 위
+// (13)에서 계산한 값을 재사용한다.
+const PRODUCTION_MULTIPLE_MIN = 1.2;
+const PRODUCTION_MULTIPLE_MAX = 4;
+const cropSellByKey = new Map(crops.map((crop) => [crop.key, crop.sell]));
+const recipes = Array.isArray(balance.production?.recipes) ? balance.production.recipes : [];
+check(recipes.length > 0, 'production.recipes는 비어 있을 수 없습니다.');
+const recipeKeysSeen = new Set();
+for (const recipe of recipes) {
+  const label = recipe?.key ?? '(이름 없음)';
+  if (!isFiniteNumber(recipe?.timerMs) || !isFiniteNumber(recipe?.sellPrice)) {
+    check(false, `가공 레시피 ${label}: timerMs/sellPrice가 모두 유효한 숫자여야 합니다.`);
+    continue;
+  }
+  check(
+    typeof recipe.key === 'string' && recipe.key.length > 0 && !recipeKeysSeen.has(recipe.key),
+    `가공 레시피 ${label}: key는 비어 있지 않은 고유 문자열이어야 합니다.`
+  );
+  recipeKeysSeen.add(recipe.key);
+  check(typeof recipe.icon === 'string' && recipe.icon.length > 0, `가공 레시피 ${label}: icon은 비어 있지 않은 문자열이어야 합니다.`);
+  check(recipe.timerMs > 0, `가공 레시피 ${label}: timerMs는 0보다 커야 합니다.`);
+  check(recipe.sellPrice > 0, `가공 레시피 ${label}: sellPrice는 0보다 커야 합니다.`);
+  const inputs = Array.isArray(recipe.inputs) ? recipe.inputs : [];
+  const inputsValid =
+    inputs.length > 0 &&
+    inputs.every(
+      (input) => cropSellByKey.has(input?.crop) && Number.isInteger(input?.qty) && input.qty > 0
+    );
+  check(inputsValid, `가공 레시피 ${label}: inputs는 유효 작물 키와 양의 정수 수량을 가져야 합니다.`);
+  if (!inputsValid) {
+    continue;
+  }
+  const inputSellSum = inputs.reduce((sum, input) => sum + cropSellByKey.get(input.crop) * input.qty, 0);
+  check(
+    recipe.sellPrice > inputSellSum,
+    `가공 레시피 ${label}: sellPrice(${recipe.sellPrice})는 입력 작물 판매가 합(${inputSellSum})보다 커야 합니다(부가가치).`
+  );
+  const multiple = recipe.sellPrice / inputSellSum;
+  check(
+    multiple >= PRODUCTION_MULTIPLE_MIN && multiple <= PRODUCTION_MULTIPLE_MAX,
+    `가공 레시피 ${label}: 판매가 배수(×${multiple.toFixed(2)})는 [${PRODUCTION_MULTIPLE_MIN}, ${PRODUCTION_MULTIPLE_MAX}] 밴드 안이어야 합니다.`
+  );
+  // 재고 입력은 수확 부산물(무료)이라 실현 한계수익 = 판매가 전액. 이 net/h가 최소
+  // 작물 net/h보다 낮아야 크래프팅이 능동 작물 진행을 지배하지 않는다.
+  const netPerHour = (recipe.sellPrice / recipe.timerMs) * MS_PER_HOUR_ANIMALS;
+  check(
+    netPerHour > 0 && netPerHour < minCropNetPerHour,
+    `가공 레시피 ${label}: net/h(${Math.round(netPerHour)})는 최소 작물 net/h(${Math.round(minCropNetPerHour)})보다 낮아야 합니다(작물 지배 방지).`
+  );
+}
+
 const result = {
   status: failures.length > 0 ? 'fail' : 'pass',
   checked: passes.length + failures.length,

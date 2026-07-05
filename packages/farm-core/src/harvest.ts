@@ -10,6 +10,7 @@ import {
   type MutationKind,
 } from './mastery';
 import { getDonationRp, isCropPlantable, isNodeUnlocked } from './research';
+import { addCropToInventory } from './production';
 import { recordHarvestProgress } from './missions';
 import { recordWeeklyHarvestProgress } from './weeklyMissions';
 
@@ -248,6 +249,12 @@ export function performHarvest(gameState: GameState, plotIndex: number, options:
     harvestedCropKeys,
     harvestCounts,
     mutationsDiscovered,
+    // 공방 부산물(#250): 매 수확마다 작물 1개를 인벤토리에 적재한다. 판매/기부 보상은
+    // 그대로 두고 재고만 추가하는 순수 가산이라, 공방을 안 쓰는 유저에겐 영향이 없다.
+    production: {
+      ...gameState.production,
+      inventory: addCropToInventory(gameState.production.inventory, cropKey, 1),
+    },
     // Every harvest path funnels through here, so daily-mission harvest progress
     // (total + per-area) is tracked once at the canonical pipeline.
     dailyMissionState: recordHarvestProgress(gameState.dailyMissionState, crop.area, now, gameState.unlockedAreas),
