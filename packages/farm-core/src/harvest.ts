@@ -482,6 +482,37 @@ export function performHarvestAll(gameState: GameState, options: HarvestAllOptio
   };
 }
 
+export type HarvestAndReplantResult = {
+  state: GameState;
+  // The underlying harvest-all result (per-plot outcomes + totals) so the caller
+  // can drive the exact same batched feedback as a plain Harvest All.
+  harvest: HarvestAllResult;
+  // Plots re-sown after harvesting (0 when the crop was unplantable/unaffordable).
+  plantedCount: number;
+};
+
+// Manual "Harvest then Replant" (#252): one tap that harvests every ripe plot and
+// immediately re-sows the freed (and any pre-existing empty) plots with `cropKey`,
+// so a returning/idle player restarts the cycle without a second action. Pure —
+// it just sequences the existing performHarvestAll → performPlantAll, so mastery/
+// mutation/collection side effects and the partial-on-gold behavior (performPlantAll
+// stops at the first unaffordable plot) are identical to doing the two steps by hand.
+// No harvest happening (nothing ripe) is a no-op: it never plants on its own, which
+// keeps it distinct from plain "Plant All".
+export function performHarvestAndReplant(
+  gameState: GameState,
+  cropKey: CropKey,
+  options: HarvestAllOptions = {}
+): HarvestAndReplantResult {
+  const now = options.now ?? Date.now();
+  const harvest = performHarvestAll(gameState, options);
+  if (harvest.harvestedCount === 0) {
+    return { state: gameState, harvest, plantedCount: 0 };
+  }
+  const plant = performPlantAll(harvest.state, cropKey, now);
+  return { state: plant.state, harvest, plantedCount: plant.plantedCount };
+}
+
 export type AutomationTickResult = {
   state: GameState;
   harvestedCount: number;

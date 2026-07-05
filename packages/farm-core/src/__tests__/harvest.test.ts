@@ -9,6 +9,7 @@ import {
   getReadyPlotCount,
   performHarvest,
   performHarvestAll,
+  performHarvestAndReplant,
   performPlantAll,
 } from '../harvest';
 import type { CropKey, GameState, PlotState } from '../types';
@@ -304,5 +305,76 @@ describe('performPlantAll', () => {
     const result = performPlantAll(base, LOCKED_AREA_CROP, NOW);
     expect(result.plantedCount).toBe(0);
     expect(result.state).toBe(base);
+  });
+});
+
+describe('performHarvestAndReplant (#252)', () => {
+  const NOW = 10_000;
+  const allPlotIndices = (state: GameState) => Array.from({ length: state.unlockedPlotCount }, (_, i) => i);
+
+  test('harvests every ripe plot then re-sows them with the crop (enough gold)', () => {
+    const base = { ...createInitialState(), gold: 1_000_000 };
+    const ripe = withRipePlots(base, allPlotIndices(base), 'carrot');
+
+    const result = performHarvestAndReplant(ripe, 'carrot', { now: NOW, rng: noMutationRng });
+
+    expect(result.harvest.harvestedCount).toBe(base.unlockedPlotCount);
+    expect(result.plantedCount).toBe(base.unlockedPlotCount);
+    // 방금 수확한 밭이 같은 작물로 다시 심겨 성장 중(state 1)이다.
+    for (const i of allPlotIndices(base)) {
+      const plot = result.state.plots.find((p) => p.id === i)!;
+      expect(plot.state).toBe(1);
+      expect(plot.cropType).toBe('carrot');
+    }
+  });
+
+  test('nothing ripe is a no-op — never plants on its own (distinct from Plant All)', () => {
+    // 빈 밭만 있는 상태: 수확할 게 없으면 재심기도 하지 않는다.
+    const base = { ...createInitialState(), gold: 1_000_000 };
+    const result = performHarvestAndReplant(base, 'carrot', { now: NOW, rng: noMutationRng });
+    expect(result.harvest.harvestedCount).toBe(0);
+    expect(result.plantedCount).toBe(0);
+    expect(result.state).toBe(base);
+    // 빈 밭이 심기지 않고 그대로다.
+    expect(result.state.plots.every((p) => p.state === 0)).toBe(true);
+  });
+
+  test('gold-limited: replants only the affordable count; freed-but-unplanted plots stay empty', () => {
+    // 값싼 carrot을 수확해(적은 수입) 비싼 onion으로 재심기 → 예산이 모자라 일부만.
+    const base = { ...createInitialState(), gold: 0 };
+    const ripe = withRipePlots(base, allPlotIndices(base), 'carrot');
+
+    const result = performHarvestAndReplant(ripe, 'onion', { now: NOW, rng: noMutationRng });
+
+    // 부분 성공: 심은 수 < 수확한 수.
+    expect(result.harvest.harvestedCount).toBe(base.unlockedPlotCount);
+    expect(result.plantedCount).toBeLessThan(result.harvest.harvestedCount);
+    // 심은 수는 정확히 수확 후 상태의 '지불 가능 수량'과 일치한다(골드 제한 불변식).
+    expect(result.plantedCount).toBe(getPlantAllPreview(result.harvest.state, 'onion', NOW).plantableCount);
+    // 재심되지 못한 밭은 빈 채로 남는다(state 0).
+    const emptyAfter = result.state.plots.filter((p) => p.id < base.unlockedPlotCount && p.state === 0).length;
+    expect(emptyAfter).toBe(base.unlockedPlotCount - result.plantedCount);
+  });
+
+  test('unplantable replant crop still harvests; plants nothing', () => {
+    const base = { ...createInitialState(), gold: 1_000_000 };
+    const ripe = withRipePlots(base, allPlotIndices(base), 'carrot');
+
+    const result = performHarvestAndReplant(ripe, LOCKED_AREA_CROP, { now: NOW, rng: noMutationRng });
+
+    expect(result.harvest.harvestedCount).toBe(base.unlockedPlotCount);
+    expect(result.plantedCount).toBe(0);
+    // 수확은 됐고(밭이 비었고), 미해금 작물이라 재심기는 안 됐다.
+    expect(result.state.plots.every((p) => p.id >= base.unlockedPlotCount || p.state === 0)).toBe(true);
+  });
+
+  test('replant reuses the same rolls as harvest-all (deterministic outcomes)', () => {
+    const base = { ...createInitialState(), gold: 1_000_000 };
+    const ripe = withRipePlots(base, allPlotIndices(base), 'carrot');
+    const rollFor = () => 0.999999; // 변이 없음
+    const a = performHarvestAndReplant(ripe, 'carrot', { now: NOW, rollFor });
+    const b = performHarvestAndReplant(ripe, 'carrot', { now: NOW, rollFor });
+    expect(a.state).toEqual(b.state);
+    expect(a.harvest.totalGoldGained).toBe(b.harvest.totalGoldGained);
   });
 });

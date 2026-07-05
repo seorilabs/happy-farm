@@ -157,6 +157,7 @@ import {
   isTitleUnlocked,
   normalizeLocale,
   performHarvestAll,
+  performHarvestAndReplant,
   performPlantAll,
   getPlantAllPreview,
   getReadyPlotCount,
@@ -164,6 +165,7 @@ import {
   recordReturnInterstitial,
   recordRewardedAdUsage,
   type CropHarvestedGameEvent,
+  type HarvestAllResult,
   type CropPlantedGameEvent,
   type CropEconomyEstimate,
   type FarmGameCommandBlockedReason,
@@ -2670,51 +2672,106 @@ export default function FarmGame({
       // here, so the FX/toast/analytics always reflect exactly what was harvested
       // even if a concurrent tick shifted the ripe set after this tap.
       const result = performHarvestAll(state, { now, rollFor });
-      // Guard the queue against a StrictMode/concurrent double-invoke of this
-      // updater: keep at most one effect per id. (The drain loop also dedupes by
-      // id, so feedback never doubles either way — this just keeps the queue clean.)
-      if (!pendingCommandEffectsRef.current.some((pending) => pending.id === effectId)) {
-        let firstMutationFlash: 'golden' | 'rainbow' | null = null;
-        let firstHarvest: { cropIcon: string; goldGained: number } | null = null;
-        const rankUps: { cropKey: CropKey; rankKey: MasteryRankKey; rankIcon: string }[] = [];
-        for (const { outcome } of result.harvests) {
-          const mk = outcome.mutation?.key;
-          if (mk === 'rainbow') {
-            firstMutationFlash = 'rainbow';
-          } else if (mk === 'golden' && firstMutationFlash == null) {
-            firstMutationFlash = 'golden';
-          }
-          if (outcome.isFirstMeaningfulHarvest) {
-            firstHarvest = { cropIcon: getCrop(outcome.cropKey).icon, goldGained: outcome.goldGained };
-          }
-          if (outcome.newMasteryRank != null) {
-            rankUps.push({
-              cropKey: outcome.cropKey,
-              rankKey: outcome.newMasteryRank.key,
-              rankIcon: outcome.newMasteryRank.icon,
-            });
-          }
-        }
-        pendingCommandEffectsRef.current.push({
-          id: effectId,
-          type: 'harvestedAll',
-          fx: result.harvests.map(({ plotIndex, outcome }) => {
-            const mk = outcome.mutation?.key;
-            const tone: HarvestPop['tone'] =
-              mk === 'rainbow' ? 'rainbow' : mk === 'golden' ? 'golden' :
-              outcome.mutation != null || outcome.newMasteryRank != null || outcome.boostActive ? 'special' : 'normal';
-            return { plotIndex, goldGained: outcome.goldGained, tone };
-          }),
-          rankUps,
-          firstMutationFlash,
-          firstHarvest,
-          totalGoldGained: result.totalGoldGained,
-          totalRpGained: result.totalRpGained,
-          harvestedCount: result.harvestedCount,
-          specialCount: result.specialCount,
+      enqueueHarvestAllFeedback(result, effectId);
+      return result.harvestedCount > 0 ? result.state : state;
+    });
+    setCommandEffectVersion((version) => version + 1);
+  }
+
+  // Queues the batched "Harvest All" feedback (floating gold per plot, mutation
+  // flash, rank-ups, first-harvest aha) for a computed HarvestAllResult. Shared by
+  // plain Harvest All and Harvest-then-Replant (#252) so both drive identical FX.
+  function enqueueHarvestAllFeedback(result: HarvestAllResult, effectId: number) {
+    // Guard the queue against a StrictMode/concurrent double-invoke of the updater:
+    // keep at most one effect per id. (The drain loop also dedupes by id, so
+    // feedback never doubles either way — this just keeps the queue clean.)
+    if (pendingCommandEffectsRef.current.some((pending) => pending.id === effectId)) {
+      return;
+    }
+    let firstMutationFlash: 'golden' | 'rainbow' | null = null;
+    let firstHarvest: { cropIcon: string; goldGained: number } | null = null;
+    const rankUps: { cropKey: CropKey; rankKey: MasteryRankKey; rankIcon: string }[] = [];
+    for (const { outcome } of result.harvests) {
+      const mk = outcome.mutation?.key;
+      if (mk === 'rainbow') {
+        firstMutationFlash = 'rainbow';
+      } else if (mk === 'golden' && firstMutationFlash == null) {
+        firstMutationFlash = 'golden';
+      }
+      if (outcome.isFirstMeaningfulHarvest) {
+        firstHarvest = { cropIcon: getCrop(outcome.cropKey).icon, goldGained: outcome.goldGained };
+      }
+      if (outcome.newMasteryRank != null) {
+        rankUps.push({
+          cropKey: outcome.cropKey,
+          rankKey: outcome.newMasteryRank.key,
+          rankIcon: outcome.newMasteryRank.icon,
         });
       }
-      return result.harvestedCount > 0 ? result.state : state;
+    }
+    pendingCommandEffectsRef.current.push({
+      id: effectId,
+      type: 'harvestedAll',
+      fx: result.harvests.map(({ plotIndex, outcome }) => {
+        const mk = outcome.mutation?.key;
+        const tone: HarvestPop['tone'] =
+          mk === 'rainbow' ? 'rainbow' : mk === 'golden' ? 'golden' :
+          outcome.mutation != null || outcome.newMasteryRank != null || outcome.boostActive ? 'special' : 'normal';
+        return { plotIndex, goldGained: outcome.goldGained, tone };
+      }),
+      rankUps,
+      firstMutationFlash,
+      firstHarvest,
+      totalGoldGained: result.totalGoldGained,
+      totalRpGained: result.totalRpGained,
+      harvestedCount: result.harvestedCount,
+      specialCount: result.specialCount,
+    });
+  }
+
+  // "Harvest then Replant" (#252): harvest every ripe plot and immediately re-sow
+  // the freed plots with the selected crop (or, when the harvest tool is active,
+  // the crop that was just growing) in one tap — removing the harvest→plant 2-tap
+  // friction of the idle/return loop. Reuses the pure performHarvestAndReplant, so
+  // gold-limited partial replant and all harvest side effects match the manual path.
+  function harvestAllAndReplant() {
+    if (harvestAllInFlightRef.current) {
+      return;
+    }
+    // Replant crop: the selected seed, or — when the harvest tool is active — the
+    // crop of the first ripe plot ("what was just growing"). Null only if nothing
+    // is ripe (then it degrades to a plain Harvest All via the pure function).
+    const replantCropKey: CropKey | null =
+      selectedTool !== 'harvest'
+        ? selectedTool
+        : (gameState.plots.find((plot) => plot.id < gameState.unlockedPlotCount && plot.state === 2)?.cropType ??
+          null);
+
+    const now = Date.now();
+    const effectId = ++commandEffectIdRef.current;
+    const rollByPlot: Record<number, number> = {};
+    const rollFor = (plotIndex: number) => {
+      const existing = rollByPlot[plotIndex];
+      if (existing != null) {
+        return existing;
+      }
+      const roll = Math.random();
+      rollByPlot[plotIndex] = roll;
+      return roll;
+    };
+
+    harvestAllInFlightRef.current = true;
+    setGameState((state) => {
+      // No crop to replant (harvest tool + nothing ripe resolved): fall back to a
+      // plain harvest so the tap is never a no-op when plots are ripe.
+      if (replantCropKey == null) {
+        const harvest = performHarvestAll(state, { now, rollFor });
+        enqueueHarvestAllFeedback(harvest, effectId);
+        return harvest.harvestedCount > 0 ? harvest.state : state;
+      }
+      const result = performHarvestAndReplant(state, replantCropKey, { now, rollFor });
+      enqueueHarvestAllFeedback(result.harvest, effectId);
+      return result.harvest.harvestedCount > 0 ? result.state : state;
     });
     setCommandEffectVersion((version) => version + 1);
   }
@@ -3182,10 +3239,19 @@ export default function FarmGame({
         <View style={styles.toolHeader}>
           <Text style={styles.toolLabel}>{messages.toolLabel}</Text>
           {readyPlotCount >= HARVEST_ALL_MIN_COUNT ? (
-            <HarvestAllButton
-              label={messages.harvestAllButton(readyPlotCount)}
-              onPress={harvestAllCrops}
-            />
+            // 익은 밭이 다수면 '전체 수확'과 '수확 후 재심기'(#252)를 나란히 제공한다.
+            // 둘 다 툴 스트립 내부(하단)에 두고 상단 HUD/navRow는 건드리지 않는다.
+            <View style={styles.toolHeaderRight}>
+              <HarvestAllButton
+                label={messages.harvestAllButton(readyPlotCount)}
+                onPress={harvestAllCrops}
+              />
+              <HarvestAllButton
+                testID="harvest-replant-button"
+                label={messages.harvestReplantButton}
+                onPress={harvestAllAndReplant}
+              />
+            </View>
           ) : selectedTool !== 'harvest' &&
             onboardingStep == null &&
             plantAllPreview.plantableCount > 0 &&
@@ -4066,7 +4132,7 @@ function MoreMenuButton({
 // Swaps in for the tool hint the moment a couple of plots ripen, turning a
 // row of individual taps into one satisfying batch harvest. It pops in and
 // breathes gently so the eye catches the call-to-action without nagging.
-function HarvestAllButton({ label, onPress }: { label: string; onPress: () => void }) {
+function HarvestAllButton({ label, onPress, testID }: { label: string; onPress: () => void; testID?: string }) {
   const entranceRef = useRef<Animated.Value | null>(null);
   if (entranceRef.current == null) {
     entranceRef.current = new Animated.Value(0);
@@ -4114,6 +4180,7 @@ function HarvestAllButton({ label, onPress }: { label: string; onPress: () => vo
 
   return (
     <Pressable
+      testID={testID}
       accessibilityLabel={label}
       hitSlop={6}
       style={({ pressed }) => [pressed && styles.harvestAllButtonPressed]}
