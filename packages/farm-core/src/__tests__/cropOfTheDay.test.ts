@@ -8,9 +8,13 @@ import {
   CROP_OF_THE_DAY_MULTIPLIER,
   getCropOfTheDayStatus,
 } from '../cropOfTheDay';
+import { getResetDayIndex, getResetDayStart } from '../resetBoundary';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const DAY_START = Date.parse('2026-06-13T00:00:00.000Z');
+// 리셋 경계(#251)는 UTC 자정이 아니라 오프셋(기본 KST 04:00) 기준이므로, 하루가 온전히
+// 들어가는 리셋 일 시작 시각을 앵커로 쓴다.
+const RESET_START = getResetDayStart(getResetDayIndex(DAY_START));
 
 // 신규 세이브(starter_field만 해금)에서 즉시 심을 수 있는 작물 5종.
 const STARTER_CROP_KEYS: CropKey[] = ['carrot', 'wheat', 'potato', 'onion', 'sweet_potato'];
@@ -56,9 +60,13 @@ describe('getCropOfTheDayStatus', () => {
     expect(CROP_OF_THE_DAY_MULTIPLIER).toBe(balance.cropOfTheDay.multiplier);
   });
 
-  test('windowStartAt is UTC midnight for the given day', () => {
-    const { windowStartAt } = getCropOfTheDayStatus(DAY_START + 6 * 3600_000);
-    expect(windowStartAt).toBe(DAY_START);
+  test('windowStartAt is the reset-day start containing now (offset-anchored)', () => {
+    const now = RESET_START + 6 * 3600_000;
+    const { windowStartAt } = getCropOfTheDayStatus(now);
+    expect(windowStartAt).toBe(getResetDayStart(getResetDayIndex(now)));
+    // 창은 now를 포함한다: windowStartAt ≤ now < windowStartAt + 24h.
+    expect(now - windowStartAt).toBeGreaterThanOrEqual(0);
+    expect(now - windowStartAt).toBeLessThan(DAY_MS);
   });
 
   test('windowEndAt is exactly 24h after windowStartAt', () => {
@@ -66,10 +74,10 @@ describe('getCropOfTheDayStatus', () => {
     expect(windowEndAt - windowStartAt).toBe(DAY_MS);
   });
 
-  test('same crop all day (morning, noon, late evening)', () => {
-    const morning = getCropOfTheDayStatus(DAY_START + 3600_000);
-    const noon = getCropOfTheDayStatus(DAY_START + 12 * 3600_000);
-    const evening = getCropOfTheDayStatus(DAY_START + 23 * 3600_000 + 59 * 60_000);
+  test('same crop all day (morning, noon, late evening within one reset day)', () => {
+    const morning = getCropOfTheDayStatus(RESET_START + 3600_000);
+    const noon = getCropOfTheDayStatus(RESET_START + 12 * 3600_000);
+    const evening = getCropOfTheDayStatus(RESET_START + 23 * 3600_000 + 59 * 60_000);
     expect(noon.cropKey).toBe(morning.cropKey);
     expect(evening.cropKey).toBe(morning.cropKey);
   });
@@ -83,11 +91,11 @@ describe('getCropOfTheDayStatus', () => {
     expect(b.windowEndAt).toBe(a.windowEndAt);
   });
 
-  test('windowStartAt changes at day boundary', () => {
-    const endOfDay = getCropOfTheDayStatus(DAY_START + DAY_MS - 1);
-    const startOfNextDay = getCropOfTheDayStatus(DAY_START + DAY_MS);
-    expect(endOfDay.windowStartAt).toBe(DAY_START);
-    expect(startOfNextDay.windowStartAt).toBe(DAY_START + DAY_MS);
+  test('windowStartAt changes at the reset-day boundary', () => {
+    const endOfDay = getCropOfTheDayStatus(RESET_START + DAY_MS - 1);
+    const startOfNextDay = getCropOfTheDayStatus(RESET_START + DAY_MS);
+    expect(endOfDay.windowStartAt).toBe(RESET_START);
+    expect(startOfNextDay.windowStartAt).toBe(RESET_START + DAY_MS);
   });
 
   test('windowEndAt for today equals windowStartAt of tomorrow', () => {

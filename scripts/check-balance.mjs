@@ -620,6 +620,16 @@ for (const recipe of recipes) {
   );
 }
 
+// 15) 리셋 오프셋(#251): 일일/주간 리셋 경계 이동량. 하루(0~24h) 안의 시각 오프셋이라
+// [0, DAY_MS) 범위의 유한값이어야 한다(음수/24h 이상이면 경계가 하루 밖으로 나가거나
+// 순환해 리셋 시각이 의도와 어긋난다).
+const DAY_MS_RESET = 24 * 60 * 60 * 1000;
+const resetOffsetMs = balance.resetOffset?.offsetMs;
+check(
+  isFiniteNumber(resetOffsetMs) && resetOffsetMs >= 0 && resetOffsetMs < DAY_MS_RESET,
+  `resetOffset.offsetMs(${resetOffsetMs})는 0 이상 ${DAY_MS_RESET}(24h) 미만의 유한 값이어야 합니다.`
+);
+
 const result = {
   status: failures.length > 0 ? 'fail' : 'pass',
   checked: passes.length + failures.length,

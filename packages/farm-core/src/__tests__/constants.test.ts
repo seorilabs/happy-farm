@@ -41,6 +41,7 @@ import {
   getUpgradeCost,
   migrateLoadedState,
   normalizeAdUsage,
+  getAdDailyKey,
   recordHarvestBonusAdPrompt,
   recordRewardedAdUsage,
 } from '../constants';
@@ -281,7 +282,9 @@ describe('farm save migration', () => {
       state: 0,
     });
     expect(migrated.adUsage).toEqual({
-      dailyKey: '2026-05-27',
+      // 광고 일일 키는 리셋 오프셋(#251) 반영으로 리셋 일 인덱스 문자열이다(구 세이브의
+      // 다른 날짜 키와 불일치 → 일일 카운트 리셋). 형식은 getAdDailyKey로 데이터 유도.
+      dailyKey: getAdDailyKey(NOW),
       rewardedGoldTimestamps: [NOW - 1000],
       rewardedGoldDailyCount: 0,
       growthAd: { lastUsedAt: null, dailyCount: 0 },
@@ -430,7 +433,8 @@ describe('farm ad limits', () => {
   test('ad usage normalization rejects future and non-finite timestamps', () => {
     const adUsage = normalizeAdUsage(
       {
-        dailyKey: '2026-05-27',
+        // 오늘의 리셋 일 키와 일치해야 일일 카운트가 보존된다(#251 형식 변경 반영).
+        dailyKey: getAdDailyKey(NOW),
         rewardedGoldTimestamps: [NOW - 1, NOW + 1, NOW - REWARDED_GOLD_WINDOW_MS - 1, Number.NaN],
         rewardedGoldDailyCount: -5,
         growthAd: { lastUsedAt: NOW + 1, dailyCount: Number.NaN },

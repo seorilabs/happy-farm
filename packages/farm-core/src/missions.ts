@@ -8,8 +8,7 @@
 
 import balance from './balance.json';
 import type { AreaKey, GameState } from './types';
-
-const DAY_MS = 24 * 60 * 60 * 1000;
+import { getResetDayIndex } from './resetBoundary';
 
 export type MissionType = (typeof balance.missions.slots)[number]['type'];
 
@@ -88,11 +87,11 @@ function hashString(input: string): number {
   return h >>> 0;
 }
 
-// now가 속한 UTC 캘린더 날짜 키(에포크 일수 문자열). cropOfTheDay·weeklyEvent와 동일한 UTC
-// 자정 경계를 쓴다(오늘의 작물/주말 이벤트와 같은 시각에 갱신되도록 일부러 통일).
+// now가 속한 리셋 날짜 키(리셋 일 인덱스 문자열). cropOfTheDay·weeklyEvent와 동일한
+// 리셋 경계(공통 getResetDayIndex, 기본 KST 04:00)를 쓴다 — 오늘의 작물/주말 이벤트와
+// 같은 시각에 갱신되도록 일부러 통일한다(#251).
 export function getMissionDayKey(now = Date.now()): string {
-  const safeNow = Number.isFinite(now) ? now : Date.now();
-  return String(Math.floor(safeNow / DAY_MS));
+  return String(getResetDayIndex(now));
 }
 
 // "오늘의 구역" 추첨 풀: 해금 목록을 넘기면 그 구역만 후보로 삼아 항상 도달 가능한 구역이

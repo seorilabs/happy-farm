@@ -2,6 +2,7 @@ import balance from './balance.json';
 import type { CropKey, GameState } from './types';
 import { CROPS, INITIAL_AREA_KEYS, getAreaCropKeys, isAreaUnlocked } from './constants';
 import { isCropPlantable } from './research';
+import { getResetDayIndex, getResetDayStart } from './resetBoundary';
 
 // Featured-crop sell multiplier, data-driven from balance.json (was hardcoded 2).
 export const CROP_OF_THE_DAY_MULTIPLIER = balance.cropOfTheDay.multiplier;
@@ -86,10 +87,12 @@ export function getCropOfTheDayStatus(
           ? starterKeys
           : allCropKeys;
   }
-  const day = Math.floor(safeNow / DAY_MS);
+  // 리셋 경계는 공통 헬퍼로 통일한다(#251): UTC 자정이 아니라 오프셋(기본 KST 04:00)
+  // 시각에 오늘의 작물이 바뀐다.
+  const day = getResetDayIndex(safeNow);
   const index = hashDay(day) % cropKeys.length;
   const cropKey = cropKeys[index]!;
-  const windowStartAt = day * DAY_MS;
+  const windowStartAt = getResetDayStart(day);
   return {
     cropKey,
     multiplier: CROP_OF_THE_DAY_MULTIPLIER,

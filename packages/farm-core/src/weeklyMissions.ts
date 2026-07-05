@@ -9,8 +9,7 @@
 
 import balance from './balance.json';
 import type { AreaKey, GameState } from './types';
-
-const DAY_MS = 24 * 60 * 60 * 1000;
+import { getResetDayIndex } from './resetBoundary';
 
 export type WeeklyMissionType = (typeof balance.missions.weekly.slots)[number]['type'];
 
@@ -82,11 +81,11 @@ function hashString(input: string): number {
   return h >>> 0;
 }
 
-// now가 속한 UTC 주(週) 키(월요일 경계). epoch(1970-01-01)는 목요일이므로 +3일 보정하면
-// 월요일마다 주 인덱스가 1씩 증가한다(월요일 00:00 UTC가 주 경계).
+// now가 속한 주(週) 키(월요일 경계). epoch(1970-01-01)는 목요일이므로 +3일 보정하면
+// 월요일마다 주 인덱스가 1씩 증가한다. 리셋 일 경계는 공통 getResetDayIndex를 쓰므로
+// (#251) 주 경계도 오프셋(기본 KST 04:00) 반영 후 월요일에 롤오버한다.
 export function getMissionWeekKey(now = Date.now()): string {
-  const safeNow = Number.isFinite(now) ? now : Date.now();
-  const days = Math.floor(safeNow / DAY_MS);
+  const days = getResetDayIndex(now);
   return String(Math.floor((days + 3) / 7));
 }
 

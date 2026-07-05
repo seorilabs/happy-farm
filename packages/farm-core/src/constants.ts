@@ -11,6 +11,7 @@ import {
 import { createInitialPrestigeProgress, normalizeChainFarms, normalizePrestigeProgress } from './prestige';
 import { createInitialAnimalsState, normalizeAnimalsState } from './animals';
 import { createInitialProductionState, normalizeProductionState } from './production';
+import { getResetDayIndex } from './resetBoundary';
 import { createInitialPlacedDecorations, normalizePlacedDecorations } from './decorations';
 import { createInitialDailyMissionState, normalizeDailyMissionState } from './missions';
 import { createInitialWeeklyMissionState, normalizeWeeklyMissionState } from './weeklyMissions';
@@ -463,8 +464,12 @@ export function getAreaUnlockRequirementText(
   return parts.join(' · ');
 }
 
+// 광고 일일 한도의 날짜 키. 다른 일일 리셋과 같은 리셋 경계(공통 getResetDayIndex,
+// 기본 KST 04:00)를 쓰도록 통일한다(#251). 예전 UTC 날짜 문자열("YYYY-MM-DD")에서 리셋
+// 일 인덱스 문자열로 형식이 바뀌므로, 구버전 세이브는 업그레이드 시 광고 일일 카운트가
+// 한 번 리셋된다(무해 — 한도만 하루치 초기화).
 export function getAdDailyKey(now = Date.now()) {
-  return new Date(now).toISOString().slice(0, 10);
+  return String(getResetDayIndex(now));
 }
 
 export function createInitialAdUsage(now = Date.now()): GameState['adUsage'] {

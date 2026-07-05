@@ -11,19 +11,21 @@ import { CROPS, createInitialState } from '../constants';
 import { getCropModifiers } from '../modifiers';
 import { getCropOfTheDayStatus } from '../cropOfTheDay';
 import balance from '../balance.json';
+import { RESET_OFFSET_MS } from '../resetBoundary';
 import type { AreaKey, CropKey } from '../types';
 
 // Every distinct area key, derived from the crop table.
 const ALL_AREAS = [...new Set((Object.keys(CROPS) as CropKey[]).map((key) => CROPS[key]!.area))] as AreaKey[];
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-// 2026-06-26 is a Friday (UTC); the festival window runs from Friday for the
-// balance-configured number of days (default 3 → Fri–Sun). Derive the bounds from
-// balance.json so these assertions track the data instead of a hardcoded 3.
+// 2026-06-26 is a Friday (UTC). 리셋 오프셋(#251) 반영으로 축제 창은 금 00:00 UTC가 아니라
+// 그보다 (DAY - offset)만큼 앞선 리셋 경계(기본 금 04:00 KST = 목 19:00 UTC)에 열린다.
 const WEEKEND_LENGTH_DAYS = balance.weeklyEvent.weekendLengthDays;
-const FRI_START = Date.UTC(2026, 5, 26);
-const WINDOW_END = FRI_START + WEEKEND_LENGTH_DAYS * DAY_MS;
-const FRI_NOON = FRI_START + 12 * 60 * 60 * 1000;
+const FRI_MIDNIGHT_UTC = Date.UTC(2026, 5, 26);
+const WINDOW_SHIFT = DAY_MS - RESET_OFFSET_MS; // 리셋 경계로 앞당기는 양(기본 5h)
+const WINDOW_START = FRI_MIDNIGHT_UTC - WINDOW_SHIFT;
+const WINDOW_END = WINDOW_START + WEEKEND_LENGTH_DAYS * DAY_MS;
+const FRI_NOON = FRI_MIDNIGHT_UTC + 12 * 60 * 60 * 1000;
 
 // The event TYPE rotates deterministically per weekend, independent of the featured
 // area. Scan forward from FRI_NOON (in 1-week steps) for the first weekend whose
@@ -70,7 +72,7 @@ describe('getWeeklyEventStatus', () => {
   test('is active across the Fri–Sun window with a stable theme and bounds', () => {
     const fri = getWeeklyEventStatus(FRI_NOON);
     expect(fri.active).toBe(true);
-    expect(fri.windowStartAt).toBe(FRI_START);
+    expect(fri.windowStartAt).toBe(WINDOW_START);
     expect(fri.windowEndAt).toBe(WINDOW_END);
     expect(fri.multiplier).toBe(WEEKLY_EVENT_MULTIPLIER);
     expect(fri.cropKeys.length).toBeGreaterThan(0);
@@ -81,23 +83,24 @@ describe('getWeeklyEventStatus', () => {
       WEEKEND_LENGTH_DAYS * DAY_MS - 1,
     ];
     for (const offset of inWindowOffsets) {
-      const status = getWeeklyEventStatus(FRI_START + offset);
+      const status = getWeeklyEventStatus(WINDOW_START + offset);
       expect(status.active).toBe(true);
       expect(status.areaKey).toBe(fri.areaKey);
-      expect(status.windowStartAt).toBe(FRI_START);
+      expect(status.windowStartAt).toBe(WINDOW_START);
       expect(status.windowEndAt).toBe(WINDOW_END);
     }
   });
 
-  test('is inactive on weekdays but reports the upcoming weekend window', () => {
-    const thursday = getWeeklyEventStatus(FRI_START - 60 * 1000); // Thursday 23:59 UTC
-    expect(thursday.active).toBe(false);
-    expect(thursday.multiplier).toBe(1);
-    expect(thursday.windowStartAt).toBe(FRI_START); // the upcoming weekend
+  test('is inactive before the window but reports the upcoming weekend window', () => {
+    const beforeStart = getWeeklyEventStatus(WINDOW_START - 60 * 1000); // 리셋 경계 직전
+    expect(beforeStart.active).toBe(false);
+    expect(beforeStart.multiplier).toBe(1);
+    expect(beforeStart.windowStartAt).toBe(WINDOW_START); // the upcoming weekend
 
-    const monday = getWeeklyEventStatus(WINDOW_END); // Monday 00:00 UTC, just ended
-    expect(monday.active).toBe(false);
-    expect(monday.windowStartAt).toBe(FRI_START + 7 * DAY_MS); // next weekend
+    // 다음 주 평일(월요일 낮 UTC)에는 다음 주말 창을 가리킨다.
+    const nextMonday = getWeeklyEventStatus(FRI_MIDNIGHT_UTC + 3 * DAY_MS + 12 * 60 * 60 * 1000);
+    expect(nextMonday.active).toBe(false);
+    expect(nextMonday.windowStartAt).toBe(WINDOW_START + 7 * DAY_MS); // next weekend
   });
 
   test('is deterministic and save-state-free (same instant → same result)', () => {
@@ -195,9 +198,12 @@ describe('weekly event sale integration', () => {
     const status = getWeeklyEventStatus(HARVEST_NOON, state.unlockedAreas);
     expect(status.axis).toBe('speed');
 
-    const featured = status.cropKeys[0]!;
+    // 오늘의 작물(×2 판매 배수)을 제외해, featured/other의 유일한 차이가 축제 배수만
+    // 되게 한다(sale integration 테스트와 동일한 가드).
+    const cotd = getCropOfTheDayStatus(HARVEST_NOON).cropKey;
+    const featured = status.cropKeys.find((key) => key !== cotd)!;
     const other = (Object.keys(CROPS) as CropKey[]).find(
-      (key) => CROPS[key]!.area !== status.areaKey
+      (key) => CROPS[key]!.area !== status.areaKey && key !== cotd
     )!;
 
     const featuredMods = getCropModifiers(state, featured, HARVEST_NOON);
@@ -250,7 +256,7 @@ describe('weekly event featured-area restriction (해금 구역만)', () => {
   test('weekend active/inactive transition is unaffected by the unlock filter', () => {
     const unlocked = createInitialState().unlockedAreas;
     expect(getWeeklyEventStatus(FRI_NOON, unlocked).active).toBe(true);
-    expect(getWeeklyEventStatus(FRI_START - 60_000, unlocked).active).toBe(false);
+    expect(getWeeklyEventStatus(WINDOW_START - 60_000, unlocked).active).toBe(false);
     expect(getWeeklyEventStatus(WINDOW_END, unlocked).active).toBe(false);
   });
 
