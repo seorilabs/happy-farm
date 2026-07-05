@@ -578,7 +578,7 @@ const EN_FARM_MESSAGES: FarmMessages = {
   harvestAllButton: (count) => `🧺 Harvest All ${count}`,
   harvestReplantButton: '🔁 Harvest & Replant',
   harvestReplantToast: (amount, harvested, planted) =>
-    `+${amount}G · Harvested ${harvested} and replanted ${planted}!`,
+    `+${amount}G · Harvested ${harvested} ${harvested === 1 ? 'plot' : 'plots'} and replanted ${planted} ${planted === 1 ? 'plot' : 'plots'}!`,
   harvestAllToast: (amount, count) => `+${amount}G · harvested ${count} plots at once!`,
   harvestAllDonatedToast: (rp, count) => `Donated to research. +${rp}RP · ${count} plots`,
   plantAllButton: (count, cost) => `🌱 Plant All ${count} · ${cost}G`,
