@@ -194,6 +194,8 @@ const KO_FARM_MESSAGES = {
   collectionUnlockHint: (requirement: string) => `🔒 해금 조건: ${requirement}`,
   harvestHint: '밭을 눌러 수확할 수 있어요.',
   harvestAllButton: (count: number) => `🧺 모두 수확 ${count}`,
+  // #252: 수확 후 같은/선택 작물로 빈 밭 재심기를 한 번에.
+  harvestReplantButton: '🔁 수확 후 재심기',
   harvestAllToast: (amount: string, count: number) => `+${amount}G · ${count}곳 한 번에 수확했어요!`,
   harvestAllDonatedToast: (rp: string, count: number) => `연구에 헌납했어요. +${rp}RP · ${count}곳`,
   plantAllButton: (count: number, cost: string) => `🌱 모두 심기 ${count} · ${cost}G`,
@@ -571,6 +573,7 @@ const EN_FARM_MESSAGES: FarmMessages = {
   collectionUnlockHint: (requirement) => `🔒 Unlock: ${requirement}`,
   harvestHint: 'Tap a plot to harvest.',
   harvestAllButton: (count) => `🧺 Harvest All ${count}`,
+  harvestReplantButton: '🔁 Harvest & Replant',
   harvestAllToast: (amount, count) => `+${amount}G · harvested ${count} plots at once!`,
   harvestAllDonatedToast: (rp, count) => `Donated to research. +${rp}RP · ${count} plots`,
   plantAllButton: (count, cost) => `🌱 Plant All ${count} · ${cost}G`,
