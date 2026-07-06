@@ -353,6 +353,7 @@ const KO_FARM_MESSAGES = {
   collectionCompletedBadge: '완성 ✓',
   collectionClaimAction: (amount: string) => `완성 보상 ${amount}G 받기`,
   collectionClaimedLabel: '보상 받음 ✓',
+  collectionDetailCloseAction: '닫기',
   collectionFullTitle: '전체 도감',
   collectionFullDesc: (discovered: number, total: number) =>
     `모든 작물 ${discovered}/${total}종을 모으면 큰 보상을 받아요.`,
@@ -727,6 +728,7 @@ const EN_FARM_MESSAGES: FarmMessages = {
   collectionCompletedBadge: 'Done ✓',
   collectionClaimAction: (amount) => `Claim ${amount}G`,
   collectionClaimedLabel: 'Claimed ✓',
+  collectionDetailCloseAction: 'Close',
   collectionFullTitle: 'Full Collection',
   collectionFullDesc: (discovered, total) => `Collect all ${total} crops (${discovered}/${total}) for a big reward.`,
   collectionRewardClaimedToast: (amount) => `Claimed +${amount}G from your collection.`,

@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import {
   COLLECTION_FULL_REWARD_KEY,
@@ -76,6 +76,12 @@ export function CollectionSheet({
   collectionSummary: CollectionSummary;
   onClaimReward: (rewardKey: CollectionRewardKey) => void;
 }) {
+  // 발견한 작물을 탭하면 플레이버 텍스트(설명)를 상세 팝업으로 보여준다(#253).
+  // 72px 그리드 셀에는 설명을 담을 공간이 없어 한 뎁스 뒤의 팝업에 배치한다.
+  const [detailCropKey, setDetailCropKey] = React.useState<CropKey | null>(null);
+  const detailCrop = detailCropKey != null ? getKnownCrop(detailCropKey) : null;
+  const detailLabel = detailCropKey != null ? getCropLabel(detailCropKey, locale) : null;
+
   return (
     <View testID="collection-sheet">
       {collectionSummary.areas.map((area) => {
@@ -109,7 +115,14 @@ export function CollectionSheet({
                 const discovered = isCropDiscovered(gameState, cropKey);
                 const crop = getKnownCrop(cropKey);
                 return (
-                  <View key={cropKey} style={[styles.collectionCell, !discovered && styles.collectionCellLocked]}>
+                  <Pressable
+                    key={cropKey}
+                    style={[styles.collectionCell, !discovered && styles.collectionCellLocked]}
+                    // 발견한 작물만 상세 팝업을 연다. 미발견 셀은 잠금 표현을 유지하고 탭 비활성.
+                    onPress={discovered ? () => setDetailCropKey(cropKey) : undefined}
+                    disabled={!discovered}
+                    testID={discovered ? `collection-cell-${cropKey}` : undefined}
+                  >
                     <Text style={styles.collectionCellIcon}>{discovered ? crop.icon : '❓'}</Text>
                     <Text style={styles.collectionCellName} numberOfLines={1}>
                       {discovered ? getCropLabel(cropKey, locale).name : '???'}
@@ -123,7 +136,7 @@ export function CollectionSheet({
                         <MutationBadges gameState={gameState} cropKey={cropKey} />
                       </>
                     ) : null}
-                  </View>
+                  </Pressable>
                 );
               })}
             </View>
@@ -153,6 +166,33 @@ export function CollectionSheet({
           />
         ) : null}
       </View>
+
+      {detailCropKey != null && detailCrop != null && detailLabel != null ? (
+        <Modal
+          transparent
+          visible
+          animationType="fade"
+          onRequestClose={() => setDetailCropKey(null)}
+        >
+          <Pressable
+            style={styles.detailBackdrop}
+            onPress={() => setDetailCropKey(null)}
+            testID="collection-detail-backdrop"
+          >
+            {/* 카드 내부 탭은 배경으로 전파돼 닫히지 않도록 빈 onPress로 막는다. */}
+            <Pressable style={styles.detailCard} onPress={() => {}} testID="collection-detail-card">
+              <Text style={styles.detailIcon}>{detailCrop.icon}</Text>
+              <Text style={styles.detailName}>{detailLabel.name}</Text>
+              <Text style={styles.detailValue}>{formatMoney(detailCrop.sell, locale)}G</Text>
+              <Text style={styles.detailDescription}>{detailLabel.description}</Text>
+              <SheetAction
+                label={messages.collectionDetailCloseAction}
+                onPress={() => setDetailCropKey(null)}
+              />
+            </Pressable>
+          </Pressable>
+        </Modal>
+      ) : null}
     </View>
   );
 }
@@ -160,6 +200,47 @@ export function CollectionSheet({
 const styles = StyleSheet.create({
   collectionArea: {
     marginBottom: 14,
+  },
+  detailBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  detailCard: {
+    width: '100%',
+    maxWidth: 320,
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    paddingVertical: 20,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    gap: 8,
+  },
+  detailIcon: {
+    fontSize: 48,
+    lineHeight: 54,
+  },
+  detailName: {
+    color: '#253126',
+    fontSize: 18,
+    fontWeight: '900',
+    textAlign: 'center',
+  },
+  detailValue: {
+    color: '#247241',
+    fontSize: 14,
+    fontWeight: '900',
+  },
+  detailDescription: {
+    marginTop: 2,
+    marginBottom: 6,
+    color: '#475467',
+    fontSize: 13,
+    lineHeight: 19,
+    fontWeight: '600',
+    textAlign: 'center',
   },
   collectionAreaHeader: {
     flexDirection: 'row',
