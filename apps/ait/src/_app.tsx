@@ -11,7 +11,7 @@ function AppContainer({ children }: PropsWithChildren<InitialProps>) {
     // 초기화 실패를 조용히 삼키지 않고 관측 가능하게 남긴다. 초기화 완료 전 발생한
     // 이벤트는 analytics 레이어에서 큐잉되므로 await 없이 시작해도 유실되지 않는다.
     initializeAppsInTossFirebaseServices().catch((error: unknown) => {
-      console.warn('[ait] Firebase 서비스 초기화 실패', error);
+      console.warn('[ait] Firebase services init failed', error);
     });
   }, []);
 

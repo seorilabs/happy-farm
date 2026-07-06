@@ -124,6 +124,29 @@ describe('initializeAppsInTossAnalytics — isSupported 폴백/미지원 처리'
     expect(mockLogEvent).not.toHaveBeenCalled();
   });
 
+  test('첫 초기화가 실패해도 Promise가 고정되지 않고, 재시도 성공 시 대기 큐가 flush 된다', async () => {
+    // 1차 시도: isSupported=false + 강제 초기화도 실패 → unsupported
+    mockIsSupported.mockResolvedValue(false);
+    mockGetAnalytics.mockImplementationOnce(() => {
+      throw new Error('analytics unsupported in webview');
+    });
+
+    const { trackAppsInTossAnalyticsEvent, initializeAppsInTossAnalytics } = loadAnalytics();
+    trackAppsInTossAnalyticsEvent('crop_ready', { crop: 'wheat' });
+
+    const first = await initializeAppsInTossAnalytics(FAKE_APP);
+    expect(first).toEqual({ status: 'unsupported' });
+    expect(mockLogEvent).not.toHaveBeenCalled();
+
+    // 2차 시도: 이제 지원됨 → ready. 첫 시도가 Promise를 고정했다면 재시도가 막혀 실패한다.
+    mockIsSupported.mockResolvedValue(true);
+
+    const second = await initializeAppsInTossAnalytics(FAKE_APP);
+    expect(second).toEqual({ status: 'ready' });
+    // 첫 시도부터 큐에 남아 있던 이벤트가 재시도 성공 시점에 flush 된다.
+    expect(trackedEventNames()).toEqual(['crop_ready']);
+  });
+
   test('initializeAppsInTossAnalytics는 여러 번 호출해도 한 번만 초기화한다(멱등)', async () => {
     const { initializeAppsInTossAnalytics } = loadAnalytics();
 

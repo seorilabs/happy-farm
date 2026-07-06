@@ -69,7 +69,7 @@ function flushPendingEvents() {
   for (const { name, params } of flushed) {
     logEvent(firebaseAnalytics, name, normalizeAnalyticsParams(params));
   }
-  console.info(`[ait-analytics] 초기화 전 대기 이벤트 ${flushed.length}건 flush 완료`);
+  console.info(`[ait-analytics] flushed ${flushed.length} queued event(s) after init`);
 }
 
 async function initializeAnalytics(app: FirebaseApp): Promise<AppsInTossAnalyticsInitResult> {
@@ -79,12 +79,12 @@ async function initializeAnalytics(app: FirebaseApp): Promise<AppsInTossAnalytic
       // Granite 웹뷰 등 일부 환경에서 isSupported()가 보수적으로 false를 반환할 수
       // 있어, 미지원으로 단정하기 전에 getAnalytics를 한 번 최선 노력으로 시도한다.
       // 시도가 실패하면 그때 미지원으로 처리해 이벤트를 큐에 남긴다.
-      console.warn('[ait-analytics] isSupported() === false — 강제 초기화를 시도합니다');
+      console.warn('[ait-analytics] isSupported() === false — attempting best-effort init');
       try {
         firebaseAnalytics = getAnalytics(app);
       } catch (fallbackError) {
         console.warn(
-          `[ait-analytics] 강제 초기화 실패, 미지원으로 처리합니다: ${normalizeErrorReason(fallbackError)}`,
+          `[ait-analytics] best-effort init failed, treating as unsupported: ${normalizeErrorReason(fallbackError)}`,
         );
         return { status: 'unsupported' };
       }
@@ -99,13 +99,22 @@ async function initializeAnalytics(app: FirebaseApp): Promise<AppsInTossAnalytic
     return { status: 'ready' };
   } catch (error) {
     firebaseAnalytics = null;
-    console.warn(`[ait-analytics] 초기화 오류: ${normalizeErrorReason(error)}`);
+    console.warn(`[ait-analytics] init error: ${normalizeErrorReason(error)}`);
     return { status: 'error', reason: normalizeErrorReason(error) };
   }
 }
 
 export function initializeAppsInTossAnalytics(app: FirebaseApp) {
-  initializePromise ??= initializeAnalytics(app);
+  // 성공(ready)만 메모이즈한다. 미지원/일시 오류는 메모이즈를 해제해 다음 호출에서
+  // 재시도할 수 있게 한다(초기화 실패 후 영구 차단 방지). 재시도가 성공하면 그 시점에
+  // 대기 큐가 flush 되므로, 첫 시도가 실패해도 큐 이벤트는 유실되지 않는다.
+  // (remoteConfig 초기화와 동일한 패턴)
+  initializePromise ??= initializeAnalytics(app).then((result) => {
+    if (result.status !== 'ready') {
+      initializePromise = null;
+    }
+    return result;
+  });
   return initializePromise;
 }
 
