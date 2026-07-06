@@ -23,6 +23,15 @@ type AppsInTossAnalyticsInitResult =
 let firebaseAnalytics: Analytics | null = null;
 let initializePromise: Promise<AppsInTossAnalyticsInitResult> | null = null;
 
+// 초기화 완료 전에 발생한 이벤트를 담아 두는 큐. FarmGame은 analytics 초기화가
+// 끝나기 전에 렌더/이벤트 발생이 가능하므로, 준비되기 전 이벤트를 유실하지 않도록
+// 여기에 쌓아 두었다가 준비되면 순서대로 flush 한다.
+type QueuedAnalyticsEvent = { name: string; params: Record<string, AnalyticsValue> };
+const pendingEvents: QueuedAnalyticsEvent[] = [];
+// 초기화가 끝내 실패(미지원)해도 큐가 무한히 커지지 않도록 상한을 둔다.
+// 상한 초과 시 가장 오래된 이벤트부터 폐기한다.
+const MAX_PENDING_EVENTS = 200;
+
 function isDevBuild() {
   return typeof __DEV__ !== 'undefined' && __DEV__;
 }
@@ -50,30 +59,73 @@ function normalizeErrorReason(error: unknown) {
   return typeof error === 'string' ? error : 'unknown';
 }
 
+// 준비되기 전 큐에 쌓인 이벤트를 순서대로 전송한다. 초기화 성공 직후에만 호출된다.
+function flushPendingEvents() {
+  if (firebaseAnalytics == null || pendingEvents.length === 0) {
+    return;
+  }
+  // splice로 큐를 비우면서 스냅샷을 받아, flush 중 재진입에도 안전하게 처리한다.
+  const flushed = pendingEvents.splice(0, pendingEvents.length);
+  for (const { name, params } of flushed) {
+    logEvent(firebaseAnalytics, name, normalizeAnalyticsParams(params));
+  }
+  console.info(`[ait-analytics] flushed ${flushed.length} queued event(s) after init`);
+}
+
 async function initializeAnalytics(app: FirebaseApp): Promise<AppsInTossAnalyticsInitResult> {
   try {
     const isAnalyticsSupported = await isSupported();
     if (!isAnalyticsSupported) {
-      return { status: 'unsupported' };
+      // Granite 웹뷰 등 일부 환경에서 isSupported()가 보수적으로 false를 반환할 수
+      // 있어, 미지원으로 단정하기 전에 getAnalytics를 한 번 최선 노력으로 시도한다.
+      // 시도가 실패하면 그때 미지원으로 처리해 이벤트를 큐에 남긴다.
+      console.warn('[ait-analytics] isSupported() === false — attempting best-effort init');
+      try {
+        firebaseAnalytics = getAnalytics(app);
+      } catch (fallbackError) {
+        console.warn(
+          `[ait-analytics] best-effort init failed, treating as unsupported: ${normalizeErrorReason(fallbackError)}`,
+        );
+        return { status: 'unsupported' };
+      }
+    } else {
+      firebaseAnalytics = getAnalytics(app);
     }
 
-    firebaseAnalytics = getAnalytics(app);
     logEvent(firebaseAnalytics, 'ait_firebase_initialized', normalizeAnalyticsParams());
+    // 초기화가 완료된 시점에 대기 이벤트를 즉시 flush 해 유실을 막는다.
+    flushPendingEvents();
 
     return { status: 'ready' };
   } catch (error) {
     firebaseAnalytics = null;
+    console.warn(`[ait-analytics] init error: ${normalizeErrorReason(error)}`);
     return { status: 'error', reason: normalizeErrorReason(error) };
   }
 }
 
 export function initializeAppsInTossAnalytics(app: FirebaseApp) {
-  initializePromise ??= initializeAnalytics(app);
+  // 성공(ready)만 메모이즈한다. 미지원/일시 오류는 메모이즈를 해제해 다음 호출에서
+  // 재시도할 수 있게 한다(초기화 실패 후 영구 차단 방지). 재시도가 성공하면 그 시점에
+  // 대기 큐가 flush 되므로, 첫 시도가 실패해도 큐 이벤트는 유실되지 않는다.
+  // (remoteConfig 초기화와 동일한 패턴)
+  initializePromise ??= initializeAnalytics(app).then((result) => {
+    if (result.status !== 'ready') {
+      initializePromise = null;
+    }
+    return result;
+  });
   return initializePromise;
 }
 
 export const trackAppsInTossAnalyticsEvent: TrackGameEvent = (name, params = {}) => {
   if (firebaseAnalytics == null) {
+    // 아직 초기화 전이면 이벤트를 큐에 쌓아 두었다가 준비되면 flush 한다.
+    // 상한을 넘으면 가장 오래된 이벤트부터 폐기해 메모리 무한 증가를 막는다.
+    if (pendingEvents.length >= MAX_PENDING_EVENTS) {
+      pendingEvents.shift();
+    }
+    pendingEvents.push({ name, params });
     return;
   }
 
