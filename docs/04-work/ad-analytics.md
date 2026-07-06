@@ -36,7 +36,9 @@ happy-farm 광고 수익·노출 모니터링의 단일 기준 문서. 이벤트
 `GameAnalyticsContext`)가 함께 실려 코호트 분해가 가능하다.
 
 ## 파생 지표 (대시보드 기준)
-placement(또는 `ad_type`)별로 집계한다.
+placement(또는 `ad_type`)별로 집계한다. 아래 정의를 그대로 구현한 실행 가능한
+BigQuery 쿼리는 `analytics/queries/ad-placement-metrics.sql`, 정기 리포트 운영
+기준은 `docs/04-work/ad-placement-report.md`에 있다.
 
 - **노출(impression) 수** = `count(ad_reward_impression)`
 - **클릭률(CTR)** = `ad_reward_click / ad_reward_impression`
