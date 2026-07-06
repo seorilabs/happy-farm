@@ -253,6 +253,16 @@ export function recordHarvestProgress(
   );
 }
 
+// 작물 1회 심기를 plant 미션 진행도에 반영한다. 심기가 그날의 첫 행동일 수 있어
+// unlockedAreas로 "오늘의 구역"을 고정한다(순수 함수, 심기 파이프라인 performPlant에서 배선).
+export function recordPlantProgress(
+  state: DailyMissionState,
+  now = Date.now(),
+  unlockedAreas?: readonly AreaKey[]
+): DailyMissionState {
+  return recordProgressForMatches(state, now, unlockedAreas, (mission) => mission.type === 'plant');
+}
+
 // 보상형 광고 1회 시청을 watch_ad 미션 진행도에 반영한다. unlockedAreas는 새 날 첫 호출 시
 // "오늘의 구역" 고정을 위해 받는다(광고가 그날의 첫 행동일 수 있으므로).
 export function recordAdWatchProgress(
