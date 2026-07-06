@@ -31,8 +31,8 @@
     "upgradeStep": 0.1
   },
   "offlineIncome": {
-    "agentPurpose": "Pre-prestige (active-farm) offline income. The idle-genre promise — earning while away — previously applied only to post-prestige chain farms, so most early/mid players accrued nothing offline. While away, each currently-growing plot accrues a fraction (efficiencyRatio) of its crop's netProfitPerHour, capped to capMs so a long absence can't snowball. Tied to actually-planted plots (not a hypothetical best-crop-on-all-plots estimate) so an empty or under-invested farm earns nothing and early balance isn't trivialized. capMs mirrors regions.chain.offlineCapMs (24h) so a once-daily player loses nothing.",
-    "efficiencyRatio": 0.4,
+    "agentPurpose": "Pre-prestige (active-farm) offline income. The idle-genre promise — earning while away — previously applied only to post-prestige chain farms, so most early/mid players accrued nothing offline. While away, each currently-growing plot accrues a fraction (efficiencyRatio) of its crop's netProfitPerHour, capped to capMs so a long absence can't snowball. Tied to actually-planted plots (not a hypothetical best-crop-on-all-plots estimate) so an empty or under-invested farm earns nothing and early balance isn't trivialized. capMs mirrors regions.chain.offlineCapMs (24h) so a once-daily player loses nothing. NOTE: this active-farm cap is a fixed constant (OFFLINE_INCOME_CAP_MS) independent of the offline_cap prestige skill, which only extends CHAIN farm caps — so tuning capMs here has no interaction with that skill. efficiencyRatio tuned 0.4→0.45 (#273) to strengthen the D1/D7 return incentive (idle-genre promise) while keeping 0.05 headroom below the 0.5 domination ceiling enforced by check-balance §offlineIncome; because offline gold over a window ≤ cap equals exactly efficiencyRatio × the same-window active-play gold (stage-independent), any ratio < 1 keeps offline from dominating active play. capMs held at 24h: extending it would let multi-day absences snowball and erode the daily-return cadence.",
+    "efficiencyRatio": 0.45,
     "capMs": 86400000
   },
   "resetOffset": {
