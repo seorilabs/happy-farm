@@ -36,7 +36,9 @@ happy-farm 광고 수익·노출 모니터링의 단일 기준 문서. 이벤트
 `GameAnalyticsContext`)가 함께 실려 코호트 분해가 가능하다.
 
 ## 파생 지표 (대시보드 기준)
-placement(또는 `ad_type`)별로 집계한다.
+placement(또는 `ad_type`)별로 집계한다. 아래 정의를 그대로 구현한 실행 가능한
+BigQuery 쿼리는 `analytics/queries/ad-placement-metrics.sql`, 정기 리포트 운영
+기준은 `docs/04-work/ad-placement-report.md`에 있다.
 
 - **노출(impression) 수** = `count(ad_reward_impression)`
 - **클릭률(CTR)** = `ad_reward_click / ad_reward_impression`
@@ -45,7 +47,9 @@ placement(또는 `ad_type`)별로 집계한다.
 - **차단율** = `ad_limit_blocked / (ad_reward_impression + ad_limit_blocked)`
   — 한도/쿨다운이 수요를 얼마나 누르는지(인벤토리 소멸) 확인.
 - **fill 근사** = `ad_reward_click / (ad_reward_click + ad_reward_failed[reason=not_ready])`
-  — `not_ready` 비중이 높으면 광고 로딩/캐시 부족 신호.
+  — `not_ready` 비중이 높으면 광고 로딩/캐시 부족 신호. 분모는 `clicks + fails[reason=not_ready]`
+  뿐이며, `not_ready` 외 실패(`unsupported`·`dismissed`·`show_ad_threw` 등)는 fill 신호에서
+  제외하고 `fail_rate`(분모 전체 clicks)에서만 집계한다.
 - **광고 완료 수(일)** = `count(ad_reward_completed)` per day
 - **ARPDAU(추정)** = `(일 광고 완료 수 × placement별 eCPM) / DAU`
   eCPM은 AdMob/AppsInToss 매출 리포트에서 placement별로 가져와 결합한다.
