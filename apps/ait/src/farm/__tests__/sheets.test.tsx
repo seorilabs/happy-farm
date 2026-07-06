@@ -16,6 +16,7 @@ import {
   getAreaCropKeys,
   getAreaUnlockRequirementText,
   getCollectionSummary,
+  getCropLabel,
   isAreaUnlocked,
   getPrestigeSkillLabel,
   getRewardedGoldAmount,
@@ -104,6 +105,68 @@ describe('CollectionSheet', () => {
     const expectedText = enMessages.collectionUnlockHint(getAreaUnlockRequirementText(state, lockedArea.key, 'en-US'));
     expect(screen.getByText(expectedText)).toBeTruthy();
     expect(expectedText).toContain('Unlock');
+  });
+
+  // #253: 발견한 작물 셀 탭 → 플레이버 상세 팝업. Pressable+Modal 분기(셀 탭, 미발견
+  // 비활성, 닫기 경로)를 데이터가 아닌 UI 동작으로 회귀 고정한다.
+  function renderDiscovered(locale: typeof LOCALE | 'en-US', localeMessages = messages) {
+    const base = createInitialState();
+    // carrot을 발견 상태로 만들어 상시 해금된 초보 밭 셀이 활성화되도록 한다.
+    const state: GameState = { ...base, harvestedCropKeys: ['carrot'] };
+    return render(
+      <CollectionSheet
+        gameState={state}
+        locale={locale}
+        messages={localeMessages}
+        collectionSummary={getCollectionSummary(state)}
+        onClaimReward={jest.fn()}
+      />
+    );
+  }
+
+  test('발견 셀을 탭하면 아이콘·이름·판매가·설명 상세 팝업이 열린다 (#253)', () => {
+    const screen = renderDiscovered(LOCALE);
+    // 탭 전에는 팝업이 없다.
+    expect(screen.queryByTestId('collection-detail-card')).toBeNull();
+
+    fireEvent.press(screen.getByTestId('collection-cell-carrot'));
+
+    expect(screen.getByTestId('collection-detail-card')).toBeTruthy();
+    // 설명은 데이터 계약과 동일한 카탈로그 값이 노출된다.
+    expect(screen.getByText(getCropLabel('carrot', LOCALE).description)).toBeTruthy();
+  });
+
+  test('미발견 셀은 disabled라 탭해도 팝업이 열리지 않는다 (#253)', () => {
+    const screen = renderDiscovered(LOCALE);
+    // 초기 미발견 작물 하나를 골라(예: wheat) 잠금·비활성 상태를 확인한다.
+    const lockedCell = screen.getByTestId('collection-cell-wheat');
+    expect(lockedCell).toBeDisabled();
+
+    fireEvent.press(lockedCell);
+    expect(screen.queryByTestId('collection-detail-card')).toBeNull();
+  });
+
+  test('상세 팝업은 닫기 액션과 배경 탭으로 닫힌다 (#253)', () => {
+    const screen = renderDiscovered(LOCALE);
+
+    // 닫기 SheetAction 경로.
+    fireEvent.press(screen.getByTestId('collection-cell-carrot'));
+    expect(screen.getByTestId('collection-detail-card')).toBeTruthy();
+    fireEvent.press(screen.getByText(messages.collectionDetailCloseAction));
+    expect(screen.queryByTestId('collection-detail-card')).toBeNull();
+
+    // 배경(백드롭) 탭 경로.
+    fireEvent.press(screen.getByTestId('collection-cell-carrot'));
+    expect(screen.getByTestId('collection-detail-card')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('collection-detail-backdrop'));
+    expect(screen.queryByTestId('collection-detail-card')).toBeNull();
+  });
+
+  test('상세 팝업 설명이 en-US로 현지화된다 (#253)', () => {
+    const enMessages = getFarmMessages('en-US');
+    const screen = renderDiscovered('en-US', enMessages);
+    fireEvent.press(screen.getByTestId('collection-cell-carrot'));
+    expect(screen.getByText(getCropLabel('carrot', 'en-US').description)).toBeTruthy();
   });
 
   test('claims an area reward once every crop in that area is discovered', () => {

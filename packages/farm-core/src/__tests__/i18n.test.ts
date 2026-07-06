@@ -6,6 +6,7 @@ import {
   getAreaLabel,
   getAreaUnlockRequirementText,
   getCropLabel,
+  getCropLabels,
   getRewardedAdLimitStatus,
   normalizeLocale,
   type CropKey,
@@ -35,13 +36,30 @@ describe('farm-core i18n', () => {
 
   test('모든 작물에 ko/en 도감 플레이버 설명이 채워져 있다 (#253)', () => {
     const cropKeys = Object.keys(CROPS) as CropKey[];
-    expect(cropKeys.length).toBeGreaterThan(0);
+    // 인수조건이 약속한 정확한 작물 수(47종)를 단언해, 향후 작물 추가 시 이 테스트가
+    // 반드시 함께 갱신되도록 강제한다(신규 종 설명 누락 침묵 통과 방지).
+    expect(cropKeys.length).toBe(47);
     for (const cropKey of cropKeys) {
       for (const locale of ['ko-KR', 'en-US'] as const) {
         const label = getCropLabel(cropKey, locale);
         // 설명은 비어 있지 않고, 이름과 구별되는 별도 플레이버여야 한다.
         expect(label.description.trim().length).toBeGreaterThan(0);
         expect(label.description).not.toBe(label.name);
+      }
+    }
+  });
+
+  test('작물 라벨 키 집합이 CROPS와 양방향으로 일치한다 (#253)', () => {
+    const cropKeys = new Set(Object.keys(CROPS));
+    for (const locale of ['ko-KR', 'en-US'] as const) {
+      const labelKeys = new Set(Object.keys(getCropLabels(locale)));
+      // CROPS ⊆ labels: 모든 작물이 라벨을 가진다(누락 종 없음).
+      for (const cropKey of cropKeys) {
+        expect(labelKeys.has(cropKey)).toBe(true);
+      }
+      // labels ⊆ CROPS: 잉여(고아) 라벨 키가 없다.
+      for (const labelKey of labelKeys) {
+        expect(cropKeys.has(labelKey)).toBe(true);
       }
     }
   });

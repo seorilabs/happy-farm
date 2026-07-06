@@ -121,7 +121,7 @@ export function CollectionSheet({
                     // 발견한 작물만 상세 팝업을 연다. 미발견 셀은 잠금 표현을 유지하고 탭 비활성.
                     onPress={discovered ? () => setDetailCropKey(cropKey) : undefined}
                     disabled={!discovered}
-                    testID={discovered ? `collection-cell-${cropKey}` : undefined}
+                    testID={`collection-cell-${cropKey}`}
                   >
                     <Text style={styles.collectionCellIcon}>{discovered ? crop.icon : '❓'}</Text>
                     <Text style={styles.collectionCellName} numberOfLines={1}>
