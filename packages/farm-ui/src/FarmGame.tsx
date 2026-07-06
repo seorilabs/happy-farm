@@ -3832,11 +3832,17 @@ export default function FarmGame({
                 // tap evaluates against the already-updated state, gets null,
                 // and leaves the holder empty — so no duplicate emit. (A holder
                 // object is used so TS keeps the union type after the closure.)
-                const claimHolder: { value: { streak: number; goldAwarded: number } | null } = { value: null };
+                const claimHolder: {
+                  value: { streak: number; goldAwarded: number; isFirstClaim: boolean } | null;
+                } = { value: null };
                 setGameState((prev) => {
                   const result = claimDailyBonus(prev.dailyBonusState, now, getRewardedGoldAmount(prev));
                   if (result == null) return prev;
-                  claimHolder.value = { streak: result.streak, goldAwarded: result.goldAwarded };
+                  claimHolder.value = {
+                    streak: result.streak,
+                    goldAwarded: result.goldAwarded,
+                    isFirstClaim: result.isFirstClaim,
+                  };
                   return {
                     ...prev,
                     gold: prev.gold + result.goldAwarded,
@@ -3847,6 +3853,7 @@ export default function FarmGame({
                   farmAnalytics.trackDailyBonusClaimed({
                     streak: claimHolder.value.streak,
                     rewardValue: claimHolder.value.goldAwarded,
+                    isFirstClaim: claimHolder.value.isFirstClaim,
                     context: analyticsContext(),
                   });
                 }

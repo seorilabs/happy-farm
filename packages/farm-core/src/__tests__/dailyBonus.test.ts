@@ -70,6 +70,17 @@ describe('claimDailyBonus', () => {
     expect(result!.goldAwarded).toBe(50);
   });
 
+  test('isFirstClaim: 생애 첫 수령(lastClaimedAt == null)만 true, 이후 수령은 false', () => {
+    // 첫 수령: lastClaimedAt이 null이므로 첫 클레임으로 표시된다.
+    const first = claimDailyBonus(fresh, NOW);
+    expect(first!.isFirstClaim).toBe(true);
+
+    // 이미 한 번 받은 상태에서의 재수령은 첫 클레임이 아니다.
+    const returning: DailyBonusState = { lastClaimedAt: NOW - H24, streak: 1 };
+    const second = claimDailyBonus(returning, NOW);
+    expect(second!.isFirstClaim).toBe(false);
+  });
+
   test('sets lastClaimedAt to now in newState', () => {
     const result = claimDailyBonus(fresh, NOW);
     expect(result!.newState.lastClaimedAt).toBe(NOW);

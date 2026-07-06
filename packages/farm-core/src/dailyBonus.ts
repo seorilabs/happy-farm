@@ -43,6 +43,10 @@ export type DailyBonusResult = {
   milestoneBonus: number;
   // 이번 수령이 주간 마일스톤(7일 배수)인지 여부.
   isWeeklyMilestone: boolean;
+  // 이번 수령이 "생애 첫 데일리 보너스 수령"인지 여부. 수령 전 lastClaimedAt이
+  // null(한 번도 받지 않음)일 때만 true. 활성화 퍼널에서 "첫 데일리 클레임"
+  // 단계를 특정하기 위한 신호다(#107).
+  isFirstClaim: boolean;
   streak: number;
   newState: DailyBonusState;
 };
@@ -138,11 +142,14 @@ export function claimDailyBonus(
   const newStreak = isStreakAlive ? state.streak + 1 : 1;
   const milestoneBonus = getWeeklyMilestoneBonus(newStreak, adRewardGold);
   const goldAwarded = getDailyBonusGold(newStreak, adRewardGold) + milestoneBonus;
+  // 수령 전 상태 기준으로 판정한다: 한 번도 받은 적 없으면(lastClaimedAt == null) 첫 수령.
+  const isFirstClaim = state.lastClaimedAt == null;
 
   return {
     goldAwarded,
     milestoneBonus,
     isWeeklyMilestone: milestoneBonus > 0,
+    isFirstClaim,
     streak: newStreak,
     newState: {
       lastClaimedAt: now,
