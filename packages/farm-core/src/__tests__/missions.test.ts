@@ -10,12 +10,17 @@ import {
   normalizeDailyMissionState,
   recordAdWatchProgress,
   recordHarvestProgress,
+  recordPlantProgress,
   rolloverDailyMissions,
   type DailyMissionState,
 } from '../missions';
 import balance from '../balance.json';
 import { CROPS, createInitialState, migrateLoadedState } from '../constants';
-import { performHarvest } from '../harvest';
+import { performHarvest, performPlant } from '../harvest';
+
+// 일일 미션 슬롯 수(현재 4종: harvest/harvest_area/watch_ad/plant). 슬롯 추가 시
+// balance.json이 단일 출처이므로 테스트 상태 배열 길이도 여기서 파생한다.
+const SLOT_COUNT = balance.missions.slots.length;
 import { createPrestigedState } from '../prestige';
 import type { AreaKey, CropKey, GameState } from '../types';
 import { META_LAYER_KEYS } from '../types';
@@ -26,13 +31,13 @@ const DAY_B = DAY_A + DAY_MS; // next calendar day
 const ALL_AREAS = [...new Set((Object.keys(CROPS) as CropKey[]).map((key) => CROPS[key]!.area))] as AreaKey[];
 
 describe('getDailyMissions determinism', () => {
-  test('returns 3 missions with distinct types, stable for a given day', () => {
+  test('returns one mission per slot with distinct types, stable for a given day', () => {
     const keyA = getMissionDayKey(DAY_A);
     const a1 = getDailyMissions(keyA, ALL_AREAS);
     const a2 = getDailyMissions(keyA, ALL_AREAS);
-    expect(a1).toHaveLength(3);
+    expect(a1).toHaveLength(SLOT_COUNT);
     expect(a1).toEqual(a2);
-    expect(new Set(a1.map((m) => m.type)).size).toBe(3);
+    expect(new Set(a1.map((m) => m.type)).size).toBe(SLOT_COUNT);
     for (const mission of a1) {
       expect(mission.target).toBeGreaterThan(0);
       expect(mission.rewardGold).toBeGreaterThan(0);
@@ -90,6 +95,50 @@ describe('progress tracking', () => {
     expect(after.progress[adMission.slot]).toBe(1);
   });
 
+  test('plant progress increments only the plant mission (#254)', () => {
+    const start = createInitialDailyMissionState();
+    const missions = getDailyMissions(getMissionDayKey(DAY_A), ALL_AREAS);
+    const plantMission = missions.find((m) => m.type === 'plant')!;
+    const harvestMission = missions.find((m) => m.type === 'harvest')!;
+
+    const after = recordPlantProgress(start, DAY_A, ALL_AREAS);
+    expect(after.progress[plantMission.slot]).toBe(1);
+    // 심기는 수확/광고 미션 진행에는 영향을 주지 않는다(타입 격리).
+    expect(after.progress[harvestMission.slot]).toBe(0);
+  });
+
+  test('레거시 3-slot 세이브(길이 3)가 4-slot으로 늘어난 뒤 첫 심기도 진행이 보존·기록된다 (#254)', () => {
+    const missions = getDailyMissions(getMissionDayKey(DAY_A), ALL_AREAS);
+    const plantMission = missions.find((m) => m.type === 'plant')!;
+    const harvestMission = missions.find((m) => m.type === 'harvest')!;
+    // 슬롯 3개 시절 저장된 상태를 그대로 흉내 낸다: 오늘 날짜 + 길이 3 배열 + 기존 수확 진행 2.
+    const legacy: DailyMissionState = {
+      dayKey: getMissionDayKey(DAY_A),
+      areaKeys: [null, null, null],
+      progress: [2, 0, 0],
+      claimedSlots: [],
+    };
+    const after = recordPlantProgress(legacy, DAY_A, ALL_AREAS);
+    // 길이가 슬롯 수(4)로 정규화되고, 롤오버(리셋) 없이 기존 수확 진행(2)이 보존되며
+    // 신규 plant 슬롯에만 +1 기록된다(길이 가드 회귀 방지).
+    expect(after.progress).toHaveLength(SLOT_COUNT);
+    expect(after.progress[harvestMission.slot]).toBe(2);
+    expect(after.progress[plantMission.slot]).toBe(1);
+  });
+
+  test('performPlant feeds plant-mission progress through the canonical pipeline (#254)', () => {
+    let state = createInitialState();
+    // 심을 수 있는 초기 작물(초보 밭)을 고른다.
+    const cropKey = Object.keys(CROPS)[0] as CropKey;
+    // 골드가 충분하고 0번 밭이 비어 있는 초기 상태에서 심기.
+    state = { ...state, gold: 100_000 };
+    const planted = performPlant(state, 0, cropKey, DAY_A);
+    expect(planted).not.toBeNull();
+    const snapshot = getDailyMissionsSnapshot(planted!.dailyMissionState, DAY_A, planted!.unlockedAreas);
+    const plantMission = snapshot.missions.find((m) => m.type === 'plant')!;
+    expect(plantMission.progress).toBe(1);
+  });
+
   test('performHarvest feeds daily-mission progress through the canonical pipeline', () => {
     let state = createInitialState();
     const cropKey = Object.keys(CROPS)[0] as CropKey;
@@ -145,11 +194,11 @@ describe('claim guard', () => {
   function completedStateForSlot(now: number, slot: number): GameState {
     const base = createInitialState();
     const mission = getDailyMissions(getMissionDayKey(now), base.unlockedAreas).find((m) => m.slot === slot)!;
-    const progress = new Array(3).fill(0);
+    const progress = new Array(SLOT_COUNT).fill(0);
     progress[slot] = mission.target;
     const dailyMissionState: DailyMissionState = {
       dayKey: getMissionDayKey(now),
-      areaKeys: new Array(3).fill(null),
+      areaKeys: new Array(SLOT_COUNT).fill(null),
       progress,
       claimedSlots: [],
     };
@@ -189,7 +238,7 @@ describe('save migration & prestige', () => {
     } as unknown as Partial<GameState>;
     const migrated = migrateLoadedState(loaded, base);
     expect(migrated.dailyMissionState.dayKey).toBe('');
-    expect(migrated.dailyMissionState.progress).toHaveLength(3);
+    expect(migrated.dailyMissionState.progress).toHaveLength(SLOT_COUNT);
     expect(migrated.dailyMissionState.progress[0]).toBe(3);
     expect(migrated.dailyMissionState.progress[1]).toBe(0);
     expect(migrated.dailyMissionState.progress[2]).toBe(0);
@@ -255,13 +304,13 @@ describe('progress-scaled rewards (#207)', () => {
   test('수령 시 주입된 광고 보상 기준으로 지급되고 스냅샷 표시 금액과 일치한다', () => {
     const base = createInitialState();
     const mission = getDailyMissions(keyA, base.unlockedAreas).find((m) => m.slot === 0)!;
-    const progress = new Array(3).fill(0);
+    const progress = new Array(SLOT_COUNT).fill(0);
     progress[0] = mission.target;
     const state: GameState = {
       ...base,
       dailyMissionState: {
         dayKey: keyA,
-        areaKeys: new Array(3).fill(null),
+        areaKeys: new Array(SLOT_COUNT).fill(null),
         progress,
         claimedSlots: [],
       },

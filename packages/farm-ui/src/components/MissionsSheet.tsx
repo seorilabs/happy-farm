@@ -24,6 +24,8 @@ function getMissionLabel(mission: DailyMissionView, locale: SupportedLocale, mes
     }
     case 'watch_ad':
       return messages.missionWatchAdLabel(mission.target);
+    case 'plant':
+      return messages.missionPlantLabel(mission.target);
     case 'harvest':
     default:
       return messages.missionHarvestLabel(mission.target);

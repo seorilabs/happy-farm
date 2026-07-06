@@ -201,8 +201,16 @@ export function rolloverDailyMissions(
   dayKey: string,
   unlockedAreas?: readonly AreaKey[]
 ): DailyMissionState {
-  if (state.dayKey === dayKey && state.areaKeys.length === DAILY_MISSION_COUNT) {
-    return state;
+  if (state.dayKey === dayKey) {
+    // 같은 날이면 진행도/"오늘의 구역"을 보존한다. 다만 슬롯 수가 바뀌어(예: 3→4)
+    // 배열 길이가 어긋난 레거시 상태는 롤오버(리셋)로 오인하지 말고, 길이만 슬롯 수에
+    // 맞춰 정규화(패딩)해 기존 진행도를 살린다. 이렇게 하면 신규 슬롯 추가 후 첫 행동이
+    // 진행을 사일런트로 누락시키지 않는다(#254). 길이가 이미 맞으면 참조를 그대로 반환해
+    // 표시 전용 반복 호출/동일일 가드의 참조 동등성을 보존한다.
+    if (state.areaKeys.length === DAILY_MISSION_COUNT && state.progress.length === DAILY_MISSION_COUNT) {
+      return state;
+    }
+    return normalizeDailyMissionState(state);
   }
   return {
     dayKey,
@@ -251,6 +259,16 @@ export function recordHarvestProgress(
     (mission) =>
       mission.type === 'harvest' || (mission.type === 'harvest_area' && mission.areaKey === areaKey)
   );
+}
+
+// 작물 1회 심기를 plant 미션 진행도에 반영한다. 심기가 그날의 첫 행동일 수 있어
+// unlockedAreas로 "오늘의 구역"을 고정한다(순수 함수, 심기 파이프라인 performPlant에서 배선).
+export function recordPlantProgress(
+  state: DailyMissionState,
+  now = Date.now(),
+  unlockedAreas?: readonly AreaKey[]
+): DailyMissionState {
+  return recordProgressForMatches(state, now, unlockedAreas, (mission) => mission.type === 'plant');
 }
 
 // 보상형 광고 1회 시청을 watch_ad 미션 진행도에 반영한다. unlockedAreas는 새 날 첫 호출 시
