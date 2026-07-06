@@ -66,6 +66,29 @@ describe('animals catalog', () => {
     }
   });
 
+  test('catalog keeps purchaseCost ascending and includes the expanded kinds (#272)', () => {
+    // purchaseCost 오름차순 정렬 유지(진행 구간을 넓게 커버하는 골드 싱크 계단).
+    for (let i = 1; i < ANIMALS.length; i += 1) {
+      expect(ANIMALS[i]!.purchaseCost).toBeGreaterThan(ANIMALS[i - 1]!.purchaseCost);
+    }
+    // chicken/cow 2종에서 최소 3종 이상 확장(보조 루프 다양화).
+    expect(ANIMALS.length).toBeGreaterThanOrEqual(5);
+    const keys = new Set(ANIMALS.map((animal) => animal.key));
+    for (const key of ['duck', 'sheep', 'pig', 'bee']) {
+      expect(keys.has(key as AnimalKey)).toBe(true);
+    }
+  });
+
+  test('a newly added animal (bee) runs the full feed → collect cycle (#272)', () => {
+    const bee = getAnimal('bee' as AnimalKey)!;
+    const now = 9_000_000;
+    const fed = feedAnimal(ownedState(bee.feedCost, ['bee' as AnimalKey]), 'bee' as AnimalKey, now)!;
+    const readyAt = now + bee.produceTimerMs;
+    expect(canCollectProduce(fed, 'bee' as AnimalKey, readyAt)).toBe(true);
+    const collected = collectProduce(fed, 'bee' as AnimalKey, readyAt)!;
+    expect(collected.gold).toBe(bee.producePrice);
+  });
+
   test('every catalog item has ko/en labels', () => {
     for (const animal of ANIMALS) {
       for (const locale of ['ko-KR', 'en-US'] as const) {
