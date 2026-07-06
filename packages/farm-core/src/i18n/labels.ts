@@ -197,11 +197,19 @@ const KO_DECORATION_LABELS = {
 const KO_ANIMAL_LABELS = {
   chicken: { name: '닭', description: '20분마다 달걀을 낳는 든든한 첫 가축' },
   cow: { name: '젖소', description: '1시간마다 우유를 내는 농장의 큰 일꾼' },
+  duck: { name: '오리', description: '30분마다 보드라운 깃털을 내주는 물가의 가축' },
+  sheep: { name: '양', description: '90분마다 포근한 양털을 자아내는 목장 친구' },
+  pig: { name: '돼지', description: '2시간마다 값진 송로버섯을 찾아내는 코 좋은 가축' },
+  bee: { name: '꿀벌', description: '3시간마다 달콤한 꿀을 모아 오는 부지런한 일꾼' },
 } satisfies Record<AnimalKey, DescribedLabel>;
 
 const EN_ANIMAL_LABELS = {
   chicken: { name: 'Chicken', description: 'A trusty first animal that lays an egg every 20 minutes.' },
   cow: { name: 'Cow', description: 'A big farm helper that gives milk every hour.' },
+  duck: { name: 'Duck', description: 'A waterside animal that offers soft down every 30 minutes.' },
+  sheep: { name: 'Sheep', description: 'A pasture friend that spins cozy wool every 90 minutes.' },
+  pig: { name: 'Pig', description: 'A keen-nosed animal that roots out prized truffles every 2 hours.' },
+  bee: { name: 'Bee', description: 'A busy worker that gathers sweet honey every 3 hours.' },
 } satisfies Record<AnimalKey, DescribedLabel>;
 
 const KO_PRODUCTION_LABELS = {
