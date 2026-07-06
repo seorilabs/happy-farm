@@ -52,16 +52,20 @@ GA4 export에는 매출 단가가 없다. ARPDAU는 광고 네트워크(AdMob/Ap
 - eCPM 미기입 상태로도 카운트/율(fill·완료율 등)은 정상 산출된다. ARPDAU만 0이 된다.
 
 ## 실행 방법
-1. BigQuery 콘솔에서 `analytics/queries/ad-placement-metrics.sql`의 쿼리 `[A]` 또는
-   `[B]`를 개별 실행한다(각 쿼리는 `DECLARE`로 기간을 자체 선언).
-2. 기본 기간은 최근 28일. 다른 기간은 각 쿼리 상단 `start_date`/`end_date` 기본값을
-   수정한다.
-3. ARPDAU가 필요하면 먼저 `placement_ecpm`에 최신 eCPM을 반영한다.
+1. BigQuery 콘솔은 **GoogleSQL**(레거시 SQL 아님)로 실행한다. 두 쿼리 `[A]`/`[B]`는
+   각각 `BEGIN ... END` 블록으로 변수 스코프가 분리돼, 파일 전체를 한 번에 실행하든
+   블록을 개별 실행하든 `DECLARE` 변수 충돌이 없다.
+2. 기간은 각 블록 상단 `DECLARE window_days INT64`(일 단위)로 조절한다. 기본값은
+   `[A]` = 28일(시계열), `[B]` = 7일(주간 요약)이다. 다른 기간이 필요하면 해당 블록의
+   `window_days` 기본값만 바꾼다(날짜 리터럴 수정 불필요).
+3. ARPDAU가 필요하면 먼저 `placement_ecpm` CTE에 최신 eCPM을 반영한다.
 
 ## 정기 운영 기준(cadence)
-- **주간**: 쿼리 `[B]`(최근 7일)로 placement별 완료율·fill·차단율·기여 ARPDAU를 비교,
-  이상 지면(fill 급락·차단율 급등)을 점검한다.
-- **월간**: 쿼리 `[A]`(최근 28일 시계열)로 추세를 확인하고 eCPM을 갱신해 ARPDAU를 재산출한다.
+- **주간**: 쿼리 `[B]`(기본 `window_days = 7`)로 placement별 완료율·fill·차단율·기여
+  ARPDAU를 비교, 이상 지면(fill 급락·차단율 급등)을 점검한다. 별도 수정 없이 최근 7일
+  기준으로 동작한다.
+- **월간**: 쿼리 `[A]`(기본 `window_days = 28` 시계열)로 추세를 확인하고 eCPM을 갱신해
+  ARPDAU를 재산출한다. `[A]`는 시계열이라 28일을 유지하고, 주간 요약은 `[B]`가 담당한다.
 - **경보 신호(사람이 판단)**:
   - `fail_rate`에서 `not_ready` 비중↑ 또는 `fill_approx`↓ → 광고 로딩/캐시·재고 부족.
   - `block_rate`↑ → 한도/쿨다운이 수요를 과도하게 억제(수익 기회 손실 가능).
