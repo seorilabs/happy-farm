@@ -39,10 +39,14 @@ export function FarmOnboarding({
   step,
   messages,
   onSkip,
+  onQuickStart,
 }: {
   step: OnboardingStep;
   messages: FarmMessages;
   onSkip: () => void;
+  // #274: selectSeed 단계에서만 노출되는 "바로 시작" CTA. 탭 시 대표 씨앗을
+  // 자동 선택해 plant 단계로 즉시 진행시킨다(직접 선택도 여전히 가능).
+  onQuickStart?: () => void;
 }) {
   const { title, description } = getStepText(step, messages);
   const stepIndex = ONBOARDING_STEPS.indexOf(step);
@@ -51,6 +55,8 @@ export function FarmOnboarding({
   // 핵심 행동(파종)으로의 도달률을 끌어올리기 위함이다(#159). 파종 이후(harvest·
   // unlock)부터 건너뛰기를 노출한다.
   const canSkip = step !== 'selectSeed' && step !== 'plant';
+  // "바로 시작"은 정체가 가장 심한 selectSeed 단계에서만 제공한다(#274).
+  const canQuickStart = step === 'selectSeed' && onQuickStart != null;
 
   // Bob the arrow up and down a little to catch the eye.
   const bounceRef = useRef<Animated.Value | null>(null);
@@ -94,6 +100,17 @@ export function FarmOnboarding({
         </View>
         <View style={styles.aside}>
           <Text style={styles.progress}>{messages.onboardingProgress(stepIndex + 1, ONBOARDING_STEPS.length)}</Text>
+          {canQuickStart ? (
+            <Pressable
+              testID="onboarding-quick-start"
+              accessibilityLabel={messages.onboardingQuickStart}
+              hitSlop={8}
+              style={styles.quickStartButton}
+              onPress={onQuickStart}
+            >
+              <Text style={styles.quickStartText}>{messages.onboardingQuickStart}</Text>
+            </Pressable>
+          ) : null}
           {canSkip ? (
             <Pressable testID="onboarding-skip" hitSlop={8} style={styles.skipButton} onPress={onSkip}>
               <Text style={styles.skipText}>{messages.onboardingSkip}</Text>
@@ -152,6 +169,18 @@ const styles = StyleSheet.create({
     color: '#4a7c59',
     fontSize: 11,
     fontWeight: '800',
+  },
+  // 정체 완화 CTA(#274): selectSeed 단계의 주 행동 버튼이라 초록 솔리드로 강조.
+  quickStartButton: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 999,
+    backgroundColor: '#2e9e52',
+  },
+  quickStartText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '900',
   },
   skipButton: {
     paddingHorizontal: 10,

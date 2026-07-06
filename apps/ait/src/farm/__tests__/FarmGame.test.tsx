@@ -56,6 +56,7 @@ const {
   PRESTIGE_GRADUATION_CELEBRATION_DURATION_MS,
   FIRST_HARVEST_CELEBRATION_DURATION_MS,
   ONBOARDING_UNLOCK_SAFETY_TIMEOUT_MS,
+  ONBOARDING_STALL_MS,
   COMBO_GREAT_THRESHOLD,
   COMBO_LEGENDARY_THRESHOLD,
 } = farmGameModule;
@@ -890,6 +891,71 @@ describe('FarmGame UI flow', () => {
       await waitFor(() => expect(screen.queryByTestId('onboarding-coachmark')).toBeNull());
       expect(track).toHaveBeenCalledWith('onboarding_complete', expect.anything());
       expect(track).not.toHaveBeenCalledWith('onboarding_skip', expect.anything());
+    });
+
+    test('quick-start CTA auto-picks a seed and advances to plant with the funnel intact (#274)', async () => {
+      const track = jest.fn();
+      const screen = await renderGame(null, { analytics: createFarmAnalytics(track) });
+
+      await waitFor(() => expect(screen.getByTestId('onboarding-coachmark')).toBeTruthy());
+      // selectSeed 단계: 직접 씨앗 탭 없이 "바로 시작" 한 번으로 진행한다.
+      expect(screen.getByText(messages.onboardingSelectSeedTitle)).toBeTruthy();
+      fireEvent.press(screen.getByTestId('onboarding-quick-start'));
+
+      // plant 단계까지 한 번에 진입한다.
+      await waitFor(() => expect(screen.getByText(messages.onboardingPlantTitle)).toBeTruthy());
+      // 자동 선택 경로에서도 first_seed_selected 와 onboarding_step_view(step=plant)가
+      // 기존 계약대로 발화한다.
+      expect(track).toHaveBeenCalledWith('first_seed_selected', expect.anything());
+      expect(track).toHaveBeenCalledWith(
+        'onboarding_step_view',
+        expect.objectContaining({ step: 'plant', step_index: 2 })
+      );
+      // CTA는 selectSeed 전용이라 plant 단계에서는 사라진다.
+      expect(screen.queryByTestId('onboarding-quick-start')).toBeNull();
+    });
+
+    test('emits onboarding_stall once when the player lingers without acting (#274)', async () => {
+      const track = jest.fn();
+      const screen = await renderGame(null, { analytics: createFarmAnalytics(track) });
+
+      await waitFor(() => expect(screen.getByTestId('onboarding-coachmark')).toBeTruthy());
+      // 임계 이전에는 정체 이벤트가 없다.
+      expect(track).not.toHaveBeenCalledWith('onboarding_stall', expect.anything());
+
+      // selectSeed에서 무행동으로 임계(15s)를 넘기면 stall이 1회 발화한다.
+      await act(async () => {
+        jest.advanceTimersByTime(ONBOARDING_STALL_MS);
+      });
+      await waitFor(() =>
+        expect(track).toHaveBeenCalledWith(
+          'onboarding_stall',
+          expect.objectContaining({ step: 'selectSeed', step_index: 1, dwell_seconds: 15 })
+        )
+      );
+      const stallCalls = track.mock.calls.filter(([event]) => event === 'onboarding_stall');
+      expect(stallCalls).toHaveLength(1);
+    });
+
+    test('does not stall the step the player acts on before the threshold (#274)', async () => {
+      const track = jest.fn();
+      const screen = await renderGame(null, { analytics: createFarmAnalytics(track) });
+
+      await waitFor(() => expect(screen.getByTestId('onboarding-coachmark')).toBeTruthy());
+      // 임계 전에 "바로 시작"으로 행동하면 selectSeed는 정체로 잡히지 않는다.
+      await act(async () => {
+        jest.advanceTimersByTime(ONBOARDING_STALL_MS - 1000);
+      });
+      fireEvent.press(screen.getByTestId('onboarding-quick-start'));
+      await waitFor(() => expect(screen.getByText(messages.onboardingPlantTitle)).toBeTruthy());
+      await act(async () => {
+        jest.advanceTimersByTime(2000);
+      });
+      // 이미 plant로 넘어갔으므로 selectSeed stall은 발화하지 않는다.
+      expect(track).not.toHaveBeenCalledWith(
+        'onboarding_stall',
+        expect.objectContaining({ step: 'selectSeed' })
+      );
     });
 
     test('never shows for a returning player whose save is already complete', async () => {
