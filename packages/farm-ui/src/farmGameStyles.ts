@@ -818,6 +818,23 @@ export const styles = StyleSheet.create({
   moreMenu: {
     gap: 8,
   },
+  // 성격별 섹션 그룹(#270): 소제목 아래 관련 항목을 모아 스캔 비용을 낮춘다.
+  moreMenuSection: {
+    gap: 8,
+  },
+  // 두 번째 섹션부터는 얕은 구분선과 여백으로 위 섹션과 경계를 준다.
+  moreMenuSectionDivided: {
+    marginTop: 6,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#e4e7ec',
+  },
+  moreMenuSectionTitle: {
+    color: '#667085',
+    fontSize: 12,
+    fontWeight: '800',
+    marginBottom: 2,
+  },
   moreMenuButton: {
     flexDirection: 'row',
     alignItems: 'center',

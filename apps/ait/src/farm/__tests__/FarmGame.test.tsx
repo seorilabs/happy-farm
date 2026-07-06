@@ -646,6 +646,33 @@ describe('FarmGame UI flow', () => {
       const wheelEntry = screen.getByLabelText(messages.wheelButtonAccessibilityLabel);
       expect(within(wheelEntry).getByText('1')).toBeTruthy();
     });
+
+    test('더보기 시트가 성격별 섹션 헤더로 그룹화되고 7개 진입점이 모두 유지된다 (#270)', async () => {
+      const screen = await renderGame(completedState());
+      await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+
+      fireEvent.press(screen.getByTestId('more-nav-button'));
+
+      // 3개 섹션 헤더가 모두 노출된다(평면 목록 → 명명된 섹션).
+      expect(screen.getByText(messages.moreSectionDaily)).toBeTruthy();
+      expect(screen.getByText(messages.moreSectionProduction)).toBeTruthy();
+      expect(screen.getByText(messages.moreSectionGrowth)).toBeTruthy();
+
+      // 기존 7개 진입점(룰렛/도감/연구소/동물/공방/개척/업적)이 모두 그대로 존재한다.
+      expect(screen.getByLabelText(messages.wheelButtonAccessibilityLabel)).toBeTruthy();
+      expect(screen.getByLabelText(messages.collectionButtonAccessibilityLabel)).toBeTruthy();
+      expect(screen.getByLabelText(messages.labButtonAccessibilityLabel)).toBeTruthy();
+      expect(screen.getByLabelText(messages.animalsButtonAccessibilityLabel)).toBeTruthy();
+      expect(screen.getByLabelText(messages.workshopButtonAccessibilityLabel)).toBeTruthy();
+      expect(screen.getByLabelText(messages.mapButtonAccessibilityLabel)).toBeTruthy();
+      expect(screen.getByLabelText(messages.achievementsButtonAccessibilityLabel)).toBeTruthy();
+
+      // 그룹화 후에도 항목별 배지가 유지되고(룰렛=1), onPress 배선도 동일하다(공방 시트 전환).
+      const wheelEntry = screen.getByLabelText(messages.wheelButtonAccessibilityLabel);
+      expect(within(wheelEntry).getByText('1')).toBeTruthy();
+      fireEvent.press(screen.getByLabelText(messages.workshopButtonAccessibilityLabel));
+      expect(screen.getByText(messages.sheetTitleWorkshop)).toBeTruthy();
+    });
   });
 
   describe('welcome-back offline settlement', () => {

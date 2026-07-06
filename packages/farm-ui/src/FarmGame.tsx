@@ -3111,6 +3111,15 @@ export default function FarmGame({
   ];
   const moreRollupBadge = moreMenuEntries.reduce((sum, entry) => sum + entry.badge, 0);
 
+  // '더보기' 시트 내부 그룹화(#270): 평면 7행을 성격별 섹션으로 묶어 스캔 비용을 낮춘다.
+  // 상시 진입점 추가 없이 표현만 재편 — 항목·onPress·항목별 배지·롤업 배지는 전부 불변.
+  const moreMenuEntryByKey = new Map(moreMenuEntries.map((entry) => [entry.key, entry]));
+  const moreMenuSections: { key: string; title: string; entryKeys: string[] }[] = [
+    { key: 'daily', title: messages.moreSectionDaily, entryKeys: ['wheel', 'collection'] },
+    { key: 'production', title: messages.moreSectionProduction, entryKeys: ['animals', 'workshop'] },
+    { key: 'growth', title: messages.moreSectionGrowth, entryKeys: ['lab', 'map', 'achievements'] },
+  ];
+
   // Outline the target the current onboarding step points at to draw the eye.
   const onboardingSeedHighlight = onboardingStep === 'selectSeed';
   const onboardingPlotHighlight = onboardingStep === 'plant' || onboardingStep === 'harvest';
@@ -3574,14 +3583,26 @@ export default function FarmGame({
 
         {activeSheet?.type === 'more' ? (
           <View style={styles.moreMenu}>
-            {moreMenuEntries.map((entry) => (
-              <MoreMenuButton
-                key={entry.key}
-                label={entry.label}
-                badge={entry.badge}
-                accessibilityLabel={entry.accessibilityLabel}
-                onPress={entry.onPress}
-              />
+            {moreMenuSections.map((section, sectionIndex) => (
+              <View
+                key={section.key}
+                style={[styles.moreMenuSection, sectionIndex > 0 && styles.moreMenuSectionDivided]}
+              >
+                <Text style={styles.moreMenuSectionTitle}>{section.title}</Text>
+                {section.entryKeys.map((entryKey) => {
+                  const entry = moreMenuEntryByKey.get(entryKey);
+                  if (entry == null) return null;
+                  return (
+                    <MoreMenuButton
+                      key={entry.key}
+                      label={entry.label}
+                      badge={entry.badge}
+                      accessibilityLabel={entry.accessibilityLabel}
+                      onPress={entry.onPress}
+                    />
+                  );
+                })}
+              </View>
             ))}
           </View>
         ) : null}

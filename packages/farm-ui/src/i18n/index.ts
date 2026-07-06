@@ -219,6 +219,10 @@ const KO_FARM_MESSAGES = {
   moreButtonAccessibilityLabel: '더보기 메뉴',
   sheetTitleMore: '더보기',
   sheetDescriptionMore: '룰렛·도감·연구소·개척·업적을 한곳에서 열어요.',
+  // '더보기' 시트 내부 섹션 헤더(#270): 평면 7행을 성격별로 묶어 스캔 비용을 낮춘다.
+  moreSectionDaily: '🗓️ 매일 할 것',
+  moreSectionProduction: '🏭 부가 생산',
+  moreSectionGrowth: '🌱 장기 성장',
   wheelButton: '🎰 룰렛',
   wheelButtonAccessibilityLabel: '일일 행운 룰렛',
   sheetTitleWheel: '일일 행운 룰렛',
@@ -600,6 +604,10 @@ const EN_FARM_MESSAGES: FarmMessages = {
   moreButtonAccessibilityLabel: 'More menu',
   sheetTitleMore: 'More',
   sheetDescriptionMore: 'Open the wheel, collection, lab, pioneer, and achievements in one place.',
+  // Section headers inside the More sheet (#270): group the flat 7-row list by purpose.
+  moreSectionDaily: '🗓️ Daily',
+  moreSectionProduction: '🏭 Production',
+  moreSectionGrowth: '🌱 Long-term',
   wheelButton: '🎰 Wheel',
   wheelButtonAccessibilityLabel: 'Daily Fortune Wheel',
   sheetTitleWheel: 'Daily Fortune Wheel',
