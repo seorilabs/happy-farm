@@ -372,12 +372,28 @@ export function createFarmAnalytics(track: TrackGameEvent = noopTrackGameEvent) 
     // === 리텐션 계측 (행동 변경 없는 emit 배선) ===
 
     // 데일리 보너스 수령. streak/보상값으로 H2(데일리 보너스 미스케일) 검증.
-    trackDailyBonusClaimed: (params: { streak: number; rewardValue: number; context: GameAnalyticsContext }) => {
+    // is_first_claim은 활성화 퍼널의 "첫 데일리 클레임" 단계를 특정하기 위한 플래그이며,
+    // 첫 수령이면 first_meaningful_harvest와 동일한 패턴으로 전용 이벤트도 함께 발화한다.
+    trackDailyBonusClaimed: (params: {
+      streak: number;
+      rewardValue: number;
+      isFirstClaim: boolean;
+      context: GameAnalyticsContext;
+    }) => {
       track('daily_bonus_claimed', {
         streak: params.streak,
         reward_value: params.rewardValue,
+        is_first_claim: params.isFirstClaim,
         ...params.context,
       });
+
+      if (params.isFirstClaim) {
+        track('first_daily_bonus_claimed', {
+          streak: params.streak,
+          reward_value: params.rewardValue,
+          ...params.context,
+        });
+      }
     },
 
     // 복귀 요약(welcome back) 노출. 이탈 시간/오프라인 골드/수확 대기 작물 수로

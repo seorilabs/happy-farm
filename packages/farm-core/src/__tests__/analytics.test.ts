@@ -68,7 +68,7 @@ describe('farm analytics adapter contract', () => {
       Date.parse('2026-05-27T03:00:05.000Z')
     );
 
-    analytics.trackDailyBonusClaimed({ streak: 3, rewardValue: 90, context });
+    analytics.trackDailyBonusClaimed({ streak: 3, rewardValue: 90, isFirstClaim: false, context });
     analytics.trackReturnSummaryShown({ awayMs: 3600000, offlineGold: 1200, readyCropCount: 4, context });
     analytics.trackReturnSummaryCollected({ awayMs: 3600000, offlineGold: 1200, readyCropCount: 4, context });
     analytics.trackCropOfTheDayHarvested({ cropKey: 'carrot', multiplier: 2, context });
@@ -77,7 +77,7 @@ describe('farm analytics adapter contract', () => {
 
     expect(track).toHaveBeenCalledWith(
       'daily_bonus_claimed',
-      expect.objectContaining({ streak: 3, reward_value: 90, gold: context.gold })
+      expect.objectContaining({ streak: 3, reward_value: 90, is_first_claim: false, gold: context.gold })
     );
     expect(track).toHaveBeenCalledWith(
       'return_summary_shown',
@@ -97,6 +97,93 @@ describe('farm analytics adapter contract', () => {
     );
     // notification_opened은 앱 로드 이전에도 발생할 수 있어 게임 상태 context 없이 emit한다.
     expect(track).toHaveBeenCalledWith('notification_opened', { notification_kind: 'harvest' });
+  });
+
+  test('첫 데일리 클레임은 daily_bonus_claimed(is_first_claim=true)와 전용 first_daily_bonus_claimed를 함께 emit한다 (#107)', () => {
+    const track = jest.fn();
+    const analytics = createFarmAnalytics(track);
+    const context = getGameAnalyticsContext(
+      createInitialState(),
+      Date.parse('2026-05-27T03:00:00.000Z'),
+      Date.parse('2026-05-27T03:00:05.000Z')
+    );
+
+    analytics.trackDailyBonusClaimed({ streak: 1, rewardValue: 50, isFirstClaim: true, context });
+
+    expect(track).toHaveBeenCalledWith(
+      'daily_bonus_claimed',
+      expect.objectContaining({ streak: 1, reward_value: 50, is_first_claim: true })
+    );
+    expect(track).toHaveBeenCalledWith(
+      'first_daily_bonus_claimed',
+      expect.objectContaining({ streak: 1, reward_value: 50, gold: context.gold })
+    );
+  });
+
+  test('첫 클레임이 아니면 first_daily_bonus_claimed는 emit되지 않는다 (#107)', () => {
+    const track = jest.fn();
+    const analytics = createFarmAnalytics(track);
+    const context = getGameAnalyticsContext(
+      createInitialState(),
+      Date.parse('2026-05-27T03:00:00.000Z'),
+      Date.parse('2026-05-27T03:00:05.000Z')
+    );
+
+    analytics.trackDailyBonusClaimed({ streak: 5, rewardValue: 90, isFirstClaim: false, context });
+
+    expect(track).not.toHaveBeenCalledWith('first_daily_bonus_claimed', expect.anything());
+  });
+
+  test('핵심 활성화·리텐션 퍼널 이벤트는 모두 GameAnalyticsContext를 함께 싣는다 (#107 정합성)', () => {
+    // 퍼널 코호트 분해가 가능하도록, 게임 상태를 아는 지점에서 발화하는 모든
+    // 핵심 퍼널 이벤트에는 context(gold/plot_count/lifetime_harvests 등)가 실려야 한다.
+    const track = jest.fn();
+    const analytics = createFarmAnalytics(track);
+    const context = getGameAnalyticsContext(
+      createInitialState(),
+      Date.parse('2026-05-27T03:00:00.000Z'),
+      Date.parse('2026-05-27T03:00:05.000Z')
+    );
+
+    analytics.trackGameStart(context);
+    analytics.trackOnboardingStepView({ step: 'selectSeed', stepIndex: 1, context });
+    analytics.trackOnboardingComplete({ context });
+    analytics.trackSeedSelected('carrot', 'starter_field', true, context);
+    analytics.trackCropPlanted('carrot', 'starter_field', 1, 10, context);
+    analytics.trackCropHarvested({
+      cropKey: 'carrot',
+      areaKey: 'starter_field',
+      cropTier: 1,
+      revenue: 20,
+      isFirstMeaningfulHarvest: true,
+      isFirstCropHarvest: true,
+      context,
+    });
+    analytics.trackDailyBonusClaimed({ streak: 1, rewardValue: 50, isFirstClaim: true, context });
+    analytics.trackReturnSummaryShown({ awayMs: 3600000, offlineGold: 1200, readyCropCount: 4, context });
+
+    const contextKeys = Object.keys(context);
+    const funnelEvents = [
+      'game_start',
+      'onboarding_step_view',
+      'onboarding_complete',
+      'first_seed_selected',
+      'crop_planted',
+      'crop_harvested',
+      'first_meaningful_harvest',
+      'daily_bonus_claimed',
+      'first_daily_bonus_claimed',
+      'return_summary_shown',
+    ];
+
+    for (const eventName of funnelEvents) {
+      const call = track.mock.calls.find(([name]) => name === eventName);
+      expect(call).toBeDefined();
+      const params = call![1] as Record<string, unknown>;
+      for (const key of contextKeys) {
+        expect(params).toHaveProperty(key);
+      }
+    }
   });
 
   test('notification_scheduled는 context/leadTime 없이도 emit된다', () => {
