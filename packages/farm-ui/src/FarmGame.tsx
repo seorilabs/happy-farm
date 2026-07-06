@@ -154,6 +154,8 @@ import {
   isAreaUnlocked,
   isCropPlantable,
   isPlotGrowthComplete,
+  collectNewlyReadyPlotIds,
+  type CropReadyLogState,
   isTitleUnlocked,
   normalizeLocale,
   performHarvestAll,
@@ -1792,6 +1794,10 @@ export default function FarmGame({
   // 비료 성공 부수효과(토스트·시트 닫힘)를 시트 1회 오픈당 한 번만 발화하게 하는
   // 가드. 시트가 열릴 때 false로 리셋한다(#227 리뷰).
   const fertilizeGuardRef = useRef(false);
+  // 익은 작물 crop_ready 로깅 중복 방지 상태(plotId → 로깅한 심기 인스턴스 startTime).
+  // 250ms 틱 루프가 setGameState 커밋 전에 다시 돌아 같은 익음을 반복 로깅하던 문제
+  // (#266)를 막는다. ref로 보관해 렌더 간 유지하면서 즉시 갱신한다.
+  const cropReadyLogStateRef = useRef<CropReadyLogState>({});
   const chainIncome = useMemo(() => getChainIncome(gameState), [gameState, tick]);
   const mapActionableCount = useMemo(
     () => (chainIncome.accruedGold > 0 ? 1 : 0) + (canPrestige(gameState).allowed ? 1 : 0),
@@ -1804,6 +1810,9 @@ export default function FarmGame({
     let next = gameState;
 
     let growthUpdated = false;
+    // 심기 인스턴스당 1회만 로깅되도록, 이번 틱에 새로 익은 plot.id 집합을 먼저 구한다.
+    // (커밋 지연으로 같은 익음이 여러 틱 반복 로깅되는 것을 방지 — #266)
+    const newlyReadyPlotIds = new Set(collectNewlyReadyPlotIds(next, cropReadyLogStateRef.current, now));
     const grownPlots = next.plots.map((plot) => {
       if (plot.id >= next.unlockedPlotCount) {
         return plot;
@@ -1813,7 +1822,9 @@ export default function FarmGame({
       }
       const crop = getCrop(plot.cropType);
       growthUpdated = true;
-      farmAnalytics.trackCropReady(plot.cropType, crop.area, crop.tier, analyticsContext());
+      if (newlyReadyPlotIds.has(plot.id)) {
+        farmAnalytics.trackCropReady(plot.cropType, crop.area, crop.tier, analyticsContext());
+      }
       return { ...plot, state: 2 as const };
     });
     if (growthUpdated) {

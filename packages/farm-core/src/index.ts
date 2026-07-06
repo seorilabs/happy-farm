@@ -6,6 +6,7 @@ export * from './ads';
 export * from './commands';
 export * from './constants';
 export * from './cropOfTheDay';
+export * from './cropReady';
 export * from './dailyBonus';
 export * from './decorations';
 export * from './environment';
