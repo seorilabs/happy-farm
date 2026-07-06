@@ -1698,6 +1698,17 @@ export default function FarmGame({
         : [],
     [gameState, selectedArea]
   );
+  // #274 대표 씨앗(바로 시작 CTA): 잠긴 구역·미해금 작물을 제외하고 실제로 심을 수
+  // 있는 첫 작물만 고른다. 후보가 없으면 null → CTA 자체를 숨겨(무동작 CTA 방지),
+  // "탭해도 아무 일 없는" 정체 유발을 막는다. 선택 구역과 무관하게 전 구역에서
+  // 찾으므로 어떤 상태에서도 심기 가능한 씨앗이 있으면 반드시 하나를 고른다.
+  const quickStartCropKey = useMemo<CropKey | null>(
+    () =>
+      (Object.keys(CROPS) as CropKey[]).find(
+        (key) => isAreaUnlocked(gameState, getCrop(key).area) && isCropPlantable(gameState, key)
+      ) ?? null,
+    [gameState]
+  );
   const areaCropCounts = useMemo(() => {
     return FARM_AREAS.reduce(
       (acc, area) => {
@@ -2395,16 +2406,16 @@ export default function FarmGame({
     setSelectedTool(cropKey);
   }
 
-  // #274: selectSeed 코치마크 "바로 시작" — 현재 구역의 첫 재배 가능 작물(대표
-  // 씨앗)을 자동 선택한다. selectCrop을 그대로 태우므로 first_seed_selected 계측과
-  // 씨앗 선택 상태 세팅이 직접 선택과 동일하게 일어나고, 이어서 진행 이펙트가
-  // selectSeed→plant로 넘겨 onboarding_step_view(step=plant)까지 한 번에 발화한다.
+  // #274: selectSeed 코치마크 "바로 시작" — 심을 수 있는 대표 씨앗을 자동 선택한다.
+  // selectCrop을 그대로 태우므로 first_seed_selected 계측과 씨앗 선택 상태 세팅이
+  // 직접 선택과 동일하게 일어나고, 이어서 진행 이펙트가 selectSeed→plant로 넘겨
+  // onboarding_step_view(step=plant)까지 한 번에 발화한다. quickStartCropKey는 이미
+  // 해금·심기 가능 작물만 담으므로 selectCrop이 거절(잠김/미해금)로 no-op되지 않는다.
   function quickStartOnboarding() {
-    const cropKey = visibleCropKeys.find((key) => isCropPlantable(gameState, key)) ?? visibleCropKeys[0];
-    if (cropKey == null) {
+    if (quickStartCropKey == null) {
       return;
     }
-    selectCrop(cropKey);
+    selectCrop(quickStartCropKey);
   }
 
   async function showRewardedAd(type: RewardedAdType, rewardValue: number, onReward: () => void) {
@@ -3275,7 +3286,7 @@ export default function FarmGame({
           step={onboardingStep}
           messages={messages}
           onSkip={skipOnboarding}
-          onQuickStart={quickStartOnboarding}
+          onQuickStart={quickStartCropKey != null ? quickStartOnboarding : undefined}
         />
       ) : null}
 
