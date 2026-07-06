@@ -286,7 +286,15 @@
     "recipes": [
       { "key": "bread", "icon": "🍞", "inputs": [{ "crop": "wheat", "qty": 3 }], "timerMs": 300000, "sellPrice": 300 },
       { "key": "juice", "icon": "🧃", "inputs": [{ "crop": "tomato", "qty": 2 }], "timerMs": 900000, "sellPrice": 1500 },
-      { "key": "pie", "icon": "🥧", "inputs": [{ "crop": "strawberry", "qty": 1 }], "timerMs": 2400000, "sellPrice": 4000 }
+      { "key": "pie", "icon": "🥧", "inputs": [{ "crop": "strawberry", "qty": 1 }], "timerMs": 2400000, "sellPrice": 4000 },
+      { "key": "pumpkin_tart", "icon": "🧁", "inputs": [{ "crop": "pumpkin", "qty": 1 }, { "crop": "wheat", "qty": 2 }], "timerMs": 34560000, "sellPrice": 63000 },
+      { "key": "sunflower_oil", "icon": "🫗", "inputs": [{ "crop": "sunflower", "qty": 2 }], "timerMs": 41520000, "sellPrice": 76000 },
+      { "key": "melon_sorbet", "icon": "🍧", "inputs": [{ "crop": "melon", "qty": 1 }, { "crop": "pumpkin", "qty": 1 }], "timerMs": 54600000, "sellPrice": 100000 },
+      { "key": "apple_cider", "icon": "🍾", "inputs": [{ "crop": "apple", "qty": 1 }, { "crop": "grape", "qty": 1 }], "timerMs": 64920000, "sellPrice": 119000 },
+      { "key": "pear_jam", "icon": "🍯", "inputs": [{ "crop": "pear", "qty": 1 }], "timerMs": 81840000, "sellPrice": 150000 },
+      { "key": "peach_compote", "icon": "🍨", "inputs": [{ "crop": "peach", "qty": 1 }], "timerMs": 128220000, "sellPrice": 235000 },
+      { "key": "cherry_wine", "icon": "🍷", "inputs": [{ "crop": "cherry", "qty": 1 }], "timerMs": 231300000, "sellPrice": 424000 },
+      { "key": "mango_pudding", "icon": "🍮", "inputs": [{ "crop": "mango", "qty": 1 }], "timerMs": 351840000, "sellPrice": 645000 }
     ]
   },
   "crops": [

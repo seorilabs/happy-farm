@@ -208,12 +208,28 @@ const KO_PRODUCTION_LABELS = {
   bread: { name: '빵', description: '밀을 구워 만든 든든한 빵' },
   juice: { name: '주스', description: '토마토를 짜서 만든 새콤한 주스' },
   pie: { name: '파이', description: '딸기를 듬뿍 올린 달콤한 파이' },
+  pumpkin_tart: { name: '호박 타르트', description: '황금호박과 밀로 구운 고소한 타르트' },
+  sunflower_oil: { name: '해바라기유', description: '해바라기씨를 짜서 만든 고급 기름' },
+  melon_sorbet: { name: '멜론 소르베', description: '멜론과 호박을 갈아 얼린 시원한 디저트' },
+  apple_cider: { name: '사과 사이다', description: '사과와 포도를 발효시킨 향긋한 사이다' },
+  pear_jam: { name: '배 잼', description: '배를 오래 졸여 만든 진한 잼' },
+  peach_compote: { name: '복숭아 콩포트', description: '복숭아를 설탕에 조린 달콤한 콩포트' },
+  cherry_wine: { name: '체리 와인', description: '체리를 오래 숙성시킨 깊은 맛의 와인' },
+  mango_pudding: { name: '망고 푸딩', description: '망고를 듬뿍 넣어 굳힌 부드러운 푸딩' },
 } satisfies Record<ProductionRecipeKey, DescribedLabel>;
 
 const EN_PRODUCTION_LABELS = {
   bread: { name: 'Bread', description: 'Hearty bread baked from wheat.' },
   juice: { name: 'Juice', description: 'Tangy juice pressed from tomatoes.' },
   pie: { name: 'Pie', description: 'A sweet pie piled with strawberries.' },
+  pumpkin_tart: { name: 'Pumpkin Tart', description: 'A savory tart baked from golden pumpkin and wheat.' },
+  sunflower_oil: { name: 'Sunflower Oil', description: 'Premium oil pressed from sunflower seeds.' },
+  melon_sorbet: { name: 'Melon Sorbet', description: 'A cool frozen dessert blended from melon and pumpkin.' },
+  apple_cider: { name: 'Apple Cider', description: 'Fragrant cider fermented from apples and grapes.' },
+  pear_jam: { name: 'Pear Jam', description: 'Rich jam simmered slowly from pears.' },
+  peach_compote: { name: 'Peach Compote', description: 'A sweet compote of peaches candied in sugar.' },
+  cherry_wine: { name: 'Cherry Wine', description: 'Deep, aged wine matured from cherries.' },
+  mango_pudding: { name: 'Mango Pudding', description: 'A smooth pudding set with plenty of mango.' },
 } satisfies Record<ProductionRecipeKey, DescribedLabel>;
 
 const EN_DECORATION_LABELS = {

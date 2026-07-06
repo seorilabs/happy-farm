@@ -71,6 +71,36 @@ describe('production catalog', () => {
     }
   });
 
+  test('mid/late recipes consume tier-4+ crop inventory and craft end to end (#271)', () => {
+    // 후반 재고 소비: 최소 6종의 레시피가 tier 4 이상 작물을 입력으로 가진다.
+    const tier4Recipes = PRODUCTION_RECIPES.filter((recipe) =>
+      recipe.inputs.some((input) => (CROPS[input.crop]?.tier ?? 0) >= 4)
+    );
+    expect(tier4Recipes.length).toBeGreaterThanOrEqual(6);
+
+    // 대표 후반 레시피(배 잼)를 실제로 가공·수령해 소비/보상이 동작함을 확인한다.
+    const pearJam = getRecipe('pear_jam');
+    expect(pearJam).not.toBeNull();
+    expect(pearJam!.inputs.some((input) => (CROPS[input.crop]?.tier ?? 0) >= 4)).toBe(true);
+
+    const now = 5_000_000;
+    const inventory: Partial<Record<CropKey, number>> = {};
+    for (const input of pearJam!.inputs) {
+      inventory[input.crop] = input.qty;
+    }
+    const seeded = stateWith({ inventory, crafting: {} }, 1000);
+    const crafting = startCraft(seeded, 'pear_jam', now)!;
+    // 입력 작물이 인벤토리에서 차감된다.
+    for (const input of pearJam!.inputs) {
+      expect(crafting.production.inventory[input.crop] ?? 0).toBe(0);
+    }
+    // 타이머 이후 수령하면 sellPrice가 1회 지급된다.
+    const readyAt = now + pearJam!.timerMs;
+    expect(canCollectCraft(crafting, 'pear_jam', readyAt)).toBe(true);
+    const collected = collectCraft(crafting, 'pear_jam', readyAt)!;
+    expect(collected.gold).toBe(seeded.gold + pearJam!.sellPrice);
+  });
+
   test('every recipe has ko/en labels', () => {
     for (const recipe of PRODUCTION_RECIPES) {
       for (const locale of ['ko-KR', 'en-US'] as const) {
