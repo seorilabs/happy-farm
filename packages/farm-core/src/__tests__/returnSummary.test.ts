@@ -170,6 +170,40 @@ describe('getReturnSummary', () => {
     );
   });
 
+  // #273: 오프라인 튜닝 불변식 — 오프라인 세션 수익은 동일 시간 온라인 능동
+  // 플레이 수익을 절대 초과하지 않는다(능동 플레이 지배 금지). 오프라인 gold는
+  // 창(window ≤ cap)에 대해 정확히 efficiencyRatio × 동일창 능동 수익이므로,
+  // ratio가 도메인 상한(0.5) 이하인 한 이 관계가 스테이지와 무관하게 성립한다.
+  test('offline income never exceeds same-duration active play (#273)', () => {
+    const base = createInitialState();
+    // 여러 밭이 자라는 대표 농장(단일 밀 밭이 아닌 합산 케이스로 검증).
+    const state = withGrowingCrop(2, 'wheat', withGrowingCrop(1, 'wheat', withGrowingCrop(0, 'wheat', base)));
+
+    const speedMultiplier = getSpeedMultiplier(base.upgrades.speed);
+    const profitMultiplier = getProfitMultiplier(base.upgrades.profit);
+    // 동일 시간 온라인 능동 플레이 수익률(효율계수 미적용 = 100% net/h 합산).
+    const activeNetPerHour = ['wheat', 'wheat', 'wheat'].reduce(
+      (acc, key) =>
+        acc + getCropEconomyEstimate(key as CropKey, { speedMultiplier, profitMultiplier }).netProfitPerHour,
+      0
+    );
+
+    for (const awayHours of [1, 6, 24, 48]) {
+      const awayMs = awayHours * MS_PER_HOUR;
+      const offline = getActiveFarmOfflineGold(state, awayMs);
+      const cappedHours = Math.min(awayMs, OFFLINE_INCOME_CAP_MS) / MS_PER_HOUR;
+      const activePlay = Math.floor(activeNetPerHour * cappedHours);
+      // 오프라인은 동일창 능동 수익을 절대 초과하지 않는다.
+      expect(offline).toBeLessThanOrEqual(activePlay);
+      // 그리고 정확히 efficiencyRatio 비율만큼이다(스테이지 무관 선형 관계).
+      expect(offline).toBe(Math.floor(activeNetPerHour * OFFLINE_INCOME_EFFICIENCY_RATIO * cappedHours));
+    }
+
+    // 효율계수는 능동 플레이 지배 방지를 위한 상한(0.5) 이하로 유지된다.
+    expect(OFFLINE_INCOME_EFFICIENCY_RATIO).toBeLessThanOrEqual(0.5);
+    expect(OFFLINE_INCOME_EFFICIENCY_RATIO).toBeGreaterThan(0);
+  });
+
   test('flags daily bonus as available when it has never been claimed', () => {
     const state = withReadyCrop(0, createInitialState());
     const lastSeen = NOW - 2 * MS_PER_HOUR;
