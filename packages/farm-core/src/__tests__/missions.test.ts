@@ -107,6 +107,25 @@ describe('progress tracking', () => {
     expect(after.progress[harvestMission.slot]).toBe(0);
   });
 
+  test('레거시 3-slot 세이브(길이 3)가 4-slot으로 늘어난 뒤 첫 심기도 진행이 보존·기록된다 (#254)', () => {
+    const missions = getDailyMissions(getMissionDayKey(DAY_A), ALL_AREAS);
+    const plantMission = missions.find((m) => m.type === 'plant')!;
+    const harvestMission = missions.find((m) => m.type === 'harvest')!;
+    // 슬롯 3개 시절 저장된 상태를 그대로 흉내 낸다: 오늘 날짜 + 길이 3 배열 + 기존 수확 진행 2.
+    const legacy: DailyMissionState = {
+      dayKey: getMissionDayKey(DAY_A),
+      areaKeys: [null, null, null],
+      progress: [2, 0, 0],
+      claimedSlots: [],
+    };
+    const after = recordPlantProgress(legacy, DAY_A, ALL_AREAS);
+    // 길이가 슬롯 수(4)로 정규화되고, 롤오버(리셋) 없이 기존 수확 진행(2)이 보존되며
+    // 신규 plant 슬롯에만 +1 기록된다(길이 가드 회귀 방지).
+    expect(after.progress).toHaveLength(SLOT_COUNT);
+    expect(after.progress[harvestMission.slot]).toBe(2);
+    expect(after.progress[plantMission.slot]).toBe(1);
+  });
+
   test('performPlant feeds plant-mission progress through the canonical pipeline (#254)', () => {
     let state = createInitialState();
     // 심을 수 있는 초기 작물(초보 밭)을 고른다.
