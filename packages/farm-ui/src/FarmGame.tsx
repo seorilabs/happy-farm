@@ -238,6 +238,9 @@ export const FIRST_HARVEST_CELEBRATION_DURATION_MS = 3200;
 // "first unlock" coachmark auto-dismisses after this long so it can never stick
 // around forever.
 export const ONBOARDING_UNLOCK_SAFETY_TIMEOUT_MS = 5 * 60_000;
+// 온보딩 단계 진입 후 이만큼 무행동으로 머물면 onboarding_stall을 1회 발화해
+// 단계별 정체 구간을 계측한다(#274). selectSeed 69% 정체 진단용.
+export const ONBOARDING_STALL_MS = 15_000;
 const SHEET_DISMISS_DRAG_DISTANCE = 96;
 const SHEET_DISMISS_VELOCITY = 1.1;
 const SHEET_DISMISS_TRANSLATE_Y = 520;
@@ -1376,6 +1379,32 @@ export default function FarmGame({
     });
   }, [onboardingStep, farmAnalytics, analyticsContext]);
 
+  // Fire onboarding_stall once per step entry if the player lingers without
+  // acting for ONBOARDING_STALL_MS (#274). The step changes the instant the
+  // player acts, so this effect's cleanup clears the timer before it fires —
+  // a stall event therefore only lands when the player is genuinely stuck.
+  // Reads the analytics context from a ref so lingering doesn't re-arm on every
+  // tick (the effect depends only on the step, not on gameState).
+  useEffect(() => {
+    if (onboardingStep == null) {
+      return;
+    }
+    const step = onboardingStep;
+    const timer = setTimeout(() => {
+      const buildContext = analyticsContextRef.current;
+      if (buildContext == null) {
+        return;
+      }
+      farmAnalytics.trackOnboardingStall({
+        step,
+        stepIndex: ONBOARDING_STEPS.indexOf(step) + 1,
+        dwellSeconds: Math.round(ONBOARDING_STALL_MS / 1000),
+        context: buildContext(),
+      });
+    }, ONBOARDING_STALL_MS);
+    return () => clearTimeout(timer);
+  }, [onboardingStep, farmAnalytics]);
+
   // Loop a gentle pulse on the seed-strip emphasis ring while the selectSeed step
   // is active so the place to tap reads louder for brand-new players; stop and
   // reset when the step moves on. Drives only the overlay ring's opacity (native
@@ -2366,6 +2395,18 @@ export default function FarmGame({
     setSelectedTool(cropKey);
   }
 
+  // #274: selectSeed 코치마크 "바로 시작" — 현재 구역의 첫 재배 가능 작물(대표
+  // 씨앗)을 자동 선택한다. selectCrop을 그대로 태우므로 first_seed_selected 계측과
+  // 씨앗 선택 상태 세팅이 직접 선택과 동일하게 일어나고, 이어서 진행 이펙트가
+  // selectSeed→plant로 넘겨 onboarding_step_view(step=plant)까지 한 번에 발화한다.
+  function quickStartOnboarding() {
+    const cropKey = visibleCropKeys.find((key) => isCropPlantable(gameState, key)) ?? visibleCropKeys[0];
+    if (cropKey == null) {
+      return;
+    }
+    selectCrop(cropKey);
+  }
+
   async function showRewardedAd(type: RewardedAdType, rewardValue: number, onReward: () => void) {
     // Tag the whole funnel with the type's canonical placement so blocked/click/
     // completed/failed all aggregate per placement (single source of truth).
@@ -3230,7 +3271,12 @@ export default function FarmGame({
       </View>
 
       {onboardingStep != null ? (
-        <FarmOnboarding step={onboardingStep} messages={messages} onSkip={skipOnboarding} />
+        <FarmOnboarding
+          step={onboardingStep}
+          messages={messages}
+          onSkip={skipOnboarding}
+          onQuickStart={quickStartOnboarding}
+        />
       ) : null}
 
       <ScrollView contentContainerStyle={styles.mainContent} style={styles.main}>

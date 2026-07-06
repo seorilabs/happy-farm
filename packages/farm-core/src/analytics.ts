@@ -485,5 +485,22 @@ export function createFarmAnalytics(track: TrackGameEvent = noopTrackGameEvent) 
         ...params.context,
       });
     },
+
+    // 온보딩 단계 무행동 정체(#274). 단계 진입 후 dwellSeconds 동안 다음 행동이
+    // 없으면 발생시켜, 어느 단계에서 얼마나 머물다 정체/이탈하는지 특정한다.
+    // (특히 selectSeed에서 씨앗 선택도 skip도 없이 정체하는 구간을 계측)
+    trackOnboardingStall: (params: {
+      step: string;
+      stepIndex: number;
+      dwellSeconds: number;
+      context: GameAnalyticsContext;
+    }) => {
+      track('onboarding_stall', {
+        step: params.step,
+        step_index: params.stepIndex,
+        dwell_seconds: params.dwellSeconds,
+        ...params.context,
+      });
+    },
   };
 }

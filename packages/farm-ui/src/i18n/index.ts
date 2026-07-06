@@ -388,6 +388,8 @@ const KO_FARM_MESSAGES = {
     `${themeName} 작물 축제까지 ${remaining}`,
   onboardingProgress: (current: number, total: number) => `${current} / ${total}`,
   onboardingSkip: '건너뛰기',
+  // #274: selectSeed 정체 완화 — 탭 한 번으로 대표 씨앗을 자동 선택해 심기 단계로 진행.
+  onboardingQuickStart: '바로 시작',
   onboardingSelectSeedTitle: '씨앗을 골라요',
   onboardingSelectSeedDesc: '아래 목록에서 심을 씨앗을 골라 보세요.',
   onboardingPlantTitle: '빈 밭에 심어요',
@@ -763,6 +765,7 @@ const EN_FARM_MESSAGES: FarmMessages = {
   weeklyEventTeaserDesc: (themeName, remaining) => `${themeName} crop festival in ${remaining}`,
   onboardingProgress: (current, total) => `${current} / ${total}`,
   onboardingSkip: 'Skip',
+  onboardingQuickStart: 'Quick start',
   onboardingSelectSeedTitle: 'Pick a seed',
   onboardingSelectSeedDesc: 'Choose a seed to plant from the strip below.',
   onboardingPlantTitle: 'Plant it',
