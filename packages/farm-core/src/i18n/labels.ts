@@ -192,6 +192,9 @@ const KO_DECORATION_LABELS = {
   hot_spring: { name: '온천', description: '김이 모락모락 피어오르는 노천 온천' },
   golden_statue: { name: '황금 동상', description: '농장의 번영을 기리는 눈부신 황금 동상' },
   rainbow_fountain: { name: '무지개 분수', description: '물줄기마다 무지개가 걸리는 전설의 분수' },
+  observatory: { name: '천문대', description: '밤하늘의 별을 관측하는 웅장한 천문대' },
+  aurora_arch: { name: '오로라 다리', description: '오로라가 걸쳐진 눈부신 빛의 다리' },
+  celestial_palace: { name: '천상의 궁전', description: '구름 위에 세운 전설의 천상 궁전' },
 } satisfies Record<DecorationKey, DescribedLabel>;
 
 const KO_ANIMAL_LABELS = {
@@ -253,6 +256,9 @@ const EN_DECORATION_LABELS = {
   hot_spring: { name: 'Hot Spring', description: 'An open-air spring with steam drifting up.' },
   golden_statue: { name: 'Golden Statue', description: 'A dazzling statue honoring your farm prosperity.' },
   rainbow_fountain: { name: 'Rainbow Fountain', description: 'A legendary fountain with a rainbow in every jet.' },
+  observatory: { name: 'Observatory', description: 'A grand observatory for stargazing the night sky.' },
+  aurora_arch: { name: 'Aurora Arch', description: 'A dazzling arch of light draped in auroras.' },
+  celestial_palace: { name: 'Celestial Palace', description: 'A legendary palace raised above the clouds.' },
 } satisfies Record<DecorationKey, DescribedLabel>;
 
 const EN_AREA_LABELS = {

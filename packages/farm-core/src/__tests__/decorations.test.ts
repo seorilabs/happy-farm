@@ -46,6 +46,32 @@ describe('decorations catalog', () => {
     }
   });
 
+  test('prestige-era top-tier decorations extend the catalog in ascending order with ko/en labels (#293)', () => {
+    const prestigeTier: DecorationKey[] = ['observatory', 'aurora_arch', 'celestial_palace'];
+    const catalogKeys = DECORATIONS.map((decoration) => decoration.key);
+
+    // 신규 3종이 카탈로그에 존재하고 최상단(최고가)에 선언 순서대로 놓인다.
+    for (const key of prestigeTier) {
+      expect(catalogKeys).toContain(key);
+    }
+    expect(catalogKeys.slice(-3)).toEqual(prestigeTier);
+
+    // 카탈로그 전체가 가격 순증가(골드 싱크 사다리 단조성 — #293 리뷰: 간격이 사다리를
+    // 끊지 않도록 오름차순 불변식을 회귀로 고정).
+    for (let index = 1; index < DECORATIONS.length; index += 1) {
+      expect(DECORATIONS[index]!.price).toBeGreaterThan(DECORATIONS[index - 1]!.price);
+    }
+
+    // 신규 3종 각각 ko/en 라벨이 비어 있지 않다.
+    for (const key of prestigeTier) {
+      for (const locale of ['ko-KR', 'en-US'] as const) {
+        const label = getDecorationLabel(key, locale);
+        expect(label.name.trim()).not.toBe('');
+        expect(label.description.trim()).not.toBe('');
+      }
+    }
+  });
+
   test('isKnownDecorationKey accepts catalog keys and rejects others', () => {
     expect(isKnownDecorationKey(FIRST)).toBe(true);
     expect(isKnownDecorationKey('not_a_decoration')).toBe(false);
