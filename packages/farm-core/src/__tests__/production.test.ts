@@ -71,6 +71,38 @@ describe('production catalog', () => {
     }
   });
 
+  test('tier 6~7 recipes extend the sink in ascending price with ko/en labels (#297)', () => {
+    const lateTierRecipes: ProductionRecipeKey[] = [
+      'coconut_bar',
+      'kiwi_smoothie',
+      'avocado_toast',
+      'cactus_candy',
+      'bamboo_tea',
+      'ginseng_tonic',
+      'crystal_elixir',
+    ];
+    const catalogKeys = PRODUCTION_RECIPES.map((recipe) => recipe.key);
+
+    for (const key of lateTierRecipes) {
+      const recipe = getRecipe(key);
+      expect(recipe).not.toBeNull();
+      // 입력이 tier 6 이상 작물이다(후반 재고 소비처).
+      expect(recipe!.inputs.every((input) => (CROPS[input.crop]?.tier ?? 0) >= 6)).toBe(true);
+      // ko/en 라벨이 모두 비어 있지 않다.
+      for (const locale of ['ko-KR', 'en-US'] as const) {
+        const label = getProductionRecipeLabel(key, locale);
+        expect(label.name.trim()).not.toBe('');
+        expect(label.description.trim()).not.toBe('');
+      }
+    }
+    // 신규 7종이 카탈로그 최상단(최고가)에 선언 순서대로 놓인다.
+    expect(catalogKeys.slice(-7)).toEqual(lateTierRecipes);
+    // 카탈로그 전체가 sellPrice 오름차순이다(선언 순서=가격 오름차순 유지 — #297).
+    for (let index = 1; index < PRODUCTION_RECIPES.length; index += 1) {
+      expect(PRODUCTION_RECIPES[index]!.sellPrice).toBeGreaterThan(PRODUCTION_RECIPES[index - 1]!.sellPrice);
+    }
+  });
+
   test('mid/late recipes consume tier-4+ crop inventory and craft end to end (#271)', () => {
     // 후반 재고 소비: 최소 6종의 레시피가 tier 4 이상 작물을 입력으로 가진다.
     const tier4Recipes = PRODUCTION_RECIPES.filter((recipe) =>
