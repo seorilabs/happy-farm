@@ -204,6 +204,10 @@ const KO_ANIMAL_LABELS = {
   sheep: { name: '양', description: '90분마다 포근한 양털을 자아내는 목장 친구' },
   pig: { name: '돼지', description: '2시간마다 값진 송로버섯을 찾아내는 코 좋은 가축' },
   bee: { name: '꿀벌', description: '3시간마다 달콤한 꿀을 모아 오는 부지런한 일꾼' },
+  goat: { name: '염소', description: '4시간마다 고소한 치즈를 내주는 산악 목장의 일꾼' },
+  alpaca: { name: '알파카', description: '6시간마다 최고급 털을 자아내는 고산지대 가축' },
+  turkey: { name: '칠면조', description: '8시간마다 풍성한 고기를 안겨 주는 큰 새' },
+  peacock: { name: '공작', description: '12시간마다 화려한 깃털을 선사하는 귀한 새' },
 } satisfies Record<AnimalKey, DescribedLabel>;
 
 const EN_ANIMAL_LABELS = {
@@ -213,6 +217,10 @@ const EN_ANIMAL_LABELS = {
   sheep: { name: 'Sheep', description: 'A pasture friend that spins cozy wool every 90 minutes.' },
   pig: { name: 'Pig', description: 'A keen-nosed animal that roots out prized truffles every 2 hours.' },
   bee: { name: 'Bee', description: 'A busy worker that gathers sweet honey every 3 hours.' },
+  goat: { name: 'Goat', description: 'A mountain-ranch worker that gives savory cheese every 4 hours.' },
+  alpaca: { name: 'Alpaca', description: 'A highland animal that spins premium wool every 6 hours.' },
+  turkey: { name: 'Turkey', description: 'A large bird that yields hearty meat every 8 hours.' },
+  peacock: { name: 'Peacock', description: 'A rare bird that offers splendid plumes every 12 hours.' },
 } satisfies Record<AnimalKey, DescribedLabel>;
 
 const KO_PRODUCTION_LABELS = {
