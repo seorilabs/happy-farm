@@ -14,6 +14,7 @@ export * from './fertilizer';
 export * from './growthStage';
 export * from './harvest';
 export * from './mastery';
+export * from './metricsSink';
 export * from './missions';
 export * from './modifiers';
 export * from './prestige';
