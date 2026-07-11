@@ -9,11 +9,14 @@ import {
 
 import {
   RELEASE_INFO,
+  combineTrackers,
   createFarmAnalytics,
   toFirebaseAnalyticsParams,
   type AnalyticsValue,
   type TrackGameEvent,
 } from '../../../../packages/farm-core/src';
+
+import { createAppsInTossSelfServerTracker } from './metricsServer';
 
 type AppsInTossAnalyticsInitResult =
   | { status: 'ready' }
@@ -143,4 +146,8 @@ export function setAppsInTossAnalyticsCollectionEnabled(enabled: boolean) {
   setAnalyticsCollectionEnabled(firebaseAnalytics, enabled);
 }
 
-export const appsInTossFarmAnalytics = createFarmAnalytics(trackAppsInTossAnalyticsEvent);
+// Firebase(GA4) 전송에 자체 지표 서버 전송을 fanout으로 결합한다. 자체 서버 tracker가
+// null(엔드포인트 미설정)이면 firebase tracker만 남아 현 동작과 동일하다.
+export const appsInTossFarmAnalytics = createFarmAnalytics(
+  combineTrackers(trackAppsInTossAnalyticsEvent, createAppsInTossSelfServerTracker()),
+);
