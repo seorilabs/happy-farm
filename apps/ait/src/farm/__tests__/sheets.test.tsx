@@ -25,11 +25,16 @@ import {
   getWheelSlotReward,
   getResetDayIndex,
   getResetDayStart,
+  MUTATION_KINDS,
   WHEEL_SLOTS,
   type GameState,
 } from '../../../../../packages/farm-core/src';
 import { getFarmMessages } from '../../../../../packages/farm-ui/src';
-import { CollectionSheet } from '../../../../../packages/farm-ui/src/components/CollectionSheet';
+import {
+  CollectionSheet,
+  COLLECTION_CELL_WIDTH,
+  styles as collectionStyles,
+} from '../../../../../packages/farm-ui/src/components/CollectionSheet';
 import { StatsSheet } from '../../../../../packages/farm-ui/src/components/StatsSheet';
 import { AchievementsSheet } from '../../../../../packages/farm-ui/src/components/AchievementsSheet';
 import { LabSheet } from '../../../../../packages/farm-ui/src/components/LabSheet';
@@ -58,6 +63,33 @@ describe('CollectionSheet', () => {
     expect(screen.getByTestId('collection-sheet')).toBeTruthy();
     // 초기 상태에서는 발견한 작물이 없어 ??? 플레이스홀더만 노출된다.
     expect(screen.getAllByText('???').length).toBeGreaterThan(0);
+  });
+
+  test('mutation badge row fits inside the crop card and the card clips overflow (UI 깨짐 회귀 방지)', () => {
+    // 각 작물 카드 하단 돌연변이 배지 행(MUTATION_KINDS 슬롯)이 카드 폭을 넘어 UI가
+    // 깨지던 문제의 회귀 방지. 시각 렌더는 헤드리스로 검증 못 하므로 레이아웃 불변식을 고정한다.
+    const cell = StyleSheet.flatten(collectionStyles.collectionCell);
+    const mutationRow = StyleSheet.flatten(collectionStyles.mutationRow);
+    const mutationCell = StyleSheet.flatten(collectionStyles.mutationCell);
+    const mutationIcon = StyleSheet.flatten(collectionStyles.mutationCellIcon);
+
+    const paddingH = cell.paddingHorizontal as number;
+    const gap = mutationRow.gap as number;
+    const cellSize = mutationCell.width as number;
+    const contentWidth = COLLECTION_CELL_WIDTH - paddingH * 2;
+
+    // 4개(현재) 배지 + 갭이 카드 가용폭 안에 들어와야 한다.
+    const rowWidth = MUTATION_KINDS.length * cellSize + (MUTATION_KINDS.length - 1) * gap;
+    expect(rowWidth).toBeLessThanOrEqual(contentWidth);
+
+    // 카드가 초과분을 클리핑해 어떤 경우에도 박스 밖으로 튀어나가지 않는다(안전망).
+    expect(cell.overflow).toBe('hidden');
+
+    // 배지 글리프가 셀 안에서 세로로 넘치지 않도록 lineHeight >= fontSize, 셀 높이 이하.
+    const fontSize = mutationIcon.fontSize as number;
+    const lineHeight = mutationIcon.lineHeight as number;
+    expect(lineHeight).toBeGreaterThanOrEqual(fontSize);
+    expect(lineHeight).toBeLessThanOrEqual(mutationCell.height as number);
   });
 
   test('shows an unlock-condition hint on locked areas and none on unlocked ones (#228)', () => {
