@@ -79,6 +79,41 @@ describe('animals catalog', () => {
     }
   });
 
+  test('premium-tier animals extend the roster in ascending cost, below the crop ceiling, with ko/en labels (#299)', () => {
+    const MS_PER_HOUR = 60 * 60 * 1000;
+    const premiumTier: AnimalKey[] = ['goat', 'alpaca', 'turkey', 'peacock'] as AnimalKey[];
+    const catalogKeys = ANIMALS.map((animal) => animal.key);
+    const cropNetPerHours = Object.values(CROPS).map(
+      (crop) => ((crop.sell - crop.cost) / crop.growTime) * MS_PER_HOUR
+    );
+    const minCropNetPerHour = Math.min(...cropNetPerHours);
+
+    // 신규 4종이 카탈로그 최상단(최고가)에 선언 순서대로 놓인다.
+    expect(catalogKeys.slice(-4)).toEqual(premiumTier);
+    for (const key of premiumTier) {
+      const animal = getAnimal(key)!;
+      expect(animal).toBeDefined();
+      // 산출물 net/h는 가장 싼 작물 net/h 미만이어야 한다(작물 지배 방지).
+      const netPerHour = ((animal.producePrice - animal.feedCost) / animal.produceTimerMs) * MS_PER_HOUR;
+      expect(netPerHour).toBeGreaterThan(0);
+      expect(netPerHour).toBeLessThan(minCropNetPerHour);
+      // ko/en 라벨이 모두 비어 있지 않다.
+      for (const locale of ['ko-KR', 'en-US'] as const) {
+        const label = getAnimalLabel(key, locale);
+        expect(label.name.trim()).not.toBe('');
+        expect(label.description.trim()).not.toBe('');
+      }
+    }
+
+    // 신규 최상위 종(peacock)이 feed → collect 사이클을 완주한다.
+    const peacock = getAnimal('peacock' as AnimalKey)!;
+    const now = 12_000_000;
+    const fed = feedAnimal(ownedState(peacock.feedCost, ['peacock' as AnimalKey]), 'peacock' as AnimalKey, now)!;
+    const readyAt = now + peacock.produceTimerMs;
+    expect(canCollectProduce(fed, 'peacock' as AnimalKey, readyAt)).toBe(true);
+    expect(collectProduce(fed, 'peacock' as AnimalKey, readyAt)!.gold).toBe(peacock.producePrice);
+  });
+
   test('a newly added animal (bee) runs the full feed → collect cycle (#272)', () => {
     const bee = getAnimal('bee' as AnimalKey)!;
     const now = 9_000_000;

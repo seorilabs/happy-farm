@@ -278,14 +278,18 @@
     ]
   },
   "animals": {
-    "agentPurpose": "Supplementary re-visit loop with a cadence distinct from crops (feed → deterministic timer → collect produce → sell). A gentle, always-something-to-do trickle, NOT a primary income source: each animal's produce net/h ((producePrice - feedCost) / produceTimerMs) is kept well below the cheapest crop's net/h so it never dominates active crop farming (enforced by scripts/check-balance.mjs §animals). purchaseCost is a one-time gold sink; ownership + in-progress feeding live in the meta layer (GameState.animals) and survive prestige. Timers are deterministic (fedAt + produceTimerMs), no rng. Add kinds here (key/icon + costs/timer/price); localized names/descriptions live in i18n/labels.ts.",
+    "agentPurpose": "Supplementary re-visit loop with a cadence distinct from crops (feed → deterministic timer → collect produce → sell). A gentle, always-something-to-do trickle, NOT a primary income source: each animal's produce net/h ((producePrice - feedCost) / produceTimerMs) is kept well below the cheapest crop's net/h so it never dominates active crop farming (enforced by scripts/check-balance.mjs §animals). purchaseCost is a one-time gold sink; ownership + in-progress feeding live in the meta layer (GameState.animals) and survive prestige. Timers are deterministic (fedAt + produceTimerMs), no rng. The premium tier (goat/alpaca/turkey/peacock, #299) extends the roster past bee (32k) into the orchard+ gold band (60k~480k purchaseCost) so late-game players still have a new coop to build; their produce net/h (3000~6000) climbs above the early animals for a sense of upgrade but stays strictly below the cheapest crop's net/h (carrot ~7200) as §animals requires. Keep kinds sorted by ascending purchaseCost. Add kinds here (key/icon + costs/timer/price); localized names/descriptions live in i18n/labels.ts.",
     "kinds": [
       { "key": "chicken", "icon": "🐔", "purchaseCost": 600, "feedCost": 30, "produceIcon": "🥚", "produceTimerMs": 1200000, "producePrice": 400 },
       { "key": "cow", "icon": "🐄", "purchaseCost": 4000, "feedCost": 150, "produceIcon": "🥛", "produceTimerMs": 3600000, "producePrice": 1200 },
       { "key": "duck", "icon": "🦆", "purchaseCost": 7000, "feedCost": 200, "produceIcon": "🪶", "produceTimerMs": 1800000, "producePrice": 850 },
       { "key": "sheep", "icon": "🐑", "purchaseCost": 12000, "feedCost": 400, "produceIcon": "🧶", "produceTimerMs": 5400000, "producePrice": 2650 },
       { "key": "pig", "icon": "🐖", "purchaseCost": 20000, "feedCost": 700, "produceIcon": "🍄", "produceTimerMs": 7200000, "producePrice": 4300 },
-      { "key": "bee", "icon": "🐝", "purchaseCost": 32000, "feedCost": 1000, "produceIcon": "🍯", "produceTimerMs": 10800000, "producePrice": 7600 }
+      { "key": "bee", "icon": "🐝", "purchaseCost": 32000, "feedCost": 1000, "produceIcon": "🍯", "produceTimerMs": 10800000, "producePrice": 7600 },
+      { "key": "goat", "icon": "🐐", "purchaseCost": 60000, "feedCost": 2000, "produceIcon": "🧀", "produceTimerMs": 14400000, "producePrice": 14000 },
+      { "key": "alpaca", "icon": "🦙", "purchaseCost": 120000, "feedCost": 4000, "produceIcon": "🧣", "produceTimerMs": 21600000, "producePrice": 28000 },
+      { "key": "turkey", "icon": "🦃", "purchaseCost": 240000, "feedCost": 8000, "produceIcon": "🍗", "produceTimerMs": 28800000, "producePrice": 48000 },
+      { "key": "peacock", "icon": "🦚", "purchaseCost": 480000, "feedCost": 15000, "produceIcon": "🪭", "produceTimerMs": 43200000, "producePrice": 87000 }
     ]
   },
   "production": {
