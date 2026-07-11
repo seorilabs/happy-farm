@@ -115,7 +115,7 @@
       { "key": "golden", "icon": "✨", "sellMultiplier": 5, "baseChance": 0.02, "chancePerRankAboveMin": 0.005, "minRank": "bronze" },
       { "key": "rainbow", "icon": "🌈", "sellMultiplier": 25, "baseChance": 0.002, "chancePerRankAboveMin": 0.001, "minRank": "silver" },
       { "key": "giant", "icon": "🦣", "sellMultiplier": 60, "baseChance": 0.0008, "chancePerRankAboveMin": 0.0004, "minRank": "gold" },
-      { "key": "prism", "icon": "🫧", "sellMultiplier": 150, "baseChance": 0.0003, "chancePerRankAboveMin": 0, "minRank": "prism" }
+      { "key": "prism", "icon": "🔮", "sellMultiplier": 150, "baseChance": 0.0003, "chancePerRankAboveMin": 0, "minRank": "prism" }
     ]
   },
   "collection": {

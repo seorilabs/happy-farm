@@ -197,7 +197,11 @@ export function CollectionSheet({
   );
 }
 
-const styles = StyleSheet.create({
+// 도감 셀 폭. 돌연변이 배지 행이 이 폭(에서 좌우 패딩을 뺀 값)을 넘지 않아야 한다.
+// 테스트에서 레이아웃 불변식을 고정하기 위해 상수로 노출한다.
+export const COLLECTION_CELL_WIDTH = 72;
+
+export const styles = StyleSheet.create({
   collectionArea: {
     marginBottom: 14,
   },
@@ -278,7 +282,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   collectionCell: {
-    width: 72,
+    width: COLLECTION_CELL_WIDTH,
     minHeight: 96,
     paddingVertical: 8,
     paddingHorizontal: 4,
@@ -289,6 +293,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 2,
+    // 내부 콘텐츠(특히 돌연변이 배지 행)가 카드 경계를 넘지 않도록 클리핑한다.
+    // 배지 행은 아래에서 카드 폭에 맞게 사이징하지만, 이 클립을 안전망으로 둔다(#237 선례).
+    overflow: 'hidden',
   },
   collectionCellLocked: {
     minHeight: 72,
@@ -331,13 +338,20 @@ const styles = StyleSheet.create({
   },
   mutationRow: {
     flexDirection: 'row',
-    gap: 3,
+    gap: 2,
     marginTop: 1,
+    // 4개 셀이 72px 카드(가용폭 64px) 안에 들어오도록 폭을 제한하고, 만약을 대비해
+    // 줄바꿈을 허용한다(돌연변이 종류가 더 늘어도 박스를 넘지 않음 — #266 후속 UI 회귀).
+    maxWidth: '100%',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
   },
   mutationCell: {
-    width: 18,
-    height: 18,
-    borderRadius: 4,
+    // 13*4 + gap 2*3 = 58px ≤ 카드 가용폭 64px(72 - 좌우 패딩 4*2). 기존 18px는
+    // 4종 기준 81px라 카드를 튀어나가 UI가 깨졌다.
+    width: 13,
+    height: 13,
+    borderRadius: 3,
     borderWidth: 1,
     borderColor: '#f1d98a',
     backgroundColor: '#fff8d8',
@@ -349,8 +363,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#f1f3f5',
   },
   mutationCellIcon: {
-    fontSize: 10,
-    lineHeight: 12,
+    fontSize: 9,
+    lineHeight: 11,
   },
   collectionClaimedLabel: {
     marginTop: 8,
