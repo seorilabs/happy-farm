@@ -258,7 +258,7 @@
     }
   },
   "decorations": {
-    "agentPurpose": "Late-game gold sink + self-expression. Cosmetic-only farm decorations bought with gold; ownership lives in the meta layer (placedDecorations) and survives prestige. Prices climb so they soak up surplus gold once expansion/upgrades are exhausted: the catalog now spans every progression band (early 1.2k~35k, then one 'pleasant splurge' per area era — well~rainbow_fountain sit at roughly 1~35% of the next area unlock cost so they never gate progression but always give surplus gold somewhere to go). Keep items sorted by ascending price. Add new items here (key/icon/price); localized names live in i18n/labels.ts.",
+    "agentPurpose": "Late-game gold sink + self-expression. Cosmetic-only farm decorations bought with gold; ownership lives in the meta layer (placedDecorations) and survives prestige. Prices climb so they soak up surplus gold once expansion/upgrades are exhausted: the catalog now spans every progression band (early 1.2k~35k, then one 'pleasant splurge' per area era — well~rainbow_fountain sit at roughly 1~35% of the next area unlock cost so they never gate progression but always give surplus gold somewhere to go). The top three (observatory/aurora_arch/celestial_palace, 200B~20T) extend the ladder into the prestige/chain-farm era: past legend_field (18B unlock) the only remaining gold destination is graduation (costBase 100B, ×6 per level), so these sit at roughly 1~35% of the escalating graduation costs to give the longest-lived prestige cohort's surplus gold (tens of billions to trillions) somewhere to go. Keep items sorted by ascending price. Add new items here (key/icon/price); localized names live in i18n/labels.ts.",
     "items": [
       { "key": "signpost", "icon": "🪧", "price": 1200 },
       { "key": "fence", "icon": "🚧", "price": 2500 },
@@ -271,7 +271,10 @@
       { "key": "barn", "icon": "🛖", "price": 12000000 },
       { "key": "hot_spring", "icon": "♨️", "price": 150000000 },
       { "key": "golden_statue", "icon": "🏆", "price": 2000000000 },
-      { "key": "rainbow_fountain", "icon": "🎇", "price": 20000000000 }
+      { "key": "rainbow_fountain", "icon": "🎇", "price": 20000000000 },
+      { "key": "observatory", "icon": "🔭", "price": 200000000000 },
+      { "key": "aurora_arch", "icon": "🌉", "price": 2000000000000 },
+      { "key": "celestial_palace", "icon": "🏯", "price": 20000000000000 }
     ]
   },
   "animals": {
