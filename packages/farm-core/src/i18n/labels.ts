@@ -227,6 +227,13 @@ const KO_PRODUCTION_LABELS = {
   peach_compote: { name: '복숭아 콩포트', description: '복숭아를 설탕에 조린 달콤한 콩포트' },
   cherry_wine: { name: '체리 와인', description: '체리를 오래 숙성시킨 깊은 맛의 와인' },
   mango_pudding: { name: '망고 푸딩', description: '망고를 듬뿍 넣어 굳힌 부드러운 푸딩' },
+  coconut_bar: { name: '코코넛 바', description: '코코넛을 굳혀 만든 진한 초콜릿 바' },
+  kiwi_smoothie: { name: '키위 스무디', description: '키위를 곱게 갈아 시원하게 만든 스무디' },
+  avocado_toast: { name: '아보카도 토스트', description: '아보카도를 듬뿍 올린 든든한 토스트' },
+  cactus_candy: { name: '선인장 캔디', description: '선인장 과육을 졸여 만든 쫀득한 캔디' },
+  bamboo_tea: { name: '대나무 차', description: '대나무 잎을 우려낸 향긋한 차' },
+  ginseng_tonic: { name: '인삼주', description: '천년인삼을 담가 우려낸 귀한 보양주' },
+  crystal_elixir: { name: '수정 엘릭서', description: '수정꽃을 정제해 빚은 영롱한 영약' },
 } satisfies Record<ProductionRecipeKey, DescribedLabel>;
 
 const EN_PRODUCTION_LABELS = {
@@ -241,6 +248,13 @@ const EN_PRODUCTION_LABELS = {
   peach_compote: { name: 'Peach Compote', description: 'A sweet compote of peaches candied in sugar.' },
   cherry_wine: { name: 'Cherry Wine', description: 'Deep, aged wine matured from cherries.' },
   mango_pudding: { name: 'Mango Pudding', description: 'A smooth pudding set with plenty of mango.' },
+  coconut_bar: { name: 'Coconut Bar', description: 'A rich chocolate bar set from coconut.' },
+  kiwi_smoothie: { name: 'Kiwi Smoothie', description: 'A cool smoothie blended from kiwi.' },
+  avocado_toast: { name: 'Avocado Toast', description: 'Hearty toast piled with avocado.' },
+  cactus_candy: { name: 'Cactus Candy', description: 'Chewy candy simmered from cactus flesh.' },
+  bamboo_tea: { name: 'Bamboo Tea', description: 'A fragrant tea steeped from bamboo leaves.' },
+  ginseng_tonic: { name: 'Ginseng Tonic', description: 'A precious restorative brewed from millennial ginseng.' },
+  crystal_elixir: { name: 'Crystal Elixir', description: 'A radiant elixir refined from crystal flowers.' },
 } satisfies Record<ProductionRecipeKey, DescribedLabel>;
 
 const EN_DECORATION_LABELS = {

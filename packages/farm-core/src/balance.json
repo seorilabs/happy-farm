@@ -289,7 +289,7 @@
     ]
   },
   "production": {
-    "agentPurpose": "Crop-processing workshop (#250): a calculated, planning-flavored gold sink distinct from active farming. Every harvest deposits one crop unit into the meta-layer inventory (GameState.production.inventory) as a byproduct; the workshop consumes stockpiled crops into higher-value goods (deterministic timer, no rng). Each recipe's sellPrice must exceed the raw input sell-sum (value-add multiple in [1.2, 4]), AND its realized net/h (sellPrice / timerMs, since stockpiled inputs are a free harvest byproduct) is kept below the cheapest crop's net/h so crafting never dominates active crop progression — both enforced by scripts/check-balance.mjs §production. Add recipes here (key/icon + inputs/timerMs/sellPrice); localized names live in i18n/labels.ts.",
+    "agentPurpose": "Crop-processing workshop (#250): a calculated, planning-flavored gold sink distinct from active farming. Every harvest deposits one crop unit into the meta-layer inventory (GameState.production.inventory) as a byproduct; the workshop consumes stockpiled crops into higher-value goods (deterministic timer, no rng). Each recipe's sellPrice must exceed the raw input sell-sum (value-add multiple in [1.2, 4]), AND its realized net/h (sellPrice / timerMs, since stockpiled inputs are a free harvest byproduct) is kept below the cheapest crop's net/h (carrot, ~7200/h) so crafting never dominates active crop progression — both enforced by scripts/check-balance.mjs §production. The tier 6~7 recipes (coconut_bar~crystal_elixir, #297) extend the sink past mango (tier 5) so late-game surplus crops have a consumption path. NOTE: because the net/h ceiling is fixed at the cheapest crop's rate, a recipe's timerMs must be ≳ sellPrice/7200*3600000 = sellPrice*500 — so high-value inputs force very long (multi-week to multi-month) deterministic offline crafts by design; these are ultra-long-horizon sinks for the longest-lived prestige cohort. tier 8+ crops (diamond 43M sell and up) are intentionally NOT used as inputs here because the same ceiling would force multi-year timers (dead content). Add recipes here (key/icon + inputs/timerMs/sellPrice), ascending sellPrice; localized names live in i18n/labels.ts.",
     "recipes": [
       { "key": "bread", "icon": "🍞", "inputs": [{ "crop": "wheat", "qty": 3 }], "timerMs": 300000, "sellPrice": 300 },
       { "key": "juice", "icon": "🧃", "inputs": [{ "crop": "tomato", "qty": 2 }], "timerMs": 900000, "sellPrice": 1500 },
@@ -301,7 +301,14 @@
       { "key": "pear_jam", "icon": "🍯", "inputs": [{ "crop": "pear", "qty": 1 }], "timerMs": 81840000, "sellPrice": 150000 },
       { "key": "peach_compote", "icon": "🍨", "inputs": [{ "crop": "peach", "qty": 1 }], "timerMs": 128220000, "sellPrice": 235000 },
       { "key": "cherry_wine", "icon": "🍷", "inputs": [{ "crop": "cherry", "qty": 1 }], "timerMs": 231300000, "sellPrice": 424000 },
-      { "key": "mango_pudding", "icon": "🍮", "inputs": [{ "crop": "mango", "qty": 1 }], "timerMs": 351840000, "sellPrice": 645000 }
+      { "key": "mango_pudding", "icon": "🍮", "inputs": [{ "crop": "mango", "qty": 1 }], "timerMs": 351840000, "sellPrice": 645000 },
+      { "key": "coconut_bar", "icon": "🍫", "inputs": [{ "crop": "coconut", "qty": 1 }], "timerMs": 1296000000, "sellPrice": 2300000 },
+      { "key": "kiwi_smoothie", "icon": "🥤", "inputs": [{ "crop": "kiwi", "qty": 1 }], "timerMs": 2073600000, "sellPrice": 3700000 },
+      { "key": "avocado_toast", "icon": "🥪", "inputs": [{ "crop": "avocado", "qty": 1 }], "timerMs": 3283200000, "sellPrice": 6000000 },
+      { "key": "cactus_candy", "icon": "🍭", "inputs": [{ "crop": "cactus", "qty": 1 }], "timerMs": 5529600000, "sellPrice": 10000000 },
+      { "key": "bamboo_tea", "icon": "🍵", "inputs": [{ "crop": "bamboo", "qty": 1 }], "timerMs": 9244800000, "sellPrice": 16800000 },
+      { "key": "ginseng_tonic", "icon": "🍶", "inputs": [{ "crop": "ginseng", "qty": 1 }], "timerMs": 15897600000, "sellPrice": 29000000 },
+      { "key": "crystal_elixir", "icon": "🧪", "inputs": [{ "crop": "crystal_flower", "qty": 1 }], "timerMs": 27302400000, "sellPrice": 50000000 }
     ]
   },
   "crops": [
