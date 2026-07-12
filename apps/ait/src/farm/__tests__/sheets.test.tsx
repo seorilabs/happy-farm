@@ -376,6 +376,7 @@ describe('StatsSheet', () => {
         weeklyEventAreaName={'초보 농장'}
         weeklyEventMultiplier={1}
         weeklyEventAxis={'sell'}
+        weeklyEventTypeKey="sale"
         weeklyEventRemainingMs={2 * HOUR_MS}
         farmRecords={emptyFarmRecords}
       />
@@ -424,6 +425,7 @@ describe('StatsSheet', () => {
         weeklyEventAreaName={'초보 농장'}
         weeklyEventMultiplier={1.5}
         weeklyEventAxis={'sell'}
+        weeklyEventTypeKey="sale"
         weeklyEventRemainingMs={5 * HOUR_MS}
         farmRecords={emptyFarmRecords}
       />
@@ -437,6 +439,50 @@ describe('StatsSheet', () => {
     expect(saleBanner).toHaveTextContent(/판매/);
     expect(saleBanner).not.toHaveTextContent(/성장속도/);
     expect(screen.queryByTestId('weekly-event-teaser')).toBeNull();
+  });
+
+  test('distinguishes the golden sell flavor in live and teaser copy with an axis fallback', () => {
+    const renderFestival = (active: boolean, typeKey: string, axis: 'sell' | 'speed', remainingMs: number) => (
+      <StatsSheet
+        messages={messages}
+        locale={LOCALE}
+        researchLevel={0}
+        profitMultiplier={1}
+        speedMultiplier={1}
+        boostActive={false}
+        boostMultiplier={1}
+        boostRemainingMs={0}
+        weeklyEventActive={active}
+        weeklyEventAreaName="초보 농장"
+        weeklyEventMultiplier={active ? 1.5 : 1}
+        weeklyEventAxis={axis}
+        weeklyEventTypeKey={typeKey}
+        weeklyEventRemainingMs={remainingMs}
+        farmRecords={emptyFarmRecords}
+      />
+    );
+
+    const screen = render(renderFestival(true, 'golden_sale', 'sell', 5 * HOUR_MS));
+    expect(screen.getByTestId('weekly-event-title')).toHaveTextContent(
+      `🪙 ${messages.weeklyEventGoldenLabel}`,
+    );
+    expect(screen.getByTestId('weekly-event-banner')).toHaveTextContent(
+      messages.weeklyEventGoldenDesc('초보 농장', 1.5, formatRemainingTime(5 * HOUR_MS, LOCALE)),
+    );
+
+    screen.rerender(renderFestival(false, 'golden_sale', 'sell', 2 * HOUR_MS));
+    expect(screen.getByTestId('weekly-event-title')).toHaveTextContent(
+      `🪙 ${messages.weeklyEventGoldenTeaserLabel}`,
+    );
+    expect(screen.getByTestId('weekly-event-teaser')).toHaveTextContent(
+      messages.weeklyEventGoldenTeaserDesc('초보 농장', formatRemainingTime(2 * HOUR_MS, LOCALE)),
+    );
+
+    screen.rerender(renderFestival(true, 'future_speed_type', 'speed', 5 * HOUR_MS));
+    expect(screen.getByTestId('weekly-event-title')).toHaveTextContent(`⚡ ${messages.weeklyEventLabel}`);
+    expect(screen.getByTestId('weekly-event-banner')).toHaveTextContent(
+      messages.weeklyEventHarvestDesc('초보 농장', 1.5, formatRemainingTime(5 * HOUR_MS, LOCALE)),
+    );
   });
 
   test('shows the harvest (speed) festival copy when the live event is a harvest type (#243)', () => {
@@ -454,6 +500,7 @@ describe('StatsSheet', () => {
         weeklyEventAreaName={'초보 농장'}
         weeklyEventMultiplier={1.5}
         weeklyEventAxis={'speed'}
+        weeklyEventTypeKey="harvest"
         weeklyEventRemainingMs={5 * HOUR_MS}
         farmRecords={emptyFarmRecords}
       />
@@ -481,6 +528,7 @@ describe('StatsSheet', () => {
         weeklyEventAreaName={'Starter Farm'}
         weeklyEventMultiplier={1}
         weeklyEventAxis={'sell'}
+        weeklyEventTypeKey="sale"
         weeklyEventRemainingMs={HOUR_MS}
         farmRecords={emptyFarmRecords}
       />
@@ -515,6 +563,7 @@ describe('StatsSheet', () => {
         weeklyEventAreaName="Starter Farm"
         weeklyEventMultiplier={1}
         weeklyEventAxis="sell"
+        weeklyEventTypeKey="sale"
         weeklyEventRemainingMs={HOUR_MS}
         farmRecords={{
           totalHarvests: lifetimeStats.totalHarvests,

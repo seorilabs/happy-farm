@@ -408,9 +408,15 @@ const KO_FARM_MESSAGES = {
   // 수확(성장속도) 축제: 판매가 아닌 성장속도 배수를 강조한다.
   weeklyEventHarvestDesc: (themeName: string, multiplier: number, remaining: string) =>
     `${themeName} ×${multiplier} 성장속도 · 종료까지 ${remaining}`,
+  weeklyEventGoldenLabel: '황금 주말 장터',
+  weeklyEventGoldenDesc: (themeName: string, multiplier: number, remaining: string) =>
+    `${themeName} 판매가 ×${multiplier} · 종료까지 ${remaining}`,
   weeklyEventTeaserLabel: '다가오는 주말 축제',
   weeklyEventTeaserDesc: (themeName: string, remaining: string) =>
     `${themeName} 작물 축제까지 ${remaining}`,
+  weeklyEventGoldenTeaserLabel: '다가오는 황금 주말 장터',
+  weeklyEventGoldenTeaserDesc: (themeName: string, remaining: string) =>
+    `${themeName} 황금 장터까지 ${remaining}`,
   onboardingProgress: (current: number, total: number) => `${current} / ${total}`,
   onboardingSkip: '건너뛰기',
   // #274: selectSeed 정체 완화 — 탭 한 번으로 대표 씨앗을 자동 선택해 심기 단계로 진행.
@@ -816,8 +822,13 @@ const EN_FARM_MESSAGES: FarmMessages = {
     `${themeName} ×${multiplier} sell · ends in ${remaining}`,
   weeklyEventHarvestDesc: (themeName, multiplier, remaining) =>
     `${themeName} ×${multiplier} grow speed · ends in ${remaining}`,
+  weeklyEventGoldenLabel: 'Golden Weekend Market',
+  weeklyEventGoldenDesc: (themeName, multiplier, remaining) =>
+    `${themeName} sells for ×${multiplier} · ends in ${remaining}`,
   weeklyEventTeaserLabel: 'Upcoming Weekend Festival',
   weeklyEventTeaserDesc: (themeName, remaining) => `${themeName} crop festival in ${remaining}`,
+  weeklyEventGoldenTeaserLabel: 'Upcoming Golden Weekend Market',
+  weeklyEventGoldenTeaserDesc: (themeName, remaining) => `Golden market for ${themeName} in ${remaining}`,
   onboardingProgress: (current, total) => `${current} / ${total}`,
   onboardingSkip: 'Skip',
   onboardingQuickStart: 'Quick start',

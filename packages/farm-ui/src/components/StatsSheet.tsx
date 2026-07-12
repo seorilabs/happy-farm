@@ -8,6 +8,7 @@ import {
 } from '../../../farm-core/src';
 
 import type { FarmMessages } from '../i18n';
+import { getWeeklyEventPresentation } from '../weeklyEventPresentation';
 
 // 헤더 HUD에서 옮겨온 보조 지표 배수 포맷터. 지역 스케일링이 배수를 업그레이드 범위보다
 // 훨씬 크게 밀어올릴 수 있어, 소수 표기가 의미 없어지는 100배 이상은 정수+천단위 구분으로,
@@ -79,6 +80,7 @@ export function StatsSheet({
   weeklyEventAreaName,
   weeklyEventMultiplier,
   weeklyEventAxis,
+  weeklyEventTypeKey,
   weeklyEventRemainingMs,
   farmRecords,
 }: {
@@ -95,9 +97,17 @@ export function StatsSheet({
   weeklyEventMultiplier: number;
   // 'speed'면 수확(성장속도) 축제, 그 외('sell')면 판매 축제로 문구를 분기한다.
   weeklyEventAxis: 'sell' | 'speed';
+  // 같은 axis 안에서도 이벤트 플레이버를 구분하는 balance roster key.
+  weeklyEventTypeKey: string;
   weeklyEventRemainingMs: number;
   farmRecords: FarmRecordStats;
 }) {
+  const weeklyEventPresentation = getWeeklyEventPresentation(messages, weeklyEventTypeKey, weeklyEventAxis);
+  const weeklyEventTitle = weeklyEventActive
+    ? weeklyEventPresentation.activeLabel
+    : weeklyEventPresentation.teaserLabel;
+  const weeklyEventRemaining = formatRemainingTime(weeklyEventRemainingMs, locale);
+
   return (
     <View testID="stats-sheet">
       <Text style={styles.researchBadge}>{messages.researchBadge(researchLevel)}</Text>
@@ -119,20 +129,20 @@ export function StatsSheet({
         subTestID="boost-remaining"
       />
 
-      <Text style={styles.sectionTitle}>
-        {weeklyEventActive ? messages.weeklyEventLabel : messages.weeklyEventTeaserLabel}
+      <Text testID="weekly-event-title" style={styles.sectionTitle}>
+        {weeklyEventPresentation.badgeIcon} {weeklyEventTitle}
       </Text>
       {weeklyEventActive ? (
         <Text style={styles.eventDesc} testID="weekly-event-banner">
-          {(weeklyEventAxis === 'speed' ? messages.weeklyEventHarvestDesc : messages.weeklyEventDesc)(
+          {weeklyEventPresentation.activeDescription(
             weeklyEventAreaName,
             weeklyEventMultiplier,
-            formatRemainingTime(weeklyEventRemainingMs, locale)
+            weeklyEventRemaining,
           )}
         </Text>
       ) : (
         <Text style={styles.eventDesc} testID="weekly-event-teaser">
-          {messages.weeklyEventTeaserDesc(weeklyEventAreaName, formatRemainingTime(weeklyEventRemainingMs, locale))}
+          {weeklyEventPresentation.teaserDescription(weeklyEventAreaName, weeklyEventRemaining)}
         </Text>
       )}
 
