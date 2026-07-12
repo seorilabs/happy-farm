@@ -9,7 +9,7 @@ import {
   type TrackGameEvent,
 } from '../../../../packages/farm-core/src';
 
-import { APPS_IN_TOSS_GA4_MEASUREMENT_ID } from './mpConfig';
+import { APPS_IN_TOSS_GA4_MEASUREMENT_ID } from './firebaseWebConfig';
 import { GA4_MP_API_SECRET } from './mpSecret.generated';
 import { createGa4MeasurementProtocolClient, type Ga4McpInitResult } from './measurementProtocol';
 import { createAppsInTossSelfServerTracker } from './metricsServer';

@@ -5,10 +5,6 @@ const mockGetRemoteBoolean = jest.fn(() => true);
 const mockSetAnalyticsCollectionEnabled = jest.fn();
 const mockInitAnalytics = jest.fn(async () => ({ status: 'ready' as const }));
 
-jest.mock('../app', () => ({
-  getAppsInTossFirebaseApp: () => ({}),
-}));
-
 jest.mock('../analytics', () => ({
   appsInTossFarmAnalytics: {},
   initializeAppsInTossAnalytics: mockInitAnalytics,

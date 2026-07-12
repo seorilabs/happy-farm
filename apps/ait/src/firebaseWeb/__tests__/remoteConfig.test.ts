@@ -2,100 +2,108 @@
 
 import remoteConfigTemplate from '../../../../../remoteconfig.template.json';
 
-// firebase/remote-config는 헤드리스 테스트에서 직접 호출할 수 없으므로 모킹한다.
-const mockGetBoolean = jest.fn();
-const mockGetNumber = jest.fn();
-const mockGetString = jest.fn();
-const mockFetchAndActivate = jest.fn(async () => true);
-const mockIsSupported = jest.fn(async () => true);
-const mockGetRemoteConfig = jest.fn(() => ({ settings: {}, defaultConfig: {} }));
+// AIT는 Granite RN 런타임이라 firebase/remote-config 대신 Remote Config REST fetch로
+// 원격값을 받는다. 테스트는 AppsInToss Storage와 전역 fetch를 모의한다.
 
-jest.mock('firebase/remote-config', () => ({
-  fetchAndActivate: mockFetchAndActivate,
-  getBoolean: mockGetBoolean,
-  getNumber: mockGetNumber,
-  getString: mockGetString,
-  getRemoteConfig: mockGetRemoteConfig,
-  isSupported: mockIsSupported,
+const mockStorage = {
+  getItem: jest.fn<Promise<string | null>, [string]>(),
+  setItem: jest.fn<Promise<void>, [string, string]>(),
+  removeItem: jest.fn<Promise<void>, [string]>(),
+};
+
+jest.mock('@apps-in-toss/framework', () => ({
+  Storage: mockStorage,
 }));
 
-jest.mock('../app', () => ({
-  getAppsInTossFirebaseApp: () => ({}),
-}));
-
-// 모듈은 initializePromise/activeRemoteConfig 등 모듈 스코프 상태를 가지므로
+// 모듈은 initializePromise/activeEntries 등 모듈 스코프 상태를 가지므로
 // 테스트마다 resetModules로 새 인스턴스를 받아 상태 오염을 막는다.
 function loadAdapter() {
   return jest.requireActual<typeof import('../remoteConfig')>('../remoteConfig');
 }
 
+const mockFetch = jest.fn();
+
+function respondWith(entries: Record<string, string>) {
+  mockFetch.mockResolvedValue({
+    ok: true,
+    status: 200,
+    text: async () => JSON.stringify({ entries, state: 'UPDATE', templateVersion: '1' }),
+  } as unknown as Response);
+}
+
 beforeEach(() => {
   jest.resetModules();
-  mockGetBoolean.mockReset();
-  mockGetNumber.mockReset();
-  mockGetString.mockReset();
-  mockFetchAndActivate.mockReset().mockResolvedValue(true);
-  mockIsSupported.mockReset().mockResolvedValue(true);
-  mockGetRemoteConfig.mockReset().mockReturnValue({ settings: {}, defaultConfig: {} });
+  mockStorage.getItem.mockReset().mockResolvedValue(null);
+  mockStorage.setItem.mockReset().mockResolvedValue(undefined);
+  mockStorage.removeItem.mockReset().mockResolvedValue(undefined);
+  mockFetch.mockReset();
+  respondWith({ mobile_ads_global_enabled: 'true' });
+  (globalThis as { fetch: typeof fetch }).fetch = mockFetch as unknown as typeof fetch;
 });
 
-describe('AppsInToss Remote Config 어댑터', () => {
-  test('초기화 전에는 원격 게터가 안전 기본값으로 폴백한다', async () => {
+describe('AppsInToss Remote Config 어댑터 (REST)', () => {
+  test('초기화 전에는 원격 게터가 안전 기본값으로 폴백하고 네트워크를 치지 않는다', async () => {
     const adapter = loadAdapter();
     expect(adapter.getAppsInTossRemoteBoolean('mobile_ads_global_enabled')).toBe(true);
     expect(adapter.getAppsInTossRemoteBoolean('analytics_collection_enabled')).toBe(true);
-    // 초기화 전에는 firebase 게터를 호출하지 않는다.
-    expect(mockGetBoolean).not.toHaveBeenCalled();
+    expect(mockFetch).not.toHaveBeenCalled();
   });
 
   test('활성화 후에는 원격값을 읽어 반영한다', async () => {
+    respondWith({ mobile_ads_global_enabled: 'false' });
     const adapter = loadAdapter();
-    mockGetBoolean.mockReturnValue(false);
 
-    const result = await adapter.initializeAppsInTossRemoteConfig({} as never);
+    const result = await adapter.initializeAppsInTossRemoteConfig();
 
     expect(result.status).toBe('ready');
-    expect(mockFetchAndActivate).toHaveBeenCalledTimes(1);
+    expect(mockFetch).toHaveBeenCalledTimes(1);
     expect(adapter.getAppsInTossRemoteBoolean('mobile_ads_global_enabled')).toBe(false);
     // 광고 enabled 상태도 원격값으로 갱신된다.
     expect(adapter.getAppsInTossAdsEnabled()).toBe(false);
   });
 
-  test('원격 게터가 던지면 안전 기본값으로 폴백한다', async () => {
+  test('불리언은 truthy 토큰(1/true/yes 등)을 인정하고 그 외는 false다', async () => {
+    respondWith({ mobile_ads_global_enabled: '1', analytics_collection_enabled: 'no' });
     const adapter = loadAdapter();
-    await adapter.initializeAppsInTossRemoteConfig({} as never);
-    mockGetBoolean.mockImplementation(() => {
-      throw new Error('boom');
-    });
+    await adapter.initializeAppsInTossRemoteConfig();
+
     expect(adapter.getAppsInTossRemoteBoolean('mobile_ads_global_enabled')).toBe(true);
+    expect(adapter.getAppsInTossRemoteBoolean('analytics_collection_enabled')).toBe(false);
   });
 
   test('숫자/문자열 게터도 활성화 후 원격값을 반환한다', async () => {
+    respondWith({ mobile_ads_global_enabled: '42', analytics_collection_enabled: 'remote' });
     const adapter = loadAdapter();
-    mockGetNumber.mockReturnValue(42);
-    mockGetString.mockReturnValue('remote');
-    await adapter.initializeAppsInTossRemoteConfig({} as never);
+    await adapter.initializeAppsInTossRemoteConfig();
+
     expect(adapter.getAppsInTossRemoteNumber('mobile_ads_global_enabled')).toBe(42);
     expect(adapter.getAppsInTossRemoteString('analytics_collection_enabled')).toBe('remote');
   });
 
-  test('미지원 환경에서는 unsupported로 종료하고 기본값을 유지한다', async () => {
-    mockIsSupported.mockResolvedValue(false);
+  test('응답에 없는 키는 안전 기본값으로 폴백한다', async () => {
+    respondWith({ mobile_ads_global_enabled: 'false' });
     const adapter = loadAdapter();
+    await adapter.initializeAppsInTossRemoteConfig();
 
-    const result = await adapter.initializeAppsInTossRemoteConfig({} as never);
-
-    expect(result.status).toBe('unsupported');
-    expect(mockFetchAndActivate).not.toHaveBeenCalled();
-    // 활성화 인스턴스가 없으므로 게터는 기본값으로 폴백한다.
-    expect(adapter.getAppsInTossRemoteBoolean('mobile_ads_global_enabled')).toBe(true);
+    // 응답에 없는 문자열 키 → 기본값('')
+    expect(adapter.getAppsInTossRemoteString('appsintoss_interstitial_ad_group_id')).toBe('');
   });
 
   test('fetch 오류 시 error로 종료하고 기본값으로 폴백한다', async () => {
-    mockFetchAndActivate.mockRejectedValue(new Error('network'));
+    mockFetch.mockRejectedValue(new Error('network'));
     const adapter = loadAdapter();
 
-    const result = await adapter.initializeAppsInTossRemoteConfig({} as never);
+    const result = await adapter.initializeAppsInTossRemoteConfig();
+
+    expect(result.status).toBe('error');
+    expect(adapter.getAppsInTossRemoteBoolean('mobile_ads_global_enabled')).toBe(true);
+  });
+
+  test('non-2xx 응답도 error로 종료하고 기본값으로 폴백한다', async () => {
+    mockFetch.mockResolvedValue({ ok: false, status: 403, text: async () => 'forbidden' } as unknown as Response);
+    const adapter = loadAdapter();
+
+    const result = await adapter.initializeAppsInTossRemoteConfig();
 
     expect(result.status).toBe('error');
     expect(adapter.getAppsInTossRemoteBoolean('mobile_ads_global_enabled')).toBe(true);
@@ -104,26 +112,15 @@ describe('AppsInToss Remote Config 어댑터', () => {
   test('초기화 실패(error) 후에도 재시도가 가능하다', async () => {
     const adapter = loadAdapter();
     // 1차: 일시 오류
-    mockFetchAndActivate.mockRejectedValueOnce(new Error('network'));
-    const first = await adapter.initializeAppsInTossRemoteConfig({} as never);
+    mockFetch.mockRejectedValueOnce(new Error('network'));
+    const first = await adapter.initializeAppsInTossRemoteConfig();
     expect(first.status).toBe('error');
 
     // 2차: 정상 활성화(메모이즈가 해제되어 재시도된다)
-    mockGetBoolean.mockReturnValue(false);
-    const second = await adapter.initializeAppsInTossRemoteConfig({} as never);
+    respondWith({ mobile_ads_global_enabled: 'false' });
+    const second = await adapter.initializeAppsInTossRemoteConfig();
     expect(second.status).toBe('ready');
-    expect(mockFetchAndActivate).toHaveBeenCalledTimes(2);
     expect(adapter.getAppsInTossRemoteBoolean('mobile_ads_global_enabled')).toBe(false);
-  });
-
-  test('미지원으로 끝난 뒤 환경이 바뀌면 재시도로 활성화된다', async () => {
-    mockIsSupported.mockResolvedValueOnce(false);
-    const adapter = loadAdapter();
-    const first = await adapter.initializeAppsInTossRemoteConfig({} as never);
-    expect(first.status).toBe('unsupported');
-
-    const second = await adapter.initializeAppsInTossRemoteConfig({} as never);
-    expect(second.status).toBe('ready');
   });
 });
 
