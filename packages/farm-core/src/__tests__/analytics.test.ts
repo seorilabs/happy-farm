@@ -57,6 +57,7 @@ describe('farm analytics adapter contract', () => {
       );
     }
     expect(getRewardedAdPlacement('plotDiscountAd')).toBe('shop_plot_discount');
+    expect(getRewardedAdPlacement('offlineBonusAd')).toBe('return_offline_bonus');
   });
 
   test('리텐션 계측 이벤트를 계약대로 emit한다', () => {

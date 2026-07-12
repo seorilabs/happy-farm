@@ -12,6 +12,7 @@ import { ANIMALS } from '../animals';
 import {
   collectReturnOfflineGold,
   collectReturnSummaryOfflineGold,
+  collectReturnSummaryOfflineGoldWithAdBonus,
   creditActiveFarmOfflineGold,
   getActiveFarmOfflineGold,
   getReturnSummary,
@@ -392,6 +393,30 @@ describe('collectReturnSummaryOfflineGold', () => {
     const result = collectReturnSummaryOfflineGold(base, summary!);
     expect(result.state.chainFarms[0]?.lastCollectedAt).toBe(NOW);
     expect(getChainIncome(result.state, NOW + MS_PER_HOUR).accruedGold).toBe(3600);
+  });
+
+  test('credits base plus an equal ad bonus atomically with a 2x payout', () => {
+    const base = withChainFarm(3600, NOW - MS_PER_HOUR, createInitialState());
+    const summary = getReturnSummary(base, NOW - MS_PER_HOUR, NOW)!;
+    expect(summary.offlineGold).toBeGreaterThan(0);
+
+    const result = collectReturnSummaryOfflineGoldWithAdBonus(base, summary);
+
+    expect(result.collectedGold).toBe(summary.offlineGold * 2);
+    expect(result.state.gold).toBe(base.gold + summary.offlineGold * 2);
+    expect(result.state.lifetimeStats.totalGoldEarned).toBe(
+      base.lifetimeStats.totalGoldEarned + summary.offlineGold * 2
+    );
+    expect(result.state.chainFarms[0]?.lastCollectedAt).toBe(summary.capturedAt);
+  });
+
+  test('falls back to the guaranteed 1x payout for an invalid multiplier', () => {
+    const base = withChainFarm(3600, NOW - MS_PER_HOUR, createInitialState());
+    const summary = getReturnSummary(base, NOW - MS_PER_HOUR, NOW)!;
+
+    for (const multiplier of [0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
+      expect(collectReturnSummaryOfflineGold(base, summary, multiplier).collectedGold).toBe(summary.offlineGold);
+    }
   });
 
   test('is a no-op for an empty or invalid snapshot', () => {

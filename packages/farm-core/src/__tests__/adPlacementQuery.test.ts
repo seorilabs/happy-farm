@@ -17,7 +17,7 @@ function occurrences(haystack: string, needle: string): number {
 }
 
 describe('ad-placement-metrics.sql 계약 가드 (#116)', () => {
-  test('placement_ecpm CTE에 ads.ts의 4개 placement가 모두 정의돼 있다', () => {
+  test('placement_ecpm CTE에 ads.ts의 모든 placement가 정의돼 있다', () => {
     for (const placement of Object.values(REWARDED_AD_PLACEMENTS)) {
       expect(sql).toContain(`'${placement}'`);
     }

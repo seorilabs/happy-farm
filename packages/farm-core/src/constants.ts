@@ -42,7 +42,12 @@ import {
   type SupportedLocale,
 } from './i18n';
 
-export type RewardedAdType = 'rewardedGold' | 'growthAd' | 'harvestBonusAd' | 'plotDiscountAd';
+export type RewardedAdType =
+  | 'rewardedGold'
+  | 'growthAd'
+  | 'harvestBonusAd'
+  | 'plotDiscountAd'
+  | 'offlineBonusAd';
 
 export const FARM_AREAS = balance.areas as Array<{
   key: AreaKey;
@@ -123,6 +128,7 @@ export const GROWTH_AD_DAILY_LIMIT = balance.ads.growthAdDailyLimit;
 export const PLOT_DISCOUNT_AD_PERCENT = balance.ads.plotDiscountAdPercent;
 export const PLOT_DISCOUNT_AD_DAILY_LIMIT = balance.ads.plotDiscountAdDailyLimit;
 export const PLOT_DISCOUNT_AD_COOLDOWN_MS = balance.ads.plotDiscountAdCooldownMs;
+export const OFFLINE_BONUS_MULTIPLIER = balance.ads.offlineBonusMultiplier;
 export const INTERSTITIAL_MILESTONE_COOLDOWN_MS = balance.ads.interstitialMilestoneCooldownMs;
 // Minimum gap between two return (welcome-back) interstitials. Keeps the
 // session-return ad non-intrusive for players who reopen the app often.
@@ -488,6 +494,7 @@ export function createInitialAdUsage(now = Date.now()): GameState['adUsage'] {
     rewardedGoldDailyCount: 0,
     growthAd: { lastUsedAt: null, dailyCount: 0 },
     plotDiscountAd: { lastUsedAt: null, dailyCount: 0 },
+    offlineBonusAd: { lastUsedAt: null, dailyCount: 0 },
     harvestBonusAd: { lastUsedAt: null, lastPromptedAt: null, boostEndsAt: null, dailyCount: 0 },
     returnInterstitialAt: null,
   };
@@ -532,6 +539,12 @@ export function normalizeAdUsage(
         ? adUsage.plotDiscountAd.lastUsedAt
         : null,
       dailyCount: normalizeDailyCount(adUsage?.plotDiscountAd?.dailyCount, isSameDay),
+    },
+    offlineBonusAd: {
+      lastUsedAt: isFinitePastTimestamp(adUsage?.offlineBonusAd?.lastUsedAt, now)
+        ? adUsage.offlineBonusAd.lastUsedAt
+        : null,
+      dailyCount: normalizeDailyCount(adUsage?.offlineBonusAd?.dailyCount, isSameDay),
     },
     harvestBonusAd: {
       lastUsedAt: isFinitePastTimestamp(adUsage?.harvestBonusAd?.lastUsedAt, now)
@@ -598,19 +611,25 @@ export function getRewardedAdLimitStatus(
       ? limits.growthAdDailyLimit
       : type === 'plotDiscountAd'
         ? limits.plotDiscountAdDailyLimit
-        : limits.harvestBonusAdDailyLimit;
+        : type === 'offlineBonusAd'
+          ? limits.offlineBonusAdDailyLimit
+          : limits.harvestBonusAdDailyLimit;
   const cooldownMs =
     type === 'growthAd'
       ? limits.growthAdCooldownMs
       : type === 'plotDiscountAd'
         ? limits.plotDiscountAdCooldownMs
-        : limits.harvestBonusAdCooldownMs;
+        : type === 'offlineBonusAd'
+          ? limits.offlineBonusAdCooldownMs
+          : limits.harvestBonusAdCooldownMs;
   const usage =
     type === 'growthAd'
       ? adUsage.growthAd
       : type === 'plotDiscountAd'
         ? adUsage.plotDiscountAd
-        : adUsage.harvestBonusAd;
+        : type === 'offlineBonusAd'
+          ? adUsage.offlineBonusAd
+          : adUsage.harvestBonusAd;
 
   if (usage.dailyCount >= limit) {
     return { allowed: false, reason: messages.adDailyLimitReached };
@@ -753,6 +772,16 @@ export function recordRewardedAdUsage(
       plotDiscountAd: {
         lastUsedAt: now,
         dailyCount: adUsage.plotDiscountAd.dailyCount + 1,
+      },
+    };
+  }
+
+  if (type === 'offlineBonusAd') {
+    return {
+      ...adUsage,
+      offlineBonusAd: {
+        lastUsedAt: now,
+        dailyCount: adUsage.offlineBonusAd.dailyCount + 1,
       },
     };
   }

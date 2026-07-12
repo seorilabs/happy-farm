@@ -33,6 +33,8 @@ import {
   getMasteryThresholds,
   getPrestigeCost,
   getRegionArchetypeLabel,
+  recordAdWatchProgress,
+  recordWeeklyAdWatchProgress,
   sortCropKeysForStrip,
   type AreaKey,
   type CropKey,
@@ -928,6 +930,187 @@ describe('FarmGame UI flow', () => {
       );
     });
 
+    test('earned offline-bonus ad commits exactly one 2x payout, usage, missions, and analytics', async () => {
+      const state = withGrowingPlot('wheat' as CropKey, createInitialState());
+      mockPersistence.readLastSeenAt.mockResolvedValueOnce(NOW - TWO_HOURS_MS);
+      const offlineGold = getActiveFarmOfflineGold(state, TWO_HOURS_MS);
+      expect(offlineGold).toBeGreaterThan(0);
+
+      let resolveAd!: (result: RewardedAdShowResult) => void;
+      const rewardedAd: RewardedAdController = {
+        isAdReady: true,
+        isAdSupported: true,
+        showAd: jest.fn(
+          () =>
+            new Promise<RewardedAdShowResult>((resolve) => {
+              resolveAd = resolve;
+            })
+        ),
+      };
+      const track = jest.fn();
+      const screen = await renderGame(state, {
+        analytics: createFarmAnalytics(track),
+        useRewardedAd: () => rewardedAd,
+      });
+
+      const action = await waitFor(() => screen.getByTestId('welcome-back-double-ad-action'));
+      const collectLabel = messages.welcomeBackCollectAction(formatMoney(offlineGold, DEFAULT_LOCALE));
+      await act(async () => {
+        fireEvent.press(action);
+        fireEvent.press(action);
+        // Every other recap action is inert while the rewarded request owns the snapshot.
+        fireEvent.press(screen.getByText(collectLabel));
+        await Promise.resolve();
+      });
+      expect(rewardedAd.showAd).toHaveBeenCalledTimes(1);
+      expect(screen.getByText(messages.sheetTitleWelcomeBack)).toBeTruthy();
+      expect(screen.getByText(`${formatMoney(state.gold, DEFAULT_LOCALE)}G`)).toBeTruthy();
+
+      // Backdrop/swipe/back all share this close animation. While the SDK owns
+      // the snapshot, closing must be vetoed before the sheet animates offscreen.
+      const { Animated } = jest.requireActual<typeof import('react-native')>('react-native');
+      const timingSpy = jest.spyOn(Animated, 'timing');
+      const timingCallCount = timingSpy.mock.calls.length;
+      fireEvent.press(screen.getByLabelText(messages.sheetCloseAccessibilityLabel));
+      expect(timingSpy).toHaveBeenCalledTimes(timingCallCount);
+      expect(screen.getByText(messages.sheetTitleWelcomeBack)).toBeTruthy();
+      timingSpy.mockRestore();
+
+      await act(async () => {
+        resolveAd({ status: 'earned' });
+        await Promise.resolve();
+      });
+
+      await waitFor(() =>
+        expect(screen.getByText(`${formatMoney(state.gold + offlineGold * 2, DEFAULT_LOCALE)}G`)).toBeTruthy()
+      );
+      expect(screen.queryByText(messages.sheetTitleWelcomeBack)).toBeNull();
+      expect(screen.getByText(messages.welcomeBackDoubleAdToast(formatMoney(offlineGold, DEFAULT_LOCALE)))).toBeTruthy();
+
+      const persisted = getLatestPersistedState();
+      expect(persisted.gold).toBe(state.gold + offlineGold * 2);
+      expect(persisted.lifetimeStats.totalGoldEarned).toBe(state.lifetimeStats.totalGoldEarned + offlineGold * 2);
+      expect(persisted.adUsage.offlineBonusAd).toEqual({ lastUsedAt: NOW, dailyCount: 1 });
+      expect(persisted.dailyMissionState).toEqual(
+        recordAdWatchProgress(state.dailyMissionState, NOW, state.unlockedAreas)
+      );
+      expect(persisted.weeklyMissionState).toEqual(
+        recordWeeklyAdWatchProgress(state.weeklyMissionState, NOW, state.unlockedAreas)
+      );
+      expect(
+        track.mock.calls.filter(
+          ([event, params]) => event === 'ad_reward_impression' && params.placement === 'return_offline_bonus'
+        )
+      ).toHaveLength(1);
+      expect(track).toHaveBeenCalledWith(
+        'ad_reward_completed',
+        expect.objectContaining({
+          ad_type: 'offlineBonusAd',
+          placement: 'return_offline_bonus',
+          reward_value: offlineGold * 2,
+        })
+      );
+    });
+
+    test.each([
+      ['dismissed', { status: 'dismissed' } as RewardedAdShowResult],
+      ['failed', { status: 'failed', error: 'network' } as RewardedAdShowResult],
+      ['throw', null],
+    ])('keeps the guaranteed 1x claim after a %s rewarded-ad outcome', async (kind, result) => {
+      const state = withGrowingPlot('wheat' as CropKey, createInitialState());
+      mockPersistence.readLastSeenAt.mockResolvedValueOnce(NOW - TWO_HOURS_MS);
+      const offlineGold = getActiveFarmOfflineGold(state, TWO_HOURS_MS);
+      const rewardedAd =
+        kind === 'throw'
+          ? createThrowingRewardedAd()
+          : createRewardedAd(result ?? { status: 'failed', error: 'missing result' });
+      const screen = await renderGame(state, { useRewardedAd: () => rewardedAd });
+
+      fireEvent.press(await waitFor(() => screen.getByTestId('welcome-back-double-ad-action')));
+      await waitFor(() => expect(rewardedAd.showAd).toHaveBeenCalledTimes(1));
+
+      // Failure/cancel never consumes the recap or records a rewarded use.
+      expect(screen.getByText(messages.sheetTitleWelcomeBack)).toBeTruthy();
+      expect(screen.getByText(`${formatMoney(state.gold, DEFAULT_LOCALE)}G`)).toBeTruthy();
+      const collectLabel = messages.welcomeBackCollectAction(formatMoney(offlineGold, DEFAULT_LOCALE));
+      fireEvent.press(screen.getByText(collectLabel));
+
+      await waitFor(() =>
+        expect(screen.getByText(`${formatMoney(state.gold + offlineGold, DEFAULT_LOCALE)}G`)).toBeTruthy()
+      );
+      expect(getLatestPersistedState().adUsage.offlineBonusAd.dailyCount).toBe(0);
+    });
+
+    test('hides the 2x action when rewarded ads are unsupported', async () => {
+      const state = withGrowingPlot('wheat' as CropKey, createInitialState());
+      mockPersistence.readLastSeenAt.mockResolvedValueOnce(NOW - TWO_HOURS_MS);
+      const unsupported = await renderGame(state);
+      await waitFor(() => expect(unsupported.getByText(messages.sheetTitleWelcomeBack)).toBeTruthy());
+      expect(unsupported.queryByTestId('welcome-back-double-ad-action')).toBeNull();
+    });
+
+    test('disables the 2x action while the rewarded ad is not ready', async () => {
+      const state = withGrowingPlot('wheat' as CropKey, createInitialState());
+      mockPersistence.readLastSeenAt.mockResolvedValueOnce(NOW - TWO_HOURS_MS);
+      const notReadyAd: RewardedAdController = {
+        isAdReady: false,
+        isAdSupported: true,
+        showAd: jest.fn(async () => ({ status: 'notReady' as const })),
+      };
+      const notReady = await renderGame(state, { useRewardedAd: () => notReadyAd });
+      const notReadyAction = await waitFor(() => notReady.getByTestId('welcome-back-double-ad-action'));
+      expect(notReadyAction.props.accessibilityState.disabled).toBe(true);
+      fireEvent.press(notReadyAction);
+      expect(notReadyAd.showAd).not.toHaveBeenCalled();
+      const persisted = getLatestPersistedState();
+      expect(persisted.adUsage.offlineBonusAd).toEqual(state.adUsage.offlineBonusAd);
+      expect(persisted.dailyMissionState).toEqual(state.dailyMissionState);
+      expect(persisted.weeklyMissionState).toEqual(state.weeklyMissionState);
+    });
+
+    test('disables the 2x action when its daily limit is exhausted', async () => {
+      const state = withGrowingPlot('wheat' as CropKey, createInitialState());
+      mockPersistence.readLastSeenAt.mockResolvedValueOnce(NOW - TWO_HOURS_MS);
+      const cappedState: GameState = {
+        ...state,
+        adUsage: {
+          ...state.adUsage,
+          offlineBonusAd: { lastUsedAt: NOW - 1, dailyCount: 1 },
+        },
+      };
+      const readyAd = createReadyRewardedAd();
+      const capped = await renderGame(cappedState, { useRewardedAd: () => readyAd });
+      const cappedAction = await waitFor(() => capped.getByTestId('welcome-back-double-ad-action'));
+      expect(cappedAction.props.accessibilityState.disabled).toBe(true);
+      fireEvent.press(cappedAction);
+      expect(readyAd.showAd).not.toHaveBeenCalled();
+      const persisted = getLatestPersistedState();
+      expect(persisted.adUsage.offlineBonusAd).toEqual(cappedState.adUsage.offlineBonusAd);
+      expect(persisted.dailyMissionState).toEqual(cappedState.dailyMissionState);
+      expect(persisted.weeklyMissionState).toEqual(cappedState.weeklyMissionState);
+    });
+
+    test('implicit backdrop close settles the guaranteed 1x payout without stacking a return ad', async () => {
+      const state = withGrowingPlot('wheat' as CropKey, createInitialState());
+      mockPersistence.readLastSeenAt.mockResolvedValueOnce(NOW - TWO_HOURS_MS);
+      const offlineGold = getActiveFarmOfflineGold(state, TWO_HOURS_MS);
+      const interstitial = {
+        isAdReady: true,
+        isAdSupported: true,
+        showAd: jest.fn(async () => ({ status: 'dismissed' as const })),
+      };
+      const screen = await renderGame(state, { useInterstitialAd: () => interstitial });
+
+      await waitFor(() => expect(screen.getByText(messages.sheetTitleWelcomeBack)).toBeTruthy());
+      fireEvent.press(screen.getByLabelText(messages.sheetCloseAccessibilityLabel));
+      await waitFor(() => expect(screen.queryByText(messages.sheetTitleWelcomeBack)).toBeNull());
+      await waitFor(() =>
+        expect(screen.getByText(`${formatMoney(state.gold + offlineGold, DEFAULT_LOCALE)}G`)).toBeTruthy()
+      );
+      expect(interstitial.showAd).not.toHaveBeenCalled();
+      expect(getLatestPersistedState().adUsage.returnInterstitialAt).toBe(state.adUsage.returnInterstitialAt);
+    });
+
     test('close branch (collectOffline=false): pressing confirm with no offline gold grants nothing', async () => {
       // Ready crop but no growing plots → offlineGold 0, so the bottom button is
       // the plain confirm ("농장으로 가기") and settlement must not run.
@@ -941,6 +1124,7 @@ describe('FarmGame UI flow', () => {
       expect(screen.queryByText(messages.welcomeBackOfflineLabel)).toBeNull();
       expect(screen.queryByTestId('welcome-back-animal-row')).toBeNull();
       expect(screen.queryByTestId('welcome-back-craft-row')).toBeNull();
+      expect(screen.queryByTestId('welcome-back-double-ad-action')).toBeNull();
 
       fireEvent.press(screen.getByText(messages.welcomeBackConfirmAction));
 

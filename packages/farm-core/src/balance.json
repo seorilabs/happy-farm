@@ -40,7 +40,7 @@
     "offsetMs": 68400000
   },
   "ads": {
-    "agentPurpose": "Rewarded-ad frequency gates. Each rewarded ad (growthAd, harvestBonusAd, plotDiscountAd) is bounded by a per-day limit (...DailyLimit) and a cooldown (...CooldownMs) that throttles rapid re-watching within a day; rewardedGold instead uses a sliding-window model (rewardedGoldWindowMs / rewardedGoldMaxUsesPerWindow / rewardedGoldDailyLimit). plotDiscountAdCooldownMs is intentionally 0 because plotDiscountAdDailyLimit is 1 - the once-per-day cap is already the effective gate, so a separate cooldown would be redundant. Invariant enforced by scripts/check-balance.mjs: any rewarded ad whose daily limit is >= 2 must have cooldown > 0, otherwise the same-day limit could be spent back-to-back and the frequency gate is meaningless.",
+    "agentPurpose": "Rewarded-ad frequency gates. Each rewarded ad (growthAd, harvestBonusAd, plotDiscountAd, offlineBonusAd) is bounded by a per-day limit (...DailyLimit) and a cooldown (...CooldownMs) that throttles rapid re-watching within a day; rewardedGold instead uses a sliding-window model (rewardedGoldWindowMs / rewardedGoldMaxUsesPerWindow / rewardedGoldDailyLimit). plotDiscountAdCooldownMs is intentionally 0 because plotDiscountAdDailyLimit is 1 - the once-per-day cap is already the effective gate. offlineBonusAd also has a daily limit of 1, but keeps a 6-hour cooldown to prevent back-to-back claims across the 04:00 reset boundary and to match the return-interstitial cadence. Invariant enforced by scripts/check-balance.mjs: any rewarded ad whose daily limit is >= 2 must have cooldown > 0, otherwise the same-day limit could be spent back-to-back and the frequency gate is meaningless.",
     "rewardedGoldAmount": 100,
     "rewardedGoldWindowMs": 900000,
     "rewardedGoldMaxUsesPerWindow": 3,
@@ -60,6 +60,9 @@
     "plotDiscountAdPercent": 0.5,
     "plotDiscountAdDailyLimit": 1,
     "plotDiscountAdCooldownMs": 0,
+    "offlineBonusMultiplier": 2,
+    "offlineBonusAdDailyLimit": 1,
+    "offlineBonusAdCooldownMs": 21600000,
     "interstitialMilestoneCooldownMs": 180000,
     "returnInterstitialCooldownMs": 21600000
   },

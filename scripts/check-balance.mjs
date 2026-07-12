@@ -412,6 +412,7 @@ const rewardedAdGates = [
   { key: 'growthAd', dailyLimit: ads.growthAdDailyLimit, cooldownMs: ads.growthAdCooldownMs },
   { key: 'harvestBonusAd', dailyLimit: ads.harvestBonusAdDailyLimit, cooldownMs: ads.harvestBonusAdCooldownMs },
   { key: 'plotDiscountAd', dailyLimit: ads.plotDiscountAdDailyLimit, cooldownMs: ads.plotDiscountAdCooldownMs },
+  { key: 'offlineBonusAd', dailyLimit: ads.offlineBonusAdDailyLimit, cooldownMs: ads.offlineBonusAdCooldownMs },
 ];
 for (const gate of rewardedAdGates) {
   check(
@@ -448,6 +449,10 @@ check(
   Number.isInteger(ads.rewardedGoldDailyLimit) &&
     ads.rewardedGoldDailyLimit >= (ads.rewardedGoldMaxUsesPerWindow ?? 0),
   `ads.rewardedGoldDailyLimit(${ads.rewardedGoldDailyLimit})는 윈도우당 한도(${ads.rewardedGoldMaxUsesPerWindow}) 이상이어야 합니다.`
+);
+check(
+  ads.offlineBonusMultiplier === 2,
+  `ads.offlineBonusMultiplier(${ads.offlineBonusMultiplier})는 CTA 문구와 동일한 2여야 합니다.`
 );
 
 // 퍼센트류는 (0,1] 범위(0이면 보상이 없고 1 초과면 음수 가격/시간이 된다).

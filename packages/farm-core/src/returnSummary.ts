@@ -8,6 +8,7 @@ import {
   getCropEconomyEstimate,
   getProfitMultiplier,
   getSpeedMultiplier,
+  OFFLINE_BONUS_MULTIPLIER,
   OFFLINE_INCOME_CAP_MS,
   OFFLINE_INCOME_EFFICIENCY_RATIO,
 } from './constants';
@@ -142,7 +143,8 @@ export function collectReturnOfflineGold(
 // invoking this pure transition to prevent rapid-tap duplicate claims.
 export function collectReturnSummaryOfflineGold(
   gameState: GameState,
-  summary: Pick<ReturnSummary, 'capturedAt' | 'chainGold' | 'activeFarmGold'>
+  summary: Pick<ReturnSummary, 'capturedAt' | 'chainGold' | 'activeFarmGold'>,
+  payoutMultiplier = 1
 ): { state: GameState; collectedGold: number; chainGold: number; activeFarmGold: number } {
   const capturedAt =
     Number.isFinite(summary.capturedAt) && summary.capturedAt > 0 ? summary.capturedAt : null;
@@ -156,9 +158,12 @@ export function collectReturnSummaryOfflineGold(
     Number.isFinite(summary.activeFarmGold) && summary.activeFarmGold > 0
       ? Math.floor(summary.activeFarmGold)
       : 0;
-  const collectedGold = chainGold + activeFarmGold;
+  const baseGold = chainGold + activeFarmGold;
+  const safeMultiplier =
+    Number.isFinite(payoutMultiplier) && payoutMultiplier >= 1 ? Math.floor(payoutMultiplier) : 1;
+  const collectedGold = baseGold * safeMultiplier;
 
-  if (collectedGold <= 0) {
+  if (baseGold <= 0) {
     return { state: gameState, collectedGold: 0, chainGold: 0, activeFarmGold: 0 };
   }
 
@@ -182,6 +187,16 @@ export function collectReturnSummaryOfflineGold(
     chainGold,
     activeFarmGold,
   };
+}
+
+// Rewarded welcome-back settlement has one explicit domain transition so the
+// UI cannot accidentally fall back to the guaranteed 1× path. Keeping the 2×
+// balance constant here also makes base + equal ad bonus one atomic update.
+export function collectReturnSummaryOfflineGoldWithAdBonus(
+  gameState: GameState,
+  summary: Pick<ReturnSummary, 'capturedAt' | 'chainGold' | 'activeFarmGold'>
+) {
+  return collectReturnSummaryOfflineGold(gameState, summary, OFFLINE_BONUS_MULTIPLIER);
 }
 
 // Builds the "welcome back" summary shown when a player returns after being

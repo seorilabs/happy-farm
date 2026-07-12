@@ -104,6 +104,10 @@ export type AdUsage = {
     lastUsedAt: number | null;
     dailyCount: number;
   };
+  offlineBonusAd: {
+    lastUsedAt: number | null;
+    dailyCount: number;
+  };
   harvestBonusAd: {
     lastUsedAt: number | null;
     lastPromptedAt: number | null;

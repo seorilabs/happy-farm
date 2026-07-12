@@ -5,6 +5,7 @@ export const REWARDED_AD_PLACEMENTS = {
   shopPlotDiscount: 'shop_plot_discount',
   growthSkip: 'growth_ad_sheet',
   harvestBonus: 'harvest_bonus_sheet',
+  returnOfflineBonus: 'return_offline_bonus',
 } as const;
 
 export type RewardedAdPlacement = (typeof REWARDED_AD_PLACEMENTS)[keyof typeof REWARDED_AD_PLACEMENTS];
@@ -17,6 +18,7 @@ export const REWARDED_AD_PLACEMENT_BY_TYPE: Record<RewardedAdType, RewardedAdPla
   plotDiscountAd: REWARDED_AD_PLACEMENTS.shopPlotDiscount,
   growthAd: REWARDED_AD_PLACEMENTS.growthSkip,
   harvestBonusAd: REWARDED_AD_PLACEMENTS.harvestBonus,
+  offlineBonusAd: REWARDED_AD_PLACEMENTS.returnOfflineBonus,
 };
 
 export function getRewardedAdPlacement(type: RewardedAdType): RewardedAdPlacement {
