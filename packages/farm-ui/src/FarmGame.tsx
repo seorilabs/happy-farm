@@ -34,6 +34,7 @@ import {
   claimNextAchievementTier,
   collectChainIncome,
   collectReturnOfflineGold,
+  collectReturnSummaryOfflineGold,
   acknowledgeResearchOpportunities,
   hasUnseenResearchOpportunity,
   getBreedingRecipeStatus,
@@ -645,6 +646,10 @@ function FarmGameBody({
   const bottomSafeInset = resolveBottomSafeInset(insets.bottom);
   const { width: windowWidth } = useWindowDimensions();
   const [activeSheet, setActiveSheet] = useState<ActiveSheet>(null);
+  // A return-card action can receive two native taps before React commits the
+  // destination sheet. Reserve its immutable snapshot synchronously so offline
+  // gold and analytics are exactly-once for this mount.
+  const completedReturnSummaryAtRef = useRef<number | null>(null);
   // First-session onboarding owns the foreground. A daily-bonus sheet
   // discovered during load waits here until the guide completes or the player
   // explicitly skips it, so a modal can never hide the first action.
@@ -2246,58 +2251,49 @@ function FarmGameBody({
     toast(messages.chainCollectedToast(formatMoney(collected.collectedGold, locale)));
   }
 
-  // Settles every kind of offline gold owed on return — chain accrual and the
-  // active farm's pre-prestige accrual — in one inseparable step via the core
-  // collectReturnOfflineGold. Binding them here is the fix for the asymmetry
-  // where the two could be collected independently: there is exactly one path,
-  // so chain and active gold are always swept together or not at all. The chain
-  // toast/analytics mirror the standalone collectChain for parity.
-  function settleReturnOffline(summary: ReturnSummary) {
-    if (summary.offlineGold <= 0) {
-      return;
-    }
-    const now = Date.now();
-    // Read (not settle) the chain accrual purely to drive the toast/analytics,
-    // then settle chain + active farm exactly once inside collectReturnOfflineGold.
-    // getChainIncome is non-mutating, so chain is settled a single time (no double
-    // computation) while keeping chain-collected feedback at parity with collectChain.
-    const chainGold = getChainIncome(gameState, now).accruedGold;
-    setGameState((state) => collectReturnOfflineGold(state, summary.awayMs, now).state);
-    if (chainGold > 0) {
-      farmAnalytics.trackChainCollected({
-        collectedGold: chainGold,
-        farmCount: gameState.chainFarms.length,
-        context: analyticsContext(),
-      });
-      toast(messages.chainCollectedToast(formatMoney(chainGold, locale)));
-    }
-  }
-
-  // Closes the welcome-back recap. The recap's sole dismiss affordance is the
-  // "collect" button (it doubles as a one-tap collect — returning should feel
-  // like an instant reward, not a chore), so collectOffline is an explicit
-  // accept signal: offline gold — chain AND active farm together — is settled
-  // only when the player actually collects, never on a hypothetical close path.
-  function dismissWelcomeBack(summary: ReturnSummary | null, collectOffline: boolean) {
-    if (collectOffline && summary != null) {
-      settleReturnOffline(summary);
-    }
-    setActiveSheet(null);
-    void maybeShowReturnAd();
-  }
-
-  // Shared settlement for the welcome-back action CTAs: record the analytics
-  // event and always sweep any accrued offline income into the purse. Both CTAs
-  // (harvest / daily) call this so offline gold is never lost no matter which
-  // first action the player picks.
+  // Completes one immutable welcome-back snapshot. Amounts come from the card's
+  // capture instant, not live plot phases, so a crop becoming ready while the
+  // sheet is open cannot reduce the promised payout. The synchronous ref also
+  // prevents rapid native taps from claiming the same snapshot twice.
   function collectReturnSummaryOffline(summary: ReturnSummary) {
+    if (completedReturnSummaryAtRef.current === summary.capturedAt) {
+      return false;
+    }
+    completedReturnSummaryAtRef.current = summary.capturedAt;
+
     farmAnalytics.trackReturnSummaryCollected({
       awayMs: summary.awayMs,
       offlineGold: summary.offlineGold,
       readyCropCount: summary.readyCropCount,
       context: analyticsContext(),
     });
-    settleReturnOffline(summary);
+
+    if (summary.offlineGold > 0) {
+      setGameState((state) => collectReturnSummaryOfflineGold(state, summary).state);
+    }
+    if (summary.chainGold > 0) {
+      farmAnalytics.trackChainCollected({
+        collectedGold: summary.chainGold,
+        farmCount: gameState.chainFarms.length,
+        context: analyticsContext(),
+      });
+      toast(messages.chainCollectedToast(formatMoney(summary.chainGold, locale)));
+    }
+    return true;
+  }
+
+  function dismissWelcomeBack(summary: ReturnSummary) {
+    collectReturnSummaryOffline(summary);
+    setActiveSheet(null);
+    void maybeShowReturnAd();
+  }
+
+  // The return timestamp is committed as soon as the saved game loads. Settle
+  // the recap before navigating away from it so a direct ranch/workshop CTA
+  // cannot discard accrued offline gold for that already-consumed window.
+  function openReturnReadySheet(summary: ReturnSummary, target: 'animals' | 'workshop') {
+    collectReturnSummaryOffline(summary);
+    setActiveSheet({ type: target });
   }
 
   function openPrestigeConfirm() {
@@ -4182,6 +4178,52 @@ function FarmGameBody({
                 </View>
               </View>
             ) : null}
+            {activeSheet.summary.readyAnimalCount > 0 ? (
+              <Pressable
+                testID="welcome-back-animal-row"
+                accessibilityRole="button"
+                accessibilityLabel={`${messages.welcomeBackAnimalLabel}, ${messages.welcomeBackAnimalValue(
+                  activeSheet.summary.readyAnimalCount
+                )}`}
+                style={({ pressed }) => [styles.welcomeBackRow, pressed && styles.welcomeBackRowPressed]}
+                onPress={() => {
+                  if (activeSheet?.type !== 'welcomeBack') return;
+                  openReturnReadySheet(activeSheet.summary, 'animals');
+                }}
+              >
+                <Text style={styles.welcomeBackIcon}>🐔</Text>
+                <View style={styles.welcomeBackRowText}>
+                  <Text style={styles.welcomeBackRowLabel}>{messages.welcomeBackAnimalLabel}</Text>
+                  <Text style={styles.welcomeBackRowValue} numberOfLines={1}>
+                    {messages.welcomeBackAnimalValue(activeSheet.summary.readyAnimalCount)}
+                  </Text>
+                </View>
+                <Text style={styles.welcomeBackRowChevron}>›</Text>
+              </Pressable>
+            ) : null}
+            {activeSheet.summary.readyCraftCount > 0 ? (
+              <Pressable
+                testID="welcome-back-craft-row"
+                accessibilityRole="button"
+                accessibilityLabel={`${messages.welcomeBackCraftLabel}, ${messages.welcomeBackCraftValue(
+                  activeSheet.summary.readyCraftCount
+                )}`}
+                style={({ pressed }) => [styles.welcomeBackRow, pressed && styles.welcomeBackRowPressed]}
+                onPress={() => {
+                  if (activeSheet?.type !== 'welcomeBack') return;
+                  openReturnReadySheet(activeSheet.summary, 'workshop');
+                }}
+              >
+                <Text style={styles.welcomeBackIcon}>🏭</Text>
+                <View style={styles.welcomeBackRowText}>
+                  <Text style={styles.welcomeBackRowLabel}>{messages.welcomeBackCraftLabel}</Text>
+                  <Text style={styles.welcomeBackRowValue} numberOfLines={1}>
+                    {messages.welcomeBackCraftValue(activeSheet.summary.readyCraftCount)}
+                  </Text>
+                </View>
+                <Text style={styles.welcomeBackRowChevron}>›</Text>
+              </Pressable>
+            ) : null}
             {activeSheet.summary.dailyBonusAvailable ? (
               <View style={styles.welcomeBackRow}>
                 <Text style={styles.welcomeBackIcon}>🎁</Text>
@@ -4228,14 +4270,7 @@ function FarmGameBody({
               }
               onPress={() => {
                 if (activeSheet?.type !== 'welcomeBack') return;
-                const summary = activeSheet.summary;
-                farmAnalytics.trackReturnSummaryCollected({
-                  awayMs: summary.awayMs,
-                  offlineGold: summary.offlineGold,
-                  readyCropCount: summary.readyCropCount,
-                  context: analyticsContext(),
-                });
-                dismissWelcomeBack(summary, summary.offlineGold > 0);
+                dismissWelcomeBack(activeSheet.summary);
               }}
             />
           </View>

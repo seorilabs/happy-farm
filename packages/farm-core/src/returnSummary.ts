@@ -1,5 +1,7 @@
 import type { GameState } from './types';
+import { getAnimalStates } from './animals';
 import { collectChainIncome, getChainIncome } from './prestige';
+import { getProductionStates } from './production';
 import { isPlotGrowthComplete } from './harvest';
 import { isDailyBonusAvailable, normalizeDailyBonusState } from './dailyBonus';
 import {
@@ -19,12 +21,22 @@ const MS_PER_HOUR = 60 * 60 * 1000;
 export const RETURN_SUMMARY_MIN_AWAY_MS = 10 * 60 * 1000;
 
 export type ReturnSummary = {
+  // Wall-clock instant at which every amount/count below was captured.
+  capturedAt: number;
   // How long the player was away (clamped to a non-negative value).
   awayMs: number;
   // Passive chain-farm gold accrued while away and waiting to be collected.
   offlineGold: number;
+  // Stable breakdown used to settle exactly what the card displayed even when
+  // crop phases reconcile before the player taps an action.
+  chainGold: number;
+  activeFarmGold: number;
   // Crops sitting ready to harvest right now.
   readyCropCount: number;
+  // Fed animals whose produce timer completed while the player was away.
+  readyAnimalCount: number;
+  // Workshop recipes whose craft timer completed while the player was away.
+  readyCraftCount: number;
   // Whether the daily login bonus can be claimed right now. Surfaced so the
   // welcome-back card can offer a "claim daily bonus" first-action CTA without
   // the player having to hunt for it (the daily sheet is otherwise suppressed
@@ -122,6 +134,56 @@ export function collectReturnOfflineGold(
   };
 }
 
+// Settles the immutable amount promised by a previously rendered return card.
+// The live farm may already have reconciled growing crops to ready by the time
+// the player taps, so recomputing from current plot phases can underpay. Chain
+// timestamps advance only to the capture instant, preserving income accrued
+// while the card remained open. UI callers reserve each capturedAt once before
+// invoking this pure transition to prevent rapid-tap duplicate claims.
+export function collectReturnSummaryOfflineGold(
+  gameState: GameState,
+  summary: Pick<ReturnSummary, 'capturedAt' | 'chainGold' | 'activeFarmGold'>
+): { state: GameState; collectedGold: number; chainGold: number; activeFarmGold: number } {
+  const capturedAt =
+    Number.isFinite(summary.capturedAt) && summary.capturedAt > 0 ? summary.capturedAt : null;
+  if (capturedAt == null) {
+    return { state: gameState, collectedGold: 0, chainGold: 0, activeFarmGold: 0 };
+  }
+
+  const chainGold =
+    Number.isFinite(summary.chainGold) && summary.chainGold > 0 ? Math.floor(summary.chainGold) : 0;
+  const activeFarmGold =
+    Number.isFinite(summary.activeFarmGold) && summary.activeFarmGold > 0
+      ? Math.floor(summary.activeFarmGold)
+      : 0;
+  const collectedGold = chainGold + activeFarmGold;
+
+  if (collectedGold <= 0) {
+    return { state: gameState, collectedGold: 0, chainGold: 0, activeFarmGold: 0 };
+  }
+
+  return {
+    state: {
+      ...gameState,
+      gold: gameState.gold + collectedGold,
+      chainFarms:
+        chainGold > 0
+          ? gameState.chainFarms.map((farm) => ({
+              ...farm,
+              lastCollectedAt: Math.max(farm.lastCollectedAt, capturedAt),
+            }))
+          : gameState.chainFarms,
+      lifetimeStats: {
+        ...gameState.lifetimeStats,
+        totalGoldEarned: gameState.lifetimeStats.totalGoldEarned + collectedGold,
+      },
+    },
+    collectedGold,
+    chainGold,
+    activeFarmGold,
+  };
+}
+
 // Builds the "welcome back" summary shown when a player returns after being
 // away. Returns null when there is nothing worth interrupting the player for:
 // they only just left, this is their very first session, or no progress is
@@ -146,7 +208,9 @@ export function getReturnSummary(
   // Total offline gold = post-prestige chain income + the active farm's
   // pre-prestige accrual. For early/mid players (no chain farms) the active
   // farm term is the entire idle reward; for graduated players it adds to it.
-  const offlineGold = getChainIncome(gameState, now).accruedGold + getActiveFarmOfflineGold(gameState, awayMs);
+  const chainGold = getChainIncome(gameState, now).accruedGold;
+  const activeFarmGold = getActiveFarmOfflineGold(gameState, awayMs);
+  const offlineGold = chainGold + activeFarmGold;
 
   let readyCropCount = 0;
   for (const plot of gameState.plots) {
@@ -154,6 +218,9 @@ export function getReturnSummary(
       readyCropCount += 1;
     }
   }
+
+  const readyAnimalCount = getAnimalStates(gameState, now).filter((status) => status.phase === 'ready').length;
+  const readyCraftCount = getProductionStates(gameState, now).filter((status) => status.phase === 'ready').length;
 
   // The card still only interrupts the player when passive income or ready
   // crops are waiting; daily-bonus availability alone keeps the existing
@@ -164,5 +231,15 @@ export function getReturnSummary(
 
   const dailyBonusAvailable = isDailyBonusAvailable(normalizeDailyBonusState(gameState.dailyBonusState), now);
 
-  return { awayMs, offlineGold, readyCropCount, dailyBonusAvailable };
+  return {
+    capturedAt: now,
+    awayMs,
+    offlineGold,
+    chainGold,
+    activeFarmGold,
+    readyCropCount,
+    readyAnimalCount,
+    readyCraftCount,
+    dailyBonusAvailable,
+  };
 }
