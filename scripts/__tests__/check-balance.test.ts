@@ -3,6 +3,8 @@ import path from 'node:path';
 
 // @ts-expect-error — .js 검출기 모듈(CommonJS)에는 타입 선언이 없다. 런타임 계약만 검증한다.
 import { computeNetPerHour, findCropDominanceViolations } from '../lib/crop-dominance.js';
+// @ts-expect-error — .js 검출기 모듈(CommonJS)에는 타입 선언이 없다. 런타임 계약만 검증한다.
+import { findFirstTierHybridProfitViolations } from '../lib/hybrid-profit-checks.js';
 
 // check:balance(scripts/check-balance.mjs)의 작물 수익 지배(dominance) 역전 검출
 // 회귀 테스트(#206).
@@ -166,6 +168,63 @@ describe('check:balance 작물 수익 지배 역전 검출 (findCropDominanceVio
         });
       }
     }
+  });
+});
+
+describe('check:balance 1차 교배 작물 수익성 검증 (#285)', () => {
+  const validCrops: FixtureCrop[] = [
+    { key: 'pineapple', area: 'greenhouse', cost: 260000, sell: 700000, growTime: 1200000 },
+    { key: 'coconut', area: 'greenhouse', cost: 410000, sell: 1150000, growTime: 1800000 },
+    { key: 'kiwi', area: 'greenhouse', cost: 650000, sell: 1850000, growTime: 2400000 },
+    { key: 'avocado', area: 'greenhouse', cost: 1000000, sell: 3000000, growTime: 3000000 },
+    { key: 'cactus', area: 'greenhouse', cost: 1600000, sell: 5000000, growTime: 3600000 },
+    { key: 'crystalberry', area: 'hybrid_greenhouse', cost: 103000, sell: 257500, growTime: 168000 },
+    { key: 'sun_grape', area: 'hybrid_greenhouse', cost: 137000, sell: 342500, growTime: 224000 },
+    { key: 'royal_potato', area: 'hybrid_greenhouse', cost: 117000, sell: 292500, growTime: 192000 },
+    { key: 'frost_blueberry', area: 'hybrid_greenhouse', cost: 73000, sell: 182500, growTime: 120000 },
+  ];
+
+  const mutateCrop = (key: string, patch: Partial<FixtureCrop>) => ({
+    crops: validCrops.map((crop) => (crop.key === key ? { ...crop, ...patch } : crop)),
+  });
+
+  it('현재 4종은 avocado보다 높고 cactus보다 낮으며 sell/cost 2.5를 유지한다', () => {
+    expect(findFirstTierHybridProfitViolations({ crops: validCrops })).toEqual([]);
+  });
+
+  it('net/h가 avocado와 같거나 낮아지면 실패한다', () => {
+    // net 240,000 / growTime 360,000ms면 avocado와 같은 2.4M/h다.
+    const violations = findFirstTierHybridProfitViolations(
+      mutateCrop('frost_blueberry', { cost: 160000, sell: 400000, growTime: 360000 })
+    );
+    expect(violations.some((message: string) => message.includes('온실 최고'))).toBe(true);
+  });
+
+  it('net/h가 cactus와 같거나 높아지면 실패한다', () => {
+    // ROI 2.5를 유지하면서 frost_blueberry를 cactus와 같은 3.4M/h로 맞춘다.
+    const violations = findFirstTierHybridProfitViolations(
+      mutateCrop('frost_blueberry', { cost: 680000, sell: 1700000, growTime: 1080000 })
+    );
+    expect(violations.some((message: string) => message.includes('온실 상한'))).toBe(true);
+  });
+
+  it('수익 밴드 안이어도 sell/cost 2.5가 깨지면 실패한다', () => {
+    const violations = findFirstTierHybridProfitViolations(mutateCrop('crystalberry', { sell: 250000 }));
+    expect(violations.some((message: string) => message.includes('sell/cost'))).toBe(true);
+  });
+
+  it('필수 비교 작물이 누락되면 명시적으로 실패한다', () => {
+    const violations = findFirstTierHybridProfitViolations({
+      crops: validCrops.filter((crop) => crop.key !== 'avocado'),
+    });
+    expect(violations).toContain('1차 교배 수익성 비교 작물 avocado: 유효한 cost/sell/growTime이 필요합니다.');
+  });
+
+  it('실제 balance.json도 1차 교배 수익성 밴드를 만족한다', () => {
+    const balance = JSON.parse(
+      fs.readFileSync(path.join(__dirname, '..', '..', 'packages', 'farm-core', 'src', 'balance.json'), 'utf8')
+    );
+    expect(findFirstTierHybridProfitViolations(balance)).toEqual([]);
   });
 });
 

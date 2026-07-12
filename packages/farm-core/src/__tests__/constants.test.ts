@@ -207,22 +207,18 @@ describe('farm balance and model invariants', () => {
 
   test('first-tier hybrid crops stay competitive with their unlock-era economy', () => {
     // 교배 온실(hybrid_greenhouse)은 골드 5M + RP 투자로 해금된다. 따라서 첫 신품종의
-    // 시간당 순이익이 동시대 비교군(과수원 tier 최상위) 이상이어야 투자 회수가 가능하고,
-    // 동시에 다음 정규 구역(온실)의 최상위 작물을 추월하지 않아야 진행 동기가 유지된다.
+    // 시간당 순이익이 해금 시기 온실 작물(pineapple~avocado)보다 엄격히 높아야 하고,
+    // 동시에 온실 졸업 작물(cactus)을 추월하지 않아야 정규 진행 동기가 유지된다(#285).
     const firstTierHybrids: CropKey[] = ['crystalberry', 'frost_blueberry', 'sun_grape', 'royal_potato'];
+    const unlockEraGreenhouseCrops: CropKey[] = ['pineapple', 'coconut', 'kiwi', 'avocado'];
 
     const perHour = (cropKey: CropKey) =>
       getCropEconomyEstimate(cropKey, { speedMultiplier: 1, profitMultiplier: 1 }).netProfitPerHour;
 
-    const perHourByArea = (areaKey: string) =>
-      cropKeys()
-        .filter((cropKey) => CROPS[cropKey]!.area === areaKey)
-        .map(perHour);
-
-    const orchardBest = Math.max(...perHourByArea('orchard'));
-    const greenhouseBest = Math.max(...perHourByArea('greenhouse'));
-    expect(orchardBest).toBeGreaterThan(0);
-    expect(greenhouseBest).toBeGreaterThan(orchardBest);
+    const unlockEraGreenhouseBest = Math.max(...unlockEraGreenhouseCrops.map(perHour));
+    const greenhouseCeiling = perHour('cactus');
+    expect(unlockEraGreenhouseBest).toBeGreaterThan(0);
+    expect(greenhouseCeiling).toBeGreaterThan(unlockEraGreenhouseBest);
 
     for (const hybridKey of firstTierHybrids) {
       const crop = CROPS[hybridKey];
@@ -231,12 +227,11 @@ describe('farm balance and model invariants', () => {
       }
       // 판매가는 동시대 비교군과 같은 자릿수(6자리) 범위여야 한다.
       expect(crop.sell).toBeGreaterThanOrEqual(100000);
+      expect(crop.sell / crop.cost).toBeCloseTo(2.5);
 
       const hybridPerHour = perHour(hybridKey);
-      // 비교군(과수원 최상위) 이상: 투자 회수 가능.
-      expect(hybridPerHour).toBeGreaterThanOrEqual(orchardBest);
-      // 상한(온실 최상위 이하): 정규 구역 진행을 무의미하게 추월하지 않음.
-      expect(hybridPerHour).toBeLessThanOrEqual(greenhouseBest);
+      expect(hybridPerHour).toBeGreaterThan(unlockEraGreenhouseBest);
+      expect(hybridPerHour).toBeLessThan(greenhouseCeiling);
     }
   });
 });

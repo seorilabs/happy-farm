@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { findCropDominanceViolations } from './lib/crop-dominance.js';
+import { findFirstTierHybridProfitViolations } from './lib/hybrid-profit-checks.js';
 import { findWheelSlotViolations } from './lib/wheel-slot-checks.js';
 
 // balance.json 회귀 가드. balance를 손볼 때 무심코 깨지기 쉬운 핵심 곡선/지표
@@ -209,6 +210,17 @@ check(
             `작물 수익 역전: ${v.cropKey}(net/h ${Math.round(v.netPerHour).toLocaleString('en-US')})가 먼저 해금되는 ${v.dominatedByKey}(net/h ${Math.round(v.dominatedByNetPerHour).toLocaleString('en-US')})에게 지배당합니다.`
         )
         .join(' ')
+);
+
+// 3-c) 1차 교배 작물 수익성(#285): 해금 시기 온실 작물(pineapple~avocado)
+// 최고보다 엄격히 높고, 온실 졸업 작물(cactus)보다 엄격히 낮아야 한다.
+// PR #300의 데이터 조정이 이전 ~2.19M/h 밴드로 회귀하지 않도록 CLI gate에 고정한다.
+const firstTierHybridProfitViolations = findFirstTierHybridProfitViolations(balance);
+check(
+  firstTierHybridProfitViolations.length === 0,
+  firstTierHybridProfitViolations.length === 0
+    ? '1차 교배 작물 수익성 밴드 유효.'
+    : firstTierHybridProfitViolations.join(' ')
 );
 
 // 4) 데일리 보너스: 광고 인센티브 보존을 위해 일일 ad-reward 비율이 1 미만.
