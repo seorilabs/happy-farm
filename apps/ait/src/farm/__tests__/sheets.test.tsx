@@ -20,6 +20,7 @@ import {
   getAreaCropKeys,
   getAreaUnlockRequirementText,
   getCollectionSummary,
+  getMutationCollectionSummary,
   getCropLabel,
   getChainIncome,
   isAreaUnlocked,
@@ -154,6 +155,38 @@ describe('CollectionSheet', () => {
     // 초기 상태에서는 발견한 작물이 없어 ??? 플레이스홀더만 노출된다.
     expect(screen.getAllByText('???').length).toBeGreaterThan(0);
   });
+
+  test.each(['ko-KR', 'en-US'] as const)(
+    'shows the mutation collection total from the core summary in %s',
+    (locale) => {
+      const base = createInitialState();
+      const state: GameState = {
+        ...base,
+        mutationsDiscovered: {
+          carrot: ['golden', 'rainbow'],
+          wheat: ['giant'],
+        },
+      };
+      const localeMessages = getFarmMessages(locale);
+      const mutationSummary = getMutationCollectionSummary(state);
+      const screen = render(
+        <CollectionSheet
+          gameState={state}
+          locale={locale}
+          messages={localeMessages}
+          collectionSummary={getCollectionSummary(state)}
+          onClaimReward={jest.fn()}
+        />
+      );
+
+      expect(screen.getByTestId('collection-mutation-progress')).toHaveTextContent(
+        localeMessages.collectionMutationProgress(
+          mutationSummary.discoveredCount,
+          mutationSummary.totalCount,
+        )
+      );
+    }
+  );
 
   test('mutation badge row fits inside the crop card and the card clips overflow (UI 깨짐 회귀 방지)', () => {
     // 각 작물 카드 하단 돌연변이 배지 행(MUTATION_KINDS 슬롯)이 카드 폭을 넘어 UI가

@@ -385,6 +385,8 @@ const KO_FARM_MESSAGES = {
   collectionFullTitle: '전체 도감',
   collectionFullDesc: (discovered: number, total: number) =>
     `모든 작물 ${discovered}/${total}종을 모으면 큰 보상을 받아요.`,
+  collectionMutationProgress: (discovered: number, total: number) =>
+    `돌연변이 도감 · ${discovered}/${total} 발견`,
   collectionRewardClaimedToast: (amount: string) => `+${amount}G 도감 보상을 받았어요.`,
   nextGoalGold: (areaName: string, needed: string) => `⬆️ ${areaName} 해금까지 ${needed}G 더`,
   nextGoalHarvest: (areaName: string, current: number, total: number) =>
@@ -794,6 +796,8 @@ const EN_FARM_MESSAGES: FarmMessages = {
   collectionDetailCloseAction: 'Close',
   collectionFullTitle: 'Full Collection',
   collectionFullDesc: (discovered, total) => `Collect all ${total} crops (${discovered}/${total}) for a big reward.`,
+  collectionMutationProgress: (discovered, total) =>
+    `Mutation collection · ${discovered}/${total} discovered`,
   collectionRewardClaimedToast: (amount) => `Claimed +${amount}G from your collection.`,
   nextGoalGold: (areaName, needed) => `⬆️ ${needed}G more to unlock ${areaName}`,
   nextGoalHarvest: (areaName, current, total) => `🌾 Unlock ${areaName}: harvest ${current}/${total} crop types`,

@@ -11,6 +11,7 @@ import {
   getAreaUnlockRequirementText,
   getCropLabel,
   getMasteryStatus,
+  getMutationCollectionSummary,
   isAreaUnlocked,
   isCropDiscovered,
   isMutationDiscovered,
@@ -82,6 +83,7 @@ export function CollectionSheet({
   const [detailCropKey, setDetailCropKey] = React.useState<CropKey | null>(null);
   const detailCrop = detailCropKey != null ? getKnownCrop(detailCropKey) : null;
   const detailLabel = detailCropKey != null ? getCropLabel(detailCropKey, locale) : null;
+  const mutationCollectionSummary = getMutationCollectionSummary(gameState);
 
   return (
     <View testID="collection-sheet">
@@ -161,6 +163,12 @@ export function CollectionSheet({
       <View style={styles.collectionArea}>
         <Text style={styles.collectionFullDesc}>
           {messages.collectionFullDesc(collectionSummary.discoveredCount, collectionSummary.totalCount)}
+        </Text>
+        <Text testID="collection-mutation-progress" style={styles.collectionMutationProgress}>
+          {messages.collectionMutationProgress(
+            mutationCollectionSummary.discoveredCount,
+            mutationCollectionSummary.totalCount,
+          )}
         </Text>
         {collectionSummary.fullRewardClaimed ? (
           <Text style={styles.collectionClaimedLabel}>{messages.collectionClaimedLabel}</Text>
@@ -382,5 +390,12 @@ export const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
     fontWeight: '700',
+  },
+  collectionMutationProgress: {
+    marginTop: 6,
+    color: '#6f57d9',
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '900',
   },
 });
