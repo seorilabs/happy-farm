@@ -714,9 +714,14 @@ function FarmGameBody({
   const firstHarvestNoticeIdRef = useRef(0);
   // One-time harvest-notification permission prompt, shown after the first
   // harvest ("aha") and once onboarding has finished.
-  const [notificationPrompt, setNotificationPrompt] = useState(false);
+  const [notificationPromptGeneration, setNotificationPromptGeneration] = useState<number | null>(null);
   // Guards the prompt decision so it runs only once per mount.
   const notificationPromptResolvedRef = useRef(false);
+  // Each displayed prompt owns a generation token. Accept/decline atomically
+  // invalidate it, so queued events from a retired prompt cannot affect a new
+  // prompt shown after an in-place reset or cloud restore.
+  const notificationPromptGenerationSequenceRef = useRef(0);
+  const activeNotificationPromptGenerationRef = useRef<number | null>(null);
   // Current step of the first-session onboarding coachmark; null hides it.
   const [onboardingStep, setOnboardingStep] = useState<OnboardingStep | null>(null);
   // Mirror of the current step for stable callbacks (skip handler) that must read
@@ -1578,7 +1583,10 @@ function FarmGameBody({
       markHarvestNotificationPromptSeen();
       return;
     }
-    setNotificationPrompt(true);
+    const generation = notificationPromptGenerationSequenceRef.current + 1;
+    notificationPromptGenerationSequenceRef.current = generation;
+    activeNotificationPromptGenerationRef.current = generation;
+    setNotificationPromptGeneration(generation);
   }, [
     isSaveLoaded,
     isSettingsLoaded,
@@ -2548,8 +2556,12 @@ function FarmGameBody({
     );
   }
 
-  async function acceptNotificationPrompt() {
-    setNotificationPrompt(false);
+  async function acceptNotificationPrompt(generation: number) {
+    if (activeNotificationPromptGenerationRef.current !== generation) {
+      return;
+    }
+    activeNotificationPromptGenerationRef.current = null;
+    setNotificationPromptGeneration(null);
     markHarvestNotificationPromptSeen();
     if (!notifications.isSupported) return;
     const granted = await notifications.requestPermission();
@@ -2557,13 +2569,22 @@ function FarmGameBody({
       toast(messages.notificationPermissionDeniedToast);
       return;
     }
-    updateGameSettings({ harvestNotificationsEnabled: true });
+    // The education prompt explicitly covers both categories. Persist them
+    // together, while Settings keeps the two toggles independently reversible.
+    updateGameSettings({
+      harvestNotificationsEnabled: true,
+      comebackRemindersEnabled: true,
+    });
   }
 
   // Dismissing with "Maybe later" also retires the prompt for good, keeping the
   // decline/re-ask behavior consistent.
-  function declineNotificationPrompt() {
-    setNotificationPrompt(false);
+  function declineNotificationPrompt(generation: number) {
+    if (activeNotificationPromptGenerationRef.current !== generation) {
+      return;
+    }
+    activeNotificationPromptGenerationRef.current = null;
+    setNotificationPromptGeneration(null);
     markHarvestNotificationPromptSeen();
   }
 
@@ -2855,7 +2876,8 @@ function FarmGameBody({
     onboardingStepViewedRef.current = null;
     onboardingFinishCommittedRef.current = false;
     notificationPromptResolvedRef.current = false;
-    setNotificationPrompt(false);
+    activeNotificationPromptGenerationRef.current = null;
+    setNotificationPromptGeneration(null);
     setOnboardingStep(null);
     setGameState(resetState);
     setSelectedArea(FIRST_AREA.key);
@@ -2939,7 +2961,8 @@ function FarmGameBody({
         onboardingStepViewedRef.current = null;
         onboardingFinishCommittedRef.current = false;
         notificationPromptResolvedRef.current = normalizedRestored.harvestNotificationPromptSeen;
-        setNotificationPrompt(false);
+        activeNotificationPromptGenerationRef.current = null;
+        setNotificationPromptGeneration(null);
         setOnboardingStep(null);
         setSelectedArea(FIRST_AREA.key);
         setSelectedTool('harvest');
@@ -4535,11 +4558,13 @@ function FarmGameBody({
           onDismiss={dismissFirstHarvestCelebration}
         />
       ) : null}
-      {notificationPrompt ? (
+      {notificationPromptGeneration != null ? (
         <NotificationPromptOverlay
           messages={messages}
-          onAccept={acceptNotificationPrompt}
-          onDecline={declineNotificationPrompt}
+          onAccept={() => {
+            void acceptNotificationPrompt(notificationPromptGeneration);
+          }}
+          onDecline={() => declineNotificationPrompt(notificationPromptGeneration)}
         />
       ) : null}
       {prestigeGuide ? (

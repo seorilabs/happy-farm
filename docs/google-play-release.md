@@ -118,7 +118,7 @@ release signing 상태:
 
 데이터 보안 답변에는 AdMob/Firebase 분석 데이터 외에 Firebase Anonymous Auth의 앱 생성 사용자 식별자와 Firestore 클라우드 저장 백업용 게임 진행 데이터를 포함합니다. 사용 목적은 앱 기능(저장 복구)이며, 로컬 저장이 계속 권위 상태입니다.
 
-모바일 앱은 사용자가 설정에서 수확 알림을 켠 경우 Android 13+ `POST_NOTIFICATIONS` 런타임 권한을 요청합니다. 이 알림은 Notifee 기반 기기 로컬 알림이며 FCM token, 서버 push campaign, 추가 개인정보 전송을 사용하지 않습니다. Google Play 데이터 보안 답변에는 별도 수집 데이터로 추가하지 않습니다.
+모바일 앱은 첫 수확 뒤 농장 알림 안내에서 사용자가 명시적으로 수락하거나 설정에서 개별 토글을 켠 경우 Android 13+ `POST_NOTIFICATIONS` 런타임 권한을 요청합니다. 수락 시 수확 시점과 데일리 보너스·오늘의 작물 복귀 리마인더가 함께 활성화되며, 설정에서 각각 끌 수 있습니다. 이 알림은 Notifee 기반 기기 로컬 알림이며 FCM token, 서버 push campaign, 추가 개인정보 전송을 사용하지 않으므로 Google Play 데이터 보안 답변에는 별도 수집 데이터로 추가하지 않습니다.
 
 이 앱은 게임이므로 한국에 배포하려면 GRAC 등급 인증 필요 여부를 별도로 확인해야 합니다. 한국 배포를 보류하고 다른 국가 internal/closed test부터 시작하는 선택지도 유지합니다.
 
