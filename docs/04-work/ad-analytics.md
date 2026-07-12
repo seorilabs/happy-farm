@@ -33,7 +33,11 @@ happy-farm 광고 수익·노출 모니터링의 단일 기준 문서. 이벤트
 | `ad_limit_blocked` | 일일 한도·쿨다운으로 차단 | `ad_type`, `placement`, `blocked_reason` |
 
 `offlineBonusAd`의 `reward_value`는 기본 정산을 포함한 총액이 아니라 광고로 추가 지급한
-보너스 골드(`summary.offlineGold`)다. 따라서 placement별 광고 기여 골드를 중복 없이 합산할 수 있다.
+보너스 골드(`summary.offlineGold`)다. 즉 `reward_value = 총 2배 지급액 - 보장된 1배 지급액`이며,
+placement별 광고 기여 골드를 중복 없이 합산할 수 있다. 기본 지급액은
+`return_summary_collected.offline_gold`에 별도로 남는다. 현재 placement 리포트 SQL은
+`reward_value` 합계가 아니라 완료 수와 eCPM으로 매출을 추정하므로 이 정의가 매출 추정치를
+과소집계하지 않는다.
 
 `reason` 값: `not_ready`, `unsupported`, `dismissed`, `show_ad_threw`, SDK 오류 코드.
 모든 퍼널 이벤트에는 게임 상태 컨텍스트(`gold`, `plot_count`, `prestige_level` 등,

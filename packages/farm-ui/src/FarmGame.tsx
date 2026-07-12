@@ -2760,6 +2760,8 @@ function FarmGameBody({
     try {
       await showRewardedAd(
         'offlineBonusAd',
+        // reward_value is the incremental gold unlocked by the ad. The
+        // guaranteed base payout is tracked by return_summary_collected.
         summary.offlineGold,
         () => {
           rewardReserved = reserveReturnSummary(summary, true);

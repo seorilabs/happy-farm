@@ -1062,6 +1062,10 @@ describe('FarmGame UI flow', () => {
       expect(notReadyAction.props.accessibilityState.disabled).toBe(true);
       fireEvent.press(notReadyAction);
       expect(notReadyAd.showAd).not.toHaveBeenCalled();
+      const persisted = getLatestPersistedState();
+      expect(persisted.adUsage.offlineBonusAd).toEqual(state.adUsage.offlineBonusAd);
+      expect(persisted.dailyMissionState).toEqual(state.dailyMissionState);
+      expect(persisted.weeklyMissionState).toEqual(state.weeklyMissionState);
     });
 
     test('disables the 2x action when its daily limit is exhausted', async () => {
@@ -1095,14 +1099,12 @@ describe('FarmGame UI flow', () => {
 
       await waitFor(() => expect(screen.getByText(messages.sheetTitleWelcomeBack)).toBeTruthy());
       fireEvent.press(screen.getByLabelText(messages.sheetCloseAccessibilityLabel));
-      await act(async () => {
-        jest.advanceTimersByTime(500);
-      });
-
+      await waitFor(() => expect(screen.queryByText(messages.sheetTitleWelcomeBack)).toBeNull());
       await waitFor(() =>
         expect(screen.getByText(`${formatMoney(state.gold + offlineGold, DEFAULT_LOCALE)}G`)).toBeTruthy()
       );
       expect(interstitial.showAd).not.toHaveBeenCalled();
+      expect(getLatestPersistedState().adUsage.returnInterstitialAt).toBe(state.adUsage.returnInterstitialAt);
     });
 
     test('close branch (collectOffline=false): pressing confirm with no offline gold grants nothing', async () => {
