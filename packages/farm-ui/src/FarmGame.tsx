@@ -127,11 +127,13 @@ import {
   purchaseAnimal,
   feedAnimal,
   collectProduce,
+  collectAllReadyProduce,
   type AnimalKey,
   getProductionStates,
   getProductionRecipeLabel,
   startCraft,
   collectCraft,
+  collectAllReadyCrafts,
   type ProductionRecipeKey,
   getCropEconomyEstimate,
   sortCropKeysForStrip,
@@ -473,6 +475,13 @@ type PendingFarmCommandEffect =
       // the batch toast to the combined harvest+replant variant. 0/undefined for a
       // plain Harvest All.
       replantedCount?: number;
+    }
+  | {
+      id: number;
+      type: 'readyItemsCollected';
+      surface: 'animals' | 'workshop';
+      collectedCount: number;
+      totalGold: number;
     };
 
 type MasteryRankUpNotice = {
@@ -813,6 +822,7 @@ function FarmGameBody({
   // A quick "cha-ching" bump on the gold HUD when a harvest lands, so the eye
   // links the floating "+gold" at the plot to the balance actually rising.
   const pulseGold = useCallback(() => {
+    _callGoldPulseHook();
     goldPulse.stopAnimation();
     goldPulse.setValue(0);
     Animated.sequence([
@@ -1155,6 +1165,23 @@ function FarmGameBody({
             void audio.playHarvest();
           }
           incrementCombo(effect.harvestedCount);
+        }
+        continue;
+      }
+
+      if (effect.type === 'readyItemsCollected') {
+        // Release the synchronous guard even for a stale/no-op attempt so the
+        // next completed set can always be collected.
+        collectAllReadyInFlightRef.current[effect.surface] = false;
+        if (effect.collectedCount > 0) {
+          if (effect.totalGold > 0) {
+            pulseGold();
+          }
+          toast(
+            effect.surface === 'animals'
+              ? messages.animalsCollectedAllToast(formatMoney(effect.totalGold, locale), effect.collectedCount)
+              : messages.workshopCollectedAllToast(formatMoney(effect.totalGold, locale), effect.collectedCount)
+          );
         }
         continue;
       }
@@ -1915,6 +1942,7 @@ function FarmGameBody({
   // Blocks a second "Harvest All" tap until the in-flight batch finishes; the
   // command drain effect releases it after each attempt (success or no-op).
   const harvestAllInFlightRef = useRef(false);
+  const collectAllReadyInFlightRef = useRef({ animals: false, workshop: false });
   // 비료 성공 부수효과(토스트·시트 닫힘)를 시트 1회 오픈당 한 번만 발화하게 하는
   // 가드. 시트가 열릴 때 false로 리셋한다(#227 리뷰).
   const fertilizeGuardRef = useRef(false);
@@ -2014,7 +2042,6 @@ function FarmGameBody({
     toast(messages.collectionRewardClaimedToast(formatMoney(preview.awardedGold, locale)));
     triggerHaptic(50);
     pulseGold();
-    _callGoldPulseHook();
     playSoundEffect('reward');
   }
 
@@ -2089,6 +2116,41 @@ function FarmGameBody({
     });
   }
 
+  function collectAllReadyItems(surface: 'animals' | 'workshop') {
+    if (collectAllReadyInFlightRef.current[surface]) {
+      return;
+    }
+
+    collectAllReadyInFlightRef.current[surface] = true;
+    const now = Date.now();
+    const effectId = ++commandEffectIdRef.current;
+    setGameState((state) => {
+      const result =
+        surface === 'animals' ? collectAllReadyProduce(state, now) : collectAllReadyCrafts(state, now);
+      // The synchronous in-flight ref keeps a second press out of this setter.
+      // React may still replay one functional updater in development, so the
+      // operation ID is deduped against both queued and already-drained effects.
+      if (
+        !handledCommandEffectIdsRef.current.has(effectId) &&
+        !pendingCommandEffectsRef.current.some((effect) => effect.id === effectId)
+      ) {
+        pendingCommandEffectsRef.current.push({
+          id: effectId,
+          type: 'readyItemsCollected',
+          surface,
+          collectedCount: result.collectedCount,
+          totalGold: result.totalGold,
+        });
+      }
+      return result.collectedCount > 0 ? result.state : state;
+    });
+    setCommandEffectVersion((version) => version + 1);
+  }
+
+  function collectAllAnimalProduce() {
+    collectAllReadyItems('animals');
+  }
+
   // 생산 가공 공방 시트('더보기' 뒤). 가공 시작/수집은 core 순수 함수에 위임하고,
   // functional updater 안에서 재검증해 이중 차감/이중 수집을 막는다.
   function openWorkshop() {
@@ -2117,6 +2179,10 @@ function FarmGameBody({
       toast(messages.workshopCollectedToast(getProductionRecipeLabel(key, locale).name));
       return next;
     });
+  }
+
+  function collectAllCrafts() {
+    collectAllReadyItems('workshop');
   }
 
   function claimMissionReward(slot: number) {
@@ -4140,6 +4206,7 @@ function FarmGameBody({
             onPurchase={buyAnimal}
             onFeed={feedAnimalNow}
             onCollect={collectAnimalProduce}
+            onCollectAll={collectAllAnimalProduce}
           />
         ) : null}
 
@@ -4152,6 +4219,7 @@ function FarmGameBody({
             getCropName={getLocalizedCropName}
             onStart={startCraftNow}
             onCollect={collectCraftNow}
+            onCollectAll={collectAllCrafts}
           />
         ) : null}
 

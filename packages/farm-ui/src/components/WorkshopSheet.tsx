@@ -36,6 +36,7 @@ export function WorkshopSheet({
   getCropName,
   onStart,
   onCollect,
+  onCollectAll,
 }: {
   gameState: GameState;
   locale: SupportedLocale;
@@ -44,12 +45,23 @@ export function WorkshopSheet({
   getCropName: (cropKey: CropKey) => string;
   onStart: (key: ProductionRecipeKey) => void;
   onCollect: (key: ProductionRecipeKey) => void;
+  onCollectAll: () => void;
 }) {
   const safeNow = Number.isFinite(now) ? now : Date.now();
   const statuses = getProductionStates(gameState, safeNow);
+  const readyCount = statuses.filter((status) => status.phase === 'ready').length;
 
   return (
     <View testID="workshop-sheet">
+      {readyCount >= 2 ? (
+        <View style={styles.collectAllArea}>
+          <SheetAction
+            testID="workshop-collect-all-action"
+            label={messages.workshopCollectAllAction(readyCount)}
+            onPress={onCollectAll}
+          />
+        </View>
+      ) : null}
       {statuses.map((status) => (
         <RecipeCard
           key={status.key}
@@ -151,6 +163,9 @@ function RecipeCard({
 }
 
 const styles = StyleSheet.create({
+  collectAllArea: {
+    marginBottom: 8,
+  },
   card: {
     marginBottom: 12,
     padding: 12,

@@ -6,11 +6,13 @@ import { act, cleanup, fireEvent, render } from '@testing-library/react-native';
 
 import {
   ACHIEVEMENT_TRACKS,
+  ANIMALS,
   COLLECTION_AREA_REWARDS,
   DEFAULT_LOCALE,
   FARM_AREAS,
   PRESTIGE_STARS_BASE,
   PRESTIGE_SKILLS,
+  PRODUCTION_RECIPES,
   createInitialState,
   formatMoney,
   formatHourlyGold,
@@ -45,12 +47,95 @@ import { AchievementsSheet } from '../../../../../packages/farm-ui/src/component
 import { LabSheet } from '../../../../../packages/farm-ui/src/components/LabSheet';
 import { ChainMapSheet, PrestigeConfirmSheet } from '../../../../../packages/farm-ui/src/components/ChainMapSheet';
 import { WheelSheet } from '../../../../../packages/farm-ui/src/components/WheelSheet';
+import { AnimalsSheet } from '../../../../../packages/farm-ui/src/components/AnimalsSheet';
+import { WorkshopSheet } from '../../../../../packages/farm-ui/src/components/WorkshopSheet';
 
 const LOCALE = DEFAULT_LOCALE;
 const messages = getFarmMessages(LOCALE);
 const NOW = Date.parse('2026-05-27T03:00:00.000Z');
 
 afterEach(cleanup);
+
+describe('ready output batch actions', () => {
+  function withReadyAnimals(count: number): GameState {
+    const base = createInitialState();
+    const ready = ANIMALS.slice(0, count);
+    return {
+      ...base,
+      animals: {
+        owned: ready.map((animal) => animal.key),
+        feeding: Object.fromEntries(ready.map((animal) => [animal.key, NOW - animal.produceTimerMs])),
+      },
+    };
+  }
+
+  function withReadyCrafts(count: number): GameState {
+    const base = createInitialState();
+    const ready = PRODUCTION_RECIPES.slice(0, count);
+    return {
+      ...base,
+      production: {
+        ...base.production,
+        crafting: Object.fromEntries(ready.map((recipe) => [recipe.key, NOW - recipe.timerMs])),
+      },
+    };
+  }
+
+  test('ranch shows collect-all only for at least two ready animals', () => {
+    const onCollect = jest.fn();
+    const onCollectAll = jest.fn();
+    const renderSheet = (state: GameState) => (
+      <AnimalsSheet
+        gameState={state}
+        locale={LOCALE}
+        messages={messages}
+        now={NOW}
+        onPurchase={jest.fn()}
+        onFeed={jest.fn()}
+        onCollect={onCollect}
+        onCollectAll={onCollectAll}
+      />
+    );
+    const screen = render(renderSheet(withReadyAnimals(1)));
+
+    expect(screen.queryByTestId('animals-collect-all-action')).toBeNull();
+    expect(screen.getByText(messages.animalsCollectAction(formatMoney(ANIMALS[0]!.producePrice, LOCALE)))).toBeTruthy();
+
+    screen.rerender(renderSheet(withReadyAnimals(2)));
+    const action = screen.getByTestId('animals-collect-all-action');
+    expect(action.props.accessibilityLabel).toBe(messages.animalsCollectAllAction(2));
+    fireEvent.press(action);
+    expect(onCollectAll).toHaveBeenCalledTimes(1);
+  });
+
+  test('workshop shows collect-all only for at least two completed crafts', () => {
+    const onCollectAll = jest.fn();
+    const renderSheet = (state: GameState) => (
+      <WorkshopSheet
+        gameState={state}
+        locale={LOCALE}
+        messages={messages}
+        now={NOW}
+        getCropName={(cropKey) => getCropLabel(cropKey, LOCALE).name}
+        onStart={jest.fn()}
+        onCollect={jest.fn()}
+        onCollectAll={onCollectAll}
+      />
+    );
+    const screen = render(renderSheet(withReadyCrafts(1)));
+
+    expect(screen.queryByTestId('workshop-collect-all-action')).toBeNull();
+    expect(
+      screen.getByText(messages.workshopCollectAction(formatMoney(PRODUCTION_RECIPES[0]!.sellPrice, LOCALE)))
+    ).toBeTruthy();
+
+    screen.rerender(renderSheet(withReadyCrafts(2)));
+    const action = screen.getByTestId('workshop-collect-all-action');
+    expect(action.props.accessibilityLabel).toBe(messages.workshopCollectAllAction(2));
+    fireEvent.press(action);
+    expect(onCollectAll).toHaveBeenCalledTimes(1);
+  });
+});
 
 describe('CollectionSheet', () => {
   test('renders areas and shows undiscovered crops as locked placeholders', () => {

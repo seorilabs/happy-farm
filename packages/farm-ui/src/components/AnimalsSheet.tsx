@@ -34,6 +34,7 @@ export function AnimalsSheet({
   onPurchase,
   onFeed,
   onCollect,
+  onCollectAll,
 }: {
   gameState: GameState;
   locale: SupportedLocale;
@@ -42,12 +43,23 @@ export function AnimalsSheet({
   onPurchase: (key: AnimalKey) => void;
   onFeed: (key: AnimalKey) => void;
   onCollect: (key: AnimalKey) => void;
+  onCollectAll: () => void;
 }) {
   const safeNow = Number.isFinite(now) ? now : Date.now();
   const statuses = getAnimalStates(gameState, safeNow);
+  const readyCount = statuses.filter((status) => status.phase === 'ready').length;
 
   return (
     <View testID="animals-sheet">
+      {readyCount >= 2 ? (
+        <View style={styles.collectAllArea}>
+          <SheetAction
+            testID="animals-collect-all-action"
+            label={messages.animalsCollectAllAction(readyCount)}
+            onPress={onCollectAll}
+          />
+        </View>
+      ) : null}
       {statuses.map((status) => (
         <AnimalCard
           key={status.key}
@@ -152,6 +164,9 @@ function AnimalCard({
 }
 
 const styles = StyleSheet.create({
+  collectAllArea: {
+    marginBottom: 8,
+  },
   card: {
     marginBottom: 12,
     padding: 12,

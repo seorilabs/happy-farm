@@ -260,3 +260,43 @@ export function collectCraft(state: GameState, key: ProductionRecipeKey, now: nu
     },
   };
 }
+
+export type CollectAllReadyCraftsResult = {
+  state: GameState;
+  collectedKeys: ProductionRecipeKey[];
+  collectedCount: number;
+  totalGold: number;
+};
+
+// Collects every completed recipe at one captured instant through the existing
+// single-recipe transition. A no-op returns the input state by reference, and
+// the summary lets UI feedback fire exactly once for the committed batch.
+export function collectAllReadyCrafts(
+  gameState: GameState,
+  now: number = Date.now()
+): CollectAllReadyCraftsResult {
+  const safeNow = Number.isFinite(now) ? now : Date.now();
+  let state = gameState;
+  const collectedKeys: ProductionRecipeKey[] = [];
+  let totalGold = 0;
+
+  for (const status of getProductionStates(gameState, safeNow)) {
+    if (status.phase !== 'ready') {
+      continue;
+    }
+    const next = collectCraft(state, status.key, safeNow);
+    if (next == null) {
+      continue;
+    }
+    totalGold += next.gold - state.gold;
+    state = next;
+    collectedKeys.push(status.key);
+  }
+
+  return {
+    state,
+    collectedKeys,
+    collectedCount: collectedKeys.length,
+    totalGold,
+  };
+}

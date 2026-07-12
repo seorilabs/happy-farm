@@ -246,3 +246,44 @@ export function collectProduce(state: GameState, key: AnimalKey, now: number = D
     },
   };
 }
+
+export type CollectAllReadyProduceResult = {
+  state: GameState;
+  collectedKeys: AnimalKey[];
+  collectedCount: number;
+  totalGold: number;
+};
+
+// Collects every ready animal at one captured instant by sequencing the same
+// single-item transition used by individual taps. This preserves every
+// collection invariant while returning one deterministic summary for batched
+// UI feedback. A no-op keeps the original state reference.
+export function collectAllReadyProduce(
+  gameState: GameState,
+  now: number = Date.now()
+): CollectAllReadyProduceResult {
+  const safeNow = Number.isFinite(now) ? now : Date.now();
+  let state = gameState;
+  const collectedKeys: AnimalKey[] = [];
+  let totalGold = 0;
+
+  for (const status of getAnimalStates(gameState, safeNow)) {
+    if (status.phase !== 'ready') {
+      continue;
+    }
+    const next = collectProduce(state, status.key, safeNow);
+    if (next == null) {
+      continue;
+    }
+    totalGold += next.gold - state.gold;
+    state = next;
+    collectedKeys.push(status.key);
+  }
+
+  return {
+    state,
+    collectedKeys,
+    collectedCount: collectedKeys.length,
+    totalGold,
+  };
+}
