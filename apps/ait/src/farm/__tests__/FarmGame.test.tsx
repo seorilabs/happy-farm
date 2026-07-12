@@ -1,7 +1,7 @@
 /// <reference types="jest" />
 
 import React from 'react';
-import { StyleSheet, Vibration } from 'react-native';
+import { Animated, StyleSheet, Vibration } from 'react-native';
 import { act, cleanup, fireEvent, render, waitFor, within } from '@testing-library/react-native';
 import {
   ACHIEVEMENT_TRACKS,
@@ -39,6 +39,7 @@ import {
   type AreaKey,
   type CropKey,
   type GameState,
+  type MutationKey,
   type RewardedAdController,
   type RewardedAdShowResult,
 } from '../../../../../packages/farm-core/src';
@@ -402,6 +403,68 @@ describe('FarmGame UI flow', () => {
     expect(forward).toBe('prism');
     expect(reverse).toBe('prism');
     expect(selectRarestMutationFlash('giant', 'rainbow')).toBe('giant');
+    expect(selectRarestMutationFlash(null, 'giant')).toBe('giant');
+    expect(selectRarestMutationFlash(null, null)).toBeNull();
+    expect(selectRarestMutationFlash('rainbow', undefined)).toBe('rainbow');
+    expect(selectRarestMutationFlash('rainbow', 'future' as MutationKey)).toBe('rainbow');
+    expect(selectRarestMutationFlash('prism', 'prism')).toBe('prism');
+  });
+
+  test('a consecutive mutation flash resets every layer and animates only the latest rarity', async () => {
+    const base = createReadyHarvestState();
+    const state: GameState = {
+      ...base,
+      onboardingCompleted: true,
+      harvestedCropKeys: ['carrot'],
+      harvestNotificationPromptSeen: true,
+      harvestCounts: { carrot: getMasteryThresholds('carrot')[3]! },
+    };
+    const onMutationFlash = jest.fn();
+    __setMutationFlashTestHook(onMutationFlash);
+    const screen = await renderGame(state);
+    await waitFor(() => expect(screen.getAllByText('GET')).toHaveLength(2));
+
+    const stopSpy = jest.spyOn(Animated.Value.prototype, 'stopAnimation');
+    const setValueSpy = jest.spyOn(Animated.Value.prototype, 'setValue');
+    const timingSpy = jest.spyOn(Animated, 'timing');
+    let randomSpy = jest.spyOn(Math, 'random').mockReturnValue(0.001);
+
+    try {
+      fireEvent.press(within(screen.getByTestId('plot-cell-0')).getByText('GET'));
+      await waitFor(() => expect(onMutationFlash).toHaveBeenLastCalledWith('giant'));
+
+      randomSpy.mockRestore();
+      randomSpy = jest.spyOn(Math, 'random').mockReturnValue(0);
+      stopSpy.mockClear();
+      setValueSpy.mockClear();
+      timingSpy.mockClear();
+
+      fireEvent.press(within(screen.getByTestId('plot-cell-1')).getByText('GET'));
+      await waitFor(() => expect(onMutationFlash).toHaveBeenLastCalledWith('prism'));
+
+      expect(stopSpy.mock.calls.length).toBeGreaterThanOrEqual(MUTATION_CELEBRATION_KEYS.length);
+      expect(setValueSpy.mock.calls.filter(([value]) => value === 0).length).toBeGreaterThanOrEqual(
+        MUTATION_CELEBRATION_KEYS.length,
+      );
+
+      const prismTimings = timingSpy.mock.calls
+        .map(([, config]) => config)
+        .filter((config) => config.duration === 260 || config.duration === 940);
+      expect(prismTimings).toEqual([
+        expect.objectContaining({ toValue: 0.6, duration: 260 }),
+        expect.objectContaining({ toValue: 0, duration: 940 }),
+      ]);
+      expect(
+        timingSpy.mock.calls.some(([, config]) =>
+          [0.36, 0.45, 0.52].includes(Number(config.toValue)),
+        ),
+      ).toBe(false);
+    } finally {
+      randomSpy.mockRestore();
+      timingSpy.mockRestore();
+      stopSpy.mockRestore();
+      setValueSpy.mockRestore();
+    }
   });
 
   test('plants every affordable empty plot at once via "Plant All"', async () => {
