@@ -161,7 +161,11 @@ import {
   isAreaUnlocked,
   isCropPlantable,
   isPlotGrowthComplete,
+  accumulateCropReadySummary,
   collectNewlyReadyPlotIds,
+  createCropReadySummaryState,
+  isCropReadySummaryDue,
+  type CropReadySummaryEntry,
   type CropReadyLogState,
   isTitleUnlocked,
   normalizeLocale,
@@ -220,6 +224,9 @@ import { resolveBottomSafeInset } from './safeArea';
 export const GAME_TICK_INTERVAL_MS = 250;
 // Auto-harvest analytics are batched into one summary event per interval.
 const AUTO_HARVEST_SUMMARY_INTERVAL_MS = 60_000;
+// Newly-ready crops share one rolling window, then emit one summary per
+// crop/area/tier bucket instead of one event per plot.
+export const CROP_READY_SUMMARY_INTERVAL_MS = 60_000;
 // How often the active session refreshes its "last seen" timestamp so the
 // welcome-back recap measures the real away gap even if the app is killed
 // without firing a background event.
@@ -786,6 +793,7 @@ function FarmGameBody({
   // but the toast/analytics must fire exactly once per graduated level.
   const prestigedLevelsRef = useRef<Set<number>>(new Set());
   const autoHarvestSummaryRef = useRef({ harvestedCount: 0, replantedCount: 0, windowStartedAt: 0 });
+  const cropReadySummaryRef = useRef(createCropReadySummaryState());
   const rewardedAd = useRewardedAd(adGroupIds.rewarded);
   const interstitialAd = useInterstitialAd(adGroupIds.interstitial);
   const farmAnalytics = analytics;
@@ -1061,6 +1069,34 @@ function FarmGameBody({
   // analyticsContext so timers can build a fresh context without depending on
   // gameState.
   analyticsContextRef.current = analyticsContext;
+
+  const flushCropReadySummary = useCallback(
+    (context?: GameAnalyticsContext, flushedAt = Date.now()) => {
+      const summary = cropReadySummaryRef.current;
+      if (summary.readyCount === 0) {
+        return;
+      }
+      const snapshotContext = context ?? analyticsContextRef.current?.();
+      if (snapshotContext == null) {
+        return;
+      }
+
+      // Retire the window before tracking so a re-entrant render/background
+      // callback cannot emit the same buckets twice.
+      cropReadySummaryRef.current = createCropReadySummaryState();
+      for (const bucket of summary.buckets) {
+        farmAnalytics.trackCropReadySummary({
+          cropKey: bucket.cropKey,
+          areaKey: bucket.areaKey,
+          cropTier: bucket.cropTier,
+          readyCount: bucket.readyCount,
+          windowSeconds: Math.max(1, Math.floor((flushedAt - summary.windowStartedAt) / 1000)),
+          context: snapshotContext,
+        });
+      }
+    },
+    [farmAnalytics],
+  );
 
   useEffect(() => {
     if (pendingCommandEffectsRef.current.length === 0) {
@@ -1612,13 +1648,15 @@ function FarmGameBody({
     const subscription = AppState.addEventListener('change', (nextState) => {
       if (nextState === 'background' || nextState === 'inactive') {
         markSeen();
+        flushCropReadySummary();
       }
     });
     return () => {
       clearInterval(heartbeat);
       subscription.remove();
+      flushCropReadySummary();
     };
-  }, [isSaveLoaded, persistence]);
+  }, [flushCropReadySummary, isSaveLoaded, persistence]);
 
   useEffect(() => {
     if (!isSettingsLoaded) {
@@ -1995,8 +2033,8 @@ function FarmGameBody({
   // 비료 성공 부수효과(토스트·시트 닫힘)를 시트 1회 오픈당 한 번만 발화하게 하는
   // 가드. 시트가 열릴 때 false로 리셋한다(#227 리뷰).
   const fertilizeGuardRef = useRef(false);
-  // 익은 작물 crop_ready 로깅 중복 방지 상태(plotId → 로깅한 심기 인스턴스 startTime).
-  // 250ms 틱 루프가 setGameState 커밋 전에 다시 돌아 같은 익음을 반복 로깅하던 문제
+  // 익은 작물 summary 중복 방지 상태(plotId → 집계한 심기 인스턴스 startTime).
+  // 250ms 틱 루프가 setGameState 커밋 전에 다시 돌아 같은 익음을 반복 집계하던 문제
   // (#266)를 막는다. ref로 보관해 렌더 간 유지하면서 즉시 갱신한다.
   const cropReadyLogStateRef = useRef<CropReadyLogState>({});
   const chainIncome = useMemo(() => getChainIncome(gameState), [gameState, tick]);
@@ -2011,9 +2049,10 @@ function FarmGameBody({
     let next = gameState;
 
     let growthUpdated = false;
-    // 심기 인스턴스당 1회만 로깅되도록, 이번 틱에 새로 익은 plot.id 집합을 먼저 구한다.
-    // (커밋 지연으로 같은 익음이 여러 틱 반복 로깅되는 것을 방지 — #266)
+    // 심기 인스턴스당 1회만 집계되도록, 이번 틱에 새로 익은 plot.id 집합을 먼저 구한다.
+    // (커밋 지연으로 같은 익음이 여러 틱 반복 집계되는 것을 방지 — #266)
     const newlyReadyPlotIds = new Set(collectNewlyReadyPlotIds(next, cropReadyLogStateRef.current, now));
+    const newlyReadySummaryEntries: CropReadySummaryEntry[] = [];
     const grownPlots = next.plots.map((plot) => {
       if (plot.id >= next.unlockedPlotCount) {
         return plot;
@@ -2024,10 +2063,15 @@ function FarmGameBody({
       const crop = getCrop(plot.cropType);
       growthUpdated = true;
       if (newlyReadyPlotIds.has(plot.id)) {
-        farmAnalytics.trackCropReady(plot.cropType, crop.area, crop.tier, analyticsContext());
+        newlyReadySummaryEntries.push({ cropKey: plot.cropType, areaKey: crop.area, cropTier: crop.tier });
       }
       return { ...plot, state: 2 as const };
     });
+    cropReadySummaryRef.current = accumulateCropReadySummary(
+      cropReadySummaryRef.current,
+      newlyReadySummaryEntries,
+      now,
+    );
     if (growthUpdated) {
       next = { ...next, plots: grownPlots };
     }
@@ -2056,11 +2100,14 @@ function FarmGameBody({
       });
       autoHarvestSummaryRef.current = { harvestedCount: 0, replantedCount: 0, windowStartedAt: now };
     }
+    if (isCropReadySummaryDue(cropReadySummaryRef.current, now, CROP_READY_SUMMARY_INTERVAL_MS)) {
+      flushCropReadySummary(analyticsContext(next), now);
+    }
 
     if (next !== gameState) {
       setGameState(() => next);
     }
-  }, [analyticsContext, gameState, tick]);
+  }, [analyticsContext, flushCropReadySummary, gameState, tick]);
 
   function openShop() {
     setActiveSheet({ type: 'shop' });
@@ -2441,6 +2488,8 @@ function FarmGameBody({
       setActiveSheet(null);
       return;
     }
+    flushCropReadySummary();
+    cropReadyLogStateRef.current = {};
     prestigedLevelsRef.current.add(guardLevel);
     // First graduation (level 0 → 1) and guide not yet seen: queue the one-time
     // chain-income guide to appear once the graduation celebration clears.
@@ -2856,6 +2905,10 @@ function FarmGameBody({
       return;
     }
     await persistence.removePersistedGameState();
+    // removePersistedGameState is async; flush only after it settles so ticks
+    // during the await cannot leave old-farm buckets for the reset state.
+    flushCropReadySummary();
+    cropReadyLogStateRef.current = {};
     claimedRewardKeysRef.current.clear();
     claimedAchievementKeysRef.current.clear();
     prestigedLevelsRef.current.clear();
@@ -2941,6 +2994,8 @@ function FarmGameBody({
     try {
       const outcome = await cloudSave.restoreFromCloud();
       if (outcome.status === 'restored') {
+        flushCropReadySummary();
+        cropReadyLogStateRef.current = {};
         // The cloud payload may come from an older app version, so run it through
         // the same migration/normalization as the load path before showing it.
         const restored = migrateLoadedState(outcome.gameState, createInitialState());

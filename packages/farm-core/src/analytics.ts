@@ -122,12 +122,25 @@ export function createFarmAnalytics(track: TrackGameEvent = noopTrackGameEvent) 
       });
     },
 
-    trackCropReady: (cropKey: CropKey, areaKey: AreaKey, cropTier: number, context: GameAnalyticsContext) => {
-      track('crop_ready', {
-        crop: cropKey,
-        area: areaKey,
-        crop_tier: cropTier,
-        ...context,
+    // One event per non-empty crop/area/tier bucket in a caller-owned rolling
+    // window. ready_count replaces plot-level crop_ready event counts while
+    // preserving the dimensions used by content analytics.
+    trackCropReadySummary: (params: {
+      cropKey: CropKey;
+      areaKey: AreaKey;
+      cropTier: number;
+      readyCount: number;
+      windowSeconds: number;
+      context: GameAnalyticsContext;
+    }) => {
+      track('crop_ready_summary', {
+        crop: params.cropKey,
+        area: params.areaKey,
+        crop_tier: params.cropTier,
+        ready_count: params.readyCount,
+        window_seconds: params.windowSeconds,
+        schema_version: 1,
+        ...params.context,
       });
     },
 

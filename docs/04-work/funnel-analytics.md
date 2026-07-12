@@ -45,7 +45,7 @@ happy-farm 활성화·리텐션 퍼널 측정의 단일 기준 문서. 이벤트
 | 심기 안내 | `onboarding_step_view` (`step` = `plant`, `step_index` = 2) | `step`, `step_index`, context |
 | 심기 | `crop_planted` | `crop`, `area`, `crop_tier`, `crop_cost`, context |
 | 수확 안내 | `onboarding_step_view` (`step` = `harvest`, `step_index` = 3) | `step`, `step_index`, context |
-| 수확 준비 | `crop_ready` | `crop`, `area`, `crop_tier`, context |
+| 수확 준비 집계 | `crop_ready_summary` | `crop`, `area`, `crop_tier`, `ready_count`, `window_seconds`, `schema_version`, context |
 | 수확 | `crop_harvested` | `crop`, `area`, `crop_tier`, `revenue`, `is_first_crop_harvest`, `is_first_meaningful_harvest`, context |
 | **첫 유의미 수확** | `first_meaningful_harvest` | `crop`, `area`, `crop_tier`, `revenue`, context |
 | 첫 수확 보상 확인 | `onboarding_step_view` (`step` = `reward`, `step_index` = 4) | `step`, `step_index`, context |
@@ -60,6 +60,8 @@ happy-farm 활성화·리텐션 퍼널 측정의 단일 기준 문서. 이벤트
 > 단계 stable key는 `selectSeed` → `plant` → `harvest` → `reward`다. 미완료 세이브는
 > 현재 단계를 저장하고 재진입 시 이어서 보여 준다. 따라서 세션을 넘긴 재노출로 같은 사용자의
 > `onboarding_step_view`가 중복될 수 있으므로 전환율은 이벤트 수가 아니라 고유 사용자로 집계한다.
+> 성장 완료 수는 배칭 배포 이후 `sum(crop_ready_summary.ready_count)`, 이전 기간은
+> `count(crop_ready)`로 읽으며 혼합 기간에는 두 값을 더한다.
 > `unlock`은 이전 버전의 역사 데이터에만 존재하는 legacy key이며 `reward`로 소급 치환하지 않는다.
 > 미완료 가이드가 있는 복귀 세션에서는 온보딩이 foreground를 소유한다. 출석 보너스 시트는
 > 완료/skip 뒤로 미루고, 복귀 passive gold는 `lastSeenAt`을 갱신하기 전에 저장 상태에 먼저

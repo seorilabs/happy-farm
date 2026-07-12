@@ -138,6 +138,8 @@ describe('createHttpMetricsSink(자체 서버 HTTP sink)', () => {
       },
     });
 
-    expect(() => httpSink.sink({ name: 'crop_ready', params: { crop: 'carrot' } })).not.toThrow();
+    expect(() =>
+      httpSink.sink({ name: 'crop_ready_summary', params: { crop: 'carrot', ready_count: 2 } })
+    ).not.toThrow();
   });
 });

@@ -1,7 +1,13 @@
 /// <reference types="jest" />
 
 import { createInitialState } from '../constants';
-import { collectNewlyReadyPlotIds, type CropReadyLogState } from '../cropReady';
+import {
+  accumulateCropReadySummary,
+  collectNewlyReadyPlotIds,
+  createCropReadySummaryState,
+  isCropReadySummaryDue,
+  type CropReadyLogState,
+} from '../cropReady';
 import type { CropKey, GameState, PlotState } from '../types';
 
 const STARTER_CROP: CropKey = 'carrot';
@@ -91,5 +97,52 @@ describe('collectNewlyReadyPlotIds', () => {
       const logState: CropReadyLogState = {};
       expect(collectNewlyReadyPlotIds(state, logState, NOW)).toEqual([]);
     }
+  });
+});
+
+describe('crop ready summary window', () => {
+  test('같은 crop/area/tier는 한 bucket의 readyCount로 합치고 window 시작을 유지한다', () => {
+    const empty = createCropReadySummaryState();
+    const first = accumulateCropReadySummary(
+      empty,
+      [
+        { cropKey: 'carrot', areaKey: 'starter_field', cropTier: 1 },
+        { cropKey: 'carrot', areaKey: 'starter_field', cropTier: 1 },
+        { cropKey: 'wheat', areaKey: 'starter_field', cropTier: 1 },
+      ],
+      1_000,
+    );
+
+    expect(first).toEqual({
+      readyCount: 3,
+      windowStartedAt: 1_000,
+      buckets: [
+        { cropKey: 'carrot', areaKey: 'starter_field', cropTier: 1, readyCount: 2 },
+        { cropKey: 'wheat', areaKey: 'starter_field', cropTier: 1, readyCount: 1 },
+      ],
+    });
+
+    const second = accumulateCropReadySummary(
+      first,
+      [{ cropKey: 'wheat', areaKey: 'starter_field', cropTier: 1 }],
+      30_000,
+    );
+    expect(second.windowStartedAt).toBe(1_000);
+    expect(second.readyCount).toBe(4);
+    expect(second.buckets.find((bucket) => bucket.cropKey === 'wheat')?.readyCount).toBe(2);
+  });
+
+  test('빈 입력은 window를 열지 않고, interval이 지난 non-empty summary만 flush 대상이다', () => {
+    const empty = createCropReadySummaryState();
+    expect(accumulateCropReadySummary(empty, [], 1_000)).toBe(empty);
+    expect(isCropReadySummaryDue(empty, 100_000, 60_000)).toBe(false);
+
+    const pending = accumulateCropReadySummary(
+      empty,
+      [{ cropKey: 'carrot', areaKey: 'starter_field', cropTier: 1 }],
+      1_000,
+    );
+    expect(isCropReadySummaryDue(pending, 60_999, 60_000)).toBe(false);
+    expect(isCropReadySummaryDue(pending, 61_000, 60_000)).toBe(true);
   });
 });
