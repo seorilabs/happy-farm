@@ -8,6 +8,7 @@ import {
   getCropEconomyEstimate,
   getProfitMultiplier,
   getSpeedMultiplier,
+  OFFLINE_BONUS_MULTIPLIER,
   OFFLINE_INCOME_CAP_MS,
   OFFLINE_INCOME_EFFICIENCY_RATIO,
 } from './constants';
@@ -186,6 +187,16 @@ export function collectReturnSummaryOfflineGold(
     chainGold,
     activeFarmGold,
   };
+}
+
+// Rewarded welcome-back settlement has one explicit domain transition so the
+// UI cannot accidentally fall back to the guaranteed 1× path. Keeping the 2×
+// balance constant here also makes base + equal ad bonus one atomic update.
+export function collectReturnSummaryOfflineGoldWithAdBonus(
+  gameState: GameState,
+  summary: Pick<ReturnSummary, 'capturedAt' | 'chainGold' | 'activeFarmGold'>
+) {
+  return collectReturnSummaryOfflineGold(gameState, summary, OFFLINE_BONUS_MULTIPLIER);
 }
 
 // Builds the "welcome back" summary shown when a player returns after being

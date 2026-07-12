@@ -12,6 +12,7 @@ import { ANIMALS } from '../animals';
 import {
   collectReturnOfflineGold,
   collectReturnSummaryOfflineGold,
+  collectReturnSummaryOfflineGoldWithAdBonus,
   creditActiveFarmOfflineGold,
   getActiveFarmOfflineGold,
   getReturnSummary,
@@ -399,7 +400,7 @@ describe('collectReturnSummaryOfflineGold', () => {
     const summary = getReturnSummary(base, NOW - MS_PER_HOUR, NOW)!;
     expect(summary.offlineGold).toBeGreaterThan(0);
 
-    const result = collectReturnSummaryOfflineGold(base, summary, 2);
+    const result = collectReturnSummaryOfflineGoldWithAdBonus(base, summary);
 
     expect(result.collectedGold).toBe(summary.offlineGold * 2);
     expect(result.state.gold).toBe(base.gold + summary.offlineGold * 2);

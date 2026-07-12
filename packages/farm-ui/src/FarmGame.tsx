@@ -35,6 +35,7 @@ import {
   collectChainIncome,
   collectReturnOfflineGold,
   collectReturnSummaryOfflineGold,
+  collectReturnSummaryOfflineGoldWithAdBonus,
   acknowledgeResearchOpportunities,
   hasUnseenResearchOpportunity,
   getBreedingRecipeStatus,
@@ -2777,7 +2778,7 @@ function FarmGameBody({
           // by showRewardedAd in one functional updater on the freshest state.
           applyRewardState: (state) =>
             rewardReserved
-              ? collectReturnSummaryOfflineGold(state, summary, OFFLINE_BONUS_MULTIPLIER).state
+              ? collectReturnSummaryOfflineGoldWithAdBonus(state, summary).state
               : state,
         }
       );
