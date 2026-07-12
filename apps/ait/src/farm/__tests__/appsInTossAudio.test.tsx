@@ -195,9 +195,9 @@ describe('useAppsInTossFarmAudio', () => {
       audio.playEffect('reward');
     });
 
-    // seek fires per play() call plus once more when the restart resumes
-    // after the paused frame commits: 2 + 1.
-    expect(mockSeek).toHaveBeenCalledTimes(3);
+    // seek fires exactly once per restart cycle, always against a player whose
+    // paused frame has already committed: two play() calls → two cycles.
+    expect(mockSeek).toHaveBeenCalledTimes(2);
     expect(mockSeek).toHaveBeenLastCalledWith(0);
     expect(latestPropsFor(FARM_AUDIO_SOURCES.reward).paused).toBe(false);
 
@@ -220,9 +220,9 @@ describe('useAppsInTossFarmAudio', () => {
       audio.playEffect('wheelSpin');
     });
 
-    // 3 play() seeks + 1 restart-resume seek; the two same-batch calls fold
-    // into a single stop-then-play cycle.
-    expect(mockSeek).toHaveBeenCalledTimes(4);
+    // The two same-batch calls fold into a single stop-then-play cycle, so
+    // only two seeks total (one per cycle), each against a paused player.
+    expect(mockSeek).toHaveBeenCalledTimes(2);
     expect(mockSeek).toHaveBeenLastCalledWith(0);
     expect(latestPropsFor(FARM_AUDIO_SOURCES.wheelSpin).paused).toBe(false);
 
