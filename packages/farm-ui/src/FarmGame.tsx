@@ -55,6 +55,7 @@ import {
   unlockNode,
   type AchievementTrackKey,
   type MasteryRankKey,
+  type MutationKey,
   type PrestigeSkillKey,
   type RegionArchetypeKey,
   type ResearchNodeKey,
@@ -471,7 +472,7 @@ type PendingFarmCommandEffect =
       type: 'harvestedAll';
       fx: { plotIndex: number; goldGained: number; tone: HarvestPop['tone'] }[];
       rankUps: { cropKey: CropKey; rankKey: MasteryRankKey; rankIcon: string }[];
-      firstMutationFlash: 'golden' | 'rainbow' | null;
+      firstMutationFlash: MutationCelebrationKey | null;
       // Carries the lifetime-first-harvest signal when the batch contains it, so
       // the "aha" celebration fires even if the very first harvest came through
       // Harvest All (e.g. a new player whose starter plots ripen together).
@@ -528,7 +529,7 @@ type HarvestPop = {
   id: number;
   index: number;
   label: string;
-  tone: 'normal' | 'special' | 'golden' | 'rainbow';
+  tone: 'normal' | 'special' | MutationCelebrationKey;
 };
 
 // Imperative handle so a harvest can fire a burst without lifting pop state into
@@ -541,8 +542,101 @@ type HarvestFxHandle = {
 // Imperative handle to fire the full-screen mutation flash overlay without
 // lifting flash state into FarmGame (avoids re-rendering the whole tree).
 type MutationFlashHandle = {
-  flash: (mutationKey: 'golden' | 'rainbow') => void;
+  flash: (mutationKey: MutationCelebrationKey) => void;
 };
+
+export const MUTATION_CELEBRATION_KEYS = ['golden', 'rainbow', 'giant', 'prism'] as const;
+export type MutationCelebrationKey = (typeof MUTATION_CELEBRATION_KEYS)[number];
+
+type MutationCelebrationConfig = {
+  priority: number;
+  flashColor: string;
+  flashPeakOpacity: number;
+  flashRiseMs: number;
+  flashFadeMs: number;
+  popIcon: string;
+  popDurationMs: number;
+  popRiseMultiplier: number;
+  popScaleMax: number;
+};
+
+const MUTATION_CELEBRATION_CONFIG = {
+  golden: {
+    priority: 0,
+    flashColor: '#fde68a',
+    flashPeakOpacity: 0.36,
+    flashRiseMs: 120,
+    flashFadeMs: 400,
+    popIcon: '✨',
+    popDurationMs: 1_100,
+    popRiseMultiplier: 0.78,
+    popScaleMax: 1.45,
+  },
+  rainbow: {
+    priority: 1,
+    flashColor: '#c084fc',
+    flashPeakOpacity: 0.45,
+    flashRiseMs: 230,
+    flashFadeMs: 600,
+    popIcon: '🌈',
+    popDurationMs: 1_400,
+    popRiseMultiplier: 0.95,
+    popScaleMax: 1.65,
+  },
+  giant: {
+    priority: 2,
+    flashColor: '#fb923c',
+    flashPeakOpacity: 0.52,
+    flashRiseMs: 180,
+    flashFadeMs: 760,
+    popIcon: '🦣',
+    popDurationMs: 1_550,
+    popRiseMultiplier: 1.08,
+    popScaleMax: 1.82,
+  },
+  prism: {
+    priority: 3,
+    flashColor: '#67e8f9',
+    flashPeakOpacity: 0.6,
+    flashRiseMs: 260,
+    flashFadeMs: 940,
+    popIcon: '🔮',
+    popDurationMs: 1_750,
+    popRiseMultiplier: 1.2,
+    popScaleMax: 2,
+  },
+} satisfies Record<MutationCelebrationKey, MutationCelebrationConfig>;
+
+export function isMutationCelebrationKey(value: MutationKey | null | undefined): value is MutationCelebrationKey {
+  return value != null && (MUTATION_CELEBRATION_KEYS as readonly string[]).includes(value);
+}
+
+export function selectRarestMutationFlash(
+  current: MutationCelebrationKey | null,
+  candidate: MutationKey | null | undefined,
+): MutationCelebrationKey | null {
+  if (!isMutationCelebrationKey(candidate)) {
+    return current;
+  }
+  if (
+    current == null ||
+    MUTATION_CELEBRATION_CONFIG[candidate].priority > MUTATION_CELEBRATION_CONFIG[current].priority
+  ) {
+    return candidate;
+  }
+  return current;
+}
+
+let mutationFlashTestHook: ((mutationKey: MutationCelebrationKey) => void) | undefined;
+
+/** @internal Test-only setter; no-op when __DEV__ is false. */
+export function __setMutationFlashTestHook(
+  hook: ((mutationKey: MutationCelebrationKey) => void) | undefined,
+): void {
+  if (typeof __DEV__ !== 'undefined' && __DEV__) {
+    mutationFlashTestHook = hook;
+  }
+}
 
 // Imperative handle to show the new-crop discovery banner. Keeping crop data
 // in the call avoids any shared state and lets the overlay mount lazily.
@@ -1295,14 +1389,11 @@ function FarmGameBody({
         });
       }
       const mutationKey = event.mutation?.key;
-      const popTone: HarvestPop['tone'] =
-        mutationKey === 'rainbow'
-          ? 'rainbow'
-          : mutationKey === 'golden'
-            ? 'golden'
-            : isSpecialHarvest || isCropOfTheDay
-              ? 'special'
-              : 'normal';
+      const popTone: HarvestPop['tone'] = isMutationCelebrationKey(mutationKey)
+        ? mutationKey
+        : isSpecialHarvest || isCropOfTheDay
+          ? 'special'
+          : 'normal';
       if (event.goldGained > 0) {
         harvestFxRef.current?.spawn(
           event.plotIndex,
@@ -1312,11 +1403,10 @@ function FarmGameBody({
         pulseGold();
       }
       if (event.mutation != null) {
-        const mutKey = event.mutation.key;
-        if (mutKey === 'golden' || mutKey === 'rainbow') {
-          mutationFlashRef.current?.flash(mutKey);
-          playSoundEffect('mutation');
+        if (isMutationCelebrationKey(event.mutation.key)) {
+          mutationFlashRef.current?.flash(event.mutation.key);
         }
+        playSoundEffect('mutation');
       }
       if (event.isNewCropDiscovery) {
         const crop = getCrop(event.cropKey);
@@ -3134,16 +3224,12 @@ function FarmGameBody({
     if (pendingCommandEffectsRef.current.some((pending) => pending.id === effectId)) {
       return;
     }
-    let firstMutationFlash: 'golden' | 'rainbow' | null = null;
+    let firstMutationFlash: MutationCelebrationKey | null = null;
     let firstHarvest: { cropIcon: string; goldGained: number } | null = null;
     const rankUps: { cropKey: CropKey; rankKey: MasteryRankKey; rankIcon: string }[] = [];
     for (const { outcome } of result.harvests) {
       const mk = outcome.mutation?.key;
-      if (mk === 'rainbow') {
-        firstMutationFlash = 'rainbow';
-      } else if (mk === 'golden' && firstMutationFlash == null) {
-        firstMutationFlash = 'golden';
-      }
+      firstMutationFlash = selectRarestMutationFlash(firstMutationFlash, mk);
       if (outcome.isFirstMeaningfulHarvest) {
         firstHarvest = { cropIcon: getCrop(outcome.cropKey).icon, goldGained: outcome.goldGained };
       }
@@ -3160,9 +3246,11 @@ function FarmGameBody({
       type: 'harvestedAll',
       fx: result.harvests.map(({ plotIndex, outcome }) => {
         const mk = outcome.mutation?.key;
-        const tone: HarvestPop['tone'] =
-          mk === 'rainbow' ? 'rainbow' : mk === 'golden' ? 'golden' :
-          outcome.mutation != null || outcome.newMasteryRank != null || outcome.boostActive ? 'special' : 'normal';
+        const tone: HarvestPop['tone'] = isMutationCelebrationKey(mk)
+          ? mk
+          : outcome.mutation != null || outcome.newMasteryRank != null || outcome.boostActive
+            ? 'special'
+            : 'normal';
         return { plotIndex, goldGained: outcome.goldGained, tone };
       }),
       rankUps,
@@ -5408,80 +5496,73 @@ const DiscoveryBanner = React.forwardRef<
   );
 });
 
-// Full-screen flash overlay for rare mutation harvests. Two overlay layers
-// (golden and rainbow) driven independently so both can coexist without shared
-// state; native driver keeps the flash cheap even at the moment of a burst.
+// Full-screen flash overlay for rare mutation harvests. Each rarity owns an
+// independent native animated value, but a new jackpot retires every active
+// layer first so rapid mixed harvests never blend into a strobe. Higher rarities
+// use stronger, longer flashes.
 const MutationFlashOverlay = React.forwardRef<MutationFlashHandle>(function MutationFlashOverlay(_, ref) {
-  const goldenOpacityRef = useRef<Animated.Value | null>(null);
-  if (goldenOpacityRef.current == null) {
-    goldenOpacityRef.current = new Animated.Value(0);
+  const opacitiesRef = useRef<Record<MutationCelebrationKey, Animated.Value> | null>(null);
+  if (opacitiesRef.current == null) {
+    opacitiesRef.current = {
+      golden: new Animated.Value(0),
+      rainbow: new Animated.Value(0),
+      giant: new Animated.Value(0),
+      prism: new Animated.Value(0),
+    };
   }
-  const goldenOpacity = goldenOpacityRef.current;
-
-  const rainbowOpacityRef = useRef<Animated.Value | null>(null);
-  if (rainbowOpacityRef.current == null) {
-    rainbowOpacityRef.current = new Animated.Value(0);
-  }
-  const rainbowOpacity = rainbowOpacityRef.current;
+  const opacities = opacitiesRef.current;
 
   useImperativeHandle(
     ref,
     () => ({
-      flash(mutationKey: 'golden' | 'rainbow') {
-        if (mutationKey === 'rainbow') {
-          rainbowOpacity.stopAnimation();
-          rainbowOpacity.setValue(0);
-          // Avoid Animated.delay here: stopAnimation() does not reliably interrupt
-          // a delay stage mid-sequence in React Native, which can cause the opacity
-          // to snap unexpectedly when rapid successive mutations overlap. The 80ms
-          // "hold" is folded into the fade-in duration instead (150 + 80 = 230ms).
-          Animated.sequence([
-            Animated.timing(rainbowOpacity, {
-              toValue: 0.45,
-              duration: 230,
-              easing: Easing.out(Easing.quad),
-              useNativeDriver: true,
-            }),
-            Animated.timing(rainbowOpacity, {
-              toValue: 0,
-              duration: 600,
-              easing: Easing.in(Easing.quad),
-              useNativeDriver: true,
-            }),
-          ]).start();
-        } else {
-          goldenOpacity.stopAnimation();
-          goldenOpacity.setValue(0);
-          Animated.sequence([
-            Animated.timing(goldenOpacity, {
-              toValue: 0.36,
-              duration: 120,
-              easing: Easing.out(Easing.quad),
-              useNativeDriver: true,
-            }),
-            Animated.timing(goldenOpacity, {
-              toValue: 0,
-              duration: 400,
-              easing: Easing.in(Easing.quad),
-              useNativeDriver: true,
-            }),
-          ]).start();
+      flash(mutationKey) {
+        const opacity = opacities[mutationKey];
+        const config = MUTATION_CELEBRATION_CONFIG[mutationKey];
+        if (typeof __DEV__ !== 'undefined' && __DEV__) {
+          mutationFlashTestHook?.(mutationKey);
         }
+        for (const key of MUTATION_CELEBRATION_KEYS) {
+          opacities[key].stopAnimation();
+          opacities[key].setValue(0);
+        }
+        // Avoid Animated.delay here: stopAnimation() does not reliably interrupt
+        // a delay stage mid-sequence in React Native, which can make rapid mixed
+        // mutations snap. Any desired hold is folded into the rise duration.
+        Animated.sequence([
+          Animated.timing(opacity, {
+            toValue: config.flashPeakOpacity,
+            duration: config.flashRiseMs,
+            easing: Easing.out(Easing.quad),
+            useNativeDriver: true,
+          }),
+          Animated.timing(opacity, {
+            toValue: 0,
+            duration: config.flashFadeMs,
+            easing: Easing.in(Easing.quad),
+            useNativeDriver: true,
+          }),
+        ]).start();
       },
     }),
-    [goldenOpacity, rainbowOpacity]
+    [opacities]
   );
 
   return (
     <>
-      <Animated.View
-        pointerEvents="none"
-        style={[styles.mutationFlash, { opacity: goldenOpacity, backgroundColor: '#fde68a' }]}
-      />
-      <Animated.View
-        pointerEvents="none"
-        style={[styles.mutationFlash, { opacity: rainbowOpacity, backgroundColor: '#c084fc' }]}
-      />
+      {MUTATION_CELEBRATION_KEYS.map((mutationKey) => (
+        <Animated.View
+          key={mutationKey}
+          pointerEvents="none"
+          testID={`mutation-flash-${mutationKey}`}
+          style={[
+            styles.mutationFlash,
+            {
+              opacity: opacities[mutationKey],
+              backgroundColor: MUTATION_CELEBRATION_CONFIG[mutationKey].flashColor,
+            },
+          ]}
+        />
+      ))}
     </>
   );
 });
@@ -5866,11 +5947,13 @@ function HarvestPopText({
   const onDoneRef = useRef(onDone);
   onDoneRef.current = onDone;
 
+  const mutationTone = pop.tone === 'normal' || pop.tone === 'special' ? null : pop.tone;
+  const mutationConfig = mutationTone == null ? null : MUTATION_CELEBRATION_CONFIG[mutationTone];
+
   useEffect(() => {
-    const dur = pop.tone === 'rainbow' ? 1400 : pop.tone === 'golden' ? 1100 : 900;
     const animation = Animated.timing(progress, {
       toValue: 1,
-      duration: dur,
+      duration: mutationConfig?.popDurationMs ?? 900,
       easing: Easing.out(Easing.cubic),
       useNativeDriver: true,
     });
@@ -5880,20 +5963,19 @@ function HarvestPopText({
       }
     });
     return () => animation.stop();
-  }, [pop.id, pop.tone, progress]);
+  }, [mutationConfig?.popDurationMs, pop.id, progress]);
 
   const col = pop.index % PLOT_COLUMNS;
   const row = Math.floor(pop.index / PLOT_COLUMNS);
   const left = col * (tileSize + PLOT_GAP);
   const top = row * (tileSize + PLOT_GAP);
 
-  const isMutationTone = pop.tone === 'golden' || pop.tone === 'rainbow';
-  const yTop =
-    pop.tone === 'rainbow' ? -tileSize * 0.95 : pop.tone === 'golden' ? -tileSize * 0.78 : -tileSize * 0.55;
+  const isMutationTone = mutationConfig != null;
+  const yTop = -tileSize * (mutationConfig?.popRiseMultiplier ?? 0.55);
   // Scale start and max are larger for mutation tones to give the jackpot pop extra punch;
   // normal/special keep their original 0.6 start so existing harvest feel is unchanged.
   const scaleStart = isMutationTone ? 0.4 : 0.6;
-  const scaleMax = pop.tone === 'rainbow' ? 1.65 : pop.tone === 'golden' ? 1.45 : 1.15;
+  const scaleMax = mutationConfig?.popScaleMax ?? 1.15;
 
   const translateY = progress.interpolate({
     inputRange: [0, 1],
@@ -5911,16 +5993,19 @@ function HarvestPopText({
     outputRange: [0, 1, 1, 0],
   });
 
-  const icon = pop.tone === 'rainbow' ? '🌈 ' : pop.tone === 'golden' ? '✨ ' : '';
+  const icon = mutationConfig == null ? '' : `${mutationConfig.popIcon} `;
 
   return (
     <View pointerEvents="none" style={[styles.harvestPop, { left, top, width: tileSize, height: tileSize }]}>
       <Animated.Text
+        testID={`harvest-pop-${pop.tone}`}
         style={[
           styles.harvestPopText,
           pop.tone === 'special' && styles.harvestPopTextSpecial,
           pop.tone === 'golden' && styles.harvestPopTextGolden,
           pop.tone === 'rainbow' && styles.harvestPopTextRainbow,
+          pop.tone === 'giant' && styles.harvestPopTextGiant,
+          pop.tone === 'prism' && styles.harvestPopTextPrism,
           { opacity, transform: [{ translateY }, { scale }] },
         ]}
       >

@@ -60,9 +60,12 @@ const {
   MASTERY_RANK_UP_CELEBRATION_DURATION_MS,
   PRESTIGE_GRADUATION_CELEBRATION_DURATION_MS,
   FIRST_HARVEST_CELEBRATION_DURATION_MS,
+  MUTATION_CELEBRATION_KEYS,
   ONBOARDING_STALL_MS,
   COMBO_GREAT_THRESHOLD,
   COMBO_LEGENDARY_THRESHOLD,
+  __setMutationFlashTestHook,
+  selectRarestMutationFlash,
 } = farmGameModule;
 const { __setGoldPulseTestHook } = jest.requireActual<
   typeof import('../../../../../packages/farm-ui/src/farmGoldPulse')
@@ -284,6 +287,7 @@ describe('FarmGame UI flow', () => {
   });
 
   afterEach(() => {
+    __setMutationFlashTestHook(undefined);
     cleanup();
     jest.useRealTimers();
   });
@@ -372,6 +376,32 @@ describe('FarmGame UI flow', () => {
     expect(screen.getAllByText('빈 밭')).toHaveLength(6);
     // Harvesting spawns a floating "+gold" burst at the tapped plot (gained 14G).
     expect(screen.getByText('+14')).toBeTruthy();
+  });
+
+  test('mounts one distinct full-screen flash layer for every mutation rarity', async () => {
+    const screen = await renderGame(createInitialState());
+    const colors = MUTATION_CELEBRATION_KEYS.map((mutationKey) => {
+      const style = StyleSheet.flatten(screen.getByTestId(`mutation-flash-${mutationKey}`).props.style);
+      return style.backgroundColor;
+    });
+
+    expect(MUTATION_CELEBRATION_KEYS).toEqual(['golden', 'rainbow', 'giant', 'prism']);
+    expect(new Set(colors).size).toBe(MUTATION_CELEBRATION_KEYS.length);
+  });
+
+  test('batch mutation celebration selects the rarest key regardless of harvest order', () => {
+    const forward = MUTATION_CELEBRATION_KEYS.reduce(
+      (current, candidate) => selectRarestMutationFlash(current, candidate),
+      null as ReturnType<typeof selectRarestMutationFlash>,
+    );
+    const reverse = [...MUTATION_CELEBRATION_KEYS].reverse().reduce(
+      (current, candidate) => selectRarestMutationFlash(current, candidate),
+      null as ReturnType<typeof selectRarestMutationFlash>,
+    );
+
+    expect(forward).toBe('prism');
+    expect(reverse).toBe('prism');
+    expect(selectRarestMutationFlash('giant', 'rainbow')).toBe('giant');
   });
 
   test('plants every affordable empty plot at once via "Plant All"', async () => {
@@ -2332,6 +2362,34 @@ describe('FarmGame UI flow', () => {
     expect(screen.queryByText(/모두 수확/)).toBeNull();
   });
 
+  test('Harvest All flashes only the rarest mutation from a mixed batch', async () => {
+    const base = createReadyHarvestState();
+    const state: GameState = {
+      ...base,
+      onboardingCompleted: true,
+      harvestCounts: { carrot: getMasteryThresholds('carrot')[3]! },
+    };
+    const onMutationFlash = jest.fn();
+    __setMutationFlashTestHook(onMutationFlash);
+    const screen = await renderGame(state);
+    await waitFor(() => expect(screen.getByText('🧺 모두 수확 2')).toBeTruthy());
+
+    // At prism rank 0.001 resolves to giant, while 0 resolves to prism.
+    const randomSpy = jest.spyOn(Math, 'random')
+      .mockReturnValueOnce(0.001)
+      .mockReturnValueOnce(0);
+    try {
+      fireEvent.press(screen.getByLabelText('🧺 모두 수확 2'));
+    } finally {
+      randomSpy.mockRestore();
+    }
+
+    await waitFor(() => expect(onMutationFlash).toHaveBeenCalledWith('prism'));
+    expect(onMutationFlash).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId('harvest-pop-giant')).toBeTruthy();
+    expect(screen.getByTestId('harvest-pop-prism')).toBeTruthy();
+  });
+
   test('harvests then replants in one tap via the Harvest-then-Replant shortcut (#252)', async () => {
     // 익은 밭 2곳(readyPlotCount >= HARVEST_ALL_MIN_COUNT)에서 결합 버튼이 '전체 수확'
     // 옆에 함께 노출된다. 기본 도구는 'harvest'이므로 재심 작물은 첫 익은 밭 작물(당근)로
@@ -2846,15 +2904,21 @@ describe('FarmGame UI flow', () => {
       expect(playEffect).toHaveBeenCalledTimes(1);
     });
 
-    test('harvesting a golden-mutated crop plays the mutation effect', async () => {
+    test.each([
+      ['golden', '황금', 0],
+      ['rainbow', '무지개', 1],
+      ['giant', '거대', 2],
+      ['prism', '프리즘', 3],
+    ] as const)('harvesting a %s-mutated crop plays its dedicated celebration', async (mutationKey, label, rankIndex) => {
       const playEffect = jest.fn();
+      const onMutationFlash = jest.fn();
       const base = createReadyHarvestState();
-      // Carrot(tier 1) reaches bronze mastery at 10 harvests; at bronze, only
-      // the golden band is open, so a 0 roll deterministically lands golden.
+      // rollMutation checks the rarest unlocked kind first. At each exact rank
+      // threshold, a zero roll therefore selects that rank's newly unlocked kind.
       const state: GameState = {
         ...base,
         onboardingCompleted: true,
-        harvestCounts: { carrot: 10 },
+        harvestCounts: { carrot: getMasteryThresholds('carrot')[rankIndex]! },
       };
       const screen = await renderGame(
         state,
@@ -2863,6 +2927,7 @@ describe('FarmGame UI flow', () => {
       );
       await waitFor(() => expect(screen.getAllByText('GET').length).toBeGreaterThan(0));
 
+      __setMutationFlashTestHook(onMutationFlash);
       const randomSpy = jest.spyOn(Math, 'random').mockReturnValue(0);
       try {
         fireEvent.press(screen.getAllByText('GET')[0]!);
@@ -2871,6 +2936,10 @@ describe('FarmGame UI flow', () => {
       }
 
       await waitFor(() => expect(playEffect).toHaveBeenCalledWith('mutation'));
+      expect(onMutationFlash).toHaveBeenCalledTimes(1);
+      expect(onMutationFlash).toHaveBeenCalledWith(mutationKey);
+      expect(screen.getByText(new RegExp(`${label} 변이 수확`))).toBeTruthy();
+      expect(screen.getByTestId(`harvest-pop-${mutationKey}`)).toBeTruthy();
     });
 
     test('unlocking a research node plays the unlock effect', async () => {
