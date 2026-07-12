@@ -53,6 +53,7 @@ function findWeekendNoonOfType(typeKey: string, unlockedAreas?: AreaKey[]): numb
 }
 
 const SALE_NOON = findWeekendNoonOfType('sale');
+const GOLDEN_SALE_NOON = findWeekendNoonOfType('golden_sale');
 const HARVEST_NOON = findWeekendNoonOfType('harvest');
 
 describe('weeklyEvent balance data', () => {
@@ -65,6 +66,21 @@ describe('weeklyEvent balance data', () => {
     expect(balance.weeklyEvent.weekendLengthDays).toBe(3);
     const fri = getWeeklyEventStatus(FRI_NOON);
     expect(fri.windowEndAt - fri.windowStartAt).toBe(balance.weeklyEvent.weekendLengthDays * DAY_MS);
+  });
+
+  test('splits the legacy sell draw into sale and golden flavor without changing axis odds', () => {
+    expect(WEEKLY_EVENT_TYPES).toEqual([
+      { key: 'sale', axis: 'sell', multiplier: 1.5, weight: 1 },
+      { key: 'golden_sale', axis: 'sell', multiplier: 1.5, weight: 1 },
+      { key: 'harvest', axis: 'speed', multiplier: 1.5, weight: 2 },
+    ]);
+    const sellWeight = WEEKLY_EVENT_TYPES
+      .filter((type) => type.axis === 'sell')
+      .reduce((sum, type) => sum + type.weight, 0);
+    const speedWeight = WEEKLY_EVENT_TYPES
+      .filter((type) => type.axis === 'speed')
+      .reduce((sum, type) => sum + type.weight, 0);
+    expect(sellWeight).toBe(speedWeight);
   });
 });
 
@@ -127,6 +143,17 @@ describe('getWeeklyEventMultiplier (sale axis)', () => {
     expect(getWeeklyEventMultiplier(featured, WINDOW_END)).toBe(1);
     // A sale weekend leaves the speed axis untouched.
     expect(getWeeklyEventSpeedMultiplier(featured, SALE_NOON)).toBe(1);
+  });
+
+  test('the golden sale flavor uses the same sell modifier and leaves speed untouched', () => {
+    const status = getWeeklyEventStatus(GOLDEN_SALE_NOON);
+    expect(status.typeKey).toBe('golden_sale');
+    expect(status.axis).toBe('sell');
+    expect(status.multiplier).toBe(1.5);
+    const featured = status.cropKeys[0]!;
+
+    expect(getWeeklyEventMultiplier(featured, GOLDEN_SALE_NOON)).toBe(status.multiplier);
+    expect(getWeeklyEventSpeedMultiplier(featured, GOLDEN_SALE_NOON)).toBe(1);
   });
 });
 

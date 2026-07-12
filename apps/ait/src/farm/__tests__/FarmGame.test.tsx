@@ -610,6 +610,12 @@ describe('FarmGame UI flow', () => {
 
   describe('seed-strip sell-bonus badges (#226)', () => {
     const FRIDAY = Date.parse('2026-05-29T12:00:00.000Z');
+    const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+    const GOLDEN_SALE_FRIDAY = Array.from({ length: 520 }, (_, week) => FRIDAY + week * WEEK_MS)
+      .find((now) => getWeeklyEventStatus(now, ['starter_field']).typeKey === 'golden_sale');
+    if (GOLDEN_SALE_FRIDAY == null) {
+      throw new Error('golden_sale must be reachable within 520 weekends');
+    }
     // starter_field 하나만 해금해 두면 주말 축제 추첨 풀이 그 구역으로 고정되고,
     // 오늘의 작물 추첨 풀도 그 구역 작물로 좁혀져 배지 대상이 결정적이 된다.
     const badgeState = (): GameState => ({
@@ -642,8 +648,8 @@ describe('FarmGame UI flow', () => {
       const status = getWeeklyEventStatus(FRIDAY, state.unlockedAreas);
       const festivalCropKeys = status.cropKeys;
       expect(festivalCropKeys.length).toBeGreaterThan(1);
-      // 축제 종류(#243)에 따라 배지 아이콘이 달라진다: 판매=🎉, 수확(성장속도)=⚡.
-      const expectedBadge = `${status.axis === 'speed' ? '⚡' : '🎉'}×${status.multiplier}`;
+      // typeKey 플레이버까지 배지 아이콘이 달라진다: 판매=🎉, 황금=🪙, 성장속도=⚡.
+      const expectedBadge = `${status.typeKey === 'golden_sale' ? '🪙' : status.axis === 'speed' ? '⚡' : '🎉'}×${status.multiplier}`;
       const screen = await renderGame(state);
       await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
 
@@ -661,12 +667,38 @@ describe('FarmGame UI flow', () => {
       // 풀이 starter_field 로 좁혀져 있어 오늘의 작물도 축제 구역 작물이다 → 두 배지 공존.
       const featuredKey = getCropOfTheDayStatus(FRIDAY, state).cropKey;
       const status = getWeeklyEventStatus(FRIDAY, state.unlockedAreas);
-      const expectedWeeklyBadge = `${status.axis === 'speed' ? '⚡' : '🎉'}×${status.multiplier}`;
+      const expectedWeeklyBadge = `${status.typeKey === 'golden_sale' ? '🪙' : status.axis === 'speed' ? '⚡' : '🎉'}×${status.multiplier}`;
       const screen = await renderGame(state);
       await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
 
       expect(within(screen.getByTestId(`seed-bonus-cotd-${featuredKey}`)).getByText('⭐×2')).toBeTruthy();
       expect(within(screen.getByTestId(`seed-bonus-weekly-${featuredKey}`)).getByText(expectedWeeklyBadge)).toBeTruthy();
+    });
+
+    test('golden_sale uses its own seed badge, accessibility label, and Stats copy', async () => {
+      jest.setSystemTime(GOLDEN_SALE_FRIDAY);
+      const state = badgeState();
+      const status = getWeeklyEventStatus(GOLDEN_SALE_FRIDAY, state.unlockedAreas);
+      expect(status.typeKey).toBe('golden_sale');
+      expect(status.axis).toBe('sell');
+
+      const screen = await renderGame(state);
+      await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+      for (const cropKey of status.cropKeys) {
+        expect(
+          within(screen.getByTestId(`seed-bonus-weekly-${cropKey}`)).getByText(`🪙×${status.multiplier}`),
+        ).toBeTruthy();
+        expect(screen.getByTestId(`seed-tool-${cropKey}`).props.accessibilityLabel).toContain(
+          getFarmMessages('ko-KR').weeklyEventGoldenLabel,
+        );
+      }
+
+      fireEvent.press(screen.getByTestId('cotd-chip'));
+      await waitFor(() => expect(screen.getByTestId('weekly-event-banner')).toBeTruthy());
+      expect(screen.getByTestId('weekly-event-title')).toHaveTextContent(
+        `🪙 ${getFarmMessages('ko-KR').weeklyEventGoldenLabel}`,
+      );
+      expect(screen.getByTestId('weekly-event-banner')).toHaveTextContent(/판매가/);
     });
 
     test('exposes the sell bonus in the seed button accessibility label (ko-KR)', async () => {

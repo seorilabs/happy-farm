@@ -197,6 +197,7 @@ import {
 import { DEFAULT_FARM_GAME_SETTINGS, normalizeFarmGameSettings, type FarmGameSettings } from './gameSettings';
 import { CropGlyph, FarmArtProvider, useCropArtSource, useFarmArt, type FarmArt } from './farmArt';
 import { getFarmMessages, type FarmMessages } from './i18n';
+import { getWeeklyEventPresentation } from './weeklyEventPresentation';
 import { AchievementsSheet } from './components/AchievementsSheet';
 import { ChainMapSheet, PrestigeConfirmSheet } from './components/ChainMapSheet';
 import { CollectionSheet } from './components/CollectionSheet';
@@ -2071,6 +2072,7 @@ function FarmGameBody({
     () => getWeeklyEventStatus(tickNowMsRef.current, gameState.unlockedAreas),
     [tick, gameState.unlockedAreas]
   );
+  const weeklyEventPresentation = getWeeklyEventPresentation(messages, weeklyEvent.typeKey, weeklyEvent.axis);
   const rawBoostRemainingMs = harvestBonusBoost.remainingMs;
   const safeBoostRemainingMs = Number.isFinite(rawBoostRemainingMs) ? Math.max(0, rawBoostRemainingMs) : 0;
   const farmProductivity = useMemo(
@@ -3908,17 +3910,18 @@ function FarmGameBody({
               // memo(ToolButton) 얕은 비교가 깨지지 않도록 배열이 아닌 문자열
               // 프리미티브로 넘긴다. 보너스가 없는 작물은 undefined → 동등 비교.
               const cotdBadge = key === cropOfTheDay.cropKey ? `⭐×${cropOfTheDay.multiplier}` : undefined;
-              // 판매 축제(sell)는 🎉, 수확 축제(speed)는 ⚡ 배지로 축제 종류를 구분한다.
+              // 기본 판매 축제는 🎉, 황금 판매 주말은 🪙, 수확 축제는 ⚡ 배지로
+              // 같은 axis 안의 typeKey 플레이버까지 구분한다.
               const weeklyBadge =
                 weeklyEvent.active && weeklyEvent.cropKeys.includes(key)
-                  ? `${weeklyEvent.axis === 'speed' ? '⚡' : '🎉'}×${weeklyEvent.multiplier}`
+                  ? `${weeklyEventPresentation.badgeIcon}×${weeklyEvent.multiplier}`
                   : undefined;
               const bonusA11yParts: string[] = [];
               if (cotdBadge != null) {
                 bonusA11yParts.push(`${messages.cropOfTheDayLabel} ×${cropOfTheDay.multiplier}`);
               }
               if (weeklyBadge != null) {
-                bonusA11yParts.push(`${messages.weeklyEventLabel} ×${weeklyEvent.multiplier}`);
+                bonusA11yParts.push(`${weeklyEventPresentation.activeLabel} ×${weeklyEvent.multiplier}`);
               }
               return (
                 <ToolButton
@@ -4152,6 +4155,7 @@ function FarmGameBody({
             weeklyEventAreaName={getLocalizedAreaLabel(weeklyEvent.areaKey).name}
             weeklyEventMultiplier={weeklyEvent.multiplier}
             weeklyEventAxis={weeklyEvent.axis}
+            weeklyEventTypeKey={weeklyEvent.typeKey}
             weeklyEventRemainingMs={Math.max(
               0,
               (weeklyEvent.active ? weeklyEvent.windowEndAt : weeklyEvent.windowStartAt) - tickNowMsRef.current

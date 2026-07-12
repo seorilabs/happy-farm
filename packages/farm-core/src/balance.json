@@ -219,7 +219,8 @@
     "weekendLengthDays": 3,
     "types": [
       { "key": "sale", "axis": "sell", "multiplier": 1.5, "weight": 1 },
-      { "key": "harvest", "axis": "speed", "multiplier": 1.5, "weight": 1 }
+      { "key": "golden_sale", "axis": "sell", "multiplier": 1.5, "weight": 1 },
+      { "key": "harvest", "axis": "speed", "multiplier": 1.5, "weight": 2 }
     ]
   },
   "combo": {
