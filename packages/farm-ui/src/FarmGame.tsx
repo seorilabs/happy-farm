@@ -2300,13 +2300,13 @@ function FarmGameBody({
     setActiveSheet({ type: 'prestigeConfirm' });
   }
 
-  function confirmPrestige() {
+  function confirmPrestige(productivitySnapshotAt: number) {
     const now = Date.now();
     const guardLevel = gameState.prestige.level;
     if (prestigedLevelsRef.current.has(guardLevel)) {
       return;
     }
-    const result = prestigeFarm(gameState, prestigeArchetype, now);
+    const result = prestigeFarm(gameState, prestigeArchetype, now, productivitySnapshotAt);
     if (result == null) {
       setActiveSheet(null);
       return;
@@ -2325,7 +2325,7 @@ function FarmGameBody({
       comboTimerRef.current = null;
     }
     setHarvestCombo(0);
-    setGameState((state) => prestigeFarm(state, prestigeArchetype, now)?.state ?? state);
+    setGameState((state) => prestigeFarm(state, prestigeArchetype, now, productivitySnapshotAt)?.state ?? state);
     setSelectedArea(FIRST_AREA.key);
     setSelectedTool('harvest');
     setActiveSheet(null);
@@ -3839,6 +3839,7 @@ function FarmGameBody({
             gameState={gameState}
             locale={locale}
             messages={messages}
+            now={Date.now()}
             selectedArchetype={prestigeArchetype}
             onSelectArchetype={setPrestigeArchetype}
             onConfirm={confirmPrestige}

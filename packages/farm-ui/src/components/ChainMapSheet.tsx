@@ -10,6 +10,7 @@ import {
   formatMoney,
   getChainIncome,
   getPrestigeStarsAward,
+  getPrestigePreview,
   getPrestigeSkillLabel,
   getRegionArchetype,
   getRegionArchetypeLabel,
@@ -132,6 +133,7 @@ export function PrestigeConfirmSheet({
   gameState,
   locale,
   messages,
+  now,
   selectedArchetype,
   onSelectArchetype,
   onConfirm,
@@ -140,14 +142,42 @@ export function PrestigeConfirmSheet({
   gameState: GameState;
   locale: SupportedLocale;
   messages: FarmMessages;
+  now: number;
   selectedArchetype: RegionArchetypeKey;
   onSelectArchetype: (archetypeKey: RegionArchetypeKey) => void;
-  onConfirm: () => void;
+  onConfirm: (previewAt: number) => void;
   onCancel: () => void;
 }) {
+  const preview = getPrestigePreview(gameState, now);
+
   return (
     <View>
       <Text style={styles.prestigeWarning}>{messages.prestigeWarning}</Text>
+
+      <Text style={sheetPartStyles.sheetSectionTitle}>{messages.prestigePreviewSection}</Text>
+      <View testID="prestige-preview" style={styles.prestigePreviewCard}>
+        <View style={styles.prestigePreviewRow}>
+          <Text style={styles.prestigePreviewLabel}>{messages.prestigeChainIncomePreviewLabel}</Text>
+          <Text testID="prestige-preview-chain-income" numberOfLines={1} style={styles.prestigePreviewValue}>
+            {formatHourlyGold(preview.baseChainGoldPerHour, locale)}
+          </Text>
+        </View>
+        {preview.effectiveChainGoldPerHour !== preview.baseChainGoldPerHour ? (
+          <View style={[styles.prestigePreviewRow, styles.prestigePreviewRowDivider]}>
+            <Text style={styles.prestigePreviewLabel}>{messages.prestigeEffectiveChainIncomePreviewLabel}</Text>
+            <Text testID="prestige-preview-effective-chain-income" numberOfLines={1} style={styles.prestigePreviewValue}>
+              {formatHourlyGold(preview.effectiveChainGoldPerHour, locale)}
+            </Text>
+          </View>
+        ) : null}
+        <View style={[styles.prestigePreviewRow, styles.prestigePreviewRowDivider]}>
+          <Text style={styles.prestigePreviewLabel}>{messages.prestigeStartingGoldPreviewLabel}</Text>
+          <Text testID="prestige-preview-starting-gold" numberOfLines={1} style={styles.prestigePreviewValue}>
+            {formatMoney(preview.startingGold, locale)}G
+          </Text>
+        </View>
+        <Text style={styles.prestigePreviewHint}>{messages.prestigeChainIncomePreviewHint}</Text>
+      </View>
 
       <Text style={sheetPartStyles.sheetSectionTitle}>{messages.regionChoiceSection}</Text>
       {REGION_ARCHETYPES.map((archetype) => {
@@ -170,7 +200,7 @@ export function PrestigeConfirmSheet({
 
       <SheetAction
         label={messages.prestigeConfirmAction(getPrestigeStarsAward(gameState.prestige.level))}
-        onPress={onConfirm}
+        onPress={() => onConfirm(now)}
       />
       <SheetAction label={messages.prestigeCancelAction} secondary onPress={onCancel} />
     </View>
@@ -255,6 +285,47 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
     fontWeight: '700',
+  },
+  prestigePreviewCard: {
+    marginBottom: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: '#aad8b1',
+    borderRadius: 8,
+    backgroundColor: '#f0fbf0',
+  },
+  prestigePreviewRow: {
+    minHeight: 36,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  prestigePreviewRowDivider: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#c8e5cc',
+  },
+  prestigePreviewLabel: {
+    minWidth: 0,
+    flex: 1,
+    color: '#344054',
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '700',
+  },
+  prestigePreviewValue: {
+    flexShrink: 0,
+    color: '#247241',
+    fontSize: 14,
+    fontWeight: '900',
+  },
+  prestigePreviewHint: {
+    marginTop: 6,
+    color: '#667085',
+    fontSize: 11,
+    lineHeight: 16,
+    fontWeight: '600',
   },
   regionOption: {
     minHeight: 64,

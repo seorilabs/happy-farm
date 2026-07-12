@@ -294,6 +294,11 @@ const KO_FARM_MESSAGES = {
   prestigeAction: (stars: number) => `개척 준비하기 (★${stars})`,
   prestigeWarning:
     '개척하면 골드·밭·구역·성장/수익 업그레이드가 초기화되고, 지금 농장은 체인에 들어가 자동으로 수익을 만들어요. 도감·마스터리·연구소(RP·연구·교배)·명성·업적은 모두 유지돼요.',
+  prestigePreviewSection: '개척 후 미리보기',
+  prestigeChainIncomePreviewLabel: '새 체인 농장 기본 수입',
+  prestigeEffectiveChainIncomePreviewLabel: '명성 스킬 적용 수입',
+  prestigeStartingGoldPreviewLabel: '다음 농장 시작 골드',
+  prestigeChainIncomePreviewHint: '실제 체인 카드와 수금에는 명성 스킬 적용 수입이 사용돼요.',
   regionChoiceSection: '지역 선택',
   prestigeConfirmAction: (stars: number) => `개척하고 ★${stars} 받기`,
   prestigeCancelAction: '다음에 할게요',
@@ -687,6 +692,11 @@ const EN_FARM_MESSAGES: FarmMessages = {
   prestigeAction: (stars) => `Prepare to pioneer (★${stars})`,
   prestigeWarning:
     'Pioneering resets gold, plots, areas, and growth/profit upgrades. This farm joins your chain and earns gold automatically. Collection, mastery, the lab (RP, research, breeds), prestige, and achievements all carry over.',
+  prestigePreviewSection: 'After Pioneering',
+  prestigeChainIncomePreviewLabel: 'New chain farm base income',
+  prestigeEffectiveChainIncomePreviewLabel: 'With prestige skill bonus',
+  prestigeStartingGoldPreviewLabel: 'Next farm starting gold',
+  prestigeChainIncomePreviewHint: 'The skill-adjusted rate is used on the chain map and when income is collected.',
   regionChoiceSection: 'Choose a Region',
   prestigeConfirmAction: (stars) => `Pioneer and earn ★${stars}`,
   prestigeCancelAction: 'Maybe later',
