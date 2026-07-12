@@ -197,7 +197,7 @@ import { EnvironmentBackdrop } from './components/EnvironmentBackdrop';
 import { FarmOnboarding, ONBOARDING_STEPS, type OnboardingStep } from './components/FarmOnboarding';
 import { LabSheet } from './components/LabSheet';
 import { MissionsSheet } from './components/MissionsSheet';
-import { StatsSheet } from './components/StatsSheet';
+import { StatsSheet, type FarmRecordStats } from './components/StatsSheet';
 import { WheelSheet } from './components/WheelSheet';
 import { AnimalsSheet } from './components/AnimalsSheet';
 import { WorkshopSheet } from './components/WorkshopSheet';
@@ -1830,6 +1830,24 @@ function FarmGameBody({
     );
   }, []);
   const collectionSummary = useMemo(() => getCollectionSummary(gameState), [gameState]);
+  const farmRecordStats = useMemo<FarmRecordStats>(
+    () => ({
+      totalHarvests: gameState.lifetimeStats.totalHarvests,
+      cropAndIdleGoldEarned: gameState.lifetimeStats.totalGoldEarned,
+      mutationHarvests: gameState.lifetimeStats.mutationsFound,
+      prestigeCount: gameState.lifetimeStats.prestigeCount,
+      researchPointsEarned: gameState.research.totalPointsEarned,
+      breedsUnlocked: gameState.lifetimeStats.breedsUnlocked,
+      collectionDiscoveredCount: collectionSummary.discoveredCount,
+      collectionTotalCount: collectionSummary.totalCount,
+    }),
+    [
+      gameState.lifetimeStats,
+      gameState.research.totalPointsEarned,
+      collectionSummary.discoveredCount,
+      collectionSummary.totalCount,
+    ]
+  );
   const claimableCollectionCount = collectionSummary.claimableCount;
   const claimableAchievementCount = useMemo(() => getClaimableAchievementCount(gameState), [gameState]);
   // Daily-mission badge: how many of today's missions are completed and waiting to
@@ -3864,6 +3882,7 @@ function FarmGameBody({
               0,
               (weeklyEvent.active ? weeklyEvent.windowEndAt : weeklyEvent.windowStartAt) - tickNowMsRef.current
             )}
+            farmRecords={farmRecordStats}
           />
         ) : null}
 

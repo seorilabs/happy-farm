@@ -1,7 +1,11 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
-import { formatRemainingTime, type SupportedLocale } from '../../../farm-core/src';
+import {
+  formatMoney,
+  formatRemainingTime,
+  type SupportedLocale,
+} from '../../../farm-core/src';
 
 import type { FarmMessages } from '../i18n';
 
@@ -12,6 +16,20 @@ function formatMultiplier(value: number) {
   return value >= 100 ? `×${Math.round(value).toLocaleString()}` : `×${value.toFixed(1)}`;
 }
 
+// UI-facing record names intentionally narrow legacy LifetimeStats semantics:
+// totalGoldEarned is crop/idle income (not every reward), and mutationsFound
+// counts mutation harvests rather than unique mutation discoveries.
+export type FarmRecordStats = {
+  totalHarvests: number;
+  cropAndIdleGoldEarned: number;
+  mutationHarvests: number;
+  prestigeCount: number;
+  researchPointsEarned: number;
+  breedsUnlocked: number;
+  collectionDiscoveredCount: number;
+  collectionTotalCount: number;
+};
+
 // 라벨 + 값(+ 보조 텍스트) 한 줄. 시트 안에서만 쓰는 표시 전용 부품.
 function StatRow({
   label,
@@ -19,18 +37,22 @@ function StatRow({
   sub,
   valueStyle,
   subTestID,
+  valueTestID,
 }: {
   label: string;
   value: string;
   sub?: string;
   valueStyle?: object;
   subTestID?: string;
+  valueTestID?: string;
 }) {
   return (
     <View style={styles.statRow}>
       <Text style={styles.statLabel}>{label}</Text>
       <View style={styles.statValueGroup}>
-        <Text style={[styles.statValue, valueStyle]}>{value}</Text>
+        <Text testID={valueTestID} numberOfLines={1} style={[styles.statValue, valueStyle]}>
+          {value}
+        </Text>
         {sub != null ? (
           <Text testID={subTestID} style={styles.statSub}>
             {sub}
@@ -58,6 +80,7 @@ export function StatsSheet({
   weeklyEventMultiplier,
   weeklyEventAxis,
   weeklyEventRemainingMs,
+  farmRecords,
 }: {
   messages: FarmMessages;
   locale: SupportedLocale;
@@ -73,6 +96,7 @@ export function StatsSheet({
   // 'speed'면 수확(성장속도) 축제, 그 외('sell')면 판매 축제로 문구를 분기한다.
   weeklyEventAxis: 'sell' | 'speed';
   weeklyEventRemainingMs: number;
+  farmRecords: FarmRecordStats;
 }) {
   return (
     <View testID="stats-sheet">
@@ -111,6 +135,50 @@ export function StatsSheet({
           {messages.weeklyEventTeaserDesc(weeklyEventAreaName, formatRemainingTime(weeklyEventRemainingMs, locale))}
         </Text>
       )}
+
+      <View testID="farm-records-section">
+        <Text accessibilityRole="header" style={styles.sectionTitle}>
+          {messages.statsRecordsSection}
+        </Text>
+        <StatRow
+          label={messages.statsTotalHarvestsLabel}
+          value={formatMoney(farmRecords.totalHarvests, locale)}
+          valueTestID="stats-record-total-harvests"
+        />
+        <StatRow
+          label={messages.statsCropIdleGoldLabel}
+          value={`${formatMoney(farmRecords.cropAndIdleGoldEarned, locale)}G`}
+          valueTestID="stats-record-crop-idle-gold"
+        />
+        <StatRow
+          label={messages.statsMutationHarvestsLabel}
+          value={formatMoney(farmRecords.mutationHarvests, locale)}
+          valueTestID="stats-record-mutation-harvests"
+        />
+        <StatRow
+          label={messages.statsPrestigeCountLabel}
+          value={formatMoney(farmRecords.prestigeCount, locale)}
+          valueTestID="stats-record-prestige-count"
+        />
+        <StatRow
+          label={messages.statsResearchPointsEarnedLabel}
+          value={`${formatMoney(farmRecords.researchPointsEarned, locale)} RP`}
+          valueTestID="stats-record-research-points"
+        />
+        <StatRow
+          label={messages.statsBreedsUnlockedLabel}
+          value={formatMoney(farmRecords.breedsUnlocked, locale)}
+          valueTestID="stats-record-breeds-unlocked"
+        />
+        <StatRow
+          label={messages.statsCollectionDiscoveredLabel}
+          value={`${formatMoney(farmRecords.collectionDiscoveredCount, locale)} / ${formatMoney(
+            farmRecords.collectionTotalCount,
+            locale
+          )}`}
+          valueTestID="stats-record-collection-discovered"
+        />
+      </View>
     </View>
   );
 }
@@ -139,12 +207,15 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   statLabel: {
+    flex: 1,
+    flexShrink: 1,
+    minWidth: 0,
     color: '#667085',
     fontSize: 14,
     fontWeight: '800',
   },
   statValueGroup: {
-    flexShrink: 1,
+    flexShrink: 0,
     alignItems: 'flex-end',
   },
   statValue: {

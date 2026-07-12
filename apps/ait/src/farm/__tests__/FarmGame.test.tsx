@@ -430,6 +430,69 @@ describe('FarmGame UI flow', () => {
     expect(screen.getByText(messages.growthLabel)).toBeTruthy();
   });
 
+  test('wires saved farm records and the live research/collection totals into the stats sheet (#291)', async () => {
+    const base = createInitialState();
+    const discovered = getCropKeys().slice(0, 3);
+    const state: GameState = {
+      ...base,
+      onboardingCompleted: true,
+      harvestedCropKeys: discovered,
+      research: { ...base.research, points: 123, totalPointsEarned: 76_543 },
+      lifetimeStats: {
+        totalHarvests: 1_234,
+        totalGoldEarned: 9_876_543,
+        mutationsFound: 45,
+        prestigeCount: 6,
+        researchPointsEarned: 1,
+        breedsUnlocked: 7,
+      },
+    };
+    const screen = await renderGame(state);
+
+    fireEvent.press(screen.getByTestId('cotd-chip'));
+    await waitFor(() => expect(screen.getByTestId('farm-records-section')).toBeTruthy());
+    expect(screen.getByTestId('stats-record-total-harvests')).toHaveTextContent('1,234');
+    expect(screen.getByTestId('stats-record-crop-idle-gold')).toHaveTextContent(
+      `${formatMoney(state.lifetimeStats.totalGoldEarned, DEFAULT_LOCALE)}G`
+    );
+    expect(screen.getByTestId('stats-record-mutation-harvests')).toHaveTextContent('45');
+    expect(screen.getByTestId('stats-record-prestige-count')).toHaveTextContent('6');
+    expect(screen.getByTestId('stats-record-research-points')).toHaveTextContent(
+      `${formatMoney(state.research.totalPointsEarned, DEFAULT_LOCALE)} RP`
+    );
+    expect(screen.getByTestId('stats-record-breeds-unlocked')).toHaveTextContent('7');
+    expect(screen.getByTestId('stats-record-collection-discovered')).toHaveTextContent(
+      `${discovered.length} / ${getCropKeys().length}`
+    );
+  });
+
+  test('refreshes the visible harvest records after a crop is collected (#291)', async () => {
+    const carrot = CROPS.carrot;
+    if (carrot == null) {
+      throw new Error('FarmGame tests require carrot balance data.');
+    }
+    const base = createReadyHarvestState();
+    const state: GameState = {
+      ...base,
+      onboardingCompleted: true,
+      harvestedCropKeys: ['wheat'],
+      harvestCounts: { ...base.harvestCounts, wheat: 10 },
+      lifetimeStats: { ...base.lifetimeStats, totalHarvests: 10, totalGoldEarned: 100 },
+    };
+    const screen = await renderGame(state);
+
+    fireEvent.press(screen.getAllByText('GET')[0]!);
+    fireEvent.press(screen.getByTestId('cotd-chip'));
+
+    await waitFor(() => expect(screen.getByTestId('stats-record-total-harvests')).toHaveTextContent('11'));
+    expect(screen.getByTestId('stats-record-crop-idle-gold')).toHaveTextContent(
+      `${formatMoney(100 + carrot.sell, DEFAULT_LOCALE)}G`
+    );
+    expect(screen.getByTestId('stats-record-collection-discovered')).toHaveTextContent(
+      `2 / ${getCropKeys().length}`
+    );
+  });
+
   describe('seed-strip sell-bonus badges (#226)', () => {
     const FRIDAY = Date.parse('2026-05-29T12:00:00.000Z');
     // starter_field 하나만 해금해 두면 주말 축제 추첨 풀이 그 구역으로 고정되고,

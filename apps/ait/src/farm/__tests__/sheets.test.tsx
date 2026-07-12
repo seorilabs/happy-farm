@@ -315,6 +315,18 @@ describe('CollectionSheet', () => {
 // 분기와 배수 표기를 표시 전용 계약으로 고정한다.
 describe('StatsSheet', () => {
   const HOUR_MS = 60 * 60 * 1000;
+  const initialState = createInitialState();
+  const initialCollection = getCollectionSummary(initialState);
+  const emptyFarmRecords = {
+    totalHarvests: initialState.lifetimeStats.totalHarvests,
+    cropAndIdleGoldEarned: initialState.lifetimeStats.totalGoldEarned,
+    mutationHarvests: initialState.lifetimeStats.mutationsFound,
+    prestigeCount: initialState.lifetimeStats.prestigeCount,
+    researchPointsEarned: initialState.research.totalPointsEarned,
+    breedsUnlocked: initialState.lifetimeStats.breedsUnlocked,
+    collectionDiscoveredCount: initialCollection.discoveredCount,
+    collectionTotalCount: initialCollection.totalCount,
+  };
 
   test('renders research/profit/growth stats and the boost as active with a remaining time', () => {
     const screen = render(
@@ -332,6 +344,7 @@ describe('StatsSheet', () => {
         weeklyEventMultiplier={1}
         weeklyEventAxis={'sell'}
         weeklyEventRemainingMs={2 * HOUR_MS}
+        farmRecords={emptyFarmRecords}
       />
     );
 
@@ -350,6 +363,17 @@ describe('StatsSheet', () => {
     // 축제 비활성 요일: 티저가 노출되고 라이브 배너는 없다.
     expect(screen.getByTestId('weekly-event-teaser')).toBeTruthy();
     expect(screen.queryByTestId('weekly-event-banner')).toBeNull();
+    expect(screen.getByTestId('farm-records-section')).toBeTruthy();
+    expect(screen.getByText(messages.statsRecordsSection).props.accessibilityRole).toBe('header');
+    expect(screen.getByTestId('stats-record-total-harvests')).toHaveTextContent('0');
+    expect(screen.getByTestId('stats-record-crop-idle-gold')).toHaveTextContent('0G');
+    expect(screen.getByTestId('stats-record-mutation-harvests')).toHaveTextContent('0');
+    expect(screen.getByTestId('stats-record-prestige-count')).toHaveTextContent('0');
+    expect(screen.getByTestId('stats-record-research-points')).toHaveTextContent('0 RP');
+    expect(screen.getByTestId('stats-record-breeds-unlocked')).toHaveTextContent('0');
+    expect(screen.getByTestId('stats-record-collection-discovered')).toHaveTextContent(
+      `0 / ${initialCollection.totalCount}`
+    );
   });
 
   test('shows the boost row as inactive and the festival banner when a festival is live', () => {
@@ -368,6 +392,7 @@ describe('StatsSheet', () => {
         weeklyEventMultiplier={1.5}
         weeklyEventAxis={'sell'}
         weeklyEventRemainingMs={5 * HOUR_MS}
+        farmRecords={emptyFarmRecords}
       />
     );
 
@@ -397,6 +422,7 @@ describe('StatsSheet', () => {
         weeklyEventMultiplier={1.5}
         weeklyEventAxis={'speed'}
         weeklyEventRemainingMs={5 * HOUR_MS}
+        farmRecords={emptyFarmRecords}
       />
     );
 
@@ -423,12 +449,70 @@ describe('StatsSheet', () => {
         weeklyEventMultiplier={1}
         weeklyEventAxis={'sell'}
         weeklyEventRemainingMs={HOUR_MS}
+        farmRecords={emptyFarmRecords}
       />
     );
 
     expect(screen.getByText(enMessages.profitLabel)).toBeTruthy();
     expect(screen.getByText(enMessages.statsBoostInactive)).toBeTruthy();
     expect(enMessages.statsBoostInactive).toBe('Inactive');
+  });
+
+  test('formats large farm records in en-US and uses the live research total', () => {
+    const enMessages = getFarmMessages('en-US');
+    const lifetimeStats = {
+      totalHarvests: 1_234_567,
+      totalGoldEarned: 1_234_567_890,
+      mutationsFound: 2_345,
+      prestigeCount: 12,
+      researchPointsEarned: 1,
+      breedsUnlocked: 8,
+    };
+    const screen = render(
+      <StatsSheet
+        messages={enMessages}
+        locale="en-US"
+        researchLevel={9}
+        profitMultiplier={123.4}
+        speedMultiplier={2.5}
+        boostActive={false}
+        boostMultiplier={1}
+        boostRemainingMs={0}
+        weeklyEventActive={false}
+        weeklyEventAreaName="Starter Farm"
+        weeklyEventMultiplier={1}
+        weeklyEventAxis="sell"
+        weeklyEventRemainingMs={HOUR_MS}
+        farmRecords={{
+          totalHarvests: lifetimeStats.totalHarvests,
+          cropAndIdleGoldEarned: lifetimeStats.totalGoldEarned,
+          mutationHarvests: lifetimeStats.mutationsFound,
+          prestigeCount: lifetimeStats.prestigeCount,
+          researchPointsEarned: 987_654,
+          breedsUnlocked: lifetimeStats.breedsUnlocked,
+          collectionDiscoveredCount: 11,
+          collectionTotalCount: 28,
+        }}
+      />
+    );
+
+    expect(screen.getByText(enMessages.statsRecordsSection)).toBeTruthy();
+    expect(screen.getByText(enMessages.statsCropIdleGoldLabel)).toBeTruthy();
+    expect(screen.getByTestId('stats-record-total-harvests')).toHaveTextContent(
+      formatMoney(lifetimeStats.totalHarvests, 'en-US')
+    );
+    expect(screen.getByTestId('stats-record-crop-idle-gold')).toHaveTextContent(
+      `${formatMoney(lifetimeStats.totalGoldEarned, 'en-US')}G`
+    );
+    expect(screen.getByTestId('stats-record-mutation-harvests')).toHaveTextContent(
+      formatMoney(lifetimeStats.mutationsFound, 'en-US')
+    );
+    expect(screen.getByTestId('stats-record-prestige-count')).toHaveTextContent('12');
+    expect(screen.getByTestId('stats-record-research-points')).toHaveTextContent(
+      `${formatMoney(987_654, 'en-US')} RP`
+    );
+    expect(screen.getByTestId('stats-record-breeds-unlocked')).toHaveTextContent('8');
+    expect(screen.getByTestId('stats-record-collection-discovered')).toHaveTextContent('11 / 28');
   });
 });
 
