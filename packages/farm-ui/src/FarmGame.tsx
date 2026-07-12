@@ -2127,7 +2127,13 @@ function FarmGameBody({
     setGameState((state) => {
       const result =
         surface === 'animals' ? collectAllReadyProduce(state, now) : collectAllReadyCrafts(state, now);
-      if (!pendingCommandEffectsRef.current.some((effect) => effect.id === effectId)) {
+      // The synchronous in-flight ref keeps a second press out of this setter.
+      // React may still replay one functional updater in development, so the
+      // operation ID is deduped against both queued and already-drained effects.
+      if (
+        !handledCommandEffectIdsRef.current.has(effectId) &&
+        !pendingCommandEffectsRef.current.some((effect) => effect.id === effectId)
+      ) {
         pendingCommandEffectsRef.current.push({
           id: effectId,
           type: 'readyItemsCollected',
