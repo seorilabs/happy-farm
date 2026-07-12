@@ -275,6 +275,18 @@ export const styles = StyleSheet.create({
     textShadowColor: 'rgba(109, 40, 217, 0.95)',
     textShadowRadius: 10,
   },
+  harvestPopTextGiant: {
+    color: '#fb923c',
+    fontSize: 43,
+    textShadowColor: 'rgba(154, 52, 18, 0.95)',
+    textShadowRadius: 12,
+  },
+  harvestPopTextPrism: {
+    color: '#67e8f9',
+    fontSize: 48,
+    textShadowColor: 'rgba(91, 33, 182, 0.95)',
+    textShadowRadius: 14,
+  },
   mutationFlash: {
     position: 'absolute',
     top: 0,
