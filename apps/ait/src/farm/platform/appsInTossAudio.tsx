@@ -85,14 +85,35 @@ const OneShotEffectPlayer = React.forwardRef<OneShotHandle, { uri: string; volum
   function OneShotEffectPlayer({ uri, volume }, ref) {
     const videoRef = useRef<VideoRef | null>(null);
     const [playing, setPlaying] = useState(false);
+    // Mirrors `playing` so play() (imperative handle created once with empty
+    // deps) always reads the current value instead of a stale closure.
+    const playingRef = useRef(false);
+    playingRef.current = playing;
+    const [restartPending, setRestartPending] = useState(false);
     const stopPlayback = useCallback(() => setPlaying(false), []);
     const warnFailure = useMemo(() => createPlaybackFailureWarning(uri), [uri]);
+
+    // Retrigger while already playing: mirror the mobile adapter's
+    // stop-then-play (playFromStart). A paused=true render commits first and
+    // playback resumes from 0 on the next effect pass, so the restart never
+    // depends on seek-while-playing semantics of the Granite Video wrapper.
+    useEffect(() => {
+      if (restartPending && !playing) {
+        setRestartPending(false);
+        setPlaying(true);
+      }
+    }, [restartPending, playing]);
 
     useImperativeHandle(
       ref,
       () => ({
         play: () => {
           videoRef.current?.seek(0);
+          if (playingRef.current) {
+            setRestartPending(true);
+            setPlaying(false);
+            return;
+          }
           setPlaying(true);
         },
       }),
@@ -136,6 +157,10 @@ export function useAppsInTossFarmAudio(): { audio: FarmGameAudio; audioElement: 
       if (comboMilestoneTimerRef.current != null) {
         clearTimeout(comboMilestoneTimerRef.current);
       }
+      // React nulls each player's ref callback on unmount, but clearing the
+      // map here keeps every ref-based resource cleaned up in one place and
+      // drops stale handles across a hook remount (e.g. Fast Refresh).
+      effectHandlesRef.current = {};
     };
   }, []);
 

@@ -138,33 +138,70 @@ describe('useAppsInTossFarmAudio', () => {
     expect(latestPropsFor(FARM_AUDIO_SOURCES.harvestCoin).paused).toBe(false);
   });
 
-  test('mounts one remote player per one-shot effect and plays it from the start', () => {
-    const audio = renderFarmAudio();
+  const EFFECT_URIS = {
+    plant: FARM_AUDIO_SOURCES.plant,
+    reward: FARM_AUDIO_SOURCES.reward,
+    unlock: FARM_AUDIO_SOURCES.unlock,
+    mutation: FARM_AUDIO_SOURCES.mutation,
+    wheelSpin: FARM_AUDIO_SOURCES.wheelSpin,
+  } as const;
 
-    for (const uri of [
-      FARM_AUDIO_SOURCES.plant,
-      FARM_AUDIO_SOURCES.reward,
-      FARM_AUDIO_SOURCES.unlock,
-      FARM_AUDIO_SOURCES.mutation,
-      FARM_AUDIO_SOURCES.wheelSpin,
-    ]) {
+  test('mounts one paused, cached remote player per one-shot effect', () => {
+    renderFarmAudio();
+
+    for (const uri of Object.values(EFFECT_URIS)) {
       expect(latestPropsFor(uri).paused).toBe(true);
       expect(latestPropsFor(uri).source?.shouldCache).toBe(true);
     }
+  });
+
+  test.each(Object.entries(EFFECT_URIS))(
+    'playEffect(%s) plays only its own player from the start and pauses on end',
+    (effect, uri) => {
+      const audio = renderFarmAudio();
+
+      act(() => {
+        audio.playEffect(effect as keyof typeof EFFECT_URIS);
+      });
+
+      expect(mockSeek).toHaveBeenCalledWith(0);
+      expect(latestPropsFor(uri).paused).toBe(false);
+      // Every other effect player stays paused: play routes to exactly one.
+      for (const otherUri of Object.values(EFFECT_URIS)) {
+        if (otherUri !== uri) {
+          expect(latestPropsFor(otherUri).paused).toBe(true);
+        }
+      }
+
+      act(() => {
+        latestPropsFor(uri).onEnd?.();
+      });
+
+      expect(latestPropsFor(uri).paused).toBe(true);
+    }
+  );
+
+  test('retriggering an effect mid-playback restarts it via a stop-then-play cycle', () => {
+    const audio = renderFarmAudio();
 
     act(() => {
       audio.playEffect('reward');
     });
-
-    expect(mockSeek).toHaveBeenCalledWith(0);
     expect(latestPropsFor(FARM_AUDIO_SOURCES.reward).paused).toBe(false);
-    // Other effect players stay paused: play routes to exactly one player.
-    expect(latestPropsFor(FARM_AUDIO_SOURCES.unlock).paused).toBe(true);
+
+    // Second call before onEnd: the player must pass through paused=true and
+    // come back unpaused (mobile playFromStart parity), with a fresh seek(0).
+    act(() => {
+      audio.playEffect('reward');
+    });
+
+    expect(mockSeek).toHaveBeenCalledTimes(2);
+    expect(mockSeek).toHaveBeenLastCalledWith(0);
+    expect(latestPropsFor(FARM_AUDIO_SOURCES.reward).paused).toBe(false);
 
     act(() => {
       latestPropsFor(FARM_AUDIO_SOURCES.reward).onEnd?.();
     });
-
     expect(latestPropsFor(FARM_AUDIO_SOURCES.reward).paused).toBe(true);
   });
 });

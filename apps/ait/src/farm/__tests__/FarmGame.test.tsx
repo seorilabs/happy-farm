@@ -1970,6 +1970,133 @@ describe('FarmGame UI flow', () => {
     });
   });
 
+  describe('new sound effect hook points (playEffect)', () => {
+    const messages = getFarmMessages(DEFAULT_LOCALE);
+
+    function createEffectAudio(playEffect: jest.Mock) {
+      return {
+        isSupported: true,
+        playHarvest: jest.fn(),
+        playComboMilestone: jest.fn(),
+        playEffect,
+        setBackgroundMusicEnabled: jest.fn(),
+      };
+    }
+
+    test('planting a crop plays the plant effect once', async () => {
+      const playEffect = jest.fn();
+      const state: GameState = { ...createInitialState(), onboardingCompleted: true };
+      const screen = await renderGame(
+        state,
+        { audio: createEffectAudio(playEffect) },
+        { soundEffectsEnabled: true }
+      );
+      await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+
+      fireEvent.press(screen.getByText('당근'));
+      fireEvent.press(screen.getByTestId('plot-cell-0'));
+
+      await waitFor(() => expect(playEffect).toHaveBeenCalledWith('plant'));
+      expect(playEffect).toHaveBeenCalledTimes(1);
+    });
+
+    test('planting stays silent when sound effects are disabled', async () => {
+      const playEffect = jest.fn();
+      const base = createInitialState();
+      const state: GameState = { ...base, onboardingCompleted: true };
+      const carrotCost = CROPS.carrot!.cost;
+      const screen = await renderGame(
+        state,
+        { audio: createEffectAudio(playEffect) },
+        { soundEffectsEnabled: false }
+      );
+      await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+
+      fireEvent.press(screen.getByText('당근'));
+      fireEvent.press(screen.getByTestId('plot-cell-0'));
+
+      // The plant itself lands (gold drops by the seed cost)…
+      await waitFor(() =>
+        expect(screen.getByText(`${formatMoney(state.gold - carrotCost)}G`)).toBeTruthy()
+      );
+      // …but no effect sound is requested.
+      expect(playEffect).not.toHaveBeenCalled();
+    });
+
+    test('spinning the daily wheel plays the wheelSpin effect', async () => {
+      const playEffect = jest.fn();
+      const state: GameState = { ...createInitialState(), onboardingCompleted: true };
+      const screen = await renderGame(
+        state,
+        { audio: createEffectAudio(playEffect) },
+        { soundEffectsEnabled: true }
+      );
+      await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+
+      fireEvent.press(screen.getByTestId('more-nav-button'));
+      fireEvent.press(screen.getByLabelText(messages.wheelButtonAccessibilityLabel));
+      await waitFor(() => expect(screen.getByText(messages.wheelSpinAction)).toBeTruthy());
+      fireEvent.press(screen.getByText(messages.wheelSpinAction));
+
+      await waitFor(() => expect(playEffect).toHaveBeenCalledWith('wheelSpin'));
+      expect(playEffect).toHaveBeenCalledTimes(1);
+    });
+
+    test('harvesting a golden-mutated crop plays the mutation effect', async () => {
+      const playEffect = jest.fn();
+      const base = createReadyHarvestState();
+      // Carrot(tier 1) reaches bronze mastery at 10 harvests; at bronze, only
+      // the golden band is open, so a 0 roll deterministically lands golden.
+      const state: GameState = {
+        ...base,
+        onboardingCompleted: true,
+        harvestCounts: { carrot: 10 },
+      };
+      const screen = await renderGame(
+        state,
+        { audio: createEffectAudio(playEffect) },
+        { soundEffectsEnabled: true }
+      );
+      await waitFor(() => expect(screen.getAllByText('GET').length).toBeGreaterThan(0));
+
+      const randomSpy = jest.spyOn(Math, 'random').mockReturnValue(0);
+      try {
+        fireEvent.press(screen.getAllByText('GET')[0]!);
+      } finally {
+        randomSpy.mockRestore();
+      }
+
+      await waitFor(() => expect(playEffect).toHaveBeenCalledWith('mutation'));
+    });
+
+    test('unlocking a research node plays the unlock effect', async () => {
+      const playEffect = jest.fn();
+      const base = createInitialState();
+      const state: GameState = {
+        ...base,
+        onboardingCompleted: true,
+        research: { ...base.research, points: 50_000, totalPointsEarned: 50_000 },
+      };
+      const screen = await renderGame(
+        state,
+        { audio: createEffectAudio(playEffect) },
+        { soundEffectsEnabled: true }
+      );
+      await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+
+      fireEvent.press(screen.getByTestId('more-nav-button'));
+      fireEvent.press(screen.getByLabelText(messages.labButtonAccessibilityLabel));
+      // '자동 수확' 라벨은 자동화 토글에도 쓰이므로, 노드 ShopCard는 고유한
+      // 설명 문구로 특정해 누른다(press는 상위 Pressable로 전파된다).
+      const nodeDesc = '다 자란 작물을 자동으로 수확해요.';
+      await waitFor(() => expect(screen.getByText(nodeDesc)).toBeTruthy());
+      fireEvent.press(screen.getByText(nodeDesc));
+
+      await waitFor(() => expect(playEffect).toHaveBeenCalledWith('unlock'));
+      expect(playEffect).toHaveBeenCalledTimes(1);
+    });
+  });
+
   test('fires combo great milestone audio when combo crosses the great tier threshold', async () => {
     const lateGame = createLateGameState();
     const playComboMilestone = jest.fn();
