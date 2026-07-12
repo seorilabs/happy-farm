@@ -210,9 +210,17 @@ export const styles = StyleSheet.create({
   },
   main: {
     flex: 1,
+    backgroundColor: 'transparent',
+  },
+  farmStage: {
+    position: 'relative',
+    flex: 1,
+    overflow: 'hidden',
   },
   mainContent: {
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingTop: 72,
+    paddingBottom: 16,
   },
   plotGrid: {
     flexDirection: 'row',

@@ -270,10 +270,29 @@ describe('FarmGame UI flow', () => {
     const rootBackground = () =>
       StyleSheet.flatten(screen.getByTestId('farm-root').props.style).backgroundColor;
     const expectedToneNow = () => getEnvironmentTone(getLocalMinutesOfDay(new Date())).backgroundColor;
+    const expectedPhaseNow = () => getEnvironmentTone(getLocalMinutesOfDay(new Date())).phase;
+    const backdropNow = () => screen.UNSAFE_getByProps({ testID: `environment-backdrop-${expectedPhaseNow()}` });
 
     // The backdrop reflects the current local time's tone (NOW from beforeEach).
     expect(rootBackground()).toBe(expectedToneNow());
+    expect(backdropNow()).toBeTruthy();
     const firstBackground = rootBackground();
+    const firstPhase = expectedPhaseNow();
+
+    const farmStage = screen.getByTestId('farm-stage');
+    const backdropChild = farmStage.children[0];
+    const scrollChild = farmStage.children[1];
+    if (
+      backdropChild == null ||
+      scrollChild == null ||
+      typeof backdropChild === 'string' ||
+      typeof scrollChild === 'string'
+    ) {
+      throw new Error('farm stage must render the absolute backdrop before the farm scroll view');
+    }
+    expect(backdropChild.props.phase).toBe(firstPhase);
+    expect(scrollChild.props.testID).toBe('farm-scroll');
+    expect(screen.getByTestId('plot-grid')).toBeTruthy();
 
     // Advancing 12h lands in a different phase; one game tick re-renders and the
     // backdrop tracks the new minute's tone (proves the wiring, not just the math).
@@ -285,6 +304,8 @@ describe('FarmGame UI flow', () => {
 
     expect(rootBackground()).toBe(expectedToneNow());
     expect(rootBackground()).not.toBe(firstBackground);
+    expect(expectedPhaseNow()).not.toBe(firstPhase);
+    expect(backdropNow()).toBeTruthy();
   });
 
   test('renders initial farm and supports a plant-grow-harvest loop', async () => {
