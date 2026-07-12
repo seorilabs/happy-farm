@@ -789,6 +789,9 @@ export const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#d6ecd0',
   },
+  welcomeBackRowPressed: {
+    opacity: 0.72,
+  },
   welcomeBackIcon: {
     fontSize: 28,
     marginRight: 14,
@@ -805,6 +808,12 @@ export const styles = StyleSheet.create({
   welcomeBackRowValue: {
     color: '#1f7a3d',
     fontSize: 20,
+    fontWeight: '900',
+  },
+  welcomeBackRowChevron: {
+    marginLeft: 8,
+    color: '#5b6b58',
+    fontSize: 28,
     fontWeight: '900',
   },
   resetInput: {

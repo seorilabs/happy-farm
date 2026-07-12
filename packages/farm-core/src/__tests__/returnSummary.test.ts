@@ -8,15 +8,18 @@ import {
   OFFLINE_INCOME_CAP_MS,
   OFFLINE_INCOME_EFFICIENCY_RATIO,
 } from '../constants';
+import { ANIMALS } from '../animals';
 import {
   collectReturnOfflineGold,
+  collectReturnSummaryOfflineGold,
   creditActiveFarmOfflineGold,
   getActiveFarmOfflineGold,
   getReturnSummary,
   RETURN_SUMMARY_MIN_AWAY_MS,
 } from '../returnSummary';
-import { CHAIN_OFFLINE_CAP_MS } from '../prestige';
-import type { CropKey, GameState } from '../types';
+import { CHAIN_OFFLINE_CAP_MS, getChainIncome } from '../prestige';
+import { PRODUCTION_RECIPES } from '../production';
+import type { AnimalKey, CropKey, GameState, ProductionRecipeKey } from '../types';
 
 const NOW = Date.parse('2026-06-13T03:00:00.000Z');
 const MS_PER_HOUR = 60 * 60 * 1000;
@@ -60,6 +63,35 @@ function withChainFarm(goldPerHour: number, lastCollectedAt: number, base: GameS
   };
 }
 
+function withSecondaryLoopProgress(
+  readyAnimalCount: number,
+  growingAnimalCount: number,
+  readyCraftCount: number,
+  craftingCount: number,
+  base: GameState
+): GameState {
+  const owned: AnimalKey[] = [];
+  const feeding: Partial<Record<AnimalKey, number>> = {};
+  for (const [index, animal] of ANIMALS.entries()) {
+    if (index >= readyAnimalCount + growingAnimalCount) break;
+    owned.push(animal.key);
+    feeding[animal.key] =
+      index < readyAnimalCount ? NOW - animal.produceTimerMs : NOW - animal.produceTimerMs + 1;
+  }
+
+  const crafting: Partial<Record<ProductionRecipeKey, number>> = {};
+  for (const [index, recipe] of PRODUCTION_RECIPES.entries()) {
+    if (index >= readyCraftCount + craftingCount) break;
+    crafting[recipe.key] = index < readyCraftCount ? NOW - recipe.timerMs : NOW - recipe.timerMs + 1;
+  }
+
+  return {
+    ...base,
+    animals: { owned, feeding },
+    production: { ...base.production, crafting },
+  };
+}
+
 describe('getReturnSummary', () => {
   test('returns null when no game state is available', () => {
     const lastSeen = NOW - 2 * MS_PER_HOUR;
@@ -94,6 +126,42 @@ describe('getReturnSummary', () => {
     expect(summary?.readyCropCount).toBe(2);
     expect(summary?.offlineGold).toBe(0);
     expect(summary?.awayMs).toBe(2 * MS_PER_HOUR);
+  });
+
+  test('reports zero ready animal and workshop counts when no secondary timer completed', () => {
+    const state = withReadyCrop(0, createInitialState());
+    const summary = getReturnSummary(state, NOW - 2 * MS_PER_HOUR, NOW);
+
+    expect(summary?.readyAnimalCount).toBe(0);
+    expect(summary?.readyCraftCount).toBe(0);
+  });
+
+  test('counts only completed animal and workshop timers at the exact ready boundary', () => {
+    const state = withSecondaryLoopProgress(1, 1, 1, 1, withReadyCrop(0, createInitialState()));
+    const summary = getReturnSummary(state, NOW - 2 * MS_PER_HOUR, NOW);
+
+    expect(summary?.readyAnimalCount).toBe(1);
+    expect(summary?.readyCraftCount).toBe(1);
+  });
+
+  test('counts every completed animal and workshop timer', () => {
+    const state = withSecondaryLoopProgress(
+      ANIMALS.length,
+      0,
+      PRODUCTION_RECIPES.length,
+      0,
+      withReadyCrop(0, createInitialState())
+    );
+    const summary = getReturnSummary(state, NOW - 2 * MS_PER_HOUR, NOW);
+
+    expect(summary?.readyAnimalCount).toBe(ANIMALS.length);
+    expect(summary?.readyCraftCount).toBe(PRODUCTION_RECIPES.length);
+  });
+
+  test('keeps the existing card gate when only animal or workshop output is ready', () => {
+    const state = withSecondaryLoopProgress(1, 0, 1, 0, createInitialState());
+
+    expect(getReturnSummary(state, NOW - 2 * MS_PER_HOUR, NOW)).toBeNull();
   });
 
   test('surfaces accrued offline chain gold', () => {
@@ -291,5 +359,60 @@ describe('collectReturnOfflineGold', () => {
     const settled = collectReturnOfflineGold(state, summary!.awayMs, NOW);
     // What the card promises (offlineGold) is exactly what settlement credits.
     expect(settled.collectedGold).toBe(summary?.offlineGold);
+  });
+});
+
+describe('collectReturnSummaryOfflineGold', () => {
+  test('credits the captured amount after a growing plot reconciles to ready', () => {
+    const base = createInitialState();
+    const source = withGrowingCrop(0, 'wheat', base);
+    const lastSeen = NOW - 2 * MS_PER_HOUR;
+    const summary = getReturnSummary(source, lastSeen, NOW);
+    expect(summary?.activeFarmGold).toBeGreaterThan(0);
+
+    const reconciled = {
+      ...source,
+      plots: source.plots.map((plot, index) => (index === 0 ? { ...plot, state: 2 as const } : plot)),
+    };
+    const result = collectReturnSummaryOfflineGold(reconciled, summary!);
+
+    expect(result.collectedGold).toBe(summary?.offlineGold);
+    expect(result.activeFarmGold).toBe(summary?.activeFarmGold);
+    expect(result.state.gold).toBe(reconciled.gold + summary!.offlineGold);
+    expect(result.state.lifetimeStats.totalGoldEarned).toBe(
+      reconciled.lifetimeStats.totalGoldEarned + summary!.offlineGold
+    );
+  });
+
+  test('advances chain timestamps only to the capture instant', () => {
+    const base = withChainFarm(3600, NOW - 2 * MS_PER_HOUR, createInitialState());
+    const summary = getReturnSummary(base, NOW - 2 * MS_PER_HOUR, NOW);
+    expect(summary?.chainGold).toBe(7200);
+
+    const result = collectReturnSummaryOfflineGold(base, summary!);
+    expect(result.state.chainFarms[0]?.lastCollectedAt).toBe(NOW);
+    expect(getChainIncome(result.state, NOW + MS_PER_HOUR).accruedGold).toBe(3600);
+  });
+
+  test('is a no-op for an empty or invalid snapshot', () => {
+    const base = createInitialState();
+    const result = collectReturnSummaryOfflineGold(base, {
+      capturedAt: NOW,
+      chainGold: Number.NaN,
+      activeFarmGold: -1,
+    });
+
+    expect(result.state).toBe(base);
+    expect(result.collectedGold).toBe(0);
+
+    for (const capturedAt of [Number.NaN, Number.POSITIVE_INFINITY, 0, -1]) {
+      const invalidCapture = collectReturnSummaryOfflineGold(base, {
+        capturedAt,
+        chainGold: 100,
+        activeFarmGold: 50,
+      });
+      expect(invalidCapture.state).toBe(base);
+      expect(invalidCapture.collectedGold).toBe(0);
+    }
   });
 });

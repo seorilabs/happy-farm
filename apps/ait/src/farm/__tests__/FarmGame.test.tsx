@@ -5,6 +5,7 @@ import { StyleSheet, Vibration } from 'react-native';
 import { act, cleanup, fireEvent, render, waitFor, within } from '@testing-library/react-native';
 import {
   ACHIEVEMENT_TRACKS,
+  ANIMALS,
   COLLECTION_AREA_REWARDS,
   CROPS,
   DEFAULT_LOCALE,
@@ -17,6 +18,7 @@ import {
   REWARDED_GOLD_MAX_USES_PER_WINDOW,
   REWARDED_GOLD_WINDOW_MS,
   PRESTIGE_STARS_BASE,
+  PRODUCTION_RECIPES,
   REGION_ARCHETYPES,
   createFarmAnalytics,
   createInitialState,
@@ -719,11 +721,11 @@ describe('FarmGame UI flow', () => {
     const messages = getFarmMessages(DEFAULT_LOCALE);
     const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
 
-    function withGrowingPlot(cropKey: CropKey, base: GameState): GameState {
+    function withGrowingPlot(cropKey: CropKey, base: GameState, startTime = NOW): GameState {
       return {
         ...base,
         plots: base.plots.map((plot, index) =>
-          index === 0 ? { ...plot, cropType: cropKey, startTime: NOW, state: 1 as const } : plot
+          index === 0 ? { ...plot, cropType: cropKey, startTime, state: 1 as const } : plot
         ),
       };
     }
@@ -734,6 +736,30 @@ describe('FarmGame UI flow', () => {
         plots: base.plots.map((plot, index) =>
           index === 0 ? { ...plot, cropType: cropKey, startTime: NOW - 60000, state: 2 as const } : plot
         ),
+      };
+    }
+
+    function withReadyReturnLoops(
+      base: GameState,
+      options: { animal?: boolean; craft?: boolean } = { animal: true, craft: true }
+    ): GameState {
+      const animal = ANIMALS[0];
+      const recipe = PRODUCTION_RECIPES[0];
+      if (animal == null || recipe == null) {
+        throw new Error('welcome-back tests require at least one animal and workshop recipe');
+      }
+
+      return {
+        ...base,
+        animals: options.animal
+          ? { owned: [animal.key], feeding: { [animal.key]: NOW - animal.produceTimerMs } }
+          : base.animals,
+        production: options.craft
+          ? {
+              ...base.production,
+              crafting: { [recipe.key]: NOW - recipe.timerMs },
+            }
+          : base.production,
       };
     }
 
@@ -770,11 +796,62 @@ describe('FarmGame UI flow', () => {
       await waitFor(() => expect(screen.getByText(messages.welcomeBackConfirmAction)).toBeTruthy());
       // No offline-earnings row when nothing accrued.
       expect(screen.queryByText(messages.welcomeBackOfflineLabel)).toBeNull();
+      expect(screen.queryByTestId('welcome-back-animal-row')).toBeNull();
+      expect(screen.queryByTestId('welcome-back-craft-row')).toBeNull();
 
       fireEvent.press(screen.getByText(messages.welcomeBackConfirmAction));
 
       // Gold is unchanged: the close path settles nothing.
       expect(screen.getByText(`${formatMoney(state.gold, DEFAULT_LOCALE)}G`)).toBeTruthy();
+    });
+
+    test('ready animal row settles offline gold before opening the ranch sheet', async () => {
+      const state = withReadyReturnLoops(
+        // This crop matured while the player was away. The load-time tick will
+        // reconcile state 1 → 2 before the CTA is tapped, so the card snapshot
+        // (not live plot phase) must remain the settlement source.
+        withGrowingPlot('wheat' as CropKey, createInitialState(), NOW - TWO_HOURS_MS),
+        { animal: true, craft: false }
+      );
+      mockPersistence.readLastSeenAt.mockResolvedValueOnce(NOW - TWO_HOURS_MS);
+
+      const offlineGold = getActiveFarmOfflineGold(state, TWO_HOURS_MS);
+      expect(offlineGold).toBeGreaterThan(0);
+      const screen = await renderGame(state);
+
+      const animalRow = await waitFor(() => screen.getByTestId('welcome-back-animal-row'));
+      expect(screen.getByText(messages.welcomeBackAnimalLabel)).toBeTruthy();
+      expect(screen.getByText(messages.welcomeBackAnimalValue(1))).toBeTruthy();
+      expect(screen.queryByTestId('welcome-back-craft-row')).toBeNull();
+
+      fireEvent.press(animalRow);
+      fireEvent.press(animalRow);
+
+      await waitFor(() => expect(screen.getByText(messages.sheetTitleAnimals)).toBeTruthy());
+      await waitFor(() =>
+        expect(screen.getByText(`${formatMoney(state.gold + offlineGold, DEFAULT_LOCALE)}G`)).toBeTruthy()
+      );
+    });
+
+    test('ready workshop row opens the workshop and keeps long English copy on one line', async () => {
+      const state = withReadyReturnLoops(withReadyPlot('carrot' as CropKey, createInitialState()), {
+        animal: false,
+        craft: true,
+      });
+      mockPersistence.readLastSeenAt.mockResolvedValueOnce(NOW - TWO_HOURS_MS);
+      const englishMessages = getFarmMessages('en-US');
+
+      const screen = await renderGame(state, { preferredLocale: 'en-US' });
+
+      const craftRow = await waitFor(() => screen.getByTestId('welcome-back-craft-row'));
+      expect(screen.getByText(englishMessages.welcomeBackCraftLabel)).toBeTruthy();
+      const craftValue = screen.getByText(englishMessages.welcomeBackCraftValue(1));
+      expect(craftValue.props.numberOfLines).toBe(1);
+      expect(screen.queryByTestId('welcome-back-animal-row')).toBeNull();
+
+      fireEvent.press(craftRow);
+
+      await waitFor(() => expect(screen.getByText(englishMessages.sheetTitleWorkshop)).toBeTruthy());
     });
   });
 
