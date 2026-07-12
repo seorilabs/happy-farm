@@ -137,4 +137,34 @@ describe('useAppsInTossFarmAudio', () => {
     expect(mockSeek).toHaveBeenCalledTimes(2);
     expect(latestPropsFor(FARM_AUDIO_SOURCES.harvestCoin).paused).toBe(false);
   });
+
+  test('mounts one remote player per one-shot effect and plays it from the start', () => {
+    const audio = renderFarmAudio();
+
+    for (const uri of [
+      FARM_AUDIO_SOURCES.plant,
+      FARM_AUDIO_SOURCES.reward,
+      FARM_AUDIO_SOURCES.unlock,
+      FARM_AUDIO_SOURCES.mutation,
+      FARM_AUDIO_SOURCES.wheelSpin,
+    ]) {
+      expect(latestPropsFor(uri).paused).toBe(true);
+      expect(latestPropsFor(uri).source?.shouldCache).toBe(true);
+    }
+
+    act(() => {
+      audio.playEffect('reward');
+    });
+
+    expect(mockSeek).toHaveBeenCalledWith(0);
+    expect(latestPropsFor(FARM_AUDIO_SOURCES.reward).paused).toBe(false);
+    // Other effect players stay paused: play routes to exactly one player.
+    expect(latestPropsFor(FARM_AUDIO_SOURCES.unlock).paused).toBe(true);
+
+    act(() => {
+      latestPropsFor(FARM_AUDIO_SOURCES.reward).onEnd?.();
+    });
+
+    expect(latestPropsFor(FARM_AUDIO_SOURCES.reward).paused).toBe(true);
+  });
 });

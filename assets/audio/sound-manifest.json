@@ -1,0 +1,32 @@
+{
+  "model": "stable-audio-2.5",
+  "out_dir": ".",
+  "tracks": [
+    {
+      "name": "farm_bgm_loop",
+      "type": "loop",
+      "duration": 90,
+      "crossfade": 3,
+      "formats": ["wav"],
+      "prompt": "cozy warm farm life game background music, gentle acoustic guitar and soft ukulele, warm marimba, glockenspiel accents, light shaker percussion, cheerful relaxed pastoral mood, calm and unobtrusive"
+    },
+    {
+      "name": "sting_reward",
+      "type": "oneshot",
+      "duration": 3,
+      "prompt": "short cheerful reward jingle, bright glockenspiel arpeggio and warm ukulele strum, single celebratory phrase, no background music, no background noise"
+    },
+    {
+      "name": "sting_unlock",
+      "type": "oneshot",
+      "duration": 4,
+      "prompt": "short triumphant unlock fanfare, warm brass and bells, single rising celebratory phrase, bright and happy, no background music, no background noise"
+    },
+    {
+      "name": "sting_mutation",
+      "type": "oneshot",
+      "duration": 2,
+      "prompt": "magical sparkle discovery sound, shimmering wind chimes glissando rising, single short twinkle phrase, no background music, no background noise"
+    }
+  ]
+}

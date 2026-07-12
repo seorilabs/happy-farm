@@ -1761,6 +1761,7 @@ describe('FarmGame UI flow', () => {
         isSupported: true,
         playHarvest,
         playComboMilestone: jest.fn(),
+        playEffect: jest.fn(),
         setBackgroundMusicEnabled: jest.fn(),
       },
     });
@@ -1799,14 +1800,15 @@ describe('FarmGame UI flow', () => {
       vibrateSpy.mockRestore();
     });
 
-    async function renderAndClaim(playHarvest: jest.Mock, savedSettings: unknown) {
+    async function renderAndClaim(playEffect: jest.Mock, savedSettings: unknown) {
       const screen = await renderGame(
         lateGame,
         {
           audio: {
             isSupported: true,
-            playHarvest,
+            playHarvest: jest.fn(),
             playComboMilestone: jest.fn(),
+            playEffect,
             setBackgroundMusicEnabled: jest.fn(),
           },
         },
@@ -1822,10 +1824,11 @@ describe('FarmGame UI flow', () => {
       return screen;
     }
 
-    test('plays harvest sound, pulses gold, and vibrates when sound effects are enabled', async () => {
-      const playHarvest = jest.fn();
-      const screen = await renderAndClaim(playHarvest, { soundEffectsEnabled: true });
-      await waitFor(() => expect(playHarvest).toHaveBeenCalledTimes(1));
+    test('plays the reward sting, pulses gold, and vibrates when sound effects are enabled', async () => {
+      const playEffect = jest.fn();
+      const screen = await renderAndClaim(playEffect, { soundEffectsEnabled: true });
+      await waitFor(() => expect(playEffect).toHaveBeenCalledTimes(1));
+      expect(playEffect).toHaveBeenCalledWith('reward');
       await waitFor(() => expect(onGoldPulse).toHaveBeenCalledTimes(1));
       await waitFor(() => {
         expect(vibrateSpy).toHaveBeenCalledTimes(1);
@@ -1834,27 +1837,28 @@ describe('FarmGame UI flow', () => {
       await waitFor(() => expect(screen.getByText(claimMessages.collectionClaimedLabel)).toBeTruthy());
     });
 
-    test('pulses gold and vibrates but skips harvest sound when sound effects are disabled', async () => {
-      const playHarvest = jest.fn();
-      const screen = await renderAndClaim(playHarvest, { soundEffectsEnabled: false });
+    test('pulses gold and vibrates but skips the reward sting when sound effects are disabled', async () => {
+      const playEffect = jest.fn();
+      const screen = await renderAndClaim(playEffect, { soundEffectsEnabled: false });
       await waitFor(() => expect(screen.getByText(claimMessages.collectionClaimedLabel)).toBeTruthy());
       await waitFor(() => expect(onGoldPulse).toHaveBeenCalledTimes(1));
       await waitFor(() => {
         expect(vibrateSpy).toHaveBeenCalledTimes(1);
         expect(vibrateSpy).toHaveBeenLastCalledWith(50);
       });
-      expect(playHarvest).not.toHaveBeenCalled();
+      expect(playEffect).not.toHaveBeenCalled();
     });
 
-    test('pulses gold but skips harvest sound when audio is unsupported', async () => {
-      const playHarvest = jest.fn();
+    test('pulses gold but skips the reward sting when audio is unsupported', async () => {
+      const playEffect = jest.fn();
       const screen = await renderGame(
         lateGame,
         {
           audio: {
             isSupported: false,
-            playHarvest,
+            playHarvest: jest.fn(),
             playComboMilestone: jest.fn(),
+            playEffect,
             setBackgroundMusicEnabled: jest.fn(),
           },
         },
@@ -1868,21 +1872,21 @@ describe('FarmGame UI flow', () => {
       fireEvent.press(screen.getByText(claimButtonLabel));
       await waitFor(() => expect(screen.getByText(claimMessages.collectionClaimedLabel)).toBeTruthy());
       await waitFor(() => expect(onGoldPulse).toHaveBeenCalledTimes(1));
-      expect(playHarvest).not.toHaveBeenCalled();
+      expect(playEffect).not.toHaveBeenCalled();
     });
 
-    test('claim flow completes when playHarvest throws synchronously', async () => {
-      const playHarvest = jest.fn(() => {
+    test('claim flow completes when playEffect throws synchronously', async () => {
+      const playEffect = jest.fn(() => {
         throw new Error('audio error');
       });
-      const screen = await renderAndClaim(playHarvest, { soundEffectsEnabled: true });
+      const screen = await renderAndClaim(playEffect, { soundEffectsEnabled: true });
       await waitFor(() => expect(screen.getByText(claimMessages.collectionClaimedLabel)).toBeTruthy());
       await waitFor(() => expect(onGoldPulse).toHaveBeenCalledTimes(1));
     });
 
-    test('claim flow completes when playHarvest returns a rejected Promise', async () => {
-      const playHarvest = jest.fn(() => Promise.reject(new Error('audio error')));
-      const screen = await renderAndClaim(playHarvest, { soundEffectsEnabled: true });
+    test('claim flow completes when playEffect returns a rejected Promise', async () => {
+      const playEffect = jest.fn(() => Promise.reject(new Error('audio error')));
+      const screen = await renderAndClaim(playEffect, { soundEffectsEnabled: true });
       await waitFor(() => expect(screen.getByText(claimMessages.collectionClaimedLabel)).toBeTruthy());
       await waitFor(() => expect(onGoldPulse).toHaveBeenCalledTimes(1));
     });
@@ -1912,7 +1916,7 @@ describe('FarmGame UI flow', () => {
       vibrateSpy.mockRestore();
     });
 
-    async function renderAndClaimAchievement(playHarvest: jest.Mock, savedSettings: unknown) {
+    async function renderAndClaimAchievement(playEffect: jest.Mock, savedSettings: unknown) {
       const claimMessages = getFarmMessages();
       const track = getHarvestTrack();
       const claimLabel = claimMessages.achievementClaimAction(track.starsPerTier);
@@ -1921,8 +1925,9 @@ describe('FarmGame UI flow', () => {
         {
           audio: {
             isSupported: true,
-            playHarvest,
+            playHarvest: jest.fn(),
             playComboMilestone: jest.fn(),
+            playEffect,
             setBackgroundMusicEnabled: jest.fn(),
           },
         },
@@ -1937,20 +1942,21 @@ describe('FarmGame UI flow', () => {
       return screen;
     }
 
-    test('plays harvest sound and vibrates when an achievement tier is claimed', async () => {
-      const playHarvest = jest.fn();
-      await renderAndClaimAchievement(playHarvest, { soundEffectsEnabled: true });
-      await waitFor(() => expect(playHarvest).toHaveBeenCalledTimes(1));
+    test('plays the reward sting and vibrates when an achievement tier is claimed', async () => {
+      const playEffect = jest.fn();
+      await renderAndClaimAchievement(playEffect, { soundEffectsEnabled: true });
+      await waitFor(() => expect(playEffect).toHaveBeenCalledTimes(1));
+      expect(playEffect).toHaveBeenCalledWith('reward');
       await waitFor(() => {
         expect(vibrateSpy).toHaveBeenCalledTimes(1);
         expect(vibrateSpy).toHaveBeenLastCalledWith(50);
       });
     });
 
-    test('vibrates but skips harvest sound when sound effects are disabled', async () => {
-      const playHarvest = jest.fn();
+    test('vibrates but skips the reward sting when sound effects are disabled', async () => {
+      const playEffect = jest.fn();
       const claimMessages = getFarmMessages();
-      const screen = await renderAndClaimAchievement(playHarvest, {
+      const screen = await renderAndClaimAchievement(playEffect, {
         soundEffectsEnabled: false,
       });
       await waitFor(() =>
@@ -1960,7 +1966,7 @@ describe('FarmGame UI flow', () => {
         expect(vibrateSpy).toHaveBeenCalledTimes(1);
         expect(vibrateSpy).toHaveBeenLastCalledWith(50);
       });
-      expect(playHarvest).not.toHaveBeenCalled();
+      expect(playEffect).not.toHaveBeenCalled();
     });
   });
 
@@ -1972,6 +1978,7 @@ describe('FarmGame UI flow', () => {
         isSupported: true,
         playHarvest: jest.fn(),
         playComboMilestone,
+        playEffect: jest.fn(),
         setBackgroundMusicEnabled: jest.fn(),
       },
     });
@@ -1996,6 +2003,7 @@ describe('FarmGame UI flow', () => {
         isSupported: true,
         playHarvest: jest.fn(),
         playComboMilestone,
+        playEffect: jest.fn(),
         setBackgroundMusicEnabled: jest.fn(),
       },
     });
@@ -2024,6 +2032,7 @@ describe('FarmGame UI flow', () => {
         isSupported: true,
         playHarvest: jest.fn(),
         playComboMilestone,
+        playEffect: jest.fn(),
         setBackgroundMusicEnabled: jest.fn(),
       },
     });

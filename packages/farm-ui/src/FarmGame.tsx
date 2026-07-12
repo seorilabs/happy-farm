@@ -369,11 +369,18 @@ export type FarmGameAdGroupIds = {
   interstitial?: string;
 };
 
+// One-shot SFX beyond the base harvest coin. Adapters map each key to a
+// bundled/streamed asset: plant(심기 팝), reward(도감/업적 보상 팡파레),
+// unlock(구역 해금/연구 완료), mutation(돌연변이 발견 반짝), wheelSpin(룰렛 틱).
+export type FarmSoundEffectKey = 'plant' | 'reward' | 'unlock' | 'mutation' | 'wheelSpin';
+
 export type FarmGameAudio = {
   isSupported: boolean;
   playHarvest: () => void | Promise<void>;
   // Fire-and-forget: implementations must not throw or return a rejectable Promise.
   playComboMilestone: (tier: 'great' | 'legendary') => void;
+  // Fire-and-forget like playComboMilestone; callers guard settings/support.
+  playEffect: (effect: FarmSoundEffectKey) => void;
   setBackgroundMusicEnabled: (enabled: boolean) => void | Promise<void>;
 };
 
@@ -519,6 +526,7 @@ const defaultFarmAudio: FarmGameAudio = {
   isSupported: false,
   playHarvest: () => undefined,
   playComboMilestone: () => undefined,
+  playEffect: () => undefined,
   setBackgroundMusicEnabled: () => undefined,
 };
 const defaultFarmNotifications: FarmGameNotifications = {
@@ -944,6 +952,20 @@ export default function FarmGame({
     };
   }, []);
 
+  // Central SFX guard: every non-harvest effect funnels through here so the
+  // settings/support checks and error swallowing stay in one place.
+  const playSoundEffect = useCallback(
+    (effect: FarmSoundEffectKey) => {
+      if (!gameSettings.soundEffectsEnabled || !audio.isSupported) return;
+      try {
+        void Promise.resolve(audio.playEffect(effect) as unknown).catch(() => undefined);
+      } catch {
+        // SFX errors are non-critical.
+      }
+    },
+    [audio, gameSettings.soundEffectsEnabled]
+  );
+
   useEffect(() => {
     const prev = prevComboRef.current;
     prevComboRef.current = harvestCombo;
@@ -1008,6 +1030,7 @@ export default function FarmGame({
         const token = plantPulseTokenRef.current;
         setPlantPulses((prev) => ({ ...prev, [event.plotIndex]: token }));
         triggerHaptic(15);
+        playSoundEffect('plant');
         farmAnalytics.trackCropPlanted(event.cropKey, event.areaKey, event.cropTier, event.cost, analyticsContext());
         continue;
       }
@@ -1032,6 +1055,7 @@ export default function FarmGame({
           }
           if (effect.firstMutationFlash != null) {
             mutationFlashRef.current?.flash(effect.firstMutationFlash);
+            playSoundEffect('mutation');
           }
           if (effect.firstHarvest != null) {
             showFirstHarvestCelebration({
@@ -1169,6 +1193,7 @@ export default function FarmGame({
         const mutKey = event.mutation.key;
         if (mutKey === 'golden' || mutKey === 'rainbow') {
           mutationFlashRef.current?.flash(mutKey);
+          playSoundEffect('mutation');
         }
       }
       if (event.isNewCropDiscovery) {
@@ -1200,6 +1225,7 @@ export default function FarmGame({
     incrementCombo,
     locale,
     messages,
+    playSoundEffect,
     pulseGold,
     showFirstHarvestCelebration,
     showMasteryRankUpCelebration,
@@ -1931,13 +1957,7 @@ export default function FarmGame({
     triggerHaptic(50);
     pulseGold();
     _callGoldPulseHook();
-    if (gameSettings.soundEffectsEnabled && audio.isSupported) {
-      try {
-        void Promise.resolve(audio.playHarvest()).catch(() => undefined);
-      } catch {
-        // SFX errors are non-critical.
-      }
-    }
+    playSoundEffect('reward');
   }
 
   function openAchievements() {
@@ -2104,13 +2124,7 @@ export default function FarmGame({
     });
     toast(messages.achievementClaimedToast(preview.starsAwarded));
     triggerHaptic(50);
-    if (gameSettings.soundEffectsEnabled && audio.isSupported) {
-      try {
-        void Promise.resolve(audio.playHarvest()).catch(() => undefined);
-      } catch {
-        // SFX errors are non-critical.
-      }
-    }
+    playSoundEffect('reward');
   }
 
   function selectTitle(titleKey: TitleKey | null) {
@@ -2146,6 +2160,7 @@ export default function FarmGame({
     }
     setGameState((state) => unlockNode(state, nodeKey) ?? state);
     farmAnalytics.trackResearchNodeUnlocked({ nodeKey, context: analyticsContext() });
+    playSoundEffect('unlock');
     toast(messages.researchNodeUnlockedToast(getResearchNodeLabel(nodeKey, locale).name));
   }
 
@@ -3586,6 +3601,7 @@ export default function FarmGame({
               analytics={farmAnalytics}
               onDone={toast}
               onMilestone={() => void maybeShowMilestoneAd()}
+              onUnlocked={() => playSoundEffect('unlock')}
             />
 
             <Text style={styles.sheetSectionTitle}>{messages.researchSection}</Text>
@@ -3985,6 +4001,9 @@ export default function FarmGame({
               setGameState((prev) =>
                 getWheelStatus(prev.wheelState, now).canSpin ? applyWheelReward(prev, result, now) : prev
               );
+              // 스핀 연출 시작과 동시에 감속 틱 사운드를 깐다(2000ms, WheelSheet의
+              // ease-out 커브와 같은 길이로 구운 트랙 — scripts/synth-audio-sfx.py).
+              playSoundEffect('wheelSpin');
               return result.reward;
             }}
             onRevealed={(reward) => {
@@ -5875,6 +5894,7 @@ function ShopAreaUnlockRows({
   analytics,
   onDone,
   onMilestone,
+  onUnlocked,
 }: {
   gameState: GameState;
   locale: SupportedLocale;
@@ -5884,6 +5904,8 @@ function ShopAreaUnlockRows({
   analytics: FarmAnalytics;
   onDone: (msg: string) => void;
   onMilestone: () => void;
+  // Fired after a successful unlock commit (SFX hook; host owns the guard).
+  onUnlocked: () => void;
 }) {
   const lockedAreas = FARM_AREAS.filter((area) => !isAreaUnlocked(gameState, area.key));
   // Gated areas (research-unlocked) sit outside the sequential progression.
@@ -5940,6 +5962,7 @@ function ShopAreaUnlockRows({
             cost: area.unlock.cost,
             context: getAnalyticsContext(gameState),
           });
+          onUnlocked();
           onDone(messages.areaOpenedToast(areaLabel.name));
           onMilestone();
         }}
