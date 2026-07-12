@@ -133,13 +133,45 @@ export function canPrestige(gameState: GameState): PrestigeCheck {
   };
 }
 
+export type PrestigePreview = {
+  // Base income persisted on the new chain-farm snapshot. The chain_yield
+  // prestige skill is applied later by getChainIncome when gold is collected.
+  baseChainGoldPerHour: number;
+  // Income rate shown on the chain map and used by getChainIncome after the
+  // current chain_yield prestige-skill multiplier is applied.
+  effectiveChainGoldPerHour: number;
+  // Exact purse balance the next active farm starts with after graduation.
+  startingGold: number;
+};
+
+function getPrestigeStartingGold(gameState: GameState): number {
+  return createInitialState().gold + getSkillEffect(gameState, 'starting_capital');
+}
+
+function getChainYieldMultiplier(gameState: GameState): number {
+  return 1 + getSkillEffect(gameState, 'chain_yield');
+}
+
+// Computes the two economic outcomes shown before graduation. prestigeFarm
+// consumes this same preview so the confirmation sheet cannot drift from the
+// persisted chain-farm value when balance or modifier formulas change.
+export function getPrestigePreview(gameState: GameState, now = Date.now()): PrestigePreview {
+  const productivity = getFarmHourlyProductivity(gameState, now);
+  const baseChainGoldPerHour = Math.max(0, Math.floor(productivity.netProfitPerHour * CHAIN_INCOME_RATIO));
+  return {
+    baseChainGoldPerHour,
+    effectiveChainGoldPerHour: Math.floor(baseChainGoldPerHour * getChainYieldMultiplier(gameState)),
+    startingGold: getPrestigeStartingGold(gameState),
+  };
+}
+
 // Resets exactly the farm layer (FARM_LAYER_KEYS); every meta-layer field is
 // carried over untouched.
 export function createPrestigedState(gameState: GameState): GameState {
   const fresh = createInitialState();
   return {
     ...gameState,
-    gold: fresh.gold + getSkillEffect(gameState, 'starting_capital'),
+    gold: getPrestigeStartingGold(gameState),
     plots: fresh.plots,
     unlockedPlotCount: fresh.unlockedPlotCount,
     unlockedAreas: fresh.unlockedAreas,
@@ -156,18 +188,19 @@ export type PrestigeResult = {
 export function prestigeFarm(
   gameState: GameState,
   nextArchetypeKey: RegionArchetypeKey,
-  now = Date.now()
+  now = Date.now(),
+  productivitySnapshotAt = now
 ): PrestigeResult | null {
   if (!canPrestige(gameState).allowed || !isKnownArchetypeKey(nextArchetypeKey)) {
     return null;
   }
 
   // Snapshot the farm being left behind, with all current modifiers applied.
-  const productivity = getFarmHourlyProductivity(gameState, now);
+  const preview = getPrestigePreview(gameState, productivitySnapshotAt);
   const chainFarm: ChainFarm = {
     id: gameState.prestige.level,
     archetype: gameState.prestige.currentRegionArchetype,
-    goldPerHour: Math.max(0, Math.floor(productivity.netProfitPerHour * CHAIN_INCOME_RATIO)),
+    goldPerHour: preview.baseChainGoldPerHour,
     lastCollectedAt: now,
   };
   const starsAwarded = getPrestigeStarsAward(gameState.prestige.level);
@@ -203,7 +236,7 @@ export type ChainIncomeStatus = {
 
 export function getChainIncome(gameState: GameState, now = Date.now()): ChainIncomeStatus {
   const capMs = getOfflineCapMs(gameState);
-  const yieldMultiplier = 1 + getSkillEffect(gameState, 'chain_yield');
+  const yieldMultiplier = getChainYieldMultiplier(gameState);
   let totalGoldPerHour = 0;
   let accruedGold = 0;
 

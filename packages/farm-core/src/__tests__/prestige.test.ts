@@ -13,6 +13,7 @@ import {
   getChainIncome,
   getOfflineCapMs,
   getPrestigeCost,
+  getPrestigePreview,
   getPrestigeStarsAward,
   getSkillCost,
   getSkillEffect,
@@ -97,11 +98,25 @@ describe('prestige reset boundary', () => {
   test('the chain farm snapshot pays a ratio of the graduating farm productivity', () => {
     const ready = prestigeReadyState();
     const productivity = getFarmHourlyProductivity(ready, NOW);
+    const preview = getPrestigePreview(ready, NOW);
     const result = prestigeFarm(ready, 'plains', NOW);
 
     expect(result!.chainFarm.goldPerHour).toBe(Math.floor(productivity.netProfitPerHour * CHAIN_INCOME_RATIO));
+    expect(result!.chainFarm.goldPerHour).toBe(preview.baseChainGoldPerHour);
+    expect(preview.effectiveChainGoldPerHour).toBe(result!.chainFarm.goldPerHour);
     expect(result!.chainFarm.archetype).toBe(ready.prestige.currentRegionArchetype);
     expect(result!.chainFarm.lastCollectedAt).toBe(NOW);
+  });
+
+  test('can preserve the displayed productivity snapshot while collection starts at confirmation', () => {
+    const ready = prestigeReadyState();
+    const previewAt = NOW;
+    const confirmedAt = NOW + 60_000;
+    const preview = getPrestigePreview(ready, previewAt);
+    const result = prestigeFarm(ready, 'plains', confirmedAt, previewAt);
+
+    expect(result?.chainFarm.goldPerHour).toBe(preview.baseChainGoldPerHour);
+    expect(result?.chainFarm.lastCollectedAt).toBe(confirmedAt);
   });
 
   test('rejects unknown archetypes and unmet requirements', () => {
@@ -115,7 +130,23 @@ describe('prestige reset boundary', () => {
       prestige: { ...prestigeReadyState().prestige, skills: { starting_capital: 2 } },
     };
     const prestiged = createPrestigedState(ready);
+    const preview = getPrestigePreview(ready, NOW);
+    expect(prestiged.gold).toBe(preview.startingGold);
     expect(prestiged.gold).toBe(createInitialState().gold + getSkillEffect(ready, 'starting_capital'));
+  });
+
+  test('preview includes the same chain-yield rate used for collection', () => {
+    const base = prestigeReadyState();
+    const ready: GameState = {
+      ...base,
+      prestige: { ...base.prestige, skills: { chain_yield: 3 } },
+    };
+    const preview = getPrestigePreview(ready, NOW);
+    const result = prestigeFarm(ready, 'plains', NOW)!;
+
+    expect(preview.baseChainGoldPerHour).toBe(result.chainFarm.goldPerHour);
+    expect(preview.effectiveChainGoldPerHour).toBe(getChainIncome(result.state, NOW).totalGoldPerHour);
+    expect(preview.effectiveChainGoldPerHour).toBeGreaterThan(preview.baseChainGoldPerHour);
   });
 });
 

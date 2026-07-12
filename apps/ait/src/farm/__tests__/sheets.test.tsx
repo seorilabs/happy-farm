@@ -9,16 +9,20 @@ import {
   COLLECTION_AREA_REWARDS,
   DEFAULT_LOCALE,
   FARM_AREAS,
+  PRESTIGE_STARS_BASE,
   PRESTIGE_SKILLS,
   createInitialState,
   formatMoney,
+  formatHourlyGold,
   formatRemainingTime,
   getAreaCropKeys,
   getAreaUnlockRequirementText,
   getCollectionSummary,
   getCropLabel,
+  getChainIncome,
   isAreaUnlocked,
   getPrestigeSkillLabel,
+  getPrestigeCost,
   getRewardedGoldAmount,
   getSkillLevel,
   getWheelSlotGold,
@@ -26,6 +30,7 @@ import {
   getResetDayIndex,
   getResetDayStart,
   MUTATION_KINDS,
+  prestigeFarm,
   WHEEL_SLOTS,
   type GameState,
 } from '../../../../../packages/farm-core/src';
@@ -38,7 +43,7 @@ import {
 import { StatsSheet } from '../../../../../packages/farm-ui/src/components/StatsSheet';
 import { AchievementsSheet } from '../../../../../packages/farm-ui/src/components/AchievementsSheet';
 import { LabSheet } from '../../../../../packages/farm-ui/src/components/LabSheet';
-import { ChainMapSheet } from '../../../../../packages/farm-ui/src/components/ChainMapSheet';
+import { ChainMapSheet, PrestigeConfirmSheet } from '../../../../../packages/farm-ui/src/components/ChainMapSheet';
 import { WheelSheet } from '../../../../../packages/farm-ui/src/components/WheelSheet';
 
 const LOCALE = DEFAULT_LOCALE;
@@ -460,6 +465,88 @@ describe('ChainMapSheet', () => {
     const skillTitle = `${skill.icon} ${getPrestigeSkillLabel(skill.key, LOCALE).name} · Lv.${getSkillLevel(state, skill.key)}`;
     fireEvent.press(screen.getByText(skillTitle));
     expect(onBuySkill).toHaveBeenCalledWith(skill.key);
+  });
+});
+
+describe('PrestigeConfirmSheet', () => {
+  test('shows the exact base chain income and next-farm starting gold preview', () => {
+    const base = createInitialState();
+    const legendCrops = getAreaCropKeys('legend_field');
+    const state: GameState = {
+      ...base,
+      gold: getPrestigeCost(0),
+      harvestedCropKeys: [...legendCrops],
+      prestige: {
+        ...base.prestige,
+        skills: { starting_capital: 2, chain_yield: 3 },
+      },
+    };
+    const result = prestigeFarm(state, 'tundra', NOW);
+    expect(result).not.toBeNull();
+    const onConfirm = jest.fn();
+    const screen = render(
+      <PrestigeConfirmSheet
+        gameState={state}
+        locale={LOCALE}
+        messages={messages}
+        now={NOW}
+        selectedArchetype="plains"
+        onSelectArchetype={jest.fn()}
+        onConfirm={onConfirm}
+        onCancel={jest.fn()}
+      />
+    );
+
+    expect(screen.getByText(messages.prestigePreviewSection)).toBeTruthy();
+    expect(screen.getByText(formatHourlyGold(result!.chainFarm.goldPerHour, LOCALE))).toBeTruthy();
+    expect(
+      screen.getByText(formatHourlyGold(getChainIncome(result!.state, NOW).totalGoldPerHour, LOCALE))
+    ).toBeTruthy();
+    expect(screen.getByText(`${formatMoney(result!.state.gold, LOCALE)}G`)).toBeTruthy();
+    expect(screen.getByText(messages.prestigeChainIncomePreviewHint)).toBeTruthy();
+    fireEvent.press(screen.getByText(messages.prestigeConfirmAction(PRESTIGE_STARS_BASE)));
+    expect(onConfirm).toHaveBeenCalledWith(NOW);
+
+    screen.rerender(
+      <PrestigeConfirmSheet
+        gameState={state}
+        locale={LOCALE}
+        messages={messages}
+        now={NOW}
+        selectedArchetype="tundra"
+        onSelectArchetype={jest.fn()}
+        onConfirm={jest.fn()}
+        onCancel={jest.fn()}
+      />
+    );
+    expect(screen.getByText(formatHourlyGold(result!.chainFarm.goldPerHour, LOCALE))).toBeTruthy();
+    expect(screen.getByText(`${formatMoney(result!.state.gold, LOCALE)}G`)).toBeTruthy();
+  });
+
+  test('renders the full English preview copy', () => {
+    const base = createInitialState();
+    const state: GameState = {
+      ...base,
+      prestige: { ...base.prestige, skills: { starting_capital: 2, chain_yield: 3 } },
+    };
+    const englishMessages = getFarmMessages('en-US');
+    const screen = render(
+      <PrestigeConfirmSheet
+        gameState={state}
+        locale="en-US"
+        messages={englishMessages}
+        now={NOW}
+        selectedArchetype="plains"
+        onSelectArchetype={jest.fn()}
+        onConfirm={jest.fn()}
+        onCancel={jest.fn()}
+      />
+    );
+
+    expect(screen.getByText(englishMessages.prestigeChainIncomePreviewLabel)).toBeTruthy();
+    expect(screen.getByText(englishMessages.prestigeEffectiveChainIncomePreviewLabel)).toBeTruthy();
+    expect(screen.getByText(englishMessages.prestigeStartingGoldPreviewLabel)).toBeTruthy();
+    expect(screen.getByText(englishMessages.prestigeChainIncomePreviewHint)).toBeTruthy();
   });
 });
 
