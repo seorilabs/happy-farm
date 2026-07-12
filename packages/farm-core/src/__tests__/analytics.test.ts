@@ -31,6 +31,38 @@ describe('farm analytics adapter contract', () => {
     );
   });
 
+  test('crop_ready_summary는 bucket count와 window 계약을 context와 함께 emit한다', () => {
+    const track = jest.fn();
+    const analytics = createFarmAnalytics(track);
+    const context = getGameAnalyticsContext(
+      createInitialState(),
+      Date.parse('2026-05-27T03:00:00.000Z'),
+      Date.parse('2026-05-27T03:00:05.000Z')
+    );
+
+    analytics.trackCropReadySummary({
+      cropKey: 'carrot',
+      areaKey: 'starter_field',
+      cropTier: 1,
+      readyCount: 6,
+      windowSeconds: 60,
+      context,
+    });
+
+    expect(track).toHaveBeenCalledWith(
+      'crop_ready_summary',
+      expect.objectContaining({
+        crop: 'carrot',
+        area: 'starter_field',
+        crop_tier: 1,
+        ready_count: 6,
+        window_seconds: 60,
+        schema_version: 1,
+        gold: context.gold,
+      })
+    );
+  });
+
   test('rewarded-ad funnel events all carry ad_type and placement for per-placement aggregation', () => {
     const track = jest.fn();
     const analytics = createFarmAnalytics(track);

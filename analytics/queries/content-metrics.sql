@@ -6,7 +6,7 @@
 --
 -- 데이터셋: happy-farm-tycoon.analytics_539626577 (일일 events_YYYYMMDD 샤드)
 -- 이벤트 계약: packages/farm-core/src/analytics.ts
---   (crop_planted / crop_harvested / crop_ready / seed_selected /
+--   (crop_planted / crop_harvested / crop_ready_summary / legacy crop_ready / seed_selected /
 --    area_unlock_clicked / area_unlocked / crop_of_the_day_harvested)
 -- 콘텐츠 키: packages/farm-core/src/balance.json (crops[].key, areas[].key)
 --
@@ -28,7 +28,7 @@ BEGIN
   DECLARE window_days INT64 DEFAULT 28;
 
   WITH
-  -- 콘텐츠 이벤트만 추출하고 event_params에서 crop/area/revenue/first-flag를 평탄화.
+  -- 콘텐츠 이벤트만 추출하고 event_params에서 crop/area/revenue/ready-count/first-flag를 평탄화.
   content_events AS (
     SELECT
       PARSE_DATE('%Y%m%d', event_date) AS day,
@@ -38,6 +38,8 @@ BEGIN
       (SELECT ep.value.string_value FROM UNNEST(event_params) ep WHERE ep.key = 'area') AS area,
       (SELECT COALESCE(ep.value.double_value, ep.value.int_value)
          FROM UNNEST(event_params) ep WHERE ep.key = 'revenue') AS revenue,
+      (SELECT COALESCE(ep.value.int_value, CAST(ep.value.double_value AS INT64))
+         FROM UNNEST(event_params) ep WHERE ep.key = 'ready_count') AS ready_count,
       (SELECT ep.value.int_value FROM UNNEST(event_params) ep WHERE ep.key = 'is_first_crop_harvest') AS is_first_crop_harvest
     FROM `happy-farm-tycoon.analytics_539626577.events_*`
     WHERE _TABLE_SUFFIX
@@ -47,6 +49,7 @@ BEGIN
         'seed_selected',
         'first_seed_selected',
         'crop_planted',
+        'crop_ready_summary',
         'crop_ready',
         'crop_harvested',
         'crop_of_the_day_harvested'
@@ -58,7 +61,14 @@ BEGIN
       day,
       crop,
       COUNTIF(event_name = 'crop_planted')  AS planted,
-      COUNTIF(event_name = 'crop_ready')    AS ready,
+      -- 신규 summary는 ready_count 합계, 배포 전 legacy crop_ready는 이벤트당 1건.
+      SUM(
+        CASE
+          WHEN event_name = 'crop_ready_summary' THEN COALESCE(ready_count, 0)
+          WHEN event_name = 'crop_ready' THEN 1
+          ELSE 0
+        END
+      ) AS ready,
       COUNTIF(event_name = 'crop_harvested') AS harvested,
       COUNTIF(event_name IN ('seed_selected', 'first_seed_selected')) AS seed_selected,
       COUNTIF(event_name = 'crop_harvested' AND is_first_crop_harvest = 1) AS first_harvests,

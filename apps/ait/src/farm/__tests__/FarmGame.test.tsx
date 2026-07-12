@@ -56,6 +56,7 @@ const farmGameModule = jest.requireActual(
 const FarmGame = farmGameModule.default;
 const {
   GAME_TICK_INTERVAL_MS,
+  CROP_READY_SUMMARY_INTERVAL_MS,
   MASTERY_RANK_UP_CELEBRATION_DURATION_MS,
   PRESTIGE_GRADUATION_CELEBRATION_DURATION_MS,
   FIRST_HARVEST_CELEBRATION_DURATION_MS,
@@ -138,6 +139,22 @@ function createGrowingCropState(): GameState {
           }
         : plot
     ),
+  };
+}
+
+function createCropReadyBatchState(): GameState {
+  const base = createInitialState();
+  return {
+    ...base,
+    plots: base.plots.map((plot, index) => {
+      if (index === 0 || index === 1) {
+        return { ...plot, cropType: 'carrot' as const, startTime: NOW, state: 1 as const };
+      }
+      if (index === 2) {
+        return { ...plot, cropType: 'wheat' as const, startTime: NOW, state: 1 as const };
+      }
+      return plot;
+    }),
   };
 }
 
@@ -1982,6 +1999,108 @@ describe('FarmGame UI flow', () => {
     await waitFor(() => expect(screen.queryByText('즉시 성장')).toBeNull());
     await waitFor(() => expect(screen.getByText('GET')).toBeTruthy());
   }, 30_000);
+
+  describe('crop-ready analytics batching', () => {
+    test('flushes one summary per crop bucket after the rolling window', async () => {
+      const track = jest.fn();
+      await renderGame(createCropReadyBatchState(), { analytics: createFarmAnalytics(track) });
+
+      await act(async () => {
+        jest.advanceTimersByTime(4_250);
+      });
+      expect(track).not.toHaveBeenCalledWith('crop_ready', expect.anything());
+      expect(track).not.toHaveBeenCalledWith('crop_ready_summary', expect.anything());
+
+      await act(async () => {
+        jest.advanceTimersByTime(CROP_READY_SUMMARY_INTERVAL_MS);
+      });
+
+      const summaries = track.mock.calls.filter(([name]) => name === 'crop_ready_summary');
+      expect(summaries).toHaveLength(2);
+      expect(summaries).toContainEqual([
+        'crop_ready_summary',
+        expect.objectContaining({
+          crop: 'carrot',
+          area: 'starter_field',
+          crop_tier: 1,
+          ready_count: 2,
+          window_seconds: 60,
+          schema_version: 1,
+        }),
+      ]);
+      expect(summaries).toContainEqual([
+        'crop_ready_summary',
+        expect.objectContaining({
+          crop: 'wheat',
+          area: 'starter_field',
+          crop_tier: 1,
+          ready_count: 1,
+          window_seconds: 60,
+          schema_version: 1,
+        }),
+      ]);
+
+      await act(async () => {
+        jest.advanceTimersByTime(CROP_READY_SUMMARY_INTERVAL_MS);
+      });
+      expect(track.mock.calls.filter(([name]) => name === 'crop_ready_summary')).toHaveLength(2);
+    });
+
+    test('flushes a partial window exactly once on unmount', async () => {
+      const track = jest.fn();
+      const screen = await renderGame(createCropReadyBatchState(), { analytics: createFarmAnalytics(track) });
+
+      await act(async () => {
+        jest.advanceTimersByTime(4_250);
+      });
+      expect(track).not.toHaveBeenCalledWith('crop_ready_summary', expect.anything());
+
+      await act(async () => {
+        screen.unmount();
+      });
+      const summaries = track.mock.calls.filter(([name]) => name === 'crop_ready_summary');
+      expect(summaries).toHaveLength(2);
+      expect(summaries.every(([, params]) => params.window_seconds >= 1 && params.window_seconds < 60)).toBe(true);
+    });
+
+    test('flushes pending buckets with the old context before cloud restore', async () => {
+      const track = jest.fn();
+      const restoreFromCloud = jest.fn(async () => ({
+        status: 'restored' as const,
+        clientRevision: 2,
+        gameState: createInitialState(),
+      }));
+      const screen = await renderGame(
+        { ...createCropReadyBatchState(), gold: 777 },
+        {
+          analytics: createFarmAnalytics(track),
+          cloudSave: {
+            isSupported: true,
+            backupNow: jest.fn(async () => ({ status: 'backed_up' as const, clientRevision: 1 })),
+            restoreFromCloud,
+          },
+        }
+      );
+
+      await act(async () => {
+        jest.advanceTimersByTime(4_250);
+      });
+      fireEvent.press(screen.getByLabelText(getFarmMessages().settingsAccessibilityLabel));
+      fireEvent.press(screen.getByText(getFarmMessages().cloudRestoreAction));
+
+      await waitFor(() => expect(restoreFromCloud).toHaveBeenCalledTimes(1));
+      await waitFor(() =>
+        expect(track.mock.calls.filter(([name]) => name === 'crop_ready_summary')).toHaveLength(2)
+      );
+      const summaries = track.mock.calls.filter(([name]) => name === 'crop_ready_summary');
+      expect(summaries.every(([, params]) => params.gold === 777)).toBe(true);
+
+      await act(async () => {
+        jest.advanceTimersByTime(CROP_READY_SUMMARY_INTERVAL_MS);
+      });
+      expect(track.mock.calls.filter(([name]) => name === 'crop_ready_summary')).toHaveLength(2);
+    });
+  });
 
   test('never drives the growth bar with a full-grow-time animation (legend crops crashed iOS)', async () => {
     // Regression: GrowthProgressBar used to run a single Animated.timing spanning

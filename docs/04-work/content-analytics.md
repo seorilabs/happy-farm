@@ -26,7 +26,8 @@ happy-farm **개별 콘텐츠(작물·구역·기능 퍼널)** 세부 지표의 
 |---|---|---|
 | `seed_selected` / `first_seed_selected` | `crop`, `area` | 씨앗 선택(관심) |
 | `crop_planted` | `crop`, `area`, `crop_tier`, `crop_cost` | 심기 |
-| `crop_ready` | `crop`, `area`, `crop_tier` | 성장 완료 |
+| `crop_ready_summary` | `crop`, `area`, `crop_tier`, `ready_count`, `window_seconds`, `schema_version` | 60초 rolling window의 성장 완료 집계(bucket별 1건) |
+| `crop_ready` | `crop`, `area`, `crop_tier` | 배칭 전 버전의 legacy 성장 완료 이벤트 |
 | `crop_harvested` | `crop`, `area`, `crop_tier`, `revenue`, `is_first_crop_harvest` | 수확·매출 |
 | `crop_of_the_day_harvested` | `crop`, `multiplier` | 오늘의 작물 수확 |
 | `breed_unlocked` | `crop` | 교배 해금 |
@@ -37,13 +38,21 @@ happy-farm **개별 콘텐츠(작물·구역·기능 퍼널)** 세부 지표의 
 - **revenue** = `sum(crop_harvested.revenue)`
 - **harvesters** = `count(distinct user_pseudo_id where crop_harvested)`
 - **seed_selected** = `count(seed_selected) + count(first_seed_selected)`
-- **ready** = `count(crop_ready)`
+- **ready** = `sum(crop_ready_summary.ready_count) + count(legacy crop_ready)`
 - **first_harvests** = `count(crop_harvested where is_first_crop_harvest)`
 - **cotd_harvests** = `count(crop_of_the_day_harvested)`
 
 파생 지표:
 - **심기→수확 전환율** = `harvested / planted` (작물별 완주율)
 - **수확당 평균 매출** = `revenue / harvested`
+
+`crop_ready_summary`는 같은 window 안에서 `(crop, area, crop_tier)`가 같은 익음을
+`ready_count`로 합친다. 정상 active window는 60초 뒤 flush하며, 앱 background/inactive,
+unmount, prestige/reset/cloud restore에서는 유실을 줄이고 새 농장 context 혼합을 막기 위해
+부분 window를 best-effort로 먼저 flush한다. 이때 `window_seconds`에는 실제 경과 초가 기록된다.
+배칭 배포 전후를 함께 조회할 때는 반드시 위의 legacy 호환 합계식을 사용한다. #288의
+기존 `crop_ready` 대비 수확 비율은 과다 발화 기간을 포함하므로 신규 계약 배포 뒤 다시
+baseline을 잡고, 자동수확 사용자는 crop별 수확 이벤트가 없으므로 별도 cohort로 분리한다.
 
 ### 2) 구역(area) 차원
 | 소스 이벤트 | 파라미터 | 용도 |

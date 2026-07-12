@@ -47,6 +47,7 @@ describe('content-metrics.sql 계약 가드', () => {
     for (const event of [
       'crop_planted',
       'crop_harvested',
+      'crop_ready_summary',
       'crop_ready',
       'seed_selected',
       'first_seed_selected',
@@ -56,6 +57,12 @@ describe('content-metrics.sql 계약 가드', () => {
     ]) {
       expect(sql).toContain(`'${event}'`);
     }
+  });
+
+  test('ready는 summary ready_count와 legacy crop_ready를 함께 합산한다', () => {
+    expect(sql).toContain("event_name = 'crop_ready_summary'");
+    expect(sql).toContain("event_name = 'crop_ready'");
+    expect(sql).toContain('COALESCE(ready_count, 0)');
   });
 
   test('두 블록이 BEGIN...END로 변수 스코프가 분리돼 DECLARE 충돌이 없다', () => {
