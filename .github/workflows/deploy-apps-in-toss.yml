@@ -40,6 +40,7 @@ jobs:
       APPS_IN_TOSS_API_KEY: ${{ secrets.APPS_IN_TOSS_API_KEY }}
       APPS_IN_TOSS_INPUT_MEMO: ${{ github.event_name == 'workflow_dispatch' && inputs.memo || '' }}
       APPS_IN_TOSS_RELEASE_REF: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
+      GA4_MP_API_SECRET: ${{ secrets.GA4_MP_API_SECRET }}
 
     steps:
       - name: Checkout
@@ -84,6 +85,9 @@ jobs:
 
       - name: Test AIT app
         run: pnpm --dir apps/ait test
+
+      - name: Inject GA4 Measurement Protocol secret
+        run: node scripts/write-ait-mp-config.mjs
 
       - name: Build AIT artifact
         run: pnpm --dir apps/ait build
