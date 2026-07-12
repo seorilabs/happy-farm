@@ -253,9 +253,12 @@ describe('FarmGame UI flow', () => {
     jest.useFakeTimers();
     jest.setSystemTime(NOW);
     mockPersistence.readPersistedGameState.mockReset();
+    mockPersistence.writePersistedGameState.mockReset();
     mockPersistence.writePersistedGameState.mockResolvedValue(undefined);
+    mockPersistence.removePersistedGameState.mockReset();
     mockPersistence.removePersistedGameState.mockResolvedValue(undefined);
     mockPersistence.readPersistedGameSettings.mockReset();
+    mockPersistence.writePersistedGameSettings.mockReset();
     mockPersistence.writePersistedGameSettings.mockResolvedValue(undefined);
     mockPersistence.readLastSeenAt.mockReset();
     mockPersistence.readLastSeenAt.mockResolvedValue(null);
@@ -3264,6 +3267,20 @@ describe('NextGoalBar', () => {
 
       await waitFor(() => expect(screen.getByTestId('notification-prompt-card')).toBeTruthy());
       expect(screen.getByText(promptMessages.notificationPromptTitle)).toBeTruthy();
+      expect(screen.getByText(promptMessages.notificationPromptDesc)).toBeTruthy();
+    });
+
+    test('renders the combined farm-reminder consent copy in English', async () => {
+      const notifications = createNotificationsMock();
+      const englishMessages = getFarmMessages('en-US');
+      const screen = await renderGame(createPostAhaState(), {
+        notifications,
+        preferredLocale: 'en-US',
+      });
+
+      await waitFor(() => expect(screen.getByTestId('notification-prompt-card')).toBeTruthy());
+      expect(screen.getByText(englishMessages.notificationPromptTitle)).toBeTruthy();
+      expect(screen.getByText(englishMessages.notificationPromptDesc)).toBeTruthy();
     });
 
     test('waits for saved settings before deciding whether to show the prompt', async () => {
@@ -3290,20 +3307,100 @@ describe('NextGoalBar', () => {
       expect(notifications.requestPermission).not.toHaveBeenCalled();
     });
 
-    test('requests permission and enables harvest notifications on accept', async () => {
+    test('requests permission once and enables harvest + comeback reminders together on rapid accept', async () => {
       const notifications = createNotificationsMock();
       const screen = await renderGame(createPostAhaState(), { notifications });
 
       await waitFor(() => expect(screen.getByTestId('notification-prompt-card')).toBeTruthy());
-      fireEvent.press(screen.getByTestId('notification-prompt-accept'));
+      const accept = screen.getByTestId('notification-prompt-accept');
+      await act(async () => {
+        fireEvent.press(accept);
+        fireEvent.press(accept);
+        await Promise.resolve();
+      });
 
       await waitFor(() => expect(notifications.requestPermission).toHaveBeenCalledTimes(1));
       await waitFor(() => expect(screen.queryByTestId('notification-prompt-card')).toBeNull());
       await waitFor(() =>
         expect(mockPersistence.writePersistedGameSettings).toHaveBeenCalledWith(
-          expect.objectContaining({ harvestNotificationsEnabled: true })
+          expect.objectContaining({
+            harvestNotificationsEnabled: true,
+            comebackRemindersEnabled: true,
+          })
         )
       );
+      await waitFor(() =>
+        expect(notifications.scheduleReminder).toHaveBeenCalledWith(
+          'dailyBonus',
+          expect.objectContaining({ readyAtMs: expect.any(Number) })
+        )
+      );
+      expect(notifications.scheduleReminder).toHaveBeenCalledWith(
+        'cropOfTheDay',
+        expect.objectContaining({ readyAtMs: expect.any(Number) })
+      );
+      expect(
+        (notifications.scheduleReminder as jest.Mock).mock.calls.filter(([kind]) => kind === 'dailyBonus')
+      ).toHaveLength(1);
+      expect(
+        (notifications.scheduleReminder as jest.Mock).mock.calls.filter(([kind]) => kind === 'cropOfTheDay')
+      ).toHaveLength(1);
+    });
+
+    test('keeps both reminder settings off when OS permission is denied', async () => {
+      const requestPermission = jest.fn(async () => false);
+      const notifications = createNotificationsMock({ requestPermission });
+      const screen = await renderGame(createPostAhaState(), { notifications });
+
+      const accept = await waitFor(() => screen.getByTestId('notification-prompt-accept'));
+      // Ignore the initial default-settings persistence. From the denied tap
+      // onward, no settings write may enable either notification category.
+      await waitFor(() => expect(mockPersistence.writePersistedGameSettings).toHaveBeenCalled());
+      mockPersistence.writePersistedGameSettings.mockClear();
+      fireEvent.press(accept);
+
+      await waitFor(() => expect(requestPermission).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(screen.queryByTestId('notification-prompt-card')).toBeNull());
+      expect(notifications.scheduleReminder).not.toHaveBeenCalled();
+      expect(mockPersistence.writePersistedGameSettings).not.toHaveBeenCalled();
+      await waitFor(() =>
+        expect(mockPersistence.writePersistedGameState).toHaveBeenCalledWith(
+          expect.objectContaining({ harvestNotificationPromptSeen: true })
+        )
+      );
+    });
+
+    test('keeps harvest and comeback reminder settings independently reversible', async () => {
+      const notifications = createNotificationsMock();
+      const state = { ...createPostAhaState(), harvestNotificationPromptSeen: true };
+      const screen = await renderGame(
+        state,
+        { notifications },
+        { harvestNotificationsEnabled: true, comebackRemindersEnabled: true }
+      );
+
+      await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+      fireEvent.press(screen.getByLabelText(promptMessages.settingsAccessibilityLabel));
+      fireEvent.press(screen.getByText(promptMessages.harvestNotificationsLabel));
+      await waitFor(() =>
+        expect(mockPersistence.writePersistedGameSettings).toHaveBeenCalledWith(
+          expect.objectContaining({
+            harvestNotificationsEnabled: false,
+            comebackRemindersEnabled: true,
+          })
+        )
+      );
+
+      fireEvent.press(screen.getByText(promptMessages.comebackRemindersLabel));
+      await waitFor(() =>
+        expect(mockPersistence.writePersistedGameSettings).toHaveBeenCalledWith(
+          expect.objectContaining({
+            harvestNotificationsEnabled: false,
+            comebackRemindersEnabled: false,
+          })
+        )
+      );
+      expect(notifications.requestPermission).not.toHaveBeenCalled();
     });
 
     test('retires the prompt without asking permission on decline', async () => {

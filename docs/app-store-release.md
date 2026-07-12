@@ -118,7 +118,7 @@ apps/mobile/ios/HappyFarmMobile/GoogleService-Info.plist
 
 Firebase Anonymous Auth와 Firestore 클라우드 저장 백업을 사용하는 빌드는 앱 생성 사용자 식별자와 게임 진행 저장 데이터를 앱 기능(저장 복구) 목적으로 수집한다고 답변합니다. 사용자가 직접 로그인하지 않으므로 심사 정보의 `requiresSignIn`은 `no`를 유지하지만, App Privacy 데이터 유형은 UID/게임 진행 데이터 수집을 반영해야 합니다.
 
-수확 알림은 사용자가 설정에서 켠 경우에만 iOS 로컬 알림 권한을 요청합니다. FCM/APNs 원격 push token을 서버로 보내지 않고, 수확 가능 시점을 기기 로컬 trigger notification으로 예약합니다. 이 기능은 App Privacy 수집 데이터 항목을 추가하지 않습니다.
+농장 알림은 첫 수확 뒤 안내에서 사용자가 명시적으로 수락하거나 설정에서 개별 토글을 켠 경우에만 iOS 로컬 알림 권한을 요청합니다. 수락 시 수확 시점과 데일리 보너스·오늘의 작물 복귀 리마인더가 함께 활성화되며, 설정에서 각각 끌 수 있습니다. FCM/APNs 원격 push token을 서버로 보내지 않고 기기 로컬 trigger notification만 예약하므로 App Privacy 수집 데이터 항목을 추가하지 않습니다.
 
 이 답변은 App Store 심사 통과 기준이며, App Tracking Transparency/IDFA 또는 비개인화 광고 정책을 바꾸면 App Store Connect 답변과 `PrivacyInfo.xcprivacy`를 함께 재검토합니다.
 

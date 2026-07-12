@@ -5,7 +5,7 @@ Firebase project는 `.firebaserc`의 `happy-farm-tycoon`을 기본값으로 사�
 - Mobile: Analytics, Crashlytics, Remote Config, Anonymous Auth, Firestore cloud-save backup
 - AppsInToss: Firebase Web App 등록 완료. AIT target은 Firebase Web SDK를 `apps/ait/src/firebaseWeb/*`에서만 import합니다.
 - 미사용: Cloud Functions, Cloud Messaging
-- Mobile local notifications: Notifee 기반 기기 로컬 수확 알림. FCM token이나 서버 푸시는 사용하지 않습니다.
+- Mobile local notifications: Notifee 기반 기기 로컬 농장 알림(수확·데일리 보너스·오늘의 작물). FCM token이나 서버 푸시는 사용하지 않습니다.
 
 ## Firebase 앱 등록
 
@@ -74,14 +74,17 @@ AppsInToss 보상형 광고는 AppsInToss 광고 그룹 ID가 발급된 뒤 `app
 
 게임 경제, gold, 저장 데이터는 계속 로컬 권위 상태이며 서버 신뢰값으로 쓰지 않습니다.
 
-## 로컬 수확 알림
+## 로컬 농장 알림
 
-모바일 앱은 사용자가 설정에서 `수확 알림`을 켠 경우에만 OS 알림 권한을 요청하고, 현재 심어진 작물 중 가장 빨리 수확 가능한 시점에 단일 로컬 알림을 예약합니다.
+모바일 앱은 첫 수확 뒤 표시되는 농장 알림 안내에서 사용자가 명시적으로 수락하거나, 설정에서 알림 토글을 직접 켠 경우에만 OS 알림 권한을 요청합니다. 안내 수락 시 `수확 알림`과 `복귀 리마인더`를 함께 켜며, 설정에서는 둘을 개별 해제할 수 있습니다.
+
+- 수확 알림은 현재 심어진 작물 중 가장 빨리 수확 가능한 시점에 단일 로컬 알림을 예약합니다.
+- 복귀 리마인더는 데일리 보너스 쿨다운 만료와 오늘의 작물 갱신 시점을 서로 다른 로컬 알림 id로 예약합니다.
 
 - Android 13+에서는 `POST_NOTIFICATIONS` 런타임 권한을 요청합니다.
 - `SCHEDULE_EXACT_ALARM` 권한은 요청하지 않습니다. 알림은 수확 시점 안내용이며 정확한 알람/시계 기능으로 취급하지 않습니다.
 - Firebase Cloud Messaging, 서버 저장 token, 원격 push campaign은 사용하지 않습니다.
-- 알림을 끄거나 수확 예약 대상이 없으면 기존 로컬 trigger notification을 취소합니다.
+- 각 알림을 끄거나 예약 대상이 없으면 해당 로컬 trigger notification을 취소합니다.
 
 ## 익명 Auth와 클라우드 저장 백업
 

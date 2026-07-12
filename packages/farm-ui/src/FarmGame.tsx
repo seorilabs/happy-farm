@@ -717,6 +717,9 @@ function FarmGameBody({
   const [notificationPrompt, setNotificationPrompt] = useState(false);
   // Guards the prompt decision so it runs only once per mount.
   const notificationPromptResolvedRef = useRef(false);
+  // A native double tap can arrive before the prompt unmount commits. Keep the
+  // OS permission request and combined opt-in exactly-once.
+  const notificationPromptAcceptInFlightRef = useRef(false);
   // Current step of the first-session onboarding coachmark; null hides it.
   const [onboardingStep, setOnboardingStep] = useState<OnboardingStep | null>(null);
   // Mirror of the current step for stable callbacks (skip handler) that must read
@@ -2549,15 +2552,28 @@ function FarmGameBody({
   }
 
   async function acceptNotificationPrompt() {
-    setNotificationPrompt(false);
-    markHarvestNotificationPromptSeen();
-    if (!notifications.isSupported) return;
-    const granted = await notifications.requestPermission();
-    if (!granted) {
-      toast(messages.notificationPermissionDeniedToast);
+    if (notificationPromptAcceptInFlightRef.current) {
       return;
     }
-    updateGameSettings({ harvestNotificationsEnabled: true });
+    notificationPromptAcceptInFlightRef.current = true;
+    try {
+      setNotificationPrompt(false);
+      markHarvestNotificationPromptSeen();
+      if (!notifications.isSupported) return;
+      const granted = await notifications.requestPermission();
+      if (!granted) {
+        toast(messages.notificationPermissionDeniedToast);
+        return;
+      }
+      // The education prompt explicitly covers both categories. Persist them
+      // together, while Settings keeps the two toggles independently reversible.
+      updateGameSettings({
+        harvestNotificationsEnabled: true,
+        comebackRemindersEnabled: true,
+      });
+    } finally {
+      notificationPromptAcceptInFlightRef.current = false;
+    }
   }
 
   // Dismissing with "Maybe later" also retires the prompt for good, keeping the
