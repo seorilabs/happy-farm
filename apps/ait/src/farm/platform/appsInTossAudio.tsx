@@ -84,37 +84,30 @@ type OneShotHandle = { play: () => void };
 const OneShotEffectPlayer = React.forwardRef<OneShotHandle, { uri: string; volume: number }>(
   function OneShotEffectPlayer({ uri, volume }, ref) {
     const videoRef = useRef<VideoRef | null>(null);
-    const [playing, setPlaying] = useState(false);
-    // Mirrors `playing` so play() (imperative handle created once with empty
-    // deps) always reads the current value instead of a stale closure.
-    const playingRef = useRef(false);
-    playingRef.current = playing;
-    const [restartPending, setRestartPending] = useState(false);
-    const stopPlayback = useCallback(() => setPlaying(false), []);
+    // Three-state machine instead of a boolean so a retrigger while playing
+    // commits exactly one paused=true render ('restarting') before resuming —
+    // the mobile adapter's stop-then-play (playFromStart) parity — without
+    // relying on seek-while-playing semantics of the Granite Video wrapper.
+    // Transitions run in a pure functional updater, so any number of play()
+    // calls landing in the same batch collapse into a single restart cycle
+    // (idle→playing, playing→restarting, restarting→restarting).
+    const [playState, setPlayState] = useState<'idle' | 'playing' | 'restarting'>('idle');
+    const stopPlayback = useCallback(() => setPlayState('idle'), []);
     const warnFailure = useMemo(() => createPlaybackFailureWarning(uri), [uri]);
 
-    // Retrigger while already playing: mirror the mobile adapter's
-    // stop-then-play (playFromStart). A paused=true render commits first and
-    // playback resumes from 0 on the next effect pass, so the restart never
-    // depends on seek-while-playing semantics of the Granite Video wrapper.
+    // After the 'restarting' (paused) frame commits, resume from position 0.
     useEffect(() => {
-      if (restartPending && !playing) {
-        setRestartPending(false);
-        setPlaying(true);
+      if (playState === 'restarting') {
+        setPlayState('playing');
       }
-    }, [restartPending, playing]);
+    }, [playState]);
 
     useImperativeHandle(
       ref,
       () => ({
         play: () => {
           videoRef.current?.seek(0);
-          if (playingRef.current) {
-            setRestartPending(true);
-            setPlaying(false);
-            return;
-          }
-          setPlaying(true);
+          setPlayState((prev) => (prev === 'idle' ? 'playing' : 'restarting'));
         },
       }),
       []
@@ -128,7 +121,7 @@ const OneShotEffectPlayer = React.forwardRef<OneShotHandle, { uri: string; volum
         onAudioFocusChanged={keepPlaybackOnAudioFocusChange}
         onEnd={stopPlayback}
         onError={warnFailure}
-        paused={!playing}
+        paused={playState !== 'playing'}
         source={{ uri, shouldCache: true }}
         style={styles.hiddenPlayer}
         volume={volume}

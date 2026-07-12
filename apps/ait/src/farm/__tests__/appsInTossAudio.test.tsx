@@ -204,4 +204,27 @@ describe('useAppsInTossFarmAudio', () => {
     });
     expect(latestPropsFor(FARM_AUDIO_SOURCES.reward).paused).toBe(true);
   });
+
+  test('rapid same-batch retriggers collapse into a single restart with no ghost replay', () => {
+    const audio = renderFarmAudio();
+
+    act(() => {
+      audio.playEffect('wheelSpin');
+    });
+    // Two more calls landing in one batch (the wheel path can retrigger fast):
+    // the state machine must fold them into one stop-then-play cycle.
+    act(() => {
+      audio.playEffect('wheelSpin');
+      audio.playEffect('wheelSpin');
+    });
+
+    expect(mockSeek).toHaveBeenCalledTimes(3);
+    expect(latestPropsFor(FARM_AUDIO_SOURCES.wheelSpin).paused).toBe(false);
+
+    // After the sound naturally ends, no stale restart may bring it back.
+    act(() => {
+      latestPropsFor(FARM_AUDIO_SOURCES.wheelSpin).onEnd?.();
+    });
+    expect(latestPropsFor(FARM_AUDIO_SOURCES.wheelSpin).paused).toBe(true);
+  });
 });
