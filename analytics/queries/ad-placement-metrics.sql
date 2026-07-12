@@ -68,7 +68,8 @@ BEGIN
     SELECT 'shop_gold_reward'   AS placement, 0.0 AS ecpm_usd UNION ALL
     SELECT 'shop_plot_discount',     0.0            UNION ALL
     SELECT 'growth_ad_sheet',        0.0            UNION ALL
-    SELECT 'harvest_bonus_sheet',    0.0
+    SELECT 'harvest_bonus_sheet',    0.0            UNION ALL
+    SELECT 'return_offline_bonus',   0.0
   ),
 
   -- 일자 × placement 카운트 집계.
@@ -169,7 +170,8 @@ BEGIN
     SELECT 'shop_gold_reward'   AS placement, 0.0 AS ecpm_usd UNION ALL
     SELECT 'shop_plot_discount',     0.0            UNION ALL
     SELECT 'growth_ad_sheet',        0.0            UNION ALL
-    SELECT 'harvest_bonus_sheet',    0.0
+    SELECT 'harvest_bonus_sheet',    0.0            UNION ALL
+    SELECT 'return_offline_bonus',   0.0
   ),
 
   agg AS (

@@ -65,6 +65,7 @@ import {
   getGrowthAdSkipMs,
   HARVEST_BONUS_BOOST_DURATION_MS,
   HARVEST_BONUS_MULTIPLIER,
+  OFFLINE_BONUS_MULTIPLIER,
   getAdLimits,
   MAX_PLOTS,
   PLOT_DISCOUNT_AD_PERCENT,
@@ -659,6 +660,10 @@ function FarmGameBody({
   // destination sheet. Reserve its immutable snapshot synchronously so offline
   // gold and analytics are exactly-once for this mount.
   const completedReturnSummaryAtRef = useRef<number | null>(null);
+  // The rewarded SDK may take seconds to settle, so block every other
+  // welcome-back action while the offline-bonus request owns its snapshot.
+  const offlineBonusAdInFlightRef = useRef(false);
+  const offlineBonusImpressionAtRef = useRef<number | null>(null);
   // First-session onboarding owns the foreground. A daily-bonus sheet
   // discovered during load waits here until the guide completes or the player
   // explicitly skips it, so a modal can never hide the first action.
@@ -1776,10 +1781,23 @@ function FarmGameBody({
     if (activeSheet?.type === 'harvestBonus') {
       farmAnalytics.trackAdRewardImpression('harvestBonusAd', getRewardedAdPlacement('harvestBonusAd'), analyticsContext());
     }
+    if (
+      activeSheet?.type === 'welcomeBack' &&
+      activeSheet.summary.offlineGold > 0 &&
+      rewardedAd.isAdSupported &&
+      offlineBonusImpressionAtRef.current !== activeSheet.summary.capturedAt
+    ) {
+      offlineBonusImpressionAtRef.current = activeSheet.summary.capturedAt;
+      farmAnalytics.trackAdRewardImpression(
+        'offlineBonusAd',
+        getRewardedAdPlacement('offlineBonusAd'),
+        analyticsContext()
+      );
+    }
     if (activeSheet?.type === 'collection') {
       farmAnalytics.trackCollectionScreen(analyticsContext());
     }
-  }, [activeSheet, analyticsContext]);
+  }, [activeSheet, analyticsContext, rewardedAd.isAdSupported]);
 
   useEffect(() => {
     const id = setInterval(() => {
@@ -1901,6 +1919,10 @@ function FarmGameBody({
   );
   const harvestBonusAdLimit = useMemo(
     () => getRewardedAdLimitStatus(gameState, 'harvestBonusAd', Date.now(), locale),
+    [gameState, locale, tick]
+  );
+  const offlineBonusAdLimit = useMemo(
+    () => getRewardedAdLimitStatus(gameState, 'offlineBonusAd', Date.now(), locale),
     [gameState, locale, tick]
   );
   const harvestBonusBoost = useMemo(() => getHarvestBonusBoostStatus(gameState), [gameState, tick]);
@@ -2335,11 +2357,13 @@ function FarmGameBody({
     toast(messages.chainCollectedToast(formatMoney(collected.collectedGold, locale)));
   }
 
-  // Completes one immutable welcome-back snapshot. Amounts come from the card's
-  // capture instant, not live plot phases, so a crop becoming ready while the
-  // sheet is open cannot reduce the promised payout. The synchronous ref also
-  // prevents rapid native taps from claiming the same snapshot twice.
-  function collectReturnSummaryOffline(summary: ReturnSummary) {
+  // Reserves one immutable welcome-back snapshot before any state transition or
+  // side effect. Amounts come from the card's capture instant, not live plot
+  // phases. During a rewarded request only its earned callback may reserve it.
+  function reserveReturnSummary(summary: ReturnSummary, allowDuringOfflineBonusAd = false) {
+    if (offlineBonusAdInFlightRef.current && !allowDuringOfflineBonusAd) {
+      return false;
+    }
     if (completedReturnSummaryAtRef.current === summary.capturedAt) {
       return false;
     }
@@ -2352,9 +2376,6 @@ function FarmGameBody({
       context: analyticsContext(),
     });
 
-    if (summary.offlineGold > 0) {
-      setGameState((state) => collectReturnSummaryOfflineGold(state, summary).state);
-    }
     if (summary.chainGold > 0) {
       farmAnalytics.trackChainCollected({
         collectedGold: summary.chainGold,
@@ -2366,8 +2387,22 @@ function FarmGameBody({
     return true;
   }
 
+  // Default 1× settlement. The synchronous reservation prevents rapid native
+  // taps and implicit-close races from claiming the same snapshot twice.
+  function collectReturnSummaryOffline(summary: ReturnSummary) {
+    if (!reserveReturnSummary(summary)) {
+      return false;
+    }
+    if (summary.offlineGold > 0) {
+      setGameState((state) => collectReturnSummaryOfflineGold(state, summary).state);
+    }
+    return true;
+  }
+
   function dismissWelcomeBack(summary: ReturnSummary) {
-    collectReturnSummaryOffline(summary);
+    if (!collectReturnSummaryOffline(summary)) {
+      return;
+    }
     setActiveSheet(null);
     void maybeShowReturnAd();
   }
@@ -2376,7 +2411,9 @@ function FarmGameBody({
   // the recap before navigating away from it so a direct ranch/workshop CTA
   // cannot discard accrued offline gold for that already-consumed window.
   function openReturnReadySheet(summary: ReturnSummary, target: 'animals' | 'workshop') {
-    collectReturnSummaryOffline(summary);
+    if (!collectReturnSummaryOffline(summary)) {
+      return;
+    }
     setActiveSheet({ type: target });
   }
 
@@ -2576,7 +2613,15 @@ function FarmGameBody({
     selectCrop(quickStartCropKey);
   }
 
-  async function showRewardedAd(type: RewardedAdType, rewardValue: number, onReward: () => void) {
+  async function showRewardedAd(
+    type: RewardedAdType,
+    rewardValue: number,
+    onReward: () => void,
+    options: {
+      keepSheetOnFailure?: boolean;
+      applyRewardState?: (state: GameState, rewardedAt: number) => GameState;
+    } = {}
+  ) {
     // Tag the whole funnel with the type's canonical placement so blocked/click/
     // completed/failed all aggregate per placement (single source of truth).
     const placement = getRewardedAdPlacement(type);
@@ -2603,7 +2648,9 @@ function FarmGameBody({
     try {
       result = await rewardedAd.showAd();
     } catch {
-      setActiveSheet(null);
+      if (!options.keepSheetOnFailure) {
+        setActiveSheet(null);
+      }
       farmAnalytics.trackAdRewardFailed(type, placement, 'show_ad_threw', analyticsContext());
       toast(messages.adFailedToast);
       return false;
@@ -2619,17 +2666,30 @@ function FarmGameBody({
         rewardValue,
         context: analyticsContext(),
       });
-      setGameState((state) => ({
-        ...state,
-        adUsage: recordRewardedAdUsage(state, type, rewardedAt),
-        // Any rewarded-ad view counts toward the "watch an ad" daily + weekly mission.
-        dailyMissionState: recordAdWatchProgress(state.dailyMissionState, rewardedAt, state.unlockedAreas),
-        weeklyMissionState: recordWeeklyAdWatchProgress(state.weeklyMissionState, rewardedAt, state.unlockedAreas),
-      }));
+      setGameState((state) => {
+        const rewardedState = options.applyRewardState?.(state, rewardedAt) ?? state;
+        return {
+          ...rewardedState,
+          adUsage: recordRewardedAdUsage(rewardedState, type, rewardedAt),
+          // Any rewarded-ad view counts toward the "watch an ad" daily + weekly mission.
+          dailyMissionState: recordAdWatchProgress(
+            rewardedState.dailyMissionState,
+            rewardedAt,
+            rewardedState.unlockedAreas
+          ),
+          weeklyMissionState: recordWeeklyAdWatchProgress(
+            rewardedState.weeklyMissionState,
+            rewardedAt,
+            rewardedState.unlockedAreas
+          ),
+        };
+      });
       return true;
     }
 
-    setActiveSheet(null);
+    if (!options.keepSheetOnFailure) {
+      setActiveSheet(null);
+    }
     farmAnalytics.trackAdRewardFailed(type, placement, getAdFailureReason(result), analyticsContext());
     toast(result.status === 'dismissed' ? messages.adDismissedToast : messages.adFailedToast);
 
@@ -2684,6 +2744,44 @@ function FarmGameBody({
     // milestone interstitial doesn't immediately stack on top of this one — and a
     // return ad that never showed never suppresses the milestone slot.
     lastInterstitialShownAtRef.current = Date.now();
+  }
+
+  async function rewardReturnOfflineGoldFromAd(summary: ReturnSummary) {
+    if (
+      summary.offlineGold <= 0 ||
+      offlineBonusAdInFlightRef.current ||
+      completedReturnSummaryAtRef.current === summary.capturedAt
+    ) {
+      return;
+    }
+
+    offlineBonusAdInFlightRef.current = true;
+    let rewardReserved = false;
+    try {
+      await showRewardedAd(
+        'offlineBonusAd',
+        summary.offlineGold,
+        () => {
+          rewardReserved = reserveReturnSummary(summary, true);
+          if (!rewardReserved) return;
+          pulseGold();
+          toast(messages.welcomeBackDoubleAdToast(formatMoney(summary.offlineGold, locale)));
+        },
+        {
+          // A dismissed/failed ad must leave the recap and its guaranteed 1×
+          // claim intact. Only an earned result closes the sheet.
+          keepSheetOnFailure: true,
+          // Base payout + bonus, ad usage, and ad-mission progress are committed
+          // by showRewardedAd in one functional updater on the freshest state.
+          applyRewardState: (state) =>
+            rewardReserved
+              ? collectReturnSummaryOfflineGold(state, summary, OFFLINE_BONUS_MULTIPLIER).state
+              : state,
+        }
+      );
+    } finally {
+      offlineBonusAdInFlightRef.current = false;
+    }
   }
 
   async function rewardGoldFromAd() {
@@ -3723,7 +3821,14 @@ function FarmGameBody({
         title={getSheetTitle(activeSheet, messages)}
         closeLabel={messages.sheetCloseAccessibilityLabel}
         bottomInset={bottomSafeInset}
-        onClose={closeSheet}
+        canClose={() => activeSheet?.type !== 'welcomeBack' || !offlineBonusAdInFlightRef.current}
+        onClose={() => {
+          if (activeSheet?.type === 'welcomeBack' && !collectReturnSummaryOffline(activeSheet.summary)) {
+            return false;
+          }
+          closeSheet();
+          return true;
+        }}
       >
         {activeSheet?.type === 'shop' ? (
           <View>
@@ -4329,7 +4434,7 @@ function FarmGameBody({
                 label={messages.welcomeBackHarvestAction}
                 onPress={() => {
                   if (activeSheet?.type !== 'welcomeBack') return;
-                  collectReturnSummaryOffline(activeSheet.summary);
+                  if (!collectReturnSummaryOffline(activeSheet.summary)) return;
                   setActiveSheet(null);
                   harvestAllCrops();
                   void maybeShowReturnAd();
@@ -4342,11 +4447,26 @@ function FarmGameBody({
                 secondary={activeSheet.summary.readyCropCount > 0}
                 onPress={() => {
                   if (activeSheet?.type !== 'welcomeBack') return;
-                  collectReturnSummaryOffline(activeSheet.summary);
+                  if (!collectReturnSummaryOffline(activeSheet.summary)) return;
                   // Jump straight to the daily sheet. It is the next interaction, so we skip
                   // the return ad here to avoid covering the claim flow.
                   setActiveSheet({ type: 'dailyBonus' });
                 }}
+              />
+            ) : null}
+            {activeSheet.summary.offlineGold > 0 && rewardedAd.isAdSupported ? (
+              <SheetAction
+                testID="welcome-back-double-ad-action"
+                secondary
+                label={
+                  offlineBonusAdLimit.allowed
+                    ? messages.welcomeBackDoubleAdAction(
+                        formatMoney(activeSheet.summary.offlineGold * OFFLINE_BONUS_MULTIPLIER, locale)
+                      )
+                    : offlineBonusAdLimit.reason
+                }
+                disabled={!rewardedAd.isAdReady || !offlineBonusAdLimit.allowed}
+                onPress={() => void rewardReturnOfflineGoldFromAd(activeSheet.summary)}
               />
             ) : null}
             <SheetAction
@@ -5776,6 +5896,7 @@ function Sheet({
   title,
   closeLabel,
   bottomInset,
+  canClose,
   onClose,
 }: {
   activeSheet: ActiveSheet;
@@ -5785,7 +5906,11 @@ function Sheet({
   closeLabel: string;
   // 하단 시스템 UI와 시트 하단 버튼이 겹치지 않도록 확보할 하단 인셋(#236).
   bottomInset: number;
-  onClose: () => void;
+  // Rewarded-ad requests may temporarily own a sheet snapshot. Reject the
+  // native close before animating so a pending request cannot leave an
+  // invisible, still-mounted modal behind.
+  canClose?: () => boolean;
+  onClose: () => boolean | void;
 }) {
   const dragYRef = useRef<Animated.Value | null>(null);
   if (dragYRef.current == null) {
@@ -5800,8 +5925,22 @@ function Sheet({
     extrapolate: 'clamp',
   });
   const shouldHandleSheetDrag = useCallback((dy: number, dx: number) => dy > 4 && Math.abs(dy) > Math.abs(dx), []);
+  const restoreSheetPosition = useCallback(() => {
+    dragY.stopAnimation();
+    Animated.spring(dragY, {
+      toValue: 0,
+      damping: 18,
+      stiffness: 220,
+      mass: 0.8,
+      useNativeDriver: true,
+    }).start();
+  }, [dragY]);
   const closeSheetWithAnimation = useCallback(() => {
     if (isClosingRef.current) {
+      return;
+    }
+    if (canClose?.() === false) {
+      restoreSheetPosition();
       return;
     }
 
@@ -5814,11 +5953,13 @@ function Sheet({
       useNativeDriver: true,
     }).start(({ finished }) => {
       isClosingRef.current = false;
-      if (finished) {
-        onClose();
+      if (finished && onClose() === false) {
+        // The close became invalid while the animation was running (for
+        // example, a rewarded request acquired the welcome-back snapshot).
+        restoreSheetPosition();
       }
     });
-  }, [dragY, onClose]);
+  }, [canClose, dragY, onClose, restoreSheetPosition]);
   const panResponder = useMemo(
     () =>
       PanResponder.create({
@@ -5840,25 +5981,13 @@ function Sheet({
             return;
           }
 
-          Animated.spring(dragY, {
-            toValue: 0,
-            damping: 18,
-            stiffness: 220,
-            mass: 0.8,
-            useNativeDriver: true,
-          }).start();
+          restoreSheetPosition();
         },
         onPanResponderTerminate: () => {
-          Animated.spring(dragY, {
-            toValue: 0,
-            damping: 18,
-            stiffness: 220,
-            mass: 0.8,
-            useNativeDriver: true,
-          }).start();
+          restoreSheetPosition();
         },
       }),
-    [closeSheetWithAnimation, dragY, shouldHandleSheetDrag]
+    [closeSheetWithAnimation, dragY, restoreSheetPosition, shouldHandleSheetDrag]
   );
 
   useEffect(() => {

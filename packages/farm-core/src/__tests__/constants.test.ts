@@ -295,6 +295,7 @@ describe('farm save migration', () => {
       rewardedGoldDailyCount: 0,
       growthAd: { lastUsedAt: null, dailyCount: 0 },
       plotDiscountAd: { lastUsedAt: null, dailyCount: 0 },
+      offlineBonusAd: { lastUsedAt: null, dailyCount: 0 },
       harvestBonusAd: {
         lastUsedAt: NOW - 1000,
         lastPromptedAt: NOW - 2000,
@@ -531,6 +532,7 @@ describe('farm ad limits', () => {
         rewardedGoldTimestamps: [NOW - 1, NOW + 1, NOW - REWARDED_GOLD_WINDOW_MS - 1, Number.NaN],
         rewardedGoldDailyCount: -5,
         growthAd: { lastUsedAt: NOW + 1, dailyCount: Number.NaN },
+        offlineBonusAd: { lastUsedAt: NOW - 2, dailyCount: 1 },
         harvestBonusAd: {
           lastUsedAt: NOW - 1,
           lastPromptedAt: NOW + 1,
@@ -544,6 +546,7 @@ describe('farm ad limits', () => {
     expect(adUsage.rewardedGoldTimestamps).toEqual([NOW - 1]);
     expect(adUsage.rewardedGoldDailyCount).toBe(0);
     expect(adUsage.growthAd).toEqual({ lastUsedAt: null, dailyCount: 0 });
+    expect(adUsage.offlineBonusAd).toEqual({ lastUsedAt: NOW - 2, dailyCount: 1 });
     expect(adUsage.harvestBonusAd).toEqual({
       lastUsedAt: NOW - 1,
       lastPromptedAt: null,

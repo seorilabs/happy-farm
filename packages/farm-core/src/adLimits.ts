@@ -19,6 +19,10 @@ export type AdLimitsConfig = {
   plotDiscountAdDailyLimit: number;
   /** 밭 할인 광고: 쿨다운(ms) */
   plotDiscountAdCooldownMs: number;
+  /** 복귀 오프라인 골드 2배 광고: 일일 한도 */
+  offlineBonusAdDailyLimit: number;
+  /** 복귀 오프라인 골드 2배 광고: 쿨다운(ms) */
+  offlineBonusAdCooldownMs: number;
   /** 수확 보너스 광고: 일일 한도 */
   harvestBonusAdDailyLimit: number;
   /** 수확 보너스 광고: 쿨다운(ms) */
@@ -36,6 +40,8 @@ export const DEFAULT_AD_LIMITS: AdLimitsConfig = {
   growthAdCooldownMs: balance.ads.growthAdCooldownMs,
   plotDiscountAdDailyLimit: balance.ads.plotDiscountAdDailyLimit,
   plotDiscountAdCooldownMs: balance.ads.plotDiscountAdCooldownMs,
+  offlineBonusAdDailyLimit: balance.ads.offlineBonusAdDailyLimit,
+  offlineBonusAdCooldownMs: balance.ads.offlineBonusAdCooldownMs,
   harvestBonusAdDailyLimit: balance.ads.harvestBonusAdDailyLimit,
   harvestBonusAdCooldownMs: balance.ads.harvestBonusAdCooldownMs,
   interstitialMilestoneCooldownMs: balance.ads.interstitialMilestoneCooldownMs,
