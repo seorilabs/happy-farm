@@ -1,5 +1,7 @@
 import { getApps, initializeApp, type FirebaseApp, type FirebaseOptions } from 'firebase/app';
 
+import { APPS_IN_TOSS_GA4_MEASUREMENT_ID } from './mpConfig';
+
 const APPS_IN_TOSS_FIREBASE_APP_NAME = 'happy-farm-apps-in-toss';
 
 export const APPS_IN_TOSS_FIREBASE_CONFIG: FirebaseOptions = {
@@ -9,7 +11,7 @@ export const APPS_IN_TOSS_FIREBASE_CONFIG: FirebaseOptions = {
   storageBucket: 'happy-farm-tycoon.firebasestorage.app',
   messagingSenderId: '1874344437',
   appId: '1:1874344437:web:a34abb444eae2baa6c48bc',
-  measurementId: 'G-LQQQQZHG1V',
+  measurementId: APPS_IN_TOSS_GA4_MEASUREMENT_ID,
 };
 
 export function getAppsInTossFirebaseApp(): FirebaseApp {
