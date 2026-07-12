@@ -3,6 +3,7 @@ import {
   Animated,
   AppState,
   Easing,
+  Image,
   KeyboardAvoidingView,
   Modal,
   PanResponder,
@@ -183,6 +184,7 @@ import {
 } from '../../farm-core/src/dailyBonus';
 
 import { DEFAULT_FARM_GAME_SETTINGS, normalizeFarmGameSettings, type FarmGameSettings } from './gameSettings';
+import { CropGlyph, FarmArtProvider, useCropArtSource, useFarmArt, type FarmArt } from './farmArt';
 import { getFarmMessages, type FarmMessages } from './i18n';
 import { AchievementsSheet } from './components/AchievementsSheet';
 import { ChainMapSheet, PrestigeConfirmSheet } from './components/ChainMapSheet';
@@ -419,6 +421,9 @@ export type FarmGameProps = {
   useRewardedAd?: UseFarmAd;
   useInterstitialAd?: UseFarmAd;
   audio?: FarmGameAudio;
+  // Host-provided generated art (crop icons, growth stages, soil tile).
+  // Absent → every surface falls back to the original emoji glyphs.
+  art?: FarmArt;
   notifications?: FarmGameNotifications;
   market?: FarmGameMarket;
   preferredLocale?: SupportedLocale;
@@ -598,7 +603,17 @@ function useFarmSafeAreaInsets() {
   }
 }
 
-export default function FarmGame({
+// Thin wrapper so the art context wraps every FarmGame subtree (sheets,
+// overlays, plot grid) without threading a prop through each component.
+export default function FarmGame(props: FarmGameProps = {}) {
+  return (
+    <FarmArtProvider art={props.art}>
+      <FarmGameBody {...props} />
+    </FarmArtProvider>
+  );
+}
+
+function FarmGameBody({
   persistence = defaultPersistence,
   cloudSave = defaultCloudSave,
   analytics = defaultFarmAnalytics,
@@ -3461,6 +3476,7 @@ export default function FarmGame({
                   testID={`seed-tool-${key}`}
                   active={selectedTool === key}
                   icon={crop.icon}
+                  cropKey={key}
                   name={getLocalizedCropName(key)}
                   cost={formatMoney(cropCost, locale)}
                   roi={messages.roi(formatSignedPercent(getCropEconomy(cropEconomyByKey, key).roiPercent, locale))}
@@ -5094,6 +5110,7 @@ const PlotCell = React.memo(function PlotCell({
         style={[styles.plotTile, tileSizeStyle, styles.emptyPlot]}
         onPress={handlePress}
       >
+        <PlotSoilBackground />
         <Text style={styles.emptyPlotText}>{messages.emptyPlot}</Text>
       </Pressable>
     );
@@ -5126,6 +5143,7 @@ const PlotCell = React.memo(function PlotCell({
       style={[styles.plotTile, tileSizeStyle, plot.state === 2 ? styles.readyPlot : styles.growingPlot]}
       onPress={handlePress}
     >
+      <PlotSoilBackground readyTint={plot.state === 2} />
       {plot.state === 2 ? (
         <View style={styles.harvestBadge}>
           <Text style={styles.harvestBadgeText}>{messages.readyBadge}</Text>
@@ -5144,9 +5162,10 @@ const PlotCell = React.memo(function PlotCell({
         </>
       ) : null}
       {plot.state === 2 ? (
-        <ReadyCropIcon icon={cropIconGlyph} phaseSeed={plot.id} />
+        <ReadyCropIcon cropKey={plot.cropType ?? null} icon={cropIconGlyph} phaseSeed={plot.id} />
       ) : (
         <GrowingCropIcon
+          cropKey={plot.cropType ?? null}
           icon={growingGlyph}
           stage={growthStage}
           nearlyReady={nearlyReady}
@@ -5161,7 +5180,40 @@ const PlotCell = React.memo(function PlotCell({
 // Ripe crops gently pulse so harvestable plots draw the eye in a full grid,
 // reinforcing the "see ready -> tap" loop. Native-driven loop keeps it cheap
 // even with every plot ripe at once.
-function ReadyCropIcon({ icon, phaseSeed }: { icon: string; phaseSeed: number }) {
+// Soil texture under plot content (art hosts only). Absolute-filled inside the
+// plot Pressable, whose overflow:hidden + borderRadius clips it to the tile.
+// Ready plots get a warm tint above the soil so the "harvestable" cue survives
+// the texture covering the readyPlot background color.
+function PlotSoilBackground({ readyTint = false }: { readyTint?: boolean }) {
+  const art = useFarmArt();
+  const [failed, setFailed] = useState(false);
+  if (art.soilTile == null || failed) {
+    return null;
+  }
+  return (
+    <>
+      <Image
+        source={art.soilTile}
+        onError={() => setFailed(true)}
+        style={StyleSheet.absoluteFill}
+        resizeMode="cover"
+      />
+      {readyTint ? <View style={[StyleSheet.absoluteFill, styles.plotSoilReadyTint]} /> : null}
+    </>
+  );
+}
+
+function ReadyCropIcon({
+  cropKey,
+  icon,
+  phaseSeed,
+}: {
+  cropKey: CropKey | null;
+  icon: string;
+  phaseSeed: number;
+}) {
+  const artSource = useCropArtSource(cropKey);
+  const [artFailed, setArtFailed] = useState(false);
   const pulseRef = useRef<Animated.Value | null>(null);
   if (pulseRef.current == null) {
     pulseRef.current = new Animated.Value(0);
@@ -5197,6 +5249,18 @@ function ReadyCropIcon({ icon, phaseSeed }: { icon: string; phaseSeed: number })
 
   const scale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.14] });
 
+  if (artSource != null && !artFailed) {
+    return (
+      <Animated.View style={{ transform: [{ scale }] }}>
+        <Image
+          source={artSource}
+          onError={() => setArtFailed(true)}
+          style={styles.readyCropImage}
+          resizeMode="contain"
+        />
+      </Animated.View>
+    );
+  }
   return <Animated.Text style={[styles.readyCropIcon, { transform: [{ scale }] }]}>{icon}</Animated.Text>;
 }
 
@@ -5204,18 +5268,27 @@ function ReadyCropIcon({ icon, phaseSeed }: { icon: string; phaseSeed: number })
 // in once so tapping an empty plot feels tactile. Auto-replant and save-load
 // pass no token, so reopening the app never re-pops every growing plot.
 function GrowingCropIcon({
+  cropKey,
   icon,
   stage,
   nearlyReady,
   plantToken,
   onPlantPulseDone,
 }: {
+  cropKey: CropKey | null;
   icon: string;
   stage: CropGrowthStage;
   nearlyReady: boolean;
   plantToken: number | undefined;
   onPlantPulseDone: () => void;
 }) {
+  // sprout/sapling share the generic stage art; budding/mature show the crop's
+  // own art (the budding dim/shrink treatment below applies to both paths).
+  const art = useFarmArt();
+  const cropArtSource = useCropArtSource(cropKey);
+  const artSource =
+    stage === 'sprout' || stage === 'sapling' ? (art.stageIcon?.(stage) ?? null) : cropArtSource;
+  const [artFailed, setArtFailed] = useState(false);
   const popRef = useRef<Animated.Value | null>(null);
   if (popRef.current == null) {
     popRef.current = new Animated.Value(1);
@@ -5290,6 +5363,18 @@ function GrowingCropIcon({
   const scale = Animated.multiply(Animated.multiply(popScale, previewScale), pulseScale);
   const opacity = Animated.multiply(popOpacity, previewOpacity);
 
+  if (artSource != null && !artFailed) {
+    return (
+      <Animated.View style={{ opacity, transform: [{ scale }] }}>
+        <Image
+          source={artSource}
+          onError={() => setArtFailed(true)}
+          style={styles.cropImage}
+          resizeMode="contain"
+        />
+      </Animated.View>
+    );
+  }
   return (
     <Animated.Text style={[styles.cropIcon, { opacity, transform: [{ scale }] }]}>{icon}</Animated.Text>
   );
@@ -5733,6 +5818,7 @@ function getSheetDescription(
 const ToolButton = React.memo(function ToolButton({
   active,
   icon,
+  cropKey,
   name,
   cost,
   roi,
@@ -5749,6 +5835,9 @@ const ToolButton = React.memo(function ToolButton({
 }: {
   active: boolean;
   icon: string;
+  // Seed tools pass their crop key so the icon can render generated art;
+  // the harvest tool leaves it unset and keeps its emoji glyph.
+  cropKey?: CropKey;
   name: string;
   cost?: string;
   roi?: string;
@@ -5774,7 +5863,7 @@ const ToolButton = React.memo(function ToolButton({
       style={[styles.toolButton, active && styles.activeToolButton]}
       onPress={() => onSelect(toolKey)}
     >
-      <Text style={styles.toolIcon}>{icon}</Text>
+      <CropGlyph cropKey={cropKey} emoji={icon} size={24} textStyle={styles.toolIcon} />
       <Text style={styles.toolName} numberOfLines={1}>
         {name}
       </Text>

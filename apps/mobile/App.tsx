@@ -3,6 +3,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { FarmGame, detectRuntimeLocale } from '../../packages/farm-ui/src';
 import { useAdMobRewardedAd } from './src/ads/adMobRewardedAd';
+import { mobileFarmArt } from './src/art/farmArt';
 import { useMobileFarmAudio } from './src/audio/farmAudio';
 import {
   initializeMobileFirebaseServices,
@@ -32,6 +33,7 @@ function App() {
     <SafeAreaProvider>
       <FarmGame
         analytics={mobileFarmAnalytics}
+        art={mobileFarmArt}
         audio={farmAudio}
         cloudSave={mobileCloudSave}
         market="mobile"

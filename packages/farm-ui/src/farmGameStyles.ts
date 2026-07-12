@@ -426,9 +426,22 @@ export const styles = StyleSheet.create({
     fontSize: 28,
     lineHeight: 32,
   },
+  // 생성 아트 경로: 이모지 글리프(fontSize)와 같은 시각적 크기로 맞춘 정사각 이미지.
+  cropImage: {
+    width: 30,
+    height: 30,
+  },
   readyCropIcon: {
     fontSize: 32,
     lineHeight: 36,
+  },
+  readyCropImage: {
+    width: 34,
+    height: 34,
+  },
+  // 흙 타일 텍스처 위에서도 '수확 가능' 배경색 신호가 살아남도록 덧씌우는 웜 틴트.
+  plotSoilReadyTint: {
+    backgroundColor: 'rgba(255, 213, 79, 0.30)',
   },
   toolStrip: {
     paddingTop: 10,

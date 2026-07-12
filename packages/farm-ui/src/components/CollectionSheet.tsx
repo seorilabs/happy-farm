@@ -1,6 +1,7 @@
 import React from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { CropGlyph } from '../farmArt';
 import {
   COLLECTION_FULL_REWARD_KEY,
   CROPS,
@@ -123,7 +124,11 @@ export function CollectionSheet({
                     disabled={!discovered}
                     testID={`collection-cell-${cropKey}`}
                   >
-                    <Text style={styles.collectionCellIcon}>{discovered ? crop.icon : '❓'}</Text>
+                    {discovered ? (
+                      <CropGlyph cropKey={cropKey} emoji={crop.icon} size={28} textStyle={styles.collectionCellIcon} />
+                    ) : (
+                      <Text style={styles.collectionCellIcon}>❓</Text>
+                    )}
                     <Text style={styles.collectionCellName} numberOfLines={1}>
                       {discovered ? getCropLabel(cropKey, locale).name : '???'}
                     </Text>
@@ -181,7 +186,7 @@ export function CollectionSheet({
           >
             {/* 카드 내부 탭은 배경으로 전파돼 닫히지 않도록 빈 onPress로 막는다. */}
             <Pressable style={styles.detailCard} onPress={() => {}} testID="collection-detail-card">
-              <Text style={styles.detailIcon}>{detailCrop.icon}</Text>
+              <CropGlyph cropKey={detailCropKey} emoji={detailCrop.icon} size={52} textStyle={styles.detailIcon} />
               <Text style={styles.detailName}>{detailLabel.name}</Text>
               <Text style={styles.detailValue}>{formatMoney(detailCrop.sell, locale)}G</Text>
               <Text style={styles.detailDescription}>{detailLabel.description}</Text>
