@@ -1,4 +1,3 @@
-import { getAppsInTossFirebaseApp } from './app';
 import {
   appsInTossFarmAnalytics,
   initializeAppsInTossAnalytics,
@@ -7,10 +6,10 @@ import {
 import { getAppsInTossRemoteBoolean, initializeAppsInTossRemoteConfig } from './remoteConfig';
 
 export async function initializeAppsInTossFirebaseServices() {
-  const app = getAppsInTossFirebaseApp();
-  // analytics는 GA4 Measurement Protocol(fetch) 전송이라 FirebaseApp 인스턴스가 필요 없다.
+  // analytics(GA4 Measurement Protocol)·remoteConfig(REST) 모두 fetch로 직접 호출하므로
+  // 브라우저 전용 Firebase JS SDK나 FirebaseApp 인스턴스가 필요 없다.
   const analytics = await initializeAppsInTossAnalytics();
-  const remoteConfig = await initializeAppsInTossRemoteConfig(app);
+  const remoteConfig = await initializeAppsInTossRemoteConfig();
 
   // 원격값(analytics_collection_enabled)을 실제 수집 토글에 반영하되, 원격 설정이
   // 실제로 활성화(ready)된 경우에만 적용한다. 미지원/오류로 원격값이 비권위적인
