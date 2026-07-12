@@ -137,4 +137,99 @@ describe('useAppsInTossFarmAudio', () => {
     expect(mockSeek).toHaveBeenCalledTimes(2);
     expect(latestPropsFor(FARM_AUDIO_SOURCES.harvestCoin).paused).toBe(false);
   });
+
+  const EFFECT_URIS = {
+    plant: FARM_AUDIO_SOURCES.plant,
+    reward: FARM_AUDIO_SOURCES.reward,
+    unlock: FARM_AUDIO_SOURCES.unlock,
+    mutation: FARM_AUDIO_SOURCES.mutation,
+    wheelSpin: FARM_AUDIO_SOURCES.wheelSpin,
+  } as const;
+
+  test('mounts one paused, cached remote player per one-shot effect', () => {
+    renderFarmAudio();
+
+    for (const uri of Object.values(EFFECT_URIS)) {
+      expect(latestPropsFor(uri).paused).toBe(true);
+      expect(latestPropsFor(uri).source?.shouldCache).toBe(true);
+    }
+  });
+
+  test.each(Object.entries(EFFECT_URIS))(
+    'playEffect(%s) plays only its own player from the start and pauses on end',
+    (effect, uri) => {
+      const audio = renderFarmAudio();
+
+      act(() => {
+        audio.playEffect(effect as keyof typeof EFFECT_URIS);
+      });
+
+      expect(mockSeek).toHaveBeenCalledWith(0);
+      expect(latestPropsFor(uri).paused).toBe(false);
+      // Every other effect player stays paused: play routes to exactly one.
+      for (const otherUri of Object.values(EFFECT_URIS)) {
+        if (otherUri !== uri) {
+          expect(latestPropsFor(otherUri).paused).toBe(true);
+        }
+      }
+
+      act(() => {
+        latestPropsFor(uri).onEnd?.();
+      });
+
+      expect(latestPropsFor(uri).paused).toBe(true);
+    }
+  );
+
+  test('retriggering an effect mid-playback restarts it via a stop-then-play cycle', () => {
+    const audio = renderFarmAudio();
+
+    act(() => {
+      audio.playEffect('reward');
+    });
+    expect(latestPropsFor(FARM_AUDIO_SOURCES.reward).paused).toBe(false);
+
+    // Second call before onEnd: the player must pass through paused=true and
+    // come back unpaused (mobile playFromStart parity), with a fresh seek(0).
+    act(() => {
+      audio.playEffect('reward');
+    });
+
+    // seek fires exactly once per restart cycle, always against a player whose
+    // paused frame has already committed: two play() calls → two cycles.
+    expect(mockSeek).toHaveBeenCalledTimes(2);
+    expect(mockSeek).toHaveBeenLastCalledWith(0);
+    expect(latestPropsFor(FARM_AUDIO_SOURCES.reward).paused).toBe(false);
+
+    act(() => {
+      latestPropsFor(FARM_AUDIO_SOURCES.reward).onEnd?.();
+    });
+    expect(latestPropsFor(FARM_AUDIO_SOURCES.reward).paused).toBe(true);
+  });
+
+  test('rapid same-batch retriggers collapse into a single restart with no ghost replay', () => {
+    const audio = renderFarmAudio();
+
+    act(() => {
+      audio.playEffect('wheelSpin');
+    });
+    // Two more calls landing in one batch (the wheel path can retrigger fast):
+    // the state machine must fold them into one stop-then-play cycle.
+    act(() => {
+      audio.playEffect('wheelSpin');
+      audio.playEffect('wheelSpin');
+    });
+
+    // The two same-batch calls fold into a single stop-then-play cycle, so
+    // only two seeks total (one per cycle), each against a paused player.
+    expect(mockSeek).toHaveBeenCalledTimes(2);
+    expect(mockSeek).toHaveBeenLastCalledWith(0);
+    expect(latestPropsFor(FARM_AUDIO_SOURCES.wheelSpin).paused).toBe(false);
+
+    // After the sound naturally ends, no stale restart may bring it back.
+    act(() => {
+      latestPropsFor(FARM_AUDIO_SOURCES.wheelSpin).onEnd?.();
+    });
+    expect(latestPropsFor(FARM_AUDIO_SOURCES.wheelSpin).paused).toBe(true);
+  });
 });

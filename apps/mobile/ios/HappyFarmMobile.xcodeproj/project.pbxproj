@@ -14,6 +14,11 @@
 		81AB9BB82411601600AC10FF /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */; };
 		A17C99000000000000000000 /* farm_bgm_loop.wav in Resources */ = {isa = PBXBuildFile; fileRef = A17C99000000000000000002 /* farm_bgm_loop.wav */; };
 		A17C99000000000000000001 /* harvest_coin.wav in Resources */ = {isa = PBXBuildFile; fileRef = A17C99000000000000000003 /* harvest_coin.wav */; };
+		A17C99000000000000000004 /* sfx_plant.wav in Resources */ = {isa = PBXBuildFile; fileRef = A17C99000000000000000009 /* sfx_plant.wav */; };
+		A17C99000000000000000005 /* sfx_wheel_spin.wav in Resources */ = {isa = PBXBuildFile; fileRef = A17C9900000000000000000A /* sfx_wheel_spin.wav */; };
+		A17C99000000000000000006 /* sting_mutation.wav in Resources */ = {isa = PBXBuildFile; fileRef = A17C9900000000000000000B /* sting_mutation.wav */; };
+		A17C99000000000000000007 /* sting_reward.wav in Resources */ = {isa = PBXBuildFile; fileRef = A17C9900000000000000000C /* sting_reward.wav */; };
+		A17C99000000000000000008 /* sting_unlock.wav in Resources */ = {isa = PBXBuildFile; fileRef = A17C9900000000000000000D /* sting_unlock.wav */; };
 		A17C99DA2C0F4D9AA0000002 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = A17C99D92C0F4D9AA0000001 /* GoogleService-Info.plist */; };
 /* End PBXBuildFile section */
 
@@ -29,6 +34,11 @@
 		81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = LaunchScreen.storyboard; path = HappyFarmMobile/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		A17C99000000000000000002 /* farm_bgm_loop.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; name = farm_bgm_loop.wav; path = ../src/audio/assets/farm_bgm_loop.wav; sourceTree = SOURCE_ROOT; };
 		A17C99000000000000000003 /* harvest_coin.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; name = harvest_coin.wav; path = ../src/audio/assets/harvest_coin.wav; sourceTree = SOURCE_ROOT; };
+		A17C99000000000000000009 /* sfx_plant.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; name = sfx_plant.wav; path = ../src/audio/assets/sfx_plant.wav; sourceTree = SOURCE_ROOT; };
+		A17C9900000000000000000A /* sfx_wheel_spin.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; name = sfx_wheel_spin.wav; path = ../src/audio/assets/sfx_wheel_spin.wav; sourceTree = SOURCE_ROOT; };
+		A17C9900000000000000000B /* sting_mutation.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; name = sting_mutation.wav; path = ../src/audio/assets/sting_mutation.wav; sourceTree = SOURCE_ROOT; };
+		A17C9900000000000000000C /* sting_reward.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; name = sting_reward.wav; path = ../src/audio/assets/sting_reward.wav; sourceTree = SOURCE_ROOT; };
+		A17C9900000000000000000D /* sting_unlock.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; name = sting_unlock.wav; path = ../src/audio/assets/sting_unlock.wav; sourceTree = SOURCE_ROOT; };
 		A17C99D92C0F4D9AA0000001 /* GoogleService-Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = "GoogleService-Info.plist"; path = "HappyFarmMobile/GoogleService-Info.plist"; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
@@ -53,6 +63,11 @@
 				A17C99D92C0F4D9AA0000001 /* GoogleService-Info.plist */,
 				A17C99000000000000000002 /* farm_bgm_loop.wav */,
 				A17C99000000000000000003 /* harvest_coin.wav */,
+				A17C99000000000000000009 /* sfx_plant.wav */,
+				A17C9900000000000000000A /* sfx_wheel_spin.wav */,
+				A17C9900000000000000000B /* sting_mutation.wav */,
+				A17C9900000000000000000C /* sting_reward.wav */,
+				A17C9900000000000000000D /* sting_unlock.wav */,
 				13B07FB61A68108700A75B9A /* Info.plist */,
 				81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */,
 				13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */,
@@ -178,6 +193,11 @@
 				40E37E434038C43594E2C075 /* PrivacyInfo.xcprivacy in Resources */,
 				A17C99000000000000000000 /* farm_bgm_loop.wav in Resources */,
 				A17C99000000000000000001 /* harvest_coin.wav in Resources */,
+				A17C99000000000000000004 /* sfx_plant.wav in Resources */,
+				A17C99000000000000000005 /* sfx_wheel_spin.wav in Resources */,
+				A17C99000000000000000006 /* sting_mutation.wav in Resources */,
+				A17C99000000000000000007 /* sting_reward.wav in Resources */,
+				A17C99000000000000000008 /* sting_unlock.wav in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
