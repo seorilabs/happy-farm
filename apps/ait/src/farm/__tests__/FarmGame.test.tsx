@@ -1007,7 +1007,7 @@ describe('FarmGame UI flow', () => {
         expect.objectContaining({
           ad_type: 'offlineBonusAd',
           placement: 'return_offline_bonus',
-          reward_value: offlineGold,
+          reward_value: offlineGold * 2,
         })
       );
     });
@@ -1084,6 +1084,10 @@ describe('FarmGame UI flow', () => {
       expect(cappedAction.props.accessibilityState.disabled).toBe(true);
       fireEvent.press(cappedAction);
       expect(readyAd.showAd).not.toHaveBeenCalled();
+      const persisted = getLatestPersistedState();
+      expect(persisted.adUsage.offlineBonusAd).toEqual(cappedState.adUsage.offlineBonusAd);
+      expect(persisted.dailyMissionState).toEqual(cappedState.dailyMissionState);
+      expect(persisted.weeklyMissionState).toEqual(cappedState.weeklyMissionState);
     });
 
     test('implicit backdrop close settles the guaranteed 1x payout without stacking a return ad', async () => {
