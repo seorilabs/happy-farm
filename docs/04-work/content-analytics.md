@@ -81,6 +81,13 @@ happy-farm **개별 콘텐츠(작물·구역·기능 퍼널)** 세부 지표의 
 파생 지표(온보딩): 단계별 **도달률** = `step_users / step1_users`,
 **이탈률** = `skips / step_users`.
 
+온보딩 단계 stable key는 `selectSeed`, `plant`, `harvest`, `reward` 순서다.
+`onboarding_step_view`/`onboarding_stall`은 이 네 값을 쓰고, `onboarding_skip`의
+`skipped_step`은 명시적 확인이 있는 `harvest`만 사용한다. 완료는 step 이벤트가
+아닌 `onboarding_complete`로 집계한다. 재진입 시 저장된 단계가 다시 노출될 수
+있으므로 도달률에는 이벤트 수가 아닌 고유 사용자를 쓴다. 이전 배포에서 수집된
+`unlock`은 역사 데이터로 보존하고 배포일/앱 버전으로 `reward`와 분리한다.
+
 ### 4) 광고 placement 차원
 `docs/04-work/ad-analytics.md` 및 `analytics/queries/ad-placement-metrics.sql`를
 그대로 따른다. 콘텐츠 대시보드에서는 placement별 impression/click/complete/fail/blocked

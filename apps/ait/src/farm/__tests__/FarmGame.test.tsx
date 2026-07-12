@@ -55,7 +55,6 @@ const {
   MASTERY_RANK_UP_CELEBRATION_DURATION_MS,
   PRESTIGE_GRADUATION_CELEBRATION_DURATION_MS,
   FIRST_HARVEST_CELEBRATION_DURATION_MS,
-  ONBOARDING_UNLOCK_SAFETY_TIMEOUT_MS,
   ONBOARDING_STALL_MS,
   COMBO_GREAT_THRESHOLD,
   COMBO_LEGENDARY_THRESHOLD,
@@ -185,9 +184,19 @@ function createActiveBoostState(now = NOW): GameState {
 async function renderGame(
   savedState: GameState | null,
   props: Partial<React.ComponentProps<typeof FarmGame>> = {},
-  savedSettings: unknown = null
+  savedSettings: unknown = null,
+  options: { preserveOnboarding?: boolean } = {}
 ) {
-  mockPersistence.readPersistedGameState.mockResolvedValueOnce(savedState ?? createInitialState());
+  const state = savedState ?? createInitialState();
+  mockPersistence.readPersistedGameState.mockResolvedValueOnce(
+    options.preserveOnboarding
+      ? state
+      : {
+          ...state,
+          onboardingCompleted: true,
+          onboardingStep: null,
+        }
+  );
   mockPersistence.readPersistedGameSettings.mockResolvedValueOnce(savedSettings);
 
   const view = render(<FarmGame persistence={mockPersistence} {...props} />);
@@ -197,6 +206,15 @@ async function renderGame(
   });
 
   return view;
+}
+
+function getLatestPersistedState(): GameState {
+  const calls = mockPersistence.writePersistedGameState.mock.calls;
+  const latest = calls[calls.length - 1]?.[0];
+  if (latest == null) {
+    throw new Error('FarmGame did not persist a game state.');
+  }
+  return latest;
 }
 
 function createRewardedAd(result: RewardedAdShowResult): RewardedAdController {
@@ -741,9 +759,43 @@ describe('FarmGame UI flow', () => {
 
   describe('first-session onboarding', () => {
     const messages = getFarmMessages(DEFAULT_LOCALE);
+    const renderOnboardingGame = (
+      savedState: GameState | null,
+      props: Partial<React.ComponentProps<typeof FarmGame>> = {}
+    ) => renderGame(savedState, props, null, { preserveOnboarding: true });
+    const createRewardStepState = (): GameState => {
+      const base = createInitialState();
+      return {
+        ...base,
+        gold: 104,
+        harvestedCropKeys: ['carrot'],
+        harvestCounts: { ...base.harvestCounts, carrot: 1 },
+        lifetimeStats: {
+          ...base.lifetimeStats,
+          totalHarvests: 1,
+          totalGoldEarned: 54,
+        },
+        onboardingCompleted: false,
+        onboardingStep: 'reward',
+      };
+    };
 
-    test('guides a brand-new player through seed → plant → harvest → unlock', async () => {
-      const screen = await renderGame(null);
+    test('guides a brand-new player through seed → plant → harvest → reward without a competing sheet', async () => {
+      const track = jest.fn();
+      const notifications: FarmGameNotifications = {
+        isSupported: true,
+        requestPermission: jest.fn(async () => false),
+        scheduleHarvestReady: jest.fn(async () => undefined),
+        cancelHarvestReady: jest.fn(async () => undefined),
+        scheduleReminder: jest.fn(async () => undefined),
+        cancelReminder: jest.fn(async () => undefined),
+      };
+      const rewardedAd = createReadyRewardedAd();
+      const screen = await renderOnboardingGame(null, {
+        analytics: createFarmAnalytics(track),
+        notifications,
+        useRewardedAd: () => rewardedAd,
+      });
 
       await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
 
@@ -751,6 +803,9 @@ describe('FarmGame UI flow', () => {
       expect(screen.getByTestId('onboarding-coachmark')).toBeTruthy();
       expect(screen.getByText(messages.onboardingSelectSeedTitle)).toBeTruthy();
       expect(screen.getByText(messages.onboardingProgress(1, 4))).toBeTruthy();
+      // Fresh saves have an available daily bonus, but onboarding must own the
+      // foreground until the first loop is complete.
+      expect(screen.queryByText(messages.sheetTitleDailyBonus)).toBeNull();
       fireEvent.press(screen.getByText('당근'));
 
       // Step 2: plant it.
@@ -765,66 +820,220 @@ describe('FarmGame UI flow', () => {
       await waitFor(() => expect(screen.getByText('GET')).toBeTruthy());
       fireEvent.press(screen.getByText('GET'));
 
-      // Step 4: grow the farm. The guide stays until the player unlocks something.
-      await waitFor(() => expect(screen.getByText(messages.onboardingUnlockTitle)).toBeTruthy());
+      // Step 4: the credited first-harvest reward is made explicit, then the
+      // player confirms it instead of being blocked by a 300G expansion.
+      await waitFor(() => expect(screen.getByTestId('first-harvest-card')).toBeTruthy());
+      await waitFor(() => expect(screen.getByText(messages.onboardingRewardTitle)).toBeTruthy());
+      // Even when an ad is ready, its harvest-bonus sheet must not cover the
+      // activation reward step.
+      expect(screen.queryByText(messages.sheetTitleHarvestBonus)).toBeNull();
       expect(screen.getByText(messages.onboardingProgress(4, 4))).toBeTruthy();
-    });
+      expect(track).toHaveBeenCalledWith('first_meaningful_harvest', expect.anything());
+      await waitFor(() => expect(getLatestPersistedState().onboardingStep).toBe('reward'));
+      expect(getLatestPersistedState().onboardingCompleted).toBe(false);
 
-    test('finishes and persists the flag once the player expands the farm', async () => {
-      // Seed gold so the first plot expansion (300G) is affordable after harvest.
-      const screen = await renderGame({ ...createInitialState(), gold: 1000 });
-
-      await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
-      fireEvent.press(screen.getByText('당근'));
-      await waitFor(() => expect(screen.getByText(messages.onboardingPlantTitle)).toBeTruthy());
-      fireEvent.press(screen.getAllByText('빈 밭')[0]!);
-      await waitFor(() => expect(screen.getByText(messages.onboardingHarvestTitle)).toBeTruthy());
-      await act(async () => {
-        jest.advanceTimersByTime(2500);
-      });
-      await waitFor(() => expect(screen.getByText('GET')).toBeTruthy());
-      fireEvent.press(screen.getByText('GET'));
-      await waitFor(() => expect(screen.getByText(messages.onboardingUnlockTitle)).toBeTruthy());
-
-      // Expand a plot from the shop: the final "first unlock" action.
-      fireEvent.press(screen.getByTestId('shop-nav-button'));
-      fireEvent.press(screen.getByText(messages.shopPlotTitle));
-
+      fireEvent.press(screen.getByTestId('first-harvest-overlay'));
+      const rewardConfirm = screen.getByTestId('onboarding-reward-confirm');
+      fireEvent.press(rewardConfirm);
+      fireEvent.press(rewardConfirm);
       await waitFor(() => expect(screen.queryByTestId('onboarding-coachmark')).toBeNull());
       await waitFor(() => {
-        const calls = mockPersistence.writePersistedGameState.mock.calls;
-        expect(calls[calls.length - 1]![0].onboardingCompleted).toBe(true);
+        expect(getLatestPersistedState()).toEqual(
+          expect.objectContaining({ onboardingCompleted: true, onboardingStep: null })
+        );
       });
+      expect(track.mock.calls.filter(([event]) => event === 'onboarding_complete')).toHaveLength(1);
+      // The deferred daily bonus becomes visible only after onboarding closes,
+      // and the notification permission prompt waits behind that sheet.
+      await waitFor(() => expect(screen.getByText(messages.sheetTitleDailyBonus)).toBeTruthy());
+      expect(screen.queryByTestId('notification-prompt-card')).toBeNull();
+      fireEvent.press(screen.getByText(messages.dailyBonusClaimAction(formatMoney(50, DEFAULT_LOCALE))));
+      await waitFor(() => expect(screen.getByTestId('notification-prompt-card')).toBeTruthy());
     });
 
-    test('auto-finishes the unlock step after the safety timeout', async () => {
-      const screen = await renderGame(null);
+    test('resumes a persisted plant step with a deterministic seed selection', async () => {
+      const plantSave: GameState = {
+        ...createInitialState(),
+        onboardingCompleted: false,
+        onboardingStep: 'plant',
+      };
+      const resumedPlant = await renderOnboardingGame(plantSave);
 
-      await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
-      fireEvent.press(screen.getByText('당근'));
+      await waitFor(() => expect(resumedPlant.getByText(messages.onboardingPlantTitle)).toBeTruthy());
+      expect(resumedPlant.queryByText(messages.sheetTitleDailyBonus)).toBeNull();
+      // selectedTool is UI-only state. A resumed plant step still restores a
+      // deterministic valid seed and remains actionable.
+      fireEvent.press(resumedPlant.getAllByText('빈 밭')[0]!);
+      await waitFor(() => expect(resumedPlant.getByText(messages.onboardingHarvestTitle)).toBeTruthy());
+      await waitFor(() => expect(getLatestPersistedState().onboardingStep).toBe('harvest'));
+    });
+
+    test('resumes a persisted harvest step without showing a competing sheet', async () => {
+      const harvestSave: GameState = {
+        ...createGrowingCropState(),
+        onboardingCompleted: false,
+        onboardingStep: 'harvest',
+      };
+      const resumedHarvest = await renderOnboardingGame(harvestSave);
+
+      await waitFor(() => expect(resumedHarvest.getByText(messages.onboardingHarvestTitle)).toBeTruthy());
+      expect(resumedHarvest.getByText(messages.onboardingProgress(3, 4))).toBeTruthy();
+      expect(resumedHarvest.queryByText(messages.sheetTitleDailyBonus)).toBeNull();
+    });
+
+    test('settles return gold before advancing lastSeen while an unfinished guide owns the foreground', async () => {
+      const returningSave: GameState = {
+        ...createGrowingCropState(),
+        onboardingCompleted: false,
+        onboardingStep: 'harvest',
+      };
+      const awayMs = 2 * 60 * 60 * 1000;
+      const expectedOfflineGold = getActiveFarmOfflineGold(returningSave, awayMs);
+      expect(expectedOfflineGold).toBeGreaterThan(0);
+      mockPersistence.writePersistedGameState.mockClear();
+      mockPersistence.writeLastSeenAt.mockClear();
+      mockPersistence.readLastSeenAt.mockResolvedValueOnce(NOW - awayMs);
+
+      const screen = await renderOnboardingGame(returningSave);
+
+      await waitFor(() => expect(screen.getByText(messages.onboardingHarvestTitle)).toBeTruthy());
+      expect(screen.queryByText(messages.sheetTitleWelcomeBack)).toBeNull();
+      await waitFor(() =>
+        expect(mockPersistence.writePersistedGameState).toHaveBeenCalledWith(
+          expect.objectContaining({
+            gold: returningSave.gold + expectedOfflineGold,
+            onboardingReturnSettledAt: NOW - awayMs,
+          })
+        )
+      );
+      await waitFor(() => expect(mockPersistence.writeLastSeenAt).toHaveBeenCalledWith(NOW));
+      expect(mockPersistence.writePersistedGameState.mock.invocationCallOrder[0]).toBeLessThan(
+        mockPersistence.writeLastSeenAt.mock.invocationCallOrder[0]!
+      );
+    });
+
+    test('does not credit the same onboarding return window twice after a remount', async () => {
+      const returningSave: GameState = {
+        ...createGrowingCropState(),
+        onboardingCompleted: false,
+        onboardingStep: 'harvest',
+      };
+      const awayMs = 2 * 60 * 60 * 1000;
+      const sourceSeenAt = NOW - awayMs;
+      const offlineGold = getActiveFarmOfflineGold(returningSave, awayMs);
+      const alreadySettled: GameState = {
+        ...returningSave,
+        gold: returningSave.gold + offlineGold,
+        lifetimeStats: {
+          ...returningSave.lifetimeStats,
+          totalGoldEarned: returningSave.lifetimeStats.totalGoldEarned + offlineGold,
+        },
+        onboardingReturnSettledAt: sourceSeenAt,
+      };
+      mockPersistence.writePersistedGameState.mockClear();
+      mockPersistence.writeLastSeenAt.mockClear();
+      mockPersistence.readLastSeenAt.mockResolvedValueOnce(sourceSeenAt);
+
+      await renderOnboardingGame(alreadySettled);
+
+      await waitFor(() => expect(mockPersistence.writeLastSeenAt).toHaveBeenCalledWith(NOW));
+      await waitFor(() => expect(mockPersistence.writePersistedGameState).toHaveBeenCalled());
+      expect(
+        mockPersistence.writePersistedGameState.mock.calls.every(([state]) => state.gold === alreadySettled.gold)
+      ).toBe(true);
+    });
+
+    test('resumes reward confirmation without paying or tracking the harvest twice', async () => {
+      const rewardSave = createRewardStepState();
+      const creditedGold = rewardSave.gold;
+      const resumedTrack = jest.fn();
+      const resumed = await renderOnboardingGame(rewardSave, { analytics: createFarmAnalytics(resumedTrack) });
+
+      await waitFor(() => expect(resumed.getByText(messages.onboardingRewardTitle)).toBeTruthy());
+      expect(resumed.queryByTestId('first-harvest-card')).toBeNull();
+      expect(resumedTrack).not.toHaveBeenCalledWith('first_meaningful_harvest', expect.anything());
+
+      fireEvent.press(resumed.getByTestId('onboarding-reward-confirm'));
+      await waitFor(() => expect(resumed.queryByTestId('onboarding-coachmark')).toBeNull());
+      expect(getLatestPersistedState().gold).toBe(creditedGold);
+    });
+
+    test('resets local and persisted onboarding progress together', async () => {
+      const screen = await renderOnboardingGame(createRewardStepState());
+      await waitFor(() => expect(screen.getByText(messages.onboardingRewardTitle)).toBeTruthy());
+
+      fireEvent.press(screen.getByLabelText('설정'));
+      fireEvent.press(screen.getByText(messages.resetFarmAction));
+      fireEvent.changeText(screen.getByLabelText(messages.resetInputAccessibilityLabel), messages.resetConfirmText);
+      fireEvent.press(screen.getByText(messages.resetDeleteAction));
+
+      await waitFor(() => expect(screen.getByText(messages.onboardingSelectSeedTitle)).toBeTruthy());
+      expect(screen.queryByText(messages.onboardingRewardTitle)).toBeNull();
+      await waitFor(() =>
+        expect(getLatestPersistedState()).toEqual(
+          expect.objectContaining({ onboardingCompleted: false, onboardingStep: 'selectSeed' })
+        )
+      );
+
+      fireEvent.press(screen.getByTestId('onboarding-quick-start'));
       await waitFor(() => expect(screen.getByText(messages.onboardingPlantTitle)).toBeTruthy());
+      fireEvent.press(screen.getAllByText('빈 밭')[0]!);
+      await act(async () => {
+        jest.advanceTimersByTime(2500);
+      });
+      fireEvent.press(await screen.findByText('GET'));
+      await waitFor(() => expect(screen.getByText(messages.onboardingRewardTitle)).toBeTruthy());
+      fireEvent.press(screen.getByTestId('first-harvest-overlay'));
+      fireEvent.press(screen.getByTestId('onboarding-reward-confirm'));
+      await waitFor(() => expect(screen.getByText(messages.sheetTitleDailyBonus)).toBeTruthy());
+    });
+
+    test('replaces the local onboarding step when an incomplete cloud save is restored', async () => {
+      const restoredState: GameState = {
+        ...createInitialState(),
+        onboardingCompleted: false,
+        onboardingStep: 'plant',
+      };
+      const restoreFromCloud = jest.fn(async () => ({
+        status: 'restored' as const,
+        clientRevision: 2,
+        gameState: restoredState,
+      }));
+      const screen = await renderOnboardingGame(createRewardStepState(), {
+        cloudSave: {
+          isSupported: true,
+          backupNow: jest.fn(async () => ({ status: 'backed_up' as const, clientRevision: 1 })),
+          restoreFromCloud,
+        },
+      });
+      await waitFor(() => expect(screen.getByText(messages.onboardingRewardTitle)).toBeTruthy());
+
+      fireEvent.press(screen.getByLabelText('설정'));
+      fireEvent.press(screen.getByText(messages.cloudRestoreAction));
+
+      await waitFor(() => expect(restoreFromCloud).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(screen.getByText(messages.onboardingPlantTitle)).toBeTruthy());
+      expect(screen.queryByText(messages.onboardingRewardTitle)).toBeNull();
       fireEvent.press(screen.getAllByText('빈 밭')[0]!);
       await waitFor(() => expect(screen.getByText(messages.onboardingHarvestTitle)).toBeTruthy());
       await act(async () => {
         jest.advanceTimersByTime(2500);
       });
-      await waitFor(() => expect(screen.getByText('GET')).toBeTruthy());
-      fireEvent.press(screen.getByText('GET'));
-      await waitFor(() => expect(screen.getByText(messages.onboardingUnlockTitle)).toBeTruthy());
-
-      // Lingering on the unlock step without growing the farm auto-dismisses the
-      // coachmark once the safety timeout elapses, so it can never stick forever.
-      await act(async () => {
-        jest.advanceTimersByTime(ONBOARDING_UNLOCK_SAFETY_TIMEOUT_MS);
-      });
-      await waitFor(() => expect(screen.queryByTestId('onboarding-coachmark')).toBeNull());
+      fireEvent.press(await screen.findByText('GET'));
+      await waitFor(() => expect(screen.getByText(messages.onboardingRewardTitle)).toBeTruthy());
+      fireEvent.press(screen.getByTestId('first-harvest-overlay'));
+      fireEvent.press(screen.getByTestId('onboarding-reward-confirm'));
+      await waitFor(() => expect(screen.getByText(messages.sheetTitleDailyBonus)).toBeTruthy());
     });
 
-    test('keeps skip hidden until the first plant, then ends the guide on harvest', async () => {
+    test('keeps skip hidden until harvest and requires explicit confirmation', async () => {
       // #159: 신규 사용자 다수가 첫 파종 전에 코치마크를 건너뛰고 이탈하므로,
       // selectSeed·plant 단계에서는 건너뛰기를 숨기고 첫 파종 이후에만 노출한다.
       const track = jest.fn();
-      const screen = await renderGame(null, { analytics: createFarmAnalytics(track) });
+      const screen = await renderOnboardingGame(null, {
+        analytics: createFarmAnalytics(track),
+        useRewardedAd: () => createReadyRewardedAd(),
+      });
 
       await waitFor(() => expect(screen.getByTestId('onboarding-coachmark')).toBeTruthy());
       // selectSeed 단계: 건너뛰기 없음.
@@ -841,23 +1050,43 @@ describe('FarmGame UI flow', () => {
       const skip = await screen.findByTestId('onboarding-skip');
       fireEvent.press(skip);
 
+      expect(screen.getByTestId('onboarding-skip-confirm')).toBeTruthy();
+      expect(getLatestPersistedState().onboardingCompleted).toBe(false);
+      expect(track).not.toHaveBeenCalledWith('onboarding_skip', expect.anything());
+      fireEvent.press(screen.getByTestId('onboarding-skip-cancel'));
+      expect(screen.queryByTestId('onboarding-skip-confirm')).toBeNull();
+      expect(screen.getByText(messages.onboardingHarvestTitle)).toBeTruthy();
+
+      fireEvent.press(screen.getByTestId('onboarding-skip'));
+      const skipConfirmAction = screen.getByTestId('onboarding-skip-confirm-action');
+      fireEvent.press(skipConfirmAction);
+      fireEvent.press(skipConfirmAction);
+
       await waitFor(() => expect(screen.queryByTestId('onboarding-coachmark')).toBeNull());
       await waitFor(() => {
-        const calls = mockPersistence.writePersistedGameState.mock.calls;
-        expect(calls[calls.length - 1]![0].onboardingCompleted).toBe(true);
+        expect(getLatestPersistedState()).toEqual(
+          expect.objectContaining({ onboardingCompleted: true, onboardingStep: null })
+        );
       });
       // 건너뛴 단계가 onboarding_skip으로 계측된다(완료가 아닌 이탈로 분리).
       expect(track).toHaveBeenCalledWith('onboarding_skip', expect.objectContaining({ skipped_step: 'harvest' }));
+      expect(track.mock.calls.filter(([event]) => event === 'onboarding_skip')).toHaveLength(1);
       expect(track).not.toHaveBeenCalledWith('onboarding_complete', expect.anything());
+
+      // A skipped guide can still reach its first harvest later. Preserve that
+      // aha moment instead of stacking the harvest-bonus ad sheet over it.
+      await act(async () => {
+        jest.advanceTimersByTime(2500);
+      });
+      fireEvent.press(await screen.findByText('GET'));
+      await waitFor(() => expect(screen.getByTestId('first-harvest-card')).toBeTruthy());
+      expect(screen.queryByText(messages.sheetTitleHarvestBonus)).toBeNull();
     });
 
     test('emits the step-view funnel and a complete (not skip) event through the full flow', async () => {
       // #159: 어느 단계에서 막히는지 GA4로 특정할 수 있도록 단계별 노출/완료를 계측한다.
       const track = jest.fn();
-      const screen = await renderGame(
-        { ...createInitialState(), gold: 1000 },
-        { analytics: createFarmAnalytics(track) }
-      );
+      const screen = await renderOnboardingGame(null, { analytics: createFarmAnalytics(track) });
 
       await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
       expect(track).toHaveBeenCalledWith(
@@ -874,28 +1103,42 @@ describe('FarmGame UI flow', () => {
 
       fireEvent.press(screen.getAllByText('빈 밭')[0]!);
       await waitFor(() => expect(screen.getByText(messages.onboardingHarvestTitle)).toBeTruthy());
+      expect(track).toHaveBeenCalledWith(
+        'onboarding_step_view',
+        expect.objectContaining({ step: 'harvest', step_index: 3 })
+      );
       await act(async () => {
         jest.advanceTimersByTime(2500);
       });
       await waitFor(() => expect(screen.getByText('GET')).toBeTruthy());
       fireEvent.press(screen.getByText('GET'));
-      await waitFor(() => expect(screen.getByText(messages.onboardingUnlockTitle)).toBeTruthy());
+      await waitFor(() => expect(screen.getByText(messages.onboardingRewardTitle)).toBeTruthy());
       expect(track).toHaveBeenCalledWith(
         'onboarding_step_view',
-        expect.objectContaining({ step: 'unlock', step_index: 4 })
+        expect.objectContaining({ step: 'reward', step_index: 4 })
       );
+      expect(track).toHaveBeenCalledWith('first_meaningful_harvest', expect.anything());
 
-      // 농장 확장으로 자연 완료 → onboarding_complete (skip 아님).
-      fireEvent.press(screen.getByTestId('shop-nav-button'));
-      fireEvent.press(screen.getByText(messages.shopPlotTitle));
+      fireEvent.press(screen.getByTestId('first-harvest-overlay'));
+      fireEvent.press(screen.getByTestId('onboarding-reward-confirm'));
       await waitFor(() => expect(screen.queryByTestId('onboarding-coachmark')).toBeNull());
       expect(track).toHaveBeenCalledWith('onboarding_complete', expect.anything());
       expect(track).not.toHaveBeenCalledWith('onboarding_skip', expect.anything());
+
+      const viewedSteps = track.mock.calls
+        .filter(([event]) => event === 'onboarding_step_view')
+        .map(([, params]) => ({ step: params?.step, stepIndex: params?.step_index }));
+      expect(viewedSteps).toEqual([
+        { step: 'selectSeed', stepIndex: 1 },
+        { step: 'plant', stepIndex: 2 },
+        { step: 'harvest', stepIndex: 3 },
+        { step: 'reward', stepIndex: 4 },
+      ]);
     });
 
     test('quick-start CTA auto-picks a seed and advances to plant with the funnel intact (#274)', async () => {
       const track = jest.fn();
-      const screen = await renderGame(null, { analytics: createFarmAnalytics(track) });
+      const screen = await renderOnboardingGame(null, { analytics: createFarmAnalytics(track) });
 
       await waitFor(() => expect(screen.getByTestId('onboarding-coachmark')).toBeTruthy());
       // selectSeed 단계: 직접 씨앗 탭 없이 "바로 시작" 한 번으로 진행한다.
@@ -915,9 +1158,23 @@ describe('FarmGame UI flow', () => {
       expect(screen.queryByTestId('onboarding-quick-start')).toBeNull();
     });
 
+    test('does not advance when the first selected seed is unaffordable', async () => {
+      const track = jest.fn();
+      const screen = await renderOnboardingGame(null, { analytics: createFarmAnalytics(track) });
+
+      await waitFor(() => expect(screen.getByText(messages.onboardingSelectSeedTitle)).toBeTruthy());
+      // Onion costs more than the 50G first-session purse. Normal play permits
+      // preselection, but onboarding must not lead into an impossible plant.
+      fireEvent.press(screen.getByTestId('seed-tool-onion'));
+
+      expect(screen.getByText(messages.onboardingSelectSeedTitle)).toBeTruthy();
+      expect(screen.getByText(messages.insufficientGoldToast)).toBeTruthy();
+      expect(track).not.toHaveBeenCalledWith('first_seed_selected', expect.anything());
+    });
+
     test('emits onboarding_stall once when the player lingers without acting (#274)', async () => {
       const track = jest.fn();
-      const screen = await renderGame(null, { analytics: createFarmAnalytics(track) });
+      const screen = await renderOnboardingGame(null, { analytics: createFarmAnalytics(track) });
 
       await waitFor(() => expect(screen.getByTestId('onboarding-coachmark')).toBeTruthy());
       // 임계 이전에는 정체 이벤트가 없다.
@@ -939,7 +1196,7 @@ describe('FarmGame UI flow', () => {
 
     test('does not stall the step the player acts on before the threshold (#274)', async () => {
       const track = jest.fn();
-      const screen = await renderGame(null, { analytics: createFarmAnalytics(track) });
+      const screen = await renderOnboardingGame(null, { analytics: createFarmAnalytics(track) });
 
       await waitFor(() => expect(screen.getByTestId('onboarding-coachmark')).toBeTruthy());
       // 임계 전에 "바로 시작"으로 행동하면 selectSeed는 정체로 잡히지 않는다.
@@ -959,7 +1216,7 @@ describe('FarmGame UI flow', () => {
     });
 
     test('never shows for a returning player whose save is already complete', async () => {
-      const screen = await renderGame({ ...createInitialState(), onboardingCompleted: true });
+      const screen = await renderOnboardingGame({ ...createInitialState(), onboardingCompleted: true });
 
       await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
       expect(screen.queryByTestId('onboarding-coachmark')).toBeNull();
@@ -2233,7 +2490,15 @@ describe('FarmGame UI flow', () => {
   });
 
   test('turns the harvest bonus ad into a 30 minute reward boost', async () => {
-    const readyHarvestState = createReadyHarvestState();
+    const readyBase = createReadyHarvestState();
+    // The first meaningful harvest is reserved for its aha celebration. Ad
+    // nudges begin with a later harvest, which is what this test exercises.
+    const readyHarvestState: GameState = {
+      ...readyBase,
+      harvestedCropKeys: ['carrot'],
+      harvestCounts: { ...readyBase.harvestCounts, carrot: 1 },
+      lifetimeStats: { ...readyBase.lifetimeStats, totalHarvests: 1 },
+    };
     const rewardedAd = createReadyRewardedAd();
     const harvestBonusCta = `광고 보고 30분 동안 수확 ${HARVEST_BONUS_MULTIPLIER}배`;
     const carrot = CROPS.carrot;
@@ -2563,6 +2828,7 @@ describe('NextGoalBar', () => {
         ...createInitialState(),
         onboardingCompleted: true,
         harvestedCropKeys: ['carrot'] satisfies CropKey[],
+        dailyBonusState: { lastClaimedAt: Date.now(), streak: 1 },
         harvestNotificationPromptSeen: false,
       };
     }
@@ -2573,6 +2839,30 @@ describe('NextGoalBar', () => {
 
       await waitFor(() => expect(screen.getByTestId('notification-prompt-card')).toBeTruthy());
       expect(screen.getByText(promptMessages.notificationPromptTitle)).toBeTruthy();
+    });
+
+    test('waits for saved settings before deciding whether to show the prompt', async () => {
+      const notifications = createNotificationsMock();
+      let resolveSettings: ((settings: { harvestNotificationsEnabled: boolean }) => void) | undefined;
+      const pendingSettings = new Promise<{ harvestNotificationsEnabled: boolean }>((resolve) => {
+        resolveSettings = resolve;
+      });
+      const screen = await renderGame(createPostAhaState(), { notifications }, pendingSettings);
+
+      await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+      expect(screen.queryByTestId('notification-prompt-card')).toBeNull();
+      await act(async () => {
+        resolveSettings?.({ harvestNotificationsEnabled: true });
+        await pendingSettings;
+      });
+
+      await waitFor(() =>
+        expect(mockPersistence.writePersistedGameState).toHaveBeenCalledWith(
+          expect.objectContaining({ harvestNotificationPromptSeen: true })
+        )
+      );
+      expect(screen.queryByTestId('notification-prompt-card')).toBeNull();
+      expect(notifications.requestPermission).not.toHaveBeenCalled();
     });
 
     test('requests permission and enables harvest notifications on accept', async () => {
@@ -2620,7 +2910,12 @@ describe('NextGoalBar', () => {
 
     test('does not surface the prompt while onboarding is still in progress', async () => {
       const notifications = createNotificationsMock();
-      const screen = await renderGame({ ...createPostAhaState(), onboardingCompleted: false }, { notifications });
+      const screen = await renderGame(
+        { ...createPostAhaState(), onboardingCompleted: false },
+        { notifications },
+        null,
+        { preserveOnboarding: true }
+      );
 
       await waitFor(() => expect(screen.getByText('50G')).toBeTruthy());
       expect(screen.queryByTestId('notification-prompt-card')).toBeNull();

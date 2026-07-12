@@ -32,36 +32,52 @@ happy-farm 활성화·리텐션 퍼널 측정의 단일 기준 문서. 이벤트
 | `lifetime_harvests` | 생애 누적 수확 횟수 |
 
 ## 활성화 퍼널 (신규 → 첫 수확 → 첫 데일리)
-표준 활성화 경로. 각 단계는 앞 단계 대비 전환율로 읽는다.
+표준 활성화 경로. 신규 설치 커버리지는 GA4 자동 이벤트 `first_open`, 게임 안 단계별
+전환은 첫 `onboarding_step_view`를 분모로 읽는다.
 
 | 단계 | 이벤트 | 주요 파라미터 |
 |---|---|---|
+| 신규 설치 | `first_open` (GA4 자동 수집) | GA4 기본 파라미터 |
 | 게임 시작 | `game_start` | context |
-| 온보딩 시작 | `onboarding_step_view` (`step_index` = 1) | `step`, `step_index`, context |
-| 온보딩 각 단계 | `onboarding_step_view` | `step`, `step_index`, context |
+| 씨앗 선택 안내 | `onboarding_step_view` (`step` = `selectSeed`, `step_index` = 1) | `step`, `step_index`, context |
 | 온보딩 이탈 | `onboarding_skip` | `skipped_step`, `step_index`, context |
-| 온보딩 완료 | `onboarding_complete` | context |
 | 첫 씨앗 선택 | `first_seed_selected` (이후는 `seed_selected`) | `crop`, `area`, context |
+| 심기 안내 | `onboarding_step_view` (`step` = `plant`, `step_index` = 2) | `step`, `step_index`, context |
 | 심기 | `crop_planted` | `crop`, `area`, `crop_tier`, `crop_cost`, context |
+| 수확 안내 | `onboarding_step_view` (`step` = `harvest`, `step_index` = 3) | `step`, `step_index`, context |
 | 수확 준비 | `crop_ready` | `crop`, `area`, `crop_tier`, context |
 | 수확 | `crop_harvested` | `crop`, `area`, `crop_tier`, `revenue`, `is_first_crop_harvest`, `is_first_meaningful_harvest`, context |
 | **첫 유의미 수확** | `first_meaningful_harvest` | `crop`, `area`, `crop_tier`, `revenue`, context |
+| 첫 수확 보상 확인 | `onboarding_step_view` (`step` = `reward`, `step_index` = 4) | `step`, `step_index`, context |
+| 온보딩 완료 | `onboarding_complete` | context |
 | 데일리 보너스 수령 | `daily_bonus_claimed` | `streak`, `reward_value`, `is_first_claim`, context |
 | **첫 데일리 클레임** | `first_daily_bonus_claimed` | `streak`, `reward_value`, context |
 
 > **온보딩 "시작"**은 별도 이벤트가 아니라 `onboarding_step_view`의 `step_index = 1` 발화로
 > 정의한다. "완료"는 마지막 단계 노출과 구분되는 별도 종료 시점이므로 전용
 > `onboarding_complete`를 둔다(건너뛰기로 끝나면 `onboarding_skip`만 발화).
+>
+> 단계 stable key는 `selectSeed` → `plant` → `harvest` → `reward`다. 미완료 세이브는
+> 현재 단계를 저장하고 재진입 시 이어서 보여 준다. 따라서 세션을 넘긴 재노출로 같은 사용자의
+> `onboarding_step_view`가 중복될 수 있으므로 전환율은 이벤트 수가 아니라 고유 사용자로 집계한다.
+> `unlock`은 이전 버전의 역사 데이터에만 존재하는 legacy key이며 `reward`로 소급 치환하지 않는다.
+> 미완료 가이드가 있는 복귀 세션에서는 온보딩이 foreground를 소유한다. 출석 보너스 시트는
+> 완료/skip 뒤로 미루고, 복귀 passive gold는 `lastSeenAt`을 갱신하기 전에 저장 상태에 먼저
+> 정산해 시트 지연 중 금액 변경이나 앱 종료로 인한 유실을 막는다.
 
 ```mermaid
 flowchart LR
-  A[game_start] --> B[onboarding_step_view #35;1]
-  B --> C[onboarding_complete]
+  A[first_open] --> B[game_start]
+  B --> C[selectSeed view #35;1]
   C --> D[first_seed_selected]
-  D --> E[crop_planted]
-  E --> F[first_meaningful_harvest]
-  F --> G[first_daily_bonus_claimed]
-  B -. 이탈 .-> S[onboarding_skip]
+  D --> E[plant view #35;2]
+  E --> F[crop_planted]
+  F --> G[harvest view #35;3]
+  G --> H[first_meaningful_harvest]
+  H --> I[reward view #35;4]
+  I --> J[onboarding_complete]
+  J --> K[first_daily_bonus_claimed]
+  G -. 명시적 확인 후 이탈 .-> S[onboarding_skip]
 ```
 
 ## 리텐션 · 복귀 퍼널
@@ -109,10 +125,11 @@ ORDER BY f.d0;
 ```
 
 ## 파생 지표 (대시보드 기준)
-- **온보딩 단계 도달률** = 각 `step_index`별 `onboarding_step_view` 고유 사용자 / `game_start` 고유 사용자
-- **온보딩 완료율** = `onboarding_complete` / `onboarding_step_view`(step_index=1)
-- **첫 심기 활성화율** = `crop_planted` 고유 사용자 / `game_start` 고유 사용자
-- **첫 수확 도달률** = `first_meaningful_harvest` / `game_start`
+- **온보딩 진입 커버리지** = `onboarding_step_view`(step_index=1) 고유 사용자 / `first_open` 고유 사용자
+- **온보딩 단계 도달률** = 각 `step_index`별 `onboarding_step_view` 고유 사용자 / `onboarding_step_view`(step_index=1) 고유 사용자
+- **온보딩 완료율** = `onboarding_complete` 고유 사용자 / `onboarding_step_view`(step_index=1) 고유 사용자
+- **첫 심기 활성화율** = `crop_planted` 고유 사용자 / `first_open` 고유 사용자
+- **첫 수확 도달률** = `first_meaningful_harvest` 고유 사용자 / `first_open` 고유 사용자
 - **첫 데일리 클레임율** = `first_daily_bonus_claimed` / `first_meaningful_harvest`
 - **복귀 요약 수령률** = `return_summary_collected` / `return_summary_shown`
 - **D1 복귀율** = 위 SQL 참조

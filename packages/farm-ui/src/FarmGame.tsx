@@ -85,6 +85,7 @@ import {
   getRewardedAdPlacement,
   createInitialState,
   migrateLoadedState,
+  resolveOnboardingStep,
   DEFAULT_LOCALE,
   SUPPORTED_LOCALES,
   executeFarmGameCommand,
@@ -235,11 +236,6 @@ export { COMBO_GREAT_THRESHOLD, COMBO_LEGENDARY_THRESHOLD };
 export const MASTERY_RANK_UP_CELEBRATION_DURATION_MS = 2600;
 export const PRESTIGE_GRADUATION_CELEBRATION_DURATION_MS = 3500;
 export const FIRST_HARVEST_CELEBRATION_DURATION_MS = 3200;
-// Safety net for the final onboarding step: if a new player never grows their
-// farm (e.g. keeps spending on something the unlock check doesn't track), the
-// "first unlock" coachmark auto-dismisses after this long so it can never stick
-// around forever.
-export const ONBOARDING_UNLOCK_SAFETY_TIMEOUT_MS = 5 * 60_000;
 // 온보딩 단계 진입 후 이만큼 무행동으로 머물면 onboarding_stall을 1회 발화해
 // 단계별 정체 구간을 계측한다(#274). selectSeed 69% 정체 진단용.
 export const ONBOARDING_STALL_MS = 15_000;
@@ -265,6 +261,14 @@ function getCrop(cropKey: CropKey) {
     throw new Error(`Unknown crop: ${cropKey}`);
   }
   return crop;
+}
+
+function getOnboardingCropKey(gameState: GameState): CropKey | null {
+  return (
+    (Object.keys(CROPS) as CropKey[]).find(
+      (key) => isAreaUnlocked(gameState, getCrop(key).area) && isCropPlantable(gameState, key)
+    ) ?? null
+  );
 }
 
 // Identifies the single most actionable next milestone for the player: the
@@ -640,6 +644,10 @@ function FarmGameBody({
   const bottomSafeInset = resolveBottomSafeInset(insets.bottom);
   const { width: windowWidth } = useWindowDimensions();
   const [activeSheet, setActiveSheet] = useState<ActiveSheet>(null);
+  // First-session onboarding owns the foreground. A daily-bonus sheet
+  // discovered during load waits here until the guide completes or the player
+  // explicitly skips it, so a modal can never hide the first action.
+  const deferredOnboardingSheetRef = useRef<{ type: 'dailyBonus' } | null>(null);
   const [resetConfirmText, setResetConfirmText] = useState('');
   // Cloud backup/restore: in-flight guard against double taps, plus the last
   // result notice shown in the settings section.
@@ -697,12 +705,13 @@ function FarmGameBody({
   // Tracks the last step we emitted an onboarding_step_view for, so the funnel
   // event fires once per step entry instead of on every render tick.
   const onboardingStepViewedRef = useRef<OnboardingStep | null>(null);
+  // A CTA can receive two taps before React commits the completed state. Guard
+  // analytics and finalization synchronously so completion/skip is exactly-once.
+  const onboardingFinishCommittedRef = useRef(false);
   // Stable handle to the latest analyticsContext (assigned after it is defined),
-  // so the onboarding skip/complete handlers and safety timeout can build a fresh
-  // context without being recreated on every tick.
+  // so the onboarding skip/complete handlers can build a fresh context without
+  // being recreated on every tick.
   const analyticsContextRef = useRef<GetAnalyticsContext | null>(null);
-  // Guards the one-time onboarding start.
-  const onboardingInitRef = useRef(false);
   // Soft pulse driving the seed-strip emphasis ring while the selectSeed step is
   // active, so the place to tap reads louder for brand-new players (#159).
   const seedHighlightPulseRef = useRef<Animated.Value | null>(null);
@@ -710,18 +719,6 @@ function FarmGameBody({
     seedHighlightPulseRef.current = new Animated.Value(0);
   }
   const seedHighlightPulse = seedHighlightPulseRef.current;
-  // Progression snapshot taken when onboarding starts. The final "first unlock"
-  // step finishes once any of these counters grows — a plot, an area, a growth/
-  // profit upgrade, or a research node/breed — so the guide doesn't stall when a
-  // new player's first purchase isn't a plot or an area.
-  const onboardingBaselineRef = useRef<{
-    plotCount: number;
-    areaCount: number;
-    speedLevel: number;
-    profitLevel: number;
-    researchNodeCount: number;
-    breedCount: number;
-  } | null>(null);
   // Per-plot "just planted" tokens. Bumped only on a manual plant so the fresh
   // sprout bounces in (auto-replant and save-load stay silent). Keyed by index.
   const [plantPulses, setPlantPulses] = useState<Record<number, number>>({});
@@ -901,18 +898,40 @@ function FarmGameBody({
     }
     setFirstHarvestNotice(null);
   }, []);
-  // Finishes onboarding (shared by complete/skip). Sets the save flag so it
-  // never resurfaces on later launches.
+  const advanceOnboarding = useCallback((step: OnboardingStep) => {
+    setOnboardingStep(step);
+    setGameState((state) => (state.onboardingStep === step ? state : { ...state, onboardingStep: step }));
+  }, []);
+  const revealDeferredOnboardingSheet = useCallback(() => {
+    const deferred = deferredOnboardingSheetRef.current;
+    if (deferred == null) {
+      return;
+    }
+    deferredOnboardingSheetRef.current = null;
+    setActiveSheet(deferred);
+  }, []);
+  // Finishes onboarding (shared by reward confirmation/skip). The persisted
+  // step is cleared atomically with the completion flag, then any sheet that
+  // waited behind the guide is surfaced.
   const finishOnboarding = useCallback(() => {
     setOnboardingStep(null);
-    setGameState((state) => (state.onboardingCompleted ? state : { ...state, onboardingCompleted: true }));
-  }, []);
+    setGameState((state) =>
+      state.onboardingCompleted && state.onboardingStep == null
+        ? state
+        : { ...state, onboardingCompleted: true, onboardingStep: null }
+    );
+    revealDeferredOnboardingSheet();
+  }, [revealDeferredOnboardingSheet]);
   // User-initiated skip: log which step they bailed on, then finish. Kept stable
   // by reading the step from a ref so the coachmark's onSkip prop is steady.
   const skipOnboarding = useCallback(() => {
     const current = onboardingStepRef.current;
+    if (current !== 'harvest' || onboardingFinishCommittedRef.current) {
+      return;
+    }
+    onboardingFinishCommittedRef.current = true;
     const buildContext = analyticsContextRef.current;
-    if (current != null && buildContext != null) {
+    if (buildContext != null) {
       farmAnalytics.trackOnboardingSkip({
         skippedStep: current,
         stepIndex: ONBOARDING_STEPS.indexOf(current) + 1,
@@ -921,10 +940,14 @@ function FarmGameBody({
     }
     finishOnboarding();
   }, [farmAnalytics, finishOnboarding]);
-  // Natural/auto completion (reached the final unlock step or the safety
-  // timeout). Distinct from skip so the funnel separates "finished" from
-  // "gave up". Stable for the safety-timeout effect.
+  // Natural completion happens only after the first-harvest reward is
+  // explicitly confirmed. Distinct from skip so the funnel separates
+  // "finished" from "gave up".
   const completeOnboarding = useCallback(() => {
+    if (onboardingStepRef.current !== 'reward' || onboardingFinishCommittedRef.current) {
+      return;
+    }
+    onboardingFinishCommittedRef.current = true;
     const buildContext = analyticsContextRef.current;
     if (buildContext != null) {
       farmAnalytics.trackOnboardingComplete({ context: buildContext() });
@@ -1172,7 +1195,11 @@ function FarmGameBody({
             : messages.harvestedToast(formatMoney(event.goldGained, locale))
         );
       }
-      if (effect.shouldShowHarvestBonusNudge) {
+      if (
+        effect.shouldShowHarvestBonusNudge &&
+        gameStateRef.current.onboardingCompleted &&
+        !event.isFirstMeaningfulHarvest
+      ) {
         setGameState((state) => ({ ...state, adUsage: recordHarvestBonusAdPrompt(state, effect.now) }));
         setActiveSheet({ type: 'harvestBonus' });
       }
@@ -1257,46 +1284,87 @@ function FarmGameBody({
       if (cancelled) {
         return;
       }
-      // Normalize dailyBonusState here so that gameState always holds a valid
-      // DailyBonusState even when a custom readPersistedGameState skips
-      // migrateLoadedState (the TypeScript type says it's DailyBonusState, but
-      // the value may be absent or malformed at runtime).
-      setGameState({
+      const onboardingPending = savedState.onboardingCompleted === false;
+      let normalizedSavedState: GameState = {
         ...savedState,
+        onboardingCompleted: !onboardingPending,
+        onboardingStep: onboardingPending ? resolveOnboardingStep(savedState, savedState.onboardingStep) : null,
         dailyBonusState: normalizeDailyBonusState(savedState.dailyBonusState as unknown),
-      });
-      setIsSaveLoaded(true);
-
+      };
+      // Normalize onboarding and dailyBonusState here even when a custom
+      // readPersistedGameState skips migrateLoadedState (their TypeScript types
+      // can still be absent or malformed at runtime).
       // Greet returning players with a recap of what waited for them. Computed
       // off the freshly loaded save (not React state, which hasn't committed
       // yet) so the very first frame after a long absence shows the summary.
       const now = Date.now();
-      const summary = getReturnSummary(savedState, lastSeenAt, now);
-      if (summary != null) {
-        setActiveSheet({ type: 'welcomeBack', summary });
+      const summary = getReturnSummary(normalizedSavedState, lastSeenAt, now);
+      const returnSettlementSourceSeenAt =
+        typeof lastSeenAt === 'number' && Number.isFinite(lastSeenAt) && lastSeenAt > 0
+          ? Math.floor(lastSeenAt)
+          : null;
+      let lastSeenCommitted = false;
+      if (
+        summary != null &&
+        onboardingPending &&
+        summary.offlineGold > 0 &&
+        returnSettlementSourceSeenAt != null
+      ) {
+        // An unfinished first-session guide must not be covered by a return
+        // sheet. Settle the load-time snapshot immediately instead of keeping a
+        // volatile deferred reward whose amount could change after a harvest or
+        // disappear on remount. Persist the credit before advancing lastSeenAt
+        // so a process exit cannot lose the reward window.
+        if (normalizedSavedState.onboardingReturnSettledAt !== returnSettlementSourceSeenAt) {
+          normalizedSavedState = {
+            ...collectReturnOfflineGold(normalizedSavedState, summary.awayMs, now).state,
+            onboardingReturnSettledAt: returnSettlementSourceSeenAt,
+          };
+          await persistence.writePersistedGameState(normalizedSavedState);
+        }
+        await persistence.writeLastSeenAt?.(now);
+        lastSeenCommitted = true;
+        if (cancelled) {
+          return;
+        }
+      }
+
+      setGameState(normalizedSavedState);
+      setIsSaveLoaded(true);
+
+      if (summary != null && !onboardingPending) {
+        const welcomeBackSheet: ActiveSheet = { type: 'welcomeBack', summary };
+        setActiveSheet(welcomeBackSheet);
         farmAnalytics.trackReturnSummaryShown({
           awayMs: summary.awayMs,
           offlineGold: summary.offlineGold,
           readyCropCount: summary.readyCropCount,
-          context: analyticsContext(savedState),
+          context: analyticsContext(normalizedSavedState),
         });
       }
       // Mark "seen" immediately so a quick reload doesn't replay the recap.
-      void persistence.writeLastSeenAt?.(now);
+      if (!lastSeenCommitted) {
+        void persistence.writeLastSeenAt?.(now);
+      }
 
-      // Check daily login bonus. Only shown when no welcome-back sheet is
-      // queued. dailyBonusState lives inside the game save so gold and bonus
-      // state are always committed atomically — no separate crash-recovery needed.
-      if (summary == null) {
+      // Check daily login bonus. Completed players keep the welcome-back sheet
+      // priority. During onboarding the return sheet is intentionally
+      // suppressed, so an available daily bonus is deferred behind the guide.
+      if (summary == null || onboardingPending) {
         // Normalize defensively: a custom readPersistedGameState may skip
         // migrateLoadedState, leaving dailyBonusState absent for old saves.
         const preview = previewDailyBonus(
-          normalizeDailyBonusState(savedState.dailyBonusState as unknown),
+          normalizedSavedState.dailyBonusState,
           now,
-          getRewardedGoldAmount(savedState)
+          getRewardedGoldAmount(normalizedSavedState)
         );
         if (preview.available) {
-          setActiveSheet({ type: 'dailyBonus' });
+          const dailyBonusSheet: ActiveSheet = { type: 'dailyBonus' };
+          if (onboardingPending) {
+            deferredOnboardingSheetRef.current = dailyBonusSheet;
+          } else {
+            setActiveSheet(dailyBonusSheet);
+          }
         }
       }
     }
@@ -1334,36 +1402,29 @@ function FarmGameBody({
     void persistence.writePersistedGameState(gameState);
   }, [gameState, isSaveLoaded, persistence]);
 
-  // Start onboarding once, right after the save loads, only for brand-new
-  // players with no progress at all. (Returning players get onboardingCompleted
-  // set true by migrateLoadedState, and any in-memory state that already has
-  // harvests is treated as experienced too.)
+  // An explicitly incomplete guide always owns the first foreground surface,
+  // regardless of how much progress the save already contains. The persisted
+  // step resumes exactly where the previous session stopped; a plant-step
+  // resume restores a deterministic valid crop because selectedTool is UI-only.
   useEffect(() => {
-    if (!isSaveLoaded || onboardingInitRef.current) {
+    if (!isSaveLoaded || gameState.onboardingCompleted || onboardingStep != null) {
       return;
     }
-    onboardingInitRef.current = true;
-    const alreadyPlayed =
-      gameState.onboardingCompleted ||
-      gameState.harvestedCropKeys.length > 0 ||
-      gameState.lifetimeStats.totalHarvests > 0 ||
-      gameState.prestige.level > 0;
-    if (alreadyPlayed) {
-      return;
+    onboardingFinishCommittedRef.current = false;
+    const resumeStep = resolveOnboardingStep(gameState, gameState.onboardingStep);
+    if (resumeStep === 'plant' && selectedTool === 'harvest') {
+      const cropKey = getOnboardingCropKey(gameState);
+      if (cropKey != null) {
+        setSelectedArea(getCrop(cropKey).area);
+        setSelectedTool(cropKey);
+      }
     }
-    onboardingBaselineRef.current = {
-      plotCount: gameState.unlockedPlotCount,
-      areaCount: gameState.unlockedAreas.length,
-      speedLevel: gameState.upgrades.speed,
-      profitLevel: gameState.upgrades.profit,
-      researchNodeCount: gameState.research.unlockedNodes.length,
-      breedCount: gameState.research.unlockedBreeds.length,
-    };
-    setOnboardingStep('selectSeed');
-  }, [isSaveLoaded, gameState]);
+    setOnboardingStep(resumeStep);
+  }, [isSaveLoaded, gameState, onboardingStep, selectedTool]);
 
-  // Advance to the next step as the player actually performs each action, and
-  // finish onboarding once the final "first unlock" step is done. The whole
+  // Advance to the next step as the player actually performs each action. The
+  // reward step waits for explicit confirmation instead of trapping a new
+  // player behind an unaffordable expansion purchase. The whole
   // gameState is a dependency: every setGameState produces a fresh reference, so
   // this re-runs on every state change and always reads the latest values (no
   // stale closure, no missed transition).
@@ -1372,34 +1433,17 @@ function FarmGameBody({
       return;
     }
     if (onboardingStep === 'selectSeed' && selectedTool !== 'harvest') {
-      setOnboardingStep('plant');
+      advanceOnboarding('plant');
       return;
     }
     if (onboardingStep === 'plant' && gameState.plots.some((plot) => plot.cropType != null)) {
-      setOnboardingStep('harvest');
+      advanceOnboarding('harvest');
       return;
     }
     if (onboardingStep === 'harvest' && gameState.harvestedCropKeys.length > 0) {
-      setOnboardingStep('unlock');
-      return;
+      advanceOnboarding('reward');
     }
-    if (onboardingStep === 'unlock') {
-      const baseline = onboardingBaselineRef.current;
-      // Any farm-growing purchase counts as the "first unlock": a plot, an area,
-      // a growth/profit upgrade, or a research node/breed.
-      const unlockedSomething =
-        baseline != null &&
-        (gameState.unlockedPlotCount > baseline.plotCount ||
-          gameState.unlockedAreas.length > baseline.areaCount ||
-          gameState.upgrades.speed > baseline.speedLevel ||
-          gameState.upgrades.profit > baseline.profitLevel ||
-          gameState.research.unlockedNodes.length > baseline.researchNodeCount ||
-          gameState.research.unlockedBreeds.length > baseline.breedCount);
-      if (unlockedSomething) {
-        completeOnboarding();
-      }
-    }
-  }, [onboardingStep, selectedTool, gameState, completeOnboarding]);
+  }, [onboardingStep, selectedTool, gameState, advanceOnboarding]);
 
   // Emit the onboarding funnel step-view once per step entry. Guarded by a ref so
   // it fires only when the step actually changes, not on every render tick (the
@@ -1476,27 +1520,20 @@ function FarmGameBody({
     return () => animation.stop();
   }, [onboardingStep, seedHighlightPulse]);
 
-  // Safety net: never let the final "first unlock" coachmark linger forever. If
-  // the player lingers on this step without growing their farm, auto-finish (this
-  // still counts as a completion for the funnel, not a skip).
-  useEffect(() => {
-    if (onboardingStep !== 'unlock') {
-      return;
-    }
-    const timer = setTimeout(completeOnboarding, ONBOARDING_UNLOCK_SAFETY_TIMEOUT_MS);
-    return () => clearTimeout(timer);
-  }, [onboardingStep, completeOnboarding]);
-
   // Surface the notification permission prompt only after the first harvest
   // ("aha") AND once onboarding is complete. Gating on onboardingCompleted keeps
   // it from colliding with the coachmarks. Skip it for players who have already
   // seen it (harvestNotificationPromptSeen) or whose platform has no support. If
   // notifications are already enabled, don't ask — just settle the flag.
   useEffect(() => {
-    if (!isSaveLoaded || notificationPromptResolvedRef.current) return;
+    if (!isSaveLoaded || !isSettingsLoaded || notificationPromptResolvedRef.current) return;
     if (!notifications.isSupported) return;
     if (gameState.harvestNotificationPromptSeen) return;
     if (!gameState.onboardingCompleted || gameState.harvestedCropKeys.length === 0) return;
+    // The permission education modal is the last post-activation surface. Let
+    // the first-harvest celebration and any deferred daily/return sheet finish
+    // first so two foreground modals are never mounted together.
+    if (firstHarvestNotice != null || activeSheet != null) return;
     notificationPromptResolvedRef.current = true;
     if (gameSettings.harvestNotificationsEnabled) {
       markHarvestNotificationPromptSeen();
@@ -1505,11 +1542,14 @@ function FarmGameBody({
     setNotificationPrompt(true);
   }, [
     isSaveLoaded,
+    isSettingsLoaded,
     notifications,
     gameState.harvestNotificationPromptSeen,
     gameState.onboardingCompleted,
     gameState.harvestedCropKeys.length,
     gameSettings.harvestNotificationsEnabled,
+    firstHarvestNotice,
+    activeSheet,
   ]);
 
   // Keep the "last seen" timestamp fresh while the player is active so the
@@ -1744,10 +1784,7 @@ function FarmGameBody({
   // "탭해도 아무 일 없는" 정체 유발을 막는다. 선택 구역과 무관하게 전 구역에서
   // 찾으므로 어떤 상태에서도 심기 가능한 씨앗이 있으면 반드시 하나를 고른다.
   const quickStartCropKey = useMemo<CropKey | null>(
-    () =>
-      (Object.keys(CROPS) as CropKey[]).find(
-        (key) => isAreaUnlocked(gameState, getCrop(key).area) && isCropPlantable(gameState, key)
-      ) ?? null,
+    () => getOnboardingCropKey(gameState),
     [gameState]
   );
   const areaCropCounts = useMemo(() => {
@@ -2428,6 +2465,16 @@ function FarmGameBody({
       toast(messages.breedRequiredToast);
       return;
     }
+    // During the first instruction, only an affordable seed may advance the
+    // guide to "plant". Regular play still allows preselecting expensive seeds,
+    // but doing so here would strand a new player on an impossible next action.
+    if (
+      onboardingStepRef.current === 'selectSeed' &&
+      gameState.gold < getCropPurchaseCost(gameState, cropKey, Date.now())
+    ) {
+      toast(messages.insufficientGoldToast);
+      return;
+    }
 
     const isFirstSeedSelection = !firstSeedSelectedRef.current;
     firstSeedSelectedRef.current = true;
@@ -2615,7 +2662,20 @@ function FarmGameBody({
       comboTimerRef.current = null;
     }
     setHarvestCombo(0);
-    setGameState(createInitialState());
+    const resetState = createInitialState();
+    deferredOnboardingSheetRef.current = previewDailyBonus(
+      resetState.dailyBonusState,
+      Date.now(),
+      getRewardedGoldAmount(resetState)
+    ).available
+      ? { type: 'dailyBonus' }
+      : null;
+    onboardingStepViewedRef.current = null;
+    onboardingFinishCommittedRef.current = false;
+    notificationPromptResolvedRef.current = false;
+    setNotificationPrompt(false);
+    setOnboardingStep(null);
+    setGameState(resetState);
     setSelectedArea(FIRST_AREA.key);
     setSelectedTool('harvest');
     setActiveSheet(null);
@@ -2680,12 +2740,30 @@ function FarmGameBody({
         // The cloud payload may come from an older app version, so run it through
         // the same migration/normalization as the load path before showing it.
         const restored = migrateLoadedState(outcome.gameState, createInitialState());
-        setGameState({
+        const normalizedRestored: GameState = {
           ...restored,
           dailyBonusState: normalizeDailyBonusState(restored.dailyBonusState as unknown),
-        });
+        };
+        setGameState(normalizedRestored);
+        deferredOnboardingSheetRef.current =
+          !normalizedRestored.onboardingCompleted &&
+          previewDailyBonus(
+            normalizedRestored.dailyBonusState,
+            Date.now(),
+            getRewardedGoldAmount(normalizedRestored)
+          ).available
+            ? { type: 'dailyBonus' }
+            : null;
+        onboardingStepViewedRef.current = null;
+        onboardingFinishCommittedRef.current = false;
+        notificationPromptResolvedRef.current = normalizedRestored.harvestNotificationPromptSeen;
+        setNotificationPrompt(false);
+        setOnboardingStep(null);
         setSelectedArea(FIRST_AREA.key);
         setSelectedTool('harvest');
+        if (!normalizedRestored.onboardingCompleted) {
+          setActiveSheet(null);
+        }
       }
       const notice = cloudRestoreOutcomeMessage(outcome.status);
       setCloudSaveNotice(notice);
@@ -3205,7 +3283,6 @@ function FarmGameBody({
   // Outline the target the current onboarding step points at to draw the eye.
   const onboardingSeedHighlight = onboardingStep === 'selectSeed';
   const onboardingPlotHighlight = onboardingStep === 'plant' || onboardingStep === 'harvest';
-  const onboardingShopHighlight = onboardingStep === 'unlock';
 
   return (
     <View testID="farm-root" style={[styles.root, { backgroundColor: environmentTone.backgroundColor }]}>
@@ -3292,7 +3369,6 @@ function FarmGameBody({
             testID="shop-nav-button"
             label={messages.shopButton}
             badge={shopBadgeCount}
-            highlight={onboardingShopHighlight}
             onPress={openShop}
           />
           <NavButton
@@ -3316,6 +3392,7 @@ function FarmGameBody({
           step={onboardingStep}
           messages={messages}
           onSkip={skipOnboarding}
+          onRewardConfirm={completeOnboarding}
           onQuickStart={quickStartCropKey != null ? quickStartOnboarding : undefined}
         />
       ) : null}
@@ -6199,4 +6276,3 @@ function ShopUpgradeRow({
     />
   );
 }
-

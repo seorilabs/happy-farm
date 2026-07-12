@@ -90,6 +90,8 @@ export type Plot = {
   state: PlotState;
 };
 
+export type OnboardingStep = 'selectSeed' | 'plant' | 'harvest' | 'reward';
+
 export type AdUsage = {
   dailyKey: string;
   rewardedGoldTimestamps: number[];
@@ -146,6 +148,13 @@ export type GameState = {
   // Whether the first-session onboarding guide was completed or skipped. A
   // one-time flag so the coachmarks show only to new players and never return.
   onboardingCompleted: boolean;
+  // Last active onboarding step. Persisted so an interrupted first session can
+  // resume from the same point; null once onboarding is completed or skipped.
+  onboardingStep: OnboardingStep | null;
+  // Source lastSeenAt used for the most recent automatic return settlement
+  // while onboarding was incomplete. Makes the two-key save/last-seen write
+  // idempotent if the process stops between those writes.
+  onboardingReturnSettledAt: number | null;
   // Whether the one-time harvest-notification permission prompt — shown right
   // after the first harvest ("aha") — has already been surfaced. Once the player
   // accepts or dismisses it we never ask again (they can still toggle it in
@@ -203,6 +212,8 @@ export const META_LAYER_KEYS = [
   'dailyMissionState',
   'weeklyMissionState',
   'onboardingCompleted',
+  'onboardingStep',
+  'onboardingReturnSettledAt',
   'harvestNotificationPromptSeen',
   'prestigeGuideSeen',
   'placedDecorations',

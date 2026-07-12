@@ -1,4 +1,12 @@
-import type { AreaKey, CollectionRewardKey, CropKey, GameState, PlotState, ResearchNodeKey } from './types';
+import type {
+  AreaKey,
+  CollectionRewardKey,
+  CropKey,
+  GameState,
+  OnboardingStep,
+  PlotState,
+  ResearchNodeKey,
+} from './types';
 import { normalizeDailyBonusState } from './dailyBonus';
 import { COLLECTION_FULL_REWARD_KEY } from './types';
 import { getHarvestedCropKeysInSync, normalizeHarvestCounts, normalizeMutationsDiscovered } from './mastery';
@@ -92,6 +100,7 @@ export const MAX_PLOTS = balance.economy.maxPlots;
 export const INITIAL_PLOTS = balance.economy.initialPlots;
 export const DEFAULT_GOLD = balance.economy.defaultGold;
 export const SAVE_KEY = 'farmTycoonSave';
+export const ONBOARDING_STEPS = ['selectSeed', 'plant', 'harvest', 'reward'] as const satisfies readonly OnboardingStep[];
 export const REWARDED_GOLD_AMOUNT = balance.ads.rewardedGoldAmount;
 export const REWARDED_GOLD_WINDOW_MS = balance.ads.rewardedGoldWindowMs;
 export const REWARDED_GOLD_MAX_USES_PER_WINDOW = balance.ads.rewardedGoldMaxUsesPerWindow;
@@ -787,6 +796,8 @@ export function createInitialState(): GameState {
     dailyMissionState: createInitialDailyMissionState(),
     weeklyMissionState: createInitialWeeklyMissionState(),
     onboardingCompleted: false,
+    onboardingStep: 'selectSeed',
+    onboardingReturnSettledAt: null,
     harvestNotificationPromptSeen: false,
     prestigeGuideSeen: false,
     placedDecorations: createInitialPlacedDecorations(),
@@ -865,6 +876,28 @@ function normalizePlot(
     startTime: state === 0 ? null : startTime,
     state,
   };
+}
+
+function isOnboardingStep(value: unknown): value is OnboardingStep {
+  return typeof value === 'string' && (ONBOARDING_STEPS as readonly string[]).includes(value);
+}
+
+/**
+ * Resolves a resumable onboarding step from persisted data and normalized game
+ * progress. Completion remains the caller's responsibility because completed
+ * onboarding always stores null rather than another active step.
+ */
+export function resolveOnboardingStep(state: GameState, candidate: unknown): OnboardingStep {
+  if (isOnboardingStep(candidate)) {
+    return candidate;
+  }
+  if (state.harvestedCropKeys.length > 0 || state.lifetimeStats.totalHarvests > 0) {
+    return 'reward';
+  }
+  if (state.plots.some((plot) => plot.cropType != null)) {
+    return 'harvest';
+  }
+  return 'selectSeed';
 }
 
 export function migrateLoadedState(loaded: Partial<GameState>, base: GameState): GameState {
@@ -949,6 +982,13 @@ export function migrateLoadedState(loaded: Partial<GameState>, base: GameState):
   // false value.
   merged.onboardingCompleted =
     typeof loaded.onboardingCompleted === 'boolean' ? loaded.onboardingCompleted : true;
+  merged.onboardingStep = merged.onboardingCompleted ? null : resolveOnboardingStep(merged, loaded.onboardingStep);
+  merged.onboardingReturnSettledAt =
+    typeof loaded.onboardingReturnSettledAt === 'number' &&
+    Number.isFinite(loaded.onboardingReturnSettledAt) &&
+    loaded.onboardingReturnSettledAt > 0
+      ? Math.floor(loaded.onboardingReturnSettledAt)
+      : null;
 
   // A save without the flag belongs to a player who already started before this
   // prompt existed, so treat it as already seen to avoid surprising them with a
