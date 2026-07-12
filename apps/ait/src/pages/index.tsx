@@ -3,6 +3,7 @@ import React, { useMemo } from 'react';
 import { FarmGame, detectRuntimeLocale, type FarmGameAdGroupIds } from '../../../../packages/farm-ui/src';
 import { appsInTossFarmAnalytics } from '../firebaseWeb';
 import { useAppsInTossInterstitialAdGroupId } from '../firebaseWeb/remoteConfig';
+import { appsInTossFarmArt } from '../farm/platform/appsInTossArt';
 import { useAppsInTossFarmAudio } from '../farm/platform/appsInTossAudio';
 import { useFullScreenAd } from '../farm/platform/fullScreenAd';
 import {
@@ -50,6 +51,7 @@ function Page() {
       <FarmGame
         analytics={appsInTossFarmAnalytics}
         adGroupIds={adGroupIds}
+        art={appsInTossFarmArt}
         audio={audio}
         persistence={appsInTossPersistence}
         preferredLocale={detectRuntimeLocale()}
