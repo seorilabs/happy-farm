@@ -195,7 +195,9 @@ describe('useAppsInTossFarmAudio', () => {
       audio.playEffect('reward');
     });
 
-    expect(mockSeek).toHaveBeenCalledTimes(2);
+    // seek fires per play() call plus once more when the restart resumes
+    // after the paused frame commits: 2 + 1.
+    expect(mockSeek).toHaveBeenCalledTimes(3);
     expect(mockSeek).toHaveBeenLastCalledWith(0);
     expect(latestPropsFor(FARM_AUDIO_SOURCES.reward).paused).toBe(false);
 
@@ -218,7 +220,10 @@ describe('useAppsInTossFarmAudio', () => {
       audio.playEffect('wheelSpin');
     });
 
-    expect(mockSeek).toHaveBeenCalledTimes(3);
+    // 3 play() seeks + 1 restart-resume seek; the two same-batch calls fold
+    // into a single stop-then-play cycle.
+    expect(mockSeek).toHaveBeenCalledTimes(4);
+    expect(mockSeek).toHaveBeenLastCalledWith(0);
     expect(latestPropsFor(FARM_AUDIO_SOURCES.wheelSpin).paused).toBe(false);
 
     // After the sound naturally ends, no stale restart may bring it back.

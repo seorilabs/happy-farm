@@ -96,9 +96,13 @@ const OneShotEffectPlayer = React.forwardRef<OneShotHandle, { uri: string; volum
     const warnFailure = useMemo(() => createPlaybackFailureWarning(uri), [uri]);
 
     // After the 'restarting' (paused) frame commits, resume from position 0.
+    // The extra seek re-pins the position after the pause reached the native
+    // layer, so the restart never depends on how the wrapper orders a seek
+    // issued while playback was still running.
     useEffect(() => {
       if (playState === 'restarting') {
         setPlayState('playing');
+        videoRef.current?.seek(0);
       }
     }, [playState]);
 
