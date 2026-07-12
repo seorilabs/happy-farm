@@ -5,6 +5,7 @@ import {
   canCollectProduce,
   canFeedAnimal,
   canPurchaseAnimal,
+  collectAllReadyProduce,
   collectProduce,
   createInitialAnimalsState,
   feedAnimal,
@@ -251,6 +252,46 @@ describe('feedAnimal / collectProduce cycle', () => {
     const fed = feedAnimal(ownedState(animal.feedCost, [FIRST]), FIRST, Number.NaN);
     expect(fed).not.toBeNull();
     expect(Number.isFinite(fed!.animals.feeding[FIRST]!)).toBe(true);
+  });
+});
+
+describe('collectAllReadyProduce', () => {
+  test('collects every ready animal at one boundary and leaves growing animals untouched', () => {
+    const now = 20_000_000;
+    const first = ANIMALS[0]!;
+    const second = ANIMALS[1]!;
+    const third = ANIMALS[2]!;
+    const before = ownedState(100, [first.key, second.key, third.key], {
+      [first.key]: now - first.produceTimerMs,
+      [second.key]: now - second.produceTimerMs - 1,
+      [third.key]: now - third.produceTimerMs + 1,
+    });
+
+    const result = collectAllReadyProduce(before, now);
+
+    expect(result.collectedKeys).toEqual([first.key, second.key]);
+    expect(result.collectedCount).toBe(2);
+    expect(result.totalGold).toBe(first.producePrice + second.producePrice);
+    expect(result.state.gold).toBe(before.gold + result.totalGold);
+    expect(result.state.animals.feeding[first.key]).toBeUndefined();
+    expect(result.state.animals.feeding[second.key]).toBeUndefined();
+    expect(result.state.animals.feeding[third.key]).toBe(before.animals.feeding[third.key]);
+    expect(before.animals.feeding[first.key]).toBeDefined();
+
+    const secondAttempt = collectAllReadyProduce(result.state, now);
+    expect(secondAttempt.state).toBe(result.state);
+    expect(secondAttempt.collectedCount).toBe(0);
+    expect(secondAttempt.totalGold).toBe(0);
+  });
+
+  test('returns the input state reference when no animal is ready', () => {
+    const before = ownedState(100, [FIRST]);
+    const result = collectAllReadyProduce(before, 10);
+
+    expect(result.state).toBe(before);
+    expect(result.collectedKeys).toEqual([]);
+    expect(result.collectedCount).toBe(0);
+    expect(result.totalGold).toBe(0);
   });
 });
 

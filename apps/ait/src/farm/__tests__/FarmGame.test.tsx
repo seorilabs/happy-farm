@@ -717,6 +717,86 @@ describe('FarmGame UI flow', () => {
     });
   });
 
+  describe('ready output collect-all', () => {
+    let onGoldPulse: jest.Mock;
+
+    beforeEach(() => {
+      onGoldPulse = jest.fn();
+      __setGoldPulseTestHook(onGoldPulse);
+    });
+
+    afterEach(() => {
+      __setGoldPulseTestHook(undefined);
+    });
+
+    test('collects all ready animal produce once on a rapid double press', async () => {
+      const ready = ANIMALS.slice(0, 2);
+      expect(ready).toHaveLength(2);
+      const base = createInitialState();
+      const state: GameState = {
+        ...base,
+        animals: {
+          owned: ready.map((animal) => animal.key),
+          feeding: Object.fromEntries(ready.map((animal) => [animal.key, NOW - animal.produceTimerMs])),
+        },
+      };
+      const totalGold = ready.reduce((sum, animal) => sum + animal.producePrice, 0);
+      const messages = getFarmMessages(DEFAULT_LOCALE);
+      const screen = await renderGame(state);
+
+      fireEvent.press(screen.getByTestId('more-nav-button'));
+      fireEvent.press(screen.getByLabelText(messages.animalsButtonAccessibilityLabel));
+      const action = screen.getByTestId('animals-collect-all-action');
+      await act(async () => {
+        fireEvent.press(action);
+        fireEvent.press(action);
+      });
+
+      await waitFor(() =>
+        expect(screen.getByText(`${formatMoney(state.gold + totalGold, DEFAULT_LOCALE)}G`)).toBeTruthy()
+      );
+      expect(screen.getByText(messages.animalsCollectedAllToast(formatMoney(totalGold, DEFAULT_LOCALE), 2))).toBeTruthy();
+      expect(screen.queryByTestId('animals-collect-all-action')).toBeNull();
+      expect(screen.getAllByText(messages.animalsIdleLabel)).toHaveLength(2);
+      expect(onGoldPulse).toHaveBeenCalledTimes(1);
+    });
+
+    test('collects all completed workshop goods once with one English summary', async () => {
+      const ready = PRODUCTION_RECIPES.slice(0, 2);
+      expect(ready).toHaveLength(2);
+      const base = createInitialState();
+      const state: GameState = {
+        ...base,
+        production: {
+          ...base.production,
+          crafting: Object.fromEntries(ready.map((recipe) => [recipe.key, NOW - recipe.timerMs])),
+        },
+      };
+      const totalGold = ready.reduce((sum, recipe) => sum + recipe.sellPrice, 0);
+      const messages = getFarmMessages('en-US');
+      const screen = await renderGame(state, { preferredLocale: 'en-US' });
+
+      fireEvent.press(screen.getByTestId('more-nav-button'));
+      fireEvent.press(screen.getByLabelText(messages.workshopButtonAccessibilityLabel));
+      const action = screen.getByTestId('workshop-collect-all-action');
+      expect(action.props.accessibilityLabel).toBe(messages.workshopCollectAllAction(2));
+      await act(async () => {
+        fireEvent.press(action);
+        fireEvent.press(action);
+      });
+
+      await waitFor(() =>
+        expect(screen.getByText(`${formatMoney(state.gold + totalGold, 'en-US')}G`)).toBeTruthy()
+      );
+      expect(screen.getByText(messages.workshopCollectedAllToast(formatMoney(totalGold, 'en-US'), 2))).toBeTruthy();
+      expect(screen.queryByTestId('workshop-collect-all-action')).toBeNull();
+      for (const recipe of ready) {
+        expect(within(screen.getByTestId(`recipe-card-${recipe.key}`)).getByText(messages.workshopNeedIngredientsLabel)).toBeTruthy();
+      }
+      expect(onGoldPulse).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe('welcome-back offline settlement', () => {
     const messages = getFarmMessages(DEFAULT_LOCALE);
     const TWO_HOURS_MS = 2 * 60 * 60 * 1000;

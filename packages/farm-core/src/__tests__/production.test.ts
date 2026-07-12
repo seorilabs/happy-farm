@@ -5,6 +5,7 @@ import {
   addCropToInventory,
   canCollectCraft,
   canStartCraft,
+  collectAllReadyCrafts,
   collectCraft,
   createInitialProductionState,
   getProductionState,
@@ -244,6 +245,54 @@ describe('startCraft / collectCraft cycle', () => {
     const crafting = startCraft(stateWithIngredients(), FIRST.key, Number.NaN);
     expect(crafting).not.toBeNull();
     expect(Number.isFinite(crafting!.production.crafting[FIRST.key]!)).toBe(true);
+  });
+});
+
+describe('collectAllReadyCrafts', () => {
+  test('collects every completed recipe at one boundary and preserves in-progress work', () => {
+    const now = 20_000_000;
+    const first = PRODUCTION_RECIPES[0]!;
+    const second = PRODUCTION_RECIPES[1]!;
+    const third = PRODUCTION_RECIPES[2]!;
+    const inventory = { [first.inputs[0]!.crop]: 7 };
+    const before = stateWith(
+      {
+        inventory,
+        crafting: {
+          [first.key]: now - first.timerMs,
+          [second.key]: now - second.timerMs - 1,
+          [third.key]: now - third.timerMs + 1,
+        },
+      },
+      100
+    );
+
+    const result = collectAllReadyCrafts(before, now);
+
+    expect(result.collectedKeys).toEqual([first.key, second.key]);
+    expect(result.collectedCount).toBe(2);
+    expect(result.totalGold).toBe(first.sellPrice + second.sellPrice);
+    expect(result.state.gold).toBe(before.gold + result.totalGold);
+    expect(result.state.production.inventory).toBe(inventory);
+    expect(result.state.production.crafting[first.key]).toBeUndefined();
+    expect(result.state.production.crafting[second.key]).toBeUndefined();
+    expect(result.state.production.crafting[third.key]).toBe(before.production.crafting[third.key]);
+    expect(before.production.crafting[first.key]).toBeDefined();
+
+    const secondAttempt = collectAllReadyCrafts(result.state, now);
+    expect(secondAttempt.state).toBe(result.state);
+    expect(secondAttempt.collectedCount).toBe(0);
+    expect(secondAttempt.totalGold).toBe(0);
+  });
+
+  test('returns the input state reference when no craft is ready', () => {
+    const before = stateWith(createInitialProductionState(), 100);
+    const result = collectAllReadyCrafts(before, 10);
+
+    expect(result.state).toBe(before);
+    expect(result.collectedKeys).toEqual([]);
+    expect(result.collectedCount).toBe(0);
+    expect(result.totalGold).toBe(0);
   });
 });
 
