@@ -1,22 +1,21 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { ONBOARDING_STEPS, type OnboardingStep } from '../../../farm-core/src';
 import type { FarmMessages } from '../i18n';
 
-// Steps of the first-session onboarding flow. Each advances automatically once
-// the player performs the action (pick seed → plant → harvest → first unlock).
-// Array order is both the progression order and the basis for the "2/4" label.
-export const ONBOARDING_STEPS = ['selectSeed', 'plant', 'harvest', 'unlock'] as const;
-
-export type OnboardingStep = (typeof ONBOARDING_STEPS)[number];
+// Keep existing farm-ui imports working while farm-core remains the canonical
+// owner of the persisted onboarding step contract.
+export { ONBOARDING_STEPS };
+export type { OnboardingStep };
 
 // Directional hint of the coachmark. The seed strip sits below the banner, so
-// that step points down; every other target (plots, shop) sits above it.
+// that step points down; action steps point up and the final reward uses a gift.
 const STEP_ARROW: Record<OnboardingStep, string> = {
   selectSeed: '👇',
   plant: '👆',
   harvest: '👆',
-  unlock: '👆',
+  reward: '🎁',
 };
 
 function getStepText(step: OnboardingStep, messages: FarmMessages): { title: string; description: string } {
@@ -27,8 +26,8 @@ function getStepText(step: OnboardingStep, messages: FarmMessages): { title: str
       return { title: messages.onboardingPlantTitle, description: messages.onboardingPlantDesc };
     case 'harvest':
       return { title: messages.onboardingHarvestTitle, description: messages.onboardingHarvestDesc };
-    case 'unlock':
-      return { title: messages.onboardingUnlockTitle, description: messages.onboardingUnlockDesc };
+    case 'reward':
+      return { title: messages.onboardingRewardTitle, description: messages.onboardingRewardDesc };
   }
 }
 
@@ -39,24 +38,31 @@ export function FarmOnboarding({
   step,
   messages,
   onSkip,
+  onRewardConfirm,
   onQuickStart,
 }: {
   step: OnboardingStep;
   messages: FarmMessages;
   onSkip: () => void;
+  onRewardConfirm: () => void;
   // #274: selectSeed 단계에서만 노출되는 "바로 시작" CTA. 탭 시 대표 씨앗을
   // 자동 선택해 plant 단계로 즉시 진행시킨다(직접 선택도 여전히 가능).
   onQuickStart?: () => void;
 }) {
   const { title, description } = getStepText(step, messages);
   const stepIndex = ONBOARDING_STEPS.indexOf(step);
-  // 첫 파종(plant) 완료 전(= selectSeed·plant 단계)에는 건너뛰기를 숨긴다. 신규
-  // 사용자 다수가 첫 씨앗을 심기도 전에 코치마크를 건너뛰고 이탈하는 것을 막아
-  // 핵심 행동(파종)으로의 도달률을 끌어올리기 위함이다(#159). 파종 이후(harvest·
-  // unlock)부터 건너뛰기를 노출한다.
-  const canSkip = step !== 'selectSeed' && step !== 'plant';
+  const [skipConfirmationStep, setSkipConfirmationStep] = useState<OnboardingStep | null>(null);
+  const isSkipConfirmationOpen = skipConfirmationStep === step;
+  // Skip is limited to the action stage. Once the first harvest is complete,
+  // the explicit reward confirmation is the only way to finish the guide.
+  const canSkip = step === 'harvest';
   // "바로 시작"은 정체가 가장 심한 selectSeed 단계에서만 제공한다(#274).
   const canQuickStart = step === 'selectSeed' && onQuickStart != null;
+  const canConfirmReward = step === 'reward';
+
+  useEffect(() => {
+    setSkipConfirmationStep(null);
+  }, [step]);
 
   // Bob the arrow up and down a little to catch the eye.
   const bounceRef = useRef<Animated.Value | null>(null);
@@ -91,32 +97,78 @@ export function FarmOnboarding({
   return (
     <View pointerEvents="box-none" style={styles.container}>
       <View testID="onboarding-coachmark" style={styles.card}>
-        <Animated.Text style={[styles.arrow, { transform: [{ translateY: arrowTranslateY }] }]}>
-          {STEP_ARROW[step]}
-        </Animated.Text>
-        <View style={styles.textGroup}>
-          <Text style={styles.title}>{title}</Text>
-          <Text style={styles.description}>{description}</Text>
+        <View style={styles.contentRow}>
+          <Animated.Text style={[styles.arrow, { transform: [{ translateY: arrowTranslateY }] }]}>
+            {STEP_ARROW[step]}
+          </Animated.Text>
+          <View style={styles.textGroup}>
+            <Text style={styles.title}>{title}</Text>
+            <Text style={styles.description}>{description}</Text>
+          </View>
+          <View style={styles.aside}>
+            <Text style={styles.progress}>{messages.onboardingProgress(stepIndex + 1, ONBOARDING_STEPS.length)}</Text>
+            {canQuickStart ? (
+              <Pressable
+                testID="onboarding-quick-start"
+                accessibilityLabel={messages.onboardingQuickStart}
+                hitSlop={8}
+                style={styles.primaryButton}
+                onPress={onQuickStart}
+              >
+                <Text style={styles.primaryButtonText}>{messages.onboardingQuickStart}</Text>
+              </Pressable>
+            ) : null}
+            {canConfirmReward ? (
+              <Pressable
+                testID="onboarding-reward-confirm"
+                accessibilityLabel={messages.onboardingRewardContinue}
+                hitSlop={8}
+                style={styles.primaryButton}
+                onPress={onRewardConfirm}
+              >
+                <Text style={styles.primaryButtonText}>{messages.onboardingRewardContinue}</Text>
+              </Pressable>
+            ) : null}
+            {canSkip ? (
+              <Pressable
+                testID="onboarding-skip"
+                accessibilityLabel={messages.onboardingSkip}
+                hitSlop={8}
+                style={styles.skipButton}
+                onPress={() => setSkipConfirmationStep(step)}
+              >
+                <Text style={styles.skipText}>{messages.onboardingSkip}</Text>
+              </Pressable>
+            ) : null}
+          </View>
         </View>
-        <View style={styles.aside}>
-          <Text style={styles.progress}>{messages.onboardingProgress(stepIndex + 1, ONBOARDING_STEPS.length)}</Text>
-          {canQuickStart ? (
-            <Pressable
-              testID="onboarding-quick-start"
-              accessibilityLabel={messages.onboardingQuickStart}
-              hitSlop={8}
-              style={styles.quickStartButton}
-              onPress={onQuickStart}
-            >
-              <Text style={styles.quickStartText}>{messages.onboardingQuickStart}</Text>
-            </Pressable>
-          ) : null}
-          {canSkip ? (
-            <Pressable testID="onboarding-skip" hitSlop={8} style={styles.skipButton} onPress={onSkip}>
-              <Text style={styles.skipText}>{messages.onboardingSkip}</Text>
-            </Pressable>
-          ) : null}
-        </View>
+        {isSkipConfirmationOpen ? (
+          <View testID="onboarding-skip-confirm" style={styles.skipConfirmation}>
+            <Text style={styles.skipConfirmationTitle}>{messages.onboardingSkipConfirmTitle}</Text>
+            <Text style={styles.skipConfirmationDescription}>{messages.onboardingSkipConfirmDesc}</Text>
+            <View style={styles.skipConfirmationActions}>
+              <Pressable
+                testID="onboarding-skip-cancel"
+                accessibilityLabel={messages.onboardingSkipConfirmCancel}
+                style={styles.skipConfirmationCancelButton}
+                onPress={() => setSkipConfirmationStep(null)}
+              >
+                <Text style={styles.skipConfirmationCancelText}>{messages.onboardingSkipConfirmCancel}</Text>
+              </Pressable>
+              <Pressable
+                testID="onboarding-skip-confirm-action"
+                accessibilityLabel={messages.onboardingSkipConfirmAction}
+                style={styles.skipConfirmationActionButton}
+                onPress={() => {
+                  setSkipConfirmationStep(null);
+                  onSkip();
+                }}
+              >
+                <Text style={styles.skipConfirmationActionText}>{messages.onboardingSkipConfirmAction}</Text>
+              </Pressable>
+            </View>
+          </View>
+        ) : null}
       </View>
     </View>
   );
@@ -128,8 +180,6 @@ const styles = StyleSheet.create({
     paddingTop: 8,
   },
   card: {
-    flexDirection: 'row',
-    alignItems: 'center',
     gap: 12,
     paddingHorizontal: 14,
     paddingVertical: 12,
@@ -142,6 +192,11 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 4 },
     elevation: 4,
+  },
+  contentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
   },
   arrow: {
     fontSize: 26,
@@ -170,14 +225,15 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '800',
   },
-  // 정체 완화 CTA(#274): selectSeed 단계의 주 행동 버튼이라 초록 솔리드로 강조.
-  quickStartButton: {
+  // Primary onboarding actions use a compact solid treatment so the coachmark
+  // copy keeps enough room to wrap on narrow portrait screens.
+  primaryButton: {
     paddingHorizontal: 14,
     paddingVertical: 7,
     borderRadius: 999,
     backgroundColor: '#2e9e52',
   },
-  quickStartText: {
+  primaryButtonText: {
     color: '#ffffff',
     fontSize: 12,
     fontWeight: '900',
@@ -192,5 +248,60 @@ const styles = StyleSheet.create({
     color: '#5b6b5f',
     fontSize: 11,
     fontWeight: '800',
+  },
+  skipConfirmation: {
+    alignItems: 'stretch',
+    gap: 8,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: '#f7faf7',
+    borderWidth: 1,
+    borderColor: '#d7e4d9',
+  },
+  skipConfirmationTitle: {
+    color: '#26472e',
+    fontSize: 14,
+    fontWeight: '900',
+  },
+  skipConfirmationDescription: {
+    color: '#4d6252',
+    fontSize: 12,
+    fontWeight: '600',
+    lineHeight: 17,
+    flexShrink: 1,
+  },
+  skipConfirmationActions: {
+    alignItems: 'stretch',
+    gap: 8,
+  },
+  skipConfirmationCancelButton: {
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: 10,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#b9ccbd',
+  },
+  skipConfirmationCancelText: {
+    color: '#35583e',
+    fontSize: 12,
+    fontWeight: '800',
+    textAlign: 'center',
+    flexShrink: 1,
+  },
+  skipConfirmationActionButton: {
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: 10,
+    backgroundColor: '#e7eee8',
+  },
+  skipConfirmationActionText: {
+    color: '#4d6252',
+    fontSize: 12,
+    fontWeight: '800',
+    textAlign: 'center',
+    flexShrink: 1,
   },
 });

@@ -396,8 +396,13 @@ const KO_FARM_MESSAGES = {
   onboardingPlantDesc: '비어 있는 밭을 눌러 고른 씨앗을 심어요.',
   onboardingHarvestTitle: '자라면 수확해요',
   onboardingHarvestDesc: '작물이 다 자라면 밭을 눌러 수확하고 골드로 바꿔요.',
-  onboardingUnlockTitle: '농장을 넓혀요',
-  onboardingUnlockDesc: '모은 골드로 상점에서 밭·구역을 열거나 업그레이드해 농장을 키워 보세요.',
+  onboardingRewardTitle: '첫 수확 완료!',
+  onboardingRewardDesc: '첫 수확 보상을 확인하고 농장 운영을 시작해요.',
+  onboardingRewardContinue: '계속하기',
+  onboardingSkipConfirmTitle: '안내를 건너뛸까요?',
+  onboardingSkipConfirmDesc: '첫 수확까지 안내를 따라가면 농장 운영을 더 쉽게 시작할 수 있어요.',
+  onboardingSkipConfirmCancel: '계속 안내받기',
+  onboardingSkipConfirmAction: '건너뛰기',
 };
 
 export type FarmMessages = typeof KO_FARM_MESSAGES;
@@ -772,8 +777,13 @@ const EN_FARM_MESSAGES: FarmMessages = {
   onboardingPlantDesc: 'Tap an empty plot to plant the seed you picked.',
   onboardingHarvestTitle: 'Harvest when ready',
   onboardingHarvestDesc: 'When the crop is ready, tap the plot to harvest and turn it into gold.',
-  onboardingUnlockTitle: 'Grow your farm',
-  onboardingUnlockDesc: 'Open the Shop to add plots, unlock an area, or buy an upgrade with your gold.',
+  onboardingRewardTitle: 'First harvest complete!',
+  onboardingRewardDesc: 'Confirm your first-harvest reward and start running your farm.',
+  onboardingRewardContinue: 'Continue',
+  onboardingSkipConfirmTitle: 'Skip the guide?',
+  onboardingSkipConfirmDesc: 'Following the guide through your first harvest makes it easier to get started.',
+  onboardingSkipConfirmCancel: 'Keep guiding me',
+  onboardingSkipConfirmAction: 'Skip guide',
 };
 
 const FARM_MESSAGES: Record<SupportedLocale, FarmMessages> = {

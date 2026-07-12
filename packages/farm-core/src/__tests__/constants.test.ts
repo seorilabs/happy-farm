@@ -21,6 +21,7 @@ import {
   INITIAL_AREA_KEYS,
   INITIAL_PLOTS,
   MAX_PLOTS,
+  ONBOARDING_STEPS,
   REWARDED_GOLD_MAX_USES_PER_WINDOW,
   REWARDED_GOLD_WINDOW_MS,
   canUnlockArea,
@@ -44,6 +45,7 @@ import {
   getAdDailyKey,
   recordHarvestBonusAdPrompt,
   recordRewardedAdUsage,
+  resolveOnboardingStep,
 } from '../constants';
 import type { CropKey, GameState } from '../types';
 
@@ -65,6 +67,10 @@ describe('farm balance and model invariants', () => {
     expect(state.unlockedPlotCount).toBe(INITIAL_PLOTS);
     expect(state.unlockedAreas).toEqual(INITIAL_AREA_KEYS);
     expect(state.harvestedCropKeys).toEqual([]);
+    expect(state.onboardingCompleted).toBe(false);
+    expect(state.onboardingStep).toBe('selectSeed');
+    expect(state.onboardingReturnSettledAt).toBeNull();
+    expect(ONBOARDING_STEPS).toEqual(['selectSeed', 'plant', 'harvest', 'reward']);
     expect(state.upgrades).toEqual({ speed: 1, profit: 1 });
     expect(state.plots).toHaveLength(MAX_PLOTS);
     expect(state.plots.map((plot) => plot.id)).toEqual(Array.from({ length: MAX_PLOTS }, (_, index) => index));
@@ -335,6 +341,93 @@ describe('farm save migration', () => {
       base
     );
     expect(explicit.prestigeGuideSeen).toBe(false);
+  });
+
+  test.each(ONBOARDING_STEPS)('preserves valid onboarding step %s for incomplete saves', (onboardingStep) => {
+    const base = createInitialState();
+    const migrated = migrateLoadedState({ ...base, onboardingCompleted: false, onboardingStep }, base);
+
+    expect(migrated.onboardingCompleted).toBe(false);
+    expect(migrated.onboardingStep).toBe(onboardingStep);
+  });
+
+  test('keeps legacy and explicitly completed saves completed with no active onboarding step', () => {
+    const base = createInitialState();
+    const legacy = migrateLoadedState(
+      { gold: base.gold, onboardingStep: 'plant' } as Partial<GameState>,
+      base
+    );
+    const completed = migrateLoadedState(
+      { ...base, onboardingCompleted: true, onboardingStep: 'harvest' },
+      base
+    );
+
+    expect(legacy.onboardingCompleted).toBe(true);
+    expect(legacy.onboardingStep).toBeNull();
+    expect(completed.onboardingCompleted).toBe(true);
+    expect(completed.onboardingStep).toBeNull();
+  });
+
+  test('infers resumable onboarding steps from normalized progress', () => {
+    const base = createInitialState();
+    const harvested = migrateLoadedState(
+      { ...base, onboardingCompleted: false, onboardingStep: null, harvestedCropKeys: ['carrot'] },
+      base
+    );
+    const lifetimeHarvested = migrateLoadedState(
+      {
+        ...base,
+        onboardingCompleted: false,
+        onboardingStep: null,
+        lifetimeStats: { ...base.lifetimeStats, totalHarvests: 1 },
+      },
+      base
+    );
+    const planted = migrateLoadedState(
+      {
+        ...base,
+        onboardingCompleted: false,
+        onboardingStep: null,
+        plots: [{ id: 0, cropType: 'carrot', startTime: NOW - 500, state: 1 }],
+      },
+      base
+    );
+    const untouched = migrateLoadedState(
+      { ...base, onboardingCompleted: false, onboardingStep: null },
+      base
+    );
+
+    expect(harvested.onboardingStep).toBe('reward');
+    expect(lifetimeHarvested.onboardingStep).toBe('reward');
+    expect(planted.onboardingStep).toBe('harvest');
+    expect(untouched.onboardingStep).toBe('selectSeed');
+  });
+
+  test('rejects invalid persisted onboarding steps and resolves them from progress', () => {
+    const state = {
+      ...createInitialState(),
+      onboardingCompleted: false,
+      plots: createInitialState().plots.map((plot, index) =>
+        index === 0 ? { ...plot, cropType: 'carrot' as const, startTime: NOW - 500, state: 1 as const } : plot
+      ),
+    };
+    const loaded = { ...state, onboardingStep: 'unlock' } as unknown as Partial<GameState>;
+    const migrated = migrateLoadedState(loaded, createInitialState());
+
+    expect(resolveOnboardingStep(state, 'unlock')).toBe('harvest');
+    expect(migrated.onboardingStep).toBe('harvest');
+  });
+
+  test('normalizes the idempotency marker for onboarding return settlement', () => {
+    const base = createInitialState();
+    const valid = migrateLoadedState({ ...base, onboardingReturnSettledAt: NOW + 0.9 }, base);
+    const invalid = migrateLoadedState(
+      { ...base, onboardingReturnSettledAt: Number.NaN },
+      base
+    );
+
+    expect(valid.onboardingReturnSettledAt).toBe(NOW);
+    expect(invalid.onboardingReturnSettledAt).toBeNull();
   });
 });
 
