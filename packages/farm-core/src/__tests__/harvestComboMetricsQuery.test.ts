@@ -3,6 +3,8 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
+import { COMBO_GREAT_THRESHOLD, COMBO_LEGENDARY_THRESHOLD } from '../constants';
+
 // BigQuery 콘솔용 multi-statement SQL은 Jest에서 직접 dry-run할 수 없다. 대신 #348의
 // 분석 계약(직접 이벤트·필수 6 params·28개 완료일·티어/분포/종료/집중도)이 구현과
 // 문서에서 조용히 드리프트하지 않도록 정적으로 가드한다.
@@ -55,6 +57,8 @@ describe('harvest-combo-metrics.sql 계약 가드 (#348)', () => {
       'combo_share',
       'manual_harvest_share',
       'user_reach_rate',
+      'exact_tier_users',
+      'reached_users',
       'median_manual_harvest_count',
       'p90_manual_harvest_count',
       'max_manual_harvest_count',
@@ -73,7 +77,9 @@ describe('harvest-combo-metrics.sql 계약 가드 (#348)', () => {
     expect(sql).toContain(
       'valid_combo_events.manual_harvest_count >= tiers.minimum_manual_harvest_count'
     );
-    expect(sql).toContain('reached_users');
+    expect(sql).toContain(`SELECT 'great', 2, ${COMBO_GREAT_THRESHOLD}`);
+    expect(sql).toContain(`SELECT 'legendary', 3, ${COMBO_LEGENDARY_THRESHOLD}`);
+    expect(sql).toContain('normal(1+) is an intentional 100% cohort anchor');
   });
 
   test('종료 사유 분포와 사용자 집중도를 0분모 안전하게 산출한다', () => {
@@ -90,6 +96,8 @@ describe('harvest-combo-metrics.sql 계약 가드 (#348)', () => {
       expect(sql).toContain(metric);
     }
     expect(occurrences(sql, 'SAFE_DIVIDE(')).toBeGreaterThanOrEqual(10);
+    expect(sql).toContain('top1/top2 mean exactly the largest one/two users');
+    expect(sql).toContain('ROW_NUMBER() OVER (ORDER BY manual_harvests DESC, user_pseudo_id)');
   });
 
   test('필수 파라미터 누락과 enum·범위·schema 드리프트를 별도 출력한다', () => {
@@ -103,9 +111,11 @@ describe('harvest-combo-metrics.sql 계약 가드 (#348)', () => {
       'invalid_combo_tier',
       'invalid_end_reason',
       'invalid_schema_version',
+      'has_data',
       'valid_event_rate',
     ]) {
       expect(sql).toContain(metric);
     }
+    expect(sql).toContain('IF(COUNT(*) = 0, NULL, SAFE_DIVIDE(COUNTIF(is_valid), COUNT(*)))');
   });
 });

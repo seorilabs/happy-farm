@@ -65,7 +65,7 @@ BEGIN
     SELECT
       combo_tier,
       COUNT(*) AS completed_combos,
-      COUNT(DISTINCT user_pseudo_id) AS combo_users,
+      COUNT(DISTINCT user_pseudo_id) AS exact_tier_users,
       COUNT(DISTINCT CONCAT(user_pseudo_id, ':', CAST(ga_session_id AS STRING))) AS combo_sessions,
       SUM(manual_harvest_count) AS manual_harvests
     FROM valid_combo_events
@@ -75,6 +75,7 @@ BEGIN
     -- Reach is cumulative: a legendary streak also reached great. Keep the
     -- exact final-tier user count above for distribution, but use this cohort
     -- for threshold reach rates that compare with the pre-instrumentation 5+/10+ baseline.
+    -- normal(1+) is an intentional 100% cohort anchor whenever valid events exist.
     SELECT
       tiers.combo_tier,
       COUNT(DISTINCT valid_combo_events.user_pseudo_id) AS reached_users
@@ -86,7 +87,7 @@ BEGIN
   totals AS (
     SELECT
       COUNT(*) AS completed_combos,
-      COUNT(DISTINCT user_pseudo_id) AS combo_users,
+      COUNT(DISTINCT user_pseudo_id) AS active_combo_users,
       SUM(manual_harvest_count) AS manual_harvests
     FROM valid_combo_events
   )
@@ -94,13 +95,13 @@ BEGIN
   SELECT
     tiers.combo_tier,
     COALESCE(tier_agg.completed_combos, 0) AS completed_combos,
-    COALESCE(tier_agg.combo_users, 0) AS combo_users,
+    COALESCE(tier_agg.exact_tier_users, 0) AS exact_tier_users,
     COALESCE(tier_reach.reached_users, 0) AS reached_users,
     COALESCE(tier_agg.combo_sessions, 0) AS combo_sessions,
     COALESCE(tier_agg.manual_harvests, 0) AS manual_harvests,
     SAFE_DIVIDE(COALESCE(tier_agg.completed_combos, 0), totals.completed_combos) AS combo_share,
     SAFE_DIVIDE(COALESCE(tier_agg.manual_harvests, 0), totals.manual_harvests) AS manual_harvest_share,
-    SAFE_DIVIDE(COALESCE(tier_reach.reached_users, 0), totals.combo_users) AS user_reach_rate
+    SAFE_DIVIDE(COALESCE(tier_reach.reached_users, 0), totals.active_combo_users) AS user_reach_rate
   FROM tiers
   LEFT JOIN tier_agg USING (combo_tier)
   LEFT JOIN tier_reach USING (combo_tier)
@@ -335,6 +336,10 @@ BEGIN
     GROUP BY user_pseudo_id
   ),
   ranked AS (
+    -- top1/top2 mean exactly the largest one/two users, matching the historical
+    -- baseline. ROW_NUMBER keeps that denominator stable; ties have identical
+    -- shares and use user_pseudo_id only as a deterministic selection key.
+    -- HHI below remains the tie-independent whole-distribution metric.
     SELECT
       *,
       ROW_NUMBER() OVER (ORDER BY manual_harvests DESC, user_pseudo_id) AS harvest_rank,
@@ -418,6 +423,7 @@ BEGIN
 
   SELECT
     COUNT(*) AS observed_events,
+    COUNT(*) > 0 AS has_data,
     COUNTIF(manual_harvest_count IS NULL) AS missing_manual_harvest_count,
     COUNTIF(combo_tier IS NULL) AS missing_combo_tier,
     COUNTIF(duration_ms IS NULL) AS missing_duration_ms,
@@ -434,6 +440,8 @@ BEGIN
     ) AS invalid_end_reason,
     COUNTIF(schema_version IS NOT NULL AND schema_version != 1) AS invalid_schema_version,
     COUNTIF(is_valid) AS valid_events,
-    SAFE_DIVIDE(COUNTIF(is_valid), COUNT(*)) AS valid_event_rate
+    -- NULL explicitly means no data; observed_events/has_data let monitors
+    -- distinguish an empty export from a 0% valid contract.
+    IF(COUNT(*) = 0, NULL, SAFE_DIVIDE(COUNTIF(is_valid), COUNT(*))) AS valid_event_rate
   FROM classified;
 END;

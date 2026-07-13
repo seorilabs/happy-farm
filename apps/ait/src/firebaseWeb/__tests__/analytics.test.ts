@@ -146,7 +146,11 @@ describe('trackAppsInTossAnalyticsEvent — 큐잉/정규화/전송', () => {
     });
     // production 22개, __DEV__에서는 debug_mode을 더해 23개다. 향후 실험 필드
     // 2개를 추가해도 GA4 Measurement Protocol 상한(25개)을 넘지 않는다.
-    expect([22, 23]).toContain(Object.keys(comboEvent?.params ?? {}).length);
+    const serializedParams = comboEvent?.params ?? {};
+    const parameterCount = Object.keys(serializedParams).length;
+    expect(parameterCount).toBe('debug_mode' in serializedParams ? 23 : 22);
+    expect(parameterCount).toBeLessThanOrEqual(25);
+    expect(25 - parameterCount).toBeGreaterThanOrEqual(2);
   });
 });
 
