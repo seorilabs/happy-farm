@@ -863,20 +863,22 @@ describe('FarmGame UI flow', () => {
 
       // 묶인 진입점은 더보기를 열기 전엔 렌더 트리에 없다.
       expect(screen.queryByLabelText(messages.wheelButtonAccessibilityLabel)).toBeNull();
+      expect(screen.queryByLabelText(messages.dailyBonusButtonAccessibilityLabel)).toBeNull();
       expect(screen.queryByLabelText(messages.collectionButtonAccessibilityLabel)).toBeNull();
       expect(screen.queryByLabelText(messages.labButtonAccessibilityLabel)).toBeNull();
       expect(screen.queryByLabelText(messages.mapButtonAccessibilityLabel)).toBeNull();
       expect(screen.queryByLabelText(messages.achievementsButtonAccessibilityLabel)).toBeNull();
     });
 
-    test('더보기 시트에서 룰렛·도감·연구소·개척·업적에 모두 도달할 수 있다', async () => {
+    test('더보기 시트에서 출석 보너스·룰렛·도감·연구소·개척·업적에 모두 도달할 수 있다', async () => {
       const screen = await renderGame(completedState());
       await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
 
       fireEvent.press(screen.getByTestId('more-nav-button'));
 
-      // 더보기 시트가 열리고 묶인 5개 진입점이 모두 노출된다.
+      // 더보기 시트가 열리고 일일 보너스를 포함한 진입점이 모두 노출된다.
       expect(screen.getByText(messages.sheetTitleMore)).toBeTruthy();
+      expect(screen.getByLabelText(messages.dailyBonusButtonAccessibilityLabel)).toBeTruthy();
       expect(screen.getByLabelText(messages.wheelButtonAccessibilityLabel)).toBeTruthy();
       expect(screen.getByLabelText(messages.collectionButtonAccessibilityLabel)).toBeTruthy();
       expect(screen.getByLabelText(messages.labButtonAccessibilityLabel)).toBeTruthy();
@@ -889,20 +891,22 @@ describe('FarmGame UI flow', () => {
     });
 
     test('묶인 항목의 배지가 더보기 버튼에 롤업 합산으로 노출되고 항목별로도 유지된다', async () => {
-      // 신규 완료 상태에선 무료 룰렛 스핀만 준비돼 있어 롤업 배지 = 1로 결정적이다.
+      // 신규 완료 상태에선 출석 보너스와 무료 룰렛이 준비돼 롤업 배지 = 2다.
       const screen = await renderGame(completedState());
       await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
 
       const moreButton = screen.getByTestId('more-nav-button');
-      expect(within(moreButton).getByText('1')).toBeTruthy();
+      expect(within(moreButton).getByText('2')).toBeTruthy();
 
-      // 더보기를 열면 룰렛 항목이 자신의 배지(1)를 그대로 유지한다(배지 유실 없음).
+      // 더보기를 열면 출석 보너스와 룰렛이 각자의 배지(1)를 유지한다.
       fireEvent.press(moreButton);
+      const dailyBonusEntry = screen.getByLabelText(messages.dailyBonusButtonAccessibilityLabel);
       const wheelEntry = screen.getByLabelText(messages.wheelButtonAccessibilityLabel);
+      expect(within(dailyBonusEntry).getByText('1')).toBeTruthy();
       expect(within(wheelEntry).getByText('1')).toBeTruthy();
     });
 
-    test('더보기 시트가 성격별 섹션 헤더로 그룹화되고 7개 진입점이 모두 유지된다 (#270)', async () => {
+    test('더보기 시트가 성격별 섹션 헤더로 그룹화되고 8개 진입점이 유지된다 (#270, #294)', async () => {
       const screen = await renderGame(completedState());
       await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
 
@@ -913,7 +917,8 @@ describe('FarmGame UI flow', () => {
       expect(screen.getByText(messages.moreSectionProduction)).toBeTruthy();
       expect(screen.getByText(messages.moreSectionGrowth)).toBeTruthy();
 
-      // 기존 7개 진입점(룰렛/도감/연구소/동물/공방/개척/업적)이 모두 그대로 존재한다.
+      // 기존 7개 진입점과 출석 보너스 재진입점이 모두 존재한다.
+      expect(screen.getByLabelText(messages.dailyBonusButtonAccessibilityLabel)).toBeTruthy();
       expect(screen.getByLabelText(messages.wheelButtonAccessibilityLabel)).toBeTruthy();
       expect(screen.getByLabelText(messages.collectionButtonAccessibilityLabel)).toBeTruthy();
       expect(screen.getByLabelText(messages.labButtonAccessibilityLabel)).toBeTruthy();
@@ -927,6 +932,53 @@ describe('FarmGame UI flow', () => {
       expect(within(wheelEntry).getByText('1')).toBeTruthy();
       fireEvent.press(screen.getByLabelText(messages.workshopButtonAccessibilityLabel));
       expect(screen.getByText(messages.sheetTitleWorkshop)).toBeTruthy();
+    });
+
+    test('닫은 자동 보너스를 더보기에서 다시 열고 source·배지를 수령 후 정리한다 (#294)', async () => {
+      const track = jest.fn();
+      const screen = await renderGame(completedState(), { analytics: createFarmAnalytics(track) });
+
+      await waitFor(() => expect(screen.getByText(messages.sheetTitleDailyBonus)).toBeTruthy());
+      expect(
+        track.mock.calls.filter(([event, params]) =>
+          event === 'daily_bonus_opened' && params?.source === 'auto_popup'
+        )
+      ).toHaveLength(1);
+
+      // Tick/re-render while the sheet remains open must not duplicate an impression.
+      await act(async () => {
+        jest.advanceTimersByTime(GAME_TICK_INTERVAL_MS * 2);
+      });
+      expect(track.mock.calls.filter(([event]) => event === 'daily_bonus_opened')).toHaveLength(1);
+
+      fireEvent.press(screen.getByLabelText(messages.sheetCloseAccessibilityLabel));
+      await act(async () => {
+        jest.advanceTimersByTime(180);
+      });
+      fireEvent.press(screen.getByTestId('more-nav-button'));
+
+      const dailyBonusEntry = screen.getByLabelText(messages.dailyBonusButtonAccessibilityLabel);
+      expect(within(dailyBonusEntry).getByText('1')).toBeTruthy();
+      fireEvent.press(dailyBonusEntry);
+      await waitFor(() => expect(screen.getByText(messages.sheetTitleDailyBonus)).toBeTruthy());
+      expect(
+        track.mock.calls.filter(([event, params]) =>
+          event === 'daily_bonus_opened' && params?.source === 'more'
+        )
+      ).toHaveLength(1);
+
+      const claim = screen.getByText(messages.dailyBonusClaimAction(formatMoney(50, DEFAULT_LOCALE)));
+      fireEvent.press(claim);
+      fireEvent.press(claim);
+      expect(
+        track.mock.calls.filter(([event, params]) =>
+          event === 'daily_bonus_claimed' && params?.source === 'more'
+        )
+      ).toHaveLength(1);
+
+      fireEvent.press(screen.getByTestId('more-nav-button'));
+      expect(screen.queryByLabelText(messages.dailyBonusButtonAccessibilityLabel)).toBeNull();
+      expect(within(screen.getByTestId('more-nav-button')).getByText('1')).toBeTruthy();
     });
   });
 
@@ -1379,6 +1431,7 @@ describe('FarmGame UI flow', () => {
       // Fresh saves have an available daily bonus, but onboarding must own the
       // foreground until the first loop is complete.
       expect(screen.queryByText(messages.sheetTitleDailyBonus)).toBeNull();
+      expect(track).not.toHaveBeenCalledWith('daily_bonus_opened', expect.anything());
       fireEvent.press(screen.getByText('당근'));
 
       // Step 2: plant it.
@@ -1419,6 +1472,10 @@ describe('FarmGame UI flow', () => {
       // The deferred daily bonus becomes visible only after onboarding closes,
       // and the notification permission prompt waits behind that sheet.
       await waitFor(() => expect(screen.getByText(messages.sheetTitleDailyBonus)).toBeTruthy());
+      expect(track).toHaveBeenCalledWith(
+        'daily_bonus_opened',
+        expect.objectContaining({ source: 'auto_popup' })
+      );
       expect(screen.queryByTestId('notification-prompt-card')).toBeNull();
       fireEvent.press(screen.getByText(messages.dailyBonusClaimAction(formatMoney(50, DEFAULT_LOCALE))));
       await waitFor(() => expect(screen.getByTestId('notification-prompt-card')).toBeTruthy());
@@ -3430,12 +3487,13 @@ describe('FarmGame UI flow', () => {
 
   test('recap offers a daily-bonus CTA that opens the daily sheet', async () => {
     mockPersistence.readLastSeenAt.mockResolvedValueOnce(NOW - 2 * 60 * 60 * 1000);
+    const track = jest.fn();
     // 오프라인 체인 수익만 있고 수확 작물은 없는 복귀 상태 → 데일리 클레임이 첫 행동 CTA.
     const chainState: GameState = {
       ...createInitialState(),
       chainFarms: [{ id: 1, archetype: 'plains', goldPerHour: 3600, lastCollectedAt: NOW - 2 * 60 * 60 * 1000 }],
     };
-    const screen = await renderGame(chainState);
+    const screen = await renderGame(chainState, { analytics: createFarmAnalytics(track) });
 
     await waitFor(() => expect(screen.getByText('다시 오셨네요!')).toBeTruthy());
     fireEvent.press(screen.getByText('데일리 보너스 받기'));
@@ -3444,6 +3502,10 @@ describe('FarmGame UI flow', () => {
     await waitFor(() => expect(screen.getByText(/수금했어요/)).toBeTruthy());
     // 데일리 보너스 시트로 전환된다.
     await waitFor(() => expect(screen.getByText('오늘의 출석 보너스')).toBeTruthy());
+    expect(track).toHaveBeenCalledWith(
+      'daily_bonus_opened',
+      expect.objectContaining({ source: 'welcome_back' })
+    );
   });
 
   test('does not show the recap after only a brief absence', async () => {

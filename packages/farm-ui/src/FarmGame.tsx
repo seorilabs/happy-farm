@@ -77,6 +77,7 @@ import {
   type AreaKey,
   type CollectionRewardKey,
   type CropKey,
+  type DailyBonusSource,
   type GameAnalyticsContext,
   type GameState,
   type RewardedAdController,
@@ -352,6 +353,8 @@ function getCropEconomy(cropEconomyByKey: Record<CropKey, CropEconomyEstimate>, 
 
 const FIRST_AREA = getFirstArea();
 
+type DailyBonusSheet = { type: 'dailyBonus'; source: DailyBonusSource };
+
 type ActiveSheet =
   | { type: 'shop' }
   | { type: 'collection' }
@@ -366,7 +369,7 @@ type ActiveSheet =
   | { type: 'growthAd'; plotIndex: number; cropKey: CropKey; remainingMs: number }
   | { type: 'harvestBonus' }
   | { type: 'welcomeBack'; summary: ReturnSummary }
-  | { type: 'dailyBonus' }
+  | DailyBonusSheet
   | { type: 'wheel' }
   | { type: 'animals' }
   | { type: 'workshop' }
@@ -773,7 +776,11 @@ function FarmGameBody({
   // First-session onboarding owns the foreground. A daily-bonus sheet
   // discovered during load waits here until the guide completes or the player
   // explicitly skips it, so a modal can never hide the first action.
-  const deferredOnboardingSheetRef = useRef<{ type: 'dailyBonus' } | null>(null);
+  const deferredOnboardingSheetRef = useRef<DailyBonusSheet | null>(null);
+  // Track one impression per continuous daily-bonus sheet opening. The ref is
+  // reset after leaving the sheet so a later More/welcome-back re-entry becomes
+  // a new, correctly attributed impression without 250ms tick duplicates.
+  const dailyBonusOpenedSourceRef = useRef<DailyBonusSource | null>(null);
   const [resetConfirmText, setResetConfirmText] = useState('');
   // Cloud backup/restore: in-flight guard against double taps, plus the last
   // result notice shown in the settings section.
@@ -1168,6 +1175,25 @@ function FarmGameBody({
   // gameState.
   analyticsContextRef.current = analyticsContext;
 
+  useEffect(() => {
+    if (activeSheet?.type !== 'dailyBonus') {
+      dailyBonusOpenedSourceRef.current = null;
+      return;
+    }
+    if (dailyBonusOpenedSourceRef.current === activeSheet.source) {
+      return;
+    }
+    const buildContext = analyticsContextRef.current;
+    if (buildContext == null) {
+      return;
+    }
+    dailyBonusOpenedSourceRef.current = activeSheet.source;
+    farmAnalytics.trackDailyBonusOpened({
+      source: activeSheet.source,
+      context: buildContext(),
+    });
+  }, [activeSheet, farmAnalytics]);
+
   const flushCropReadySummary = useCallback(
     (context?: GameAnalyticsContext, flushedAt = Date.now()) => {
       const summary = cropReadySummaryRef.current;
@@ -1533,7 +1559,7 @@ function FarmGameBody({
           getRewardedGoldAmount(normalizedSavedState)
         );
         if (preview.available) {
-          const dailyBonusSheet: ActiveSheet = { type: 'dailyBonus' };
+          const dailyBonusSheet: DailyBonusSheet = { type: 'dailyBonus', source: 'auto_popup' };
           if (onboardingPending) {
             deferredOnboardingSheetRef.current = dailyBonusSheet;
           } else {
@@ -2249,6 +2275,13 @@ function FarmGameBody({
   // 않도록 더보기 버튼에 롤업 합산(moreRollupBadge)으로 노출한다.
   function openMore() {
     setActiveSheet({ type: 'more' });
+  }
+
+  function openDailyBonus(source: DailyBonusSource) {
+    if (!isDailyBonusAvailable(gameState.dailyBonusState, Date.now())) {
+      return;
+    }
+    setActiveSheet({ type: 'dailyBonus', source });
   }
 
   // 오늘의 작물 chip 탭 → 보조 지표를 모은 '농장 현황' 시트를 연다(#233). 새 navRow
@@ -3019,7 +3052,7 @@ function FarmGameBody({
       Date.now(),
       getRewardedGoldAmount(resetState)
     ).available
-      ? { type: 'dailyBonus' }
+      ? { type: 'dailyBonus', source: 'auto_popup' }
       : null;
     onboardingStepViewedRef.current = null;
     onboardingFinishCommittedRef.current = false;
@@ -3106,7 +3139,7 @@ function FarmGameBody({
             Date.now(),
             getRewardedGoldAmount(normalizedRestored)
           ).available
-            ? { type: 'dailyBonus' }
+            ? { type: 'dailyBonus', source: 'auto_popup' }
             : null;
         onboardingStepViewedRef.current = null;
         onboardingFinishCommittedRef.current = false;
@@ -3548,6 +3581,10 @@ function FarmGameBody({
     activeSheet?.type === 'dailyBonus'
       ? previewDailyBonus(gameState.dailyBonusState, Date.now(), getRewardedGoldAmount(gameState))
       : { available: false as const, streak: 1, goldAwarded: 50 };
+  const dailyBonusAvailable = isDailyBonusAvailable(
+    gameState.dailyBonusState,
+    tickNowMsRef.current
+  );
 
   // Wheel spin availability for the nav badge. The sheet itself (WheelSheet)
   // recomputes its own status from gameState + now on every render tick.
@@ -3563,7 +3600,7 @@ function FarmGameBody({
     (status) => status.phase === 'ready'
   ).length;
 
-  // '더보기' 시트로 묶은 진입점(#241). 각 항목의 claimable/actionable 배지를 함께
+  // '더보기' 시트로 묶은 진입점(#241, #294). 각 항목의 claimable/actionable 배지를 함께
   // 들고 다녀서, 더보기 버튼에는 롤업 합산 배지를, 시트 안에서는 항목별 배지를 보여준다.
   const moreMenuEntries: {
     key: string;
@@ -3572,6 +3609,17 @@ function FarmGameBody({
     badge: number;
     onPress: () => void;
   }[] = [
+    ...(dailyBonusAvailable
+      ? [
+          {
+            key: 'dailyBonus',
+            label: messages.dailyBonusButton,
+            accessibilityLabel: messages.dailyBonusButtonAccessibilityLabel,
+            badge: 1,
+            onPress: () => openDailyBonus('more'),
+          },
+        ]
+      : []),
     {
       key: 'wheel',
       label: messages.wheelButton,
@@ -3624,11 +3672,11 @@ function FarmGameBody({
   ];
   const moreRollupBadge = moreMenuEntries.reduce((sum, entry) => sum + entry.badge, 0);
 
-  // '더보기' 시트 내부 그룹화(#270): 평면 7행을 성격별 섹션으로 묶어 스캔 비용을 낮춘다.
-  // 상시 진입점 추가 없이 표현만 재편 — 항목·onPress·항목별 배지·롤업 배지는 전부 불변.
+  // '더보기' 시트 내부 그룹화(#270): 항목을 성격별 섹션으로 묶어 스캔 비용을 낮춘다.
+  // 일일 보너스는 수령 가능할 때만 일일 섹션에 추가되고, 항목 배지가 상단에 롤업된다(#294).
   const moreMenuEntryByKey = new Map(moreMenuEntries.map((entry) => [entry.key, entry]));
   const moreMenuSections: { key: string; title: string; entryKeys: string[] }[] = [
-    { key: 'daily', title: messages.moreSectionDaily, entryKeys: ['wheel', 'collection'] },
+    { key: 'daily', title: messages.moreSectionDaily, entryKeys: ['dailyBonus', 'wheel', 'collection'] },
     { key: 'production', title: messages.moreSectionProduction, entryKeys: ['animals', 'workshop'] },
     { key: 'growth', title: messages.moreSectionGrowth, entryKeys: ['lab', 'map', 'achievements'] },
   ];
@@ -4426,6 +4474,7 @@ function FarmGameBody({
                     streak: claimHolder.value.streak,
                     rewardValue: claimHolder.value.goldAwarded,
                     isFirstClaim: claimHolder.value.isFirstClaim,
+                    source: activeSheet.source,
                     context: analyticsContext(),
                   });
                 }
@@ -4626,7 +4675,7 @@ function FarmGameBody({
                   if (!collectReturnSummaryOffline(activeSheet.summary)) return;
                   // Jump straight to the daily sheet. It is the next interaction, so we skip
                   // the return ad here to avoid covering the claim flow.
-                  setActiveSheet({ type: 'dailyBonus' });
+                  setActiveSheet({ type: 'dailyBonus', source: 'welcome_back' });
                 }}
               />
             ) : null}

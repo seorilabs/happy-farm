@@ -224,7 +224,9 @@ const KO_FARM_MESSAGES = {
   moreButton: '📂 더보기',
   moreButtonAccessibilityLabel: '더보기 메뉴',
   sheetTitleMore: '더보기',
-  sheetDescriptionMore: '룰렛·도감·연구소·개척·업적을 한곳에서 열어요.',
+  sheetDescriptionMore: '매일 할 것·부가 생산·장기 성장 메뉴를 한곳에서 열어요.',
+  dailyBonusButton: '🎁 출석 보너스',
+  dailyBonusButtonAccessibilityLabel: '일일 출석 보너스',
   // '더보기' 시트 내부 섹션 헤더(#270): 평면 7행을 성격별로 묶어 스캔 비용을 낮춘다.
   moreSectionDaily: '🗓️ 매일 할 것',
   moreSectionProduction: '🏭 부가 생산',
@@ -647,7 +649,9 @@ const EN_FARM_MESSAGES: FarmMessages = {
   moreButton: '📂 More',
   moreButtonAccessibilityLabel: 'More menu',
   sheetTitleMore: 'More',
-  sheetDescriptionMore: 'Open the wheel, collection, lab, pioneer, and achievements in one place.',
+  sheetDescriptionMore: 'Open daily, production, and long-term growth menus in one place.',
+  dailyBonusButton: '🎁 Daily Bonus',
+  dailyBonusButtonAccessibilityLabel: 'Daily login bonus',
   // Section headers inside the More sheet (#270): group the flat 7-row list by purpose.
   moreSectionDaily: '🗓️ Daily',
   moreSectionProduction: '🏭 Production',
