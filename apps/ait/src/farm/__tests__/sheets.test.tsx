@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { StyleSheet } from 'react-native';
-import { act, cleanup, fireEvent, render } from '@testing-library/react-native';
+import { act, cleanup, fireEvent, render, within } from '@testing-library/react-native';
 
 import {
   ACHIEVEMENT_TRACKS,
@@ -10,6 +10,7 @@ import {
   COLLECTION_AREA_REWARDS,
   DEFAULT_LOCALE,
   FARM_AREAS,
+  MASTERY_RANKS,
   PRESTIGE_STARS_BASE,
   PRESTIGE_SKILLS,
   PRODUCTION_RECIPES,
@@ -17,10 +18,14 @@ import {
   formatMoney,
   formatHourlyGold,
   formatRemainingTime,
+  formatSignedPercent,
   getAreaCropKeys,
   getAreaUnlockRequirementText,
   getCollectionSummary,
+  getMasteryRankLabel,
+  getMasteryThresholds,
   getMutationCollectionSummary,
+  getMutationLabel,
   getCropLabel,
   getChainIncome,
   isAreaUnlocked,
@@ -299,10 +304,14 @@ describe('CollectionSheet', () => {
 
   // #253: 발견한 작물 셀 탭 → 플레이버 상세 팝업. Pressable+Modal 분기(셀 탭, 미발견
   // 비활성, 닫기 경로)를 데이터가 아닌 UI 동작으로 회귀 고정한다.
-  function renderDiscovered(locale: typeof LOCALE | 'en-US', localeMessages = messages) {
+  function renderDiscovered(
+    locale: typeof LOCALE | 'en-US',
+    localeMessages = getFarmMessages(locale),
+    overrides: Partial<GameState> = {},
+  ) {
     const base = createInitialState();
     // carrot을 발견 상태로 만들어 상시 해금된 초보 밭 셀이 활성화되도록 한다.
-    const state: GameState = { ...base, harvestedCropKeys: ['carrot'] };
+    const state: GameState = { ...base, harvestedCropKeys: ['carrot'], ...overrides };
     return render(
       <CollectionSheet
         gameState={state}
@@ -357,6 +366,76 @@ describe('CollectionSheet', () => {
     const screen = renderDiscovered('en-US', enMessages);
     fireEvent.press(screen.getByTestId('collection-cell-carrot'));
     expect(screen.getByText(getCropLabel('carrot', 'en-US').description)).toBeTruthy();
+  });
+
+  test.each(['ko-KR', 'en-US'] as const)(
+    '상세 팝업에 마스터리 혜택과 돌연변이 도감을 상태와 함께 표시한다 (%s) (#307)',
+    (locale) => {
+      const localeMessages = getFarmMessages(locale);
+      const goldRankIndex = MASTERY_RANKS.findIndex((rank) => rank.key === 'gold');
+      const goldThreshold = getMasteryThresholds('carrot')[goldRankIndex]!;
+      const screen = renderDiscovered(locale, localeMessages, {
+        harvestCounts: { carrot: goldThreshold },
+        mutationsDiscovered: { carrot: ['golden', 'giant'] },
+      });
+
+      fireEvent.press(screen.getByTestId('collection-cell-carrot'));
+
+      expect(screen.getByTestId('collection-detail-scroll')).toBeTruthy();
+      expect(screen.getByText(localeMessages.collectionMasteryBenefitsTitle)).toBeTruthy();
+      expect(screen.getByText(localeMessages.collectionMutationCatalogTitle)).toBeTruthy();
+
+      for (const rank of MASTERY_RANKS) {
+        const row = screen.getByTestId(`collection-mastery-rank-${rank.key}`);
+        const rankName = getMasteryRankLabel(rank.key, locale).name;
+        const benefit = localeMessages.collectionMasteryBenefit(
+          formatSignedPercent(rank.sellBonus * 100, locale),
+          formatSignedPercent(rank.speedBonus * 100, locale),
+        );
+        expect(within(row).getByText(rankName)).toBeTruthy();
+        expect(within(row).getByText(benefit).props.numberOfLines).toBe(2);
+        expect(row.props.accessible).toBe(true);
+        expect(row.props.accessibilityState.selected).toBe(rank.key === 'gold');
+      }
+
+      for (const kind of MUTATION_KINDS) {
+        const row = screen.getByTestId(`collection-mutation-kind-${kind.key}`);
+        const mutationName = getMutationLabel(kind.key, locale).name;
+        const benefit = localeMessages.collectionMutationBenefit(
+          kind.sellMultiplier.toLocaleString(locale),
+          getMasteryRankLabel(kind.minRank, locale).name,
+        );
+        const discovered = kind.key === 'golden' || kind.key === 'giant';
+        expect(within(row).getByText(mutationName)).toBeTruthy();
+        expect(within(row).getByText(benefit).props.numberOfLines).toBe(2);
+        expect(row.props.accessible).toBe(true);
+        expect(
+          within(row).getByText(
+            discovered
+              ? localeMessages.collectionMutationDiscoveredBadge
+              : localeMessages.collectionMutationUndiscoveredBadge,
+          ),
+        ).toBeTruthy();
+      }
+    },
+  );
+
+  test('랭크 미달 작물은 어떤 마스터리 행도 현재로 표시하지 않는다 (#307)', () => {
+    const screen = renderDiscovered(LOCALE, messages, { harvestCounts: { carrot: 1 } });
+    fireEvent.press(screen.getByTestId('collection-cell-carrot'));
+
+    for (const rank of MASTERY_RANKS) {
+      expect(screen.getByTestId(`collection-mastery-rank-${rank.key}`).props.accessibilityState.selected).toBe(false);
+    }
+  });
+
+  test('상세 카드는 작은 화면에서 높이를 제한하고 내부 정보를 스크롤한다 (#307)', () => {
+    const card = StyleSheet.flatten(collectionStyles.detailCard);
+    const scroll = StyleSheet.flatten(collectionStyles.detailScroll);
+
+    expect(card.maxHeight).toBe('86%');
+    expect(scroll.width).toBe('100%');
+    expect(scroll.flexShrink).toBe(1);
   });
 
   test('claims an area reward once every crop in that area is discovered', () => {

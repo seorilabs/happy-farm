@@ -388,6 +388,16 @@ const KO_FARM_MESSAGES = {
   collectionClaimAction: (amount: string) => `완성 보상 ${amount}G 받기`,
   collectionClaimedLabel: '보상 받음 ✓',
   collectionDetailCloseAction: '닫기',
+  collectionMasteryBenefitsTitle: '마스터리 혜택',
+  collectionMasteryBenefit: (sellBonus: string, speedBonus: string) =>
+    `판매 ${sellBonus} · 성장 속도 ${speedBonus}`,
+  collectionMasteryCurrentBadge: '현재',
+  collectionMasteryAchievedBadge: '달성',
+  collectionMutationCatalogTitle: '돌연변이 도감',
+  collectionMutationBenefit: (multiplier: string, rankName: string) =>
+    `판매 ×${multiplier} · 해금: ${rankName}`,
+  collectionMutationDiscoveredBadge: '발견',
+  collectionMutationUndiscoveredBadge: '미발견',
   collectionFullTitle: '전체 도감',
   collectionFullDesc: (discovered: number, total: number) =>
     `모든 작물 ${discovered}/${total}종을 모으면 큰 보상을 받아요.`,
@@ -812,6 +822,14 @@ const EN_FARM_MESSAGES: FarmMessages = {
   collectionClaimAction: (amount) => `Claim ${amount}G`,
   collectionClaimedLabel: 'Claimed ✓',
   collectionDetailCloseAction: 'Close',
+  collectionMasteryBenefitsTitle: 'Mastery Benefits',
+  collectionMasteryBenefit: (sellBonus, speedBonus) => `Sell ${sellBonus} · Growth speed ${speedBonus}`,
+  collectionMasteryCurrentBadge: 'Current',
+  collectionMasteryAchievedBadge: 'Reached',
+  collectionMutationCatalogTitle: 'Mutation Catalog',
+  collectionMutationBenefit: (multiplier, rankName) => `Sell ×${multiplier} · Unlock: ${rankName}`,
+  collectionMutationDiscoveredBadge: 'Found',
+  collectionMutationUndiscoveredBadge: 'Not found',
   collectionFullTitle: 'Full Collection',
   collectionFullDesc: (discovered, total) => `Collect all ${total} crops (${discovered}/${total}) for a big reward.`,
   collectionMutationProgress: (discovered, total) =>
