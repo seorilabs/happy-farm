@@ -1,7 +1,7 @@
 /// <reference types="jest" />
 
 import React from 'react';
-import { Animated, StyleSheet, Vibration } from 'react-native';
+import { Animated, Dimensions, StyleSheet, Vibration } from 'react-native';
 import { act, cleanup, fireEvent, render, waitFor, within } from '@testing-library/react-native';
 import {
   ACHIEVEMENT_TRACKS,
@@ -52,6 +52,13 @@ import {
   type RewardedAdShowResult,
 } from '../../../../../packages/farm-core/src';
 import { getFarmMessages, type FarmGameNotifications } from '../../../../../packages/farm-ui/src';
+import {
+  MAIN_CONTENT_TOP_PADDING,
+  MAIN_HORIZONTAL_PADDING,
+  ONBOARDING_MAIN_CONTENT_TOP_PADDING,
+  PLOT_COLUMNS,
+  PLOT_GAP,
+} from '../../../../../packages/farm-ui/src/farmGameLayout';
 
 const NOW = Date.parse('2026-05-27T03:00:00.000Z');
 
@@ -331,6 +338,9 @@ describe('FarmGame UI flow', () => {
     expect(backdropChild.props.phase).toBe(firstPhase);
     expect(scrollChild.props.testID).toBe('farm-scroll');
     expect(screen.getByTestId('plot-grid')).toBeTruthy();
+    expect(StyleSheet.flatten(screen.getByTestId('farm-scroll').props.contentContainerStyle).paddingTop).toBe(
+      MAIN_CONTENT_TOP_PADDING
+    );
 
     // Advancing 12h lands in a different phase; one game tick re-renders and the
     // backdrop tracks the new minute's tone (proves the wiring, not just the math).
@@ -1522,6 +1532,72 @@ describe('FarmGame UI flow', () => {
       expect(screen.queryByTestId('notification-prompt-card')).toBeNull();
       fireEvent.press(screen.getByText(messages.dailyBonusClaimAction(formatMoney(50, DEFAULT_LOCALE))));
       await waitFor(() => expect(screen.getByTestId('notification-prompt-card')).toBeTruthy());
+    });
+
+    test('keeps four plot columns and compact top spacing through every onboarding step', async () => {
+      const screen = await renderOnboardingGame(null);
+      const initialGridStyle = StyleSheet.flatten(screen.getByTestId('plot-grid').props.style);
+      const initialTileStyle = StyleSheet.flatten(screen.getByTestId('plot-cell-0').props.style);
+      const tileSize = initialTileStyle.width;
+      if (typeof tileSize !== 'number') {
+        throw new Error('plot tile width must resolve to a number');
+      }
+
+      const contentStyle = StyleSheet.flatten(screen.getByTestId('farm-scroll').props.contentContainerStyle);
+      expect(contentStyle.paddingHorizontal).toBe(MAIN_HORIZONTAL_PADDING);
+      expect(contentStyle.paddingTop).toBe(ONBOARDING_MAIN_CONTENT_TOP_PADDING);
+      expect(ONBOARDING_MAIN_CONTENT_TOP_PADDING).toBe(16);
+
+      const availableContentWidth = Dimensions.get('window').width - MAIN_HORIZONTAL_PADDING * 2;
+      const firstRowWidth = tileSize * PLOT_COLUMNS + PLOT_GAP * (PLOT_COLUMNS - 1);
+      expect(firstRowWidth).toBeLessThanOrEqual(availableContentWidth);
+      expect(availableContentWidth - firstRowWidth).toBeLessThan(PLOT_COLUMNS);
+      expect(initialGridStyle.borderWidth).toBeUndefined();
+      expect(initialGridStyle.padding).toBeUndefined();
+      expect(screen.queryByTestId('onboarding-plot-highlight')).toBeNull();
+
+      const expectStableGrid = () => {
+        expect(StyleSheet.flatten(screen.getByTestId('plot-grid').props.style)).toEqual(initialGridStyle);
+        for (let index = 0; index < PLOT_COLUMNS; index += 1) {
+          expect(StyleSheet.flatten(screen.getByTestId(`plot-cell-${index}`).props.style).width).toBe(tileSize);
+        }
+      };
+      const expectAbsoluteHighlight = () => {
+        const highlight = screen.getByTestId('onboarding-plot-highlight');
+        const highlightStyle = StyleSheet.flatten(highlight.props.style);
+        const containerStyle = StyleSheet.flatten(screen.getByTestId('plot-grid-container').props.style);
+        expect(highlight.props.pointerEvents).toBe('none');
+        expect(containerStyle.backgroundColor).toBe('rgba(76, 175, 106, 0.08)');
+        expect(highlightStyle.backgroundColor).toBeUndefined();
+        expect(highlightStyle).toEqual(
+          expect.objectContaining({
+            position: 'absolute',
+            top: 0,
+            right: 0,
+            bottom: 0,
+            left: 0,
+            borderWidth: 2,
+          })
+        );
+      };
+
+      fireEvent.press(screen.getByText('당근'));
+      await waitFor(() => expect(screen.getByText(messages.onboardingPlantTitle)).toBeTruthy());
+      expectStableGrid();
+      expectAbsoluteHighlight();
+
+      fireEvent.press(screen.getByTestId('plot-cell-0'));
+      await waitFor(() => expect(screen.getByText(messages.onboardingHarvestTitle)).toBeTruthy());
+      expectStableGrid();
+      expectAbsoluteHighlight();
+
+      await act(async () => {
+        jest.advanceTimersByTime(2500);
+      });
+      fireEvent.press(await screen.findByText('GET'));
+      await waitFor(() => expect(screen.getByText(messages.onboardingRewardTitle)).toBeTruthy());
+      expectStableGrid();
+      expect(screen.queryByTestId('onboarding-plot-highlight')).toBeNull();
     });
 
     test('resumes a persisted plant step with a deterministic seed selection', async () => {

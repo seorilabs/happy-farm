@@ -3,6 +3,16 @@
 export const PLOT_COLUMNS = 4;
 export const PLOT_GAP = 10;
 export const MAIN_HORIZONTAL_PADDING = 16;
+// Keep the sky cap introduced in #319 for regular play, but collapse it while
+// the onboarding coachmark already occupies the space between HUD and plots.
+export const MAIN_CONTENT_TOP_PADDING = 72;
+export const ONBOARDING_MAIN_CONTENT_TOP_PADDING = 16;
+
+export function getPlotTileSize(windowWidth: number): number {
+  const availableWidth = windowWidth - MAIN_HORIZONTAL_PADDING * 2 - PLOT_GAP * (PLOT_COLUMNS - 1);
+  return Math.max(48, Math.floor(availableWidth / PLOT_COLUMNS));
+}
+
 export const SHEET_DRAG_HIT_TARGET_HEIGHT = 36;
 // 하단 시트 스크롤 콘텐츠의 기본 하단 여백. 여기에 하단 safe-area 인셋을 더해
 // 시트 하단 버튼이 시스템 내비/제스처 바와 겹치지 않게 한다(#236).
