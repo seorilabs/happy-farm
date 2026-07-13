@@ -3976,9 +3976,9 @@ function FarmGameBody({
     <View testID="farm-root" style={[styles.root, { backgroundColor: environmentTone.backgroundColor }]}>
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <View style={[styles.headerTop, isMobileMarket && styles.mobileHeaderTop]}>
-          <View style={[styles.titleGroup, isMobileMarket && styles.mobileTitleGroup]}>
+          <View testID="title-group" style={[styles.titleGroup, isMobileMarket && styles.mobileTitleGroup]}>
             <Text style={styles.homeIcon}>🏡</Text>
-            <View>
+            <View style={styles.titleTextGroup}>
               <Text style={styles.title}>{messages.appTitle}</Text>
               <View style={styles.subtitleRow}>
                 <Text style={styles.subtitle}>{messages.appSubtitle}</Text>
@@ -3987,6 +3987,19 @@ function FarmGameBody({
                     {getTitleLabel(gameState.activeTitle, locale).name}
                   </Text>
                 ) : null}
+                <Pressable
+                  testID="cotd-chip"
+                  accessibilityRole="button"
+                  accessibilityLabel={`${messages.cropOfTheDayLabel}, ${getLocalizedCropName(cropOfTheDay.cropKey)}`}
+                  hitSlop={6}
+                  style={styles.cotdChip}
+                  onPress={openStats}
+                >
+                  <Text style={styles.cotdChipText} numberOfLines={1}>
+                    🌱 {getCrop(cropOfTheDay.cropKey).icon} {getLocalizedCropName(cropOfTheDay.cropKey)} ×
+                    {cropOfTheDay.multiplier} ›
+                  </Text>
+                </Pressable>
               </View>
             </View>
           </View>
@@ -4023,22 +4036,6 @@ function FarmGameBody({
             <Text style={styles.productivityText} numberOfLines={1}>
               {messages.productivity(formatHourlyGold(farmProductivity.netProfitPerHour, locale))}
             </Text>
-            {/* 오늘의 작물은 재방문 훅이라 한 줄 chip으로 유지하되, 탭하면 보조 지표(연구레벨·
-                수익/성장 배수·수확 부스트·주말 축제 상세)를 모은 '농장 현황' 시트를 연다.
-                이로써 상단 HUD 과밀을 되돌린다(#233). */}
-            <Pressable
-              testID="cotd-chip"
-              accessibilityRole="button"
-              accessibilityLabel={`${messages.cropOfTheDayLabel}, ${getLocalizedCropName(cropOfTheDay.cropKey)}`}
-              hitSlop={6}
-              style={styles.cotdChip}
-              onPress={openStats}
-            >
-              <Text style={styles.cotdChipText} numberOfLines={1}>
-                🌱 {getCrop(cropOfTheDay.cropKey).icon} {getLocalizedCropName(cropOfTheDay.cropKey)} ×
-                {cropOfTheDay.multiplier} ›
-              </Text>
-            </Pressable>
           </View>
         </View>
 
@@ -4147,46 +4144,31 @@ function FarmGameBody({
       </View>
 
       <View testID="tool-strip" style={[styles.toolStrip, { paddingBottom: bottomSafeInset + 10 }]}>
-        <View style={styles.toolHeader}>
-          <Text style={styles.toolLabel}>{messages.toolLabel}</Text>
-          {readyPlotCount >= HARVEST_ALL_MIN_COUNT ? (
-            // 익은 밭이 다수면 '전체 수확'과 '수확 후 재심기'(#252)를 나란히 제공한다.
-            // 둘 다 툴 스트립 내부(하단)에 두고 상단 HUD/navRow는 건드리지 않는다.
-            <View style={styles.toolHeaderRight}>
-              <HarvestAllButton
-                label={messages.harvestAllButton(readyPlotCount)}
-                onPress={harvestAllCrops}
-              />
-              <HarvestAllButton
-                testID="harvest-replant-button"
-                label={messages.harvestReplantButton}
-                onPress={harvestAllAndReplant}
-              />
-            </View>
-          ) : selectedTool !== 'harvest' &&
-            onboardingStep == null &&
-            plantAllPreview.plantableCount > 0 &&
-            plantAllPreview.emptyPlotCount >= PLANT_ALL_MIN_COUNT ? (
-            // Keep the per-crop ROI hint and add the batch-plant shortcut beside it
-            // (not in place of it) so selecting a seed never hides its economics.
-            <View style={styles.toolHeaderRight}>
-              <Text style={styles.toolHint} numberOfLines={1}>
-                {toolHint}
-              </Text>
-              <HarvestAllButton
-                label={messages.plantAllButton(
-                  plantAllPreview.plantableCount,
-                  formatMoney(plantAllPreview.totalCost, locale)
-                )}
-                onPress={plantAllCrops}
-              />
-            </View>
-          ) : (
-            <Text style={styles.toolHint} numberOfLines={1}>
-              {toolHint}
-            </Text>
-          )}
-        </View>
+        {readyPlotCount >= HARVEST_ALL_MIN_COUNT ? (
+          // 익은 밭이 다수면 '전체 수확'과 '수확 후 재심기'(#252)를 나란히 제공한다.
+          // 배치는 필요할 때만 나타나는 전용 행으로 두어 평상시 세로 공간을 절약한다.
+          <View style={styles.toolActionRow}>
+            <HarvestAllButton label={messages.harvestAllButton(readyPlotCount)} onPress={harvestAllCrops} />
+            <HarvestAllButton
+              testID="harvest-replant-button"
+              label={messages.harvestReplantButton}
+              onPress={harvestAllAndReplant}
+            />
+          </View>
+        ) : selectedTool !== 'harvest' &&
+          onboardingStep == null &&
+          plantAllPreview.plantableCount > 0 &&
+          plantAllPreview.emptyPlotCount >= PLANT_ALL_MIN_COUNT ? (
+          <View style={styles.toolActionRow}>
+            <HarvestAllButton
+              label={messages.plantAllButton(
+                plantAllPreview.plantableCount,
+                formatMoney(plantAllPreview.totalCost, locale)
+              )}
+              onPress={plantAllCrops}
+            />
+          </View>
+        ) : null}
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.areaTabs}>
           {FARM_AREAS.map((area) => {
@@ -4210,12 +4192,13 @@ function FarmGameBody({
           })}
         </ScrollView>
 
-        {/* visibleCropKeys is [] for a locked area (nothing to sort → toggle hidden);
-            for an unlocked area it holds every area crop INCLUDING breed-locked ones,
-            so the toggle appears whenever 2+ crops exist and can reorder locked crops
-            too (their lock/NEW badges are rendered by ToolButton, unaffected by order). */}
-        {visibleCropKeys.length > 1 ? (
-          <View style={styles.seedSortRow}>
+        {/* 선택 도구 안내와 정렬을 같은 행에 두어 정렬 버튼 왼쪽의 빈 면을 정보로 활용한다.
+            잠긴 구역/작물 1종인 구역은 정렬 버튼만 숨기고 안내가 전체 폭을 쓴다. */}
+        <View testID="seed-meta-row" style={styles.seedMetaRow}>
+          <Text style={styles.toolHint} numberOfLines={1}>
+            {toolHint}
+          </Text>
+          {visibleCropKeys.length > 1 ? (
             <Pressable
               testID="seed-sort-toggle"
               style={styles.seedSortToggle}
@@ -4233,8 +4216,8 @@ function FarmGameBody({
                 )}
               </Text>
             </Pressable>
-          </View>
-        ) : null}
+          ) : null}
+        </View>
 
         <View style={onboardingSeedHighlight ? styles.onboardingHighlight : undefined}>
           <ScrollView
@@ -6079,9 +6062,10 @@ function PlotSoilBackground({ readyTint = false }: { readyTint?: boolean }) {
   return (
     <>
       <Image
+        testID="plot-soil-texture"
         source={art.soilTile}
         onError={() => setFailed(true)}
-        style={StyleSheet.absoluteFill}
+        style={[StyleSheet.absoluteFill, styles.plotSoilTexture]}
         resizeMode="cover"
       />
       {readyTint ? <View style={[StyleSheet.absoluteFill, styles.plotSoilReadyTint]} /> : null}

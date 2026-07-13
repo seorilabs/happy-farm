@@ -31,7 +31,7 @@ jest.mock('@granite-js/react-native', () => {
   return { Video };
 });
 
-const { FARM_AUDIO_SOURCES, useAppsInTossFarmAudio } =
+const { FARM_AUDIO_ASSET_VERSION, FARM_AUDIO_SOURCES, useAppsInTossFarmAudio } =
   jest.requireActual<typeof import('../platform/appsInTossAudio')>('../platform/appsInTossAudio');
 
 function latestPropsFor(uri: string): RecordedVideoProps {
@@ -71,6 +71,12 @@ describe('useAppsInTossFarmAudio', () => {
 
   afterEach(() => {
     cleanup();
+  });
+
+  test('cache-busts every hosted source with the deployed audio revision', () => {
+    for (const uri of Object.values(FARM_AUDIO_SOURCES)) {
+      expect(uri).toContain(`?v=${FARM_AUDIO_ASSET_VERSION}`);
+    }
   });
 
   test('streams both farm sounds from remote URIs and reports audio as supported', () => {

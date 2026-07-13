@@ -34,6 +34,7 @@ export const styles = StyleSheet.create({
   },
   titleGroup: {
     minWidth: 0,
+    flex: 1,
     flexShrink: 1,
     flexDirection: 'row',
     alignItems: 'center',
@@ -44,6 +45,10 @@ export const styles = StyleSheet.create({
   },
   homeIcon: {
     fontSize: 26,
+  },
+  titleTextGroup: {
+    minWidth: 0,
+    flex: 1,
   },
   title: {
     color: '#253126',
@@ -69,11 +74,14 @@ export const styles = StyleSheet.create({
     gap: 6,
   },
   subtitleRow: {
+    minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
   },
   titleBadge: {
+    minWidth: 0,
+    flexShrink: 1,
     marginTop: 2,
     paddingHorizontal: 7,
     paddingVertical: 2,
@@ -199,21 +207,22 @@ export const styles = StyleSheet.create({
     fontWeight: '900',
     textAlign: 'right',
   },
-  // 오늘의 작물 chip: 한 줄 탭 타깃. 보조 지표를 담은 '농장 현황' 시트로 진입한다(#233).
+  // 오늘의 작물 chip: 제목 아래 배지 행의 남는 폭을 쓰고, 긴 언어에서는
+  // 말줄임해 우측 재화/설정 액션의 폭을 침범하지 않는다.
   cotdChip: {
-    marginTop: 6,
-    maxWidth: '100%',
+    minWidth: 0,
+    flexShrink: 1,
+    marginTop: 2,
     overflow: 'hidden',
     borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
     backgroundColor: '#fdf3e2',
   },
   cotdChipText: {
     color: '#c47d11',
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '900',
-    textAlign: 'right',
   },
   main: {
     flex: 1,
@@ -239,6 +248,11 @@ export const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: PLOT_GAP,
+  },
+  // Generated soil art is intentionally blended with each plot's state color.
+  // Full opacity made labels, timers, and crop art disappear into the dark photo.
+  plotSoilTexture: {
+    opacity: 0.5,
   },
   // Cosmetic decoration strip beneath the plot grid. A soft ground-line border
   // that reads as the edge of the farm; wraps so a large collection flows onto
@@ -483,16 +497,11 @@ export const styles = StyleSheet.create({
     borderTopColor: '#d9e7ce',
     backgroundColor: '#ffffff',
   },
-  toolHeader: {
+  toolActionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  toolLabel: {
-    color: '#667085',
-    fontSize: 13,
-    fontWeight: '800',
+    justifyContent: 'flex-end',
+    gap: 8,
   },
   toolHint: {
     minWidth: 0,
@@ -500,7 +509,7 @@ export const styles = StyleSheet.create({
     color: '#247241',
     fontSize: 13,
     fontWeight: '900',
-    textAlign: 'right',
+    textAlign: 'left',
   },
   // Holds the plant hint and the "Plant All" button side by side so the per-crop
   // ROI hint stays visible while the batch-plant shortcut sits at the right edge.
@@ -632,13 +641,16 @@ export const styles = StyleSheet.create({
     paddingTop: 8,
     paddingBottom: 4,
   },
-  // Right-aligned sort toggle row above the seed strip.
-  seedSortRow: {
+  // The selected-tool hint fills the space that used to be empty beside sort.
+  seedMetaRow: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
     marginTop: 2,
   },
   seedSortToggle: {
+    flexShrink: 0,
     paddingHorizontal: 12,
     paddingVertical: 5,
     borderRadius: 14,

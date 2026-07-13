@@ -3,9 +3,10 @@
 export const PLOT_COLUMNS = 4;
 export const PLOT_GAP = 10;
 export const MAIN_HORIZONTAL_PADDING = 16;
-// Keep the sky cap introduced in #319 for regular play, but collapse it while
-// the onboarding coachmark already occupies the space between HUD and plots.
-export const MAIN_CONTENT_TOP_PADDING = 72;
+// Keep a compact sky cap for the environment art without pushing the first
+// plots too far away from the HUD. Onboarding still collapses it further while
+// its coachmark already occupies the same visual space.
+export const MAIN_CONTENT_TOP_PADDING = 48;
 export const ONBOARDING_MAIN_CONTENT_TOP_PADDING = 16;
 
 export function getPlotTileSize(windowWidth: number): number {

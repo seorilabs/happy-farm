@@ -512,6 +512,16 @@ describe('FarmGame UI flow', () => {
     expect(screen.queryByText('🌱 모두 심기 5 · 50G')).toBeNull();
   });
 
+  test('blends soil art with the lighter plot state color', async () => {
+    const screen = await renderGame(null, { art: { soilTile: { uri: 'test://soil-tile' } } });
+
+    const soilTextures = screen.getAllByTestId('plot-soil-texture');
+    expect(soilTextures).toHaveLength(6);
+    for (const texture of soilTextures) {
+      expect(StyleSheet.flatten(texture.props.style).opacity).toBe(0.5);
+    }
+  });
+
   test('plot-discount reward desc shows the original price before the discounted one', () => {
     // Locks the (percent, originalPrice, discountedPrice) arg order so a call-site
     // mismatch (which still type-checks) can't silently surface a wrong price.
@@ -560,9 +570,9 @@ describe('FarmGame UI flow', () => {
     const screen = await renderGame(state, { preferredLocale: DEFAULT_LOCALE });
     await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
 
-    // 상시 노출은 시간당 순수익 + 오늘의 작물 chip. 보조 지표(연구레벨·수익/성장 배수)는
-    // 메인 화면에 상시 노출되지 않는다.
-    expect(screen.getByTestId('cotd-chip')).toBeTruthy();
+    // 상시 노출은 시간당 순수익 + 제목 행의 오늘의 작물 chip. 보조 지표(연구레벨·
+    // 수익/성장 배수)는 메인 화면에 상시 노출되지 않는다.
+    expect(within(screen.getByTestId('title-group')).getByTestId('cotd-chip')).toBeTruthy();
     expect(screen.queryByTestId('stats-sheet')).toBeNull();
     expect(screen.queryByText(/연구 Lv\./)).toBeNull();
     expect(screen.queryByText(messages.profitLabel)).toBeNull();
@@ -837,11 +847,14 @@ describe('FarmGame UI flow', () => {
       await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
 
       // starter_field (default selection) is unlocked with 5 crops → toggle shown.
-      expect(screen.getByTestId('seed-sort-toggle')).toBeTruthy();
+      const metaRow = screen.getByTestId('seed-meta-row');
+      expect(within(metaRow).getByText(messages.harvestHint)).toBeTruthy();
+      expect(within(metaRow).getByTestId('seed-sort-toggle')).toBeTruthy();
 
       // A locked area renders no seed buttons, so there is nothing to sort.
       fireEvent.press(screen.getByTestId('area-tab-vegetable_field'));
       expect(screen.queryByTestId('seed-sort-toggle')).toBeNull();
+      expect(screen.getByTestId('seed-meta-row')).toBeTruthy();
     });
 
     test('cycles default → profit → growth → default on each press', async () => {
