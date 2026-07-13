@@ -13,6 +13,7 @@ import {
   HARVEST_BONUS_AD_COOLDOWN_MS,
   HARVEST_BONUS_BOOST_DURATION_MS,
   HARVEST_BONUS_MULTIPLIER,
+  OFFLINE_INCOME_CAP_MS,
   MAX_PLOTS,
   PLOT_DISCOUNT_AD_DAILY_LIMIT,
   REWARDED_GOLD_MAX_USES_PER_WINDOW,
@@ -23,9 +24,12 @@ import {
   claimAllAchievements,
   createFarmAnalytics,
   createInitialState,
+  formatDuration,
+  formatHourlyGold,
   formatMoney,
   getProductionRecipeLabel,
   getActiveFarmOfflineGold,
+  getActiveFarmOfflineGoldPerHour,
   getAreaCropKeys,
   getCropOfTheDayStatus,
   getFertilizerCost,
@@ -544,7 +548,15 @@ describe('FarmGame UI flow', () => {
 
   test('slims the top HUD to gold + net/h + crop-of-the-day chip; secondary stats live behind the stats sheet (#233)', async () => {
     const messages = getFarmMessages(DEFAULT_LOCALE);
-    const screen = await renderGame(null, { preferredLocale: DEFAULT_LOCALE });
+    const base = createInitialState();
+    const state: GameState = {
+      ...base,
+      plots: base.plots.map((plot, index) =>
+        index === 0 ? { ...plot, cropType: 'wheat', startTime: NOW, state: 1 as const } : plot
+      ),
+    };
+    const expectedOfflinePerHour = getActiveFarmOfflineGoldPerHour(state);
+    const screen = await renderGame(state, { preferredLocale: DEFAULT_LOCALE });
     await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
 
     // 상시 노출은 시간당 순수익 + 오늘의 작물 chip. 보조 지표(연구레벨·수익/성장 배수)는
@@ -554,6 +566,7 @@ describe('FarmGame UI flow', () => {
     expect(screen.queryByText(/연구 Lv\./)).toBeNull();
     expect(screen.queryByText(messages.profitLabel)).toBeNull();
     expect(screen.queryByText(messages.growthLabel)).toBeNull();
+    expect(screen.queryByText(messages.statsOfflineIncomeLabel)).toBeNull();
 
     // chip 탭 → '농장 현황' 시트가 열리고, 이동한 보조 지표가 시트에 노출된다.
     fireEvent.press(screen.getByTestId('cotd-chip'));
@@ -562,6 +575,12 @@ describe('FarmGame UI flow', () => {
     expect(screen.getByText(/연구 Lv\./)).toBeTruthy();
     expect(screen.getByText(messages.profitLabel)).toBeTruthy();
     expect(screen.getByText(messages.growthLabel)).toBeTruthy();
+    expect(screen.getByTestId('stats-offline-income')).toHaveTextContent(
+      formatHourlyGold(expectedOfflinePerHour, DEFAULT_LOCALE)
+    );
+    expect(screen.getByTestId('stats-offline-income-cap')).toHaveTextContent(
+      messages.statsOfflineIncomeCap(formatDuration(OFFLINE_INCOME_CAP_MS, DEFAULT_LOCALE))
+    );
   });
 
   test('wires saved farm records and the live research/collection totals into the stats sheet (#291)', async () => {

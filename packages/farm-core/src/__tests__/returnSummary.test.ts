@@ -15,6 +15,7 @@ import {
   collectReturnSummaryOfflineGoldWithAdBonus,
   creditActiveFarmOfflineGold,
   getActiveFarmOfflineGold,
+  getActiveFarmOfflineGoldPerHour,
   getReturnSummary,
   RETURN_SUMMARY_MIN_AWAY_MS,
 } from '../returnSummary';
@@ -237,6 +238,27 @@ describe('getReturnSummary', () => {
     expect(getActiveFarmOfflineGold(planted, 10 * OFFLINE_INCOME_CAP_MS)).toBe(
       Math.floor((expectedGoldPerHour(['wheat'], base) * OFFLINE_INCOME_CAP_MS) / MS_PER_HOUR)
     );
+  });
+
+  test('reports the active-farm offline hourly rate from growing unlocked plots', () => {
+    const base = createInitialState();
+    const upgraded: GameState = {
+      ...base,
+      upgrades: { speed: 3, profit: 4 },
+    };
+    const growing = withGrowingCrop(
+      base.unlockedPlotCount,
+      'potato',
+      withGrowingCrop(1, 'wheat', withGrowingCrop(0, 'carrot', upgraded))
+    );
+    const before = structuredClone(growing);
+    const expected = expectedGoldPerHour(['carrot', 'wheat'], upgraded);
+
+    expect(getActiveFarmOfflineGoldPerHour(growing)).toBeCloseTo(expected);
+    expect(getActiveFarmOfflineGold(growing, MS_PER_HOUR)).toBe(Math.floor(expected));
+    expect(growing).toEqual(before);
+    expect(getActiveFarmOfflineGoldPerHour(base)).toBe(0);
+    expect(getActiveFarmOfflineGoldPerHour(withReadyCrop(0, base))).toBe(0);
   });
 
   // #273: 오프라인 튜닝 불변식 — 오프라인 세션 수익은 동일 시간 온라인 능동

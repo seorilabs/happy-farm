@@ -2,6 +2,8 @@ import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import {
+  formatDuration,
+  formatHourlyGold,
   formatMoney,
   formatRemainingTime,
   type SupportedLocale,
@@ -65,8 +67,8 @@ function StatRow({
 }
 
 // '농장 현황' 시트: 상단 HUD 과밀을 되돌리기 위해 연구레벨·수익/성장 배수·수확 부스트·
-// 주말 축제 상세를 한 뎁스 뒤로 모은 표시 전용 컴포넌트(#233). 게임 로직/세이브 스키마
-// 변경 없이 순수 props만 받아 렌더한다.
+// 현재 농장 오프라인 수익·주말 축제 상세를 한 뎁스 뒤로 모은 표시 전용 컴포넌트(#233).
+// 게임 로직/세이브 스키마 변경 없이 순수 props만 받아 렌더한다.
 export function StatsSheet({
   messages,
   locale,
@@ -76,6 +78,8 @@ export function StatsSheet({
   boostActive,
   boostMultiplier,
   boostRemainingMs,
+  offlineGoldPerHour,
+  offlineIncomeCapMs,
   weeklyEventActive,
   weeklyEventAreaName,
   weeklyEventMultiplier,
@@ -92,6 +96,8 @@ export function StatsSheet({
   boostActive: boolean;
   boostMultiplier: number;
   boostRemainingMs: number;
+  offlineGoldPerHour: number;
+  offlineIncomeCapMs: number;
   weeklyEventActive: boolean;
   weeklyEventAreaName: string;
   weeklyEventMultiplier: number;
@@ -127,6 +133,13 @@ export function StatsSheet({
         valueStyle={boostActive ? styles.boostValue : undefined}
         sub={boostActive ? formatRemainingTime(boostRemainingMs, locale) : undefined}
         subTestID="boost-remaining"
+      />
+      <StatRow
+        label={messages.statsOfflineIncomeLabel}
+        value={formatHourlyGold(offlineGoldPerHour, locale)}
+        sub={messages.statsOfflineIncomeCap(formatDuration(offlineIncomeCapMs, locale))}
+        subTestID="stats-offline-income-cap"
+        valueTestID="stats-offline-income"
       />
 
       <Text testID="weekly-event-title" style={styles.sectionTitle}>

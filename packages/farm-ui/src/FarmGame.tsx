@@ -70,6 +70,7 @@ import {
   HARVEST_BONUS_BOOST_DURATION_MS,
   HARVEST_BONUS_MULTIPLIER,
   OFFLINE_BONUS_MULTIPLIER,
+  OFFLINE_INCOME_CAP_MS,
   getAdLimits,
   MAX_PLOTS,
   PLOT_DISCOUNT_AD_PERCENT,
@@ -102,6 +103,7 @@ import {
   formatRemainingTime,
   formatSignedPercent,
   getReturnSummary,
+  getActiveFarmOfflineGoldPerHour,
   type ReturnSummary,
   getAreaLabel,
   getAreaUnlockRequirementText,
@@ -2023,6 +2025,10 @@ function FarmGameBody({
   // prestige skills, region scaling) so the display matches the actual math;
   // the ad boost stays on its own line.
   const globalModifiers = useMemo(() => getGlobalModifiers(gameState), [gameState]);
+  const activeFarmOfflineGoldPerHour = useMemo(
+    () => getActiveFarmOfflineGoldPerHour(gameState),
+    [gameState]
+  );
   const researchLevel = useMemo(
     () => getMinUpgradeLevel(gameState),
     [gameState.upgrades.profit, gameState.upgrades.speed]
@@ -4346,6 +4352,8 @@ function FarmGameBody({
             boostActive={harvestBonusBoost.active}
             boostMultiplier={harvestBonusBoost.multiplier}
             boostRemainingMs={safeBoostRemainingMs}
+            offlineGoldPerHour={activeFarmOfflineGoldPerHour}
+            offlineIncomeCapMs={OFFLINE_INCOME_CAP_MS}
             weeklyEventActive={weeklyEvent.active}
             weeklyEventAreaName={getLocalizedAreaLabel(weeklyEvent.areaKey).name}
             weeklyEventMultiplier={weeklyEvent.multiplier}

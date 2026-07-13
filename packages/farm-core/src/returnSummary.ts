@@ -45,23 +45,14 @@ export type ReturnSummary = {
   dailyBonusAvailable: boolean;
 };
 
-// Passive gold the player's *active* farm accrues while away, independent of
+// Hourly passive-gold rate for the player's *active* farm, independent of
 // prestige chain farms. Only currently-growing plots (state 1 with a crop)
 // contribute, each at OFFLINE_INCOME_EFFICIENCY_RATIO of its crop's hourly net
-// profit, over the away window capped at OFFLINE_INCOME_CAP_MS. Tying this to
+// profit. Tying this to
 // actually-planted plots (rather than a hypothetical best-crop-on-all-plots
 // estimate) means an empty or under-invested farm earns nothing, so early
-// balance isn't trivialized. Pure and defensive: a non-positive or non-finite
-// away window, or a degenerate rate, yields 0.
-export function getActiveFarmOfflineGold(gameState: GameState, awayMs: number): number {
-  if (!Number.isFinite(awayMs) || awayMs <= 0) {
-    return 0;
-  }
-  const cappedMs = Math.min(awayMs, OFFLINE_INCOME_CAP_MS);
-  if (cappedMs <= 0) {
-    return 0;
-  }
-
+// balance isn't trivialized. Pure and defensive: a degenerate rate yields 0.
+export function getActiveFarmOfflineGoldPerHour(gameState: GameState): number {
   const speedMultiplier = getSpeedMultiplier(gameState.upgrades.speed);
   const profitMultiplier = getProfitMultiplier(gameState.upgrades.profit);
 
@@ -80,10 +71,26 @@ export function getActiveFarmOfflineGold(gameState: GameState, awayMs: number): 
   if (!Number.isFinite(goldPerHour) || goldPerHour <= 0) {
     return 0;
   }
+  return goldPerHour;
+}
+
+export function getActiveFarmOfflineGold(gameState: GameState, awayMs: number): number {
+  if (!Number.isFinite(awayMs) || awayMs <= 0) {
+    return 0;
+  }
+  const cappedMs = Math.min(awayMs, OFFLINE_INCOME_CAP_MS);
+  if (cappedMs <= 0) {
+    return 0;
+  }
+
+  const goldPerHour = getActiveFarmOfflineGoldPerHour(gameState);
+  if (goldPerHour <= 0) {
+    return 0;
+  }
   return Math.floor((goldPerHour * cappedMs) / MS_PER_HOUR);
 }
 
-// Sweeps the active farm's pre-prestige offline gold into the player's purse,
+// Sweeps the current active farm's offline gold into the player's purse,
 // mirroring how collectChainIncome settles chain farms. Unlike chain farms there
 // is no per-farm timestamp to reset: the accrual is a function of the away window
 // (now - lastSeenAt), and the welcome-back recap fires once per return, so a
