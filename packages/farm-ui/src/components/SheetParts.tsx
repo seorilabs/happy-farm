@@ -45,6 +45,7 @@ export function ShopCard({
   disabled,
   priceTone,
   goldProgress,
+  overlay,
   onPress,
 }: {
   title: string;
@@ -53,6 +54,7 @@ export function ShopCard({
   disabled?: boolean;
   priceTone?: 'speed' | 'profit';
   goldProgress?: number;
+  overlay?: React.ReactNode;
   onPress: () => void;
 }) {
   const showProgress = disabled === true && goldProgress != null && goldProgress > 0 && goldProgress < 1;
@@ -64,34 +66,37 @@ export function ShopCard({
       accessibilityRole="button"
       accessibilityLabel={`${title}, ${desc}, ${price}`}
       accessibilityState={{ disabled: disabled === true }}
-      style={[sheetPartStyles.shopCard, disabled && sheetPartStyles.disabledCard]}
+      style={sheetPartStyles.shopCard}
       onPress={onPress}
     >
-      <View style={sheetPartStyles.shopCardRow}>
-        <View style={sheetPartStyles.shopTextGroup}>
-          <Text style={sheetPartStyles.shopTitle}>{title}</Text>
-          <Text style={sheetPartStyles.shopDesc}>{desc}</Text>
-        </View>
-        <Text
-          style={[
-            sheetPartStyles.shopPrice,
-            priceTone === 'speed' && sheetPartStyles.speedPrice,
-            priceTone === 'profit' && sheetPartStyles.profitPrice,
-          ]}
-        >
-          {price}
-        </Text>
-      </View>
-      {showProgress ? (
-        <View style={sheetPartStyles.upgradeTrack}>
-          <View
+      <View style={disabled && sheetPartStyles.disabledCard}>
+        <View style={sheetPartStyles.shopCardRow}>
+          <View style={sheetPartStyles.shopTextGroup}>
+            <Text style={sheetPartStyles.shopTitle}>{title}</Text>
+            <Text style={sheetPartStyles.shopDesc}>{desc}</Text>
+          </View>
+          <Text
             style={[
-              sheetPartStyles.upgradeFill,
-              { width: `${Math.round((goldProgress ?? 0) * 100)}%` as `${number}%`, backgroundColor: fillColor },
+              sheetPartStyles.shopPrice,
+              priceTone === 'speed' && sheetPartStyles.speedPrice,
+              priceTone === 'profit' && sheetPartStyles.profitPrice,
             ]}
-          />
+          >
+            {price}
+          </Text>
         </View>
-      ) : null}
+        {showProgress ? (
+          <View style={sheetPartStyles.upgradeTrack}>
+            <View
+              style={[
+                sheetPartStyles.upgradeFill,
+                { width: `${Math.round((goldProgress ?? 0) * 100)}%` as `${number}%`, backgroundColor: fillColor },
+              ]}
+            />
+          </View>
+        ) : null}
+      </View>
+      {overlay}
     </Pressable>
   );
 }
@@ -202,6 +207,7 @@ export const sheetPartStyles = StyleSheet.create({
     fontWeight: '900',
   },
   shopCard: {
+    position: 'relative',
     minHeight: 72,
     marginBottom: 10,
     padding: 14,
