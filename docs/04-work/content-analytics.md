@@ -122,9 +122,10 @@ combo window가 끝났거나 다음 수확 시 이미 window를 넘은 경우다
 `analytics/queries/harvest-combo-metrics.sql`은 당일 미완료 export를 제외한 최근 **28개
 완료일(D-28~D-1)** 을 기본 window로 사용하며 다음 결과를 독립 블록으로 산출한다.
 
-- **티어 분포**: 티어별 완료 콤보·`exact_tier_users`·세션·수동 수확 수, 콤보/수확 share와
-  `reached_users` 기반 threshold 누적 사용자 도달률(great는 legendary 사용자 포함).
-  normal(1+) 도달률은 valid event가 있을 때 항상 100%인 cohort anchor다.
+- **티어 분포**: 티어별 완료 콤보·`event_tier_users`·세션·수동 수확 수, 사용자별 최고
+  streak 기반 상호배타 `exclusive_tier_users`, `reached_users` 기반 threshold 누적 도달 수를
+  함께 제공한다(great 누적 도달에는 legendary 사용자 포함). normal(1+)은 active cohort
+  자체이므로 `user_reach_rate=NULL`이고 great/legendary만 누적 도달률을 제공한다.
 - **길이·수익 분포**: 전체와 티어별 count·duration·base revenue의 평균/median/p90/max,
   수동 수확 1회당 평균 base revenue
 - **종료 사유**: end reason별 콤보·사용자·수확·수익과 전체 콤보 대비 share
@@ -136,7 +137,8 @@ combo window가 끝났거나 다음 수확 시 이미 window를 넘은 경우다
 분석 블록은 `schema_version=1`, `manual_harvest_count>=1`, 음수가 아닌 duration/revenue와
 정의된 tier/end reason을 모두 만족한 이벤트만 사용한다. 첫 daily export에서는 품질 블록의
 필수 파라미터 누락이 0인지 먼저 확인한다. 품질 블록은 `observed_events=0`이면
-`has_data=false`, `valid_event_rate=NULL`로 no-data를 명시한다. 최소 28일이 쌓인 뒤 표본 수와 top 사용자
+`quality_status=no_data`, `valid_event_rate=NULL`로 표시하고, 이벤트가 있으나 모두 무효면
+`quality_status=all_invalid`, `valid_event_rate=0`으로 구분한다. 최소 28일이 쌓인 뒤 표본 수와 top 사용자
 집중도를 함께 보고 #320의 A/B 실험 가능 여부를 다시 판단하며, 이 계측만으로 보상 기능을
 unblock하지 않는다.
 

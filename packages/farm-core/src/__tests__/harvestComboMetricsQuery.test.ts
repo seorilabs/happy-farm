@@ -15,6 +15,14 @@ function occurrences(haystack: string, needle: string): number {
   return haystack.split(needle).length - 1;
 }
 
+function readTierMinimum(tier: 'great' | 'legendary'): number {
+  const match = sql.match(new RegExp(`SELECT '${tier}', \\d+, (\\d+)`));
+  if (match?.[1] == null) {
+    throw new Error(`${tier} minimum_manual_harvest_count is missing from SQL`);
+  }
+  return Number(match[1]);
+}
+
 describe('harvest-combo-metrics.sql 계약 가드 (#348)', () => {
   test('harvest_combo_completed와 필수 6개 파라미터를 직접 읽는다', () => {
     expect(sql).toContain("event_name = 'harvest_combo_completed'");
@@ -57,7 +65,8 @@ describe('harvest-combo-metrics.sql 계약 가드 (#348)', () => {
       'combo_share',
       'manual_harvest_share',
       'user_reach_rate',
-      'exact_tier_users',
+      'event_tier_users',
+      'exclusive_tier_users',
       'reached_users',
       'median_manual_harvest_count',
       'p90_manual_harvest_count',
@@ -77,9 +86,13 @@ describe('harvest-combo-metrics.sql 계약 가드 (#348)', () => {
     expect(sql).toContain(
       'valid_combo_events.manual_harvest_count >= tiers.minimum_manual_harvest_count'
     );
-    expect(sql).toContain(`SELECT 'great', 2, ${COMBO_GREAT_THRESHOLD}`);
-    expect(sql).toContain(`SELECT 'legendary', 3, ${COMBO_LEGENDARY_THRESHOLD}`);
-    expect(sql).toContain('normal(1+) is an intentional 100% cohort anchor');
+    expect(readTierMinimum('great')).toBe(COMBO_GREAT_THRESHOLD);
+    expect(readTierMinimum('legendary')).toBe(COMBO_LEGENDARY_THRESHOLD);
+    expect(sql).toContain(
+      `WHEN MAX(manual_harvest_count) >= ${COMBO_LEGENDARY_THRESHOLD} THEN 'legendary'`
+    );
+    expect(sql).toContain(`WHEN MAX(manual_harvest_count) >= ${COMBO_GREAT_THRESHOLD} THEN 'great'`);
+    expect(sql).toContain("tiers.combo_tier = 'normal'");
   });
 
   test('종료 사유 분포와 사용자 집중도를 0분모 안전하게 산출한다', () => {
@@ -112,10 +125,13 @@ describe('harvest-combo-metrics.sql 계약 가드 (#348)', () => {
       'invalid_end_reason',
       'invalid_schema_version',
       'has_data',
+      'quality_status',
       'valid_event_rate',
     ]) {
       expect(sql).toContain(metric);
     }
-    expect(sql).toContain('IF(COUNT(*) = 0, NULL, SAFE_DIVIDE(COUNTIF(is_valid), COUNT(*)))');
+    expect(sql).toContain("WHEN COUNT(*) = 0 THEN 'no_data'");
+    expect(sql).toContain("WHEN COUNTIF(is_valid) = 0 THEN 'all_invalid'");
+    expect(sql).toContain('SAFE_DIVIDE(COUNTIF(is_valid), COUNT(*)) AS valid_event_rate');
   });
 });

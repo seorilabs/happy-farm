@@ -148,7 +148,11 @@ describe('trackAppsInTossAnalyticsEvent — 큐잉/정규화/전송', () => {
     // 2개를 추가해도 GA4 Measurement Protocol 상한(25개)을 넘지 않는다.
     const serializedParams = comboEvent?.params ?? {};
     const parameterCount = Object.keys(serializedParams).length;
-    expect(parameterCount).toBe('debug_mode' in serializedParams ? 23 : 22);
+    if ('debug_mode' in serializedParams) {
+      expect(parameterCount).toBe(23);
+    } else {
+      expect(parameterCount).toBe(22);
+    }
     expect(parameterCount).toBeLessThanOrEqual(25);
     expect(25 - parameterCount).toBeGreaterThanOrEqual(2);
   });

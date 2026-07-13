@@ -57,6 +57,8 @@ BEGIN
       AND end_reason IN ('timeout', 'background', 'prestige', 'reset', 'cloud_restore')
   ),
   tiers AS (
+    -- Source of truth: packages/farm-core/src/constants.ts. The SQL contract
+    -- test imports those production constants and compares these literals.
     SELECT 'normal' AS combo_tier, 1 AS tier_order, 1 AS minimum_manual_harvest_count UNION ALL
     SELECT 'great', 2, 5 UNION ALL
     SELECT 'legendary', 3, 10
@@ -65,7 +67,7 @@ BEGIN
     SELECT
       combo_tier,
       COUNT(*) AS completed_combos,
-      COUNT(DISTINCT user_pseudo_id) AS exact_tier_users,
+      COUNT(DISTINCT user_pseudo_id) AS event_tier_users,
       COUNT(DISTINCT CONCAT(user_pseudo_id, ':', CAST(ga_session_id AS STRING))) AS combo_sessions,
       SUM(manual_harvest_count) AS manual_harvests
     FROM valid_combo_events
@@ -84,6 +86,25 @@ BEGIN
       ON valid_combo_events.manual_harvest_count >= tiers.minimum_manual_harvest_count
     GROUP BY tiers.combo_tier
   ),
+  user_max_tier AS (
+    SELECT
+      user_pseudo_id,
+      CASE
+        WHEN MAX(manual_harvest_count) >= 10 THEN 'legendary'
+        WHEN MAX(manual_harvest_count) >= 5 THEN 'great'
+        ELSE 'normal'
+      END AS exclusive_combo_tier
+    FROM valid_combo_events
+    WHERE user_pseudo_id IS NOT NULL
+    GROUP BY user_pseudo_id
+  ),
+  exclusive_tier_agg AS (
+    -- One mutually exclusive cohort per user, based on that user's highest
+    -- observed streak. This is distinct from cumulative reached_users.
+    SELECT exclusive_combo_tier AS combo_tier, COUNT(*) AS exclusive_tier_users
+    FROM user_max_tier
+    GROUP BY exclusive_combo_tier
+  ),
   totals AS (
     SELECT
       COUNT(*) AS completed_combos,
@@ -95,15 +116,23 @@ BEGIN
   SELECT
     tiers.combo_tier,
     COALESCE(tier_agg.completed_combos, 0) AS completed_combos,
-    COALESCE(tier_agg.exact_tier_users, 0) AS exact_tier_users,
+    COALESCE(tier_agg.event_tier_users, 0) AS event_tier_users,
+    COALESCE(exclusive_tier_agg.exclusive_tier_users, 0) AS exclusive_tier_users,
     COALESCE(tier_reach.reached_users, 0) AS reached_users,
     COALESCE(tier_agg.combo_sessions, 0) AS combo_sessions,
     COALESCE(tier_agg.manual_harvests, 0) AS manual_harvests,
     SAFE_DIVIDE(COALESCE(tier_agg.completed_combos, 0), totals.completed_combos) AS combo_share,
     SAFE_DIVIDE(COALESCE(tier_agg.manual_harvests, 0), totals.manual_harvests) AS manual_harvest_share,
-    SAFE_DIVIDE(COALESCE(tier_reach.reached_users, 0), totals.active_combo_users) AS user_reach_rate
+    -- normal(1+) defines the active cohort itself, so a reach rate would be the
+    -- tautology 100%. Only great/legendary expose a meaningful cumulative rate.
+    IF(
+      tiers.combo_tier = 'normal',
+      NULL,
+      SAFE_DIVIDE(COALESCE(tier_reach.reached_users, 0), totals.active_combo_users)
+    ) AS user_reach_rate
   FROM tiers
   LEFT JOIN tier_agg USING (combo_tier)
+  LEFT JOIN exclusive_tier_agg USING (combo_tier)
   LEFT JOIN tier_reach USING (combo_tier)
   CROSS JOIN totals
   ORDER BY tiers.tier_order;
@@ -424,6 +453,12 @@ BEGIN
   SELECT
     COUNT(*) AS observed_events,
     COUNT(*) > 0 AS has_data,
+    CASE
+      WHEN COUNT(*) = 0 THEN 'no_data'
+      WHEN COUNTIF(is_valid) = 0 THEN 'all_invalid'
+      WHEN COUNTIF(is_valid) = COUNT(*) THEN 'all_valid'
+      ELSE 'partially_invalid'
+    END AS quality_status,
     COUNTIF(manual_harvest_count IS NULL) AS missing_manual_harvest_count,
     COUNTIF(combo_tier IS NULL) AS missing_combo_tier,
     COUNTIF(duration_ms IS NULL) AS missing_duration_ms,
@@ -440,8 +475,8 @@ BEGIN
     ) AS invalid_end_reason,
     COUNTIF(schema_version IS NOT NULL AND schema_version != 1) AS invalid_schema_version,
     COUNTIF(is_valid) AS valid_events,
-    -- NULL explicitly means no data; observed_events/has_data let monitors
-    -- distinguish an empty export from a 0% valid contract.
-    IF(COUNT(*) = 0, NULL, SAFE_DIVIDE(COUNTIF(is_valid), COUNT(*))) AS valid_event_rate
+    -- SAFE_DIVIDE returns NULL only for no_data. quality_status distinguishes
+    -- that state from all_invalid (0) without inferring from missing counters.
+    SAFE_DIVIDE(COUNTIF(is_valid), COUNT(*)) AS valid_event_rate
   FROM classified;
 END;
