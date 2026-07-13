@@ -251,6 +251,9 @@ export { COMBO_GREAT_THRESHOLD, COMBO_LEGENDARY_THRESHOLD };
 export const MASTERY_RANK_UP_CELEBRATION_DURATION_MS = 2600;
 export const PRESTIGE_GRADUATION_CELEBRATION_DURATION_MS = 3500;
 export const FIRST_HARVEST_CELEBRATION_DURATION_MS = 3200;
+// Frequent speed/profit purchases get a compact in-card burst, intentionally
+// much shorter than mastery/prestige full-screen celebrations (#289).
+export const UPGRADE_BURST_DURATION_MS = 720;
 // 온보딩 단계 진입 후 이만큼 무행동으로 머물면 onboarding_stall을 1회 발화해
 // 단계별 정체 구간을 계측한다(#274). selectSeed 69% 정체 진단용.
 export const ONBOARDING_STALL_MS = 15_000;
@@ -6680,34 +6683,131 @@ function ShopUpgradeRow({
   const desc = kind === 'speed' ? messages.speedUpgradeDesc : messages.profitUpgradeDesc;
   const disabled = gameState.gold < cost;
   const goldProgress = disabled ? Math.min(1, gameState.gold / cost) : undefined;
+  const [burstGeneration, setBurstGeneration] = useState(0);
+  const purchasedLevelRef = useRef<number | null>(null);
 
   return (
-    <ShopCard
-      title={title}
-      desc={messages.upgradeDescWithLevel(desc, level)}
-      price={`${formatMoney(cost, locale)}G`}
-      priceTone={kind}
-      disabled={disabled}
-      goldProgress={goldProgress}
-      onPress={() => {
-        if (disabled) {
-          onDone(messages.insufficientGoldToast);
-          return;
-        }
-        setGameState((state) => ({
-          ...state,
-          gold: state.gold - cost,
-          upgrades: { ...state.upgrades, [kind]: state.upgrades[kind] + 1 },
-        }));
-        analytics.trackUpgradePurchased({
-          kind,
-          cost,
-          nextLevel: level + 1,
-          context: getAnalyticsContext(gameState),
-        });
-        onDone(messages.researchCompletedToast);
-        onMilestone();
-      }}
-    />
+    <View style={styles.upgradeCardHost}>
+      <ShopCard
+        title={title}
+        desc={messages.upgradeDescWithLevel(desc, level)}
+        price={`${formatMoney(cost, locale)}G`}
+        priceTone={kind}
+        disabled={disabled}
+        goldProgress={goldProgress}
+        onPress={() => {
+          // A same-frame second press still sees the same level closure. Record
+          // that level synchronously, then allow the next purchase as soon as
+          // React renders the incremented level and its newly calculated cost.
+          if (disabled || purchasedLevelRef.current === level) {
+            if (disabled) {
+              onDone(messages.insufficientGoldToast);
+            }
+            return;
+          }
+          purchasedLevelRef.current = level;
+          setBurstGeneration((generation) => generation + 1);
+          setGameState((state) => ({
+            ...state,
+            gold: state.gold - cost,
+            upgrades: { ...state.upgrades, [kind]: state.upgrades[kind] + 1 },
+          }));
+          analytics.trackUpgradePurchased({
+            kind,
+            cost,
+            nextLevel: level + 1,
+            context: getAnalyticsContext(gameState),
+          });
+          onDone(messages.researchCompletedToast);
+          onMilestone();
+        }}
+      />
+      {burstGeneration > 0 ? (
+        <UpgradeBurst
+          key={burstGeneration}
+          kind={kind}
+          onComplete={() =>
+            setBurstGeneration((current) => (current === burstGeneration ? 0 : current))
+          }
+        />
+      ) : null}
+    </View>
+  );
+}
+
+const UPGRADE_BURST_SPARK_COUNT = 8;
+
+// A small, decorative burst contained inside the purchased upgrade card. Keep
+// it on the JS driver so its coordinates follow a scrolling Modal card instead
+// of leaving a detached native layer behind during ScrollView movement.
+function UpgradeBurst({ kind, onComplete }: { kind: 'speed' | 'profit'; onComplete: () => void }) {
+  const progressRef = useRef<Animated.Value | null>(null);
+  if (progressRef.current == null) {
+    progressRef.current = new Animated.Value(0);
+  }
+  const progress = progressRef.current;
+  const onCompleteRef = useRef(onComplete);
+  onCompleteRef.current = onComplete;
+
+  useEffect(() => {
+    const animation = Animated.timing(progress, {
+      toValue: 1,
+      duration: UPGRADE_BURST_DURATION_MS,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: false,
+    });
+    animation.start();
+    const timer = setTimeout(() => onCompleteRef.current(), UPGRADE_BURST_DURATION_MS);
+    return () => {
+      animation.stop();
+      clearTimeout(timer);
+    };
+  }, [progress]);
+
+  const opacity = progress.interpolate({ inputRange: [0, 0.72, 1], outputRange: [1, 0.8, 0] });
+  const ringScale = progress.interpolate({ inputRange: [0, 1], outputRange: [0.7, 1.18] });
+  const iconScale = progress.interpolate({
+    inputRange: [0, 0.35, 1],
+    outputRange: [0.8, 1.2, 0.8],
+  });
+
+  return (
+    <View
+      testID={`upgrade-burst-${kind}`}
+      pointerEvents="none"
+      accessible={false}
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+      style={styles.upgradeBurstOverlay}
+    >
+      <View style={styles.upgradeBurstCenter}>
+        <Animated.View
+          style={[
+            styles.upgradeBurstRing,
+            kind === 'speed' ? styles.upgradeBurstRingSpeed : styles.upgradeBurstRingProfit,
+            { opacity, transform: [{ scale: ringScale }] },
+          ]}
+        />
+        {Array.from({ length: UPGRADE_BURST_SPARK_COUNT }, (_, index) => {
+          const angle = (Math.PI * 2 * index) / UPGRADE_BURST_SPARK_COUNT;
+          const translateX = progress.interpolate({ inputRange: [0, 1], outputRange: [0, Math.cos(angle) * 42] });
+          const translateY = progress.interpolate({ inputRange: [0, 1], outputRange: [0, Math.sin(angle) * 30] });
+          const sparkScale = progress.interpolate({ inputRange: [0, 0.22, 1], outputRange: [0.5, 1, 0.4] });
+          return (
+            <Animated.View
+              key={index}
+              style={[
+                styles.upgradeBurstSpark,
+                kind === 'speed' ? styles.upgradeBurstSparkSpeed : styles.upgradeBurstSparkProfit,
+                { opacity, transform: [{ translateX }, { translateY }, { scale: sparkScale }] },
+              ]}
+            />
+          );
+        })}
+        <Animated.Text style={[styles.upgradeBurstIcon, { opacity, transform: [{ scale: iconScale }] }]}>
+          {kind === 'speed' ? '⚡' : '✦'}
+        </Animated.Text>
+      </View>
+    </View>
   );
 }

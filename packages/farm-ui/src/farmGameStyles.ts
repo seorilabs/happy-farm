@@ -519,6 +519,64 @@ export const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '900',
   },
+  // Upgrade purchase delight (#289): card-local only, so frequent purchases
+  // get tactile progress feedback without occupying the full screen.
+  upgradeCardHost: {
+    position: 'relative',
+  },
+  upgradeBurstOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 4,
+  },
+  upgradeBurstCenter: {
+    position: 'absolute',
+    // ShopCard has a 72px minimum height. A fixed center avoids percentage
+    // positioning drift inside the iOS Modal/ScrollView layout.
+    top: 36,
+    right: 42,
+    width: 0,
+    height: 0,
+  },
+  upgradeBurstRing: {
+    position: 'absolute',
+    left: -29,
+    top: -29,
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    borderWidth: 3,
+  },
+  upgradeBurstRingSpeed: {
+    borderColor: '#4da3ff',
+  },
+  upgradeBurstRingProfit: {
+    borderColor: '#f4b942',
+  },
+  upgradeBurstSpark: {
+    position: 'absolute',
+    left: -4,
+    top: -4,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  upgradeBurstSparkSpeed: {
+    backgroundColor: '#76b9ff',
+  },
+  upgradeBurstSparkProfit: {
+    backgroundColor: '#ffd166',
+  },
+  upgradeBurstIcon: {
+    position: 'absolute',
+    left: -16,
+    top: -14,
+    width: 32,
+    height: 28,
+    textAlign: 'center',
+    fontSize: 24,
+    lineHeight: 28,
+    fontWeight: '900',
+  },
   areaTabs: {
     gap: 8,
     paddingTop: 10,

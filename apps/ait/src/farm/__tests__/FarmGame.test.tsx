@@ -27,12 +27,14 @@ import {
   getAreaCropKeys,
   getCropOfTheDayStatus,
   getFertilizerCost,
+  getPlotCost,
   getWeeklyEventStatus,
   getEnvironmentTone,
   getLocalMinutesOfDay,
   getMasteryThresholds,
   getPrestigeCost,
   getRegionArchetypeLabel,
+  getUpgradeCost,
   recordAdWatchProgress,
   recordWeeklyAdWatchProgress,
   sortCropKeysForStrip,
@@ -65,6 +67,7 @@ const {
   ONBOARDING_STALL_MS,
   COMBO_GREAT_THRESHOLD,
   COMBO_LEGENDARY_THRESHOLD,
+  UPGRADE_BURST_DURATION_MS,
   __setMutationFlashTestHook,
   selectRarestMutationFlash,
 } = farmGameModule;
@@ -1949,7 +1952,9 @@ describe('FarmGame UI flow', () => {
 
   test('supports core shop management purchases', async () => {
     const shopReadyState = createShopReadyState();
-    const screen = await renderGame(shopReadyState);
+    const track = jest.fn();
+    const messages = getFarmMessages(DEFAULT_LOCALE);
+    const screen = await renderGame(shopReadyState, { analytics: createFarmAnalytics(track) });
 
     await waitFor(() => expect(screen.getByText(`${formatMoney(shopReadyState.gold)}G`)).toBeTruthy());
 
@@ -1960,12 +1965,148 @@ describe('FarmGame UI flow', () => {
 
     fireEvent.press(screen.getByText('🧪 고속 성장 비료'));
     expect(screen.getByText('현재 연구 Lv.1 · 성장속도 Lv.2 / 수익률 Lv.1')).toBeTruthy();
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(screen.getByTestId('upgrade-burst-speed', { includeHiddenElements: true })).toBeTruthy();
+    expect(screen.getByText(messages.researchCompletedToast)).toBeTruthy();
+    expect(
+      screen.getByText(
+        `${formatMoney(
+          shopReadyState.gold -
+            getPlotCost(shopReadyState.unlockedPlotCount) -
+            getUpgradeCost('speed', shopReadyState.upgrades.speed)
+        )}G`
+      )
+    ).toBeTruthy();
+    expect(track.mock.calls.filter(([eventName]) => eventName === 'upgrade_purchased')).toEqual([
+      [
+        'upgrade_purchased',
+        expect.objectContaining({
+          upgrade_kind: 'speed',
+          cost: getUpgradeCost('speed', shopReadyState.upgrades.speed),
+          next_level: 2,
+        }),
+      ],
+    ]);
+    expect(UPGRADE_BURST_DURATION_MS).toBeLessThan(MASTERY_RANK_UP_CELEBRATION_DURATION_MS);
+
+    await act(async () => {
+      jest.advanceTimersByTime(UPGRADE_BURST_DURATION_MS);
+    });
+    expect(screen.queryByTestId('upgrade-burst-speed', { includeHiddenElements: true })).toBeNull();
 
     fireEvent.press(screen.getByText('🚛 판로 개척'));
     expect(screen.getByText('현재 연구 Lv.2 · 성장속도 Lv.2 / 수익률 Lv.2')).toBeTruthy();
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(screen.getByTestId('upgrade-burst-profit', { includeHiddenElements: true })).toBeTruthy();
+    expect(track.mock.calls.filter(([eventName]) => eventName === 'upgrade_purchased')).toHaveLength(2);
 
     fireEvent.press(screen.getByText('채소 밭 열기'));
     expect(screen.queryByText('채소 밭 열기')).toBeNull();
+  });
+
+  test('guards a same-frame rapid upgrade press from duplicate charges and analytics', async () => {
+    const shopReadyState = createShopReadyState();
+    const track = jest.fn();
+    const screen = await renderGame(shopReadyState, { analytics: createFarmAnalytics(track) });
+
+    await waitFor(() => expect(screen.getByText(`${formatMoney(shopReadyState.gold)}G`)).toBeTruthy());
+    fireEvent.press(screen.getByText('🏪 상점'));
+
+    const speedUpgrade = screen.getByText('🧪 고속 성장 비료');
+    act(() => {
+      fireEvent.press(speedUpgrade);
+      fireEvent.press(speedUpgrade);
+    });
+
+    expect(screen.getByText('현재 연구 Lv.1 · 성장속도 Lv.2 / 수익률 Lv.1')).toBeTruthy();
+    expect(
+      screen.getByText(
+        `${formatMoney(shopReadyState.gold - getUpgradeCost('speed', shopReadyState.upgrades.speed))}G`
+      )
+    ).toBeTruthy();
+    expect(track.mock.calls.filter(([eventName]) => eventName === 'upgrade_purchased')).toEqual([
+      [
+        'upgrade_purchased',
+        expect.objectContaining({
+          upgrade_kind: 'speed',
+          cost: getUpgradeCost('speed', shopReadyState.upgrades.speed),
+          next_level: 2,
+        }),
+      ],
+    ]);
+  });
+
+  test('uses the next-level cost for another purchase while the previous burst is still visible', async () => {
+    const shopReadyState = createShopReadyState();
+    const firstCost = getUpgradeCost('speed', shopReadyState.upgrades.speed);
+    const secondCost = getUpgradeCost('speed', shopReadyState.upgrades.speed + 1);
+    const track = jest.fn();
+    const screen = await renderGame(shopReadyState, { analytics: createFarmAnalytics(track) });
+
+    await waitFor(() => expect(screen.getByText(`${formatMoney(shopReadyState.gold)}G`)).toBeTruthy());
+    fireEvent.press(screen.getByText('🏪 상점'));
+    fireEvent.press(screen.getByText('🧪 고속 성장 비료'));
+    await waitFor(() =>
+      expect(screen.getByText('현재 연구 Lv.1 · 성장속도 Lv.2 / 수익률 Lv.1')).toBeTruthy()
+    );
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(screen.getByTestId('upgrade-burst-speed', { includeHiddenElements: true })).toBeTruthy();
+
+    fireEvent.press(screen.getByText('🧪 고속 성장 비료'));
+    await waitFor(() =>
+      expect(screen.getByText('현재 연구 Lv.1 · 성장속도 Lv.3 / 수익률 Lv.1')).toBeTruthy()
+    );
+    expect(screen.getByText(`${formatMoney(shopReadyState.gold - firstCost - secondCost)}G`)).toBeTruthy();
+    expect(
+      track.mock.calls
+        .filter(([eventName]) => eventName === 'upgrade_purchased')
+        .map(([, params]) => params?.cost)
+    ).toEqual([firstCost, secondCost]);
+  });
+
+  test('keeps the purchase burst fully visible when the next upgrade becomes unaffordable', async () => {
+    const shopReadyState = createShopReadyState();
+    const speedCost = getUpgradeCost('speed', shopReadyState.upgrades.speed);
+    const screen = await renderGame({ ...shopReadyState, gold: speedCost });
+
+    await waitFor(() => expect(screen.getByText(`${formatMoney(speedCost)}G`)).toBeTruthy());
+    fireEvent.press(screen.getByText('🏪 상점'));
+    fireEvent.press(screen.getByText('🧪 고속 성장 비료'));
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+    const burst = screen.getByTestId('upgrade-burst-speed', { includeHiddenElements: true });
+    expect(StyleSheet.flatten(burst.parent?.props.style).opacity).toBeUndefined();
+    expect(screen.getByText('0G')).toBeTruthy();
+  });
+
+  test('cleans up an active purchase burst when the shop closes early', async () => {
+    const shopReadyState = createShopReadyState();
+    const messages = getFarmMessages(DEFAULT_LOCALE);
+    const screen = await renderGame(shopReadyState);
+
+    await waitFor(() => expect(screen.getByText(`${formatMoney(shopReadyState.gold)}G`)).toBeTruthy());
+    fireEvent.press(screen.getByText('🏪 상점'));
+    fireEvent.press(screen.getByText('🧪 고속 성장 비료'));
+    expect(screen.getByTestId('upgrade-burst-speed', { includeHiddenElements: true })).toBeTruthy();
+
+    fireEvent.press(screen.getByLabelText(messages.sheetCloseAccessibilityLabel));
+    await act(async () => {
+      jest.advanceTimersByTime(180);
+    });
+    expect(screen.queryByTestId('upgrade-burst-speed', { includeHiddenElements: true })).toBeNull();
+
+    await act(async () => {
+      jest.advanceTimersByTime(UPGRADE_BURST_DURATION_MS);
+    });
+    expect(screen.queryByTestId('upgrade-burst-speed', { includeHiddenElements: true })).toBeNull();
   });
 
   test('shows a badge on the shop nav button when a rewarded ad is ready to claim', async () => {
