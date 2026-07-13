@@ -126,7 +126,9 @@ import {
   getPlacedDecorations,
   applyWheelReward,
   getWheelStatus,
+  spinBonusWheel,
   spinWheel,
+  type WheelReward,
   getAnimalStates,
   purchaseAnimal,
   feedAnimal,
@@ -772,6 +774,9 @@ function FarmGameBody({
   // The rewarded SDK may take seconds to settle, so block every other
   // welcome-back action while the offline-bonus request owns its snapshot.
   const offlineBonusAdInFlightRef = useRef(false);
+  // Wheel bonus ad can outlive a render while the native SDK is open. Reserve
+  // the request synchronously so rapid taps cannot open two ads or two spins.
+  const wheelBonusSpinInFlightRef = useRef(false);
   const offlineBonusImpressionAtRef = useRef<number | null>(null);
   // First-session onboarding owns the foreground. A daily-bonus sheet
   // discovered during load waits here until the guide completes or the player
@@ -2092,6 +2097,10 @@ function FarmGameBody({
     () => getRewardedAdLimitStatus(gameState, 'offlineBonusAd', Date.now(), locale),
     [gameState, locale, tick]
   );
+  const wheelBonusAdLimit = useMemo(
+    () => getRewardedAdLimitStatus(gameState, 'wheelBonusAd', Date.now(), locale),
+    [gameState, locale, tick]
+  );
   const harvestBonusBoost = useMemo(() => getHarvestBonusBoostStatus(gameState), [gameState, tick]);
   const cropOfTheDay = useMemo(
     () => getCropOfTheDayStatus(tickNowMsRef.current, gameState),
@@ -2295,6 +2304,60 @@ function FarmGameBody({
   // message), never a stale reward.
   function openWheel() {
     setActiveSheet({ type: 'wheel' });
+  }
+
+  async function spinWheelWithAd(): Promise<WheelReward | null> {
+    if (wheelBonusSpinInFlightRef.current) {
+      return null;
+    }
+    const requestedAt = Date.now();
+    const requestedState = gameStateRef.current;
+    if (!getWheelStatus(requestedState.wheelState, requestedAt).canBonusSpin) {
+      return null;
+    }
+
+    // Reserve one eligible spin and its roll before opening the SDK. The native
+    // ad can cross the daily reset boundary; earned must still commit the exact
+    // entitlement the player started, instead of showing a reward animation
+    // after a fresh-day recheck silently rejects the state transition.
+    const roll = Math.random();
+    const preview = spinBonusWheel(
+      requestedState.wheelState,
+      getRewardedGoldAmount(requestedState),
+      requestedAt,
+      () => roll
+    );
+    if (preview == null) {
+      return null;
+    }
+
+    wheelBonusSpinInFlightRef.current = true;
+    try {
+      const earned = await showRewardedAd('wheelBonusAd', 1, () => undefined, {
+        keepSheetOnFailure: true,
+        keepSheetOnSuccess: true,
+        applyRewardState: (state, rewardedAt) => {
+          const committedResult = {
+            reward: preview.reward,
+            newState: {
+              ...preview.newState,
+              // Cooldown starts when the SDK confirms the reward. The count's
+              // day remains the request day, so crossing 04:00 does not consume
+              // the new day's bonus allowance before its free spin.
+              lastBonusSpinAt: rewardedAt,
+            },
+          };
+          return applyWheelReward(state, committedResult, rewardedAt);
+        },
+      });
+      if (!earned) {
+        return null;
+      }
+      playSoundEffect('wheelSpin');
+      return preview.reward;
+    } finally {
+      wheelBonusSpinInFlightRef.current = false;
+    }
   }
 
   // 동물 사육 시트('더보기' 뒤). 축사 건설/급여/수확은 모두 core의 순수 함수에
@@ -2818,6 +2881,7 @@ function FarmGameBody({
     onReward: () => void,
     options: {
       keepSheetOnFailure?: boolean;
+      keepSheetOnSuccess?: boolean;
       applyRewardState?: (state: GameState, rewardedAt: number) => GameState;
     } = {}
   ) {
@@ -2857,7 +2921,9 @@ function FarmGameBody({
 
     if (result.status === 'earned') {
       const rewardedAt = Date.now();
-      setActiveSheet(null);
+      if (!options.keepSheetOnSuccess) {
+        setActiveSheet(null);
+      }
       onReward();
       farmAnalytics.trackAdRewardCompleted({
         type,
@@ -4522,6 +4588,18 @@ function FarmGameBody({
               playSoundEffect('wheelSpin');
               return result.reward;
             }}
+            onBonusSpin={spinWheelWithAd}
+            bonusAdSupported={rewardedAd.isAdSupported}
+            bonusAdReady={rewardedAd.isAdReady}
+            bonusAdAllowed={wheelBonusAdLimit.allowed}
+            bonusAdBlockedReason={wheelBonusAdLimit.reason}
+            onBonusImpression={() =>
+              farmAnalytics.trackAdRewardImpression(
+                'wheelBonusAd',
+                getRewardedAdPlacement('wheelBonusAd'),
+                analyticsContext()
+              )
+            }
             onRevealed={(reward) => {
               // 연출 종료(당첨 슬롯 정지) 후에 타입별 토스트를 노출한다.
               switch (reward.type) {

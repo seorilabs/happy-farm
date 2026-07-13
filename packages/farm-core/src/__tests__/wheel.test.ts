@@ -11,6 +11,7 @@ import {
   getWheelSlotGold,
   getWheelSlotReward,
   getWheelSlotRp,
+  spinBonusWheel,
   spinWheel,
 } from '../wheel';
 import type { WheelState } from '../wheel';
@@ -82,7 +83,7 @@ describe('normalizeWheelSlot (하위 호환 정규화)', () => {
   });
 });
 
-describe('getWheelStatus (daily gating + UTC midnight rollover)', () => {
+describe('getWheelStatus (daily gating + shared reset rollover)', () => {
   test('a fresh state can spin immediately', () => {
     const status = getWheelStatus(createInitialWheelState(), DAY0 + 3_600_000);
     expect(status.canSpin).toBe(true);
@@ -90,14 +91,14 @@ describe('getWheelStatus (daily gating + UTC midnight rollover)', () => {
   });
 
   test('after spinning today, the next spin opens at the next reset boundary', () => {
-    const state: WheelState = { lastFreeSpinAt: RESET0 + 1_000 };
+    const state: WheelState = { ...createInitialWheelState(), lastFreeSpinAt: RESET0 + 1_000 };
     const status = getWheelStatus(state, RESET0 + 5_000);
     expect(status.canSpin).toBe(false);
     expect(status.nextSpinAt).toBe(RESET0 + DAY_MS);
   });
 
   test('crossing the reset boundary re-opens the free spin', () => {
-    const state: WheelState = { lastFreeSpinAt: RESET0 + 1_000 };
+    const state: WheelState = { ...createInitialWheelState(), lastFreeSpinAt: RESET0 + 1_000 };
     // Same reset day, later: still locked.
     expect(getWheelStatus(state, RESET0 + DAY_MS - 1).canSpin).toBe(false);
     // Next reset day: available again.
@@ -105,10 +106,11 @@ describe('getWheelStatus (daily gating + UTC midnight rollover)', () => {
   });
 
   test('future lastFreeSpinAt (clock manipulation) is clamped and stays locked today', () => {
-    const state: WheelState = { lastFreeSpinAt: DAY0 + 10 * DAY_MS };
+    const state: WheelState = { ...createInitialWheelState(), lastFreeSpinAt: DAY0 + 10 * DAY_MS };
     // now is "today" but the save claims a spin 10 days in the future.
     const status = getWheelStatus(state, DAY0 + 5_000);
     expect(status.canSpin).toBe(false);
+    expect(status.canBonusSpin).toBe(false);
   });
 });
 
@@ -210,7 +212,10 @@ describe('applyWheelReward (스핀 결과 적용, #209)', () => {
     const state = createInitialState();
     const next = applyWheelReward(
       state,
-      { reward: { type: 'gold', slotKey: 'gold_small', gold: 500 }, newState: { lastFreeSpinAt: NOW } },
+      {
+        reward: { type: 'gold', slotKey: 'gold_small', gold: 500 },
+        newState: { ...state.wheelState, lastFreeSpinAt: NOW },
+      },
       NOW
     );
     expect(next.gold).toBe(state.gold + 500);
@@ -221,7 +226,10 @@ describe('applyWheelReward (스핀 결과 적용, #209)', () => {
     const state = createInitialState();
     const next = applyWheelReward(
       state,
-      { reward: { type: 'rp', slotKey: 'research_boon', rp: 42 }, newState: { lastFreeSpinAt: NOW } },
+      {
+        reward: { type: 'rp', slotKey: 'research_boon', rp: 42 },
+        newState: { ...state.wheelState, lastFreeSpinAt: NOW },
+      },
       NOW
     );
     expect(next.research.points).toBe(state.research.points + 42);
@@ -236,7 +244,7 @@ describe('applyWheelReward (스핀 결과 적용, #209)', () => {
       state,
       {
         reward: { type: 'harvest_boost', slotKey: 'harvest_frenzy', durationMs: WHEEL_HARVEST_BOOST_DURATION_MS },
-        newState: { lastFreeSpinAt: NOW },
+        newState: { ...state.wheelState, lastFreeSpinAt: NOW },
       },
       NOW
     );
@@ -344,7 +352,7 @@ describe('spinWheel (one free spin/day, no double claim)', () => {
     expect(second).toBeNull();
   });
 
-  test('a spin re-opens after crossing UTC midnight', () => {
+  test('a spin re-opens after crossing the shared reset boundary', () => {
     const first = spinWheel(createInitialWheelState(), 1000, DAY0 + 1_000, constRng(0.5))!;
     const nextDay = spinWheel(first.newState, 1000, DAY0 + DAY_MS + 5_000, constRng(0.5));
     expect(nextDay).not.toBeNull();
@@ -358,17 +366,76 @@ describe('spinWheel (one free spin/day, no double claim)', () => {
   });
 });
 
-describe('normalizeWheelState', () => {
-  test('junk normalizes to "never spun"', () => {
-    expect(normalizeWheelState(undefined)).toEqual({ lastFreeSpinAt: null });
-    expect(normalizeWheelState('nope')).toEqual({ lastFreeSpinAt: null });
-    expect(normalizeWheelState({ lastFreeSpinAt: 'x' })).toEqual({ lastFreeSpinAt: null });
-    expect(normalizeWheelState({ lastFreeSpinAt: -1 })).toEqual({ lastFreeSpinAt: null });
-    expect(normalizeWheelState({ lastFreeSpinAt: NaN })).toEqual({ lastFreeSpinAt: null });
+describe('spinBonusWheel (광고 보너스 일일 cap, #298)', () => {
+  test('무료 스핀 전에는 닫혀 있고 무료 스핀 소비 후 같은 슬롯 계산으로 한 번 열린다', () => {
+    const initial = createInitialWheelState();
+    expect(getWheelStatus(initial, RESET0 + 1_000).canBonusSpin).toBe(false);
+    expect(spinBonusWheel(initial, 2_000, RESET0 + 1_000, constRng(0))).toBeNull();
+
+    const free = spinWheel(initial, 2_000, RESET0 + 1_000, constRng(0.5))!;
+    const ready = getWheelStatus(free.newState, RESET0 + 2_000);
+    expect(ready.canSpin).toBe(false);
+    expect(ready.canBonusSpin).toBe(true);
+    expect(ready.bonusSpinsUsedToday).toBe(0);
+
+    const bonus = spinBonusWheel(free.newState, 2_000, RESET0 + 2_000, constRng(0))!;
+    expect(bonus.reward).toEqual(getWheelSlotReward(WHEEL_SLOTS[0]!, 2_000));
+    expect(bonus.newState.lastFreeSpinAt).toBe(free.newState.lastFreeSpinAt);
+    expect(bonus.newState.lastBonusSpinAt).toBe(RESET0 + 2_000);
+    expect(bonus.newState.bonusSpinsUsed).toBe(1);
   });
 
-  test('a valid timestamp is preserved', () => {
-    expect(normalizeWheelState({ lastFreeSpinAt: DAY0 })).toEqual({ lastFreeSpinAt: DAY0 });
+  test('같은 리셋일의 두 번째 보너스는 거부되고 다음 리셋일에는 무료부터 다시 요구한다', () => {
+    const free = spinWheel(createInitialWheelState(), 1_000, RESET0 + 1_000, constRng(0.2))!;
+    const bonus = spinBonusWheel(free.newState, 1_000, RESET0 + 2_000, constRng(0.2))!;
+    expect(spinBonusWheel(bonus.newState, 1_000, RESET0 + 3_000, constRng(0.2))).toBeNull();
+
+    const nextDayStatus = getWheelStatus(bonus.newState, RESET0 + DAY_MS + 1_000);
+    expect(nextDayStatus.canSpin).toBe(true);
+    expect(nextDayStatus.canBonusSpin).toBe(false);
+    expect(nextDayStatus.bonusSpinsUsedToday).toBe(0);
+
+    const nextFree = spinWheel(bonus.newState, 1_000, RESET0 + DAY_MS + 1_000, constRng(0.2))!;
+    expect(nextFree.newState.bonusSpinsUsed).toBe(0);
+    expect(nextFree.newState.lastBonusSpinAt).toBe(bonus.newState.lastBonusSpinAt);
+    expect(getWheelStatus(nextFree.newState, RESET0 + DAY_MS + 2_000).canBonusSpin).toBe(true);
+  });
+});
+
+describe('normalizeWheelState', () => {
+  test('junk normalizes to "never spun"', () => {
+    expect(normalizeWheelState(undefined)).toEqual(createInitialWheelState());
+    expect(normalizeWheelState('nope')).toEqual(createInitialWheelState());
+    expect(normalizeWheelState({ lastFreeSpinAt: 'x' })).toEqual(createInitialWheelState());
+    expect(normalizeWheelState({ lastFreeSpinAt: -1 })).toEqual(createInitialWheelState());
+    expect(normalizeWheelState({ lastFreeSpinAt: NaN })).toEqual(createInitialWheelState());
+  });
+
+  test('레거시 timestamp는 보존되고 신규 보너스 필드는 안전한 초기값으로 채워진다', () => {
+    expect(normalizeWheelState({ lastFreeSpinAt: DAY0 })).toEqual({
+      ...createInitialWheelState(),
+      lastFreeSpinAt: DAY0,
+    });
+  });
+
+  test('유효한 보너스 일자·횟수·시각을 보존하고 잘못된 값은 0/null로 복구한다', () => {
+    const day = getResetDayIndex(DAY0);
+    expect(
+      normalizeWheelState({
+        lastFreeSpinAt: DAY0,
+        bonusSpinDayIndex: day,
+        bonusSpinsUsed: 1.9,
+        lastBonusSpinAt: DAY0 + 1_000,
+      })
+    ).toEqual({
+      lastFreeSpinAt: DAY0,
+      bonusSpinDayIndex: day,
+      bonusSpinsUsed: 1,
+      lastBonusSpinAt: DAY0 + 1_000,
+    });
+    expect(
+      normalizeWheelState({ bonusSpinDayIndex: -1, bonusSpinsUsed: 99, lastBonusSpinAt: 'bad' })
+    ).toEqual(createInitialWheelState());
   });
 });
 
@@ -379,21 +446,29 @@ describe('save migration & prestige', () => {
 
   test('a save without wheelState loads as spinnable', () => {
     const migrated = migrateLoadedState({} as Partial<GameState>, createInitialState());
-    expect(migrated.wheelState).toEqual({ lastFreeSpinAt: null });
+    expect(migrated.wheelState).toEqual(createInitialWheelState());
     expect(getWheelStatus(migrated.wheelState, DAY0).canSpin).toBe(true);
   });
 
   test('a malformed wheelState is repaired on load', () => {
     const loaded = { wheelState: { lastFreeSpinAt: 'bad' } } as unknown as Partial<GameState>;
     const migrated = migrateLoadedState(loaded, createInitialState());
-    expect(migrated.wheelState).toEqual({ lastFreeSpinAt: null });
+    expect(migrated.wheelState).toEqual(createInitialWheelState());
   });
 
   test('the last spin time survives prestige (meta layer preserved)', () => {
     const base = createInitialState();
-    const spun: GameState = { ...base, wheelState: { lastFreeSpinAt: DAY0 } };
+    const spun: GameState = {
+      ...base,
+      wheelState: {
+        lastFreeSpinAt: DAY0,
+        bonusSpinDayIndex: getResetDayIndex(DAY0),
+        bonusSpinsUsed: 1,
+        lastBonusSpinAt: DAY0 + 1_000,
+      },
+    };
     const prestiged = createPrestigedState(spun);
-    expect(prestiged.wheelState).toEqual({ lastFreeSpinAt: DAY0 });
+    expect(prestiged.wheelState).toEqual(spun.wheelState);
   });
 
   test('reward scales with progression via getRewardedGoldAmount', () => {

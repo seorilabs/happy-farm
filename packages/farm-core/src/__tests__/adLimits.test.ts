@@ -11,6 +11,8 @@ import {
   parseAdLimitsOverrides,
   recordRewardedAdUsage,
   resetAdLimits,
+  spinBonusWheel,
+  spinWheel,
   type GameState,
 } from '../';
 
@@ -129,6 +131,23 @@ describe('게이팅 함수가 적용된 오버라이드를 소비한다', () => 
     // 일일 count는 다음 리셋일로 넘어가 0이지만 lastUsedAt 기반 cooldown은 유지된다.
     expect(getRewardedAdLimitStatus(shown, 'offlineBonusAd', nextReset + 1).allowed).toBe(false);
   });
+
+  test('룰렛 광고 cap/cooldown은 중복 AdUsage가 아니라 WheelState를 source of truth로 쓴다', () => {
+    applyAdLimitsOverrides({ wheelBonusAdDailyLimit: 1, wheelBonusAdCooldownMs: 10_000 });
+    const base = createInitialState();
+    const free = spinWheel(base.wheelState, 1_000, NOW, () => 0)!;
+    const afterFree: GameState = { ...base, wheelState: free.newState };
+    expect(getRewardedAdLimitStatus(afterFree, 'wheelBonusAd', NOW + 1).allowed).toBe(true);
+
+    const bonus = spinBonusWheel(afterFree.wheelState, 1_000, NOW + 2, () => 0)!;
+    const afterBonus: GameState = { ...afterFree, wheelState: bonus.newState };
+    expect(getRewardedAdLimitStatus(afterBonus, 'wheelBonusAd', NOW + 3).allowed).toBe(false);
+
+    const usage = recordRewardedAdUsage(afterBonus, 'wheelBonusAd', NOW + 3);
+    expect(usage.harvestBonusAd).toEqual(base.adUsage.harvestBonusAd);
+    expect(usage.rewardedGoldDailyCount).toBe(0);
+    expect(usage.growthAd.dailyCount).toBe(0);
+  });
 });
 
 describe('보상형 광고 빈도 게이트 정합성(check-balance 가드와 동일 불변식)', () => {
@@ -138,6 +157,7 @@ describe('보상형 광고 빈도 게이트 정합성(check-balance 가드와 �
     { limit: 'harvestBonusAdDailyLimit', cooldown: 'harvestBonusAdCooldownMs' },
     { limit: 'plotDiscountAdDailyLimit', cooldown: 'plotDiscountAdCooldownMs' },
     { limit: 'offlineBonusAdDailyLimit', cooldown: 'offlineBonusAdCooldownMs' },
+    { limit: 'wheelBonusAdDailyLimit', cooldown: 'wheelBonusAdCooldownMs' },
   ] as const;
 
   test('각 보상 광고의 일일 한도는 1 이상 정수, 쿨다운은 0 이상 유한 값', () => {
@@ -160,6 +180,11 @@ describe('보상형 광고 빈도 게이트 정합성(check-balance 가드와 �
   test('plotDiscountAd는 일일 한도 1이라 쿨다운 0이 허용된다(하루 단위 캡이 곧 게이트)', () => {
     expect(DEFAULT_AD_LIMITS.plotDiscountAdDailyLimit).toBe(1);
     expect(DEFAULT_AD_LIMITS.plotDiscountAdCooldownMs).toBe(0);
+  });
+
+  test('wheelBonusAd도 일일 한도 1이라 쿨다운 0이 허용된다', () => {
+    expect(DEFAULT_AD_LIMITS.wheelBonusAdDailyLimit).toBe(1);
+    expect(DEFAULT_AD_LIMITS.wheelBonusAdCooldownMs).toBe(0);
   });
 
   test('offlineBonusAd는 일일 한도 1과 리셋 경계 방어용 6시간 쿨다운을 쓴다', () => {

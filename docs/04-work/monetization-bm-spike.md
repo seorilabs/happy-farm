@@ -10,7 +10,7 @@ happy-farm은 현재 **광고 only** 수익화다(보상형 5지면 + 전면 2�
 
 ## 1. 현황 요약 (코드 기준)
 - **광고 지면**: `REWARDED_AD_PLACEMENTS`(shop_gold_reward, shop_plot_discount, growth_ad_sheet,
-  harvest_bonus_sheet, return_offline_bonus) + 전면(milestone, return_welcome_back).
+  harvest_bonus_sheet, return_offline_bonus, wheel_bonus_spin) + 전면(milestone, return_welcome_back).
 - **전역 토글**: 광고 on/off는 Remote Config `mobile_ads_global_enabled`로 이미 제어된다
   (mobile: `apps/mobile/src/ads/policy.ts`, AIT: `apps/ait/src/firebaseWeb/remoteConfig.ts`).
   → **광고 제거 entitlement가 생기면 이 토글 경로를 그대로 재사용**해 유저 단위로 광고를 끌 수 있다.

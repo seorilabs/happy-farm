@@ -173,10 +173,9 @@ export type GameState = {
   // self-expression / late-game gold sink — owning a decoration has no gameplay
   // effect. A meta-layer field so the collection persists across every prestige.
   placedDecorations: DecorationKey[];
-  // Daily fortune-wheel spin tracking. Only the last free-spin timestamp needs to
-  // persist; the reward slots are derived deterministically from balance data and
-  // the injected rng. A meta-layer field so the daily spin cadence carries across
-  // prestige, like dailyBonusState.
+  // Daily fortune-wheel tracking: free-spin time plus the authoritative bonus-ad
+  // day/count/last-use fields. Reward slots stay derived from balance + injected
+  // rng. A meta-layer field so both daily caps carry across prestige.
   wheelState: WheelState;
   // Animal husbandry (coop/barn) ownership + in-progress feeding. A supplementary
   // re-visit loop with a cadence distinct from crops. Ownership and feeding
