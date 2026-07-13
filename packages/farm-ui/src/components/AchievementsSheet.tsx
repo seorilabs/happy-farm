@@ -4,6 +4,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import {
   ACHIEVEMENT_TITLES,
   ACHIEVEMENT_TRACKS,
+  claimAllAchievements,
   formatMoney,
   getAchievementTrackLabel,
   getAchievementTrackStatus,
@@ -23,22 +24,34 @@ export function AchievementsSheet({
   locale,
   messages,
   onClaim,
+  onClaimAll,
   onSelectTitle,
 }: {
   gameState: GameState;
   locale: SupportedLocale;
   messages: FarmMessages;
   onClaim: (trackKey: AchievementTrackKey) => void;
+  onClaimAll: () => void;
   onSelectTitle: (titleKey: TitleKey | null) => void;
 }) {
+  const claimAllPreview = claimAllAchievements(gameState);
+
   return (
     <View>
       <Text style={sheetPartStyles.sheetSectionTitle}>{messages.achievementTracksSection}</Text>
+      <View style={styles.claimAllArea}>
+        <SheetAction
+          testID="achievement-claim-all-action"
+          label={messages.achievementClaimAllAction(claimAllPreview.totalStars)}
+          disabled={claimAllPreview.claimedCount === 0}
+          onPress={onClaimAll}
+        />
+      </View>
       {ACHIEVEMENT_TRACKS.map((track) => {
         const status = getAchievementTrackStatus(gameState, track.key);
         const trackName = getAchievementTrackLabel(track.key, locale).name;
         return (
-          <View key={track.key} style={styles.trackCard}>
+          <View key={track.key} style={styles.trackCard} testID={`achievement-track-${track.key}`}>
             <View style={styles.trackHeader}>
               <Text style={styles.trackTitle} numberOfLines={1}>
                 {track.icon} {trackName}
@@ -56,6 +69,7 @@ export function AchievementsSheet({
             </View>
             {status.claimable ? (
               <SheetAction
+                testID={`achievement-claim-${track.key}`}
                 label={messages.achievementClaimAction(status.track.starsPerTier)}
                 onPress={() => onClaim(track.key)}
               />
@@ -96,6 +110,9 @@ export function AchievementsSheet({
 }
 
 const styles = StyleSheet.create({
+  claimAllArea: {
+    marginBottom: 10,
+  },
   trackCard: {
     marginBottom: 10,
     padding: 14,

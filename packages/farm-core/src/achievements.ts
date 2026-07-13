@@ -116,13 +116,17 @@ export function getAchievementTrackStatus(gameState: GameState, trackKey: Achiev
   }
 
   const nextThreshold = getAchievementThreshold(track, nextTier);
+  const claimable =
+    Number.isFinite(statValue) &&
+    Number.isFinite(nextThreshold) &&
+    statValue >= nextThreshold;
   return {
     track,
     statValue,
     claimedTierCount: claimedTiers.size,
     nextTier,
     nextThreshold,
-    claimable: statValue >= nextThreshold,
+    claimable,
     progressRatio: nextThreshold <= 0 ? 1 : Math.min(1, Math.max(0, statValue / nextThreshold)),
   };
 }
@@ -153,6 +157,51 @@ export function claimNextAchievementTier(
     },
     claimedTier: status.nextTier,
     starsAwarded,
+  };
+}
+
+export type ClaimedAchievementTier = {
+  trackKey: AchievementTrackKey;
+  tier: number;
+  starsAwarded: number;
+};
+
+export type ClaimAllAchievementsResult = {
+  state: GameState;
+  claims: ClaimedAchievementTier[];
+  claimedCount: number;
+  totalStars: number;
+};
+
+// 카탈로그 순서대로 각 트랙의 수령 가능한 티어를 낮은 티어부터 모두 소진한다.
+// 단일 티어 전이만 반복해 순서·지급 규칙을 한 곳에 유지하며, no-op은 입력 상태를
+// 그대로 반환한다. claims 요약은 UI 피드백과 티어별 analytics에 사용한다.
+export function claimAllAchievements(gameState: GameState): ClaimAllAchievementsResult {
+  let state = gameState;
+  const claims: ClaimedAchievementTier[] = [];
+  let totalStars = 0;
+
+  for (const track of ACHIEVEMENT_TRACKS) {
+    while (true) {
+      const result = claimNextAchievementTier(state, track.key);
+      if (result == null) {
+        break;
+      }
+      state = result.state;
+      claims.push({
+        trackKey: track.key,
+        tier: result.claimedTier,
+        starsAwarded: result.starsAwarded,
+      });
+      totalStars += result.starsAwarded;
+    }
+  }
+
+  return {
+    state,
+    claims,
+    claimedCount: claims.length,
+    totalStars,
   };
 }
 

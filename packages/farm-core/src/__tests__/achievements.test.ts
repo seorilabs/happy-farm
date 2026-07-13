@@ -3,6 +3,7 @@
 import {
   ACHIEVEMENT_TITLES,
   ACHIEVEMENT_TRACKS,
+  claimAllAchievements,
   claimNextAchievementTier,
   getAchievementClaimKey,
   getAchievementStatValue,
@@ -73,6 +74,82 @@ describe('achievement tracks', () => {
     const state = stateWithStats({ totalHarvests: track.base - 1 });
 
     expect(claimNextAchievementTier(state, 'harvest_total')).toBeNull();
+  });
+
+  test('claim all exhausts every claimable tier across tracks and is idempotent', () => {
+    const harvestTrack = getTrack('harvest_total');
+    const prestigeTrack = getTrack('prestige_pioneer');
+    const harvestTier = 3;
+    const prestigeTier = 2;
+    const base = stateWithStats({
+      totalHarvests: getAchievementThreshold(harvestTrack, harvestTier),
+      prestigeCount: getAchievementThreshold(prestigeTrack, prestigeTier),
+    });
+    const before: GameState = {
+      ...base,
+      prestige: { ...base.prestige, stars: 5, totalStarsEarned: 9 },
+    };
+
+    const result = claimAllAchievements(before);
+    const expectedStars =
+      harvestTier * harvestTrack.starsPerTier + prestigeTier * prestigeTrack.starsPerTier;
+
+    expect(result.claims).toEqual([
+      { trackKey: harvestTrack.key, tier: 1, starsAwarded: harvestTrack.starsPerTier },
+      { trackKey: harvestTrack.key, tier: 2, starsAwarded: harvestTrack.starsPerTier },
+      { trackKey: harvestTrack.key, tier: 3, starsAwarded: harvestTrack.starsPerTier },
+      { trackKey: prestigeTrack.key, tier: 1, starsAwarded: prestigeTrack.starsPerTier },
+      { trackKey: prestigeTrack.key, tier: 2, starsAwarded: prestigeTrack.starsPerTier },
+    ]);
+    expect(result.claimedCount).toBe(harvestTier + prestigeTier);
+    expect(result.totalStars).toBe(expectedStars);
+    expect(result.state.prestige.stars).toBe(before.prestige.stars + expectedStars);
+    expect(result.state.prestige.totalStarsEarned).toBe(before.prestige.totalStarsEarned + expectedStars);
+    expect(getClaimableAchievementCount(result.state)).toBe(0);
+    expect(before.claimedAchievements).toEqual([]);
+    expect(before.prestige).toEqual({ ...base.prestige, stars: 5, totalStarsEarned: 9 });
+
+    const second = claimAllAchievements(result.state);
+    expect(second.state).toBe(result.state);
+    expect(second.claims).toEqual([]);
+    expect(second.claimedCount).toBe(0);
+    expect(second.totalStars).toBe(0);
+  });
+
+  test('claim all fills a claimed-tier gap without duplicating existing claim keys', () => {
+    const track = getTrack('harvest_total');
+    const before: GameState = {
+      ...stateWithStats({ totalHarvests: getAchievementThreshold(track, 4) }),
+      claimedAchievements: [
+        getAchievementClaimKey(track.key, 1),
+        getAchievementClaimKey(track.key, 3),
+      ],
+    };
+
+    const result = claimAllAchievements(before);
+
+    expect(result.claims).toEqual([
+      { trackKey: track.key, tier: 2, starsAwarded: track.starsPerTier },
+      { trackKey: track.key, tier: 4, starsAwarded: track.starsPerTier },
+    ]);
+    expect(result.state.claimedAchievements).toEqual([
+      getAchievementClaimKey(track.key, 1),
+      getAchievementClaimKey(track.key, 3),
+      getAchievementClaimKey(track.key, 2),
+      getAchievementClaimKey(track.key, 4),
+    ]);
+    expect(new Set(result.state.claimedAchievements).size).toBe(result.state.claimedAchievements.length);
+  });
+
+  test('non-finite stats are never claimable and cannot trap claim all in an endless loop', () => {
+    const before = stateWithStats({ totalHarvests: Number.POSITIVE_INFINITY });
+
+    expect(getAchievementTrackStatus(before, 'harvest_total').claimable).toBe(false);
+    expect(claimNextAchievementTier(before, 'harvest_total')).toBeNull();
+    const result = claimAllAchievements(before);
+    expect(result.state).toBe(before);
+    expect(result.claimedCount).toBe(0);
+    expect(result.totalStars).toBe(0);
   });
 
   test('performHarvest feeds lifetime stats', () => {

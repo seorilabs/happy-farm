@@ -14,6 +14,7 @@ import {
   PRESTIGE_STARS_BASE,
   PRESTIGE_SKILLS,
   PRODUCTION_RECIPES,
+  claimAllAchievements,
   createInitialState,
   formatMoney,
   formatHourlyGold,
@@ -21,6 +22,7 @@ import {
   formatSignedPercent,
   getAreaCropKeys,
   getAreaUnlockRequirementText,
+  getAchievementThreshold,
   getCollectionSummary,
   getMasteryRankLabel,
   getMasteryThresholds,
@@ -721,12 +723,16 @@ describe('AchievementsSheet', () => {
         locale={LOCALE}
         messages={messages}
         onClaim={jest.fn()}
+        onClaimAll={jest.fn()}
         onSelectTitle={jest.fn()}
       />
     );
 
     expect(screen.getByText(messages.achievementTracksSection)).toBeTruthy();
     expect(screen.getByText(messages.titlesSection)).toBeTruthy();
+    const claimAllAction = screen.getByTestId('achievement-claim-all-action');
+    expect(claimAllAction.props.accessibilityLabel).toBe(messages.achievementClaimAllAction(0));
+    expect(claimAllAction.props.accessibilityState.disabled).toBe(true);
   });
 
   test('claims a track reward once its stat passes the next threshold', () => {
@@ -744,12 +750,45 @@ describe('AchievementsSheet', () => {
         locale={LOCALE}
         messages={messages}
         onClaim={onClaim}
+        onClaimAll={jest.fn()}
         onSelectTitle={jest.fn()}
       />
     );
 
     fireEvent.press(screen.getByText(messages.achievementClaimAction(track.starsPerTier)));
     expect(onClaim).toHaveBeenCalledWith(track.key);
+  });
+
+  test('claims every available track and tier from one total-star action', () => {
+    const harvestTrack = ACHIEVEMENT_TRACKS.find((track) => track.key === 'harvest_total')!;
+    const prestigeTrack = ACHIEVEMENT_TRACKS.find((track) => track.key === 'prestige_pioneer')!;
+    const base = createInitialState();
+    const state: GameState = {
+      ...base,
+      lifetimeStats: {
+        ...base.lifetimeStats,
+        totalHarvests: getAchievementThreshold(harvestTrack, 3),
+        prestigeCount: getAchievementThreshold(prestigeTrack, 2),
+      },
+    };
+    const preview = claimAllAchievements(state);
+    const onClaimAll = jest.fn();
+    const screen = render(
+      <AchievementsSheet
+        gameState={state}
+        locale={LOCALE}
+        messages={messages}
+        onClaim={jest.fn()}
+        onClaimAll={onClaimAll}
+        onSelectTitle={jest.fn()}
+      />
+    );
+
+    const action = screen.getByTestId('achievement-claim-all-action');
+    expect(action.props.accessibilityLabel).toBe(messages.achievementClaimAllAction(preview.totalStars));
+    expect(action.props.accessibilityState.disabled).toBe(false);
+    fireEvent.press(action);
+    expect(onClaimAll).toHaveBeenCalledTimes(1);
   });
 });
 

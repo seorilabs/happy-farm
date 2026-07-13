@@ -32,6 +32,7 @@ import {
   canPrestige,
   canUnlockNode,
   claimNextAchievementTier,
+  claimAllAchievements,
   collectChainIncome,
   collectReturnOfflineGold,
   collectReturnSummaryOfflineGold,
@@ -54,6 +55,7 @@ import {
   setActiveTitle,
   unlockNode,
   type AchievementTrackKey,
+  type ClaimedAchievementTier,
   type MasteryRankKey,
   type MutationKey,
   type PrestigeSkillKey,
@@ -502,6 +504,12 @@ type PendingFarmCommandEffect =
       surface: 'animals' | 'workshop';
       collectedCount: number;
       totalGold: number;
+    }
+  | {
+      id: number;
+      type: 'achievementsClaimed';
+      mode: 'single' | 'all';
+      claims: ClaimedAchievementTier[];
     };
 
 type MasteryRankUpNotice = {
@@ -895,7 +903,7 @@ function FarmGameBody({
   const gameStartTrackedRef = useRef(false);
   const firstSeedSelectedRef = useRef(false);
   const claimedRewardKeysRef = useRef<Set<CollectionRewardKey>>(new Set());
-  const claimedAchievementKeysRef = useRef<Set<string>>(new Set());
+  const achievementClaimInFlightRef = useRef(false);
   const commandEffectIdRef = useRef(0);
   const pendingCommandEffectsRef = useRef<PendingFarmCommandEffect[]>([]);
   const handledCommandEffectIdsRef = useRef<Set<number>>(new Set());
@@ -1360,6 +1368,32 @@ function FarmGameBody({
               : messages.workshopCollectedAllToast(formatMoney(effect.totalGold, locale), effect.collectedCount)
           );
         }
+        continue;
+      }
+
+      if (effect.type === 'achievementsClaimed') {
+        achievementClaimInFlightRef.current = false;
+        if (effect.claims.length === 0) {
+          continue;
+        }
+        const context = analyticsContext();
+        let totalStars = 0;
+        for (const claim of effect.claims) {
+          totalStars += claim.starsAwarded;
+          farmAnalytics.trackAchievementClaimed({
+            trackKey: claim.trackKey,
+            tier: claim.tier,
+            starsAwarded: claim.starsAwarded,
+            context,
+          });
+        }
+        toast(
+          effect.mode === 'all'
+            ? messages.achievementClaimedAllToast(totalStars)
+            : messages.achievementClaimedToast(totalStars),
+        );
+        triggerHaptic(50);
+        playSoundEffect('reward');
         continue;
       }
 
@@ -2528,27 +2562,48 @@ function FarmGameBody({
   }
 
   function claimAchievement(trackKey: AchievementTrackKey) {
-    const preview = claimNextAchievementTier(gameState, trackKey);
-    if (preview == null) {
+    if (achievementClaimInFlightRef.current) {
       return;
     }
-    // Same double-tap guard pattern as collection rewards: state updates are
-    // idempotent, but the toast must fire exactly once per claimed tier.
-    const guardKey = `${trackKey}:${preview.claimedTier}`;
-    if (claimedAchievementKeysRef.current.has(guardKey)) {
-      return;
-    }
-    claimedAchievementKeysRef.current.add(guardKey);
-    setGameState((state) => claimNextAchievementTier(state, trackKey)?.state ?? state);
-    farmAnalytics.trackAchievementClaimed({
-      trackKey,
-      tier: preview.claimedTier,
-      starsAwarded: preview.starsAwarded,
-      context: analyticsContext(),
+    achievementClaimInFlightRef.current = true;
+    const effectId = ++commandEffectIdRef.current;
+    setGameState((state) => {
+      const result = claimNextAchievementTier(state, trackKey);
+      if (!pendingCommandEffectsRef.current.some((effect) => effect.id === effectId)) {
+        pendingCommandEffectsRef.current.push({
+          id: effectId,
+          type: 'achievementsClaimed',
+          mode: 'single',
+          claims:
+            result == null
+              ? []
+              : [{ trackKey, tier: result.claimedTier, starsAwarded: result.starsAwarded }],
+        });
+      }
+      return result?.state ?? state;
     });
-    toast(messages.achievementClaimedToast(preview.starsAwarded));
-    triggerHaptic(50);
-    playSoundEffect('reward');
+    setCommandEffectVersion((version) => version + 1);
+  }
+
+  function claimAllAchievementRewards() {
+    if (achievementClaimInFlightRef.current) {
+      return;
+    }
+    achievementClaimInFlightRef.current = true;
+    const effectId = ++commandEffectIdRef.current;
+    setGameState((state) => {
+      const result = claimAllAchievements(state);
+      if (!pendingCommandEffectsRef.current.some((effect) => effect.id === effectId)) {
+        pendingCommandEffectsRef.current.push({
+          id: effectId,
+          type: 'achievementsClaimed',
+          mode: 'all',
+          claims: result.claims,
+        });
+      }
+      return result.state;
+    });
+    setCommandEffectVersion((version) => version + 1);
   }
 
   function selectTitle(titleKey: TitleKey | null) {
@@ -3117,7 +3172,7 @@ function FarmGameBody({
     flushCropReadySummary();
     cropReadyLogStateRef.current = {};
     claimedRewardKeysRef.current.clear();
-    claimedAchievementKeysRef.current.clear();
+    achievementClaimInFlightRef.current = false;
     prestigedLevelsRef.current.clear();
     autoHarvestSummaryRef.current = { harvestedCount: 0, replantedCount: 0, windowStartedAt: 0 };
     if (comboTimerRef.current != null) {
@@ -4346,6 +4401,7 @@ function FarmGameBody({
             locale={locale}
             messages={messages}
             onClaim={claimAchievement}
+            onClaimAll={claimAllAchievementRewards}
             onSelectTitle={selectTitle}
           />
         ) : null}
