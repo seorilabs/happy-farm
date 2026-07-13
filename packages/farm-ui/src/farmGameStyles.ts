@@ -521,6 +521,9 @@ export const styles = StyleSheet.create({
   },
   // Upgrade purchase delight (#289): card-local only, so frequent purchases
   // get tactile progress feedback without occupying the full screen.
+  upgradeCardHost: {
+    position: 'relative',
+  },
   upgradeBurstOverlay: {
     ...StyleSheet.absoluteFillObject,
     zIndex: 4,

@@ -6684,57 +6684,54 @@ function ShopUpgradeRow({
   const disabled = gameState.gold < cost;
   const goldProgress = disabled ? Math.min(1, gameState.gold / cost) : undefined;
   const [burstGeneration, setBurstGeneration] = useState(0);
-  const purchaseInFlightRef = useRef(false);
-
-  // Keep a same-frame rapid double press from charging twice with the stale
-  // level/cost closure. A committed level change re-enables the next purchase.
-  useEffect(() => {
-    purchaseInFlightRef.current = false;
-  }, [level]);
+  const purchasedLevelRef = useRef<number | null>(null);
 
   return (
-    <ShopCard
-      title={title}
-      desc={messages.upgradeDescWithLevel(desc, level)}
-      price={`${formatMoney(cost, locale)}G`}
-      priceTone={kind}
-      disabled={disabled}
-      goldProgress={goldProgress}
-      overlay={
-        burstGeneration > 0 ? (
-          <UpgradeBurst
-            key={burstGeneration}
-            kind={kind}
-            onComplete={() =>
-              setBurstGeneration((current) => (current === burstGeneration ? 0 : current))
+    <View style={styles.upgradeCardHost}>
+      <ShopCard
+        title={title}
+        desc={messages.upgradeDescWithLevel(desc, level)}
+        price={`${formatMoney(cost, locale)}G`}
+        priceTone={kind}
+        disabled={disabled}
+        goldProgress={goldProgress}
+        onPress={() => {
+          // A same-frame second press still sees the same level closure. Record
+          // that level synchronously, then allow the next purchase as soon as
+          // React renders the incremented level and its newly calculated cost.
+          if (disabled || purchasedLevelRef.current === level) {
+            if (disabled) {
+              onDone(messages.insufficientGoldToast);
             }
-          />
-        ) : null
-      }
-      onPress={() => {
-        if (disabled || purchaseInFlightRef.current) {
-          if (disabled) {
-            onDone(messages.insufficientGoldToast);
+            return;
           }
-          return;
-        }
-        purchaseInFlightRef.current = true;
-        setBurstGeneration((generation) => generation + 1);
-        setGameState((state) => ({
-          ...state,
-          gold: state.gold - cost,
-          upgrades: { ...state.upgrades, [kind]: state.upgrades[kind] + 1 },
-        }));
-        analytics.trackUpgradePurchased({
-          kind,
-          cost,
-          nextLevel: level + 1,
-          context: getAnalyticsContext(gameState),
-        });
-        onDone(messages.researchCompletedToast);
-        onMilestone();
-      }}
-    />
+          purchasedLevelRef.current = level;
+          setBurstGeneration((generation) => generation + 1);
+          setGameState((state) => ({
+            ...state,
+            gold: state.gold - cost,
+            upgrades: { ...state.upgrades, [kind]: state.upgrades[kind] + 1 },
+          }));
+          analytics.trackUpgradePurchased({
+            kind,
+            cost,
+            nextLevel: level + 1,
+            context: getAnalyticsContext(gameState),
+          });
+          onDone(messages.researchCompletedToast);
+          onMilestone();
+        }}
+      />
+      {burstGeneration > 0 ? (
+        <UpgradeBurst
+          key={burstGeneration}
+          kind={kind}
+          onComplete={() =>
+            setBurstGeneration((current) => (current === burstGeneration ? 0 : current))
+          }
+        />
+      ) : null}
+    </View>
   );
 }
 
