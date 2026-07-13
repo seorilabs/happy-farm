@@ -1,17 +1,21 @@
 import React from 'react';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { CropGlyph } from '../farmArt';
 import {
   COLLECTION_FULL_REWARD_KEY,
   CROPS,
+  MASTERY_RANKS,
   MUTATION_KINDS,
   formatMoney,
+  formatSignedPercent,
   getAreaLabel,
   getAreaUnlockRequirementText,
   getCropLabel,
+  getMasteryRankLabel,
   getMasteryStatus,
   getMutationCollectionSummary,
+  getMutationLabel,
   isAreaUnlocked,
   isCropDiscovered,
   isMutationDiscovered,
@@ -61,6 +65,117 @@ function MutationBadges({ gameState, cropKey }: { gameState: GameState; cropKey:
           </View>
         );
       })}
+    </View>
+  );
+}
+
+function MasteryDetails({
+  gameState,
+  cropKey,
+  locale,
+  messages,
+}: {
+  gameState: GameState;
+  cropKey: CropKey;
+  locale: SupportedLocale;
+  messages: FarmMessages;
+}) {
+  const mastery = getMasteryStatus(gameState, cropKey);
+
+  return (
+    <View style={styles.detailSection} testID="collection-detail-mastery-section">
+      <Text style={styles.detailSectionTitle}>{messages.collectionMasteryBenefitsTitle}</Text>
+      <View style={styles.detailRows}>
+        {MASTERY_RANKS.map((rank, index) => {
+          const achieved = mastery.rankIndex >= index;
+          const current = mastery.rank?.key === rank.key;
+          const rankName = getMasteryRankLabel(rank.key, locale).name;
+          const benefit = messages.collectionMasteryBenefit(
+            formatSignedPercent(rank.sellBonus * 100, locale),
+            formatSignedPercent(rank.speedBonus * 100, locale),
+          );
+          return (
+            <View
+              key={rank.key}
+              testID={`collection-mastery-rank-${rank.key}`}
+              style={[
+                styles.detailRow,
+                achieved && styles.detailRowAchieved,
+                current && styles.detailRowCurrent,
+              ]}
+              accessible
+              accessibilityLabel={`${rankName}, ${benefit}`}
+              accessibilityState={{ selected: current }}
+            >
+              <Text style={styles.detailRowIcon}>{rank.icon}</Text>
+              <View style={styles.detailRowTextGroup}>
+                <Text style={styles.detailRowName}>{rankName}</Text>
+                <Text style={styles.detailRowDescription} numberOfLines={2}>
+                  {benefit}
+                </Text>
+              </View>
+              {current ? (
+                <Text style={[styles.detailBadge, styles.detailBadgeCurrent]}>
+                  {messages.collectionMasteryCurrentBadge}
+                </Text>
+              ) : achieved ? (
+                <Text style={styles.detailBadge}>{messages.collectionMasteryAchievedBadge}</Text>
+              ) : null}
+            </View>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+function MutationDetails({
+  gameState,
+  cropKey,
+  locale,
+  messages,
+}: {
+  gameState: GameState;
+  cropKey: CropKey;
+  locale: SupportedLocale;
+  messages: FarmMessages;
+}) {
+  return (
+    <View style={styles.detailSection} testID="collection-detail-mutation-section">
+      <Text style={styles.detailSectionTitle}>{messages.collectionMutationCatalogTitle}</Text>
+      <View style={styles.detailRows}>
+        {MUTATION_KINDS.map((kind) => {
+          const discovered = isMutationDiscovered(gameState, cropKey, kind.key);
+          const mutationName = getMutationLabel(kind.key, locale).name;
+          const benefit = messages.collectionMutationBenefit(
+            kind.sellMultiplier.toLocaleString(locale),
+            getMasteryRankLabel(kind.minRank, locale).name,
+          );
+          const discoveryLabel = discovered
+            ? messages.collectionMutationDiscoveredBadge
+            : messages.collectionMutationUndiscoveredBadge;
+          return (
+            <View
+              key={kind.key}
+              testID={`collection-mutation-kind-${kind.key}`}
+              style={[styles.detailRow, !discovered && styles.detailRowUndiscovered]}
+              accessible
+              accessibilityLabel={`${mutationName}, ${benefit}, ${discoveryLabel}`}
+            >
+              <Text style={styles.detailRowIcon}>{kind.icon}</Text>
+              <View style={styles.detailRowTextGroup}>
+                <Text style={styles.detailRowName}>{mutationName}</Text>
+                <Text style={styles.detailRowDescription} numberOfLines={2}>
+                  {benefit}
+                </Text>
+              </View>
+              <Text style={[styles.detailBadge, discovered && styles.detailBadgeDiscovered]}>
+                {discoveryLabel}
+              </Text>
+            </View>
+          );
+        })}
+      </View>
     </View>
   );
 }
@@ -187,23 +302,43 @@ export function CollectionSheet({
           animationType="fade"
           onRequestClose={() => setDetailCropKey(null)}
         >
-          <Pressable
-            style={styles.detailBackdrop}
-            onPress={() => setDetailCropKey(null)}
-            testID="collection-detail-backdrop"
-          >
-            {/* 카드 내부 탭은 배경으로 전파돼 닫히지 않도록 빈 onPress로 막는다. */}
-            <Pressable style={styles.detailCard} onPress={() => {}} testID="collection-detail-card">
-              <CropGlyph cropKey={detailCropKey} emoji={detailCrop.icon} size={52} textStyle={styles.detailIcon} />
-              <Text style={styles.detailName}>{detailLabel.name}</Text>
-              <Text style={styles.detailValue}>{formatMoney(detailCrop.sell, locale)}G</Text>
-              <Text style={styles.detailDescription}>{detailLabel.description}</Text>
+          <View style={styles.detailBackdrop}>
+            <Pressable
+              style={StyleSheet.absoluteFill}
+              onPress={() => setDetailCropKey(null)}
+              testID="collection-detail-backdrop"
+            />
+            <View style={styles.detailCard} testID="collection-detail-card">
+              <ScrollView
+                style={styles.detailScroll}
+                contentContainerStyle={styles.detailContent}
+                showsVerticalScrollIndicator
+                bounces={false}
+                testID="collection-detail-scroll"
+              >
+                <CropGlyph cropKey={detailCropKey} emoji={detailCrop.icon} size={52} textStyle={styles.detailIcon} />
+                <Text style={styles.detailName}>{detailLabel.name}</Text>
+                <Text style={styles.detailValue}>{formatMoney(detailCrop.sell, locale)}G</Text>
+                <Text style={styles.detailDescription}>{detailLabel.description}</Text>
+                <MasteryDetails
+                  gameState={gameState}
+                  cropKey={detailCropKey}
+                  locale={locale}
+                  messages={messages}
+                />
+                <MutationDetails
+                  gameState={gameState}
+                  cropKey={detailCropKey}
+                  locale={locale}
+                  messages={messages}
+                />
+              </ScrollView>
               <SheetAction
                 label={messages.collectionDetailCloseAction}
                 onPress={() => setDetailCropKey(null)}
               />
-            </Pressable>
-          </Pressable>
+            </View>
+          </View>
         </Modal>
       ) : null}
     </View>
@@ -228,12 +363,22 @@ export const styles = StyleSheet.create({
   detailCard: {
     width: '100%',
     maxWidth: 320,
+    maxHeight: '86%',
     backgroundColor: '#ffffff',
     borderRadius: 16,
     paddingVertical: 20,
     paddingHorizontal: 20,
+    gap: 8,
+  },
+  detailScroll: {
+    width: '100%',
+    minHeight: 0,
+    flexShrink: 1,
+  },
+  detailContent: {
     alignItems: 'center',
     gap: 8,
+    paddingBottom: 4,
   },
   detailIcon: {
     fontSize: 48,
@@ -258,6 +403,85 @@ export const styles = StyleSheet.create({
     lineHeight: 19,
     fontWeight: '600',
     textAlign: 'center',
+  },
+  detailSection: {
+    width: '100%',
+    marginTop: 6,
+    gap: 6,
+  },
+  detailSectionTitle: {
+    color: '#253126',
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: '900',
+  },
+  detailRows: {
+    gap: 6,
+  },
+  detailRow: {
+    minHeight: 46,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderWidth: 1,
+    borderColor: '#d0d5dd',
+    borderRadius: 10,
+    backgroundColor: '#ffffff',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  detailRowAchieved: {
+    borderColor: '#bad7c3',
+    backgroundColor: '#f3fbf5',
+  },
+  detailRowCurrent: {
+    borderWidth: 2,
+    borderColor: '#247241',
+  },
+  detailRowUndiscovered: {
+    borderColor: '#e1e5ea',
+    backgroundColor: '#f7f8fa',
+  },
+  detailRowIcon: {
+    width: 24,
+    fontSize: 18,
+    lineHeight: 22,
+    textAlign: 'center',
+  },
+  detailRowTextGroup: {
+    minWidth: 0,
+    flex: 1,
+  },
+  detailRowName: {
+    color: '#344054',
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  detailRowDescription: {
+    marginTop: 1,
+    color: '#667085',
+    fontSize: 10,
+    lineHeight: 14,
+    fontWeight: '700',
+  },
+  detailBadge: {
+    flexShrink: 0,
+    overflow: 'hidden',
+    borderRadius: 999,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    color: '#667085',
+    backgroundColor: '#eaecf0',
+    fontSize: 9,
+    fontWeight: '900',
+  },
+  detailBadgeCurrent: {
+    color: '#ffffff',
+    backgroundColor: '#247241',
+  },
+  detailBadgeDiscovered: {
+    color: '#6f4e00',
+    backgroundColor: '#fff1b8',
   },
   collectionAreaHeader: {
     flexDirection: 'row',
