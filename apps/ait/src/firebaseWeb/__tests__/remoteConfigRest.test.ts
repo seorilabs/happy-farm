@@ -90,6 +90,30 @@ describe('createFirebaseRemoteConfigRestClient', () => {
     expect(post).toHaveBeenCalledTimes(2);
   });
 
+  test('시계가 뒤로 이동해 fetchedAt이 미래가 되면 캐시를 갱신하고 throttle을 복구한다', async () => {
+    const { client, post, storage, advance } = createHarness();
+
+    await client.fetchEntries();
+    advance(-500);
+    post.mockResolvedValueOnce(JSON.stringify({ entries: { mobile_ads_global_enabled: 'true' } }));
+
+    const refreshed = await client.fetchEntries();
+    const cached = JSON.parse(storage.map.get(REMOTE_CONFIG_CACHE_STORAGE_KEY) as string) as {
+      entries: Record<string, string>;
+      fetchedAt: number;
+    };
+
+    expect(refreshed).toEqual({ status: 'ready', entries: { mobile_ads_global_enabled: 'true' } });
+    expect(post).toHaveBeenCalledTimes(2);
+    expect(cached).toEqual({
+      entries: { mobile_ads_global_enabled: 'true' },
+      fetchedAt: 999_500,
+    });
+
+    await client.fetchEntries();
+    expect(post).toHaveBeenCalledTimes(2);
+  });
+
   test('네트워크 실패 시 캐시가 있으면 stale 캐시를 반환한다', async () => {
     const { client, post, advance } = createHarness();
 
