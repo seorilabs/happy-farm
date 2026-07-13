@@ -101,6 +101,53 @@ describe('trackAppsInTossAnalyticsEvent — 큐잉/정규화/전송', () => {
 
     expect(parseBody(0).events[0]?.params).toMatchObject({ app_market: 'apps_in_toss' });
   });
+
+  test('harvest_combo_completed 직렬화 payload는 GA4 이벤트 파라미터 25개 예산을 지킨다 (#348)', async () => {
+    const { appsInTossFarmAnalytics, initializeAppsInTossAnalytics } = loadAnalytics();
+
+    await initializeAppsInTossAnalytics();
+    jest.runOnlyPendingTimers();
+    mockFetch.mockClear();
+
+    appsInTossFarmAnalytics.trackHarvestComboCompleted({
+      manualHarvestCount: 10,
+      comboTier: 'legendary',
+      durationMs: 1_200,
+      baseRevenueTotal: 12_345,
+      endReason: 'timeout',
+      context: {
+        gold: 99_999,
+        plot_count: 12,
+        speed_level: 4,
+        profit_level: 5,
+        unlocked_area_count: 3,
+        harvested_crop_count: 8,
+        session_elapsed_sec: 60,
+        prestige_level: 2,
+        prestige_stars: 7,
+        research_points: 100,
+        lifetime_harvests: 50,
+      },
+    });
+    jest.runOnlyPendingTimers();
+
+    const comboEvent = parseBody(0).events.find((event) => event.name === 'harvest_combo_completed');
+    expect(comboEvent).toBeDefined();
+    expect(comboEvent?.params).toMatchObject({
+      manual_harvest_count: 10,
+      combo_tier: 'legendary',
+      duration_ms: 1_200,
+      base_revenue_total: 12_345,
+      end_reason: 'timeout',
+      schema_version: 1,
+      app_market: 'apps_in_toss',
+      session_id: expect.any(String),
+      engagement_time_msec: 100,
+    });
+    // production 22개, __DEV__에서는 debug_mode을 더해 23개다. 향후 실험 필드
+    // 2개를 추가해도 GA4 Measurement Protocol 상한(25개)을 넘지 않는다.
+    expect([22, 23]).toContain(Object.keys(comboEvent?.params ?? {}).length);
+  });
 });
 
 describe('initializeAppsInTossAnalytics — 멱등/재사용', () => {

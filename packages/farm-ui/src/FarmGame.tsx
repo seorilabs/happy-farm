@@ -83,6 +83,8 @@ import {
   type DailyBonusSource,
   type GameAnalyticsContext,
   type GameState,
+  type HarvestComboEndReason,
+  type HarvestComboTier,
   type RewardedAdController,
   type RewardedAdShowResult,
   type RewardedAdType,
@@ -471,6 +473,24 @@ export type FarmGameProps = {
 
 type GetAnalyticsContext = (state?: GameState) => GameAnalyticsContext;
 type ToolKey = 'harvest' | CropKey;
+type ManualHarvestComboAccumulator = {
+  count: number;
+  startedAt: number;
+  lastHarvestedAt: number;
+  baseRevenueTotal: number;
+  context: GameAnalyticsContext;
+};
+
+function getManualHarvestComboTier(count: number): HarvestComboTier {
+  if (count >= COMBO_LEGENDARY_THRESHOLD) {
+    return 'legendary';
+  }
+  if (count >= COMBO_GREAT_THRESHOLD) {
+    return 'great';
+  }
+  return 'normal';
+}
+
 type PendingFarmCommandEffect =
   | { id: number; type: 'plantBlocked'; reason: FarmGameCommandBlockedReason }
   | { id: number; type: 'cropPlanted'; event: CropPlantedGameEvent }
@@ -826,6 +846,13 @@ function FarmGameBody({
   const [harvestCombo, setHarvestCombo] = useState(0);
   const comboTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevComboRef = useRef(0);
+  // Analytics uses a manual-only streak independent from the display combo:
+  // Harvest All intentionally advances the visual celebration, but must never
+  // make a future manual reward look earned in the evidence baseline (#348).
+  const manualHarvestComboRef = useRef<ManualHarvestComboAccumulator | null>(null);
+  const manualHarvestComboTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const manualHarvestComboGenerationRef = useRef(0);
+  const manualHarvestComboPendingEndReasonRef = useRef<HarvestComboEndReason | null>(null);
   const [masteryRankUpNotice, setMasteryRankUpNotice] = useState<MasteryRankUpNotice | null>(null);
   const masteryRankUpTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const masteryNoticeIdRef = useRef(0);
@@ -1235,6 +1262,110 @@ function FarmGameBody({
     [farmAnalytics],
   );
 
+  const flushManualHarvestCombo = useCallback(
+    (endReason: HarvestComboEndReason, flushedAt = Date.now()) => {
+      const combo = manualHarvestComboRef.current;
+      if (combo == null) {
+        return;
+      }
+
+      // Retire the accumulator before tracking. AppState can emit inactive then
+      // background, and a delayed timer can race either callback; every later
+      // path sees null and becomes a no-op.
+      manualHarvestComboRef.current = null;
+      manualHarvestComboGenerationRef.current += 1;
+      if (manualHarvestComboTimerRef.current != null) {
+        clearTimeout(manualHarvestComboTimerRef.current);
+        manualHarvestComboTimerRef.current = null;
+      }
+
+      farmAnalytics.trackHarvestComboCompleted({
+        manualHarvestCount: combo.count,
+        comboTier: getManualHarvestComboTier(combo.count),
+        durationMs: Math.max(0, combo.lastHarvestedAt - combo.startedAt),
+        baseRevenueTotal: combo.baseRevenueTotal,
+        // A blocked JS thread can delay the timer past its logical deadline.
+        // If another boundary wins that race, preserve the streak semantics as
+        // timeout instead of attributing an already-expired streak to the
+        // later background/reset/prestige/restore action.
+        endReason:
+          endReason !== 'timeout' && flushedAt - combo.lastHarvestedAt > COMBO_WINDOW_MS
+            ? 'timeout'
+            : endReason,
+        context: combo.context,
+      });
+    },
+    [farmAnalytics],
+  );
+
+  const recordManualHarvestCombo = useCallback(
+    (harvestedAt: number, baseRevenue: number, context: GameAnalyticsContext) => {
+      const safeHarvestedAt = Number.isFinite(harvestedAt) ? harvestedAt : Date.now();
+      const previous = manualHarvestComboRef.current;
+      if (previous != null) {
+        const gapMs = safeHarvestedAt - previous.lastHarvestedAt;
+        // A delayed timer must not merge two streaks. A clock rollback also
+        // starts a fresh window instead of producing a negative duration.
+        if (gapMs < 0 || gapMs > COMBO_WINDOW_MS) {
+          flushManualHarvestCombo('timeout');
+        }
+      }
+
+      const active = manualHarvestComboRef.current;
+      const revenue = Number.isFinite(baseRevenue) ? Math.max(0, baseRevenue) : 0;
+      const next: ManualHarvestComboAccumulator =
+        active == null
+          ? {
+              count: 1,
+              startedAt: safeHarvestedAt,
+              lastHarvestedAt: safeHarvestedAt,
+              baseRevenueTotal: revenue,
+              context,
+            }
+          : {
+              ...active,
+              count: active.count + 1,
+              lastHarvestedAt: safeHarvestedAt,
+              baseRevenueTotal: active.baseRevenueTotal + revenue,
+              context,
+            };
+      manualHarvestComboRef.current = next;
+
+      if (manualHarvestComboTimerRef.current != null) {
+        clearTimeout(manualHarvestComboTimerRef.current);
+      }
+      const generation = manualHarvestComboGenerationRef.current + 1;
+      manualHarvestComboGenerationRef.current = generation;
+      // A harvest exactly COMBO_WINDOW_MS after the previous one still belongs
+      // to the same streak (`gap > window` is the split boundary). Schedule one
+      // millisecond beyond the inclusive deadline so timer/input queue order
+      // cannot make that equality nondeterministic.
+      const remainingMs = Math.max(0, next.lastHarvestedAt + COMBO_WINDOW_MS + 1 - Date.now());
+      manualHarvestComboTimerRef.current = setTimeout(() => {
+        if (manualHarvestComboGenerationRef.current !== generation) {
+          return;
+        }
+        flushManualHarvestCombo('timeout');
+      }, remainingMs);
+    },
+    [flushManualHarvestCombo],
+  );
+
+  // StrictMode mounts/unmounts effects speculatively in development. Cleanup
+  // therefore cancels local timers without emitting an artificial session end.
+  useEffect(
+    () => () => {
+      manualHarvestComboGenerationRef.current += 1;
+      if (manualHarvestComboTimerRef.current != null) {
+        clearTimeout(manualHarvestComboTimerRef.current);
+        manualHarvestComboTimerRef.current = null;
+      }
+      manualHarvestComboRef.current = null;
+      manualHarvestComboPendingEndReasonRef.current = null;
+    },
+    [],
+  );
+
   useEffect(() => {
     if (pendingCommandEffectsRef.current.length === 0) {
       return;
@@ -1397,6 +1528,8 @@ function FarmGameBody({
       }
 
       const { event } = effect;
+      const context = analyticsContext();
+      recordManualHarvestCombo(effect.now, event.goldGained, context);
       farmAnalytics.trackCropHarvested({
         cropKey: event.cropKey,
         areaKey: event.areaKey,
@@ -1404,7 +1537,7 @@ function FarmGameBody({
         revenue: event.goldGained,
         isFirstMeaningfulHarvest: event.isFirstMeaningfulHarvest,
         isFirstCropHarvest: event.isNewCropDiscovery,
-        context: analyticsContext(),
+        context,
       });
       if (event.isFirstMeaningfulHarvest) {
         showFirstHarvestCelebration({
@@ -1496,6 +1629,14 @@ function FarmGameBody({
       }
       incrementCombo(1);
     }
+
+    // AppState can arrive between a native tap and this post-commit effect.
+    // Preserve that boundary so the just-completed command is still emitted
+    // even when no accumulator existed at the exact AppState callback.
+    const pendingEndReason = manualHarvestComboPendingEndReasonRef.current;
+    if (pendingEndReason != null && manualHarvestComboRef.current != null) {
+      flushManualHarvestCombo(pendingEndReason);
+    }
   }, [
     analyticsContext,
     audio,
@@ -1508,6 +1649,8 @@ function FarmGameBody({
     messages,
     playSoundEffect,
     pulseGold,
+    flushManualHarvestCombo,
+    recordManualHarvestCombo,
     showFirstHarvestCelebration,
     showMasteryRankUpCelebration,
     toast,
@@ -1806,8 +1949,12 @@ function FarmGameBody({
     const heartbeat = setInterval(markSeen, LAST_SEEN_HEARTBEAT_MS);
     const subscription = AppState.addEventListener('change', (nextState) => {
       if (nextState === 'background' || nextState === 'inactive') {
+        manualHarvestComboPendingEndReasonRef.current = 'background';
         markSeen();
         flushCropReadySummary();
+        flushManualHarvestCombo('background');
+      } else if (nextState === 'active') {
+        manualHarvestComboPendingEndReasonRef.current = null;
       }
     });
     return () => {
@@ -1815,7 +1962,7 @@ function FarmGameBody({
       subscription.remove();
       flushCropReadySummary();
     };
-  }, [flushCropReadySummary, isSaveLoaded, persistence]);
+  }, [flushCropReadySummary, flushManualHarvestCombo, isSaveLoaded, persistence]);
 
   useEffect(() => {
     if (!isSettingsLoaded) {
@@ -2750,6 +2897,7 @@ function FarmGameBody({
       setActiveSheet(null);
       return;
     }
+    flushManualHarvestCombo('prestige');
     flushCropReadySummary();
     cropReadyLogStateRef.current = {};
     prestigedLevelsRef.current.add(guardLevel);
@@ -3172,6 +3320,7 @@ function FarmGameBody({
     await persistence.removePersistedGameState();
     // removePersistedGameState is async; flush only after it settles so ticks
     // during the await cannot leave old-farm buckets for the reset state.
+    flushManualHarvestCombo('reset');
     flushCropReadySummary();
     cropReadyLogStateRef.current = {};
     claimedRewardKeysRef.current.clear();
@@ -3259,6 +3408,7 @@ function FarmGameBody({
     try {
       const outcome = await cloudSave.restoreFromCloud();
       if (outcome.status === 'restored') {
+        flushManualHarvestCombo('cloud_restore');
         flushCropReadySummary();
         cropReadyLogStateRef.current = {};
         // The cloud payload may come from an older app version, so run it through

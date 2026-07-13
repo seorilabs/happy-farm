@@ -48,6 +48,11 @@ export type FarmNotificationKind = 'harvest' | 'daily_bonus' | 'crop_of_the_day'
 // Keep these values untranslated so BigQuery cohorts remain joinable.
 export type DailyBonusSource = 'auto_popup' | 'more' | 'welcome_back';
 
+// Stable values for the manual-only harvest-combo summary. Keep these keys
+// untranslated so BigQuery cohorts stay joinable across every market.
+export type HarvestComboTier = 'normal' | 'great' | 'legendary';
+export type HarvestComboEndReason = 'timeout' | 'background' | 'prestige' | 'reset' | 'cloud_restore';
+
 export type GameAnalyticsContext = {
   gold: number;
   plot_count: number;
@@ -383,6 +388,28 @@ export function createFarmAnalytics(track: TrackGameEvent = noopTrackGameEvent) 
         harvested_count: params.harvestedCount,
         total_gold: params.totalGold,
         special_count: params.specialCount,
+        ...params.context,
+      });
+    },
+
+    // One event per completed manual-only harvest streak. Harvest All and
+    // automation are deliberately excluded by the caller so this summary can
+    // measure the exact baseline population eligible for a future combo reward.
+    trackHarvestComboCompleted: (params: {
+      manualHarvestCount: number;
+      comboTier: HarvestComboTier;
+      durationMs: number;
+      baseRevenueTotal: number;
+      endReason: HarvestComboEndReason;
+      context: GameAnalyticsContext;
+    }) => {
+      track('harvest_combo_completed', {
+        manual_harvest_count: params.manualHarvestCount,
+        combo_tier: params.comboTier,
+        duration_ms: params.durationMs,
+        base_revenue_total: params.baseRevenueTotal,
+        end_reason: params.endReason,
+        schema_version: 1,
         ...params.context,
       });
     },

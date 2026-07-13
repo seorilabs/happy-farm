@@ -63,6 +63,36 @@ describe('farm analytics adapter contract', () => {
     );
   });
 
+  test('harvest_combo_completed는 수동 콤보 종료 계약을 exact payload로 emit한다 (#348)', () => {
+    const track = jest.fn();
+    const analytics = createFarmAnalytics(track);
+    const context = getGameAnalyticsContext(
+      createInitialState(),
+      Date.parse('2026-05-27T03:00:00.000Z'),
+      Date.parse('2026-05-27T03:00:05.000Z')
+    );
+
+    analytics.trackHarvestComboCompleted({
+      manualHarvestCount: 10,
+      comboTier: 'legendary',
+      durationMs: 1350,
+      baseRevenueTotal: 1234,
+      endReason: 'background',
+      context,
+    });
+
+    expect(track).toHaveBeenCalledTimes(1);
+    expect(track).toHaveBeenCalledWith('harvest_combo_completed', {
+      manual_harvest_count: 10,
+      combo_tier: 'legendary',
+      duration_ms: 1350,
+      base_revenue_total: 1234,
+      end_reason: 'background',
+      schema_version: 1,
+      ...context,
+    });
+  });
+
   test('rewarded-ad funnel events all carry ad_type and placement for per-placement aggregation', () => {
     const track = jest.fn();
     const analytics = createFarmAnalytics(track);
