@@ -20,6 +20,7 @@ import {
   PRESTIGE_STARS_BASE,
   PRODUCTION_RECIPES,
   REGION_ARCHETYPES,
+  claimAllAchievements,
   createFarmAnalytics,
   createInitialState,
   formatMoney,
@@ -33,6 +34,7 @@ import {
   getEnvironmentTone,
   getLocalMinutesOfDay,
   getMasteryThresholds,
+  getAchievementThreshold,
   getPrestigeCost,
   getRegionArchetypeLabel,
   getResetDayIndex,
@@ -3089,6 +3091,8 @@ describe('FarmGame UI flow', () => {
   });
 
   describe('achievement claim side-effects', () => {
+    const claimMessages = getFarmMessages();
+
     function getHarvestTrack() {
       const track = ACHIEVEMENT_TRACKS.find((t) => t.key === 'harvest_total');
       if (track == null) throw new Error('harvest_total achievement track must exist');
@@ -3101,6 +3105,22 @@ describe('FarmGame UI flow', () => {
       return {
         ...base,
         lifetimeStats: { ...base.lifetimeStats, totalHarvests: track.base },
+      };
+    }
+
+    function createAchievementBatchClaimableState(): GameState {
+      const base = createInitialState();
+      const harvestTrack = getHarvestTrack();
+      const prestigeTrack = ACHIEVEMENT_TRACKS.find((track) => track.key === 'prestige_pioneer');
+      if (prestigeTrack == null) throw new Error('prestige_pioneer achievement track must exist');
+      return {
+        ...base,
+        lifetimeStats: {
+          ...base.lifetimeStats,
+          totalHarvests: getAchievementThreshold(harvestTrack, 3),
+          prestigeCount: getAchievementThreshold(prestigeTrack, 2),
+        },
+        prestige: { ...base.prestige, stars: 4, totalStarsEarned: 7 },
       };
     }
 
@@ -3163,6 +3183,108 @@ describe('FarmGame UI flow', () => {
         expect(vibrateSpy).toHaveBeenLastCalledWith(50);
       });
       expect(playEffect).not.toHaveBeenCalled();
+    });
+
+    test('claims every available achievement tier once on rapid batch and cross presses', async () => {
+      const state = createAchievementBatchClaimableState();
+      const expected = claimAllAchievements(state);
+      const track = jest.fn();
+      const playEffect = jest.fn();
+      const screen = await renderGame(
+        state,
+        {
+          analytics: createFarmAnalytics(track),
+          audio: {
+            isSupported: true,
+            playHarvest: jest.fn(),
+            playComboMilestone: jest.fn(),
+            playEffect,
+            setBackgroundMusicEnabled: jest.fn(),
+          },
+        },
+        { soundEffectsEnabled: true },
+      );
+
+      fireEvent.press(screen.getByLabelText(claimMessages.moreButtonAccessibilityLabel));
+      fireEvent.press(screen.getByLabelText(claimMessages.achievementsButtonAccessibilityLabel));
+      const claimAllAction = await waitFor(() => screen.getByTestId('achievement-claim-all-action'));
+      expect(claimAllAction.props.accessibilityLabel).toBe(
+        claimMessages.achievementClaimAllAction(expected.totalStars),
+      );
+      vibrateSpy.mockClear();
+
+      await act(async () => {
+        fireEvent.press(claimAllAction);
+        fireEvent.press(claimAllAction);
+        fireEvent.press(screen.getByTestId(`achievement-claim-${getHarvestTrack().key}`));
+      });
+
+      await waitFor(() => {
+        const persisted = getLatestPersistedState();
+        expect(persisted.claimedAchievements).toEqual(expected.state.claimedAchievements);
+        expect(persisted.prestige.stars).toBe(expected.state.prestige.stars);
+        expect(persisted.prestige.totalStarsEarned).toBe(expected.state.prestige.totalStarsEarned);
+      });
+      expect(screen.getByText(claimMessages.achievementClaimedAllToast(expected.totalStars))).toBeTruthy();
+      await waitFor(() => expect(playEffect).toHaveBeenCalledTimes(1));
+      expect(playEffect).toHaveBeenCalledWith('reward');
+      expect(vibrateSpy).toHaveBeenCalledTimes(1);
+      expect(vibrateSpy).toHaveBeenCalledWith(50);
+      await waitFor(() =>
+        expect(screen.getByTestId('achievement-claim-all-action').props.accessibilityState.disabled).toBe(true),
+      );
+
+      const achievementEvents = track.mock.calls.filter(([event]) => event === 'achievement_claimed');
+      expect(
+        achievementEvents.map(([, params]) => ({
+          trackKey: params?.track_key,
+          tier: params?.tier,
+          starsAwarded: params?.stars_awarded,
+        })),
+      ).toEqual(expected.claims);
+    });
+
+    test('an individual claim wins an individual-to-batch cross press without duplicate effects', async () => {
+      const state = createAchievementBatchClaimableState();
+      const track = jest.fn();
+      const playEffect = jest.fn();
+      const harvestTrack = getHarvestTrack();
+      const screen = await renderGame(
+        state,
+        {
+          analytics: createFarmAnalytics(track),
+          audio: {
+            isSupported: true,
+            playHarvest: jest.fn(),
+            playComboMilestone: jest.fn(),
+            playEffect,
+            setBackgroundMusicEnabled: jest.fn(),
+          },
+        },
+        { soundEffectsEnabled: true },
+      );
+
+      fireEvent.press(screen.getByLabelText(claimMessages.moreButtonAccessibilityLabel));
+      fireEvent.press(screen.getByLabelText(claimMessages.achievementsButtonAccessibilityLabel));
+      const claimOneAction = await waitFor(() => screen.getByTestId(`achievement-claim-${harvestTrack.key}`));
+      const claimAllAction = screen.getByTestId('achievement-claim-all-action');
+      vibrateSpy.mockClear();
+
+      await act(async () => {
+        fireEvent.press(claimOneAction);
+        fireEvent.press(claimAllAction);
+      });
+
+      await waitFor(() => {
+        const persisted = getLatestPersistedState();
+        expect(persisted.claimedAchievements).toEqual([`${harvestTrack.key}:1`]);
+        expect(persisted.prestige.stars).toBe(state.prestige.stars + harvestTrack.starsPerTier);
+      });
+      expect(screen.getByText(claimMessages.achievementClaimedToast(harvestTrack.starsPerTier))).toBeTruthy();
+      expect(track.mock.calls.filter(([event]) => event === 'achievement_claimed')).toHaveLength(1);
+      expect(playEffect).toHaveBeenCalledTimes(1);
+      expect(vibrateSpy).toHaveBeenCalledTimes(1);
+      expect(screen.getByTestId('achievement-claim-all-action').props.accessibilityState.disabled).toBe(false);
     });
   });
 
