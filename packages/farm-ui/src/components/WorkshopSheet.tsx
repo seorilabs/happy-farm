@@ -22,7 +22,7 @@ import { SheetAction } from './SheetParts';
 // 매 수확마다 작물이 인벤토리에 부산물로 적재되고, 각 레시피 카드는 phase에 따라
 // 하나의 액션만 노출한다:
 //   idle     → 가공 시작(입력 작물 차감) — 재고가 부족하면 비활성
-//   crafting → 완료까지 남은 시간(카운트다운, 액션 없음)
+//   crafting → 완료까지 남은 시간 + 취소(입력 작물 환불)
 //   ready    → 수집(sellPrice 골드 획득) → 다시 idle
 //
 // 순수 로직은 모두 core(production.ts)에 있고 여기서는 표시와 액션 배선만 담당한다.
@@ -35,6 +35,7 @@ export function WorkshopSheet({
   now,
   getCropName,
   onStart,
+  onCancel,
   onCollect,
   onCollectAll,
 }: {
@@ -44,6 +45,7 @@ export function WorkshopSheet({
   now: number;
   getCropName: (cropKey: CropKey) => string;
   onStart: (key: ProductionRecipeKey) => void;
+  onCancel: (key: ProductionRecipeKey) => void;
   onCollect: (key: ProductionRecipeKey) => void;
   onCollectAll: () => void;
 }) {
@@ -71,6 +73,7 @@ export function WorkshopSheet({
           messages={messages}
           getCropName={getCropName}
           onStart={onStart}
+          onCancel={onCancel}
           onCollect={onCollect}
         />
       ))}
@@ -85,6 +88,7 @@ function RecipeCard({
   messages,
   getCropName,
   onStart,
+  onCancel,
   onCollect,
 }: {
   status: ProductionStatus;
@@ -93,6 +97,7 @@ function RecipeCard({
   messages: FarmMessages;
   getCropName: (cropKey: CropKey) => string;
   onStart: (key: ProductionRecipeKey) => void;
+  onCancel: (key: ProductionRecipeKey) => void;
   onCollect: (key: ProductionRecipeKey) => void;
 }) {
   const label = getProductionRecipeLabel(status.key, locale);
@@ -126,6 +131,14 @@ function RecipeCard({
     }
     case 'crafting': {
       statusLine = messages.workshopCraftingLabel(formatRemainingTime(status.remainingMs, locale));
+      action = (
+        <SheetAction
+          testID={`workshop-cancel-${status.key}`}
+          label={messages.workshopCancelAction}
+          secondary
+          onPress={() => onCancel(status.key)}
+        />
+      );
       break;
     }
     case 'ready':

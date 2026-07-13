@@ -236,6 +236,31 @@ export function startCraft(state: GameState, key: ProductionRecipeKey, now: numb
   };
 }
 
+// 순수 가공 취소: 아직 완료되지 않은 가공의 입력 작물을 전부 환불하고 진행 상태를 비운다.
+// 완료된 가공은 결과물을 수집해야 하며, 미지의 키·미진행·이중 취소는 null을 반환한다.
+export function cancelCraft(state: GameState, key: ProductionRecipeKey, now: number = Date.now()): GameState | null {
+  const recipe = getRecipe(key);
+  const status = getProductionState(state, key, now);
+  if (recipe == null || status?.phase !== 'crafting') {
+    return null;
+  }
+
+  const inventory: CropInventory = { ...state.production.inventory };
+  for (const input of recipe.inputs) {
+    inventory[input.crop] = (inventory[input.crop] ?? 0) + input.qty;
+  }
+  const crafting = { ...state.production.crafting };
+  delete crafting[key];
+
+  return {
+    ...state,
+    production: {
+      inventory,
+      crafting,
+    },
+  };
+}
+
 // 가공품을 수집할 수 있는가: 진행 중이고 타이머가 완료됐을 때만.
 export function canCollectCraft(state: GameState, key: ProductionRecipeKey, now: number = Date.now()): boolean {
   const status = getProductionState(state, key, now);

@@ -138,6 +138,7 @@ import {
   getProductionStates,
   getProductionRecipeLabel,
   startCraft,
+  cancelCraft,
   collectCraft,
   collectAllReadyCrafts,
   type ProductionRecipeKey,
@@ -2468,6 +2469,18 @@ function FarmGameBody({
     });
   }
 
+  function cancelCraftNow(key: ProductionRecipeKey) {
+    const now = Date.now();
+    setGameState((state) => {
+      const next = cancelCraft(state, key, now);
+      if (next == null) {
+        return state;
+      }
+      toast(messages.workshopCanceledToast(getProductionRecipeLabel(key, locale).name));
+      return next;
+    });
+  }
+
   function collectAllCrafts() {
     collectAllReadyItems('workshop');
   }
@@ -4645,6 +4658,7 @@ function FarmGameBody({
             now={Date.now()}
             getCropName={getLocalizedCropName}
             onStart={startCraftNow}
+            onCancel={cancelCraftNow}
             onCollect={collectCraftNow}
             onCollectAll={collectAllCrafts}
           />
