@@ -464,6 +464,10 @@ describe('CollectionSheet', () => {
 // 분기와 배수 표기를 표시 전용 계약으로 고정한다.
 describe('StatsSheet', () => {
   const HOUR_MS = 60 * 60 * 1000;
+  const offlineIncomeProps = {
+    offlineGoldPerHour: 0,
+    offlineIncomeCapMs: 24 * HOUR_MS,
+  };
   const initialState = createInitialState();
   const initialCollection = getCollectionSummary(initialState);
   const emptyFarmRecords = {
@@ -480,6 +484,8 @@ describe('StatsSheet', () => {
   test('renders research/profit/growth stats and the boost as active with a remaining time', () => {
     const screen = render(
       <StatsSheet
+        {...offlineIncomeProps}
+        offlineGoldPerHour={1_234_567}
         messages={messages}
         locale={LOCALE}
         researchLevel={4}
@@ -510,6 +516,13 @@ describe('StatsSheet', () => {
     // 부스트 활성: 배수 + 잔여시간 표기(잔여시간 testID는 헤더에서 옮겨온 것과 동일).
     expect(screen.getByText(messages.boostLabel)).toBeTruthy();
     expect(screen.getByTestId('boost-remaining')).toHaveTextContent(/^[1-9]/);
+    expect(screen.getByText(messages.statsOfflineIncomeLabel)).toBeTruthy();
+    expect(screen.getByTestId('stats-offline-income')).toHaveTextContent(
+      formatHourlyGold(1_234_567, LOCALE)
+    );
+    expect(screen.getByTestId('stats-offline-income-cap')).toHaveTextContent(
+      messages.statsOfflineIncomeCap('24시간')
+    );
     // 축제 비활성 요일: 티저가 노출되고 라이브 배너는 없다.
     expect(screen.getByTestId('weekly-event-teaser')).toBeTruthy();
     expect(screen.queryByTestId('weekly-event-banner')).toBeNull();
@@ -529,6 +542,7 @@ describe('StatsSheet', () => {
   test('shows the boost row as inactive and the festival banner when a festival is live', () => {
     const screen = render(
       <StatsSheet
+        {...offlineIncomeProps}
         messages={messages}
         locale={LOCALE}
         researchLevel={0}
@@ -550,6 +564,7 @@ describe('StatsSheet', () => {
     // 부스트 비활성: '현재 비활성' 문구가 뜨고 잔여시간 요소는 없다.
     expect(screen.getByText(messages.statsBoostInactive)).toBeTruthy();
     expect(screen.queryByTestId('boost-remaining')).toBeNull();
+    expect(screen.getByTestId('stats-offline-income')).toHaveTextContent(formatHourlyGold(0, LOCALE));
     // 축제 라이브(판매 종류): 판매 배수 문구 배너가 노출되고 티저는 없다.
     const saleBanner = screen.getByTestId('weekly-event-banner');
     expect(saleBanner).toHaveTextContent(/판매/);
@@ -560,6 +575,7 @@ describe('StatsSheet', () => {
   test('distinguishes the golden sell flavor in live and teaser copy with an axis fallback', () => {
     const renderFestival = (active: boolean, typeKey: string, axis: 'sell' | 'speed', remainingMs: number) => (
       <StatsSheet
+        {...offlineIncomeProps}
         messages={messages}
         locale={LOCALE}
         researchLevel={0}
@@ -604,6 +620,7 @@ describe('StatsSheet', () => {
   test('shows the harvest (speed) festival copy when the live event is a harvest type (#243)', () => {
     const screen = render(
       <StatsSheet
+        {...offlineIncomeProps}
         messages={messages}
         locale={LOCALE}
         researchLevel={0}
@@ -632,6 +649,8 @@ describe('StatsSheet', () => {
     const enMessages = getFarmMessages('en-US');
     const screen = render(
       <StatsSheet
+        {...offlineIncomeProps}
+        offlineGoldPerHour={1_234}
         messages={enMessages}
         locale="en-US"
         researchLevel={2}
@@ -653,6 +672,11 @@ describe('StatsSheet', () => {
     expect(screen.getByText(enMessages.profitLabel)).toBeTruthy();
     expect(screen.getByText(enMessages.statsBoostInactive)).toBeTruthy();
     expect(enMessages.statsBoostInactive).toBe('Inactive');
+    expect(enMessages.statsOfflineIncomeLabel).toBe('Active farm offline income');
+    expect(screen.getByTestId('stats-offline-income')).toHaveTextContent(formatHourlyGold(1_234, 'en-US'));
+    expect(screen.getByTestId('stats-offline-income-cap')).toHaveTextContent(
+      enMessages.statsOfflineIncomeCap('24h')
+    );
   });
 
   test('formats large farm records in en-US and uses the live research total', () => {
@@ -667,6 +691,7 @@ describe('StatsSheet', () => {
     };
     const screen = render(
       <StatsSheet
+        {...offlineIncomeProps}
         messages={enMessages}
         locale="en-US"
         researchLevel={9}
