@@ -27,6 +27,10 @@
 npx firebase-tools deploy --only hosting --project happy-farm-tycoon
 ```
 
+배포 뒤 7개 URL이 `200 audio/wav`이고 `web/audio/` 원본 hash와 일치하는지 확인한 다음,
+`appsInTossAudio.tsx`의 `FARM_AUDIO_ASSET_VERSION`을 올린다. 이 순서를 지키면 이전
+세션이 캐시한 음원이나 `404`를 새 AIT 빌드가 재사용하지 않는다.
+
 ## 설명 초안
 
 ### ko-KR

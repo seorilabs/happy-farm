@@ -38,6 +38,16 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
     return true
   }
+
+  func applicationDidBecomeActive(_ application: UIApplication) {
+    // Keep the foreground idle-game session visible without requesting an OS
+    // permission. The matching resign callback restores the user's timer.
+    application.isIdleTimerDisabled = true
+  }
+
+  func applicationWillResignActive(_ application: UIApplication) {
+    application.isIdleTimerDisabled = false
+  }
 }
 
 class ReactNativeDelegate: RCTDefaultReactNativeFactoryDelegate {

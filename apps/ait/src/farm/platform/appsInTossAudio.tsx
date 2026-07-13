@@ -16,14 +16,23 @@ import type { FarmGameAudio, FarmSoundEffectKey } from '../../../../../packages/
 // registry is a warning stub), so apps-in-toss audio must stream from remote
 // URIs. These files live in web/audio and are served by Firebase Hosting.
 // Deploy steps: docs/apps-in-toss-registration.md.
+const FARM_AUDIO_HOST = 'https://happy-farm-tycoon.web.app/audio';
+// Bump after deploying changed audio. The query isolates a new AIT build from
+// stale shouldCache entries, including cached 404s from a pre-deploy session.
+export const FARM_AUDIO_ASSET_VERSION = '20260713-v2';
+
+function farmAudioUri(fileName: string) {
+  return `${FARM_AUDIO_HOST}/${fileName}?v=${FARM_AUDIO_ASSET_VERSION}`;
+}
+
 export const FARM_AUDIO_SOURCES = {
-  backgroundMusic: 'https://happy-farm-tycoon.web.app/audio/farm_bgm_loop.wav',
-  harvestCoin: 'https://happy-farm-tycoon.web.app/audio/harvest_coin.wav',
-  plant: 'https://happy-farm-tycoon.web.app/audio/sfx_plant.wav',
-  reward: 'https://happy-farm-tycoon.web.app/audio/sting_reward.wav',
-  unlock: 'https://happy-farm-tycoon.web.app/audio/sting_unlock.wav',
-  mutation: 'https://happy-farm-tycoon.web.app/audio/sting_mutation.wav',
-  wheelSpin: 'https://happy-farm-tycoon.web.app/audio/sfx_wheel_spin.wav',
+  backgroundMusic: farmAudioUri('farm_bgm_loop.wav'),
+  harvestCoin: farmAudioUri('harvest_coin.wav'),
+  plant: farmAudioUri('sfx_plant.wav'),
+  reward: farmAudioUri('sting_reward.wav'),
+  unlock: farmAudioUri('sting_unlock.wav'),
+  mutation: farmAudioUri('sting_mutation.wav'),
+  wheelSpin: farmAudioUri('sfx_wheel_spin.wav'),
 } as const;
 
 const FARM_AUDIO_VIDEO_SOURCES = {

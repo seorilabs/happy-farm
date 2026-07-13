@@ -6,6 +6,7 @@ import { useAppsInTossInterstitialAdGroupId } from '../firebaseWeb/remoteConfig'
 import { appsInTossFarmArt } from '../farm/platform/appsInTossArt';
 import { useAppsInTossFarmAudio } from '../farm/platform/appsInTossAudio';
 import { useFullScreenAd } from '../farm/platform/fullScreenAd';
+import { useAppsInTossScreenAwake } from '../farm/platform/screenAwake';
 import {
   readLastSeenAt,
   readPersistedGameSettings,
@@ -34,6 +35,7 @@ const appsInTossPersistence = {
 
 function Page() {
   const { audio, audioElement } = useAppsInTossFarmAudio();
+  useAppsInTossScreenAwake();
   const interstitialAdGroupId = useAppsInTossInterstitialAdGroupId();
   // 전면/복귀 지면은 원격값으로 ID를 주입한다. 미설정(빈 문자열)이면 interstitial을
   // 비워 fullScreenAd가 미지원으로 동작하게 한다(빈도 제한·온보딩 미노출·placement

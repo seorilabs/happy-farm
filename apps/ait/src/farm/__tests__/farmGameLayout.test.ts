@@ -2,12 +2,17 @@
 
 import {
   getPlotTileSize,
+  MAIN_CONTENT_TOP_PADDING,
   MAIN_HORIZONTAL_PADDING,
   PLOT_COLUMNS,
   PLOT_GAP,
 } from '../../../../../packages/farm-ui/src/farmGameLayout';
 
 describe('farm plot layout', () => {
+  test('keeps a compact environment gap between the HUD and plots', () => {
+    expect(MAIN_CONTENT_TOP_PADDING).toBe(48);
+  });
+
   test.each([320, 360, 390, 393, 402, 430])(
     'fits exactly four plot columns without horizontal overflow at %ipx',
     (windowWidth) => {
