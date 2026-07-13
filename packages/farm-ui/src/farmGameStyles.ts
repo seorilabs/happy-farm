@@ -1,6 +1,13 @@
 import { StyleSheet } from 'react-native';
 
-import { PLOT_GAP, SHEET_CONTENT_BASE_PADDING_BOTTOM, SHEET_DRAG_HIT_TARGET_HEIGHT } from './farmGameLayout';
+import {
+  MAIN_CONTENT_TOP_PADDING,
+  MAIN_HORIZONTAL_PADDING,
+  ONBOARDING_MAIN_CONTENT_TOP_PADDING,
+  PLOT_GAP,
+  SHEET_CONTENT_BASE_PADDING_BOTTOM,
+  SHEET_DRAG_HIT_TARGET_HEIGHT,
+} from './farmGameLayout';
 
 // FarmGame 컴포넌트의 StyleSheet 정의를 분리한 모듈. 동작/스타일 변경 없이 단일 파일
 // LOC를 줄이기 위해 통째로 추출했다. 컴포넌트와 공유하는 레이아웃 치수만 farmGameLayout에서 가져온다.
@@ -218,9 +225,15 @@ export const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   mainContent: {
-    paddingHorizontal: 16,
-    paddingTop: 72,
+    paddingHorizontal: MAIN_HORIZONTAL_PADDING,
+    paddingTop: MAIN_CONTENT_TOP_PADDING,
     paddingBottom: 16,
+  },
+  mainContentOnboarding: {
+    paddingTop: ONBOARDING_MAIN_CONTENT_TOP_PADDING,
+  },
+  plotGridContainer: {
+    position: 'relative',
   },
   plotGrid: {
     flexDirection: 'row',
@@ -1015,6 +1028,22 @@ export const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: '#a6dcb8',
     backgroundColor: 'rgba(76, 175, 106, 0.08)',
+  },
+  // Plot geometry is calculated to fit four exact columns. Keep the onboarding
+  // ring out of layout so its border never steals width and wraps column four.
+  onboardingPlotTint: {
+    borderRadius: 14,
+    backgroundColor: 'rgba(76, 175, 106, 0.08)',
+  },
+  onboardingPlotHighlight: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    borderRadius: 14,
+    borderWidth: 2,
+    borderColor: '#a6dcb8',
   },
   // Pulsing overlay ring stacked on the seed strip during the selectSeed step.
   // A louder green than the static highlight; its opacity is animated so it

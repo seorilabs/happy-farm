@@ -218,7 +218,7 @@ import { WorkshopSheet } from './components/WorkshopSheet';
 import { AdRewardCard, CloudSaveSection, SettingToggle, SheetAction, ShopCard, sheetPartStyles } from './components/SheetParts';
 import {
   DISCOVERY_BANNER_BASE_BOTTOM,
-  MAIN_HORIZONTAL_PADDING,
+  getPlotTileSize,
   PLOT_COLUMNS,
   PLOT_GAP,
   SHEET_CONTENT_BASE_PADDING_BOTTOM,
@@ -942,10 +942,7 @@ function FarmGameBody({
     REGION_ARCHETYPES[0]?.key ?? 'plains'
   );
   const [tick, setTick] = useState(0);
-  const plotTileSize = useMemo(() => {
-    const availableWidth = windowWidth - MAIN_HORIZONTAL_PADDING * 2 - PLOT_GAP * (PLOT_COLUMNS - 1);
-    return Math.max(48, Math.floor(availableWidth / PLOT_COLUMNS));
-  }, [windowWidth]);
+  const plotTileSize = useMemo(() => getPlotTileSize(windowWidth), [windowWidth]);
 
   const toast = useCallback((message: string) => {
     if (toastTimerRef.current != null) {
@@ -3938,43 +3935,56 @@ function FarmGameBody({
           minutesOfDay={minutesOfDay}
           backgroundColor={environmentTone.backgroundColor}
         />
-        <ScrollView testID="farm-scroll" contentContainerStyle={styles.mainContent} style={styles.main}>
+        <ScrollView
+          testID="farm-scroll"
+          contentContainerStyle={[styles.mainContent, onboardingStep != null && styles.mainContentOnboarding]}
+          style={styles.main}
+        >
           <View
-            testID="plot-grid"
-            style={[styles.plotGrid, onboardingPlotHighlight && styles.onboardingHighlight]}
+            testID="plot-grid-container"
+            style={[styles.plotGridContainer, onboardingPlotHighlight && styles.onboardingPlotTint]}
           >
-            {gameState.plots.map((plot, index) => {
-              // Resolve growth ratio and countdown together so the crop modifiers
-              // are computed once per tile per tick instead of once for each.
-              const growth = getPlotGrowthDisplay(gameState, plot);
-              const unlocked = index < gameState.unlockedPlotCount;
-              // Fabric (New Architecture) fails to commit the conditional child
-              // swaps inside PlotCell when a plot transitions (empty→growing→ready
-              // or locked→unlocked): the tile background updates but the harvest
-              // badge and crop-icon subtrees stay blank, even though the data is
-              // correct (harvest still yields gold). Initial mount renders fine, so
-              // encoding the render-branch inputs into the key remounts the tile on
-              // transition and forces Fabric down the working mount path.
-              return (
-                <PlotCell
-                  key={`${plot.id}-${unlocked ? 'u' : 'l'}-${plot.state}`}
-                  index={index}
-                  plot={plot}
-                  unlocked={unlocked}
-                  progressRatio={growth.growthRatio}
-                  growthCountdown={
-                    plot.state === 1 ? formatDuration(growth.remainingWallClockMs, locale) : undefined
-                  }
-                  tileSize={plotTileSize}
-                  messages={messages}
-                  cropName={plot.cropType != null ? getLocalizedCropName(plot.cropType) : undefined}
-                  plantToken={plantPulses[index]}
-                  onPlantPulseDone={clearPlantPulse}
-                  onPress={onPlotPress}
-                />
-              );
-            })}
-            <HarvestFxOverlay ref={harvestFxRef} tileSize={plotTileSize} />
+            <View testID="plot-grid" style={styles.plotGrid}>
+              {gameState.plots.map((plot, index) => {
+                // Resolve growth ratio and countdown together so the crop modifiers
+                // are computed once per tile per tick instead of once for each.
+                const growth = getPlotGrowthDisplay(gameState, plot);
+                const unlocked = index < gameState.unlockedPlotCount;
+                // Fabric (New Architecture) fails to commit the conditional child
+                // swaps inside PlotCell when a plot transitions (empty→growing→ready
+                // or locked→unlocked): the tile background updates but the harvest
+                // badge and crop-icon subtrees stay blank, even though the data is
+                // correct (harvest still yields gold). Initial mount renders fine, so
+                // encoding the render-branch inputs into the key remounts the tile on
+                // transition and forces Fabric down the working mount path.
+                return (
+                  <PlotCell
+                    key={`${plot.id}-${unlocked ? 'u' : 'l'}-${plot.state}`}
+                    index={index}
+                    plot={plot}
+                    unlocked={unlocked}
+                    progressRatio={growth.growthRatio}
+                    growthCountdown={
+                      plot.state === 1 ? formatDuration(growth.remainingWallClockMs, locale) : undefined
+                    }
+                    tileSize={plotTileSize}
+                    messages={messages}
+                    cropName={plot.cropType != null ? getLocalizedCropName(plot.cropType) : undefined}
+                    plantToken={plantPulses[index]}
+                    onPlantPulseDone={clearPlantPulse}
+                    onPress={onPlotPress}
+                  />
+                );
+              })}
+              <HarvestFxOverlay ref={harvestFxRef} tileSize={plotTileSize} />
+            </View>
+            {onboardingPlotHighlight ? (
+              <View
+                testID="onboarding-plot-highlight"
+                pointerEvents="none"
+                style={styles.onboardingPlotHighlight}
+              />
+            ) : null}
           </View>
           <FarmDecorationStrip gameState={gameState} />
         </ScrollView>
