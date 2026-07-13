@@ -3,7 +3,7 @@
 happy-farm **개별 콘텐츠(작물·구역·기능 퍼널)** 세부 지표의 단일 기준 문서.
 공통 지표(DAU/리텐션/광고 노출 등)는 backoffice `AppMetricDaily`가 이미 다루므로,
 이 문서는 "앱 안에서 무엇이 얼마나 소비되는가"(작물별 심기·수확·매출, 구역 언락
-전환, 온보딩 단계 통과율)를 다룬다.
+전환, 온보딩 단계 통과율, 수동 수확 콤보 baseline)를 다룬다.
 
 이벤트 계약은 `packages/farm-core/src/analytics.ts`, 콘텐츠 키(작물/구역)는
 `packages/farm-core/src/balance.json`·`types.ts`가 진실원본이다. 광고 placement 지표는
@@ -97,14 +97,60 @@ baseline을 잡고, 자동수확 사용자는 crop별 수확 이벤트가 없으
 있으므로 도달률에는 이벤트 수가 아닌 고유 사용자를 쓴다. 이전 배포에서 수집된
 `unlock`은 역사 데이터로 보존하고 배포일/앱 버전으로 `reward`와 분리한다.
 
-### 4) 광고 placement 차원
+### 4) 수동 수확 콤보 baseline
+
+`harvest_combo_completed`는 **수동 단일 수확 streak가 끝날 때 1건** 발생한다. 단일
+수확 streak도 포함하며, 화면 연출용 콤보에는 들어가는 `harvest_all`과 자동 수확은 이
+계측 accumulator에서 제외한다. 따라서 배포 전 `crop_harvested` timestamp를 1.5초
+간격으로 재구성한 값과 직접 섞지 않고, 배포 이후 직접 이벤트만 새 baseline으로 쓴다.
+
+| 소스 이벤트 | 파라미터 | 계약 |
+|---|---|---|
+| `harvest_combo_completed` | `manual_harvest_count` | streak 내 수동 단일 수확 수, 1 이상 |
+|  | `combo_tier` | `normal \| great \| legendary` stable key |
+|  | `duration_ms` | 첫 수확부터 마지막 수확까지. 단일 수확은 0이며 종료 대기 window는 제외 |
+|  | `base_revenue_total` | 기존 boost·변이 등은 반영하되 미래 콤보 보너스는 적용하기 전인 실제 골드 수익 합계 |
+|  | `end_reason` | `timeout \| background \| prestige \| reset \| cloud_restore` |
+|  | `schema_version` | 초기 계약은 `1` |
+
+모든 이벤트에는 `GameAnalyticsContext`가 함께 실린다. `end_reason=background`는
+`AppState`의 background/inactive 경계를 합친 값이며, `timeout`은 마지막 수동 수확 뒤
+combo window가 끝났거나 다음 수확 시 이미 window를 넘은 경우다. prestige/reset은 상태
+전환 전, cloud_restore는 성공한 복원 적용 전에 기존 streak를 닫는다. React StrictMode의
+가상 unmount는 실제 종료로 보지 않으므로 unmount에서는 이벤트를 emit하지 않는다.
+
+`analytics/queries/harvest-combo-metrics.sql`은 당일 미완료 export를 제외한 최근 **28개
+완료일(D-28~D-1)** 을 기본 window로 사용하며 다음 결과를 독립 블록으로 산출한다.
+
+- **티어 분포**: 티어별 완료 콤보·`event_tier_users`·세션·수동 수확 수, 사용자별 최고
+  streak 기반 상호배타 `exclusive_tier_users`, `reached_users` 기반 threshold 누적 도달 수를
+  함께 제공한다(great 누적 도달에는 legendary 사용자 포함). normal(1+)은 active cohort
+  자체이므로 `user_reach_rate=NULL`이고 great/legendary만 누적 도달률을 제공한다.
+- **길이·수익 분포**: 전체와 티어별 count·duration·base revenue의 평균/median/p90/max,
+  수동 수확 1회당 평균 base revenue
+- **종료 사유**: end reason별 콤보·사용자·수확·수익과 전체 콤보 대비 share
+- **사용자 집중도**: 수동 수확 기준 top1/top2/top10% share, 수익 top1/top2 share,
+  수동 수확·수익 HHI. top1/top2는 동률이어도 정확히 1명/2명을 stable key로 선택하며,
+  전체 분포의 동률 비의존 비교는 HHI를 사용한다.
+- **계약 품질**: 필수 6개 파라미터 누락, enum·범위·schema 위반, valid event rate
+
+분석 블록은 `schema_version=1`, `manual_harvest_count>=1`, 음수가 아닌 duration/revenue와
+정의된 tier/end reason을 모두 만족한 이벤트만 사용한다. 첫 daily export에서는 품질 블록의
+필수 파라미터 누락이 0인지 먼저 확인한다. 품질 블록은 `observed_events=0`이면
+`quality_status=no_data`, `valid_event_rate=NULL`로 표시하고, 이벤트가 있으나 모두 무효면
+`quality_status=all_invalid`, `valid_event_rate=0`으로 구분한다. 최소 28일이 쌓인 뒤 표본 수와 top 사용자
+집중도를 함께 보고 #320의 A/B 실험 가능 여부를 다시 판단하며, 이 계측만으로 보상 기능을
+unblock하지 않는다.
+
+### 5) 광고 placement 차원
 `docs/04-work/ad-analytics.md` 및 `analytics/queries/ad-placement-metrics.sql`를
 그대로 따른다. 콘텐츠 대시보드에서는 placement별 impression/click/complete/fail/blocked
 카운트를 콘텐츠 지표와 나란히 보여준다(정의 중복 금지, 참조만).
 
 ## 집계·저장 파이프라인
-- **집계 참조 쿼리**: `analytics/queries/content-metrics.sql`(작물·구역 일별 집계, BigQuery
-  콘솔에서 실행 가능한 GoogleSQL). backoffice 수집기가 같은 정의를 구현한다.
+- **집계 참조 쿼리**: `analytics/queries/content-metrics.sql`(작물·구역 일별 집계)과
+  `analytics/queries/harvest-combo-metrics.sql`(수동 콤보 28일 baseline). 둘 다 BigQuery
+  콘솔에서 실행 가능한 GoogleSQL이며, backoffice 수집기는 작물·구역 일별 정의를 구현한다.
 - **저장(백오피스)**: happy-farm 전용 일별 스냅샷 테이블
   (`happy_farm_crop_daily` / `happy_farm_area_daily` / `happy_farm_funnel_daily` /
   `happy_farm_ad_placement_daily`)에 앱×일자×차원키로 멱등 upsert.
@@ -112,6 +158,6 @@ baseline을 잡고, 자동수확 사용자는 crop별 수확 이벤트가 없으
 
 ## 변경 시 유지할 것
 - 새 작물/구역 키를 추가하면 `balance.json`에만 등록하면 집계가 자동 편입된다(키 하드코딩 금지).
-- 새 콘텐츠 이벤트를 추가하면 이 표와 `analytics/queries/content-metrics.sql`,
-  backoffice 수집 쿼리를 함께 갱신한다.
+- 새 콘텐츠 이벤트를 추가하면 이 표와 해당 `analytics/queries/*.sql`, 필요한 backoffice
+  수집 쿼리를 함께 갱신한다.
 - 이벤트 파라미터에서 `crop`·`area`·`step` 등 차원 키는 항상 유지한다(집계 join 키).

@@ -1,12 +1,13 @@
 /// <reference types="jest" />
 
 import React from 'react';
-import { Animated, Dimensions, StyleSheet, Vibration } from 'react-native';
+import { AppState, Animated, Dimensions, StyleSheet, Vibration, type AppStateStatus } from 'react-native';
 import { act, cleanup, fireEvent, render, waitFor, within } from '@testing-library/react-native';
 import {
   ACHIEVEMENT_TRACKS,
   ANIMALS,
   COLLECTION_AREA_REWARDS,
+  COMBO_WINDOW_MS,
   CROPS,
   DEFAULT_LOCALE,
   FARM_AREAS,
@@ -3650,6 +3651,373 @@ describe('FarmGame UI flow', () => {
 
       await waitFor(() => expect(playEffect).toHaveBeenCalledWith('unlock'));
       expect(playEffect).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  // Keep lifecycle boundary coverage in a focused block: all non-timeout
+  // end_reason paths and StrictMode/unmount semantics are release-critical.
+  describe('manual harvest combo lifecycle end reasons (#348)', () => {
+    function comboEvents(track: jest.Mock) {
+      return track.mock.calls
+        .filter(([name]) => name === 'harvest_combo_completed')
+        .map(([, params]) => params as Record<string, unknown>);
+    }
+
+    test('emits prestige before the farm layer is replaced', async () => {
+      const track = jest.fn();
+      const base = createPrestigeReadyState();
+      const state: GameState = {
+        ...base,
+        harvestedCropKeys: [...new Set([...base.harvestedCropKeys, 'carrot' as const])],
+        plots: base.plots.map((plot, index) =>
+          index === 0
+            ? { ...plot, cropType: 'carrot' as const, startTime: NOW - 10_000, state: 2 as const }
+            : plot
+        ),
+      };
+      const screen = await renderGame(state, { analytics: createFarmAnalytics(track) });
+
+      fireEvent.press(screen.getByText('GET'));
+      await waitFor(() => expect(track).toHaveBeenCalledWith('crop_harvested', expect.anything()));
+      await triggerPrestige(screen);
+
+      expect(comboEvents(track)).toEqual([
+        expect.objectContaining({ manual_harvest_count: 1, end_reason: 'prestige' }),
+      ]);
+    });
+
+    test('emits reset only after local persistence removal succeeds', async () => {
+      const track = jest.fn();
+      const messages = getFarmMessages(DEFAULT_LOCALE);
+      const screen = await renderGame(createLateGameState(), { analytics: createFarmAnalytics(track) });
+
+      fireEvent.press(screen.getAllByText('GET')[0]!);
+      await waitFor(() => expect(track).toHaveBeenCalledWith('crop_harvested', expect.anything()));
+      fireEvent.press(screen.getByLabelText(messages.settingsAccessibilityLabel));
+      fireEvent.press(screen.getByText(messages.resetFarmAction));
+      fireEvent.changeText(screen.getByLabelText(messages.resetInputAccessibilityLabel), messages.resetConfirmText);
+      fireEvent.press(screen.getByText(messages.resetDeleteAction));
+
+      await waitFor(() => expect(mockPersistence.removePersistedGameState).toHaveBeenCalledTimes(1));
+      await waitFor(() =>
+        expect(comboEvents(track)).toEqual([
+          expect.objectContaining({ manual_harvest_count: 1, end_reason: 'reset' }),
+        ])
+      );
+    });
+
+    test('emits cloud_restore before a successful restore replaces state', async () => {
+      const track = jest.fn();
+      const messages = getFarmMessages(DEFAULT_LOCALE);
+      const restoreFromCloud = jest.fn(async () => ({
+        status: 'restored' as const,
+        clientRevision: 2,
+        gameState: createInitialState(),
+      }));
+      const screen = await renderGame(createLateGameState(), {
+        analytics: createFarmAnalytics(track),
+        cloudSave: {
+          isSupported: true,
+          backupNow: jest.fn(async () => ({ status: 'backed_up' as const, clientRevision: 1 })),
+          restoreFromCloud,
+        },
+      });
+
+      fireEvent.press(screen.getAllByText('GET')[0]!);
+      await waitFor(() => expect(track).toHaveBeenCalledWith('crop_harvested', expect.anything()));
+      fireEvent.press(screen.getByLabelText(messages.settingsAccessibilityLabel));
+      fireEvent.press(screen.getByText(messages.cloudRestoreAction));
+
+      await waitFor(() => expect(restoreFromCloud).toHaveBeenCalledTimes(1));
+      await waitFor(() =>
+        expect(comboEvents(track)).toEqual([
+          expect.objectContaining({ manual_harvest_count: 1, end_reason: 'cloud_restore' }),
+        ])
+      );
+    });
+
+    test('does not emit from real unmount cleanup', async () => {
+      const track = jest.fn();
+      const screen = await renderGame(createLateGameState(), { analytics: createFarmAnalytics(track) });
+
+      fireEvent.press(screen.getAllByText('GET')[0]!);
+      await waitFor(() => expect(track).toHaveBeenCalledWith('crop_harvested', expect.anything()));
+      screen.unmount();
+      jest.advanceTimersByTime(COMBO_WINDOW_MS + 1);
+
+      expect(comboEvents(track)).toHaveLength(0);
+    });
+
+    test('emits exactly one streak under React StrictMode effect replay', async () => {
+      const track = jest.fn();
+      const state: GameState = {
+        ...createLateGameState(),
+        onboardingCompleted: true,
+        onboardingStep: null,
+      };
+      mockPersistence.readPersistedGameState.mockReset().mockResolvedValue(state);
+      mockPersistence.readPersistedGameSettings.mockReset().mockResolvedValue(null);
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+      try {
+        const screen = render(
+          <React.StrictMode>
+            <FarmGame persistence={mockPersistence} analytics={createFarmAnalytics(track)} />
+          </React.StrictMode>
+        );
+        await act(async () => {
+          await Promise.resolve();
+          await Promise.resolve();
+        });
+        await waitFor(() => expect(screen.getAllByText('GET').length).toBeGreaterThan(0));
+
+        fireEvent.press(screen.getAllByText('GET')[0]!);
+        await waitFor(() => expect(track).toHaveBeenCalledWith('crop_harvested', expect.anything()));
+        await act(async () => {
+          jest.advanceTimersByTime(COMBO_WINDOW_MS + 1);
+        });
+
+        expect(comboEvents(track)).toEqual([
+          expect.objectContaining({ manual_harvest_count: 1, end_reason: 'timeout' }),
+        ]);
+        expect(
+          consoleErrorSpy.mock.calls.filter(
+            ([message, deprecatedApi]) =>
+              !(
+                String(message).includes('%s is deprecated in StrictMode') &&
+                deprecatedApi === 'findNodeHandle'
+              )
+          )
+        ).toEqual([]);
+      } finally {
+        consoleErrorSpy.mockRestore();
+      }
+    });
+  });
+
+  describe('manual harvest combo analytics (#348)', () => {
+    function trackedParams(track: jest.Mock, eventName: string) {
+      return track.mock.calls
+        .filter(([name]) => name === eventName)
+        .map(([, params]) => params as Record<string, unknown>);
+    }
+
+    test.each([
+      [1, 'normal'],
+      [COMBO_GREAT_THRESHOLD, 'great'],
+      [COMBO_LEGENDARY_THRESHOLD, 'legendary'],
+    ] as const)(
+      'records %i manual harvests as the %s tier with the exact accumulated revenue',
+      async (manualHarvestCount, comboTier) => {
+        const track = jest.fn();
+        const screen = await renderGame(createLateGameState(), { analytics: createFarmAnalytics(track) });
+
+        await waitFor(() =>
+          expect(screen.getAllByText('GET').length).toBeGreaterThanOrEqual(manualHarvestCount)
+        );
+        for (let index = 0; index < manualHarvestCount; index += 1) {
+          fireEvent.press(screen.getAllByText('GET')[0]!);
+        }
+        await waitFor(() => expect(trackedParams(track, 'crop_harvested')).toHaveLength(manualHarvestCount));
+
+        await act(async () => {
+          jest.advanceTimersByTime(COMBO_WINDOW_MS + 1);
+        });
+
+        const cropRevenue = trackedParams(track, 'crop_harvested').reduce(
+          (total, params) => total + Number(params.revenue),
+          0
+        );
+        expect(trackedParams(track, 'harvest_combo_completed')).toEqual([
+          expect.objectContaining({
+            manual_harvest_count: manualHarvestCount,
+            combo_tier: comboTier,
+            duration_ms: 0,
+            base_revenue_total: cropRevenue,
+            end_reason: 'timeout',
+            schema_version: 1,
+          }),
+        ]);
+      }
+    );
+
+    test('measures duration from the first manual harvest to the last', async () => {
+      const track = jest.fn();
+      const screen = await renderGame(createLateGameState(), { analytics: createFarmAnalytics(track) });
+
+      fireEvent.press(screen.getAllByText('GET')[0]!);
+      await act(async () => {
+        jest.advanceTimersByTime(400);
+      });
+      fireEvent.press(screen.getAllByText('GET')[0]!);
+      await waitFor(() => expect(trackedParams(track, 'crop_harvested')).toHaveLength(2));
+      await act(async () => {
+        jest.advanceTimersByTime(COMBO_WINDOW_MS + 1);
+      });
+
+      expect(trackedParams(track, 'harvest_combo_completed')).toEqual([
+        expect.objectContaining({ manual_harvest_count: 2, duration_ms: 400, end_reason: 'timeout' }),
+      ]);
+    });
+
+    test('keeps a harvest exactly at the inclusive window boundary in the same streak', async () => {
+      const track = jest.fn();
+      const screen = await renderGame(createLateGameState(), { analytics: createFarmAnalytics(track) });
+
+      fireEvent.press(screen.getAllByText('GET')[0]!);
+      await waitFor(() => expect(trackedParams(track, 'crop_harvested')).toHaveLength(1));
+      await act(async () => {
+        jest.advanceTimersByTime(COMBO_WINDOW_MS);
+      });
+      expect(trackedParams(track, 'harvest_combo_completed')).toHaveLength(0);
+
+      fireEvent.press(screen.getAllByText('GET')[0]!);
+      await waitFor(() => expect(trackedParams(track, 'crop_harvested')).toHaveLength(2));
+      await act(async () => {
+        jest.advanceTimersByTime(COMBO_WINDOW_MS + 1);
+      });
+
+      expect(trackedParams(track, 'harvest_combo_completed')).toEqual([
+        expect.objectContaining({
+          manual_harvest_count: 2,
+          duration_ms: COMBO_WINDOW_MS,
+          end_reason: 'timeout',
+        }),
+      ]);
+    });
+
+    test('flushes an expired streak before a delayed timer can merge the next harvest', async () => {
+      const track = jest.fn();
+      const screen = await renderGame(createLateGameState(), { analytics: createFarmAnalytics(track) });
+
+      fireEvent.press(screen.getAllByText('GET')[0]!);
+      await waitFor(() => expect(trackedParams(track, 'crop_harvested')).toHaveLength(1));
+      jest.setSystemTime(NOW + COMBO_WINDOW_MS + 1);
+      fireEvent.press(screen.getAllByText('GET')[0]!);
+
+      await waitFor(() =>
+        expect(trackedParams(track, 'harvest_combo_completed')).toEqual([
+          expect.objectContaining({ manual_harvest_count: 1, end_reason: 'timeout' }),
+        ])
+      );
+      await act(async () => {
+        jest.advanceTimersByTime(COMBO_WINDOW_MS + 1);
+      });
+      expect(trackedParams(track, 'harvest_combo_completed')).toEqual([
+        expect.objectContaining({ manual_harvest_count: 1, end_reason: 'timeout' }),
+        expect.objectContaining({ manual_harvest_count: 1, end_reason: 'timeout' }),
+      ]);
+    });
+
+    test('retires a streak before duplicate inactive/background callbacks and its timer run', async () => {
+      const track = jest.fn();
+      let onAppStateChange: ((state: AppStateStatus) => void) | undefined;
+      const addEventListenerMock = AppState.addEventListener as jest.MockedFunction<
+        typeof AppState.addEventListener
+      >;
+      addEventListenerMock.mockImplementationOnce((_event, listener) => {
+        onAppStateChange = listener;
+        return { remove: jest.fn() };
+      });
+
+      const screen = await renderGame(createLateGameState(), { analytics: createFarmAnalytics(track) });
+      fireEvent.press(screen.getAllByText('GET')[0]!);
+      await waitFor(() => expect(trackedParams(track, 'crop_harvested')).toHaveLength(1));
+
+      await act(async () => {
+        onAppStateChange?.('inactive');
+        onAppStateChange?.('background');
+        jest.advanceTimersByTime(COMBO_WINDOW_MS);
+      });
+
+      expect(trackedParams(track, 'harvest_combo_completed')).toEqual([
+        expect.objectContaining({ manual_harvest_count: 1, end_reason: 'background' }),
+      ]);
+    });
+
+    test('keeps timeout attribution when AppState beats a delayed expired timer', async () => {
+      const track = jest.fn();
+      let onAppStateChange: ((state: AppStateStatus) => void) | undefined;
+      const addEventListenerMock = AppState.addEventListener as jest.MockedFunction<
+        typeof AppState.addEventListener
+      >;
+      addEventListenerMock.mockImplementationOnce((_event, listener) => {
+        onAppStateChange = listener;
+        return { remove: jest.fn() };
+      });
+
+      const screen = await renderGame(createLateGameState(), { analytics: createFarmAnalytics(track) });
+      fireEvent.press(screen.getAllByText('GET')[0]!);
+      await waitFor(() => expect(trackedParams(track, 'crop_harvested')).toHaveLength(1));
+      // Move wall time past the deadline without running the queued timeout.
+      jest.setSystemTime(NOW + COMBO_WINDOW_MS + 1);
+      await act(async () => {
+        onAppStateChange?.('background');
+      });
+
+      expect(trackedParams(track, 'harvest_combo_completed')).toEqual([
+        expect.objectContaining({ manual_harvest_count: 1, end_reason: 'timeout' }),
+      ]);
+    });
+
+    test('flushes a tap that commits after the background callback', async () => {
+      const track = jest.fn();
+      let onAppStateChange: ((state: AppStateStatus) => void) | undefined;
+      const addEventListenerMock = AppState.addEventListener as jest.MockedFunction<
+        typeof AppState.addEventListener
+      >;
+      addEventListenerMock.mockImplementationOnce((_event, listener) => {
+        onAppStateChange = listener;
+        return { remove: jest.fn() };
+      });
+      const screen = await renderGame(createLateGameState(), { analytics: createFarmAnalytics(track) });
+      let plotNode = screen.getByTestId('plot-cell-0');
+      while (typeof plotNode.props.onPress !== 'function' && plotNode.parent != null) {
+        plotNode = plotNode.parent;
+      }
+      const pressPlot = plotNode.props.onPress as (() => void) | undefined;
+      expect(pressPlot).toBeDefined();
+
+      await act(async () => {
+        pressPlot?.();
+        onAppStateChange?.('background');
+      });
+
+      await waitFor(() => expect(trackedParams(track, 'crop_harvested')).toHaveLength(1));
+      expect(trackedParams(track, 'harvest_combo_completed')).toEqual([
+        expect.objectContaining({ manual_harvest_count: 1, end_reason: 'background' }),
+      ]);
+    });
+
+    test('excludes Harvest All from the manual accumulator', async () => {
+      const track = jest.fn();
+      const screen = await renderGame(createReadyHarvestState(), { analytics: createFarmAnalytics(track) });
+
+      await waitFor(() => expect(screen.getByText('🧺 모두 수확 2')).toBeTruthy());
+      fireEvent.press(screen.getByLabelText('🧺 모두 수확 2'));
+      await act(async () => {
+        jest.advanceTimersByTime(COMBO_WINDOW_MS);
+      });
+
+      expect(trackedParams(track, 'harvest_combo_completed')).toHaveLength(0);
+    });
+
+    test('excludes automatic harvest from the manual accumulator', async () => {
+      const track = jest.fn();
+      const base = createReadyHarvestState();
+      const state: GameState = {
+        ...base,
+        research: { ...base.research, unlockedNodes: ['auto_harvest'] },
+        automationSettings: { autoHarvestEnabled: true, autoReplantEnabled: false, donationModeEnabled: false },
+      };
+      const screen = await renderGame(state, { analytics: createFarmAnalytics(track) });
+      const expectedGold = state.gold + CROPS.carrot!.sell * 2;
+
+      await act(async () => {
+        jest.advanceTimersByTime(GAME_TICK_INTERVAL_MS + COMBO_WINDOW_MS + 50);
+      });
+
+      await waitFor(() => expect(screen.getByText(`${formatMoney(expectedGold)}G`)).toBeTruthy());
+      expect(trackedParams(track, 'harvest_combo_completed')).toHaveLength(0);
     });
   });
 
