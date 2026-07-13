@@ -44,6 +44,10 @@ export function toFirebaseAnalyticsParams(
 // 도입 시 같은 계약으로 확장할 수 있도록 종류를 미리 정의해 둔다.
 export type FarmNotificationKind = 'harvest' | 'daily_bonus' | 'crop_of_the_day';
 
+// Stable acquisition path for the daily-bonus impression → claim funnel.
+// Keep these values untranslated so BigQuery cohorts remain joinable.
+export type DailyBonusSource = 'auto_popup' | 'more' | 'welcome_back';
+
 export type GameAnalyticsContext = {
   gold: number;
   plot_count: number;
@@ -385,6 +389,18 @@ export function createFarmAnalytics(track: TrackGameEvent = noopTrackGameEvent) 
 
     // === 리텐션 계측 (행동 변경 없는 emit 배선) ===
 
+    // 데일리 보너스 노출. 자동 노출과 사용자의 명시적 재진입을 분리해
+    // "못 봄"과 "봤지만 미수령"을 BigQuery에서 구분한다(#294).
+    trackDailyBonusOpened: (params: {
+      source: DailyBonusSource;
+      context: GameAnalyticsContext;
+    }) => {
+      track('daily_bonus_opened', {
+        source: params.source,
+        ...params.context,
+      });
+    },
+
     // 데일리 보너스 수령. streak/보상값으로 H2(데일리 보너스 미스케일) 검증.
     // is_first_claim은 활성화 퍼널의 "첫 데일리 클레임" 단계를 특정하기 위한 플래그이며,
     // 첫 수령이면 first_meaningful_harvest와 동일한 패턴으로 전용 이벤트도 함께 발화한다.
@@ -392,12 +408,14 @@ export function createFarmAnalytics(track: TrackGameEvent = noopTrackGameEvent) 
       streak: number;
       rewardValue: number;
       isFirstClaim: boolean;
+      source: DailyBonusSource;
       context: GameAnalyticsContext;
     }) => {
       track('daily_bonus_claimed', {
         streak: params.streak,
         reward_value: params.rewardValue,
         is_first_claim: params.isFirstClaim,
+        source: params.source,
         ...params.context,
       });
 
@@ -405,6 +423,7 @@ export function createFarmAnalytics(track: TrackGameEvent = noopTrackGameEvent) 
         track('first_daily_bonus_claimed', {
           streak: params.streak,
           reward_value: params.rewardValue,
+          source: params.source,
           ...params.context,
         });
       }

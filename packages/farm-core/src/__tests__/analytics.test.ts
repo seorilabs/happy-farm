@@ -101,7 +101,14 @@ describe('farm analytics adapter contract', () => {
       Date.parse('2026-05-27T03:00:05.000Z')
     );
 
-    analytics.trackDailyBonusClaimed({ streak: 3, rewardValue: 90, isFirstClaim: false, context });
+    analytics.trackDailyBonusOpened({ source: 'more', context });
+    analytics.trackDailyBonusClaimed({
+      streak: 3,
+      rewardValue: 90,
+      isFirstClaim: false,
+      source: 'more',
+      context,
+    });
     analytics.trackReturnSummaryShown({ awayMs: 3600000, offlineGold: 1200, readyCropCount: 4, context });
     analytics.trackReturnSummaryCollected({ awayMs: 3600000, offlineGold: 1200, readyCropCount: 4, context });
     analytics.trackCropOfTheDayHarvested({ cropKey: 'carrot', multiplier: 2, context });
@@ -109,8 +116,18 @@ describe('farm analytics adapter contract', () => {
     analytics.trackNotificationOpened({ kind: 'harvest' });
 
     expect(track).toHaveBeenCalledWith(
+      'daily_bonus_opened',
+      expect.objectContaining({ source: 'more', gold: context.gold })
+    );
+    expect(track).toHaveBeenCalledWith(
       'daily_bonus_claimed',
-      expect.objectContaining({ streak: 3, reward_value: 90, is_first_claim: false, gold: context.gold })
+      expect.objectContaining({
+        streak: 3,
+        reward_value: 90,
+        is_first_claim: false,
+        source: 'more',
+        gold: context.gold,
+      })
     );
     expect(track).toHaveBeenCalledWith(
       'return_summary_shown',
@@ -141,15 +158,21 @@ describe('farm analytics adapter contract', () => {
       Date.parse('2026-05-27T03:00:05.000Z')
     );
 
-    analytics.trackDailyBonusClaimed({ streak: 1, rewardValue: 50, isFirstClaim: true, context });
+    analytics.trackDailyBonusClaimed({
+      streak: 1,
+      rewardValue: 50,
+      isFirstClaim: true,
+      source: 'auto_popup',
+      context,
+    });
 
     expect(track).toHaveBeenCalledWith(
       'daily_bonus_claimed',
-      expect.objectContaining({ streak: 1, reward_value: 50, is_first_claim: true })
+      expect.objectContaining({ streak: 1, reward_value: 50, is_first_claim: true, source: 'auto_popup' })
     );
     expect(track).toHaveBeenCalledWith(
       'first_daily_bonus_claimed',
-      expect.objectContaining({ streak: 1, reward_value: 50, gold: context.gold })
+      expect.objectContaining({ streak: 1, reward_value: 50, source: 'auto_popup', gold: context.gold })
     );
   });
 
@@ -162,7 +185,13 @@ describe('farm analytics adapter contract', () => {
       Date.parse('2026-05-27T03:00:05.000Z')
     );
 
-    analytics.trackDailyBonusClaimed({ streak: 5, rewardValue: 90, isFirstClaim: false, context });
+    analytics.trackDailyBonusClaimed({
+      streak: 5,
+      rewardValue: 90,
+      isFirstClaim: false,
+      source: 'welcome_back',
+      context,
+    });
 
     expect(track).not.toHaveBeenCalledWith('first_daily_bonus_claimed', expect.anything());
   });
@@ -192,7 +221,14 @@ describe('farm analytics adapter contract', () => {
       isFirstCropHarvest: true,
       context,
     });
-    analytics.trackDailyBonusClaimed({ streak: 1, rewardValue: 50, isFirstClaim: true, context });
+    analytics.trackDailyBonusOpened({ source: 'auto_popup', context });
+    analytics.trackDailyBonusClaimed({
+      streak: 1,
+      rewardValue: 50,
+      isFirstClaim: true,
+      source: 'auto_popup',
+      context,
+    });
     analytics.trackReturnSummaryShown({ awayMs: 3600000, offlineGold: 1200, readyCropCount: 4, context });
 
     const contextKeys = Object.keys(context);
@@ -204,6 +240,7 @@ describe('farm analytics adapter contract', () => {
       'crop_planted',
       'crop_harvested',
       'first_meaningful_harvest',
+      'daily_bonus_opened',
       'daily_bonus_claimed',
       'first_daily_bonus_claimed',
       'return_summary_shown',

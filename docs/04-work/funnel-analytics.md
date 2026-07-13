@@ -50,8 +50,9 @@ happy-farm 활성화·리텐션 퍼널 측정의 단일 기준 문서. 이벤트
 | **첫 유의미 수확** | `first_meaningful_harvest` | `crop`, `area`, `crop_tier`, `revenue`, context |
 | 첫 수확 보상 확인 | `onboarding_step_view` (`step` = `reward`, `step_index` = 4) | `step`, `step_index`, context |
 | 온보딩 완료 | `onboarding_complete` | context |
-| 데일리 보너스 수령 | `daily_bonus_claimed` | `streak`, `reward_value`, `is_first_claim`, context |
-| **첫 데일리 클레임** | `first_daily_bonus_claimed` | `streak`, `reward_value`, context |
+| 데일리 보너스 노출 | `daily_bonus_opened` | `source` (`auto_popup` / `more` / `welcome_back`), context |
+| 데일리 보너스 수령 | `daily_bonus_claimed` | `streak`, `reward_value`, `is_first_claim`, `source`, context |
+| **첫 데일리 클레임** | `first_daily_bonus_claimed` | `streak`, `reward_value`, `source`, context |
 
 > **온보딩 "시작"**은 별도 이벤트가 아니라 `onboarding_step_view`의 `step_index = 1` 발화로
 > 정의한다. "완료"는 마지막 단계 노출과 구분되는 별도 종료 시점이므로 전용
@@ -78,7 +79,8 @@ flowchart LR
   G --> H[first_meaningful_harvest]
   H --> I[reward view #35;4]
   I --> J[onboarding_complete]
-  J --> K[first_daily_bonus_claimed]
+  J --> K[daily_bonus_opened]
+  K --> L[first_daily_bonus_claimed]
   G -. 명시적 확인 후 이탈 .-> S[onboarding_skip]
 ```
 
@@ -94,6 +96,10 @@ flowchart LR
 | 오늘의 작물 수확 | `crop_of_the_day_harvested` | `crop`, `multiplier`, context |
 
 `notification_kind` 값: `harvest`, `daily_bonus`, `crop_of_the_day`.
+
+일일 보너스 발견성은 source별 `daily_bonus_claimed` 고유 사용자 /
+`daily_bonus_opened` 고유 사용자로 측정한다. `auto_popup`은 앱 진입 자동 노출,
+`more`는 자동 시트를 닫은 뒤 더보기에서 재진입, `welcome_back`은 복귀 요약 CTA다.
 
 ### D1(익일) 복귀
 D1 복귀는 전용 클라이언트 이벤트가 아니라 **`game_start`의 일별 코호트에서 파생**한다.
