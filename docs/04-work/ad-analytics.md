@@ -19,6 +19,7 @@ happy-farm 광고 수익·노출 모니터링의 단일 기준 문서. 이벤트
 | `growthAd` | `growth_ad_sheet` | 성장 스킵 시트 |
 | `harvestBonusAd` | `harvest_bonus_sheet` | 수확 2배 부스트 시트 |
 | `offlineBonusAd` | `return_offline_bonus` | 복귀 오프라인 골드 2배 CTA |
+| `wheelBonusAd` | `wheel_bonus_spin` | 무료 룰렛 이후 보너스 스핀 CTA |
 
 전면(interstitial) 광고는 별도 트랙이다.
 - `interstitial_shown` — `placement`: `return_welcome_back`(복귀 시점), 마일스톤 등.
@@ -37,6 +38,9 @@ happy-farm 광고 수익·노출 모니터링의 단일 기준 문서. 이벤트
 `return_summary_collected.offline_gold`에도 별도로 남는다. 광고가 추가로 만든 증분 보너스만
 분석할 때는 `reward_value - return_summary_collected.offline_gold`로 계산한다. 현재 placement
 리포트 SQL의 매출 추정은 `reward_value` 합계가 아니라 완료 수와 eCPM을 사용한다.
+
+`wheelBonusAd`의 `reward_value`는 골드/RP/부스트 당첨량이 아니라 광고가 해금한
+보너스 스핀 수 `1`이다. 실제 당첨은 무료 스핀과 동일한 슬롯·보상 계산을 사용한다.
 
 `reason` 값: `not_ready`, `unsupported`, `dismissed`, `show_ad_threw`, SDK 오류 코드.
 모든 퍼널 이벤트에는 게임 상태 컨텍스트(`gold`, `plot_count`, `prestige_level` 등,

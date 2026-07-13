@@ -34,6 +34,8 @@ import {
   getMasteryThresholds,
   getPrestigeCost,
   getRegionArchetypeLabel,
+  getResetDayIndex,
+  getResetDayStart,
   getUpgradeCost,
   recordAdWatchProgress,
   recordWeeklyAdWatchProgress,
@@ -3195,6 +3197,138 @@ describe('FarmGame UI flow', () => {
 
       await waitFor(() => expect(playEffect).toHaveBeenCalledWith('wheelSpin'));
       expect(playEffect).toHaveBeenCalledTimes(1);
+    });
+
+    test('무료 스핀 후 광고 earned에서만 보너스 스핀을 1회 지급하고 placement를 계측한다 (#298)', async () => {
+      const base = createInitialState();
+      const state: GameState = {
+        ...base,
+        onboardingCompleted: true,
+        dailyBonusState: { lastClaimedAt: NOW, streak: 1 },
+        wheelState: { ...base.wheelState, lastFreeSpinAt: NOW },
+      };
+      const track = jest.fn();
+      const rewardedAd = createReadyRewardedAd();
+      const screen = await renderGame(state, {
+        analytics: createFarmAnalytics(track),
+        useRewardedAd: () => rewardedAd,
+      });
+      await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+
+      fireEvent.press(screen.getByTestId('more-nav-button'));
+      fireEvent.press(screen.getByLabelText(messages.wheelButtonAccessibilityLabel));
+      await waitFor(() => expect(screen.getByText(messages.wheelBonusSpinAction)).toBeTruthy());
+      expect(
+        track.mock.calls.filter(
+          ([event, params]) =>
+            event === 'ad_reward_impression' && params?.placement === 'wheel_bonus_spin'
+        )
+      ).toHaveLength(1);
+
+      const action = screen.getByText(messages.wheelBonusSpinAction);
+      fireEvent.press(action);
+      fireEvent.press(action);
+      await waitFor(() => expect(rewardedAd.showAd).toHaveBeenCalledTimes(1));
+      await waitFor(() => {
+        const persisted = getLatestPersistedState();
+        expect(persisted.wheelState.bonusSpinsUsed).toBe(1);
+        expect(persisted.wheelState.lastBonusSpinAt).toBe(NOW);
+        expect(persisted.adUsage.harvestBonusAd).toEqual(state.adUsage.harvestBonusAd);
+      });
+      expect(screen.queryByText(messages.wheelBonusSpinAction)).toBeNull();
+      expect(track).toHaveBeenCalledWith(
+        'ad_reward_click',
+        expect.objectContaining({ ad_type: 'wheelBonusAd', placement: 'wheel_bonus_spin' })
+      );
+      expect(track).toHaveBeenCalledWith(
+        'ad_reward_completed',
+        expect.objectContaining({
+          ad_type: 'wheelBonusAd',
+          placement: 'wheel_bonus_spin',
+          reward_value: 1,
+        })
+      );
+    });
+
+    test('룰렛 광고 dismiss는 보너스 상태·보상을 바꾸지 않고 CTA를 유지한다 (#298)', async () => {
+      const base = createInitialState();
+      const state: GameState = {
+        ...base,
+        onboardingCompleted: true,
+        dailyBonusState: { lastClaimedAt: NOW, streak: 1 },
+        wheelState: { ...base.wheelState, lastFreeSpinAt: NOW },
+      };
+      const track = jest.fn();
+      const rewardedAd = createRewardedAd({ status: 'dismissed' });
+      const screen = await renderGame(state, {
+        analytics: createFarmAnalytics(track),
+        useRewardedAd: () => rewardedAd,
+      });
+      await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+
+      fireEvent.press(screen.getByTestId('more-nav-button'));
+      fireEvent.press(screen.getByLabelText(messages.wheelButtonAccessibilityLabel));
+      fireEvent.press(await screen.findByText(messages.wheelBonusSpinAction));
+      await waitFor(() => expect(rewardedAd.showAd).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(screen.getByText(messages.wheelBonusSpinAction)).toBeTruthy());
+      expect(getLatestPersistedState().wheelState).toEqual(state.wheelState);
+      expect(track).toHaveBeenCalledWith(
+        'ad_reward_failed',
+        expect.objectContaining({
+          ad_type: 'wheelBonusAd',
+          placement: 'wheel_bonus_spin',
+          reason: 'dismissed',
+        })
+      );
+      expect(
+        track.mock.calls.filter(([event]) => event === 'ad_reward_completed')
+      ).toHaveLength(0);
+    });
+
+    test('광고 응답 중 리셋 경계를 넘어도 예약한 보너스가 실제 상태에 지급된다 (#298)', async () => {
+      const base = createInitialState();
+      const state: GameState = {
+        ...base,
+        onboardingCompleted: true,
+        dailyBonusState: { lastClaimedAt: NOW, streak: 1 },
+        wheelState: { ...base.wheelState, lastFreeSpinAt: NOW },
+      };
+      let resolveAd: ((result: RewardedAdShowResult) => void) | null = null;
+      const rewardedAd: RewardedAdController = {
+        isAdReady: true,
+        isAdSupported: true,
+        showAd: jest.fn(
+          () =>
+            new Promise<RewardedAdShowResult>((resolve) => {
+              resolveAd = resolve;
+            })
+        ),
+      };
+      const random = jest.spyOn(Math, 'random').mockReturnValue(0);
+      const screen = await renderGame(state, { useRewardedAd: () => rewardedAd });
+      await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+
+      fireEvent.press(screen.getByTestId('more-nav-button'));
+      fireEvent.press(screen.getByLabelText(messages.wheelButtonAccessibilityLabel));
+      fireEvent.press(await screen.findByText(messages.wheelBonusSpinAction));
+      await waitFor(() => expect(rewardedAd.showAd).toHaveBeenCalledTimes(1));
+
+      const nextReset = getResetDayStart(getResetDayIndex(NOW) + 1) + 1;
+      await act(async () => {
+        jest.setSystemTime(nextReset);
+        resolveAd?.({ status: 'earned' });
+        await Promise.resolve();
+      });
+
+      await waitFor(() => {
+        const persisted = getLatestPersistedState();
+        expect(persisted.gold).toBeGreaterThan(state.gold);
+        expect(persisted.wheelState.bonusSpinsUsed).toBe(1);
+        expect(persisted.wheelState.bonusSpinDayIndex).toBe(getResetDayIndex(NOW));
+        expect(persisted.wheelState.lastBonusSpinAt).toBe(nextReset);
+      });
+      expect(screen.getByText(messages.wheelSpinningLabel)).toBeTruthy();
+      random.mockRestore();
     });
 
     test.each([

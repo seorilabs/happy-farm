@@ -1,17 +1,19 @@
 // 일일 행운 룰렛(데일리 스핀)
-// 하루 1회 무료 스핀으로 "무엇이 나올지 모르는" 가변 골드 보상을 지급해 재방문을
-// 넛지하는 장르 표준 리텐션 장치(Hay Day의 Wheel of Fortune 계열)입니다.
+// 하루 1회 무료 스핀과 선택형 광고 보너스 스핀으로 가변 보상을 지급해 재방문을
+// 넛지하는 룰렛 리텐션 장치입니다.
 //
-// - 무료 스핀은 UTC 자정 롤오버 기준으로 하루 1회 리셋됩니다(cropOfTheDay와 동일한
-//   day-index 경계). dailyBonus의 24h 쿨다운과 달리, 자정을 넘기면 다시 열립니다.
+// - 무료/보너스 cap은 cropOfTheDay와 같은 공통 day-index 경계(기본 KST 04:00)에서
+//   리셋됩니다. dailyBonus의 24h 쿨다운과는 다른 일일 경계 모델입니다.
 // - 보상 슬롯/가중치/배수는 balance.json의 `wheel` 섹션에서 읽습니다(코드 하드코딩 금지).
-// - spinWheel은 순수 함수입니다: 결과는 주입된 rng로 결정되고, 뽑은 시각을 상태
-//   (WheelState.lastFreeSpinAt)에 기록해 같은 날 두 번째 무료 스핀을 거부합니다.
+// - spinWheel/spinBonusWheel은 같은 슬롯·보상 계산을 공유하는 순수 함수입니다. 무료
+//   스핀을 먼저 소비해야 광고 보너스 스핀이 열리고, 공통 리셋일의 일일 cap을 넘으면
+//   보너스 함수가 null을 반환합니다(#298).
 // - 골드 보상은 진행도 스케일된 광고 보상(getRewardedGoldAmount)에 슬롯 배수를 곱하므로
 //   후반에도 의미가 유지됩니다. dailyBonus와 동일하게, 진행도 값(baseGold)은 순환 import를
 //   피하려고 호출부에서 주입받습니다(모듈은 GameState/constants에 의존하지 않음).
 
 import balance from './balance.json';
+import { getAdLimits } from './adLimits';
 import { getResetDayIndex, getResetDayStart } from './resetBoundary';
 
 // 진행도 정보가 없을 때 쓰는 기본 광고 보상(초기 100G). dailyBonus와 동일한 폴백.
@@ -45,6 +47,12 @@ export type WheelSlot = {
 export type WheelState = {
   // 마지막으로 무료 스핀을 돌린 UTC ms. null이면 한 번도 돌리지 않음.
   lastFreeSpinAt: number | null;
+  // 보너스 스핀 카운트가 속한 공통 리셋 일 인덱스. 레거시 세이브는 null로 정규화한다.
+  bonusSpinDayIndex: number | null;
+  // bonusSpinDayIndex에서 광고 보상으로 실행한 스핀 수.
+  bonusSpinsUsed: number;
+  // 마지막 광고 보너스 스핀 시각. 원격 쿨다운이 0보다 커질 때도 재시작 후 유지한다.
+  lastBonusSpinAt: number | null;
 };
 
 export type WheelStatus = {
@@ -52,6 +60,12 @@ export type WheelStatus = {
   canSpin: boolean;
   // 다음 무료 스핀이 열리는 UTC ms(가능하면 now). 알림/카운트다운 표시용.
   nextSpinAt: number;
+  // 무료 스핀을 오늘 소비했고 광고 보너스 일일 cap이 남았는지.
+  canBonusSpin: boolean;
+  // 현재 리셋일에 사용한 광고 보너스 스핀 수(날짜가 다르면 0으로 간주).
+  bonusSpinsUsedToday: number;
+  // Remote Config가 반영된 현재 일일 cap.
+  bonusSpinDailyLimit: number;
 };
 
 // 타입별 보상 유니언. 적용(골드 가산/RP 가산/부스트 연장)은 호출부(FarmGame)에서 분기한다.
@@ -87,7 +101,12 @@ export const WHEEL_SLOTS: readonly WheelSlot[] = (
 ).map(normalizeWheelSlot);
 
 export function createInitialWheelState(): WheelState {
-  return { lastFreeSpinAt: null };
+  return {
+    lastFreeSpinAt: null,
+    bonusSpinDayIndex: null,
+    bonusSpinsUsed: 0,
+    lastBonusSpinAt: null,
+  };
 }
 
 // 직렬화된 unknown 값을 WheelState로 정규화한다. 형식 오류는 초기 상태로 복구한다
@@ -103,7 +122,26 @@ export function normalizeWheelState(value: unknown): WheelState {
     raw.lastFreeSpinAt > 0
       ? raw.lastFreeSpinAt
       : null;
-  return { lastFreeSpinAt };
+  const bonusSpinDayIndex =
+    typeof raw.bonusSpinDayIndex === 'number' &&
+    Number.isInteger(raw.bonusSpinDayIndex) &&
+    raw.bonusSpinDayIndex >= 0
+      ? raw.bonusSpinDayIndex
+      : null;
+  const bonusSpinsUsed =
+    bonusSpinDayIndex != null &&
+    typeof raw.bonusSpinsUsed === 'number' &&
+    Number.isFinite(raw.bonusSpinsUsed) &&
+    raw.bonusSpinsUsed > 0
+      ? Math.floor(raw.bonusSpinsUsed)
+      : 0;
+  const lastBonusSpinAt =
+    typeof raw.lastBonusSpinAt === 'number' &&
+    Number.isFinite(raw.lastBonusSpinAt) &&
+    raw.lastBonusSpinAt > 0
+      ? raw.lastBonusSpinAt
+      : null;
+  return { lastFreeSpinAt, bonusSpinDayIndex, bonusSpinsUsed, lastBonusSpinAt };
 }
 
 // 리셋 일 인덱스. 같은 리셋 일이면 같은 값. cropOfTheDay와 동일한 리셋 경계(공통
@@ -117,15 +155,20 @@ function dayIndex(ms: number): number {
 export function getWheelStatus(state: WheelState, now = Date.now()): WheelStatus {
   const safeNow = Number.isFinite(now) ? now : Date.now();
   const todayIndex = dayIndex(safeNow);
-  if (state.lastFreeSpinAt == null) {
-    return { canSpin: true, nextSpinAt: safeNow };
-  }
-  const safeLast = Math.min(state.lastFreeSpinAt, safeNow);
-  const canSpin = dayIndex(safeLast) < todayIndex;
+  const clockReversed = state.lastFreeSpinAt != null && state.lastFreeSpinAt > safeNow;
+  const safeLast = state.lastFreeSpinAt == null ? null : Math.min(state.lastFreeSpinAt, safeNow);
+  const canSpin = safeLast == null || dayIndex(safeLast) < todayIndex;
+  const bonusSpinsUsedToday = state.bonusSpinDayIndex === todayIndex ? state.bonusSpinsUsed : 0;
+  const bonusSpinDailyLimit = getAdLimits().wheelBonusAdDailyLimit;
   return {
     canSpin,
     // 이미 오늘 돌렸으면 다음 리셋 경계(기본 KST 04:00)에 열린다.
     nextSpinAt: canSpin ? safeNow : getResetDayStart(todayIndex + 1),
+    // A future free-spin timestamp locks both paths. Otherwise clock rollback
+    // could keep the free spin locked while reopening an extra ad spin.
+    canBonusSpin: !canSpin && !clockReversed && bonusSpinsUsedToday < bonusSpinDailyLimit,
+    bonusSpinsUsedToday,
+    bonusSpinDailyLimit,
   };
 }
 
@@ -222,6 +265,39 @@ export function spinWheel(
   const slot = pickWheelSlot(rng);
   return {
     reward: getWheelSlotReward(slot, baseGold),
-    newState: { lastFreeSpinAt: safeNow },
+    newState: {
+      lastFreeSpinAt: safeNow,
+      bonusSpinDayIndex: dayIndex(safeNow),
+      bonusSpinsUsed: 0,
+      lastBonusSpinAt: state.lastBonusSpinAt,
+    },
+  };
+}
+
+/**
+ * 무료 스핀을 소비한 뒤 광고 보상 콜백에서 실행하는 추가 스핀.
+ * 무료 스핀과 같은 슬롯 추첨·보상 계산을 사용하되, 공통 리셋일의 bonus count만
+ * 증가시킨다. 무료 스핀이 남았거나 일일 cap을 소진했으면 null이다.
+ */
+export function spinBonusWheel(
+  state: WheelState,
+  baseGold: number = WHEEL_BASE_GOLD_FALLBACK,
+  now = Date.now(),
+  rng: () => number = Math.random
+): WheelSpinResult | null {
+  const status = getWheelStatus(state, now);
+  if (!status.canBonusSpin) {
+    return null;
+  }
+  const safeNow = Number.isFinite(now) ? now : Date.now();
+  const slot = pickWheelSlot(rng);
+  return {
+    reward: getWheelSlotReward(slot, baseGold),
+    newState: {
+      lastFreeSpinAt: state.lastFreeSpinAt,
+      bonusSpinDayIndex: dayIndex(safeNow),
+      bonusSpinsUsed: status.bonusSpinsUsedToday + 1,
+      lastBonusSpinAt: safeNow,
+    },
   };
 }

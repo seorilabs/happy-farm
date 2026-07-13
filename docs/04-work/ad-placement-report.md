@@ -23,6 +23,7 @@ happy-farm 보상형 광고를 **placement 단위로 정기 모니터링**하기
 | `growth_ad_sheet` | 성장 스킵 시트 | `growthAd` |
 | `harvest_bonus_sheet` | 수확 2배 부스트 시트 | `harvestBonusAd` |
 | `return_offline_bonus` | 복귀 오프라인 골드 2배 CTA | `offlineBonusAd` |
+| `wheel_bonus_spin` | 무료 룰렛 이후 보너스 스핀 CTA | `wheelBonusAd` |
 
 ## 리포트 지표
 모두 placement 단위로 집계한다. 정의·근거는 `ad-analytics.md`의 "파생 지표"와 일치한다.

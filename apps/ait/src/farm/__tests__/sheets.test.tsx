@@ -814,7 +814,19 @@ describe('WheelSheet', () => {
   // 연출 총 길이(2초) + 여유. 스텝 타이머가 전부 소진되도록 충분히 진행한다.
   const SPIN_SETTLE_MS = 4000;
 
-  function renderWheel(state: GameState, onSpin: jest.Mock, onRevealed: jest.Mock) {
+  function renderWheel(
+    state: GameState,
+    onSpin: jest.Mock,
+    onRevealed: jest.Mock,
+    bonus: {
+      onBonusSpin?: jest.Mock;
+      supported?: boolean;
+      ready?: boolean;
+      allowed?: boolean;
+      blockedReason?: string;
+      onImpression?: jest.Mock;
+    } = {}
+  ) {
     return render(
       <WheelSheet
         gameState={state}
@@ -822,6 +834,12 @@ describe('WheelSheet', () => {
         messages={messages}
         now={NOW}
         onSpin={onSpin}
+        onBonusSpin={bonus.onBonusSpin ?? jest.fn(async () => null)}
+        bonusAdSupported={bonus.supported ?? false}
+        bonusAdReady={bonus.ready ?? false}
+        bonusAdAllowed={bonus.allowed ?? true}
+        bonusAdBlockedReason={bonus.blockedReason ?? ''}
+        onBonusImpression={bonus.onImpression}
         onRevealed={onRevealed}
       />
     );
@@ -921,6 +939,101 @@ describe('WheelSheet', () => {
     expect(screen.getByTestId('wheel-result')).toBeTruthy();
   });
 
+  test('광고 보너스 CTA는 오늘 무료 스핀을 소비한 뒤에만 노출되고 impression은 1회다 (#298)', () => {
+    const fresh = createInitialState();
+    const freshScreen = renderWheel(fresh, jest.fn(), jest.fn(), {
+      supported: true,
+      ready: true,
+    });
+    expect(freshScreen.queryByText(messages.wheelBonusSpinAction)).toBeNull();
+    freshScreen.unmount();
+
+    const used: GameState = {
+      ...fresh,
+      wheelState: { ...fresh.wheelState, lastFreeSpinAt: NOW },
+    };
+    const onImpression = jest.fn();
+    const screen = renderWheel(used, jest.fn(), jest.fn(), {
+      supported: true,
+      ready: true,
+      onImpression,
+    });
+    expect(screen.getByText(messages.wheelBonusReadyLabel)).toBeTruthy();
+    expect(screen.getByText(messages.wheelBonusSpinAction)).toBeTruthy();
+    expect(onImpression).toHaveBeenCalledTimes(1);
+
+    screen.rerender(
+      <WheelSheet
+        gameState={used}
+        locale={LOCALE}
+        messages={messages}
+        now={NOW + 1}
+        onSpin={jest.fn()}
+        onBonusSpin={jest.fn(async () => null)}
+        bonusAdSupported
+        bonusAdReady
+        bonusAdAllowed
+        bonusAdBlockedReason=""
+        onBonusImpression={onImpression}
+      />
+    );
+    expect(onImpression).toHaveBeenCalledTimes(1);
+  });
+
+  test('광고 보너스는 async earned 결과로 같은 연출을 시작하고 빠른 재탭은 한 요청만 보낸다 (#298)', async () => {
+    const base = createInitialState();
+    const state: GameState = {
+      ...base,
+      wheelState: { ...base.wheelState, lastFreeSpinAt: NOW },
+    };
+    const reward = { type: 'gold' as const, slotKey: WHEEL_SLOTS[1]!.key, gold: 321 };
+    const onBonusSpin = jest.fn(async () => reward);
+    const onRevealed = jest.fn();
+    const screen = renderWheel(state, jest.fn(), onRevealed, {
+      onBonusSpin,
+      supported: true,
+      ready: true,
+    });
+
+    const action = screen.getByText(messages.wheelBonusSpinAction);
+    fireEvent.press(action);
+    fireEvent.press(action);
+    expect(onBonusSpin).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(screen.getByText(messages.wheelSpinningLabel)).toBeTruthy();
+
+    act(() => {
+      jest.advanceTimersByTime(SPIN_SETTLE_MS);
+    });
+    expect(onRevealed).toHaveBeenCalledTimes(1);
+    expect(onRevealed).toHaveBeenCalledWith(reward);
+  });
+
+  test('광고가 보상을 주지 않으면 연출 없이 CTA가 다시 활성화된다 (#298)', async () => {
+    const base = createInitialState();
+    const state: GameState = {
+      ...base,
+      wheelState: { ...base.wheelState, lastFreeSpinAt: NOW },
+    };
+    const onBonusSpin = jest.fn(async () => null);
+    const onRevealed = jest.fn();
+    const screen = renderWheel(state, jest.fn(), onRevealed, {
+      onBonusSpin,
+      supported: true,
+      ready: true,
+    });
+
+    fireEvent.press(screen.getByText(messages.wheelBonusSpinAction));
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(screen.queryByText(messages.wheelSpinningLabel)).toBeNull();
+    expect(screen.getByText(messages.wheelBonusSpinAction)).toBeTruthy();
+    expect(onRevealed).not.toHaveBeenCalled();
+  });
+
   test('rp/harvest_boost 슬롯도 릴에 타입별 보상 표기(RP·×배수/시간)로 노출된다(#209)', () => {
     const state = createInitialState();
     const screen = renderWheel(state, jest.fn(), jest.fn());
@@ -969,7 +1082,10 @@ describe('WheelSheet', () => {
     const base = createInitialState();
     // 세이브에 미래 타임스탬프가 남은 역전 상황: getWheelStatus가 now로 클램프해
     // canSpin=false + 다음 자정 잔여(0~24h)로 정규화한다.
-    const state: GameState = { ...base, wheelState: { lastFreeSpinAt: NOW + 5 * DAY_MS } };
+    const state: GameState = {
+      ...base,
+      wheelState: { ...base.wheelState, lastFreeSpinAt: NOW + 5 * DAY_MS },
+    };
     const screen = renderWheel(state, jest.fn(), jest.fn());
     expect(screen.queryByText(messages.wheelSpinAction)).toBeNull();
     // 다음 스핀은 다음 리셋 경계(기본 KST 04:00)에 열린다(#251).
@@ -981,7 +1097,7 @@ describe('WheelSheet', () => {
 
   test('오늘 이미 스핀했으면 버튼 없이 다음 스핀 카운트다운이 노출된다', () => {
     const base = createInitialState();
-    const state: GameState = { ...base, wheelState: { lastFreeSpinAt: NOW } };
+    const state: GameState = { ...base, wheelState: { ...base.wheelState, lastFreeSpinAt: NOW } };
     const screen = renderWheel(state, jest.fn(), jest.fn());
     expect(screen.queryByText(messages.wheelSpinAction)).toBeNull();
   });

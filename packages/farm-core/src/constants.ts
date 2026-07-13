@@ -23,7 +23,7 @@ import { getResetDayIndex } from './resetBoundary';
 import { createInitialPlacedDecorations, normalizePlacedDecorations } from './decorations';
 import { createInitialDailyMissionState, normalizeDailyMissionState } from './missions';
 import { createInitialWeeklyMissionState, normalizeWeeklyMissionState } from './weeklyMissions';
-import { createInitialWheelState, normalizeWheelState, type WheelSpinResult } from './wheel';
+import { createInitialWheelState, getWheelStatus, normalizeWheelState, type WheelSpinResult } from './wheel';
 import {
   createInitialAutomationSettings,
   createInitialResearchState,
@@ -47,7 +47,8 @@ export type RewardedAdType =
   | 'growthAd'
   | 'harvestBonusAd'
   | 'plotDiscountAd'
-  | 'offlineBonusAd';
+  | 'offlineBonusAd'
+  | 'wheelBonusAd';
 
 export const FARM_AREAS = balance.areas as Array<{
   key: AreaKey;
@@ -606,6 +607,29 @@ export function getRewardedAdLimitStatus(
     return { allowed: true, reason: '' };
   }
 
+  // 룰렛 광고의 cap/cooldown source of truth는 WheelState다. AdUsage에 같은
+  // 카운터를 복제하면 세이브 마이그레이션·리셋 경계에서 둘이 드리프트할 수 있다.
+  if (type === 'wheelBonusAd') {
+    const wheelStatus = getWheelStatus(gameState.wheelState, now);
+    if (wheelStatus.bonusSpinsUsedToday >= limits.wheelBonusAdDailyLimit) {
+      return { allowed: false, reason: messages.adDailyLimitReached };
+    }
+    const lastUsedAt = gameState.wheelState.lastBonusSpinAt;
+    const safeLastUsedAt = lastUsedAt == null ? null : Math.min(lastUsedAt, now);
+    if (
+      safeLastUsedAt != null &&
+      now - safeLastUsedAt < limits.wheelBonusAdCooldownMs
+    ) {
+      return {
+        allowed: false,
+        reason: messages.adCooldown(
+          formatDuration(limits.wheelBonusAdCooldownMs - (now - safeLastUsedAt), locale)
+        ),
+      };
+    }
+    return { allowed: true, reason: '' };
+  }
+
   const limit =
     type === 'growthAd'
       ? limits.growthAdDailyLimit
@@ -784,6 +808,10 @@ export function recordRewardedAdUsage(
         dailyCount: adUsage.offlineBonusAd.dailyCount + 1,
       },
     };
+  }
+
+  if (type === 'wheelBonusAd') {
+    return adUsage;
   }
 
   return {

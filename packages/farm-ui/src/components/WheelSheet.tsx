@@ -19,10 +19,9 @@ import { SheetAction } from './SheetParts';
 
 // 데일리 룰렛 시트(#208).
 //
-// 핵심 계약: 보상 확정과 연출은 분리된다. 스핀을 누르는 즉시 onSpin(호출부의
-// spinWheel + 골드 반영)이 실행돼 보상이 확정되고, 이후 1.5~2.5초의 슬롯 순회-감속
-// 하이라이트는 순수 코스메틱이다. 연출 중 시트가 닫히거나 언마운트돼도 보상은 이미
-// 지급된 상태라 유실/이중 지급이 없다(타이머만 정리).
+// 핵심 계약: 보상 확정과 연출은 분리된다. 무료 스핀은 탭 즉시, 보너스 스핀은 광고
+// earned 응답 직후 상태에 먼저 반영되고, 그 다음 슬롯 순회-감속 하이라이트가 시작된다.
+// 연출 중 시트가 닫히거나 언마운트돼도 보상은 이미 지급된 상태라 유실/이중 지급이 없다.
 //
 // 감속 스텝은 easeOutCubic 누적 시각의 차분으로 만들어 앞은 빠르고 끝은 느리게
 // 슬롯을 순회하며, 마지막 스텝이 당첨 슬롯에서 멈춘다. 하이라이트 셀의 펄스는
@@ -57,6 +56,12 @@ export function WheelSheet({
   messages,
   now,
   onSpin,
+  onBonusSpin,
+  bonusAdSupported,
+  bonusAdReady,
+  bonusAdAllowed,
+  bonusAdBlockedReason,
+  onBonusImpression,
   onRevealed,
 }: {
   gameState: GameState;
@@ -65,6 +70,14 @@ export function WheelSheet({
   now: number;
   // 스핀 커밋(보상 확정 + 상태 반영)을 수행하고 확정 보상을 돌려준다. 스핀 불가면 null.
   onSpin: () => WheelReward | null;
+  // 광고 earned 뒤 보너스 스핀을 커밋한다. dismiss/failure/cap 소진이면 null.
+  onBonusSpin: () => Promise<WheelReward | null>;
+  bonusAdSupported: boolean;
+  bonusAdReady: boolean;
+  bonusAdAllowed: boolean;
+  bonusAdBlockedReason: string;
+  // 실제 보너스 CTA가 보일 때 마운트당 1회 광고 impression을 기록한다.
+  onBonusImpression?: () => void;
   // 연출 종료(당첨 슬롯 정지) 시 1회 호출 — 호출부에서 타입별 토스트/펄스에 사용.
   onRevealed?: (reward: WheelReward) => void;
 }) {
@@ -81,9 +94,13 @@ export function WheelSheet({
   const [highlightIndex, setHighlightIndex] = useState<number | null>(null);
   // 연출 종료 후 결과 카드에 표시할 확정 보상(당첨 슬롯 강조 유지용 인덱스 포함).
   const [result, setResult] = useState<SpinPlayback | null>(null);
+  // 광고 SDK 응답을 기다리는 동안 CTA를 잠가 빠른 재탭으로 두 요청이 열리지 않게 한다.
+  const [bonusRequestPending, setBonusRequestPending] = useState(false);
 
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const spinningRef = useRef(false);
+  const mountedRef = useRef(true);
+  const bonusImpressionTrackedRef = useRef(false);
   // 하이라이트 셀 펄스(0→1 반복). useNativeDriver로 게임 틱과 간섭하지 않는다.
   const pulseAnim = useRef(new Animated.Value(0)).current;
   // 실행 중인 펄스 루프 핸들. 재스핀(자정 롤오버 후) 시 이전 루프를 명시적으로 stop해
@@ -97,10 +114,11 @@ export function WheelSheet({
     pulseAnim.setValue(0);
   }
 
-  // 언마운트 시 타이머/애니메이션만 정리한다. 보상은 스핀 시점에 이미 확정·지급됐으므로
-  // 연출이 중단돼도 유실되지 않는다(이 계약은 sheets.test.tsx에서 고정).
+  // 언마운트 시 타이머/애니메이션만 정리한다. 연출에 들어간 보상은 이미 확정·지급됐으므로
+  // 중단돼도 유실되지 않는다(이 계약은 sheets.test.tsx에서 고정).
   useEffect(() => {
     return () => {
+      mountedRef.current = false;
       if (timerRef.current != null) {
         clearTimeout(timerRef.current);
         timerRef.current = null;
@@ -111,15 +129,26 @@ export function WheelSheet({
     // 마운트-1회 등록으로 충분하다.
   }, []);
 
-  function startSpin() {
-    // 연출 중 재탭 가드(보상 커밋은 호출부에서도 이중 방지되지만, 연출 중복 시작도 막는다).
-    if (spinningRef.current) {
+  const bonusActionVisible =
+    status.canBonusSpin && bonusAdSupported && playback == null;
+
+  useEffect(() => {
+    if (!status.canBonusSpin) {
+      bonusImpressionTrackedRef.current = false;
       return;
     }
-    const reward = onSpin();
-    if (reward == null) {
+    if (
+      !bonusActionVisible ||
+      !bonusAdAllowed ||
+      bonusImpressionTrackedRef.current
+    ) {
       return;
     }
+    bonusImpressionTrackedRef.current = true;
+    onBonusImpression?.();
+  }, [bonusActionVisible, bonusAdAllowed, onBonusImpression, status.canBonusSpin]);
+
+  function beginPlayback(reward: WheelReward) {
     const winnerIndex = Math.max(
       0,
       WHEEL_SLOTS.findIndex((slot) => slot.key === reward.slotKey)
@@ -162,6 +191,42 @@ export function WheelSheet({
       }, delays[step] ?? 0);
     };
     runStep(0);
+  }
+
+  function startSpin() {
+    // 연출 중 재탭 가드(보상 커밋은 호출부에서도 이중 방지되지만, 연출 중복 시작도 막는다).
+    if (spinningRef.current) {
+      return;
+    }
+    const reward = onSpin();
+    if (reward == null) {
+      return;
+    }
+    beginPlayback(reward);
+  }
+
+  async function startBonusSpin() {
+    if (spinningRef.current || !bonusAdReady || !bonusAdAllowed) {
+      return;
+    }
+    // 광고가 떠 있는 동안에도 React 렌더보다 먼저 잠그는 동기 ref가 이중 요청을 막는다.
+    spinningRef.current = true;
+    setBonusRequestPending(true);
+    let reward: WheelReward | null = null;
+    try {
+      reward = await onBonusSpin();
+    } catch {
+      reward = null;
+    }
+    if (!mountedRef.current) {
+      return;
+    }
+    setBonusRequestPending(false);
+    if (reward == null) {
+      spinningRef.current = false;
+      return;
+    }
+    beginPlayback(reward);
   }
 
   const highlightScale = pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.18] });
@@ -246,6 +311,8 @@ export function WheelSheet({
             <Text style={styles.statusLabel}>
               {status.canSpin
                 ? messages.wheelReadyLabel
+                : status.canBonusSpin && bonusAdSupported && bonusAdAllowed
+                  ? messages.wheelBonusReadyLabel
                 : messages.wheelNextSpinLabel(
                     formatRemainingTime(Math.max(0, status.nextSpinAt - safeNow), locale)
                   )}
@@ -260,6 +327,17 @@ export function WheelSheet({
           윈도우)에 의존하지 않고 렌더 단계에서 확정되게 한다(spinningRef는 이중 안전망). */}
       {status.canSpin ? (
         <SheetAction label={messages.wheelSpinAction} disabled={playback != null} onPress={startSpin} />
+      ) : null}
+      {bonusActionVisible ? (
+        <SheetAction
+          label={
+            bonusAdAllowed || bonusAdBlockedReason.length === 0
+              ? messages.wheelBonusSpinAction
+              : bonusAdBlockedReason
+          }
+          disabled={bonusRequestPending || !bonusAdReady || !bonusAdAllowed}
+          onPress={() => void startBonusSpin()}
+        />
       ) : null}
     </View>
   );

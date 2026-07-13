@@ -425,6 +425,7 @@ const rewardedAdGates = [
   { key: 'harvestBonusAd', dailyLimit: ads.harvestBonusAdDailyLimit, cooldownMs: ads.harvestBonusAdCooldownMs },
   { key: 'plotDiscountAd', dailyLimit: ads.plotDiscountAdDailyLimit, cooldownMs: ads.plotDiscountAdCooldownMs },
   { key: 'offlineBonusAd', dailyLimit: ads.offlineBonusAdDailyLimit, cooldownMs: ads.offlineBonusAdCooldownMs },
+  { key: 'wheelBonusAd', dailyLimit: ads.wheelBonusAdDailyLimit, cooldownMs: ads.wheelBonusAdCooldownMs },
 ];
 for (const gate of rewardedAdGates) {
   check(

@@ -27,6 +27,10 @@ export type AdLimitsConfig = {
   harvestBonusAdDailyLimit: number;
   /** 수확 보너스 광고: 쿨다운(ms) */
   harvestBonusAdCooldownMs: number;
+  /** 룰렛 보너스 스핀 광고: 일일 한도 */
+  wheelBonusAdDailyLimit: number;
+  /** 룰렛 보너스 스핀 광고: 쿨다운(ms) */
+  wheelBonusAdCooldownMs: number;
   /** 마일스톤 전면 광고: 최소 노출 간격(ms) */
   interstitialMilestoneCooldownMs: number;
   /** 복귀(welcome-back) 전면 광고: 최소 노출 간격(ms) */
@@ -44,6 +48,8 @@ export const DEFAULT_AD_LIMITS: AdLimitsConfig = {
   offlineBonusAdCooldownMs: balance.ads.offlineBonusAdCooldownMs,
   harvestBonusAdDailyLimit: balance.ads.harvestBonusAdDailyLimit,
   harvestBonusAdCooldownMs: balance.ads.harvestBonusAdCooldownMs,
+  wheelBonusAdDailyLimit: balance.ads.wheelBonusAdDailyLimit,
+  wheelBonusAdCooldownMs: balance.ads.wheelBonusAdCooldownMs,
   interstitialMilestoneCooldownMs: balance.ads.interstitialMilestoneCooldownMs,
   returnInterstitialCooldownMs: balance.ads.returnInterstitialCooldownMs,
 };
