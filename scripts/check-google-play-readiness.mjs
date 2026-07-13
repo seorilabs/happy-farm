@@ -1,11 +1,18 @@
 #!/usr/bin/env node
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { execFileSync } from 'node:child_process';
+import { existsSync, lstatSync, readdirSync, readFileSync } from 'node:fs';
+import { basename, join, relative } from 'node:path';
+
+import releaseIntegrity from './lib/google-play-release-integrity.js';
+
+const { REQUIRED_AUDIO_RESOURCE_NAMES, validateAabEntries, validateAudioKeepFile, validateReleaseBuildConfiguration } =
+  releaseIntegrity;
 
 const root = process.cwd();
 const jsonMode = process.argv.includes('--json');
+const requireAab = process.argv.includes('--require-aab');
 const placeholderTexts = new Set(['', '확정 필요', 'TBD', 'TODO', 'FIXME', 'N/A']);
-const ignoredDirectories = new Set(['.git', '.granite', '.swc', 'build', 'coverage', 'dist', 'node_modules']);
+const ignoredDirectories = new Set(['.git', '.granite', '.swc', 'Pods', 'build', 'coverage', 'dist', 'node_modules']);
 const result = {
   status: 'pass',
   passes: [],
@@ -72,7 +79,18 @@ function collectFiles(startPath, predicate = () => true) {
       continue;
     }
 
-    const stat = statSync(current);
+    let stat;
+    try {
+      stat = lstatSync(current);
+    } catch (error) {
+      if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
+        continue;
+      }
+      throw error;
+    }
+    if (stat.isSymbolicLink()) {
+      continue;
+    }
     if (stat.isDirectory()) {
       for (const child of readdirSync(current)) {
         if (ignoredDirectories.has(child)) {
@@ -244,19 +262,20 @@ if (config == null) {
   assertValue(
     `storeListing.shortDescription.${defaultLanguage}`,
     listingValue(config, 'shortDescription', defaultLanguage),
-    (value) => typeof value === 'string' && value.length > 0 && value.length <= 80,
+    (value) => typeof value === 'string' && value.length > 0 && value.length <= 80
   );
   assertValue(
     `storeListing.fullDescription.${defaultLanguage}`,
     listingValue(config, 'fullDescription', defaultLanguage),
-    (value) => typeof value === 'string' && value.length > 0 && value.length <= 4000,
+    (value) => typeof value === 'string' && value.length > 0 && value.length <= 4000
   );
   assertValue(`release.notes.${defaultLanguage}`, releaseNote(config, defaultLanguage));
 
   for (const declaration of ['contentRating', 'targetAudience', 'dataSafety', 'ads']) {
     assertField(config, `contentDeclarations.${declaration}`);
   }
-  const koreaDistribution = config.contentDeclarations?.koreaDistribution ?? config.contentDeclarations?.koreaGameDistribution;
+  const koreaDistribution =
+    config.contentDeclarations?.koreaDistribution ?? config.contentDeclarations?.koreaGameDistribution;
   assertValue('contentDeclarations.koreaDistribution', koreaDistribution);
   if (config.appType === 'game' && yesLike(koreaDistribution)) {
     assertField(config, 'contentDeclarations.koreaGameRating');
@@ -318,14 +337,20 @@ if (!androidRootExists || appBuildPath == null) {
       ? readFileSync(repoPath(androidProject.rootBuildPath), 'utf8')
       : '';
   const applicationId = parseGradleValue(appBuildContents, 'applicationId');
-  const targetSdk = parseGradleNumber(appBuildContents, ['targetSdk', 'targetSdkVersion']) || parseGradleNumber(rootBuildContents, ['targetSdk', 'targetSdkVersion']);
+  const targetSdk =
+    parseGradleNumber(appBuildContents, ['targetSdk', 'targetSdkVersion']) ||
+    parseGradleNumber(rootBuildContents, ['targetSdk', 'targetSdkVersion']);
   const versionCode = parseGradleNumber(appBuildContents, ['versionCode']);
 
   if (applicationId == null) {
     fail('Android applicationId를 찾지 못했습니다.', appBuildPath);
   } else {
     pass('Android applicationId를 찾았습니다.', applicationId);
-    if (typeof config?.packageName === 'string' && /^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/.test(config.packageName) && config.packageName !== applicationId) {
+    if (
+      typeof config?.packageName === 'string' &&
+      /^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/.test(config.packageName) &&
+      config.packageName !== applicationId
+    ) {
       fail('Google Play packageName과 Android applicationId가 다릅니다.', `${config.packageName} != ${applicationId}`);
     }
   }
@@ -353,23 +378,80 @@ if (!androidRootExists || appBuildPath == null) {
   } else {
     pass('Android release signing 설정이 있습니다.');
   }
+
+  const releaseConfigurationFailures = validateReleaseBuildConfiguration(appBuildContents);
+  if (releaseConfigurationFailures.length === 0) {
+    pass('Android release 빌드에 R8 코드·리소스 최적화가 활성화되어 있습니다.');
+  } else {
+    for (const message of releaseConfigurationFailures) {
+      fail(message, appBuildPath);
+    }
+  }
+
+  const audioKeepPath = 'apps/mobile/android/app/src/main/res/raw/com_seorilabs_happyfarm_audio_keep.xml';
+  if (!existsSync(repoPath(audioKeepPath))) {
+    fail('동적 Android 음원 보존 규칙 파일이 없습니다.', audioKeepPath);
+  } else {
+    const audioKeepFailures = validateAudioKeepFile(readFileSync(repoPath(audioKeepPath), 'utf8'));
+    if (audioKeepFailures.length === 0) {
+      pass('동적 Android 음원 7개의 리소스 보존 규칙이 있습니다.', audioKeepPath);
+    } else {
+      for (const message of audioKeepFailures) {
+        fail(message, audioKeepPath);
+      }
+    }
+  }
 }
 
-const aabSearchRoots = androidProject == null ? androidProjects.map((project) => project.bundleRoot) : [androidProject.bundleRoot];
-const aabFiles = collectFilesFrom(aabSearchRoots, (path) => path.endsWith('.aab'));
-if (aabFiles.length === 0) {
-  fail('Android App Bundle(.aab)이 없습니다.', '예상 예: apps/mobile/android/app/build/outputs/bundle/release/app-release.aab');
+const configuredAabPath = config?.release?.aabPath;
+if (typeof configuredAabPath !== 'string' || !isConcrete(configuredAabPath)) {
+  fail('release.aabPath 값이 확정되지 않았습니다.', configuredAabPath == null ? 'missing' : String(configuredAabPath));
+} else if (!existsSync(repoPath(configuredAabPath))) {
+  const detail = `${configuredAabPath}${requireAab ? '' : ' (릴리스 빌드에서는 --require-aab 사용)'}`;
+  if (requireAab) {
+    fail('Android App Bundle(.aab)이 없습니다.', detail);
+  } else {
+    warn('Android App Bundle(.aab)이 없어 산출물 검사를 건너뜁니다.', detail);
+  }
 } else {
-  pass('Android App Bundle(.aab)을 찾았습니다.', aabFiles.join(', '));
+  pass('설정에 지정된 Android App Bundle(.aab)을 찾았습니다.', configuredAabPath);
+  try {
+    const entries = execFileSync('jar', ['tf', repoPath(configuredAabPath)], {
+      encoding: 'utf8',
+      maxBuffer: 16 * 1024 * 1024,
+    })
+      .split(/\r?\n/)
+      .filter(Boolean);
+    const artAssetFileNames = collectFiles('apps/mobile/src/art/assets', (path) => path.endsWith('.png')).map((path) =>
+      basename(path)
+    );
+    const aabFailures = validateAabEntries(entries, artAssetFileNames);
+    if (aabFailures.length === 0) {
+      pass('AAB에 R8 가독화 파일이 포함되어 있습니다.');
+      pass(`AAB에 동적 Android 음원 ${REQUIRED_AUDIO_RESOURCE_NAMES.length}개가 포함되어 있습니다.`);
+      pass(`AAB에 작물·밭 이미지 ${artAssetFileNames.length}개가 포함되어 있습니다.`);
+    } else {
+      for (const message of aabFailures) {
+        fail(message, configuredAabPath);
+      }
+    }
+  } catch (error) {
+    fail('Android App Bundle(.aab) 내용을 검사할 수 없습니다.', error instanceof Error ? error.message : String(error));
+  }
 }
 
 const nativeSourceRoots = androidProject?.sourceRoots ?? ['apps/mobile', 'packages/farm-core', 'packages/farm-ui'];
 const sourceFiles = collectFilesFrom(nativeSourceRoots, (path) => {
   return /\.(ts|tsx|js|jsx)$/.test(path) && !path.includes('__tests__') && !/\.(test|spec)\./.test(path);
 });
-const appsInTossImports = sourceFiles.filter((path) => readFileSync(repoPath(path), 'utf8').includes('@apps-in-toss/framework'));
+const appsInTossImports = sourceFiles.filter((path) =>
+  readFileSync(repoPath(path), 'utf8').includes('@apps-in-toss/framework')
+);
 if (appsInTossImports.length > 0) {
-  fail('Google Play 네이티브 런타임에서 확인되지 않은 AppsInToss API import가 남아 있습니다.', appsInTossImports.join(', '));
+  fail(
+    'Google Play 네이티브 런타임에서 확인되지 않은 AppsInToss API import가 남아 있습니다.',
+    appsInTossImports.join(', ')
+  );
 } else {
   pass('앱 소스에서 AppsInToss framework import를 찾지 못했습니다.');
 }

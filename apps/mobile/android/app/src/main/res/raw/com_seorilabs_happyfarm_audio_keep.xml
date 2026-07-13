@@ -1,0 +1,3 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@raw/farm_bgm_loop,@raw/harvest_coin,@raw/sfx_plant,@raw/sfx_wheel_spin,@raw/sting_mutation,@raw/sting_reward,@raw/sting_unlock" />

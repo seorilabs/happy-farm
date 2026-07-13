@@ -214,6 +214,9 @@ jobs:
           GOOGLE_PLAY_VERSION_NAME: ${{ steps.release-version.outputs.version_name }}
         run: ./gradlew :app:bundleRelease --no-daemon -PversionCodeOverride="$GOOGLE_PLAY_VERSION_CODE" -PversionNameOverride="$GOOGLE_PLAY_VERSION_NAME"
 
+      - name: Verify Android release bundle
+        run: pnpm check:play:release -- --json
+
       - name: Upload AAB artifact
         uses: actions/upload-artifact@v7
         with:
@@ -250,7 +253,3 @@ jobs:
           fi
 
           python3 scripts/upload-google-play-internal.py "${args[@]}"
-
-      - name: Print remaining Google Play readiness blockers
-        continue-on-error: true
-        run: pnpm check:play -- --json

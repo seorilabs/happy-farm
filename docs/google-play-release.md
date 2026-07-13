@@ -14,6 +14,7 @@
 - `apps/ait/src/farm/platform/*`는 AppsInToss `Storage`, 전면/보상형 광고 API에 묶여 있습니다.
 - `packages/farm-ui`는 공유 RN 게임 화면을 담고, `apps/mobile`은 모바일 storage/Firebase/AdMob/audio adapter를 주입합니다.
 - 현재 `.aab`는 `play-store/secrets/happy-farm-upload-key.jks` upload key로 서명됩니다.
+- Android release는 R8 코드 최적화와 리소스 축소를 사용하며, AAB 안의 가독화 파일·음원·작물 이미지가 업로드 전에 자동 검사됩니다.
 
 따라서 지금은 Play Console 내부 테스트 업로드에 필요한 signed AAB와 repo-local readiness 체크가 준비된 상태입니다.
 
@@ -64,6 +65,16 @@ python3 /Users/syous/.codex/skills/google-play-store-registration/scripts/valida
 - 증가 가능한 `versionCode`
 - release signing 설정
 - `pnpm build:android` 또는 `apps/mobile/android/gradlew :app:bundleRelease`로 `.aab` 생성
+
+release 최적화 기준:
+
+- `minifyEnabled true`, `shrinkResources true`, `proguard-android-optimize.txt`를 함께 사용합니다.
+- `react-native-sound`가 파일명으로 동적 조회하는 WAV 7개는 `com_seorilabs_happyfarm_audio_keep.xml`에서 명시적으로 보존합니다. Android 리소스 keep 파일은 전역 범위이므로 package name이 포함된 고유 파일명을 유지합니다.
+- `pnpm check:play`는 소스 설정을 검사하고 AAB가 없으면 산출물 검사를 건너뜁니다.
+- `pnpm check:play:release -- --json`은 AAB를 필수로 요구하고 `proguard.map`, WAV 7개, 작물·밭 이미지 전체를 검사합니다. Google Play workflow는 이 검사를 업로드 전에 실행합니다.
+- 로컬 mapping 원본은 `apps/mobile/android/app/build/outputs/mapping/release/mapping.txt`, AAB 내 사본은 `BUNDLE-METADATA/com.android.tools.build.obfuscation/proguard.map`입니다. Android Gradle Plugin 4.1+로 만든 AAB는 Play가 이 파일을 자동으로 가져가므로 별도 수동 업로드가 필요하지 않습니다.
+
+R8 적용 릴리스는 내부 테스트에서 익명 로그인·Firestore 저장, Remote Config, Crashlytics, 광고, 알림, 앱 재시작 후 저장 복원과 WAV 7개 재생을 smoke test합니다. 라이브러리 전체를 보존하는 광범위 `-keep` 규칙은 최적화 효과를 없앨 수 있으므로 실제 런타임 문제가 확인된 경우에만 추가합니다.
 
 2026-05-29 공식 Play Console Help 확인 기준 Google Play 신규 앱/업데이트 제출은 Android 15, API level 35 이상을 요구합니다. 현재 `apps/mobile`의 `targetSdkVersion`은 36이라 이 기준은 충족합니다.
 
@@ -271,6 +282,9 @@ unzip -p apps/mobile/android/app/build/outputs/bundle/release/app-release.aab ba
 
 - [Create and set up your app](https://support.google.com/googleplay/android-developer/answer/9859152?hl=en)
 - [Build your app from the command line](https://developer.android.com/build/building-cmdline?hl=en)
+- [Enable app optimization with R8](https://developer.android.com/topic/performance/app-optimization/enable-app-optimization)
+- [Customize which resources to keep](https://developer.android.com/topic/performance/app-optimization/customize-which-resources-to-keep)
+- [Deobfuscate or symbolicate crash stack traces](https://support.google.com/googleplay/android-developer/answer/9848633?hl=en)
 - [Use Play App Signing](https://support.google.com/googleplay/android-developer/answer/9842756?hl=en)
 - [Target API level requirements](https://support.google.com/googleplay/android-developer/answer/11926878?hl=en)
 - [Google Play Developer API](https://developer.android.com/google/play/developer-api?hl=en)
