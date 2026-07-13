@@ -132,8 +132,13 @@ export function createFirebaseRemoteConfigRestClient(
   async function fetchEntries(): Promise<RemoteConfigFetchResult> {
     const cache = await readCache();
     // throttle: 최근에 받은 캐시가 있으면 네트워크를 생략하고 그대로 반환한다.
-    if (cache != null && now() - cache.fetchedAt < minimumFetchIntervalMs) {
-      return { status: 'ready', entries: cache.entries };
+    // persisted wall clock이 뒤로 이동해 fetchedAt이 미래가 된 경우에는 캐시를
+    // fresh로 고정하지 않고 다시 받아 현재 시각으로 복구한다.
+    if (cache != null) {
+      const elapsedMs = now() - cache.fetchedAt;
+      if (elapsedMs >= 0 && elapsedMs < minimumFetchIntervalMs) {
+        return { status: 'ready', entries: cache.entries };
+      }
     }
 
     try {
