@@ -23,6 +23,7 @@ import {
   createFarmAnalytics,
   createInitialState,
   formatMoney,
+  getProductionRecipeLabel,
   getActiveFarmOfflineGold,
   getAreaCropKeys,
   getCropOfTheDayStatus,
@@ -40,6 +41,7 @@ import {
   recordAdWatchProgress,
   recordWeeklyAdWatchProgress,
   sortCropKeysForStrip,
+  startCraft,
   type AreaKey,
   type CropKey,
   type GameState,
@@ -1061,6 +1063,43 @@ describe('FarmGame UI flow', () => {
         expect(within(screen.getByTestId(`recipe-card-${recipe.key}`)).getByText(messages.workshopNeedIngredientsLabel)).toBeTruthy();
       }
       expect(onGoldPulse).toHaveBeenCalledTimes(1);
+    });
+
+    test('cancels an in-progress workshop craft once on a rapid double press and refunds inputs', async () => {
+      const recipe = PRODUCTION_RECIPES[0]!;
+      const base = createInitialState();
+      const inventory = { ...base.production.inventory };
+      for (const input of recipe.inputs) {
+        inventory[input.crop] = (inventory[input.crop] ?? 0) + input.qty + 2;
+      }
+      const beforeStart: GameState = {
+        ...base,
+        production: { inventory, crafting: {} },
+      };
+      const afterStart = startCraft(beforeStart, recipe.key, NOW)!;
+      const messages = getFarmMessages('en-US');
+      const screen = await renderGame(afterStart, { preferredLocale: 'en-US' });
+
+      fireEvent.press(screen.getByTestId('more-nav-button'));
+      fireEvent.press(screen.getByLabelText(messages.workshopButtonAccessibilityLabel));
+      const action = screen.getByTestId(`workshop-cancel-${recipe.key}`);
+      await act(async () => {
+        fireEvent.press(action);
+        fireEvent.press(action);
+      });
+
+      await waitFor(() => {
+        const persisted = getLatestPersistedState();
+        expect(persisted.production.inventory).toEqual(beforeStart.production.inventory);
+        expect(persisted.production.crafting[recipe.key]).toBeUndefined();
+        expect(persisted.gold).toBe(afterStart.gold);
+      });
+      expect(
+        screen.getByText(messages.workshopCanceledToast(getProductionRecipeLabel(recipe.key, 'en-US').name))
+      ).toBeTruthy();
+      expect(screen.queryByTestId(`workshop-cancel-${recipe.key}`)).toBeNull();
+      expect(within(screen.getByTestId(`recipe-card-${recipe.key}`)).getByText(messages.workshopReadyToCraftLabel)).toBeTruthy();
+      expect(onGoldPulse).not.toHaveBeenCalled();
     });
   });
 

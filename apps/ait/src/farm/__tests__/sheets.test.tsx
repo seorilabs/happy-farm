@@ -119,6 +119,7 @@ describe('ready output batch actions', () => {
         now={NOW}
         getCropName={(cropKey) => getCropLabel(cropKey, LOCALE).name}
         onStart={jest.fn()}
+        onCancel={jest.fn()}
         onCollect={jest.fn()}
         onCollectAll={onCollectAll}
       />
@@ -135,6 +136,40 @@ describe('ready output batch actions', () => {
     expect(action.props.accessibilityLabel).toBe(messages.workshopCollectAllAction(2));
     fireEvent.press(action);
     expect(onCollectAll).toHaveBeenCalledTimes(1);
+  });
+
+  test('workshop shows a secondary cancel action only while crafting', () => {
+    const recipe = PRODUCTION_RECIPES[0]!;
+    const base = createInitialState();
+    const onCancel = jest.fn();
+    const renderSheet = (startedAt: number) => (
+      <WorkshopSheet
+        gameState={{
+          ...base,
+          production: { ...base.production, crafting: { [recipe.key]: startedAt } },
+        }}
+        locale={LOCALE}
+        messages={messages}
+        now={NOW}
+        getCropName={(cropKey) => getCropLabel(cropKey, LOCALE).name}
+        onStart={jest.fn()}
+        onCancel={onCancel}
+        onCollect={jest.fn()}
+        onCollectAll={jest.fn()}
+      />
+    );
+    const screen = render(renderSheet(NOW));
+
+    const cancel = screen.getByTestId(`workshop-cancel-${recipe.key}`);
+    expect(cancel.props.accessibilityLabel).toBe(messages.workshopCancelAction);
+    expect(StyleSheet.flatten(cancel.props.style).backgroundColor).toBe('#edf2f7');
+    fireEvent.press(cancel);
+    expect(onCancel).toHaveBeenCalledTimes(1);
+    expect(onCancel).toHaveBeenCalledWith(recipe.key);
+
+    screen.rerender(renderSheet(NOW - recipe.timerMs));
+    expect(screen.queryByTestId(`workshop-cancel-${recipe.key}`)).toBeNull();
+    expect(screen.getByText(messages.workshopCollectAction(formatMoney(recipe.sellPrice, LOCALE)))).toBeTruthy();
   });
 });
 

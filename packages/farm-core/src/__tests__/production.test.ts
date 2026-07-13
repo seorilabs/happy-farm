@@ -3,6 +3,7 @@
 import {
   PRODUCTION_RECIPES,
   addCropToInventory,
+  cancelCraft,
   canCollectCraft,
   canStartCraft,
   collectAllReadyCrafts,
@@ -211,6 +212,44 @@ describe('startCraft / collectCraft cycle', () => {
     const crafting = startCraft(stateWithIngredients(), FIRST.key, 1)!;
     expect(canStartCraft(crafting, FIRST.key)).toBe(false);
     expect(startCraft(crafting, FIRST.key, 2)).toBeNull();
+  });
+
+  test('canceling an in-progress craft refunds every input once without changing gold', () => {
+    const now = 2_500_000;
+    const recipe = getRecipe('pumpkin_tart')!;
+    expect(recipe.inputs.length).toBeGreaterThanOrEqual(2);
+    const inventory: Partial<Record<CropKey, number>> = {};
+    for (const [index, input] of recipe.inputs.entries()) {
+      inventory[input.crop] = input.qty + index + 2;
+    }
+    const before = stateWith({ inventory, crafting: {} }, 777);
+    const originalInventory = { ...before.production.inventory };
+    const crafting = startCraft(before, recipe.key, now)!;
+
+    const canceled = cancelCraft(crafting, recipe.key, now + recipe.timerMs - 1)!;
+
+    expect(canceled.production.inventory).toEqual(originalInventory);
+    expect(canceled.production.crafting[recipe.key]).toBeUndefined();
+    expect(canceled.gold).toBe(crafting.gold);
+    expect(crafting.production.crafting[recipe.key]).toBe(now);
+    expect(before.production.inventory).toEqual(originalInventory);
+    expect(cancelCraft(canceled, recipe.key, now + 1)).toBeNull();
+  });
+
+  test('cancel rejects unknown, idle, and completed crafts; ready output remains collectable', () => {
+    const now = 2_750_000;
+    const idle = stateWithIngredients();
+    expect(cancelCraft(idle, FIRST.key, now)).toBeNull();
+    expect(cancelCraft(idle, 'nope' as ProductionRecipeKey, now)).toBeNull();
+
+    const crafting = startCraft(idle, FIRST.key, now)!;
+    const readyAt = now + FIRST.timerMs;
+    expect(cancelCraft(crafting, FIRST.key, readyAt - 1)).not.toBeNull();
+    expect(cancelCraft(crafting, FIRST.key, readyAt)).toBeNull();
+
+    const collected = collectCraft(crafting, FIRST.key, readyAt);
+    expect(collected).not.toBeNull();
+    expect(collected!.gold).toBe(crafting.gold + FIRST.sellPrice);
   });
 
   test('produce is collectable only after the timer, paying sellPrice once', () => {
