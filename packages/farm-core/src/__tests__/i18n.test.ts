@@ -29,7 +29,7 @@ describe('farm-core i18n', () => {
     expect(normalizeLocale('zh-Hant')).toBe('zh-Hant');
     expect(normalizeLocale('zh-TW')).toBe('zh-Hant');
     expect(normalizeLocale('zh-HK')).toBe('zh-Hant');
-    // 미지원 언어는 기본 로케일(영어)로 폴백한다.
+    // 미지원 언어는 영어(FALLBACK_LOCALE)로 폴백한다.
     expect(normalizeLocale('it-IT')).toBe('en-US');
     expect(normalizeLocale(null)).toBe('en-US');
   });
