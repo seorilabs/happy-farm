@@ -14,6 +14,7 @@
     "check:ait": "pnpm check:architecture && pnpm --dir apps/ait lint && pnpm --dir apps/ait typecheck && pnpm check:core && pnpm --dir apps/ait test && pnpm --dir apps/ait build",
     "check:mobile": "pnpm check:architecture && pnpm --dir apps/mobile typecheck && pnpm --dir apps/mobile test --watchAll=false && pnpm --dir apps/mobile build:android",
     "check:play": "node scripts/check-google-play-readiness.mjs",
+    "check:play:release": "node scripts/check-google-play-readiness.mjs --require-aab",
     "check:app-store": "node scripts/check-app-store-readiness.mjs",
     "check:firebase:android": "node scripts/check-firebase-android-config.mjs",
     "check:ait-mp-secret": "node scripts/check-ait-mp-secret.mjs",
