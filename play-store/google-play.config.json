@@ -11,21 +11,45 @@
     "aabPath": "apps/mobile/android/app/build/outputs/bundle/release/app-release.aab",
     "notes": {
       "ko-KR": "Android 내부 테스트 빌드를 다시 만들고, 무한 엔드게임 시스템(마스터리, 변이 도감, 연구소, 교배/자동화, 농장 체인 개척, 업적/칭호)이 Android bundle에 포함되도록 수정했습니다.",
-      "en-US": "Rebuilt the Android internal test build so the endless endgame systems, including mastery, mutation collection, Research Lab, breeding, automation, farm-chain pioneering, achievements, and titles, are included in the Android bundle."
+      "en-US": "Rebuilt the Android internal test build so the endless endgame systems, including mastery, mutation collection, Research Lab, breeding, automation, farm-chain pioneering, achievements, and titles, are included in the Android bundle.",
+      "ja": "マスタリー、変異コレクション、研究所、交配、自動化、農場チェーン開拓、実績、称号など、終わりのないエンドゲーム要素をAndroidバンドルに収録するため、Android内部テストビルドを再構築しました。",
+      "zh-Hans": "重新构建了 Android 内测版本，将熟练度、变异收集、研究所、杂交、自动化、连锁农场开拓、成就和称号等无尽终局系统全部纳入 Android 安装包。",
+      "zh-Hant": "重新建置了 Android 內部測試版本，讓無盡的終局系統，包括熟練度、變異收集、研究室、育種、自動化、連鎖農場開拓、成就與稱號，都納入 Android 安裝包中。",
+      "de": "Android-Testversion neu erstellt, damit die endlosen Endgame-Systeme im Android-Paket enthalten sind: Meisterschaft, Mutationssammlung, Forschungslabor, Zucht, Automatisierung, Kettenfarm-Erschließung, Erfolge und Titel.",
+      "fr": "Build de test interne Android reconstruit : les systèmes de fin de jeu sans fin (maîtrise, collection de mutations, Labo de recherche, croisement, automatisation, exploration en chaîne, succès et titres) sont désormais inclus dans le bundle Android.",
+      "es": "Reconstruimos la versión de prueba interna de Android para que los sistemas infinitos de final de partida, incluidas la maestría, la colección de mutaciones, el Laboratorio de Investigación, el cruce, la automatización, la colonización de granjas en cadena, los logros y los títulos, se incluyan en el paquete de Android."
     }
   },
   "storeListing": {
     "appName": {
       "ko-KR": "행복 농장 타이쿤",
-      "en-US": "Happy Farm Tycoon"
+      "en-US": "Happy Farm Tycoon",
+      "ja": "ハッピーファーム 大農園",
+      "zh-Hans": "快乐农场大亨",
+      "zh-Hant": "快樂農場大亨",
+      "de": "Happy Farm Tycoon",
+      "fr": "Happy Farm Tycoon",
+      "es": "Happy Farm Tycoon"
     },
     "shortDescription": {
       "ko-KR": "작물을 심고 수확하며 농장을 확장하는 방치형 농장 게임",
-      "en-US": "Plant, harvest, research, and expand your idle farm"
+      "en-US": "Plant, harvest, research, and expand your idle farm",
+      "ja": "作物を植えて収穫し、研究して放置農場を広げよう",
+      "zh-Hans": "种植、收获、研究，打理并扩张你的挂机农场",
+      "zh-Hant": "種植、收成、研究、擴張，經營你的放置農場",
+      "de": "Pflanze, ernte, forsche und erweitere deine Idle-Farm",
+      "fr": "Plante, récolte, cherche et agrandis ta ferme idle",
+      "es": "Planta, cosecha, investiga y amplía tu granja idle"
     },
     "fullDescription": {
       "ko-KR": "작은 밭에서 시작해 작물을 심고 수확하며 골드를 모으는 방치형 농장 타이쿤 게임입니다. 골드로 밭을 넓히고 성장 속도와 판매 수익을 업그레이드하세요.\n\n작물 도감을 채우고, 연구소에서 자동 수확·자동 파종과 신품종 교배를 해금할 수 있습니다. 농장을 졸업시키면 새 지역을 개척하고 체인 농장이 오프라인 수익을 만들어 줍니다.\n\n업적과 칭호, 마스터리와 희귀 변이 수확까지 이어지는 장기 성장 목표를 즐겨보세요.",
-      "en-US": "Start with a small field, plant crops, harvest gold, and build a cozy idle farm tycoon. Spend gold to clear more plots and upgrade growth speed and sale profit.\n\nComplete your crop collection, unlock auto harvest, auto replanting, and hybrid breeding in the Research Lab. Graduate a farm to pioneer a new region while chain farms keep producing offline income.\n\nKeep growing through achievements, titles, crop mastery, and rare harvest mutations."
+      "en-US": "Start with a small field, plant crops, harvest gold, and build a cozy idle farm tycoon. Spend gold to clear more plots and upgrade growth speed and sale profit.\n\nComplete your crop collection, unlock auto harvest, auto replanting, and hybrid breeding in the Research Lab. Graduate a farm to pioneer a new region while chain farms keep producing offline income.\n\nKeep growing through achievements, titles, crop mastery, and rare harvest mutations.",
+      "ja": "小さな畑から始めて、作物を植え、ゴールドを収穫し、心地よい放置系の農場タイクーンを築きましょう。ゴールドを使って畑を広げ、成長速度と販売利益をアップグレードできます。\n\n作物コレクションを完成させ、研究所で自動収穫・自動植え直し・交配を解放しましょう。農場を卒業させて新しい地域を開拓すれば、チェーン農場がオフラインでも収益を生み続けます。\n\n実績・称号・作物マスタリー・希少な収穫変異で、どこまでも成長を続けましょう。",
+      "zh-Hans": "从一小块田地起步，种下作物，收获金币，打造一座温馨的挂机农场帝国。花金币开垦更多地块，升级生长速度与销售收益。\n\n集齐作物图鉴，在研究所解锁自动收获、自动补种和杂交育种。让农场毕业以开拓全新地区，连锁农场则会在离线时持续带来收入。\n\n通过成就、称号、作物熟练度和稀有收获变异，让农场不断成长。",
+      "zh-Hant": "從一小塊田地開始，種下作物、收成金幣，打造一座溫馨的放置農場帝國。花費金幣開墾更多田地，並升級成長速度與販售收益。\n\n完成你的作物圖鑑，在研究室解鎖自動收成、自動補種與雜交育種。讓農場畢業以開拓全新地區，同時連鎖農場持續帶來離線收入。\n\n透過成就、稱號、作物熟練度與稀有收成變異，一路持續成長茁壯。",
+      "de": "Beginne mit einem kleinen Feld, pflanze Feldfrüchte, ernte Gold und baue eine gemütliche Idle-Farm auf. Gib Gold aus, um mehr Felder freizumachen und Wuchstempo sowie Verkaufsgewinn zu verbessern.\n\nVervollständige deine Pflanzensammlung und schalte im Forschungslabor Auto-Ernte, automatisches Nachpflanzen und Hybridzucht frei. Mach eine Farm zur Pionierfarm einer neuen Region, während Kettenfarmen offline weiter Einkommen erzeugen.\n\nWachse immer weiter durch Erfolge, Titel, Pflanzen-Meisterschaft und seltene Ernte-Mutationen.",
+      "fr": "Commence avec un petit champ, plante des cultures, récolte de l'or et bâtis une ferme idle cozy. Dépense ton or pour défricher plus de parcelles et améliorer la vitesse de pousse et le gain de vente.\n\nComplète ta collection de cultures, débloque la récolte auto, la replantation auto et le croisement hybride au Labo de recherche. Diplôme une ferme pour explorer une nouvelle région pendant que tes fermes en chaîne produisent un revenu hors ligne.\n\nContinue de grandir grâce aux succès, aux titres, à la maîtrise des cultures et aux rares mutations de récolte.",
+      "es": "Empieza con un pequeño campo, planta cultivos, cosecha oro y construye una acogedora granja idle. Gasta oro para despejar más parcelas y mejorar la velocidad de crecimiento y la ganancia de venta.\n\nCompleta tu colección de cultivos y desbloquea la cosecha automática, el replantado automático y el cruce híbrido en el Laboratorio de Investigación. Gradúa una granja para colonizar una nueva región mientras las granjas en cadena siguen generando ingresos sin conexión.\n\nSigue creciendo con logros, títulos, maestría de cultivos y raras mutaciones de cosecha."
     }
   },
   "contentDeclarations": {

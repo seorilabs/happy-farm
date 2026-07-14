@@ -28,6 +28,7 @@ export * from './weeklyMissions';
 export * from './wheel';
 export {
   DEFAULT_LOCALE,
+  LOCALE_ENDONYMS,
   SUPPORTED_LOCALES,
   formatDuration,
   formatHourlyGold,

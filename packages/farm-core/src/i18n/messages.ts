@@ -22,9 +22,75 @@ const EN_CORE_MESSAGES: CoreMessages = {
   harvestBonusPromptCooldown: (duration) => `Offered again in ${duration}.`,
 };
 
+const JA_CORE_MESSAGES: CoreMessages = {
+  harvestedCropRequirement: (current, required) => `作物 ${current}/${required}種を収穫`,
+  researchLevelRequired: (level) => `研究 Lv.${level} が必要`,
+  researchNodeRequired: (nodeName) => `${nodeName}の研究が必要`,
+  adDailyLimitReached: '本日の利用回数をすべて使い切りました。',
+  rewardedGoldCooldown: (duration) => `${duration}後にまた受け取れます。`,
+  adCooldown: (duration) => `${duration}後にまた使えます。`,
+  harvestBonusPromptCooldown: (duration) => `${duration}後にまた提案されます。`,
+};
+
+const ZH_HANS_CORE_MESSAGES: CoreMessages = {
+  harvestedCropRequirement: (current, required) => `已收获作物 ${current}/${required} 种`,
+  researchLevelRequired: (level) => `需要研究 Lv.${level}`,
+  researchNodeRequired: (nodeName) => `需要研究「${nodeName}」`,
+  adDailyLimitReached: '今天的可用次数已全部用完。',
+  rewardedGoldCooldown: (duration) => `${duration}后可再次领取。`,
+  adCooldown: (duration) => `${duration}后可再次使用。`,
+  harvestBonusPromptCooldown: (duration) => `${duration}后会再次提示。`,
+};
+
+const ZH_HANT_CORE_MESSAGES: CoreMessages = {
+  harvestedCropRequirement: (current, required) => `已收成作物 ${current}/${required} 種`,
+  researchLevelRequired: (level) => `需要研究 Lv.${level}`,
+  researchNodeRequired: (nodeName) => `需要研究「${nodeName}」`,
+  adDailyLimitReached: '今日的可用次數已全部用完。',
+  rewardedGoldCooldown: (duration) => `${duration}後可再次領取。`,
+  adCooldown: (duration) => `${duration}後可再次使用。`,
+  harvestBonusPromptCooldown: (duration) => `${duration}後會再次提示。`,
+};
+
+const DE_CORE_MESSAGES: CoreMessages = {
+  harvestedCropRequirement: (current, required) => `${current}/${required} Feldfrüchte geerntet`,
+  researchLevelRequired: (level) => `Forschung Lv.${level} erforderlich`,
+  researchNodeRequired: (nodeName) => `Erfordert Forschung „${nodeName}“`,
+  adDailyLimitReached: 'Du hast heute alle verfügbaren Versuche aufgebraucht.',
+  rewardedGoldCooldown: (duration) => `In ${duration} erneut verfügbar.`,
+  adCooldown: (duration) => `In ${duration} wieder verfügbar.`,
+  harvestBonusPromptCooldown: (duration) => `Wird in ${duration} erneut angeboten.`,
+};
+
+const FR_CORE_MESSAGES: CoreMessages = {
+  harvestedCropRequirement: (current, required) => `${current}/${required} cultures récoltées`,
+  researchLevelRequired: (level) => `Recherche niv. ${level} requise`,
+  researchNodeRequired: (nodeName) => `Nécessite la recherche « ${nodeName} »`,
+  adDailyLimitReached: 'Vous avez utilisé toutes les tentatives disponibles aujourd’hui.',
+  rewardedGoldCooldown: (duration) => `Réessayez dans ${duration}.`,
+  adCooldown: (duration) => `De nouveau disponible dans ${duration}.`,
+  harvestBonusPromptCooldown: (duration) => `Proposé à nouveau dans ${duration}.`,
+};
+
+const ES_CORE_MESSAGES: CoreMessages = {
+  harvestedCropRequirement: (current, required) => `${current}/${required} cultivos cosechados`,
+  researchLevelRequired: (level) => `Se requiere Investigación Nv. ${level}`,
+  researchNodeRequired: (nodeName) => `Requiere la investigación «${nodeName}»`,
+  adDailyLimitReached: 'Has usado todos los intentos disponibles de hoy.',
+  rewardedGoldCooldown: (duration) => `Vuelve a intentarlo en ${duration}.`,
+  adCooldown: (duration) => `Disponible de nuevo en ${duration}.`,
+  harvestBonusPromptCooldown: (duration) => `Se ofrecerá de nuevo en ${duration}.`,
+};
+
 const CORE_MESSAGES: Record<SupportedLocale, CoreMessages> = {
   'ko-KR': KO_CORE_MESSAGES,
   'en-US': EN_CORE_MESSAGES,
+  ja: JA_CORE_MESSAGES,
+  'zh-Hans': ZH_HANS_CORE_MESSAGES,
+  'zh-Hant': ZH_HANT_CORE_MESSAGES,
+  de: DE_CORE_MESSAGES,
+  fr: FR_CORE_MESSAGES,
+  es: ES_CORE_MESSAGES,
 };
 
 export function getCoreMessages(locale: SupportedLocale = DEFAULT_LOCALE) {

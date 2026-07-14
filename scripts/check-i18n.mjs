@@ -10,7 +10,9 @@ import {
 } from './lib/store-text-limits.js';
 
 const root = process.cwd();
-const requiredLocales = ['ko-KR', 'en-US'];
+// SUPPORTED_LOCALES(packages/farm-core/src/i18n/locales.ts)와 동일하게 유지한다.
+// 스토어 등록 문구(Play/App Store)는 지원 로케일 전체에 대해 존재해야 한다.
+const requiredLocales = ['ko-KR', 'en-US', 'ja', 'zh-Hans', 'zh-Hant', 'de', 'fr', 'es'];
 const failures = [];
 const passes = [];
 
