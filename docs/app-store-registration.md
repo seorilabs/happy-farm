@@ -206,3 +206,18 @@ EU 포함 전세계 배포를 목표로 하고, iOS 앱은 AdMob 광고 수익�
 ```bash
 pnpm check:app-store -- --json
 ```
+
+## 다국어 리스팅 업로드(repo-local)
+
+`app-store.config.json`의 `storeListing`(App 정보 name/subtitle, 버전
+description/keywords/promotionalText)과 `version.releaseNotes`(whatsNew),
+`localizedScreenshots`(iPhone 6.5=`APP_IPHONE_65`, iPad 13=`APP_IPAD_PRO_3GEN_129`)를
+App Store Connect API로 편집 가능한(PREPARE_FOR_SUBMISSION) 버전에 반영한다.
+config 로케일 키는 ASC 로케일(`de`→`de-DE`, `fr`→`fr-FR`, `es`→`es-ES` 등)로 매핑된다.
+인증은 `~/.config/seorilabs/app-store-connect.env`.
+
+```bash
+python3 scripts/upload-app-store-listing.py query          # 앱/버전/로컬라이제이션 상태
+python3 scripts/upload-app-store-listing.py text --commit  # name/subtitle/description/keywords/whatsNew
+python3 scripts/upload-app-store-listing.py screenshots --commit  # 6.5 iPhone + 12.9 iPad
+```

@@ -4,7 +4,10 @@ export const SUPPORTED_LOCALES = ['ko-KR', 'en-US', 'ja', 'zh-Hans', 'zh-Hant', 
 
 export type SupportedLocale = (typeof SUPPORTED_LOCALES)[number];
 
-export const DEFAULT_LOCALE: SupportedLocale = 'ko-KR';
+// 전 세계 론칭 기준 기본 로케일이자 미해석 로케일의 최종 폴백. 지원하지 않는 언어의
+// 기기/브라우저는 한국어가 아닌 영어로 노출한다(글로벌 기본값). 한국어 기기는
+// normalizeLocale에서 'ko'가 명시적으로 'ko-KR'로 매핑되므로 영향받지 않는다.
+export const DEFAULT_LOCALE: SupportedLocale = 'en-US';
 
 // 언어 선택 UI(설정 시트)에서 각 언어를 자기 언어 이름(endonym)으로 노출한다.
 // 현재 활성 로케일과 무관하게 동일하게 읽히도록 catalog가 아닌 정적 상수로 둔다.
