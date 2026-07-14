@@ -2,7 +2,9 @@
 
 ## 목표
 
-`행복 농장 타이쿤`은 `ko-KR`을 기본 언어로 유지하고, 1차 i18n 범위에서 `en-US`를 추가한다.
+`행복 농장 타이쿤`은 `ko-KR`을 기본 언어로 유지하고, 전 세계 론칭을 위해 다음 8개 로케일을 지원한다.
+
+- `ko-KR`(기본), `en-US`, `ja`(일본어), `zh-Hans`(중국어 간체), `zh-Hant`(중국어 번체), `de`(독일어), `fr`(프랑스어), `es`(스페인어)
 
 대상은 앱 UI 문구만이 아니다. 작물/구역 이름, 광고 제한 사유, 금액/시간 포맷, 스토어 등록 문구, 릴리스 노트, 스크린샷까지 같은 i18n 범위로 관리한다.
 
@@ -26,24 +28,39 @@
 
 ## 목표 구조
 
+로케일별 카탈로그는 파일로 분리하고, 조립점(`labels.ts`, `i18n/index.ts`)이 이를 모아
+`Record<SupportedLocale, …>`로 조립한다. 새 로케일 추가는 파일 하나 + 조립점 한 줄이면 된다.
+
 ```text
 packages/farm-core/src/i18n/
-  locales.ts          # SupportedLocale, DEFAULT_LOCALE
-  labels.ko-KR.ts     # crop/area/core label
-  labels.en-US.ts
-  formatters.ts       # money, duration, count, percent
+  locales.ts          # SupportedLocale, DEFAULT_LOCALE, normalizeLocale, LOCALE_ENDONYMS
+  formatters.ts       # money(로케일별 단위), duration, remaining, percent, hourly gold
+  messages.ts         # core 메시지(요구조건/광고 제한 사유) 전 로케일
+  dailyBonusMessages.ts
+  labels/
+    types.ts          # CropLabel/AreaLabel/… + LabelBundle 타입
+    ko-KR.ts en-US.ts ja.ts zh-Hans.ts zh-Hant.ts de.ts fr.ts es.ts
+  labels.ts           # LabelBundle 조립 + get*Label 헬퍼
 
 packages/farm-ui/src/i18n/
-  messages.ko-KR.ts   # FarmGame UI text
-  messages.en-US.ts
-  index.ts            # typed t helper
+  messages/
+    ko-KR.ts          # FarmMessages 타입 원본(typeof koFarmMessages)
+    en-US.ts ja.ts zh-Hans.ts zh-Hant.ts de.ts fr.ts es.ts
+  index.ts            # detectRuntimeLocale, getFarmMessages, FARM_MESSAGES 조립
 ```
 
-AIT build가 pnpm workspace bare package import에 민감하므로, 현재 방식처럼 상대 경로 import를 유지한다.
+- `LabelBundle`/`FarmMessages` 타입이 각 로케일의 key 커버리지를 컴파일 타임에 강제한다(누락 시 타입 에러).
+- 언어 선택 UI는 `LOCALE_ENDONYMS`(각 언어의 자기 이름)로 노출하므로, 언어를 추가해도 picker는 자동 반영된다.
+- AIT build가 pnpm workspace bare package import에 민감하므로, 로케일 파일도 현재 방식처럼 상대 경로 import만 사용한다.
 
-## 1차 범위
+## 로케일별 포맷 규칙
 
-1. `ko-KR`, `en-US`를 `SupportedLocale`로 고정한다.
+- 금액: `ko-KR`은 만/억/조, `ja`는 万/億/兆, `zh-Hans`/`zh-Hant`는 万(萬)/亿(億)/兆, `en-US`·`de`·`fr`·`es`는 방치형 관용 축약(K/M/B/T…)을 쓴다.
+- 시간: 초/분/시간 접미사를 로케일별로 둔다(`formatters.ts`의 `DURATION_LABELS`).
+
+## 초기 범위
+
+1. 위 8개 로케일을 `SupportedLocale`로 고정한다.
 2. `FarmGame.tsx`의 화면 문구, toast, sheet title/description, button label, accessibility label을 catalog로 이동한다.
 3. `balance.json`의 crop/area 표시 이름과 설명은 stable key 기반 locale label로 분리한다.
 4. `formatMoney`, duration formatter, reward limit reason을 locale-aware 함수로 바꾼다.
@@ -67,7 +84,7 @@ AIT build가 pnpm workspace bare package import에 민감하므로, 현재 방�
 새 기능, UI 수정, 밸런스 수정, 스토어 문구 수정 시 다음을 확인한다.
 
 - 새 사용자-facing 문자열을 locale catalog에 추가했는가?
-- `ko-KR`과 `en-US`가 모두 채워졌는가?
+- 지원 로케일 8종(`ko-KR`, `en-US`, `ja`, `zh-Hans`, `zh-Hant`, `de`, `fr`, `es`)이 모두 채워졌는가?
 - crop/area 이름, 설명, unlock 조건, 광고 제한 사유처럼 core에서 만들어지는 문구가 locale-aware인가?
 - 테스트가 특정 한국어 문자열에 과도하게 고정되어 있지 않은가?
 - 긴 `en-US` 문구가 버튼, bottom sheet, tool strip, one-line text에서 넘치지 않는가?
@@ -78,8 +95,8 @@ AIT build가 pnpm workspace bare package import에 민감하므로, 현재 방�
 
 현재 다음 검사를 추가했다.
 
-- `pnpm check:i18n`: source에서 허용되지 않은 hardcoded 한글 UI 문자열 탐지
-- locale key coverage test: `ko-KR`과 `en-US`의 key set 일치 확인
+- `pnpm check:i18n`: source에서 허용되지 않은 hardcoded 한글 UI 문자열 탐지 + Play/App Store 스토어 문구가 지원 로케일 8종에 모두 존재하는지 확인
+- locale key coverage test: 지원 로케일 전체의 key set 일치 확인
 - formatter test: `formatMoney`, duration, ad limit reason이 locale별 expectation을 만족하는지 확인
 - store config test: Play/App Store locale map에 필수 locale이 있는지 확인
 

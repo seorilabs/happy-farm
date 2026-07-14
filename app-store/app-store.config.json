@@ -17,7 +17,13 @@
     "releaseSetting": "release_tag",
     "releaseNotes": {
       "ko-KR": "새 구역을 여는 표현을 더 쉬운 용어로 바꾸고, 현재 농장의 예상 생산성을 시간당 골드로 볼 수 있게 했습니다. 작물 선택 화면에는 작물별 투자효율을 추가해 어떤 작물을 심을지 더 쉽게 판단할 수 있습니다.",
-      "en-US": "Updated area-opening copy to simpler wording, added an estimated gold-per-hour productivity readout, and added crop efficiency indicators to help players choose what to plant."
+      "en-US": "Updated area-opening copy to simpler wording, added an estimated gold-per-hour productivity readout, and added crop efficiency indicators to help players choose what to plant.",
+      "ja": "区域を開くときの文言をよりわかりやすい表現に更新し、1時間あたりのおおよそのゴールド生産性の表示と、何を植えるか選びやすくする作物の効率インジケーターを追加しました。",
+      "zh-Hans": "将开启区域的文案改得更通俗易懂，新增了每小时预估金币的产能显示，并加入作物效率指示，帮助玩家挑选该种什么。",
+      "zh-Hant": "將開啟區域的文案改為更簡潔的說法，新增每小時金幣產能的預估顯示，並加入作物效率指標，協助玩家選擇要種什麼。",
+      "de": "Texte zum Öffnen von Gebieten vereinfacht, eine geschätzte Anzeige für Gold pro Stunde hinzugefügt und Effizienz-Anzeigen für Pflanzen ergänzt, damit du leichter entscheidest, was du anbaust.",
+      "fr": "Textes d'ouverture de zone simplifiés, ajout d'un estimatif de productivité en or par heure, et ajout d'indicateurs d'efficacité des cultures pour aider à choisir quoi planter.",
+      "es": "Actualizamos el texto de apertura de áreas a un lenguaje más sencillo, añadimos una lectura estimada de productividad de oro por hora y añadimos indicadores de eficiencia de cultivos para ayudar a los jugadores a elegir qué plantar."
     }
   },
   "versioning": {
@@ -32,23 +38,53 @@
   "storeListing": {
     "appName": {
       "ko-KR": "행복 농장 타이쿤",
-      "en-US": "Happy Farm Tycoon"
+      "en-US": "Happy Farm Tycoon",
+      "ja": "ハッピーファーム 大農園",
+      "zh-Hans": "快乐农场大亨",
+      "zh-Hant": "快樂農場大亨",
+      "de": "Happy Farm Tycoon",
+      "fr": "Happy Farm Tycoon",
+      "es": "Happy Farm Tycoon"
     },
     "subtitle": {
       "ko-KR": "작물을 키우는 방치형 농장",
-      "en-US": "Idle crop-growing farm"
+      "en-US": "Idle crop-growing farm",
+      "ja": "放置で育てる農園ゲーム",
+      "zh-Hans": "挂机种植农场",
+      "zh-Hant": "放置種田農場遊戲",
+      "de": "Idle-Farm zum Anbauen",
+      "fr": "Ferme idle à cultiver",
+      "es": "Granja idle de cultivos"
     },
     "promotionalText": {
       "ko-KR": "작물을 심고 수확해 골드를 모으세요. 밭을 넓히고 성장 속도와 판매 수익을 업그레이드하는 가벼운 방치형 농장 타이쿤입니다.",
-      "en-US": "Plant crops, harvest gold, clear new plots, and upgrade your growth speed and sale profit in a light idle farm tycoon."
+      "en-US": "Plant crops, harvest gold, clear new plots, and upgrade your growth speed and sale profit in a light idle farm tycoon.",
+      "ja": "作物を植え、ゴールドを収穫し、新しい畑を開拓。軽快な放置系農場タイクーンで、成長速度と販売利益をアップグレードしよう。",
+      "zh-Hans": "种下作物、收获金币、开垦新地块，在轻松的挂机农场经营中升级你的生长速度与销售收益。",
+      "zh-Hant": "在輕鬆的放置農場帝國中種下作物、收成金幣、開墾新田，並升級你的成長速度與販售收益。",
+      "de": "Pflanze Feldfrüchte, ernte Gold, mach neue Felder frei und verbessere Wuchstempo und Verkaufsgewinn in einer leichten Idle-Farm.",
+      "fr": "Plante des cultures, récolte de l'or, défriche de nouvelles parcelles et améliore ta vitesse de pousse et ton gain de vente dans une ferme idle légère.",
+      "es": "Planta cultivos, cosecha oro, despeja nuevas parcelas y mejora tu velocidad de crecimiento y ganancia de venta en un juego de granja idle relajado."
     },
     "description": {
       "ko-KR": "행복 농장 타이쿤은 작은 밭에서 시작해 작물을 심고, 성장 시간을 기다린 뒤 수확해 골드를 모으는 농장 성장 게임입니다.\n\n감자, 딸기, 수박처럼 단계별 작물을 키우고 수확 수익으로 밭을 개간하세요. 성장 속도와 판매 수익을 업그레이드하면 같은 시간에도 더 빠르게 농장이 커집니다.\n\n새 구역을 열면 재배 공간과 목표가 늘어나고, 저장된 진행 상황은 다음 접속 때 이어집니다. 짧게 확인해도 보상이 쌓이는 가벼운 방치형 플레이에 맞췄습니다.\n\n로그인 없이 바로 시작할 수 있으며, 복잡한 경쟁이나 과금 압박 없이 농장이 커지는 흐름에 집중합니다.",
-      "en-US": "Happy Farm Tycoon is a light farm growth game where you start with a small field, plant crops, wait for them to grow, and harvest gold.\n\nGrow step-by-step crops such as potatoes, strawberries, and watermelons, then use your harvest profit to clear more plots. Upgrade growth speed and sale profit to make your farm expand faster in the same amount of time.\n\nOpen new areas to unlock more planting space and longer-term goals. Your progress is saved on this device so you can continue your farm on the next visit.\n\nYou can start right away without signing in. The game focuses on a simple, low-pressure farm expansion loop without complex competition."
+      "en-US": "Happy Farm Tycoon is a light farm growth game where you start with a small field, plant crops, wait for them to grow, and harvest gold.\n\nGrow step-by-step crops such as potatoes, strawberries, and watermelons, then use your harvest profit to clear more plots. Upgrade growth speed and sale profit to make your farm expand faster in the same amount of time.\n\nOpen new areas to unlock more planting space and longer-term goals. Your progress is saved on this device so you can continue your farm on the next visit.\n\nYou can start right away without signing in. The game focuses on a simple, low-pressure farm expansion loop without complex competition.",
+      "ja": "ハッピーファーム 大農園は、小さな畑から始めて作物を植え、育つのを待ち、ゴールドを収穫する、軽快な農場成長ゲームです。\n\nじゃがいも・いちご・すいかなど、一歩ずつ作物を育て、収穫の利益で畑を広げましょう。成長速度と販売利益をアップグレードすれば、同じ時間でも農場がもっと速く広がります。\n\n新しい区域を開いて、植えられる場所と長期的な目標を増やしましょう。進行状況はこの端末に保存されるので、次に訪れたときも続きから農場を楽しめます。\n\nログインなしですぐに始められます。複雑な競争のない、シンプルで気軽な農場拡張の流れに集中したゲームです。",
+      "zh-Hans": "《快乐农场大亨》是一款轻松的农场成长游戏，你从一小块田地起步，种下作物，等待它们生长，再收获金币。\n\n循序渐进地种植土豆、草莓、西瓜等作物，再用收获所得开垦更多地块。升级生长速度与销售收益，让农场在同样的时间里扩张得更快。\n\n开启新区域，解锁更多种植空间和更长线的目标。你的进度会保存在本设备上，下次再来即可继续经营农场。\n\n无需登录即可立即开玩。游戏专注于简单、无压力的农场扩张循环，没有复杂的竞争。",
+      "zh-Hant": "《快樂農場大亨》是一款輕鬆的農場成長遊戲，你會從一小塊田地開始，種下作物、等待成熟，再收成金幣。\n\n一步步栽培馬鈴薯、草莓、西瓜等作物，再用收成的收益開墾更多田地。升級成長速度與販售收益，讓農場在相同時間內擴張得更快。\n\n開啟新區域以解鎖更多種植空間與更長遠的目標。你的進度會儲存在這台裝置上，下次再訪時就能繼續你的農場。\n\n無須登入即可立即開始。遊戲專注於簡單、無壓力的農場擴張循環，沒有複雜的競爭。",
+      "de": "Happy Farm Tycoon ist ein leichtes Farm-Aufbauspiel, in dem du mit einem kleinen Feld beginnst, Feldfrüchte pflanzt, auf ihr Wachstum wartest und Gold erntest.\n\nBaue Schritt für Schritt Pflanzen wie Kartoffeln, Erdbeeren und Wassermelonen an und nutze deinen Erntegewinn, um mehr Felder freizumachen. Verbessere Wuchstempo und Verkaufsgewinn, damit deine Farm in gleicher Zeit schneller wächst.\n\nÖffne neue Gebiete, um mehr Pflanzplatz und langfristige Ziele freizuschalten. Dein Fortschritt wird auf diesem Gerät gespeichert, sodass du deine Farm beim nächsten Besuch fortsetzen kannst.\n\nDu kannst sofort ohne Anmeldung loslegen. Das Spiel setzt auf einen einfachen, entspannten Farm-Aufbau ohne komplexen Wettbewerb.",
+      "fr": "Happy Farm Tycoon est un jeu de gestion de ferme léger où tu commences avec un petit champ, plantes des cultures, attends qu'elles poussent et récoltes de l'or.\n\nFais pousser des cultures étape par étape comme pommes de terre, fraises et pastèques, puis utilise ton gain de récolte pour défricher plus de parcelles. Améliore la vitesse de pousse et le gain de vente pour agrandir ta ferme plus vite dans le même laps de temps.\n\nOuvre de nouvelles zones pour débloquer plus d'espace de culture et des objectifs à plus long terme. Ta progression est sauvegardée sur cet appareil, tu peux donc reprendre ta ferme à ta prochaine visite.\n\nTu peux démarrer tout de suite sans te connecter. Le jeu se concentre sur une boucle d'expansion simple et sans pression, sans compétition complexe.",
+      "es": "Happy Farm Tycoon es un juego ligero de crecimiento de granja donde empiezas con un pequeño campo, plantas cultivos, esperas a que crezcan y cosechas oro.\n\nCultiva paso a paso cosechas como patatas, fresas y sandías, y luego usa la ganancia de tu cosecha para despejar más parcelas. Mejora la velocidad de crecimiento y la ganancia de venta para que tu granja se amplíe más rápido en el mismo tiempo.\n\nAbre nuevas áreas para desbloquear más espacio de cultivo y metas a más largo plazo. Tu progreso se guarda en este dispositivo para que puedas continuar con tu granja en la próxima visita.\n\nPuedes empezar de inmediato sin iniciar sesión. El juego se centra en un ciclo de expansión de granja simple y sin presión, sin competencia compleja."
     },
     "keywords": {
       "ko-KR": "작물,수확,농사,성장,방치형,타이쿤,시뮬레이션,게임",
-      "en-US": "farm,crops,harvest,idle,tycoon,growth,simulation,game"
+      "en-US": "farm,crops,harvest,idle,tycoon,growth,simulation,game",
+      "ja": "農場,農園,放置,放置ゲーム,作物,収穫,育成,経営,シミュレーション,ゲーム",
+      "zh-Hans": "农场,挂机,种植,收获,经营,模拟,放置,休闲,养成,农场大亨,种田,金币",
+      "zh-Hant": "放置遊戲,農場,種田,經營,模擬,收成,休閒,掛機,農場大亨,種菜,養成,放置農場",
+      "de": "farm,idle,bauernhof,anbau,ernte,pflanzen,gold,tycoon,aufbau,gemüse,obst,farmspiel,idlefarm",
+      "fr": "ferme,idle,culture,récolte,agriculture,cozy,gestion,tycoon,jardin,cultiver,relaxant,fermier",
+      "es": "granja,idle,cultivos,cosecha,plantar,tycoon,agricultura,relajante,incremental,huerto,oro,casual"
     }
   },
   "categories": {

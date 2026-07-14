@@ -97,6 +97,7 @@ import {
   migrateLoadedState,
   resolveOnboardingStep,
   DEFAULT_LOCALE,
+  LOCALE_ENDONYMS,
   SUPPORTED_LOCALES,
   executeFarmGameCommand,
   formatDuration,
@@ -951,10 +952,7 @@ function FarmGameBody({
   const resetConfirmValue = messages.resetConfirmText;
   // The language picker shows each language by its own endonym, so these labels
   // read the same regardless of the currently active locale.
-  const languageOptionLabels: Record<SupportedLocale, string> = {
-    'ko-KR': messages.languageOptionKo,
-    'en-US': messages.languageOptionEn,
-  };
+  const languageOptionLabels: Record<SupportedLocale, string> = LOCALE_ENDONYMS;
   const getLocalizedCropName = useCallback((cropKey: CropKey) => getCropLabel(cropKey, locale).name, [locale]);
   const getLocalizedAreaLabel = useCallback((areaKey: AreaKey) => getAreaLabel(areaKey, locale), [locale]);
 
