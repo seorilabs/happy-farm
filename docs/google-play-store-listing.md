@@ -147,6 +147,22 @@ python3 /Users/syous/.codex/skills/google-play-store-registration/scripts/apply_
 python3 /Users/syous/.codex/skills/google-play-store-registration/scripts/apply_play_store_listing.py --root . --verify --allow-console-gates
 ```
 
+## 다국어 리스팅 업로드(repo-local)
+
+`google-play.config.json`의 `storeListing`(제목/간단한 설명/자세한 설명)과
+`localizedAssets`(언어별 폰 스크린샷 등)를 Android Publisher API로 라이브 콘솔에
+반영한다. config 로케일 키(`ja`, `zh-Hans`, `zh-Hant`, `de`, `fr`, `es`)는
+Play 언어 코드(`ja-JP`, `zh-CN`, `zh-TW`, `de-DE`, `fr-FR`, `es-ES`)로 매핑된다.
+
+```bash
+# 미리보기(편집 폐기, 콘솔 미반영)
+GOOGLE_PLAY_SERVICE_ACCOUNT_JSON="$(cat ~/.config/seorilabs/play-store/seorilabs-play-publisher.json)" \
+  python3 scripts/upload-google-play-listing.py --dry-run
+# 텍스트+이미지 라이브 반영
+GOOGLE_PLAY_SERVICE_ACCOUNT_JSON="$(cat ~/.config/seorilabs/play-store/seorilabs-play-publisher.json)" \
+  python3 scripts/upload-google-play-listing.py --with-images --commit
+```
+
 ## 공식 기준
 
 - Target API level: https://support.google.com/googleplay/android-developer/answer/11926878

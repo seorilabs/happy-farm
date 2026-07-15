@@ -6,6 +6,11 @@ export type SupportedLocale = (typeof SUPPORTED_LOCALES)[number];
 
 export const DEFAULT_LOCALE: SupportedLocale = 'ko-KR';
 
+// 미해석 로케일의 폴백. 지원하지 않는 언어의 기기/브라우저는 한국어가 아닌 영어로
+// 노출한다(글로벌 기본값). 지원 로케일(ko/en/ja/zh-*/de/fr/es)은 normalizeLocale에서
+// 각자 자기 언어로 매핑되므로 영향받지 않는다.
+export const FALLBACK_LOCALE: SupportedLocale = 'en-US';
+
 // 언어 선택 UI(설정 시트)에서 각 언어를 자기 언어 이름(endonym)으로 노출한다.
 // 현재 활성 로케일과 무관하게 동일하게 읽히도록 catalog가 아닌 정적 상수로 둔다.
 export const LOCALE_ENDONYMS: Record<SupportedLocale, string> = {
@@ -25,7 +30,7 @@ export const LOCALE_ENDONYMS: Record<SupportedLocale, string> = {
  * 태그로 가장 가까운 지원 로케일을 고른다. 어느 것에도 맞지 않으면 기본 로케일.
  */
 export function normalizeLocale(value: string | null | undefined): SupportedLocale {
-  if (value == null) return DEFAULT_LOCALE;
+  if (value == null) return FALLBACK_LOCALE;
 
   // 정확 일치 우선(예: 'zh-Hans', 'ko-KR').
   if ((SUPPORTED_LOCALES as readonly string[]).includes(value)) {
@@ -63,6 +68,6 @@ export function normalizeLocale(value: string | null | undefined): SupportedLoca
     case 'es':
       return 'es';
     default:
-      return DEFAULT_LOCALE;
+      return FALLBACK_LOCALE;
   }
 }

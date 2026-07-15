@@ -29,9 +29,9 @@ describe('farm-core i18n', () => {
     expect(normalizeLocale('zh-Hant')).toBe('zh-Hant');
     expect(normalizeLocale('zh-TW')).toBe('zh-Hant');
     expect(normalizeLocale('zh-HK')).toBe('zh-Hant');
-    // 미지원 언어는 기본 로케일로 폴백한다.
-    expect(normalizeLocale('it-IT')).toBe('ko-KR');
-    expect(normalizeLocale(null)).toBe('ko-KR');
+    // 미지원 언어는 영어(FALLBACK_LOCALE)로 폴백한다.
+    expect(normalizeLocale('it-IT')).toBe('en-US');
+    expect(normalizeLocale(null)).toBe('en-US');
   });
 
   test('formats money and duration by locale', () => {

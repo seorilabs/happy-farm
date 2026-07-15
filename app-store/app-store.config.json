@@ -196,6 +196,92 @@
     "ipadScreenshots13": ["app-store/screenshots/ipad-13/ipad-1.png", "app-store/screenshots/ipad-13/ipad-2.png"],
     "appleWatchScreenshots": []
   },
+  "localizedScreenshots": {
+    "ja": {
+      "iphone69": [
+        "app-store/screenshots/ja/iphone-6.9/iphone-1.png",
+        "app-store/screenshots/ja/iphone-6.9/iphone-2.png"
+      ],
+      "iphone65": [
+        "app-store/screenshots/ja/iphone-6.5/iphone-1.png",
+        "app-store/screenshots/ja/iphone-6.5/iphone-2.png"
+      ],
+      "ipad13": [
+        "app-store/screenshots/ja/ipad-13/ipad-1.png",
+        "app-store/screenshots/ja/ipad-13/ipad-2.png"
+      ]
+    },
+    "zh-Hans": {
+      "iphone69": [
+        "app-store/screenshots/zh-Hans/iphone-6.9/iphone-1.png",
+        "app-store/screenshots/zh-Hans/iphone-6.9/iphone-2.png"
+      ],
+      "iphone65": [
+        "app-store/screenshots/zh-Hans/iphone-6.5/iphone-1.png",
+        "app-store/screenshots/zh-Hans/iphone-6.5/iphone-2.png"
+      ],
+      "ipad13": [
+        "app-store/screenshots/zh-Hans/ipad-13/ipad-1.png",
+        "app-store/screenshots/zh-Hans/ipad-13/ipad-2.png"
+      ]
+    },
+    "zh-Hant": {
+      "iphone69": [
+        "app-store/screenshots/zh-Hant/iphone-6.9/iphone-1.png",
+        "app-store/screenshots/zh-Hant/iphone-6.9/iphone-2.png"
+      ],
+      "iphone65": [
+        "app-store/screenshots/zh-Hant/iphone-6.5/iphone-1.png",
+        "app-store/screenshots/zh-Hant/iphone-6.5/iphone-2.png"
+      ],
+      "ipad13": [
+        "app-store/screenshots/zh-Hant/ipad-13/ipad-1.png",
+        "app-store/screenshots/zh-Hant/ipad-13/ipad-2.png"
+      ]
+    },
+    "de": {
+      "iphone69": [
+        "app-store/screenshots/de/iphone-6.9/iphone-1.png",
+        "app-store/screenshots/de/iphone-6.9/iphone-2.png"
+      ],
+      "iphone65": [
+        "app-store/screenshots/de/iphone-6.5/iphone-1.png",
+        "app-store/screenshots/de/iphone-6.5/iphone-2.png"
+      ],
+      "ipad13": [
+        "app-store/screenshots/de/ipad-13/ipad-1.png",
+        "app-store/screenshots/de/ipad-13/ipad-2.png"
+      ]
+    },
+    "fr": {
+      "iphone69": [
+        "app-store/screenshots/fr/iphone-6.9/iphone-1.png",
+        "app-store/screenshots/fr/iphone-6.9/iphone-2.png"
+      ],
+      "iphone65": [
+        "app-store/screenshots/fr/iphone-6.5/iphone-1.png",
+        "app-store/screenshots/fr/iphone-6.5/iphone-2.png"
+      ],
+      "ipad13": [
+        "app-store/screenshots/fr/ipad-13/ipad-1.png",
+        "app-store/screenshots/fr/ipad-13/ipad-2.png"
+      ]
+    },
+    "es": {
+      "iphone69": [
+        "app-store/screenshots/es/iphone-6.9/iphone-1.png",
+        "app-store/screenshots/es/iphone-6.9/iphone-2.png"
+      ],
+      "iphone65": [
+        "app-store/screenshots/es/iphone-6.5/iphone-1.png",
+        "app-store/screenshots/es/iphone-6.5/iphone-2.png"
+      ],
+      "ipad13": [
+        "app-store/screenshots/es/ipad-13/ipad-1.png",
+        "app-store/screenshots/es/ipad-13/ipad-2.png"
+      ]
+    }
+  },
   "screenshotRequirements": {
     "iphone": {
       "preferred69Display": ["1260x2736", "1290x2796", "1320x2868"],

@@ -44,3 +44,7 @@ assets/art/qa_sheet.png
 
 # game-sound-pipeline raw generations (regenerate via assets/audio/sound-manifest.json)
 assets/audio/raw/
+
+# Python 캐시(스토어 업로드 스크립트 실행 부산물)
+__pycache__/
+*.pyc

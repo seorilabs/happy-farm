@@ -98,7 +98,44 @@
         "play-store/screenshots/en-US/tablet-10/tablet-10-1.png",
         "play-store/screenshots/en-US/tablet-10/tablet-10-2.png"
       ]
-    }
+    },
+
+      "ja": {
+        "phoneScreenshots": [
+          "play-store/screenshots/ja/phone/phone-1.png",
+          "play-store/screenshots/ja/phone/phone-2.png"
+        ]
+      },
+      "zh-Hans": {
+        "phoneScreenshots": [
+          "play-store/screenshots/zh-Hans/phone/phone-1.png",
+          "play-store/screenshots/zh-Hans/phone/phone-2.png"
+        ]
+      },
+      "zh-Hant": {
+        "phoneScreenshots": [
+          "play-store/screenshots/zh-Hant/phone/phone-1.png",
+          "play-store/screenshots/zh-Hant/phone/phone-2.png"
+        ]
+      },
+      "de": {
+        "phoneScreenshots": [
+          "play-store/screenshots/de/phone/phone-1.png",
+          "play-store/screenshots/de/phone/phone-2.png"
+        ]
+      },
+      "fr": {
+        "phoneScreenshots": [
+          "play-store/screenshots/fr/phone/phone-1.png",
+          "play-store/screenshots/fr/phone/phone-2.png"
+        ]
+      },
+      "es": {
+        "phoneScreenshots": [
+          "play-store/screenshots/es/phone/phone-1.png",
+          "play-store/screenshots/es/phone/phone-2.png"
+        ]
+      }
   },
   "automation": {
     "developerApiAuth": "GitHub Actions OIDC + Google Cloud Workload Identity Federation",
