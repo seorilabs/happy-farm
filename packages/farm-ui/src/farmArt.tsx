@@ -20,7 +20,6 @@ export type FarmStageArtKey = 'sprout' | 'sapling';
 export type FarmArt = {
   cropIcon?: (cropKey: CropKey) => ImageSourcePropType | null;
   stageIcon?: (stage: FarmStageArtKey) => ImageSourcePropType | null;
-  soilTile?: ImageSourcePropType | null;
 };
 
 const EMPTY_FARM_ART: FarmArt = {};

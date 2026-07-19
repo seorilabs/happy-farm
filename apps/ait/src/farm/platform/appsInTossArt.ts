@@ -10,5 +10,4 @@ const ART_BASE_URL = 'https://happy-farm-tycoon.web.app/art';
 export const appsInTossFarmArt: FarmArt = {
   cropIcon: (cropKey) => ({ uri: `${ART_BASE_URL}/crop_${cropKey}.png` }),
   stageIcon: (stage) => ({ uri: `${ART_BASE_URL}/stage_${stage}.png` }),
-  soilTile: { uri: `${ART_BASE_URL}/tile_soil.png` },
 };

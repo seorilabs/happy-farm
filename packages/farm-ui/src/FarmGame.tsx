@@ -463,7 +463,7 @@ export type FarmGameProps = {
   useRewardedAd?: UseFarmAd;
   useInterstitialAd?: UseFarmAd;
   audio?: FarmGameAudio;
-  // Host-provided generated art (crop icons, growth stages, soil tile).
+  // Host-provided generated art (crop icons and growth stages).
   // Absent → every surface falls back to the original emoji glyphs.
   art?: FarmArt;
   notifications?: FarmGameNotifications;
@@ -5977,7 +5977,6 @@ const PlotCell = React.memo(function PlotCell({
         style={[styles.plotTile, tileSizeStyle, styles.emptyPlot]}
         onPress={handlePress}
       >
-        <PlotSoilBackground />
         <Text style={styles.emptyPlotText}>{messages.emptyPlot}</Text>
       </Pressable>
     );
@@ -6010,7 +6009,6 @@ const PlotCell = React.memo(function PlotCell({
       style={[styles.plotTile, tileSizeStyle, plot.state === 2 ? styles.readyPlot : styles.growingPlot]}
       onPress={handlePress}
     >
-      <PlotSoilBackground readyTint={plot.state === 2} />
       {plot.state === 2 ? (
         <View style={styles.harvestBadge}>
           <Text style={styles.harvestBadgeText}>{messages.readyBadge}</Text>
@@ -6043,33 +6041,6 @@ const PlotCell = React.memo(function PlotCell({
     </Pressable>
   );
 });
-
-// Ripe crops gently pulse so harvestable plots draw the eye in a full grid,
-// reinforcing the "see ready -> tap" loop. Native-driven loop keeps it cheap
-// even with every plot ripe at once.
-// Soil texture under plot content (art hosts only). Absolute-filled inside the
-// plot Pressable, whose overflow:hidden + borderRadius clips it to the tile.
-// Ready plots get a warm tint above the soil so the "harvestable" cue survives
-// the texture covering the readyPlot background color.
-function PlotSoilBackground({ readyTint = false }: { readyTint?: boolean }) {
-  const art = useFarmArt();
-  const [failed, setFailed] = useState(false);
-  if (art.soilTile == null || failed) {
-    return null;
-  }
-  return (
-    <>
-      <Image
-        testID="plot-soil-texture"
-        source={art.soilTile}
-        onError={() => setFailed(true)}
-        style={[StyleSheet.absoluteFill, styles.plotSoilTexture]}
-        resizeMode="cover"
-      />
-      {readyTint ? <View style={[StyleSheet.absoluteFill, styles.plotSoilReadyTint]} /> : null}
-    </>
-  );
-}
 
 function ReadyCropIcon({
   cropKey,

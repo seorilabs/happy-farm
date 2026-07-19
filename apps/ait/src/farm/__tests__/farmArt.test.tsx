@@ -71,15 +71,12 @@ describe('appsInTossFarmArt', () => {
     }
   });
 
-  test('maps growth stages and the soil tile to hosted art URIs', () => {
+  test('maps growth stages to hosted art URIs', () => {
     expect(appsInTossFarmArt.stageIcon?.('sprout')).toEqual({
       uri: 'https://happy-farm-tycoon.web.app/art/stage_sprout.png',
     });
     expect(appsInTossFarmArt.stageIcon?.('sapling')).toEqual({
       uri: 'https://happy-farm-tycoon.web.app/art/stage_sapling.png',
-    });
-    expect(appsInTossFarmArt.soilTile).toEqual({
-      uri: 'https://happy-farm-tycoon.web.app/art/tile_soil.png',
     });
   });
 });
