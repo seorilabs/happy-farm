@@ -14,9 +14,8 @@ describe('mobileFarmArt', () => {
     }
   });
 
-  test('growth stages and the soil tile resolve to bundled assets', () => {
+  test('growth stages resolve to bundled assets', () => {
     expect(mobileFarmArt.stageIcon?.('sprout')).toBeDefined();
     expect(mobileFarmArt.stageIcon?.('sapling')).toBeDefined();
-    expect(mobileFarmArt.soilTile).toBeDefined();
   });
 });

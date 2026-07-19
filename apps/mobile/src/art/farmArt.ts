@@ -54,7 +54,6 @@ import crop_aurora_kiwi from './assets/crop_aurora_kiwi.png';
 import crop_sacred_rice from './assets/crop_sacred_rice.png';
 import stage_sapling from './assets/stage_sapling.png';
 import stage_sprout from './assets/stage_sprout.png';
-import tile_soil from './assets/tile_soil.png';
 
 const cropArt: Record<CropKey, number> = {
   carrot: crop_carrot,
@@ -114,5 +113,4 @@ const stageArt = {
 export const mobileFarmArt: FarmArt = {
   cropIcon: (cropKey) => cropArt[cropKey] ?? null,
   stageIcon: (stage) => stageArt[stage],
-  soilTile: tile_soil,
 };

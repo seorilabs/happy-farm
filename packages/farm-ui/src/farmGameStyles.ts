@@ -249,11 +249,6 @@ export const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: PLOT_GAP,
   },
-  // Generated soil art is intentionally blended with each plot's state color.
-  // Full opacity made labels, timers, and crop art disappear into the dark photo.
-  plotSoilTexture: {
-    opacity: 0.5,
-  },
   // Cosmetic decoration strip beneath the plot grid. A soft ground-line border
   // that reads as the edge of the farm; wraps so a large collection flows onto
   // multiple rows instead of overflowing.
@@ -485,10 +480,6 @@ export const styles = StyleSheet.create({
   readyCropImage: {
     width: 34,
     height: 34,
-  },
-  // 흙 타일 텍스처 위에서도 '수확 가능' 배경색 신호가 살아남도록 덧씌우는 웜 틴트.
-  plotSoilReadyTint: {
-    backgroundColor: 'rgba(255, 213, 79, 0.30)',
   },
   toolStrip: {
     paddingTop: 10,
