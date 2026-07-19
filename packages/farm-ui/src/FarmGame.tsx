@@ -46,6 +46,7 @@ import {
   getCropPurchaseCost,
   getFarmHourlyProductivity,
   getGlobalModifiers,
+  getOnboardingCropKey,
   getPrestigeSkillLabel,
   getRegionArchetypeLabel,
   getResearchNodeLabel,
@@ -290,14 +291,6 @@ function getCrop(cropKey: CropKey) {
     throw new Error(`Unknown crop: ${cropKey}`);
   }
   return crop;
-}
-
-function getOnboardingCropKey(gameState: GameState): CropKey | null {
-  return (
-    (Object.keys(CROPS) as CropKey[]).find(
-      (key) => isAreaUnlocked(gameState, getCrop(key).area) && isCropPlantable(gameState, key)
-    ) ?? null
-  );
 }
 
 // Identifies the single most actionable next milestone for the player: the
@@ -901,6 +894,18 @@ function FarmGameBody({
     seedHighlightPulseRef.current = new Animated.Value(0);
   }
   const seedHighlightPulse = seedHighlightPulseRef.current;
+  // One-shot emphasis burst on the seed strip, distinct from the ambient pulse
+  // above. Fired when the player stalls at selectSeed (#362, once per session) or
+  // taps a seed they can't afford, to actively point at the affordable seed.
+  const seedNudgeBurstRef = useRef<Animated.Value | null>(null);
+  if (seedNudgeBurstRef.current == null) {
+    seedNudgeBurstRef.current = new Animated.Value(0);
+  }
+  const seedNudgeBurst = seedNudgeBurstRef.current;
+  // Guards the stall-triggered nudge to at most once per session so a lingering
+  // new player isn't pulsed repeatedly (#362). Tap-triggered nudges are exempt —
+  // those are immediate feedback to an explicit action.
+  const stallNudgePlayedRef = useRef(false);
   // Per-plot "just planted" tokens. Bumped only on a manual plant so the fresh
   // sprout bounces in (auto-replant and save-load stay silent). Keyed by index.
   const [plantPulses, setPlantPulses] = useState<Record<number, number>>({});
@@ -1844,6 +1849,28 @@ function FarmGameBody({
     });
   }, [onboardingStep, farmAnalytics, analyticsContext]);
 
+  // Play a short, distinct emphasis burst on the seed strip (native driver, so
+  // the seed buttons stay interactive). Used to actively point the eye at the
+  // affordable seed when the player is stuck or misfires (#362).
+  const playSeedNudgeBurst = useCallback(() => {
+    seedNudgeBurst.stopAnimation();
+    seedNudgeBurst.setValue(0);
+    Animated.sequence([
+      Animated.timing(seedNudgeBurst, {
+        toValue: 1,
+        duration: 260,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
+      Animated.timing(seedNudgeBurst, {
+        toValue: 0,
+        duration: 620,
+        easing: Easing.inOut(Easing.quad),
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [seedNudgeBurst]);
+
   // Fire onboarding_stall once per step entry if the player lingers without
   // acting for ONBOARDING_STALL_MS (#274). The step changes the instant the
   // player acts, so this effect's cleanup clears the timer before it fires —
@@ -1866,9 +1893,15 @@ function FarmGameBody({
         dwellSeconds: Math.round(ONBOARDING_STALL_MS / 1000),
         context: buildContext(),
       });
+      // #362: selectSeed에서 정체가 감지되면(15초 무행동) 씨앗을 어디서 고르는지
+      // 능동적으로 한 번 짚어준다. 세션당 1회로 제한해 반복 펄스로 성가시지 않게.
+      if (step === 'selectSeed' && !stallNudgePlayedRef.current) {
+        stallNudgePlayedRef.current = true;
+        playSeedNudgeBurst();
+      }
     }, ONBOARDING_STALL_MS);
     return () => clearTimeout(timer);
-  }, [onboardingStep, farmAnalytics]);
+  }, [onboardingStep, farmAnalytics, playSeedNudgeBurst]);
 
   // Loop a gentle pulse on the seed-strip emphasis ring while the selectSeed step
   // is active so the place to tap reads louder for brand-new players; stop and
@@ -3065,11 +3098,19 @@ function FarmGameBody({
     // During the first instruction, only an affordable seed may advance the
     // guide to "plant". Regular play still allows preselecting expensive seeds,
     // but doing so here would strand a new player on an impossible next action.
+    // Rather than a bare rejection toast, steer the eye to the affordable seed:
+    // switch to its area (so it's visible in the strip) and fire the emphasis
+    // burst (#362). We still keep the toast so the reason for the redirect reads.
     if (
       onboardingStepRef.current === 'selectSeed' &&
       gameState.gold < getCropPurchaseCost(gameState, cropKey, Date.now())
     ) {
       toast(messages.insufficientGoldToast);
+      const affordableKey = getOnboardingCropKey(gameState);
+      if (affordableKey != null && gameState.gold >= getCropPurchaseCost(gameState, affordableKey, Date.now())) {
+        setSelectedArea(getCrop(affordableKey).area);
+        playSeedNudgeBurst();
+      }
       return;
     }
 
@@ -4293,6 +4334,24 @@ function FarmGameBody({
             <Animated.View
               pointerEvents="none"
               style={[styles.onboardingSeedPulseRing, { opacity: seedHighlightPulse }]}
+            />
+          ) : null}
+          {onboardingSeedHighlight ? (
+            // One-shot emphasis burst layered over the ambient ring: a brief
+            // brighter flash + slight scale-out fired on stall / unaffordable tap
+            // to actively point at the affordable seed (#362).
+            <Animated.View
+              testID="onboarding-seed-nudge-burst"
+              pointerEvents="none"
+              style={[
+                styles.onboardingSeedNudgeRing,
+                {
+                  opacity: seedNudgeBurst,
+                  transform: [
+                    { scale: seedNudgeBurst.interpolate({ inputRange: [0, 1], outputRange: [1, 1.04] }) },
+                  ],
+                },
+              ]}
             />
           ) : null}
         </View>
