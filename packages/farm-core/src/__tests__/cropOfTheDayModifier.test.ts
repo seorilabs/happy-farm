@@ -46,11 +46,20 @@ describe('오늘의 작물 배수는 UI 표시 작물에 적용된다 (#377)', (
   it('AC-1: getCropModifiers가 getCropOfTheDayStatus에 gameState를 전달한다', () => {
     const state = createInitialState();
     const { now, displayed, fullPool } = findDivergentQuietDay(state);
-    // gameState를 전달하지 않았다면(버그) 전체 풀 픽 fullPool이 배수를 받았을 것이다.
-    // 전달했으므로 심을 수 없는 fullPool엔 배수가 없고(=1), 심기 가능 풀 픽에 적용된다.
-    expect(isPlantable(state, fullPool)).toBe(false);
+
+    // getCropModifiers가 실제로 cotd 배수를 적용하는 작물을 전체 풀에서 역산한다
+    // (조용한 날이라 배수(MULT)를 받는 작물은 그날의 오늘의 작물 하나뿐).
+    const bonusTargets = (Object.keys(CROPS) as CropKey[]).filter(
+      (key) => Math.abs(cotdProfitFactor(state, key, now) - MULT) < 1e-6
+    );
+
+    // 배수 대상은 정확히 gameState를 전달한 풀의 오늘의 작물(displayed)과 일치하고,
+    expect(bonusTargets).toEqual([displayed]);
+    expect(getCropOfTheDayStatus(now, state).cropKey).toBe(displayed);
+    // gameState를 전달하지 않았다면 배수를 받았을 전체 풀 픽(fullPool)과는 다르다
+    // → getCropModifiers가 getCropOfTheDayStatus에 gameState를 전달했다는 직접 증거.
+    expect(displayed).not.toBe(fullPool);
     expect(cotdProfitFactor(state, fullPool, now)).toBeCloseTo(1, 5);
-    expect(cotdProfitFactor(state, displayed, now)).toBeCloseTo(MULT, 5);
   });
 
   it('AC-2: UI가 표시하는 오늘의 작물과 실제 ×2 배수를 받는 작물이 동일하다', () => {
