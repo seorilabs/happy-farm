@@ -1062,6 +1062,19 @@ export const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: '#2e9e54',
   },
+  // One-shot emphasis ring for the stall/unaffordable nudge (#362): a brighter,
+  // thicker gold-green flash layered over the ambient pulse. Its opacity/scale is
+  // animated as a single burst. pointerEvents none keeps taps flowing through.
+  onboardingSeedNudgeRing: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: 14,
+    borderWidth: 3,
+    borderColor: '#ffb300',
+  },
   nextGoalLabel: {
     color: '#4a7c59',
     fontSize: 11,
