@@ -66,7 +66,10 @@ export function getGlobalModifiers(gameState: GameState, now = Date.now()): Glob
 
 export function getCropModifiers(gameState: GameState, cropKey: CropKey, now = Date.now()): CropModifiers {
   const global = getGlobalModifiers(gameState, now);
-  const cotd = getCropOfTheDayStatus(now);
+  // #377: gameState를 넘겨 "오늘의 작물" 추첨 풀을 심을 수 있는 작물로 제한한다.
+  // 넘기지 않으면 전체 작물 풀에서 추첨돼(cropOfTheDay.ts) UI가 광고하는 작물과
+  // 실제 ×2 배수를 받는 작물이 어긋나 데일리 후크가 조용히 무력화된다.
+  const cotd = getCropOfTheDayStatus(now, gameState);
   return {
     ...global,
     // A harvest (speed-axis) weekend festival speeds up the featured area's growth;
