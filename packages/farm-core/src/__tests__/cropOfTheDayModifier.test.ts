@@ -86,13 +86,33 @@ describe('오늘의 작물 배수는 UI 표시 작물에 적용된다 (#377)', (
     expect(cotdProfitFactor(corrupt, displayed, now)).toBeCloseTo(MULT, 5);
   });
 
-  it('AC-5: 기존 cropOfTheDay 계약 유지 — gameState 없는 경로는 전체 풀에서 결정론적으로 추첨', () => {
-    // 알림 스케줄 등 gameState 없는 호출(하위호환)이 깨지지 않았음을 고정한다.
+  it('AC-5: 기존 cropOfTheDay 계약이 유지된다(반환 작물 유효·배수·결정론·해금 제한·하위호환)', () => {
     const now = getResetDayStart(10) + 3_600_000;
-    expect(getCropOfTheDayStatus(now).cropKey).toBe(getCropOfTheDayStatus(now).cropKey); // 결정론적
-    // gameState 없는 경로는 여전히 전체 풀을 쓰므로 심기 가능 풀과 갈릴 수 있다.
-    const { displayed, fullPool } = findDivergentQuietDay(createInitialState());
+    const all = getCropOfTheDayStatus(now);
+    // 반환 작물이 유효한 CropKey이고 배수는 데이터 기반 상수다.
+    expect(Object.prototype.hasOwnProperty.call(CROPS, all.cropKey)).toBe(true);
+    expect(all.multiplier).toBe(MULT);
+    // 결정론: 동일 timestamp는 동일 작물.
+    expect(getCropOfTheDayStatus(now).cropKey).toBe(all.cropKey);
+    // gameState 전달 시 심을 수 있는 작물만 추첨(미해금 미반환).
+    const state = createInitialState();
+    expect(isPlantable(state, getCropOfTheDayStatus(now, state).cropKey)).toBe(true);
+    // gameState 미전달 시 전체 풀 폴백(하위호환): 심기 가능 풀과 갈릴 수 있다.
+    const { displayed, fullPool } = findDivergentQuietDay(state);
     expect(fullPool).not.toBe(displayed);
-    expect(getCropOfTheDayStatus(now).multiplier).toBe(MULT);
+  });
+
+  it('AC-6: cotd 상태의 UI 계약(shape)이 gameState 유무와 무관하게 동일하다(신규 UI 필드 없음)', () => {
+    // 순수 로직 수정이라 UI가 소비하는 데이터 계약이 바뀌지 않는다: 필드 구성이
+    // 동일하므로 새 HUD 상시 요소를 유발할 신규 필드/프롭이 없다. 오늘의 작물 칩이
+    // 읽는 값(cropKey/multiplier/window)의 shape가 gameState 유무와 무관하게 동일.
+    const now = getResetDayStart(10) + 3_600_000;
+    const withState = getCropOfTheDayStatus(now, createInitialState());
+    const withoutState = getCropOfTheDayStatus(now);
+    expect(Object.keys(withState).sort()).toEqual(Object.keys(withoutState).sort());
+    expect(withState.multiplier).toBe(withoutState.multiplier);
+    expect(typeof withState.cropKey).toBe('string');
+    expect(typeof withState.windowStartAt).toBe('number');
+    expect(typeof withState.windowEndAt).toBe('number');
   });
 });
