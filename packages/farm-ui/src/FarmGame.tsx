@@ -232,7 +232,7 @@ import {
 import { styles } from './farmGameStyles';
 import { resolveUnaffordableSeedNudge, shouldFireStallNudge } from './onboardingNudge';
 import { resolveBottomSafeInset } from './safeArea';
-import { getVisibleShopTabs, resolveActiveShopTab, type ShopTabKey } from './shopTabs';
+import { getShopTabBadge, getVisibleShopTabs, resolveActiveShopTab, type ShopTabKey } from './shopTabs';
 
 // Game tick: drives idle re-renders so time-based UI (growth, cooldowns) advances.
 // The growth bar animates one tick at a time, so its duration is tied to this value
@@ -4413,13 +4413,8 @@ function FarmGameBody({
               rewards: messages.shopTabRewards,
             };
             // 탭이 섹션을 뎁스 뒤로 숨기므로, 기존 상점 nav 배지 신호(수령 가능 광고·
-            // 구매 가능 업그레이드)를 탭 배지로 보존해 놓치지 않게 한다.
-            const shopTabBadges: Record<ShopTabKey, number> = {
-              expand: 0,
-              upgrade: upgradeReadyCount,
-              decorate: 0,
-              rewards: shopAdBadgeCount,
-            };
+            // 구매 가능 업그레이드)를 탭 배지로 보존해 놓치지 않게 한다(getShopTabBadge).
+            const shopTabBadgeCounts = { upgradeReadyCount, rewardReadyCount: shopAdBadgeCount };
             return (
               <View>
                 <View testID="shop-tab-bar" style={styles.shopTabBar}>
@@ -4438,9 +4433,9 @@ function FarmGameBody({
                         <Text style={[styles.shopTabButtonText, active && styles.shopTabButtonTextActive]}>
                           {shopTabLabels[key]}
                         </Text>
-                        {shopTabBadges[key] > 0 ? (
+                        {getShopTabBadge(key, shopTabBadgeCounts) > 0 ? (
                           <View style={styles.shopTabBadge}>
-                            <Text style={styles.shopTabBadgeText}>{shopTabBadges[key]}</Text>
+                            <Text style={styles.shopTabBadgeText}>{getShopTabBadge(key, shopTabBadgeCounts)}</Text>
                           </View>
                         ) : null}
                       </Pressable>

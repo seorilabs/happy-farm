@@ -19,3 +19,38 @@ export function resolveActiveShopTab(requested: ShopTabKey, opts: { adSupported:
   const visible = getVisibleShopTabs(opts);
   return visible.includes(requested) ? requested : visible[0]!;
 }
+
+// 정리 전 상점의 5개 원래 섹션. 탭으로 재배치해도 하나도 빠지지 않고 모두
+// 접근 가능해야 한다(회귀 방지).
+export type ShopSectionKey = 'plots' | 'areaUnlock' | 'research' | 'decoration' | 'adRewards';
+export const SHOP_SECTION_KEYS: readonly ShopSectionKey[] = [
+  'plots',
+  'areaUnlock',
+  'research',
+  'decoration',
+  'adRewards',
+];
+
+// 각 탭이 담는 원래 섹션. FarmGame 렌더는 이 매핑과 일치하게 섹션을 배치하고,
+// 테스트는 5개 섹션이 정확히 한 탭씩에 중복·누락 없이 들어감을 고정한다.
+export const SHOP_TAB_SECTIONS: Record<ShopTabKey, readonly ShopSectionKey[]> = {
+  expand: ['plots', 'areaUnlock'],
+  upgrade: ['research'],
+  decorate: ['decoration'],
+  rewards: ['adRewards'],
+};
+
+// 탭이 섹션을 한 뎁스 뒤로 숨긴 대신, 기존 상점 배지 신호(수령 가능 광고 보상·
+// 구매 가능 업그레이드)를 해당 탭의 배지로 보존한다. 배지 신호가 없는 탭은 0.
+export function getShopTabBadge(
+  tab: ShopTabKey,
+  counts: { upgradeReadyCount: number; rewardReadyCount: number }
+): number {
+  if (tab === 'upgrade') {
+    return counts.upgradeReadyCount;
+  }
+  if (tab === 'rewards') {
+    return counts.rewardReadyCount;
+  }
+  return 0;
+}
