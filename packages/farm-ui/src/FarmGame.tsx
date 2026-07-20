@@ -813,6 +813,11 @@ function FarmGameBody({
   // the request synchronously so rapid taps cannot open two ads or two spins.
   const wheelBonusSpinInFlightRef = useRef(false);
   const offlineBonusImpressionAtRef = useRef<number | null>(null);
+  // 마지막으로 시트 impression·collection_screen을 발화한 시트 타입을 기억한다.
+  // 방치형 특성상 시트가 열려 있는 동안에도 gameState가 계속 바뀌는데(작물 성장/
+  // 자동 수확/골드 누적), 시트 타입이 실제로 전이(open/close/switch)될 때만 발화해
+  // 같은 시트가 열린 채 이벤트가 반복 발화되는 것을 막는다.
+  const sheetImpressionTypeRef = useRef<string | null>(null);
   // First-session onboarding owns the foreground. A daily-bonus sheet
   // discovered during load waits here until the guide completes or the player
   // explicitly skips it, so a modal can never hide the first action.
@@ -2164,34 +2169,55 @@ function FarmGameBody({
   }, [activeSheet]);
 
   useEffect(() => {
-    if (activeSheet?.type === 'shop') {
-      const context = analyticsContext();
-      farmAnalytics.trackAdRewardImpression('rewardedGold', getRewardedAdPlacement('rewardedGold'), context);
-      farmAnalytics.trackAdRewardImpression('plotDiscountAd', getRewardedAdPlacement('plotDiscountAd'), context);
-    }
-    if (activeSheet?.type === 'growthAd') {
-      farmAnalytics.trackAdRewardImpression('growthAd', getRewardedAdPlacement('growthAd'), analyticsContext());
-    }
-    if (activeSheet?.type === 'harvestBonus') {
-      farmAnalytics.trackAdRewardImpression('harvestBonusAd', getRewardedAdPlacement('harvestBonusAd'), analyticsContext());
-    }
+    // analyticsContext는 [gameState] 의존이라 gameState 변경마다 identity가 바뀐다.
+    // 이 effect의 deps에 넣으면 시트가 열린 동안 gameState 갱신마다 재실행되어
+    // impression이 재발화되므로, deps에서 제외하고 stable ref로 최신 컨텍스트를 만든다.
+    const buildContext = analyticsContextRef.current;
+
+    // welcomeBack(offlineBonus)은 시트 타입 전이 가드와 별개로 capturedAt 가드로
+    // 중복을 막는다. ad 지원 여부가 늦게 확정될 수 있어(타입 전이 없이 deps만 변경)
+    // 타입 전이 가드보다 먼저, 독립적으로 평가한다.
     if (
       activeSheet?.type === 'welcomeBack' &&
       activeSheet.summary.offlineGold > 0 &&
       rewardedAd.isAdSupported &&
-      offlineBonusImpressionAtRef.current !== activeSheet.summary.capturedAt
+      offlineBonusImpressionAtRef.current !== activeSheet.summary.capturedAt &&
+      buildContext != null
     ) {
       offlineBonusImpressionAtRef.current = activeSheet.summary.capturedAt;
       farmAnalytics.trackAdRewardImpression(
         'offlineBonusAd',
         getRewardedAdPlacement('offlineBonusAd'),
-        analyticsContext()
+        buildContext()
       );
     }
-    if (activeSheet?.type === 'collection') {
-      farmAnalytics.trackCollectionScreen(analyticsContext());
+
+    // 시트 타입 전이당 1회만 발화. 같은 시트가 열린 채 재실행되면 여기서 종료한다.
+    // 시트를 닫았다(null 등 다른 타입)가 다시 열면 타입이 바뀌므로 다시 1회 발화한다.
+    const sheetType = activeSheet?.type ?? null;
+    if (sheetImpressionTypeRef.current === sheetType) {
+      return;
     }
-  }, [activeSheet, analyticsContext, rewardedAd.isAdSupported]);
+    sheetImpressionTypeRef.current = sheetType;
+    if (buildContext == null) {
+      return;
+    }
+
+    if (activeSheet?.type === 'shop') {
+      const context = buildContext();
+      farmAnalytics.trackAdRewardImpression('rewardedGold', getRewardedAdPlacement('rewardedGold'), context);
+      farmAnalytics.trackAdRewardImpression('plotDiscountAd', getRewardedAdPlacement('plotDiscountAd'), context);
+    }
+    if (activeSheet?.type === 'growthAd') {
+      farmAnalytics.trackAdRewardImpression('growthAd', getRewardedAdPlacement('growthAd'), buildContext());
+    }
+    if (activeSheet?.type === 'harvestBonus') {
+      farmAnalytics.trackAdRewardImpression('harvestBonusAd', getRewardedAdPlacement('harvestBonusAd'), buildContext());
+    }
+    if (activeSheet?.type === 'collection') {
+      farmAnalytics.trackCollectionScreen(buildContext());
+    }
+  }, [activeSheet, rewardedAd.isAdSupported, farmAnalytics]);
 
   useEffect(() => {
     const id = setInterval(() => {

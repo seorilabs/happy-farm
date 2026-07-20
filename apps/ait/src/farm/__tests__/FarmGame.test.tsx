@@ -4366,6 +4366,95 @@ describe('FarmGame UI flow', () => {
     await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
     expect(screen.queryByText('다시 오셨네요!')).toBeNull();
   });
+
+  // #356: 시트 impression·collection_screen이 시트 오픈(타입 전이)당 1회만 발화하는지
+  // 검증한다. 회귀 대상: analyticsContext(=[gameState] 의존)를 effect deps로 두면 시트가
+  // 열린 동안 gameState가 갱신될 때마다 impression이 재발화되던 GA4 과다 발화 버그.
+  describe('시트 impression 재발화 가드 (#356)', () => {
+    const localMessages = getFarmMessages(DEFAULT_LOCALE);
+    // 시트 닫힘 애니메이션(SHEET_ANIMATION_DURATION_MS=180)이 완료돼 activeSheet=null이
+    // 커밋되기까지의 여유. 재오픈이 확실히 새 타입 전이가 되도록 넉넉히 진행한다.
+    const SHEET_CLOSE_SETTLE_MS = 400;
+
+    const impressionTypes = (track: jest.Mock): string[] =>
+      track.mock.calls
+        .filter(([eventName]) => eventName === 'ad_reward_impression')
+        .map(([, params]) => params.ad_type);
+
+    const collectionScreenCount = (track: jest.Mock): number =>
+      track.mock.calls.filter(([eventName]) => eventName === 'collection_screen').length;
+
+    test('상점 시트가 열린 동안 gameState가 갱신돼도 impression이 재발화되지 않고 재오픈 시 다시 2건 발화된다', async () => {
+      const shopReadyState = createShopReadyState();
+      const plotCost = getPlotCost(shopReadyState.unlockedPlotCount);
+      const track = jest.fn();
+      const screen = await renderGame(shopReadyState, { analytics: createFarmAnalytics(track) });
+
+      await waitFor(() => expect(screen.getByText(`${formatMoney(shopReadyState.gold)}G`)).toBeTruthy());
+
+      // 상점 열기: impression은 rewardedGold, plotDiscountAd 정확히 2건만 발화된다.
+      fireEvent.press(screen.getByTestId('shop-nav-button'));
+      expect(impressionTypes(track)).toEqual(['rewardedGold', 'plotDiscountAd']);
+
+      // 상점이 열린 채 gameState를 바꾼다(밭 개간 구매 → 골드 감소로 커밋 확인).
+      // 회귀 전에는 여기서 analyticsContext identity가 바뀌어 impression이 2건 더 발화됐다.
+      fireEvent.press(screen.getByText('밭 개간하기'));
+      expect(screen.getByText(`${formatMoney(shopReadyState.gold - plotCost)}G`)).toBeTruthy();
+      expect(impressionTypes(track)).toEqual(['rewardedGold', 'plotDiscountAd']);
+
+      // 닫았다가 다시 열면 impression이 다시 1회(2건) 발화된다. 시트 닫힘은 애니메이션
+      // 완료 콜백에서 activeSheet=null로 커밋되므로, 재오픈 전에 타이머를 진행시킨다.
+      fireEvent.press(screen.getByLabelText(localMessages.sheetCloseAccessibilityLabel));
+      await act(async () => {
+        jest.advanceTimersByTime(SHEET_CLOSE_SETTLE_MS);
+      });
+      fireEvent.press(screen.getByTestId('shop-nav-button'));
+      expect(impressionTypes(track)).toEqual([
+        'rewardedGold',
+        'plotDiscountAd',
+        'rewardedGold',
+        'plotDiscountAd',
+      ]);
+    });
+
+    test('도감 시트가 열린 동안 gameState가 갱신돼도 collection_screen이 재발화되지 않고 재오픈 시 다시 1건 발화된다', async () => {
+      // 첫 구역 작물을 모두 발견해 도감에서 구역 보상 수령이 가능한 상태로 만든다.
+      const area = FARM_AREAS[0]!;
+      const base = createInitialState();
+      const state: GameState = {
+        ...base,
+        onboardingCompleted: true,
+        harvestedCropKeys: getAreaCropKeys(area.key),
+      };
+      const track = jest.fn();
+      const screen = await renderGame(state, { analytics: createFarmAnalytics(track) });
+
+      await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+
+      // 더보기 → 도감 진입: collection_screen 1건.
+      fireEvent.press(screen.getByTestId('more-nav-button'));
+      fireEvent.press(screen.getByLabelText(localMessages.collectionButtonAccessibilityLabel));
+      expect(collectionScreenCount(track)).toBe(1);
+
+      // 도감이 열린 채 gameState를 바꾼다(구역 보상 수령 → 골드 증가로 커밋).
+      // 회귀 전에는 여기서 collection_screen이 추가 발화됐다.
+      const claimLabel = localMessages.collectionClaimAction(
+        formatMoney(COLLECTION_AREA_REWARDS[area.key]!, DEFAULT_LOCALE)
+      );
+      fireEvent.press(screen.getByText(claimLabel));
+      expect(screen.queryByText(claimLabel)).toBeNull();
+      expect(collectionScreenCount(track)).toBe(1);
+
+      // 닫았다가 다시 열면 collection_screen이 다시 1건 발화된다.
+      fireEvent.press(screen.getByLabelText(localMessages.sheetCloseAccessibilityLabel));
+      await act(async () => {
+        jest.advanceTimersByTime(SHEET_CLOSE_SETTLE_MS);
+      });
+      fireEvent.press(screen.getByTestId('more-nav-button'));
+      fireEvent.press(screen.getByLabelText(localMessages.collectionButtonAccessibilityLabel));
+      expect(collectionScreenCount(track)).toBe(2);
+    });
+  });
 });
 
 // ---------------------------------------------------------------------------
