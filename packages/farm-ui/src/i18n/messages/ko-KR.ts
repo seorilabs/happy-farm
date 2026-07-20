@@ -16,6 +16,11 @@ export const koFarmMessages = {
   roi: (value: string) => `효율 ${value}`,
   lockedAreaTitle: (areaName: string) => `${areaName} 열기 조건`,
   adRewardsSection: '광고 보상',
+  // #372 상점 시트 탭 라벨(확장/업그레이드/꾸미기/보상)
+  shopTabExpand: '확장',
+  shopTabUpgrade: '업그레이드',
+  shopTabDecorate: '꾸미기',
+  shopTabRewards: '보상',
   rewardedGoldTitle: (amount: string) => `광고 보고 ${amount}G 받기`,
   rewardedGoldReadyDesc: (windowMinutes: number, maxUses: number) => `${windowMinutes}분에 최대 ${maxUses}회 받을 수 있어요.`,
   rewardedPlotTitle: '광고 보고 밭 1칸 할인 구매',
