@@ -40,6 +40,13 @@ export const SHOP_TAB_SECTIONS: Record<ShopTabKey, readonly ShopSectionKey[]> = 
   rewards: ['adRewards'],
 };
 
+// AC-4: 탭 바는 상점 시트가 열렸을 때만 렌더된다. 시트가 없을 때(=상시 HUD만
+// 보이는 기본 화면)나 다른 시트에서는 렌더되지 않으므로, 탭은 상단 상시 HUD/navRow가
+// 아니라 상점 시트 내부(한 뎁스 뒤)에 거주함이 보장된다.
+export function shouldRenderShopTabBar(activeSheetType: string | null | undefined): boolean {
+  return activeSheetType === 'shop';
+}
+
 // 탭이 섹션을 한 뎁스 뒤로 숨긴 대신, 기존 상점 배지 신호(수령 가능 광고 보상·
 // 구매 가능 업그레이드)를 해당 탭의 배지로 보존한다. 배지 신호가 없는 탭은 0.
 export function getShopTabBadge(

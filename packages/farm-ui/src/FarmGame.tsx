@@ -232,7 +232,13 @@ import {
 import { styles } from './farmGameStyles';
 import { resolveUnaffordableSeedNudge, shouldFireStallNudge } from './onboardingNudge';
 import { resolveBottomSafeInset } from './safeArea';
-import { getShopTabBadge, getVisibleShopTabs, resolveActiveShopTab, type ShopTabKey } from './shopTabs';
+import {
+  getShopTabBadge,
+  getVisibleShopTabs,
+  resolveActiveShopTab,
+  shouldRenderShopTabBar,
+  type ShopTabKey,
+} from './shopTabs';
 
 // Game tick: drives idle re-renders so time-based UI (growth, cooldowns) advances.
 // The growth bar animates one tick at a time, so its duration is tied to this value
@@ -4398,7 +4404,7 @@ function FarmGameBody({
           return true;
         }}
       >
-        {activeSheet?.type === 'shop' ? (
+        {shouldRenderShopTabBar(activeSheet?.type) ? (
           (() => {
             // #372: 5개 이질 섹션을 4개 탭(확장/업그레이드/꾸미기/보상)으로 분리해
             // 한 탭에 해당 섹션만 렌더한다. 탭 구성·가시성·선택 폴백은 순수 로직

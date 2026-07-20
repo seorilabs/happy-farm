@@ -7,7 +7,7 @@ import {
   SHOP_SECTION_KEYS,
   SHOP_TAB_KEYS,
   SHOP_TAB_SECTIONS,
-  type ShopTabKey,
+  shouldRenderShopTabBar,
 } from '../shopTabs';
 import { deFarmMessages } from '../i18n/messages/de';
 import { enFarmMessages } from '../i18n/messages/en-US';
@@ -100,53 +100,47 @@ describe('getShopTabBadge — AC-3 (탭 배지 보존)', () => {
   });
 });
 
-describe('상점 탭 라벨 i18n 커버리지 (#372, AC-5)', () => {
-  // 8개 로케일 catalog를 직접 참조해 4개 탭 라벨이 모두 존재함을 고정한다.
-  const catalogs: Record<string, Record<string, unknown>> = {
-    'ko-KR': koFarmMessages,
-    'en-US': enFarmMessages,
-    ja: jaFarmMessages,
-    'zh-Hans': zhHansFarmMessages,
-    'zh-Hant': zhHantFarmMessages,
-    de: deFarmMessages,
-    fr: frFarmMessages,
-    es: esFarmMessages,
-  };
-  const labelKeys: Array<keyof ShopTabLabelKeys> = [
-    'shopTabExpand',
-    'shopTabUpgrade',
-    'shopTabDecorate',
-    'shopTabRewards',
-  ];
-  type ShopTabLabelKeys = {
-    shopTabExpand: string;
-    shopTabUpgrade: string;
-    shopTabDecorate: string;
-    shopTabRewards: string;
-  };
-
-  it('8개 로케일 전부에 4개 탭 라벨이 비어있지 않은 문자열로 존재한다', () => {
-    expect(Object.keys(catalogs)).toHaveLength(8);
-    for (const [locale, catalog] of Object.entries(catalogs)) {
-      for (const key of labelKeys) {
-        const value = catalog[key];
-        expect(typeof value).toBe('string');
-        expect((value as string).trim().length).toBeGreaterThan(0);
-      }
-      expect(locale).toBeTruthy();
-    }
+describe('shouldRenderShopTabBar — AC-4 (탭 바는 상점 시트 내부에만 거주)', () => {
+  it('상점 시트가 활성일 때만 탭 바를 렌더한다', () => {
+    expect(shouldRenderShopTabBar('shop')).toBe(true);
   });
 
-  // exhaustiveness 가드: SHOP_TAB_KEYS와 라벨 키가 1:1로 대응하는지.
-  it('탭 키마다 대응하는 라벨 키가 존재한다', () => {
-    const expected: Record<ShopTabKey, keyof ShopTabLabelKeys> = {
-      expand: 'shopTabExpand',
-      upgrade: 'shopTabUpgrade',
-      decorate: 'shopTabDecorate',
-      rewards: 'shopTabRewards',
-    };
-    for (const tab of SHOP_TAB_KEYS) {
-      expect(typeof koFarmMessages[expected[tab]]).toBe('string');
+  it('시트가 없을 때(=상시 HUD만 보이는 기본 화면)는 탭 바를 렌더하지 않는다', () => {
+    // null/undefined = 열린 시트 없음 → 탭 바가 상시 HUD/navRow에 얹히지 않음.
+    expect(shouldRenderShopTabBar(null)).toBe(false);
+    expect(shouldRenderShopTabBar(undefined)).toBe(false);
+  });
+
+  it('상점이 아닌 다른 시트에서도 탭 바를 렌더하지 않는다', () => {
+    expect(shouldRenderShopTabBar('missions')).toBe(false);
+    expect(shouldRenderShopTabBar('more')).toBe(false);
+    expect(shouldRenderShopTabBar('collection')).toBe(false);
+  });
+});
+
+describe('상점 탭 라벨 i18n 커버리지 (#372, AC-5)', () => {
+  it('ko-KR catalog에 4개 탭 라벨이 정의돼 있다', () => {
+    expect(koFarmMessages.shopTabExpand).toBe('확장');
+    expect(koFarmMessages.shopTabUpgrade).toBe('업그레이드');
+    expect(koFarmMessages.shopTabDecorate).toBe('꾸미기');
+    expect(koFarmMessages.shopTabRewards).toBe('보상');
+  });
+
+  it('en-US catalog에 4개 탭 라벨이 정의돼 있다', () => {
+    expect(enFarmMessages.shopTabExpand).toBe('Expand');
+    expect(enFarmMessages.shopTabUpgrade).toBe('Upgrade');
+    expect(enFarmMessages.shopTabDecorate).toBe('Decorate');
+    expect(enFarmMessages.shopTabRewards).toBe('Rewards');
+  });
+
+  it('나머지 6개 로케일(ja/zh-Hans/zh-Hant/de/fr/es)에도 4개 탭 라벨이 비어있지 않게 존재한다', () => {
+    const otherCatalogs = [jaFarmMessages, zhHansFarmMessages, zhHantFarmMessages, deFarmMessages, frFarmMessages, esFarmMessages];
+    expect(otherCatalogs).toHaveLength(6);
+    for (const catalog of otherCatalogs) {
+      expect(catalog.shopTabExpand.trim().length).toBeGreaterThan(0);
+      expect(catalog.shopTabUpgrade.trim().length).toBeGreaterThan(0);
+      expect(catalog.shopTabDecorate.trim().length).toBeGreaterThan(0);
+      expect(catalog.shopTabRewards.trim().length).toBeGreaterThan(0);
     }
   });
 });
