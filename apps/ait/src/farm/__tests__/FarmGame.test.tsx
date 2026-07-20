@@ -2125,8 +2125,11 @@ describe('FarmGame UI flow', () => {
     fireEvent.press(screen.getByText('🏪 상점'));
 
     expect(screen.getByText('농장 관리소')).toBeTruthy();
+    // 확장 탭(기본): 지역 해금 + 부지 확장.
     expect(screen.getByText('모든 구역 열기 완료')).toBeTruthy();
     expect(screen.getByText('현재 24칸 · 작물을 심을 공간을 1칸 늘려요')).toBeTruthy();
+    // 업그레이드 탭: 연구 요약 (#372 탭 분리).
+    fireEvent.press(screen.getByTestId('shop-tab-upgrade'));
     expect(screen.getByText('현재 연구 Lv.42 · 성장속도 Lv.42 / 수익률 Lv.42')).toBeTruthy();
   });
 
@@ -2162,6 +2165,8 @@ describe('FarmGame UI flow', () => {
     fireEvent.press(screen.getByText('밭 개간하기'));
     expect(screen.getByText('현재 7칸 · 작물을 심을 공간을 1칸 늘려요')).toBeTruthy();
 
+    // 연구(속도/수익) 업그레이드는 업그레이드 탭으로 이동(#372).
+    fireEvent.press(screen.getByTestId('shop-tab-upgrade'));
     fireEvent.press(screen.getByText('🧪 고속 성장 비료'));
     expect(screen.getByText('현재 연구 Lv.1 · 성장속도 Lv.2 / 수익률 Lv.1')).toBeTruthy();
     await act(async () => {
@@ -2203,6 +2208,8 @@ describe('FarmGame UI flow', () => {
     expect(screen.getByTestId('upgrade-burst-profit', { includeHiddenElements: true })).toBeTruthy();
     expect(track.mock.calls.filter(([eventName]) => eventName === 'upgrade_purchased')).toHaveLength(2);
 
+    // 지역 해금은 확장 탭으로 돌아가서(#372).
+    fireEvent.press(screen.getByTestId('shop-tab-expand'));
     fireEvent.press(screen.getByText('채소 밭 열기'));
     expect(screen.queryByText('채소 밭 열기')).toBeNull();
   });
@@ -2214,6 +2221,7 @@ describe('FarmGame UI flow', () => {
 
     await waitFor(() => expect(screen.getByText(`${formatMoney(shopReadyState.gold)}G`)).toBeTruthy());
     fireEvent.press(screen.getByText('🏪 상점'));
+    fireEvent.press(screen.getByTestId('shop-tab-upgrade'));
 
     const speedUpgrade = screen.getByText('🧪 고속 성장 비료');
     act(() => {
@@ -2248,6 +2256,7 @@ describe('FarmGame UI flow', () => {
 
     await waitFor(() => expect(screen.getByText(`${formatMoney(shopReadyState.gold)}G`)).toBeTruthy());
     fireEvent.press(screen.getByText('🏪 상점'));
+    fireEvent.press(screen.getByTestId('shop-tab-upgrade'));
     fireEvent.press(screen.getByText('🧪 고속 성장 비료'));
     await waitFor(() =>
       expect(screen.getByText('현재 연구 Lv.1 · 성장속도 Lv.2 / 수익률 Lv.1')).toBeTruthy()
@@ -2276,6 +2285,7 @@ describe('FarmGame UI flow', () => {
 
     await waitFor(() => expect(screen.getByText(`${formatMoney(speedCost)}G`)).toBeTruthy());
     fireEvent.press(screen.getByText('🏪 상점'));
+    fireEvent.press(screen.getByTestId('shop-tab-upgrade'));
     fireEvent.press(screen.getByText('🧪 고속 성장 비료'));
 
     await act(async () => {
@@ -2293,6 +2303,7 @@ describe('FarmGame UI flow', () => {
 
     await waitFor(() => expect(screen.getByText(`${formatMoney(shopReadyState.gold)}G`)).toBeTruthy());
     fireEvent.press(screen.getByText('🏪 상점'));
+    fireEvent.press(screen.getByTestId('shop-tab-upgrade'));
     fireEvent.press(screen.getByText('🧪 고속 성장 비료'));
     expect(screen.getByTestId('upgrade-burst-speed', { includeHiddenElements: true })).toBeTruthy();
 
@@ -2344,6 +2355,63 @@ describe('FarmGame UI flow', () => {
     expect(within(screen.getByTestId('shop-nav-button')).queryByText('1')).toBeNull();
   });
 
+  describe('상점 시트 탭 정리 (#372)', () => {
+    test('상점 진입 시 확장 탭이 기본이고 다른 탭 섹션은 렌더되지 않는다', async () => {
+      const screen = await renderGame(createShopReadyState());
+      await waitFor(() => expect(screen.getByTestId('shop-nav-button')).toBeTruthy());
+      fireEvent.press(screen.getByTestId('shop-nav-button'));
+
+      // 확장 탭(기본): 영토 확장 + 새 구역 열기.
+      expect(screen.getByText('영토 확장')).toBeTruthy();
+      expect(screen.getByText('새 구역 열기')).toBeTruthy();
+      // 다른 탭의 섹션은 렌더 트리에 없다.
+      expect(screen.queryByText('농업 연구소')).toBeNull();
+      expect(screen.queryByText('농장 꾸미기')).toBeNull();
+    });
+
+    test('각 탭으로 전환하면 해당 섹션만 렌더되고 모든 섹션에 회귀 없이 접근된다', async () => {
+      const screen = await renderGame(createShopReadyState(), { useRewardedAd: () => createReadyRewardedAd() });
+      await waitFor(() => expect(screen.getByTestId('shop-nav-button')).toBeTruthy());
+      fireEvent.press(screen.getByTestId('shop-nav-button'));
+
+      fireEvent.press(screen.getByTestId('shop-tab-upgrade'));
+      expect(screen.getByText('농업 연구소')).toBeTruthy();
+      expect(screen.queryByText('영토 확장')).toBeNull();
+
+      fireEvent.press(screen.getByTestId('shop-tab-decorate'));
+      expect(screen.getByText('농장 꾸미기')).toBeTruthy();
+      expect(screen.queryByText('농업 연구소')).toBeNull();
+
+      fireEvent.press(screen.getByTestId('shop-tab-rewards'));
+      expect(screen.getByText('광고 보상')).toBeTruthy();
+      expect(screen.queryByText('농장 꾸미기')).toBeNull();
+
+      fireEvent.press(screen.getByTestId('shop-tab-expand'));
+      expect(screen.getByText('영토 확장')).toBeTruthy();
+      expect(screen.queryByText('광고 보상')).toBeNull();
+    });
+
+    test('광고 미지원 환경에서는 보상 탭을 노출하지 않고 나머지 3개 탭만 보인다', async () => {
+      // 기본 useRewardedAd는 미지원(isAdSupported: false).
+      const screen = await renderGame(createShopReadyState());
+      await waitFor(() => expect(screen.getByTestId('shop-nav-button')).toBeTruthy());
+      fireEvent.press(screen.getByTestId('shop-nav-button'));
+
+      expect(screen.queryByTestId('shop-tab-rewards')).toBeNull();
+      expect(screen.getByTestId('shop-tab-expand')).toBeTruthy();
+      expect(screen.getByTestId('shop-tab-upgrade')).toBeTruthy();
+      expect(screen.getByTestId('shop-tab-decorate')).toBeTruthy();
+    });
+
+    test('보상이 준비되면 보상 탭 버튼에 수령 가능 배지가 보존된다', async () => {
+      const screen = await renderGame(null, { useRewardedAd: () => createReadyRewardedAd() });
+      await waitFor(() => expect(screen.getByTestId('shop-nav-button')).toBeTruthy());
+      fireEvent.press(screen.getByTestId('shop-nav-button'));
+
+      expect(within(screen.getByTestId('shop-tab-rewards')).getByText('1')).toBeTruthy();
+    });
+  });
+
   test('REWARDED_GOLD_WINDOW_MS is a whole number of minutes so the description divides without rounding', () => {
     expect(REWARDED_GOLD_WINDOW_MS % 60000).toBe(0);
   });
@@ -2355,6 +2423,8 @@ describe('FarmGame UI flow', () => {
 
     await waitFor(() => expect(screen.getByText('🏪 상점')).toBeTruthy());
     fireEvent.press(screen.getByText('🏪 상점'));
+    // 광고 보상은 보상 탭으로 이동(#372).
+    fireEvent.press(screen.getByTestId('shop-tab-rewards'));
 
     // Use direct division — the invariant test above guarantees no remainder.
     const expectedDesc = messages.rewardedGoldReadyDesc(
@@ -2373,6 +2443,7 @@ describe('FarmGame UI flow', () => {
     fireEvent.press(screen.getByText('🏪 상점'));
     expect(screen.getByText('농장 관리소')).toBeTruthy();
 
+    fireEvent.press(screen.getByTestId('shop-tab-rewards'));
     fireEvent.press(screen.getByText('받기'));
 
     await waitFor(() => expect(rewardedAd.showAd).toHaveBeenCalledTimes(1));
@@ -2393,6 +2464,7 @@ describe('FarmGame UI flow', () => {
     fireEvent.press(screen.getByText('🏪 상점'));
     expect(screen.getByText('농장 관리소')).toBeTruthy();
 
+    fireEvent.press(screen.getByTestId('shop-tab-rewards'));
     fireEvent.press(screen.getByText('열기'));
 
     await waitFor(() => expect(rewardedAd.showAd).toHaveBeenCalledTimes(1));
@@ -2411,6 +2483,7 @@ describe('FarmGame UI flow', () => {
 
     fireEvent.press(screen.getByText('🏪 상점'));
 
+    fireEvent.press(screen.getByTestId('shop-tab-rewards'));
     fireEvent.press(screen.getByText('받기'));
 
     await waitFor(() => expect(rewardedAd.showAd).toHaveBeenCalledTimes(1));
@@ -2432,6 +2505,7 @@ describe('FarmGame UI flow', () => {
     await waitFor(() => expect(screen.getByText('50G')).toBeTruthy());
 
     fireEvent.press(screen.getByText('🏪 상점'));
+    fireEvent.press(screen.getByTestId('shop-tab-rewards'));
     fireEvent.press(screen.getByText('받기'));
 
     await waitFor(() => expect(rewardedAd.showAd).toHaveBeenCalledTimes(1));

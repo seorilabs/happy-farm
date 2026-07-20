@@ -18,6 +18,10 @@ export const jaFarmMessages: FarmMessages = {
   roi: (value) => `効率 ${value}`,
   lockedAreaTitle: (areaName) => `${areaName} 解放条件`,
   adRewardsSection: '広告報酬',
+  shopTabExpand: '拡張',
+  shopTabUpgrade: 'アップグレード',
+  shopTabDecorate: '飾りつけ',
+  shopTabRewards: '報酬',
   rewardedGoldTitle: (amount) => `広告を見て${amount}Gを受け取る`,
   rewardedGoldReadyDesc: (windowMinutes, maxUses) =>
     `${windowMinutes}分ごとに最大${maxUses}回まで受け取れます。`,

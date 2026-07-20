@@ -820,6 +820,54 @@ export const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '900',
   },
+  // #372 상점 시트 상단 탭 바. 시트 내부에만 존재하는 뎁스 분리 UI로, 상단 상시
+  // HUD/navRow에는 아무것도 추가하지 않는다.
+  shopTabBar: {
+    flexDirection: 'row',
+    gap: 6,
+    marginBottom: 4,
+    padding: 4,
+    borderRadius: 12,
+    backgroundColor: '#eef4ef',
+  },
+  shopTabButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    minHeight: 36,
+    paddingHorizontal: 8,
+    borderRadius: 9,
+    backgroundColor: 'transparent',
+  },
+  shopTabButtonActive: {
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#4caf6a',
+  },
+  shopTabButtonText: {
+    color: '#5b6b5f',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  shopTabButtonTextActive: {
+    color: '#1c7538',
+  },
+  shopTabBadge: {
+    minWidth: 16,
+    height: 16,
+    paddingHorizontal: 4,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#e5484d',
+  },
+  shopTabBadgeText: {
+    color: '#ffffff',
+    fontSize: 10,
+    fontWeight: '900',
+  },
   languageOptions: {
     flexDirection: 'row',
     gap: 8,

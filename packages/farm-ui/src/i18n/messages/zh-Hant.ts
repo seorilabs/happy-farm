@@ -18,6 +18,10 @@ export const zhHantFarmMessages: FarmMessages = {
   roi: (value) => `效率 ${value}`,
   lockedAreaTitle: (areaName) => `${areaName} 開啟條件`,
   adRewardsSection: '廣告獎勵',
+  shopTabExpand: '擴展',
+  shopTabUpgrade: '升級',
+  shopTabDecorate: '裝飾',
+  shopTabRewards: '獎勵',
   rewardedGoldTitle: (amount) => `看廣告領 ${amount}G`,
   rewardedGoldReadyDesc: (windowMinutes, maxUses) =>
     `每 ${windowMinutes} 分鐘最多可領 ${maxUses} 次。`,

@@ -232,6 +232,7 @@ import {
 import { styles } from './farmGameStyles';
 import { resolveUnaffordableSeedNudge, shouldFireStallNudge } from './onboardingNudge';
 import { resolveBottomSafeInset } from './safeArea';
+import { getVisibleShopTabs, resolveActiveShopTab, type ShopTabKey } from './shopTabs';
 
 // Game tick: drives idle re-renders so time-based UI (growth, cooldowns) advances.
 // The growth bar animates one tick at a time, so its duration is tied to this value
@@ -793,6 +794,8 @@ function FarmGameBody({
   const bottomSafeInset = resolveBottomSafeInset(insets.bottom);
   const { width: windowWidth } = useWindowDimensions();
   const [activeSheet, setActiveSheet] = useState<ActiveSheet>(null);
+  // #372 상점 시트 내부 활성 탭. 상점 진입 시 항상 첫 탭(확장)부터 보도록 초기화한다.
+  const [shopTab, setShopTab] = useState<ShopTabKey>('expand');
   // A return-card action can receive two native taps before React commits the
   // destination sheet. Reserve its immutable snapshot synchronously so offline
   // gold and analytics are exactly-once for this mount.
@@ -2457,6 +2460,7 @@ function FarmGameBody({
   }, [analyticsContext, flushCropReadySummary, gameState, tick]);
 
   function openShop() {
+    setShopTab('expand');
     setActiveSheet({ type: 'shop' });
   }
 
@@ -4395,105 +4399,167 @@ function FarmGameBody({
         }}
       >
         {activeSheet?.type === 'shop' ? (
-          <View>
-            {rewardedAd.isAdSupported ? (
-              <>
-                <Text style={styles.sheetSectionTitle}>{messages.adRewardsSection}</Text>
-                <AdRewardCard
-                  title={messages.rewardedGoldTitle(formatMoney(getRewardedGoldAmount(gameState), locale))}
-                  desc={rewardedGoldLimit.allowed ? messages.rewardedGoldReadyDesc(REWARDED_GOLD_WINDOW_MS / 60000, REWARDED_GOLD_MAX_USES_PER_WINDOW) : rewardedGoldLimit.reason}
-                  cta={
-                    rewardedAd.isAdReady && rewardedGoldLimit.allowed
-                      ? messages.rewardReceiveCta
-                      : messages.rewardWaitCta
-                  }
-                  disabled={!rewardedAd.isAdReady || !rewardedGoldLimit.allowed}
-                  onPress={() => void rewardGoldFromAd()}
-                />
-                <AdRewardCard
-                  title={messages.rewardedPlotTitle}
-                  desc={
-                    plotDiscountLimit.allowed
-                      ? messages.rewardedPlotReadyDesc(
-                          Math.round(PLOT_DISCOUNT_AD_PERCENT * 100),
-                          formatMoney(getPlotCost(gameState.unlockedPlotCount), locale),
-                          formatMoney(getDiscountedPlotCost(gameState.unlockedPlotCount), locale)
-                        )
-                      : plotDiscountLimit.reason
-                  }
-                  cta={
-                    rewardedAd.isAdReady && plotDiscountLimit.allowed ? messages.rewardOpenCta : messages.rewardWaitCta
-                  }
-                  disabled={
-                    !rewardedAd.isAdReady || !plotDiscountLimit.allowed || gameState.unlockedPlotCount >= MAX_PLOTS
-                  }
-                  onPress={() => void rewardDiscountedPlotFromAd()}
-                />
-              </>
-            ) : null}
+          (() => {
+            // #372: 5개 이질 섹션을 4개 탭(확장/업그레이드/꾸미기/보상)으로 분리해
+            // 한 탭에 해당 섹션만 렌더한다. 탭 구성·가시성·선택 폴백은 순수 로직
+            // (shopTabs)에 위임하고, 여기서는 기존 렌더 블록을 탭별로 재배치만 한다.
+            const adSupported = rewardedAd.isAdSupported;
+            const visibleShopTabs = getVisibleShopTabs({ adSupported });
+            const activeShopTab = resolveActiveShopTab(shopTab, { adSupported });
+            const shopTabLabels: Record<ShopTabKey, string> = {
+              expand: messages.shopTabExpand,
+              upgrade: messages.shopTabUpgrade,
+              decorate: messages.shopTabDecorate,
+              rewards: messages.shopTabRewards,
+            };
+            // 탭이 섹션을 뎁스 뒤로 숨기므로, 기존 상점 nav 배지 신호(수령 가능 광고·
+            // 구매 가능 업그레이드)를 탭 배지로 보존해 놓치지 않게 한다.
+            const shopTabBadges: Record<ShopTabKey, number> = {
+              expand: 0,
+              upgrade: upgradeReadyCount,
+              decorate: 0,
+              rewards: shopAdBadgeCount,
+            };
+            return (
+              <View>
+                <View testID="shop-tab-bar" style={styles.shopTabBar}>
+                  {visibleShopTabs.map((key) => {
+                    const active = key === activeShopTab;
+                    return (
+                      <Pressable
+                        key={key}
+                        testID={`shop-tab-${key}`}
+                        accessibilityRole="tab"
+                        accessibilityState={{ selected: active }}
+                        accessibilityLabel={shopTabLabels[key]}
+                        style={[styles.shopTabButton, active && styles.shopTabButtonActive]}
+                        onPress={() => setShopTab(key)}
+                      >
+                        <Text style={[styles.shopTabButtonText, active && styles.shopTabButtonTextActive]}>
+                          {shopTabLabels[key]}
+                        </Text>
+                        {shopTabBadges[key] > 0 ? (
+                          <View style={styles.shopTabBadge}>
+                            <Text style={styles.shopTabBadgeText}>{shopTabBadges[key]}</Text>
+                          </View>
+                        ) : null}
+                      </Pressable>
+                    );
+                  })}
+                </View>
 
-            <Text style={styles.sheetSectionTitle}>{messages.territorySection}</Text>
-            <ShopPlotRow
-              gameState={gameState}
-              locale={locale}
-              messages={messages}
-              setGameState={setGameState}
-              getAnalyticsContext={analyticsContext}
-              analytics={farmAnalytics}
-              onDone={toast}
-              onMilestone={() => void maybeShowMilestoneAd()}
-            />
+                {activeShopTab === 'expand' ? (
+                  <View testID="shop-tab-panel-expand">
+                    <Text style={styles.sheetSectionTitle}>{messages.territorySection}</Text>
+                    <ShopPlotRow
+                      gameState={gameState}
+                      locale={locale}
+                      messages={messages}
+                      setGameState={setGameState}
+                      getAnalyticsContext={analyticsContext}
+                      analytics={farmAnalytics}
+                      onDone={toast}
+                      onMilestone={() => void maybeShowMilestoneAd()}
+                    />
 
-            <Text style={styles.sheetSectionTitle}>{messages.areaUnlockSection}</Text>
-            <ShopAreaUnlockRows
-              gameState={gameState}
-              locale={locale}
-              messages={messages}
-              setGameState={setGameState}
-              getAnalyticsContext={analyticsContext}
-              analytics={farmAnalytics}
-              onDone={toast}
-              onMilestone={() => void maybeShowMilestoneAd()}
-              onUnlocked={() => playSoundEffect('unlock')}
-            />
+                    <Text style={styles.sheetSectionTitle}>{messages.areaUnlockSection}</Text>
+                    <ShopAreaUnlockRows
+                      gameState={gameState}
+                      locale={locale}
+                      messages={messages}
+                      setGameState={setGameState}
+                      getAnalyticsContext={analyticsContext}
+                      analytics={farmAnalytics}
+                      onDone={toast}
+                      onMilestone={() => void maybeShowMilestoneAd()}
+                      onUnlocked={() => playSoundEffect('unlock')}
+                    />
+                  </View>
+                ) : null}
 
-            <Text style={styles.sheetSectionTitle}>{messages.researchSection}</Text>
-            <Text style={styles.researchSummary}>
-              {messages.researchSummary(researchLevel, gameState.upgrades.speed, gameState.upgrades.profit)}
-            </Text>
-            <ShopUpgradeRow
-              kind="speed"
-              gameState={gameState}
-              locale={locale}
-              messages={messages}
-              setGameState={setGameState}
-              getAnalyticsContext={analyticsContext}
-              analytics={farmAnalytics}
-              onDone={toast}
-              onMilestone={() => void maybeShowMilestoneAd()}
-            />
-            <ShopUpgradeRow
-              kind="profit"
-              gameState={gameState}
-              locale={locale}
-              messages={messages}
-              setGameState={setGameState}
-              getAnalyticsContext={analyticsContext}
-              analytics={farmAnalytics}
-              onDone={toast}
-              onMilestone={() => void maybeShowMilestoneAd()}
-            />
+                {activeShopTab === 'upgrade' ? (
+                  <View testID="shop-tab-panel-upgrade">
+                    <Text style={styles.sheetSectionTitle}>{messages.researchSection}</Text>
+                    <Text style={styles.researchSummary}>
+                      {messages.researchSummary(researchLevel, gameState.upgrades.speed, gameState.upgrades.profit)}
+                    </Text>
+                    <ShopUpgradeRow
+                      kind="speed"
+                      gameState={gameState}
+                      locale={locale}
+                      messages={messages}
+                      setGameState={setGameState}
+                      getAnalyticsContext={analyticsContext}
+                      analytics={farmAnalytics}
+                      onDone={toast}
+                      onMilestone={() => void maybeShowMilestoneAd()}
+                    />
+                    <ShopUpgradeRow
+                      kind="profit"
+                      gameState={gameState}
+                      locale={locale}
+                      messages={messages}
+                      setGameState={setGameState}
+                      getAnalyticsContext={analyticsContext}
+                      analytics={farmAnalytics}
+                      onDone={toast}
+                      onMilestone={() => void maybeShowMilestoneAd()}
+                    />
+                  </View>
+                ) : null}
 
-            <Text style={styles.sheetSectionTitle}>{messages.decorationSection}</Text>
-            <Text style={styles.researchSummary}>{messages.decorationSummary}</Text>
-            <ShopDecorationRows
-              gameState={gameState}
-              locale={locale}
-              messages={messages}
-              setGameState={setGameState}
-              onDone={toast}
-            />
-          </View>
+                {activeShopTab === 'decorate' ? (
+                  <View testID="shop-tab-panel-decorate">
+                    <Text style={styles.sheetSectionTitle}>{messages.decorationSection}</Text>
+                    <Text style={styles.researchSummary}>{messages.decorationSummary}</Text>
+                    <ShopDecorationRows
+                      gameState={gameState}
+                      locale={locale}
+                      messages={messages}
+                      setGameState={setGameState}
+                      onDone={toast}
+                    />
+                  </View>
+                ) : null}
+
+                {activeShopTab === 'rewards' && adSupported ? (
+                  <View testID="shop-tab-panel-rewards">
+                    <Text style={styles.sheetSectionTitle}>{messages.adRewardsSection}</Text>
+                    <AdRewardCard
+                      title={messages.rewardedGoldTitle(formatMoney(getRewardedGoldAmount(gameState), locale))}
+                      desc={rewardedGoldLimit.allowed ? messages.rewardedGoldReadyDesc(REWARDED_GOLD_WINDOW_MS / 60000, REWARDED_GOLD_MAX_USES_PER_WINDOW) : rewardedGoldLimit.reason}
+                      cta={
+                        rewardedAd.isAdReady && rewardedGoldLimit.allowed
+                          ? messages.rewardReceiveCta
+                          : messages.rewardWaitCta
+                      }
+                      disabled={!rewardedAd.isAdReady || !rewardedGoldLimit.allowed}
+                      onPress={() => void rewardGoldFromAd()}
+                    />
+                    <AdRewardCard
+                      title={messages.rewardedPlotTitle}
+                      desc={
+                        plotDiscountLimit.allowed
+                          ? messages.rewardedPlotReadyDesc(
+                              Math.round(PLOT_DISCOUNT_AD_PERCENT * 100),
+                              formatMoney(getPlotCost(gameState.unlockedPlotCount), locale),
+                              formatMoney(getDiscountedPlotCost(gameState.unlockedPlotCount), locale)
+                            )
+                          : plotDiscountLimit.reason
+                      }
+                      cta={
+                        rewardedAd.isAdReady && plotDiscountLimit.allowed ? messages.rewardOpenCta : messages.rewardWaitCta
+                      }
+                      disabled={
+                        !rewardedAd.isAdReady || !plotDiscountLimit.allowed || gameState.unlockedPlotCount >= MAX_PLOTS
+                      }
+                      onPress={() => void rewardDiscountedPlotFromAd()}
+                    />
+                  </View>
+                ) : null}
+              </View>
+            );
+          })()
         ) : null}
 
         {activeSheet?.type === 'missions' ? (

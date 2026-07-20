@@ -18,6 +18,10 @@ export const enFarmMessages: FarmMessages = {
   roi: (value) => `ROI ${value}`,
   lockedAreaTitle: (areaName) => `${areaName} requirements`,
   adRewardsSection: 'Ad Rewards',
+  shopTabExpand: 'Expand',
+  shopTabUpgrade: 'Upgrade',
+  shopTabDecorate: 'Decorate',
+  shopTabRewards: 'Rewards',
   rewardedGoldTitle: (amount) => `Watch ad for ${amount}G`,
   rewardedGoldReadyDesc: (windowMinutes, maxUses) =>
     `Up to ${maxUses} ${maxUses === 1 ? 'time' : 'times'} every ${windowMinutes} ${windowMinutes === 1 ? 'minute' : 'minutes'}.`,
