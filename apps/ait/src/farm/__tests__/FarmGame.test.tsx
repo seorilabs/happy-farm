@@ -2410,6 +2410,22 @@ describe('FarmGame UI flow', () => {
 
       expect(within(screen.getByTestId('shop-tab-rewards')).getByText('1')).toBeTruthy();
     });
+
+    test('탭 바는 상점 시트 내부에만 있고 상시 navRow/HUD에 신규 진입점을 더하지 않는다', async () => {
+      const screen = await renderGame(createShopReadyState());
+      await waitFor(() => expect(screen.getByTestId('shop-nav-button')).toBeTruthy());
+
+      // 시트를 열기 전에는 탭 바가 렌더 트리에 없다 → 상시 HUD/navRow가 아닌
+      // 상점 시트 내부(한 뎁스 뒤)에 거주함을 보인다.
+      expect(screen.queryByTestId('shop-tab-bar')).toBeNull();
+      // 상시 navRow 진입점은 여전히 상점·더보기만(신규 상시 진입점 추가 없음).
+      expect(screen.getByTestId('shop-nav-button')).toBeTruthy();
+      expect(screen.getByTestId('more-nav-button')).toBeTruthy();
+
+      // 상점 시트를 열어야 비로소 탭 바가 등장한다.
+      fireEvent.press(screen.getByTestId('shop-nav-button'));
+      expect(screen.getByTestId('shop-tab-bar')).toBeTruthy();
+    });
   });
 
   test('REWARDED_GOLD_WINDOW_MS is a whole number of minutes so the description divides without rounding', () => {

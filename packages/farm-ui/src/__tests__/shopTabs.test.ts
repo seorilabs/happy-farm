@@ -1,5 +1,7 @@
 /// <reference types="jest" />
 
+import { SUPPORTED_LOCALES } from '../../../farm-core/src';
+import { getFarmMessages } from '../i18n';
 import { getVisibleShopTabs, resolveActiveShopTab, SHOP_TAB_KEYS } from '../shopTabs';
 
 // #372: 상점 시트 탭 정리의 순수 로직 회귀 테스트.
@@ -37,5 +39,22 @@ describe('resolveActiveShopTab (#372)', () => {
 
   it('보이는 탭 요청은 광고 미지원에서도 유지된다', () => {
     expect(resolveActiveShopTab('decorate', { adSupported: false })).toBe('decorate');
+  });
+});
+
+describe('상점 탭 라벨 i18n 커버리지 (#372, AC-5)', () => {
+  it('8개 로케일 전부에 4개 탭 라벨이 비어있지 않은 문자열로 존재한다', () => {
+    for (const locale of SUPPORTED_LOCALES) {
+      const messages = getFarmMessages(locale);
+      for (const label of [
+        messages.shopTabExpand,
+        messages.shopTabUpgrade,
+        messages.shopTabDecorate,
+        messages.shopTabRewards,
+      ]) {
+        expect(typeof label).toBe('string');
+        expect(label.trim().length).toBeGreaterThan(0);
+      }
+    }
   });
 });
