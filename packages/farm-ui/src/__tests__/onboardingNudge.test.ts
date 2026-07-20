@@ -1,6 +1,12 @@
 /// <reference types="jest" />
 
-import { CROPS, createInitialState, getCropPurchaseCost } from '../../../farm-core/src';
+import {
+  CROPS,
+  createInitialState,
+  getCropPurchaseCost,
+  getOnboardingCropKey,
+  resolveOnboardingStep,
+} from '../../../farm-core/src';
 import type { CropKey } from '../../../farm-core/src';
 import {
   isQuickStartCtaAvailable,
@@ -28,6 +34,23 @@ describe('shouldFireStallNudge — AC-3 (세션당 1회, selectSeed 한정)', ()
     expect(shouldFireStallNudge('harvest', false)).toBe(false);
     expect(shouldFireStallNudge('reward', false)).toBe(false);
     expect(shouldFireStallNudge(null, false)).toBe(false);
+  });
+});
+
+describe('getOnboardingCropKey — AC-1 (quickStartCropKey 항상 non-null fallback)', () => {
+  it('신규 유저(초기 골드) 기준 quickStartCropKey가 항상 non-null이다', () => {
+    expect(getOnboardingCropKey(createInitialState(), NOW)).not.toBeNull();
+  });
+
+  it('fallback으로 고른 대표 씨앗은 초기 골드로 감당 가능하다(가드 토스트로 튕기지 않음)', () => {
+    const state = createInitialState();
+    const key = getOnboardingCropKey(state, NOW);
+    expect(key).not.toBeNull();
+    expect(state.gold).toBeGreaterThanOrEqual(getCropPurchaseCost(state, key as CropKey, NOW));
+  });
+
+  it('감당 가능한 작물이 하나도 없어도(골드 0) fallback으로 non-null을 보장한다', () => {
+    expect(getOnboardingCropKey({ ...createInitialState(), gold: 0 }, NOW)).not.toBeNull();
   });
 });
 
@@ -88,5 +111,21 @@ describe('resolveUnaffordableSeedNudge — AC-4 (감당 불가 탭 시 감당 �
       broke.unlockedAreas.includes(CROPS[candidate]!.area)
     ) as CropKey;
     expect(resolveUnaffordableSeedNudge(broke, anyStarter, 'selectSeed', NOW)).toBeNull();
+  });
+});
+
+describe('AC-5 (기존 온보딩 계약 유지 + 신규 케이스 추가)', () => {
+  it('기존: resolveOnboardingStep가 미진행 초기 상태를 selectSeed로 해석한다(회귀 방지)', () => {
+    const state = createInitialState();
+    expect(state.onboardingCompleted).toBe(false);
+    expect(resolveOnboardingStep(state, state.onboardingStep)).toBe('selectSeed');
+  });
+
+  it('신규: selectSeed 초기 상태에서 대표 씨앗 선택·stall 넛지 판정이 함께 성립한다', () => {
+    const state = createInitialState();
+    // 신규 케이스 1: 대표 씨앗(quickStartCropKey)이 존재 → 바로 시작 CTA 진행 가능.
+    expect(getOnboardingCropKey(state, NOW)).not.toBeNull();
+    // 신규 케이스 2: 아직 넛지 미발화면 selectSeed에서 stall 넛지가 발화한다.
+    expect(shouldFireStallNudge(resolveOnboardingStep(state, state.onboardingStep), false)).toBe(true);
   });
 });
