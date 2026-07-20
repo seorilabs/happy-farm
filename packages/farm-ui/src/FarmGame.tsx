@@ -230,6 +230,7 @@ import {
   SHEET_CONTENT_BASE_PADDING_BOTTOM,
 } from './farmGameLayout';
 import { styles } from './farmGameStyles';
+import { resolveUnaffordableSeedNudge, shouldFireStallNudge } from './onboardingNudge';
 import { resolveBottomSafeInset } from './safeArea';
 
 // Game tick: drives idle re-renders so time-based UI (growth, cooldowns) advances.
@@ -1894,8 +1895,8 @@ function FarmGameBody({
         context: buildContext(),
       });
       // #362: selectSeed에서 정체가 감지되면(15초 무행동) 씨앗을 어디서 고르는지
-      // 능동적으로 한 번 짚어준다. 세션당 1회로 제한해 반복 펄스로 성가시지 않게.
-      if (step === 'selectSeed' && !stallNudgePlayedRef.current) {
+      // 능동적으로 한 번 짚어준다. 세션당 1회 가드는 shouldFireStallNudge로 판정.
+      if (shouldFireStallNudge(step, stallNudgePlayedRef.current)) {
         stallNudgePlayedRef.current = true;
         playSeedNudgeBurst();
       }
@@ -3106,9 +3107,9 @@ function FarmGameBody({
       gameState.gold < getCropPurchaseCost(gameState, cropKey, Date.now())
     ) {
       toast(messages.insufficientGoldToast);
-      const affordableKey = getOnboardingCropKey(gameState);
-      if (affordableKey != null && gameState.gold >= getCropPurchaseCost(gameState, affordableKey, Date.now())) {
-        setSelectedArea(getCrop(affordableKey).area);
+      const nudge = resolveUnaffordableSeedNudge(gameState, cropKey, 'selectSeed', Date.now());
+      if (nudge != null) {
+        setSelectedArea(getCrop(nudge.cropKey).area);
         playSeedNudgeBurst();
       }
       return;
