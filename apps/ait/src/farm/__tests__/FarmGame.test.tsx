@@ -4370,6 +4370,16 @@ describe('FarmGame UI flow', () => {
   // #356: 시트 impression·collection_screen이 시트 오픈(타입 전이)당 1회만 발화하는지
   // 검증한다. 회귀 대상: analyticsContext(=[gameState] 의존)를 effect deps로 두면 시트가
   // 열린 동안 gameState가 갱신될 때마다 impression이 재발화되던 GA4 과다 발화 버그.
+  //
+  // 인수조건 ↔ 테스트 매핑(각 test 이름에 AC-n 태그를 달아 근거를 명시):
+  //   AC-1(같은 시트 열린 채 gameState 갱신돼도 추가 발화 없음):
+  //     shop·collection은 인시트 액션(밭 개간/구역 보상 수령)으로 실제 gameState를 바꿔 검증,
+  //     growthAd·harvestBonus는 열린 채 게임 틱 반복(방치형 재렌더)으로 검증.
+  //   AC-2(오픈당 shop 2건 / growthAd·harvestBonus·collection 각 1건): 각 시트 오픈 직후 카운트 검증.
+  //   AC-3(닫았다 다시 열면 다시 1회 발화): 각 시트 재오픈 후 누적 카운트 검증.
+  //   AC-4(welcomeBack offlineBonus 가드 회귀 없음): 복귀 시트 오픈당 1건 + 열린 채 재렌더 불변 검증.
+  //   AC-5(열림 중 gameState 업데이트 시 trackAdRewardImpression/trackCollectionScreen 추가 호출 없음):
+  //     shop(trackAdRewardImpression)·collection(trackCollectionScreen)이 실제 mutation 후 불변임을 assert.
   describe('시트 impression 재발화 가드 (#356)', () => {
     const localMessages = getFarmMessages(DEFAULT_LOCALE);
     // 시트 닫힘 애니메이션(SHEET_ANIMATION_DURATION_MS=180)이 완료돼 activeSheet=null이
@@ -4384,7 +4394,9 @@ describe('FarmGame UI flow', () => {
     const collectionScreenCount = (track: jest.Mock): number =>
       track.mock.calls.filter(([eventName]) => eventName === 'collection_screen').length;
 
-    test('상점 시트가 열린 동안 gameState가 갱신돼도 impression이 재발화되지 않고 재오픈 시 다시 2건 발화된다', async () => {
+    // AC-1·AC-2·AC-3·AC-5 (shop): 오픈 직후 2건(AC-2) → 열린 채 밭 개간으로 실제 gameState
+    // 변경해도 2건 유지(AC-1·AC-5, trackAdRewardImpression 불변) → 재오픈 시 다시 2건(AC-3).
+    test('AC-1·AC-2·AC-3·AC-5 (shop): 상점 시트가 열린 동안 gameState가 갱신돼도 impression이 재발화되지 않고 재오픈 시 다시 2건 발화된다', async () => {
       const shopReadyState = createShopReadyState();
       const plotCost = getPlotCost(shopReadyState.unlockedPlotCount);
       const track = jest.fn();
@@ -4417,7 +4429,9 @@ describe('FarmGame UI flow', () => {
       ]);
     });
 
-    test('도감 시트가 열린 동안 gameState가 갱신돼도 collection_screen이 재발화되지 않고 재오픈 시 다시 1건 발화된다', async () => {
+    // AC-1·AC-2·AC-3·AC-5 (collection): 진입 직후 1건(AC-2) → 열린 채 구역 보상 수령으로 실제
+    // gameState 변경해도 1건 유지(AC-1·AC-5, trackCollectionScreen 불변) → 재오픈 시 다시 1건(AC-3).
+    test('AC-1·AC-2·AC-3·AC-5 (collection): 도감 시트가 열린 동안 gameState가 갱신돼도 collection_screen이 재발화되지 않고 재오픈 시 다시 1건 발화된다', async () => {
       // 첫 구역 작물을 모두 발견해 도감에서 구역 보상 수령이 가능한 상태로 만든다.
       const area = FARM_AREAS[0]!;
       const base = createInitialState();
@@ -4455,11 +4469,11 @@ describe('FarmGame UI flow', () => {
       expect(collectionScreenCount(track)).toBe(2);
     });
 
-    // AC-1(growthAd): 성장 가속 시트도 타입 전이당 growthAd impression을 정확히 1회만
-    // 발화하고, 열린 채 게임 틱이 반복돼도(방치형 재렌더) 추가 발화되지 않으며, 닫았다
-    // 다시 열면 다시 1회 발화한다. shop/collection과 동일한 sheetImpressionTypeRef 가드
-    // 경로를 growthAd 타입에 대해 직접 검증한다.
-    test('성장 가속 시트도 타입 전이당 growthAd impression 1건만 발화하고 재오픈 시 다시 1건 발화된다', async () => {
+    // AC-1·AC-2·AC-3 (growthAd): 성장 가속 시트도 타입 전이당 growthAd impression을 정확히
+    // 1회만 발화(AC-2)하고, 열린 채 게임 틱이 반복돼도(방치형 재렌더) 추가 발화되지 않으며
+    // (AC-1), 닫았다 다시 열면 다시 1회 발화(AC-3)한다. shop/collection과 동일한
+    // sheetImpressionTypeRef 가드 경로를 growthAd 타입에 대해 직접 검증한다.
+    test('AC-1·AC-2·AC-3 (growthAd): 성장 가속 시트도 타입 전이당 growthAd impression 1건만 발화하고 재오픈 시 다시 1건 발화된다', async () => {
       // 성장 중인 밭(state 1) + 넉넉한 골드로 성장 가속 시트가 확실히 열리게 한다.
       const state: GameState = { ...createGrowingCropState(), gold: 100_000 };
       const rewardedAd = createReadyRewardedAd();
@@ -4491,10 +4505,10 @@ describe('FarmGame UI flow', () => {
       expect(impressionTypes(track)).toEqual(['growthAd', 'growthAd']);
     });
 
-    // AC-1(harvestBonus): 수확 보너스 넛지 시트도 타입 전이당 harvestBonusAd impression을
-    // 정확히 1회만 발화하고, 열린 채 게임 틱이 반복돼도 추가 발화되지 않으며, 쿨다운 경과
-    // 후 재노출되면 다시 1회 발화한다.
-    test('수확 보너스 넛지도 타입 전이당 harvestBonusAd impression 1건만 발화하고 재노출 시 다시 1건 발화된다', async () => {
+    // AC-1·AC-2·AC-3 (harvestBonus): 수확 보너스 넛지 시트도 타입 전이당 harvestBonusAd
+    // impression을 정확히 1회만 발화(AC-2)하고, 열린 채 게임 틱이 반복돼도 추가 발화되지
+    // 않으며(AC-1), 쿨다운 경과 후 재노출되면 다시 1회 발화(AC-3)한다.
+    test('AC-1·AC-2·AC-3 (harvestBonus): 수확 보너스 넛지도 타입 전이당 harvestBonusAd impression 1건만 발화하고 재노출 시 다시 1건 발화된다', async () => {
       const lateGame = createLateGameState();
       const rewardedAd = createReadyRewardedAd();
       const harvestBonusCta = `광고 보고 30분 동안 수확 ${HARVEST_BONUS_MULTIPLIER}배`;
@@ -4528,10 +4542,10 @@ describe('FarmGame UI flow', () => {
       expect(impressionTypes(track)).toEqual(['harvestBonusAd', 'harvestBonusAd']);
     });
 
-    // AC-4: welcomeBack(offlineBonus)의 기존 capturedAt 가드가 리팩터 후에도 회귀 없이
-    // 유지되는지 직접 검증한다. 시트 오픈당 offlineBonus impression 1건만 발화하고, 열린
-    // 채 게임 틱이 반복돼도 추가 발화되지 않는다.
-    test('복귀(welcomeBack) offlineBonus impression은 시트 오픈당 1건만 발화하고 열린 채 재렌더돼도 재발화되지 않는다', async () => {
+    // AC-4 (welcomeBack): welcomeBack(offlineBonus)의 기존 capturedAt 가드가 리팩터 후에도
+    // 회귀 없이 유지되는지 직접 검증한다. 시트 오픈당 offlineBonus impression 1건만 발화하고,
+    // 열린 채 게임 틱이 반복돼도 추가 발화되지 않는다.
+    test('AC-4 (welcomeBack): 복귀 offlineBonus impression은 시트 오픈당 1건만 발화하고 열린 채 재렌더돼도 재발화되지 않는다', async () => {
       const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
       const state = createGrowingCropState();
       mockPersistence.readLastSeenAt.mockResolvedValueOnce(NOW - TWO_HOURS_MS);
