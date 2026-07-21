@@ -4454,6 +4454,112 @@ describe('FarmGame UI flow', () => {
       fireEvent.press(screen.getByLabelText(localMessages.collectionButtonAccessibilityLabel));
       expect(collectionScreenCount(track)).toBe(2);
     });
+
+    // AC-1(growthAd): 성장 가속 시트도 타입 전이당 growthAd impression을 정확히 1회만
+    // 발화하고, 열린 채 게임 틱이 반복돼도(방치형 재렌더) 추가 발화되지 않으며, 닫았다
+    // 다시 열면 다시 1회 발화한다. shop/collection과 동일한 sheetImpressionTypeRef 가드
+    // 경로를 growthAd 타입에 대해 직접 검증한다.
+    test('성장 가속 시트도 타입 전이당 growthAd impression 1건만 발화하고 재오픈 시 다시 1건 발화된다', async () => {
+      // 성장 중인 밭(state 1) + 넉넉한 골드로 성장 가속 시트가 확실히 열리게 한다.
+      const state: GameState = { ...createGrowingCropState(), gold: 100_000 };
+      const rewardedAd = createReadyRewardedAd();
+      const track = jest.fn();
+      const screen = await renderGame(state, {
+        analytics: createFarmAnalytics(track),
+        useRewardedAd: () => rewardedAd,
+      });
+      await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+
+      // 씨앗 도구를 선택해 밭 탭이 수확이 아닌 성장 가속으로 해석되게 한 뒤, 성장 중인
+      // 밭을 눌러 시트를 연다: growthAd impression 1건.
+      fireEvent.press(screen.getByText('당근'));
+      fireEvent.press(screen.getByTestId('plot-cell-0'));
+      expect(impressionTypes(track)).toEqual(['growthAd']);
+
+      // 시트가 열린 채 게임 틱이 반복돼도 추가 발화되지 않는다.
+      await act(async () => {
+        jest.advanceTimersByTime(GAME_TICK_INTERVAL_MS * 4);
+      });
+      expect(impressionTypes(track)).toEqual(['growthAd']);
+
+      // 닫았다가 같은(여전히 성장 중인) 밭을 다시 열면 growthAd impression이 다시 1건.
+      fireEvent.press(screen.getByLabelText(localMessages.sheetCloseAccessibilityLabel));
+      await act(async () => {
+        jest.advanceTimersByTime(SHEET_CLOSE_SETTLE_MS);
+      });
+      fireEvent.press(screen.getByTestId('plot-cell-0'));
+      expect(impressionTypes(track)).toEqual(['growthAd', 'growthAd']);
+    });
+
+    // AC-1(harvestBonus): 수확 보너스 넛지 시트도 타입 전이당 harvestBonusAd impression을
+    // 정확히 1회만 발화하고, 열린 채 게임 틱이 반복돼도 추가 발화되지 않으며, 쿨다운 경과
+    // 후 재노출되면 다시 1회 발화한다.
+    test('수확 보너스 넛지도 타입 전이당 harvestBonusAd impression 1건만 발화하고 재노출 시 다시 1건 발화된다', async () => {
+      const lateGame = createLateGameState();
+      const rewardedAd = createReadyRewardedAd();
+      const harvestBonusCta = `광고 보고 30분 동안 수확 ${HARVEST_BONUS_MULTIPLIER}배`;
+      const track = jest.fn();
+      const screen = await renderGame(lateGame, {
+        analytics: createFarmAnalytics(track),
+        useRewardedAd: () => rewardedAd,
+      });
+      await waitFor(() => expect(screen.getByText(`${formatMoney(lateGame.gold)}G`)).toBeTruthy());
+
+      // 수확(GET)하면 수확 보너스 넛지 시트가 열린다: harvestBonusAd impression 1건.
+      fireEvent.press(screen.getAllByText('GET')[0]!);
+      expect(screen.getByText(harvestBonusCta)).toBeTruthy();
+      expect(impressionTypes(track)).toEqual(['harvestBonusAd']);
+
+      // 시트가 열린 채 게임 틱이 반복돼도 추가 발화되지 않는다.
+      await act(async () => {
+        jest.advanceTimersByTime(GAME_TICK_INTERVAL_MS * 4);
+      });
+      expect(impressionTypes(track)).toEqual(['harvestBonusAd']);
+
+      // 닫고(괜찮아요) 쿨다운 경과 후 다시 수확하면 넛지가 재노출되어 impression 1건 추가.
+      fireEvent.press(screen.getByText('괜찮아요'));
+      await act(async () => {
+        jest.advanceTimersByTime(SHEET_CLOSE_SETTLE_MS);
+      });
+      expect(screen.queryByText(harvestBonusCta)).toBeNull();
+      jest.setSystemTime(NOW + HARVEST_BONUS_AD_COOLDOWN_MS + 1);
+      fireEvent.press(screen.getAllByText('GET')[0]!);
+      expect(screen.getByText(harvestBonusCta)).toBeTruthy();
+      expect(impressionTypes(track)).toEqual(['harvestBonusAd', 'harvestBonusAd']);
+    });
+
+    // AC-4: welcomeBack(offlineBonus)의 기존 capturedAt 가드가 리팩터 후에도 회귀 없이
+    // 유지되는지 직접 검증한다. 시트 오픈당 offlineBonus impression 1건만 발화하고, 열린
+    // 채 게임 틱이 반복돼도 추가 발화되지 않는다.
+    test('복귀(welcomeBack) offlineBonus impression은 시트 오픈당 1건만 발화하고 열린 채 재렌더돼도 재발화되지 않는다', async () => {
+      const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
+      const state = createGrowingCropState();
+      mockPersistence.readLastSeenAt.mockResolvedValueOnce(NOW - TWO_HOURS_MS);
+      const offlineGold = getActiveFarmOfflineGold(state, TWO_HOURS_MS);
+      expect(offlineGold).toBeGreaterThan(0);
+      const rewardedAd = createReadyRewardedAd();
+      const track = jest.fn();
+      const screen = await renderGame(state, {
+        analytics: createFarmAnalytics(track),
+        useRewardedAd: () => rewardedAd,
+      });
+      await waitFor(() => expect(screen.getByTestId('welcome-back-double-ad-action')).toBeTruthy());
+
+      const offlineImpressionCount = (): number =>
+        track.mock.calls.filter(
+          ([eventName, params]) =>
+            eventName === 'ad_reward_impression' && params.placement === 'return_offline_bonus'
+        ).length;
+
+      // 복귀 시트 오픈당 offlineBonus impression 1건.
+      expect(offlineImpressionCount()).toBe(1);
+
+      // 시트가 열린 채 게임 틱이 반복돼도(capturedAt 가드) 추가 발화되지 않는다.
+      await act(async () => {
+        jest.advanceTimersByTime(GAME_TICK_INTERVAL_MS * 4);
+      });
+      expect(offlineImpressionCount()).toBe(1);
+    });
   });
 });
 
