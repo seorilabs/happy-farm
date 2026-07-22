@@ -5504,6 +5504,25 @@ describe('하단 safe-area 인셋 적용 (#236)', () => {
       await waitFor(() => expect(getLatestPersistedState().seenFeatureCoachmarks).toContain('animals'));
     });
 
+    test('코치마크는 팝오버 오버레이로만 노출되고 상시 HUD/툴스트립에 상시 요소를 더하지 않는다 (AC-3)', async () => {
+      const screen = await renderGame(animalsUnlockedState());
+
+      // 팝오버 오버레이(Modal 백드롭)로 노출된다.
+      await waitFor(() => expect(screen.getByTestId('feature-coachmark-overlay')).toBeTruthy());
+      // 상시 툴스트립 안에는 코치마크 요소가 없다 — 오버레이는 화면 위 한 뎁스 뒤에 있다.
+      expect(within(screen.getByTestId('tool-strip')).queryByTestId('feature-coachmark-card')).toBeNull();
+      // 상시 내비 행(더보기 진입점 포함)에도 코치마크 요소가 없다.
+      const navRow = screen.getByTestId('more-nav-button').parent!;
+      expect(within(navRow).queryByTestId('feature-coachmark-card')).toBeNull();
+
+      // 확인해 닫으면 화면 어디에도 코치마크 잔상이 남지 않는다(상시 요소가 아님).
+      await act(async () => {
+        fireEvent.press(screen.getByTestId('feature-coachmark-dismiss'));
+      });
+      await waitFor(() => expect(screen.queryByTestId('feature-coachmark-overlay')).toBeNull());
+      expect(screen.queryByTestId('feature-coachmark-card')).toBeNull();
+    });
+
     test('온보딩이 끝나지 않은 신규 플레이어에게는 코치마크가 뜨지 않는다', async () => {
       const screen = await renderGame(
         { ...animalsUnlockedState(), onboardingCompleted: false, onboardingStep: 'selectSeed' },
