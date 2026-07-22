@@ -892,6 +892,63 @@ describe('FarmGame UI flow', () => {
     });
   });
 
+  describe('소유 동물 스트립 (#360)', () => {
+    const messages = getFarmMessages(DEFAULT_LOCALE);
+
+    test('소유 동물이 0마리면 스트립을 렌더하지 않는다', async () => {
+      const screen = await renderGame({ ...createInitialState(), onboardingCompleted: true });
+      await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+      expect(screen.queryByTestId('animal-strip')).toBeNull();
+    });
+
+    test('소유 동물을 노출하고, 탭하면 기존 동물 시트가 열린다(신규 nav 없이)', async () => {
+      const chicken = ANIMALS[0]!; // 급여 안 한 idle 소유.
+      const state: GameState = {
+        ...createInitialState(),
+        onboardingCompleted: true,
+        animals: { owned: [chicken.key], feeding: {} },
+      };
+      const screen = await renderGame(state);
+      await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+
+      const strip = screen.getByTestId('animal-strip');
+      expect(strip).toBeTruthy();
+      // AC-4 거주 뎁스: 스트립은 농장 장면 스크롤(farm-scroll) 안에 있고, 플롯 그리드
+      // 컨테이너(hit 영역) 밖의 형제로 렌더돼 플롯 탭을 덮지 않는다.
+      expect(within(screen.getByTestId('farm-scroll')).getByTestId('animal-strip')).toBeTruthy();
+      expect(within(screen.getByTestId('plot-grid-container')).queryByTestId('animal-strip')).toBeNull();
+      // idle이므로 ready 강조 없음, 탭 라벨은 수확 준비 0.
+      expect(screen.queryByTestId(`animal-strip-ready-${chicken.key}`)).toBeNull();
+      expect(strip.props.accessibilityLabel).toBe(messages.animalStripAccessibilityLabel(0));
+
+      // 스트립 탭 → 기존 동물 시트(openAnimals) 오픈. 탭 전에는 시트가 닫혀 있어,
+      // 탭이 실제로 기존 동물 시트를 여는 실행 경로임을 before/after로 확정한다.
+      expect(screen.queryByTestId('animals-sheet')).toBeNull();
+      fireEvent.press(strip);
+      expect(screen.getByTestId('animals-sheet')).toBeTruthy();
+    });
+
+    test('ready 동물에 강조 뱃지를 표시하고 탭 라벨에 수확 준비 수를 반영한다', async () => {
+      const chicken = ANIMALS[0]!; // 급여 후 타이머 완료 → ready.
+      const state: GameState = {
+        ...createInitialState(),
+        onboardingCompleted: true,
+        animals: { owned: [chicken.key], feeding: { [chicken.key]: NOW - chicken.produceTimerMs } },
+      };
+      const screen = await renderGame(state);
+      await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+
+      const strip = screen.getByTestId('animal-strip');
+      // 시각적 강조: ready 동물에 강조 뱃지가 스트립 안에 표시된다.
+      expect(within(strip).getByTestId(`animal-strip-ready-${chicken.key}`)).toBeTruthy();
+      // 요약만: 아이콘은 노출하되, 동물 시트의 카운트다운/급여 상세(animal-status 행)는
+      // 홈 스트립에 표시하지 않는다.
+      expect(within(strip).getByText(chicken.icon)).toBeTruthy();
+      expect(within(strip).queryByTestId(`animal-status-${chicken.key}`)).toBeNull();
+      expect(strip.props.accessibilityLabel).toBe(messages.animalStripAccessibilityLabel(1));
+    });
+  });
+
   describe('seed-strip sort toggle (#192)', () => {
     const messages = getFarmMessages(DEFAULT_LOCALE);
     // Past onboarding so the seed strip is fully interactive (no coachmark gate).

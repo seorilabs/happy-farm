@@ -240,6 +240,7 @@ export const zhHantFarmMessages: FarmMessages = {
   labButtonAccessibilityLabel: '研究室',
   animalsButton: '🐄 牧場',
   animalsButtonAccessibilityLabel: '動物牧場',
+  animalStripAccessibilityLabel: (readyCount) => `打開動物 · ${readyCount} 可收成`,
   sheetTitleAnimals: '動物牧場',
   sheetDescriptionAnimals: '餵養你的動物並收取產物來販售。',
   animalsYieldLabel: (produceIcon, amount, cycle) => `${produceIcon} 每 ${cycle} +${amount}G`,

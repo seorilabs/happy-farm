@@ -248,6 +248,7 @@ export const koFarmMessages = {
   // 동물 사육/생산(#249): '더보기' 시트 뒤로 묶는 신규 진입점.
   animalsButton: '🐄 목장',
   animalsButtonAccessibilityLabel: '동물 목장',
+  animalStripAccessibilityLabel: (readyCount: number) => `동물 열기 · 수확 준비 ${readyCount}`,
   sheetTitleAnimals: '동물 목장',
   sheetDescriptionAnimals: '가축에게 먹이를 주고 산출물을 모아 파세요.',
   animalsYieldLabel: (produceIcon: string, amount: string, cycle: string) =>

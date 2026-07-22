@@ -240,6 +240,7 @@ export const jaFarmMessages: FarmMessages = {
   labButtonAccessibilityLabel: '研究所',
   animalsButton: '🐄 牧場',
   animalsButtonAccessibilityLabel: '動物牧場',
+  animalStripAccessibilityLabel: (readyCount) => `どうぶつを開く · 収穫準備 ${readyCount}`,
   sheetTitleAnimals: '動物牧場',
   sheetDescriptionAnimals: '家畜にえさをあげて産物を集めて売りましょう。',
   animalsYieldLabel: (produceIcon, amount, cycle) => `${produceIcon} ${cycle}ごとに +${amount}G`,
