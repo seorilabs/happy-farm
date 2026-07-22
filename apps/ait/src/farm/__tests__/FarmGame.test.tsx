@@ -286,6 +286,20 @@ function createThrowingRewardedAd(error = new Error('sdk dynamic failure message
   };
 }
 
+// showAd가 호출마다 큐의 다음 결과를 반환하는 컨트롤러(#374 재시도 검증용).
+// reloadAd 스파이를 포함해 프리로드·재시도 킥을 관찰할 수 있다.
+function createSequencedRewardedAd(results: RewardedAdShowResult[]): RewardedAdController {
+  const queue = [...results];
+  return {
+    isAdReady: true,
+    isAdSupported: true,
+    reloadAd: jest.fn(),
+    showAd: jest.fn(
+      async (): Promise<RewardedAdShowResult> => queue.shift() ?? { status: 'failed', error: 'exhausted' }
+    ),
+  };
+}
+
 // CI runners are typically 3-5× slower than local; 30 s gives enough headroom
 // for the heaviest tests (first-run module warmup, rewarded ad flows) without
 // letting a genuinely hung test pass unnoticed.
@@ -2861,6 +2875,76 @@ describe('FarmGame UI flow', () => {
       })
     );
     expect(screen.getByText('50G')).toBeTruthy();
+  }, 30_000);
+
+  test('재시도로 첫 show 실패 후 두 번째에서 보상을 지급한다 (#374 AC3)', async () => {
+    const rewardedAd = createSequencedRewardedAd([{ status: 'failed', error: 'no_fill' }, { status: 'earned' }]);
+    const track = jest.fn();
+    const screen = await renderGame(null, {
+      analytics: createFarmAnalytics(track),
+      useRewardedAd: () => rewardedAd,
+    });
+
+    await waitFor(() => expect(screen.getByText('50G')).toBeTruthy());
+
+    fireEvent.press(screen.getByText('🏪 상점'));
+    fireEvent.press(screen.getByTestId('shop-tab-rewards'));
+    fireEvent.press(screen.getByText('받기'));
+
+    // 실패 → reloadAd → 재시도(성공)로 showAd가 정확히 2회 호출된다(무한 재시도 금지).
+    await waitFor(() => expect(rewardedAd.showAd).toHaveBeenCalledTimes(2));
+    expect(rewardedAd.reloadAd).toHaveBeenCalledTimes(1);
+
+    expect(track).toHaveBeenCalledWith('ad_reward_completed', expect.objectContaining({ ad_type: 'rewardedGold' }));
+    expect(track).not.toHaveBeenCalledWith('ad_reward_failed', expect.anything());
+  }, 30_000);
+
+  test('재시도 후에도 실패하면 구체 에러 reason을 1회만 기록한다 (#374 AC3·AC4)', async () => {
+    const rewardedAd = createSequencedRewardedAd([
+      { status: 'failed', error: 'no_fill' },
+      { status: 'failed', error: 'no_fill' },
+    ]);
+    const track = jest.fn();
+    const screen = await renderGame(null, {
+      analytics: createFarmAnalytics(track),
+      useRewardedAd: () => rewardedAd,
+    });
+
+    await waitFor(() => expect(screen.getByText('50G')).toBeTruthy());
+
+    fireEvent.press(screen.getByText('🏪 상점'));
+    fireEvent.press(screen.getByTestId('shop-tab-rewards'));
+    fireEvent.press(screen.getByText('받기'));
+
+    await waitFor(() => expect(rewardedAd.showAd).toHaveBeenCalledTimes(2));
+    expect(rewardedAd.reloadAd).toHaveBeenCalledTimes(1);
+
+    const failedCalls = track.mock.calls.filter(([event]) => event === 'ad_reward_failed');
+    expect(failedCalls).toHaveLength(1);
+    expect(failedCalls[0][1]).toEqual(expect.objectContaining({ ad_type: 'rewardedGold', reason: 'no_fill' }));
+  }, 30_000);
+
+  test('미로드 상태로 CTA를 게이트하고 시트 오픈 시 프리로드를 킥한다 (#374 AC1·AC2)', async () => {
+    const rewardedAd: RewardedAdController = {
+      isAdReady: false,
+      isAdSupported: true,
+      reloadAd: jest.fn(),
+      showAd: jest.fn(async (): Promise<RewardedAdShowResult> => ({ status: 'notReady' })),
+    };
+    const screen = await renderGame(null, { useRewardedAd: () => rewardedAd });
+
+    await waitFor(() => expect(screen.getByText('50G')).toBeTruthy());
+
+    fireEvent.press(screen.getByText('🏪 상점'));
+
+    // 광고 CTA 시트(상점) 오픈 시 미로드면 재로드를 킥한다(AC2).
+    await waitFor(() => expect(rewardedAd.reloadAd).toHaveBeenCalled());
+
+    // 미로드 상태에서는 보상 CTA(골드·개간 할인)가 모두 대기 문구로 게이트되고
+    // show가 호출되지 않는다(AC1).
+    fireEvent.press(screen.getByTestId('shop-tab-rewards'));
+    expect(screen.getAllByText('대기').length).toBeGreaterThanOrEqual(2);
+    expect(rewardedAd.showAd).not.toHaveBeenCalled();
   }, 30_000);
 
   test('closes the growth ad sheet after completing crop growth', async () => {

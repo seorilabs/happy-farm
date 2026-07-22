@@ -147,5 +147,6 @@ export function useAdMobRewardedAd() {
     });
   }, [adUnitId, finishPendingShow, isAdReady, loadAd]);
 
-  return { isAdReady, isAdSupported, showAd };
+  // reloadAd로 시트 오픈 프리로드·show 실패 후 재시도에서 로드를 다시 킥한다(#374).
+  return { isAdReady, isAdSupported, showAd, reloadAd: loadAd };
 }

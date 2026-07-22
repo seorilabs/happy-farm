@@ -2,6 +2,7 @@ import { loadFullScreenAd, showFullScreenAd } from '@apps-in-toss/framework';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type { RewardedAdController, RewardedAdShowResult } from '../../../../../packages/farm-core/src';
+import { normalizeAdFailureReason } from '../../../../../packages/farm-core/src';
 import { useAppsInTossAdsEnabled } from '../../firebaseWeb/remoteConfig';
 
 type PendingShow = {
@@ -127,20 +128,29 @@ export function useFullScreenAd(adGroupId?: string): RewardedAdController {
                 finishPendingShow(pendingShow?.rewardGranted ? { status: 'earned' } : { status: 'dismissed' });
               }
               if (event.type === 'failedToShow') {
-                finishPendingShow({ status: 'failed' });
+                // 실제 SDK 에러를 reason으로 흘려보내 fallback failed_to_show로
+                // 뭉개지지 않게 한다(#374 AC4). 이벤트가 코드/메시지를 담고 있으면
+                // 정규화해서 쓰고, 없으면 normalizeAdFailureReason이 fallback을 준다.
+                finishPendingShow({ status: 'failed', error: normalizeAdFailureReason(event) });
               }
             },
-            onError: () => {
-              finishPendingShow({ status: 'failed' });
+            onError: (error: unknown) => {
+              finishPendingShow({ status: 'failed', error: normalizeAdFailureReason(error) });
             },
           });
-        } catch {
-          finishPendingShow({ status: 'failed' });
+        } catch (error) {
+          finishPendingShow({ status: 'failed', error: normalizeAdFailureReason(error) });
         }
       });
     },
     [normalizedAdGroupId, adsEnabled, finishPendingShow, isLoaded]
   );
 
-  return { isAdReady: adsEnabled && isSupported && isLoaded, isAdSupported: adsEnabled && isSupported, showAd };
+  // reloadAd로 시트 오픈 프리로드·show 실패 후 재시도에서 로드를 다시 킥한다(#374).
+  return {
+    isAdReady: adsEnabled && isSupported && isLoaded,
+    isAdSupported: adsEnabled && isSupported,
+    showAd,
+    reloadAd: loadAd,
+  };
 }

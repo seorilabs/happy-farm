@@ -96,6 +96,7 @@ import {
   claimCollectionReward,
   createFarmAnalytics,
   getRewardedAdPlacement,
+  shouldRetryRewardedShow,
   createInitialState,
   migrateLoadedState,
   resolveOnboardingStep,
@@ -2237,6 +2238,22 @@ function FarmGameBody({
     }
   }, [activeSheet, rewardedAd.isAdSupported, farmAnalytics]);
 
+  // 보상형 광고 CTA가 노출되는 시트가 열릴 때 아직 로드되지 않았다면 재로드를 킥해
+  // 클릭 시점 미로드로 인한 실패(#374)를 줄인다. 이미 준비됐거나 미지원이면 no-op이고,
+  // 로드가 끝나 isAdReady가 true로 뒤집히면 가드에 걸려 반복 킥하지 않는다.
+  useEffect(() => {
+    const sheetType = activeSheet?.type;
+    const isAdBearingSheet =
+      sheetType === 'shop' ||
+      sheetType === 'growthAd' ||
+      sheetType === 'harvestBonus' ||
+      sheetType === 'welcomeBack' ||
+      sheetType === 'wheel';
+    if (isAdBearingSheet && rewardedAd.isAdSupported && !rewardedAd.isAdReady) {
+      rewardedAd.reloadAd?.();
+    }
+  }, [activeSheet?.type, rewardedAd.isAdSupported, rewardedAd.isAdReady]);
+
   useEffect(() => {
     const id = setInterval(() => {
       tickNowMsRef.current = Date.now();
@@ -3272,16 +3289,27 @@ function FarmGameBody({
     }
 
     farmAnalytics.trackAdRewardClick(type, placement, analyticsContext());
-    let result: RewardedAdShowResult;
-    try {
-      result = await rewardedAd.showAd();
-    } catch {
-      if (!options.keepSheetOnFailure) {
-        setActiveSheet(null);
+    const attemptShow = async (): Promise<RewardedAdShowResult> => {
+      try {
+        return await rewardedAd.showAd();
+      } catch {
+        // showAd 자체가 throw하면 실패 결과로 정규화해 재시도·최종 실패 처리를
+        // 한 경로로 통일한다(reason은 최후 fallback show_ad_threw).
+        return { status: 'failed', error: 'show_ad_threw' };
       }
-      farmAnalytics.trackAdRewardFailed(type, placement, 'show_ad_threw', analyticsContext());
-      toast(messages.adFailedToast);
-      return false;
+    };
+
+    let result = await attemptShow();
+    // show 실패(notReady/failed) 시 컨트롤러 재로드 후 1회만 재시도한다(#374 AC3).
+    // reloadAd는 로드 완료를 기다렸다 resolve하므로, 그 뒤 showAd는 최신 로드 상태를
+    // 읽는다. reloadAd 미지원 컨트롤러(unsupported·일부 목)는 재시도 없이 그대로 실패.
+    if (shouldRetryRewardedShow(result) && rewardedAd.reloadAd) {
+      try {
+        await rewardedAd.reloadAd();
+      } catch {
+        // 재로드 실패는 최초 결과를 유지한 채 재시도만 진행한다(무한 재시도 금지).
+      }
+      result = await attemptShow();
     }
 
     if (result.status === 'earned') {
