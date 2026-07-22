@@ -110,6 +110,7 @@ export function MissionsSheet({
   locale,
   messages,
   now,
+  adSupported,
   onClaim,
   onClaimWeekly,
 }: {
@@ -117,17 +118,26 @@ export function MissionsSheet({
   locale: SupportedLocale;
   messages: FarmMessages;
   now: number;
+  // 광고 미지원/무필 환경에서는 완주 불가한 watch_ad 미션을 목록에서 제외한다(#366).
+  adSupported: boolean;
   onClaim: (slot: number) => void;
   onClaimWeekly: (slot: number) => void;
 }) {
   // 보상 표기를 수령 경로(FarmGame의 claim 함수)와 동일한 진행도 스케일 값으로 계산한다.
   const adRewardGold = getRewardedGoldAmount(gameState);
-  const snapshot = getDailyMissionsSnapshot(gameState.dailyMissionState, now, gameState.unlockedAreas, adRewardGold);
+  const snapshot = getDailyMissionsSnapshot(
+    gameState.dailyMissionState,
+    now,
+    gameState.unlockedAreas,
+    adRewardGold,
+    adSupported
+  );
   const weeklySnapshot = getWeeklyMissionsSnapshot(
     gameState.weeklyMissionState,
     now,
     gameState.unlockedAreas,
-    adRewardGold
+    adRewardGold,
+    adSupported
   );
 
   return (

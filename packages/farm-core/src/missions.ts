@@ -67,6 +67,16 @@ function getSlotRewardGold(slot: MissionSlotConfig, adRewardGold?: number): numb
   return Math.max(slot.rewardGoldMin, Number.isFinite(scaled) ? scaled : 0);
 }
 
+// 광고 미지원/무필 환경(AppsInToss 무광고·mobile_ads kill switch 등)에서 watch_ad 미션은
+// 영구 미완이 되어 일일 100% 완주와 그 보상을 봉쇄한다(#366). 광고가 지원되지 않으면 표시·
+// 수령 목록에서 watch_ad 슬롯을 제외해 완주 가능성을 보장한다. 진행도 기록 경로
+// (recordProgressForMatches)는 건드리지 않는다: 광고 미지원 환경에선 watch_ad 진행이 애초에
+// 발생하지 않으므로, 제외는 순수하게 표시/수령 레이어에서만 일어나면 충분하다. adSupported는
+// 결정론적 입력이라 같은 (dayKey, adSupported)면 같은 미션 목록을 만든다.
+function isMissionAvailable(type: MissionType, adSupported: boolean): boolean {
+  return adSupported || type !== 'watch_ad';
+}
+
 // 미션 추첨 풀(선언 순서 유지). harvest_area의 "오늘의 구역"을 여기서 뽑는다.
 const FEATURABLE_AREAS = balance.areas.map((area) => area.key) as AreaKey[];
 const FEATURABLE_AREA_SET = new Set<AreaKey>(FEATURABLE_AREAS);
@@ -143,9 +153,12 @@ function resolveMissions(
 export function getDailyMissions(
   dayKey: string,
   unlockedAreas?: readonly AreaKey[],
-  adRewardGold?: number
+  adRewardGold?: number,
+  adSupported = true
 ): DailyMission[] {
-  return resolveMissions(dayKey, pickFeaturedAreas(dayKey, unlockedAreas), adRewardGold);
+  return resolveMissions(dayKey, pickFeaturedAreas(dayKey, unlockedAreas), adRewardGold).filter((mission) =>
+    isMissionAvailable(mission.type, adSupported)
+  );
 }
 
 export function createInitialDailyMissionState(): DailyMissionState {
@@ -304,16 +317,19 @@ export function getDailyMissionsSnapshot(
   state: DailyMissionState,
   now = Date.now(),
   unlockedAreas?: readonly AreaKey[],
-  adRewardGold?: number
+  adRewardGold?: number,
+  adSupported = true
 ): DailyMissionsSnapshot {
   const dayKey = getMissionDayKey(now);
   const rolled = rolloverDailyMissions(state, dayKey, unlockedAreas);
-  const missions = resolveMissions(rolled.dayKey, rolled.areaKeys, adRewardGold).map((mission) => {
-    const progress = rolled.progress[mission.slot] ?? 0;
-    const completed = progress >= mission.target;
-    const claimed = rolled.claimedSlots.includes(mission.slot);
-    return { ...mission, progress, completed, claimed, claimable: completed && !claimed };
-  });
+  const missions = resolveMissions(rolled.dayKey, rolled.areaKeys, adRewardGold)
+    .filter((mission) => isMissionAvailable(mission.type, adSupported))
+    .map((mission) => {
+      const progress = rolled.progress[mission.slot] ?? 0;
+      const completed = progress >= mission.target;
+      const claimed = rolled.claimedSlots.includes(mission.slot);
+      return { ...mission, progress, completed, claimed, claimable: completed && !claimed };
+    });
   return { state: rolled, dayKey, missions };
 }
 
@@ -322,9 +338,10 @@ export function canClaimMission(
   state: DailyMissionState,
   slot: number,
   now = Date.now(),
-  unlockedAreas?: readonly AreaKey[]
+  unlockedAreas?: readonly AreaKey[],
+  adSupported = true
 ): boolean {
-  const snapshot = getDailyMissionsSnapshot(state, now, unlockedAreas);
+  const snapshot = getDailyMissionsSnapshot(state, now, unlockedAreas, undefined, adSupported);
   return snapshot.missions.some((mission) => mission.slot === slot && mission.claimable);
 }
 
@@ -335,9 +352,16 @@ export function claimMission(
   gameState: GameState,
   slot: number,
   now = Date.now(),
-  adRewardGold?: number
+  adRewardGold?: number,
+  adSupported = true
 ): GameState | null {
-  const snapshot = getDailyMissionsSnapshot(gameState.dailyMissionState, now, gameState.unlockedAreas, adRewardGold);
+  const snapshot = getDailyMissionsSnapshot(
+    gameState.dailyMissionState,
+    now,
+    gameState.unlockedAreas,
+    adRewardGold,
+    adSupported
+  );
   const mission = snapshot.missions.find((candidate) => candidate.slot === slot);
   if (mission == null || !mission.claimable) {
     return null;

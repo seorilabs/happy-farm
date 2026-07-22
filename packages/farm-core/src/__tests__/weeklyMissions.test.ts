@@ -364,3 +364,66 @@ describe('progress-scaled weekly rewards (#207)', () => {
     expect(claimed!.gold - migrated.gold).toBe(SLOTS[0]!.rewardGoldMin);
   });
 });
+
+describe('광고 미지원 시 주간 watch_ad 제외 (#366)', () => {
+  const weekKey = getMissionWeekKey(MON);
+
+  test('adSupported 기본값(true)은 기존 동작과 동일하다(회귀 없음)', () => {
+    const missions = getWeeklyMissions(weekKey, ALL_AREAS);
+    expect(missions).toEqual(getWeeklyMissions(weekKey, ALL_AREAS, undefined, true));
+    expect(missions).toHaveLength(WEEK_COUNT);
+    expect(missions.some((m) => m.type === 'watch_ad')).toBe(true);
+  });
+
+  test('adSupported=false면 주간 watch_ad 슬롯이 제외되고 나머지는 그대로다', () => {
+    const withAd = getWeeklyMissions(weekKey, ALL_AREAS, undefined, true);
+    const withoutAd = getWeeklyMissions(weekKey, ALL_AREAS, undefined, false);
+    expect(withoutAd.some((m) => m.type === 'watch_ad')).toBe(false);
+    expect(withoutAd).toHaveLength(WEEK_COUNT - 1);
+    expect(withoutAd).toEqual(withAd.filter((m) => m.type !== 'watch_ad'));
+  });
+
+  test('snapshot도 adSupported=false면 watch_ad를 제외한다', () => {
+    const snap = getWeeklyMissionsSnapshot(
+      createInitialWeeklyMissionState(),
+      MON,
+      ALL_AREAS,
+      undefined,
+      false
+    );
+    expect(snap.missions.some((m) => m.type === 'watch_ad')).toBe(false);
+    expect(snap.missions).toHaveLength(WEEK_COUNT - 1);
+  });
+
+  test('광고 미지원 환경에서 남은 주간 미션을 모두 완료·수령해 100% 완주가 가능하다', () => {
+    const shown = getWeeklyMissions(weekKey, ALL_AREAS, undefined, false);
+    expect(shown.every((m) => m.type !== 'watch_ad')).toBe(true);
+
+    const rolled = rolloverWeeklyMissions(createInitialWeeklyMissionState(), weekKey, ALL_AREAS);
+    const progress = [...rolled.progress];
+    for (const mission of shown) {
+      progress[mission.slot] = mission.target;
+    }
+    let gameState: GameState = { ...createInitialState(), weeklyMissionState: { ...rolled, progress } };
+
+    for (const mission of shown) {
+      const next = claimWeeklyMission(gameState, mission.slot, MON, undefined, false);
+      expect(next).not.toBeNull();
+      gameState = next!;
+    }
+    const finalSnap = getWeeklyMissionsSnapshot(gameState.weeklyMissionState, MON, ALL_AREAS, undefined, false);
+    expect(finalSnap.missions.every((m) => m.claimed)).toBe(true);
+    expect(finalSnap.missions.some((m) => m.claimable)).toBe(false);
+  });
+
+  test('adSupported=false면 주간 watch_ad 슬롯은 완료돼 있어도 수령할 수 없다(광고 지원 시엔 수령 가능)', () => {
+    const adSlot = getWeeklyMissions(weekKey, ALL_AREAS, undefined, true).find((m) => m.type === 'watch_ad')!;
+    const rolled = rolloverWeeklyMissions(createInitialWeeklyMissionState(), weekKey, ALL_AREAS);
+    const progress = [...rolled.progress];
+    progress[adSlot.slot] = adSlot.target;
+    const gameState: GameState = { ...createInitialState(), weeklyMissionState: { ...rolled, progress } };
+
+    expect(claimWeeklyMission(gameState, adSlot.slot, MON, undefined, false)).toBeNull();
+    expect(claimWeeklyMission(gameState, adSlot.slot, MON, undefined, true)).not.toBeNull();
+  });
+});
