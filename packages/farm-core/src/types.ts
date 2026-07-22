@@ -1,5 +1,6 @@
 import balance from './balance.json';
 import type { AnimalsState } from './animals';
+import type { FeatureCoachmarkKey } from './featureCoachmarks';
 import type { ProductionState } from './production';
 import type { DailyBonusState } from './dailyBonus';
 import type { DailyMissionState } from './missions';
@@ -186,6 +187,10 @@ export type GameState = {
   // byproduct) plus any in-progress crafts. A meta-layer field so the inventory
   // and running crafts survive every prestige, like placedDecorations/animals.
   production: ProductionState;
+  // 딥 기능(동물·공방·연구소·교배·개척) 최초 해금 시 1회성 발견성 코치마크(#367)를
+  // 이미 확인한 기능 키 목록. 한 번 확인하면 다시는 노출되지 않는다. 메타-레이어 필드라
+  // 프레스티지를 넘어 유지된다(placedDecorations/animals와 동일).
+  seenFeatureCoachmarks: FeatureCoachmarkKey[];
 };
 
 // Prestige reset boundary. Farm-layer fields are wiped when the player
@@ -223,6 +228,7 @@ export const META_LAYER_KEYS = [
   'wheelState',
   'animals',
   'production',
+  'seenFeatureCoachmarks',
 ] as const satisfies readonly (keyof GameState)[];
 
 export type FarmLayerKey = (typeof FARM_LAYER_KEYS)[number];

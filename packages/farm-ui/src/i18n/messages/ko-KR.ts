@@ -451,6 +451,20 @@ export const koFarmMessages = {
   onboardingSkipConfirmDesc: '첫 수확까지 안내를 따라가면 농장 운영을 더 쉽게 시작할 수 있어요.',
   onboardingSkipConfirmCancel: '계속 안내받기',
   onboardingSkipConfirmAction: '건너뛰기',
+  // #367: 딥 기능 최초 해금 시 1회성 발견성 코치마크(팝오버 오버레이).
+  featureCoachmarkEyebrow: '새 기능 열림!',
+  featureCoachmarkOpen: '보러가기',
+  featureCoachmarkDismiss: '나중에',
+  featureCoachmarkAnimalsTitle: '축사를 지을 수 있어요',
+  featureCoachmarkAnimalsDesc: '닭·소를 키워 시간마다 산출물을 모아 팔 수 있어요.',
+  featureCoachmarkWorkshopTitle: '공방이 열렸어요',
+  featureCoachmarkWorkshopDesc: '쌓인 작물을 가공해 더 비싼 상품으로 만들 수 있어요.',
+  featureCoachmarkLabTitle: '연구소를 쓸 수 있어요',
+  featureCoachmarkLabDesc: '연구 포인트로 자동화·교배 같은 기술을 해금해요.',
+  featureCoachmarkBreedingTitle: '작물 교배가 열렸어요',
+  featureCoachmarkBreedingDesc: '부모 작물을 교배해 새로운 하이브리드 작물을 만들어요.',
+  featureCoachmarkChainTitle: '새 지역을 개척할 수 있어요',
+  featureCoachmarkChainDesc: '지금 농장을 졸업하면 자동 수입을 남기고 새 지역에서 다시 시작해요.',
 };
 
 export type FarmMessages = typeof koFarmMessages;

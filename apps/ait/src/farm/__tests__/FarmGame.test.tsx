@@ -5449,4 +5449,70 @@ describe('하단 safe-area 인셋 적용 (#236)', () => {
     const banner = StyleSheet.flatten(screen.getByTestId('discovery-banner').props.style);
     expect(banner.bottom).toBe(160);
   });
+
+  // #367: 딥 기능 최초 해금 시 1회성 발견성 코치마크(팝오버 오버레이).
+  describe('딥 기능 발견성 코치마크', () => {
+    // 가장 싼 축사(닭 600G)를 살 골드가 처음 생겨 '동물' 기능이 가용해진 상태. 데일리 보너스는
+    // 오늘 이미 수령한 것으로 두어 로드 시 보너스 시트 자동 팝업이 코치마크를 가리지 않게 한다.
+    function animalsUnlockedState(): GameState {
+      return {
+        ...createInitialState(),
+        gold: 600,
+        harvestNotificationPromptSeen: true,
+        // 방금 수령한 것으로 두어(현재 활성 시계 기준) 로드 시 데일리 보너스 자동 팝업이
+        // 코치마크를 가리지 않게 한다.
+        dailyBonusState: { lastClaimedAt: Date.now(), streak: 1 },
+      };
+    }
+
+    test('기능이 처음 가용해지면 코치마크가 1회 노출되고, 확인하면 저장 상태에 기록된다', async () => {
+      const messages = getFarmMessages(DEFAULT_LOCALE);
+      const screen = await renderGame(animalsUnlockedState());
+
+      // 팝오버 오버레이가 '동물' 코치마크 문구로 노출된다.
+      const card = await waitFor(() => screen.getByTestId('feature-coachmark-card'));
+      expect(within(card).getByText(messages.featureCoachmarkAnimalsTitle)).toBeTruthy();
+
+      // '나중에'로 확인 → 오버레이가 사라지고 저장 상태에 animals가 확인됨으로 기록된다.
+      await act(async () => {
+        fireEvent.press(screen.getByTestId('feature-coachmark-dismiss'));
+      });
+      await waitFor(() => expect(screen.queryByTestId('feature-coachmark-card')).toBeNull());
+      await waitFor(() => expect(getLatestPersistedState().seenFeatureCoachmarks).toContain('animals'));
+    });
+
+    test('이미 확인한 코치마크는 저장 상태로 재개해도 재노출되지 않는다', async () => {
+      // animals가 가용하지만 이미 확인된 저장 상태(재개 시나리오).
+      const resumed = await renderGame({
+        ...animalsUnlockedState(),
+        seenFeatureCoachmarks: ['animals'],
+      });
+      await waitFor(() => expect(resumed.getByText('600G')).toBeTruthy());
+      expect(resumed.queryByTestId('feature-coachmark-card')).toBeNull();
+    });
+
+    test("'보러가기'는 해당 기능 시트를 열고 코치마크를 확인 처리한다", async () => {
+      const screen = await renderGame(animalsUnlockedState());
+      await waitFor(() => screen.getByTestId('feature-coachmark-card'));
+
+      await act(async () => {
+        fireEvent.press(screen.getByTestId('feature-coachmark-open'));
+      });
+
+      // 동물 시트가 열리고, 코치마크는 확인됨으로 저장된다.
+      await waitFor(() => expect(screen.getByTestId('animals-sheet')).toBeTruthy());
+      await waitFor(() => expect(getLatestPersistedState().seenFeatureCoachmarks).toContain('animals'));
+    });
+
+    test('온보딩이 끝나지 않은 신규 플레이어에게는 코치마크가 뜨지 않는다', async () => {
+      const screen = await renderGame(
+        { ...animalsUnlockedState(), onboardingCompleted: false, onboardingStep: 'selectSeed' },
+        {},
+        null,
+        { preserveOnboarding: true }
+      );
+      await waitFor(() => expect(screen.getByTestId('onboarding-coachmark')).toBeTruthy());
+      expect(screen.queryByTestId('feature-coachmark-card')).toBeNull();
+    });
+  });
 });

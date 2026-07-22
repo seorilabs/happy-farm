@@ -19,6 +19,7 @@ import {
 import { createInitialPrestigeProgress, normalizeChainFarms, normalizePrestigeProgress } from './prestige';
 import { createInitialAnimalsState, normalizeAnimalsState } from './animals';
 import { createInitialProductionState, normalizeProductionState } from './production';
+import { normalizeSeenFeatureCoachmarks, seedSeenFeatureCoachmarksForLoadedSave } from './featureCoachmarks';
 import { getResetDayIndex } from './resetBoundary';
 import { createInitialPlacedDecorations, normalizePlacedDecorations } from './decorations';
 import { createInitialDailyMissionState, normalizeDailyMissionState } from './missions';
@@ -861,6 +862,7 @@ export function createInitialState(): GameState {
     wheelState: createInitialWheelState(),
     animals: createInitialAnimalsState(),
     production: createInitialProductionState(),
+    seenFeatureCoachmarks: [],
   };
 }
 
@@ -1072,6 +1074,15 @@ export function migrateLoadedState(loaded: Partial<GameState>, base: GameState):
   // Workshop: drop inventory/craft entries missing from the current catalog and
   // any non-positive/non-finite values. A save without the field starts empty.
   merged.production = normalizeProductionState(loaded.production);
+
+  // 딥 기능 발견성 코치마크(#367): 필드가 있는 세이브는 알려진 키만 정규화해 보존한다.
+  // 필드가 아예 없는 레거시 세이브는 지금 이미 가용한 기능을 전부 "확인됨"으로 선반영해,
+  // 오랫동안 써 온 기능들의 코치마크가 업데이트 직후 한꺼번에 뜨는 걸 막는다. 이 판정은
+  // merged가 완전히 정규화된 뒤(연구·동물·생산·프레스티지·수확 목록 포함) 계산해야 한다.
+  merged.seenFeatureCoachmarks =
+    loaded.seenFeatureCoachmarks === undefined
+      ? seedSeenFeatureCoachmarksForLoadedSave(merged)
+      : normalizeSeenFeatureCoachmarks(loaded.seenFeatureCoachmarks);
 
   return merged;
 }
