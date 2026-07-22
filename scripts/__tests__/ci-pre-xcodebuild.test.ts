@@ -39,6 +39,20 @@ describe('ci_pre_xcodebuild.sh 버전 주입 (#364)', () => {
     }
   });
 
+  test('dry-run으로 CI_TAG 유/무 두 경로를 모두 검증한다(유→태그 버전, 무→최신 태그 폴백)', () => {
+    // 유(태그) 경로: CI_TAG를 그대로 사용해 그 버전을 산출한다.
+    const withTag = runScript({ CI_TAG: 'v1.6.2' });
+    expect(withTag.status).toBe(0);
+    expect(withTag.stdout).toContain('marketing=1.6.2');
+
+    // 무(폴백) 경로: CI_TAG가 없으면 저장소의 최신 릴리즈 태그로 폴백 주입한다.
+    const repo = makeTempRepo('v1.4.3');
+    tempDirs.push(repo);
+    const withoutTag = runScript({ CI_TAG: '', CI_PRIMARY_REPOSITORY_PATH: repo });
+    expect(withoutTag.status).toBe(0);
+    expect(withoutTag.stdout).toContain('marketing=1.4.3');
+  });
+
   test('CI_TAG(vX.Y.Z)가 있으면 그 태그로 marketing/build를 산출한다', () => {
     const result = runScript({ CI_TAG: 'v1.8.1' });
     expect(result.status).toBe(0);
