@@ -240,6 +240,7 @@ export const deFarmMessages: FarmMessages = {
   labButtonAccessibilityLabel: 'Forschungslabor',
   animalsButton: '🐄 Ranch',
   animalsButtonAccessibilityLabel: 'Tierranch',
+  animalStripAccessibilityLabel: (readyCount) => `Tiere öffnen · ${readyCount} erntereif`,
   sheetTitleAnimals: 'Tierranch',
   sheetDescriptionAnimals: 'Füttere deine Tiere und sammle Produkte zum Verkauf.',
   animalsYieldLabel: (produceIcon, amount, cycle) => `${produceIcon} +${amount}G alle ${cycle}`,

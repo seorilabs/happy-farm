@@ -265,6 +265,44 @@ export const styles = StyleSheet.create({
   decorationStripIcon: {
     fontSize: 26,
   },
+  // 소유 동물 스트립(#360): 장식 스트립과 같은 레이어·같은 상단 구분선. 전체가 하나의
+  // 탭 타깃(Pressable)이라 아이콘을 여유 있게 배치한다.
+  animalStrip: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(120, 87, 46, 0.25)',
+  },
+  animalStripItem: {
+    width: 34,
+    height: 34,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  // 수확 준비(ready) 강조: 은은한 글로우 링.
+  animalStripItemReady: {
+    borderRadius: 17,
+    backgroundColor: 'rgba(94, 179, 92, 0.18)',
+  },
+  animalStripIcon: {
+    fontSize: 26,
+  },
+  // 수확 준비 뱃지: 아이콘 우상단 초록 점.
+  animalStripReadyBadge: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#4caf50',
+    borderWidth: 1.5,
+    borderColor: '#ffffff',
+  },
   harvestPop: {
     position: 'absolute',
     zIndex: 15,

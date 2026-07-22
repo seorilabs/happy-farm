@@ -239,6 +239,7 @@ export const zhHansFarmMessages: FarmMessages = {
   labButtonAccessibilityLabel: '研究所',
   animalsButton: '🐄 牧场',
   animalsButtonAccessibilityLabel: '动物牧场',
+  animalStripAccessibilityLabel: (readyCount) => `打开动物 · ${readyCount} 可收获`,
   sheetTitleAnimals: '动物牧场',
   sheetDescriptionAnimals: '喂养动物，收集产物出售。',
   animalsYieldLabel: (produceIcon, amount, cycle) => `${produceIcon} 每 ${cycle} +${amount}G`,

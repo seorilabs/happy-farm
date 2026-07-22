@@ -4280,6 +4280,12 @@ function FarmGameBody({
               />
             ) : null}
           </View>
+          <FarmAnimalStrip
+            gameState={gameState}
+            now={tickNowMsRef.current}
+            messages={messages}
+            onPress={openAnimals}
+          />
           <FarmDecorationStrip gameState={gameState} />
         </ScrollView>
       </View>
@@ -7146,6 +7152,50 @@ function ShopAreaUnlockRows({
 // plant/harvest hit area, and hidden entirely when nothing is owned. Purely
 // decorative, so the whole strip is removed from the accessibility tree to keep
 // it from interrupting the plot-state labels a screen-reader user relies on.
+// 소유 동물 스트립(#360): 농장 장면 하단(장식 스트립과 동일 레이어)에 소유 동물을
+// 아이콘으로 요약 노출한다. phase==='ready' 동물은 미세 강조(글로우+뱃지)로 수확 가능함을
+// 알리고, 스트립 전체가 하나의 탭 타깃으로 기존 동물 시트(openAnimals)를 연다. 소유
+// 0마리면 장식 스트립과 동일하게 렌더하지 않으며, 카운트다운/급여 등 상세는 두지 않는다
+// (홈은 요약만). 순수 표시 아이콘은 Pressable 하나로 묶여 스크린리더에는 탭 라벨만 읽힌다.
+function FarmAnimalStrip({
+  gameState,
+  now,
+  messages,
+  onPress,
+}: {
+  gameState: GameState;
+  now: number;
+  messages: FarmMessages;
+  onPress: () => void;
+}) {
+  const owned = getAnimalStates(gameState, now).filter((status) => status.owned);
+  if (owned.length === 0) {
+    return null;
+  }
+  const readyCount = owned.filter((status) => status.phase === 'ready').length;
+  return (
+    <Pressable
+      testID="animal-strip"
+      style={styles.animalStrip}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={messages.animalStripAccessibilityLabel(readyCount)}
+    >
+      {owned.map((status) => {
+        const ready = status.phase === 'ready';
+        return (
+          <View key={status.key} style={[styles.animalStripItem, ready && styles.animalStripItemReady]}>
+            <Text style={styles.animalStripIcon}>{status.icon}</Text>
+            {ready ? (
+              <View testID={`animal-strip-ready-${status.key}`} style={styles.animalStripReadyBadge} />
+            ) : null}
+          </View>
+        );
+      })}
+    </Pressable>
+  );
+}
+
 function FarmDecorationStrip({ gameState }: { gameState: GameState }) {
   const placed = getPlacedDecorations(gameState);
   if (placed.length === 0) {
