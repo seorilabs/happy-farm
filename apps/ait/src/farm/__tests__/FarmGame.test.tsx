@@ -921,7 +921,9 @@ describe('FarmGame UI flow', () => {
       expect(screen.queryByTestId(`animal-strip-ready-${chicken.key}`)).toBeNull();
       expect(strip.props.accessibilityLabel).toBe(messages.animalStripAccessibilityLabel(0));
 
-      // 스트립 탭 → 기존 동물 시트(openAnimals) 오픈.
+      // 스트립 탭 → 기존 동물 시트(openAnimals) 오픈. 탭 전에는 시트가 닫혀 있어,
+      // 탭이 실제로 기존 동물 시트를 여는 실행 경로임을 before/after로 확정한다.
+      expect(screen.queryByTestId('animals-sheet')).toBeNull();
       fireEvent.press(strip);
       expect(screen.getByTestId('animals-sheet')).toBeTruthy();
     });
@@ -937,7 +939,12 @@ describe('FarmGame UI flow', () => {
       await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
 
       const strip = screen.getByTestId('animal-strip');
-      expect(screen.getByTestId(`animal-strip-ready-${chicken.key}`)).toBeTruthy();
+      // 시각적 강조: ready 동물에 강조 뱃지가 스트립 안에 표시된다.
+      expect(within(strip).getByTestId(`animal-strip-ready-${chicken.key}`)).toBeTruthy();
+      // 요약만: 아이콘은 노출하되, 동물 시트의 카운트다운/급여 상세(animal-status 행)는
+      // 홈 스트립에 표시하지 않는다.
+      expect(within(strip).getByText(chicken.icon)).toBeTruthy();
+      expect(within(strip).queryByTestId(`animal-status-${chicken.key}`)).toBeNull();
       expect(strip.props.accessibilityLabel).toBe(messages.animalStripAccessibilityLabel(1));
     });
   });
