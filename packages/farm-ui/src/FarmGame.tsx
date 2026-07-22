@@ -198,6 +198,9 @@ import {
   type CropEconomyEstimate,
   type FarmGameCommandBlockedReason,
   type SupportedLocale,
+  getPendingFeatureCoachmark,
+  markFeatureCoachmarkSeen,
+  type FeatureCoachmarkKey,
 } from '../../farm-core/src';
 import {
   claimDailyBonus,
@@ -2884,6 +2887,32 @@ function FarmGameBody({
     setActiveSheet({ type: 'lab' });
   }
 
+  // #367 딥 기능 코치마크를 확인됨으로 저장(어느 버튼을 눌러도 1회성 플래그가 켜져 재노출
+  // 되지 않는다).
+  function dismissFeatureCoachmark(key: FeatureCoachmarkKey) {
+    setGameState((state) => markFeatureCoachmarkSeen(state, key));
+  }
+
+  // '보러가기': 확인됨으로 저장하고 해당 기능의 시트를 연다(교배는 연구소 시트 안에 있다).
+  function openFeatureCoachmark(key: FeatureCoachmarkKey) {
+    dismissFeatureCoachmark(key);
+    switch (key) {
+      case 'animals':
+        openAnimals();
+        break;
+      case 'workshop':
+        openWorkshop();
+        break;
+      case 'lab':
+      case 'breeding':
+        openLab();
+        break;
+      case 'chain':
+        openMap();
+        break;
+    }
+  }
+
   function toggleAutomation(key: keyof GameState['automationSettings']) {
     setGameState((state) => ({
       ...state,
@@ -4128,6 +4157,19 @@ function FarmGameBody({
   const onboardingSeedHighlight = onboardingStep === 'selectSeed';
   const onboardingPlotHighlight = onboardingStep === 'plant' || onboardingStep === 'harvest';
 
+  // #367: 기본 온보딩을 마친 뒤, 다른 오버레이/시트가 떠 있지 않은 메인 화면에서만 딥 기능
+  // 코치마크를 1개 노출한다. 가용 판정은 core의 순수 함수라 now에 의존하지 않아 틱마다
+  // 흔들리지 않는다. 확인하면 markFeatureCoachmarkSeen로 저장되어 다시 뜨지 않는다.
+  const pendingFeatureCoachmark =
+    gameState.onboardingCompleted &&
+    onboardingStep == null &&
+    activeSheet == null &&
+    firstHarvestNotice == null &&
+    notificationPromptGeneration == null &&
+    !prestigeGuide
+      ? getPendingFeatureCoachmark(gameState)
+      : null;
+
   return (
     <View testID="farm-root" style={[styles.root, { backgroundColor: environmentTone.backgroundColor }]}>
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
@@ -5328,6 +5370,15 @@ function FarmGameBody({
       {prestigeGuide ? (
         <PrestigeGuideOverlay messages={messages} onDismiss={dismissPrestigeGuide} />
       ) : null}
+      {pendingFeatureCoachmark != null ? (
+        <FeatureCoachmarkOverlay
+          key={pendingFeatureCoachmark}
+          featureKey={pendingFeatureCoachmark}
+          messages={messages}
+          onOpen={() => openFeatureCoachmark(pendingFeatureCoachmark)}
+          onDismiss={() => dismissFeatureCoachmark(pendingFeatureCoachmark)}
+        />
+      ) : null}
     </View>
   );
 }
@@ -5805,6 +5856,84 @@ function PrestigeGuideOverlay({
               accessibilityLabel={messages.prestigeGuideConfirm}
             >
               <Text style={styles.notificationPromptAcceptText}>{messages.prestigeGuideConfirm}</Text>
+            </Pressable>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+// #367 딥 기능(동물·공방·연구소·교배·개척) 최초 해금 시 노출하는 1회성 발견성 코치마크.
+// 아이콘·제목·설명·CTA를 담은 팝오버 오버레이로, 상단 HUD/navRow에 상시 요소를 더하지
+// 않는다. '보러가기'는 해당 시트를 열고, 어느 버튼을 눌러도 확인됨으로 저장되어 재노출되지
+// 않는다(core의 markFeatureCoachmarkSeen).
+const FEATURE_COACHMARK_ICON: Record<FeatureCoachmarkKey, string> = {
+  animals: '🐔',
+  workshop: '🏭',
+  lab: '🔬',
+  breeding: '🧬',
+  chain: '🗺️',
+};
+
+function getFeatureCoachmarkText(
+  key: FeatureCoachmarkKey,
+  messages: FarmMessages
+): { title: string; description: string } {
+  switch (key) {
+    case 'animals':
+      return { title: messages.featureCoachmarkAnimalsTitle, description: messages.featureCoachmarkAnimalsDesc };
+    case 'workshop':
+      return { title: messages.featureCoachmarkWorkshopTitle, description: messages.featureCoachmarkWorkshopDesc };
+    case 'lab':
+      return { title: messages.featureCoachmarkLabTitle, description: messages.featureCoachmarkLabDesc };
+    case 'breeding':
+      return { title: messages.featureCoachmarkBreedingTitle, description: messages.featureCoachmarkBreedingDesc };
+    case 'chain':
+      return { title: messages.featureCoachmarkChainTitle, description: messages.featureCoachmarkChainDesc };
+  }
+}
+
+function FeatureCoachmarkOverlay({
+  featureKey,
+  messages,
+  onOpen,
+  onDismiss,
+}: {
+  featureKey: FeatureCoachmarkKey;
+  messages: FarmMessages;
+  onOpen: () => void;
+  onDismiss: () => void;
+}) {
+  const { title, description } = getFeatureCoachmarkText(featureKey, messages);
+  return (
+    // PrestigeGuideOverlay와 동일하게 Modal에 호스팅해야 Fabric이 absoluteFill 오버레이를
+    // 정상 렌더한다.
+    <Modal transparent visible animationType="fade" onRequestClose={onDismiss}>
+      <View testID="feature-coachmark-overlay" style={styles.notificationPromptBackdrop}>
+        <View testID="feature-coachmark-card" style={styles.notificationPromptCard}>
+          <Text style={styles.featureCoachmarkEyebrow}>{messages.featureCoachmarkEyebrow}</Text>
+          <Text style={styles.notificationPromptIcon}>{FEATURE_COACHMARK_ICON[featureKey]}</Text>
+          <Text style={styles.notificationPromptTitle}>{title}</Text>
+          <Text style={styles.notificationPromptDesc}>{description}</Text>
+          <View style={styles.notificationPromptActions}>
+            <Pressable
+              testID="feature-coachmark-dismiss"
+              style={[styles.notificationPromptButton, styles.notificationPromptDeclineButton]}
+              onPress={onDismiss}
+              accessibilityRole="button"
+              accessibilityLabel={messages.featureCoachmarkDismiss}
+            >
+              <Text style={styles.notificationPromptDeclineText}>{messages.featureCoachmarkDismiss}</Text>
+            </Pressable>
+            <Pressable
+              testID="feature-coachmark-open"
+              style={[styles.notificationPromptButton, styles.notificationPromptAcceptButton]}
+              onPress={onOpen}
+              accessibilityRole="button"
+              accessibilityLabel={messages.featureCoachmarkOpen}
+            >
+              <Text style={styles.notificationPromptAcceptText}>{messages.featureCoachmarkOpen}</Text>
             </Pressable>
           </View>
         </View>

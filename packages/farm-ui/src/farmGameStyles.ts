@@ -1394,4 +1394,13 @@ export const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '900',
   },
+  // #367 딥 기능 코치마크: 카드 상단 '새 기능' 에이브로우(아이콘·제목 위 소제목).
+  featureCoachmarkEyebrow: {
+    fontSize: 12,
+    fontWeight: '900',
+    letterSpacing: 0.4,
+    color: '#2e9e52',
+    textAlign: 'center',
+    textTransform: 'uppercase',
+  },
 });
