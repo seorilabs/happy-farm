@@ -2045,15 +2045,20 @@ function FarmGameBody({
     }
 
     const readyAtMs = Math.max(nextReadyAt, now + HARVEST_NOTIFICATION_MIN_LEAD_MS);
-    void notifications.scheduleHarvestReady({
-      readyAtMs,
-      title: messages.harvestReadyNotificationTitle,
-      body: messages.harvestReadyNotificationBody,
-    });
-    // Only measure when the scheduled target changed; the per-tick re-schedule
-    // is noise and would otherwise emit on every render.
-    if (lastScheduledHarvestReadyAtRef.current !== readyAtMs) {
-      lastScheduledHarvestReadyAtRef.current = readyAtMs;
+    // Guard both the OS (re)registration and the analytics event on the stable
+    // underlying target (nextReadyAt), not the floored readyAtMs. When the next
+    // harvest is within the 60s lead floor, readyAtMs = now + 60s drifts on every
+    // 250ms tick, which previously re-registered the notifee schedule (cancel+create
+    // 4×/sec) and re-emitted notification_scheduled on every tick (#363: one session
+    // logged 92). nextReadyAt is the crop's fixed ready time, so keying off it
+    // (re)schedules + logs once per actual target — the crop_of_the_day pattern.
+    if (lastScheduledHarvestReadyAtRef.current !== nextReadyAt) {
+      lastScheduledHarvestReadyAtRef.current = nextReadyAt;
+      void notifications.scheduleHarvestReady({
+        readyAtMs,
+        title: messages.harvestReadyNotificationTitle,
+        body: messages.harvestReadyNotificationBody,
+      });
       farmAnalytics.trackNotificationScheduled({
         kind: 'harvest',
         leadTimeMs: Math.max(0, readyAtMs - now),
@@ -2096,21 +2101,23 @@ function FarmGameBody({
     if (dailyReadyAt == null) {
       void notifications.cancelReminder('dailyBonus');
       lastScheduledDailyReminderAtRef.current = null;
-    } else {
+    } else if (lastScheduledDailyReminderAtRef.current !== dailyReadyAt) {
+      // Guard OS registration + analytics on the stable dailyReadyAt (cooldown
+      // expiry), not the floored dailyReminderAtMs, and keep the notifee schedule
+      // inside the guard so it isn't re-registered on every 250ms tick (#363).
+      // Mirrors the crop_of_the_day pattern below.
+      lastScheduledDailyReminderAtRef.current = dailyReadyAt;
       const dailyReminderAtMs = Math.max(dailyReadyAt, now + HARVEST_NOTIFICATION_MIN_LEAD_MS);
       void notifications.scheduleReminder('dailyBonus', {
         readyAtMs: dailyReminderAtMs,
         title: messages.dailyBonusReminderNotificationTitle,
         body: messages.dailyBonusReminderNotificationBody,
       });
-      if (lastScheduledDailyReminderAtRef.current !== dailyReminderAtMs) {
-        lastScheduledDailyReminderAtRef.current = dailyReminderAtMs;
-        farmAnalytics.trackNotificationScheduled({
-          kind: 'daily_bonus',
-          leadTimeMs: Math.max(0, dailyReminderAtMs - now),
-          context: analyticsContext(),
-        });
-      }
+      farmAnalytics.trackNotificationScheduled({
+        kind: 'daily_bonus',
+        leadTimeMs: Math.max(0, dailyReminderAtMs - now),
+        context: analyticsContext(),
+      });
     }
 
     // Crop of the day: a single nudge when the next daily window opens (UTC

@@ -949,6 +949,122 @@ describe('FarmGame UI flow', () => {
     });
   });
 
+  describe('notification 스케줄 가드 (#363)', () => {
+    // 익은 당근을 하나씩 수확하면 gameState(골드·플롯)가 바뀌어 알림 effect가 재실행된다.
+    // 이 churn 위에서, 스케줄 타깃이 안 바뀌면 OS 등록·이벤트가 재발화하지 않음을 검증한다.
+    // (성장 중 rice는 수확 대상이 아니므로 그 nextReadyAt은 고정으로 유지된다.)
+    const notificationEvents = (track: jest.Mock, kind: string) =>
+      track.mock.calls.filter(
+        ([name, params]) => name === 'notification_scheduled' && params?.notification_kind === kind
+      );
+
+    async function harvestRipePlots(screen: Awaited<ReturnType<typeof renderGame>>, plotIndexes: number[]) {
+      for (const plotIndex of plotIndexes) {
+        // 수확 사이 한 틱 진행 → now(=floor 시 readyAtMs) 이동. 회귀 코드라면 여기서 재발화.
+        await act(async () => {
+          jest.advanceTimersByTime(GAME_TICK_INTERVAL_MS);
+        });
+        await act(async () => {
+          fireEvent.press(screen.getByTestId(`plot-cell-${plotIndex}`));
+        });
+      }
+    }
+
+    test('nextReadyAt이 고정된 60초 floor 구간에서 gameState가 바뀌어도 harvest 스케줄·이벤트는 재발화하지 않는다', async () => {
+      const track = jest.fn();
+      const scheduleHarvestReady = jest.fn(async () => undefined);
+      const notifications: FarmGameNotifications = {
+        isSupported: true,
+        requestPermission: jest.fn(async () => true),
+        scheduleHarvestReady,
+        cancelHarvestReady: jest.fn(async () => undefined),
+        scheduleReminder: jest.fn(async () => undefined),
+        cancelReminder: jest.fn(async () => undefined),
+      };
+      const base = createInitialState();
+      const state: GameState = {
+        ...base,
+        onboardingCompleted: true,
+        gold: 1_000,
+        unlockedAreas: FARM_AREAS.map((area) => area.key),
+        plots: base.plots.map((plot, index) => {
+          if (index === 0) {
+            // 성장 중 rice(50s): nextReadyAt = NOW+50s로 60초 floor 구간의 고정 타깃.
+            return { ...plot, cropType: 'rice' as const, startTime: NOW, state: 1 as const };
+          }
+          if (index >= 1 && index <= 3) {
+            // 익은 당근: 수확으로 gameState를 churn시키는 소스(효과 재실행 유발). rice와 무관.
+            return { ...plot, cropType: 'carrot' as const, startTime: NOW - 10_000, state: 2 as const };
+          }
+          return plot;
+        }),
+      };
+      const screen = await renderGame(
+        state,
+        { analytics: createFarmAnalytics(track), notifications },
+        { harvestNotificationsEnabled: true, comebackRemindersEnabled: false }
+      );
+
+      await waitFor(() => expect(scheduleHarvestReady).toHaveBeenCalledTimes(1));
+      expect(notificationEvents(track, 'harvest')).toHaveLength(1);
+
+      await harvestRipePlots(screen, [1, 2, 3]);
+
+      // 고정 타깃(rice) + 가드 안 이동 → OS 재등록·이벤트 재발화 없음(회귀 시 수확마다 폭증).
+      expect(scheduleHarvestReady).toHaveBeenCalledTimes(1);
+      expect(notificationEvents(track, 'harvest')).toHaveLength(1);
+    });
+
+    test('daily_bonus OS 등록이 가드 안으로 이동해 gameState churn에도 1회만 호출된다(crop_of_the_day 회귀 없음)', async () => {
+      const track = jest.fn();
+      const scheduleReminder = jest.fn(async () => undefined);
+      const notifications: FarmGameNotifications = {
+        isSupported: true,
+        requestPermission: jest.fn(async () => true),
+        scheduleHarvestReady: jest.fn(async () => undefined),
+        cancelHarvestReady: jest.fn(async () => undefined),
+        scheduleReminder,
+        cancelReminder: jest.fn(async () => undefined),
+      };
+      const base = createInitialState();
+      const state: GameState = {
+        ...base,
+        onboardingCompleted: true,
+        gold: 1_000,
+        // 방금 수령: 리마인더 target(=lastClaimedAt+쿨다운)이 미래에 고정된다.
+        dailyBonusState: { lastClaimedAt: NOW - 1_000, streak: 1 },
+        plots: base.plots.map((plot, index) =>
+          index >= 0 && index <= 2
+            ? { ...plot, cropType: 'carrot' as const, startTime: NOW - 10_000, state: 2 as const }
+            : plot
+        ),
+      };
+      const screen = await renderGame(
+        state,
+        { analytics: createFarmAnalytics(track), notifications },
+        { harvestNotificationsEnabled: false, comebackRemindersEnabled: true }
+      );
+
+      const dailyCalls = () =>
+        (scheduleReminder as jest.Mock).mock.calls.filter((call) => call[0] === 'dailyBonus');
+      const cropCalls = () =>
+        (scheduleReminder as jest.Mock).mock.calls.filter((call) => call[0] === 'cropOfTheDay');
+
+      await waitFor(() => expect(dailyCalls()).toHaveLength(1));
+      expect(cropCalls()).toHaveLength(1);
+
+      // 익은 당근을 수확해 gameState를 여러 번 churn시킨다(comeback effect 재실행).
+      await harvestRipePlots(screen, [0, 1, 2]);
+
+      // daily_bonus OS 등록이 가드 안으로 이동 → churn에도 1회 유지(회귀 시 수확마다 폭증).
+      expect(dailyCalls()).toHaveLength(1);
+      expect(notificationEvents(track, 'daily_bonus')).toHaveLength(1);
+      // crop_of_the_day는 기존 올바른 패턴 그대로 → 회귀 없이 1회 유지.
+      expect(cropCalls()).toHaveLength(1);
+      expect(notificationEvents(track, 'crop_of_the_day')).toHaveLength(1);
+    });
+  });
+
   describe('seed-strip sort toggle (#192)', () => {
     const messages = getFarmMessages(DEFAULT_LOCALE);
     // Past onboarding so the seed strip is fully interactive (no coachmark gate).
@@ -5075,17 +5191,20 @@ describe('NextGoalBar', () => {
       const accept = await waitFor(() => screen.getByTestId('notification-prompt-accept'));
       await waitFor(() => expect(mockPersistence.writePersistedGameSettings).toHaveBeenCalled());
       mockPersistence.writePersistedGameSettings.mockClear();
-      await waitFor(() => expect(notifications.scheduleReminder).toHaveBeenCalled());
-      (notifications.scheduleReminder as jest.Mock).mockClear();
+      // comebackRemindersEnabled로 마운트되면 dailyBonus 리마인더가 한 번 예약된다.
+      // (#363: 타깃 변경 시에만 예약하므로 재렌더로 재예약되지 않는다.)
+      await waitFor(() =>
+        expect(notifications.scheduleReminder).toHaveBeenCalledWith(
+          'dailyBonus',
+          expect.objectContaining({ readyAtMs: expect.any(Number) })
+        )
+      );
       fireEvent.press(accept);
 
       await waitFor(() => expect(requestPermission).toHaveBeenCalledTimes(1));
       await waitFor(() => expect(screen.queryByTestId('notification-prompt-card')).toBeNull());
+      // 권한 거부는 설정을 덮어쓰지 않고, 이미 예약된 리마인더도 취소하지 않는다.
       expect(mockPersistence.writePersistedGameSettings).not.toHaveBeenCalled();
-      expect(notifications.scheduleReminder).toHaveBeenCalledWith(
-        'dailyBonus',
-        expect.objectContaining({ readyAtMs: expect.any(Number) })
-      );
       expect(notifications.cancelReminder).not.toHaveBeenCalled();
     });
 
