@@ -913,6 +913,10 @@ describe('FarmGame UI flow', () => {
 
       const strip = screen.getByTestId('animal-strip');
       expect(strip).toBeTruthy();
+      // AC-4 거주 뎁스: 스트립은 농장 장면 스크롤(farm-scroll) 안에 있고, 플롯 그리드
+      // 컨테이너(hit 영역) 밖의 형제로 렌더돼 플롯 탭을 덮지 않는다.
+      expect(within(screen.getByTestId('farm-scroll')).getByTestId('animal-strip')).toBeTruthy();
+      expect(within(screen.getByTestId('plot-grid-container')).queryByTestId('animal-strip')).toBeNull();
       // idle이므로 ready 강조 없음, 탭 라벨은 수확 준비 0.
       expect(screen.queryByTestId(`animal-strip-ready-${chicken.key}`)).toBeNull();
       expect(strip.props.accessibilityLabel).toBe(messages.animalStripAccessibilityLabel(0));
