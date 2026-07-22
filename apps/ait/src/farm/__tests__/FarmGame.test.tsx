@@ -23,8 +23,10 @@ import {
   PRODUCTION_RECIPES,
   REGION_ARCHETYPES,
   claimAllAchievements,
+  claimDailyBonus,
   createFarmAnalytics,
   createInitialState,
+  getRewardedGoldAmount,
   formatDuration,
   formatHourlyGold,
   formatMoney,
@@ -1428,6 +1430,23 @@ describe('FarmGame UI flow', () => {
         jest.advanceTimersByTime(GAME_TICK_INTERVAL_MS * 5);
       });
       expect(track.mock.calls.filter(([event]) => event === 'daily_bonus_claimed')).toHaveLength(1);
+    });
+
+    test('열람 즉시 추가 탭 없이 골드가 지급되고 dailyBonusState가 claimDailyBonus 결과와 정확히 일치한다 (#376 AC-1)', async () => {
+      const base = completedState();
+      // 컴포넌트와 동일한 인자(NOW·getRewardedGoldAmount)로 기대 수령 결과를 미리 계산한다.
+      const expected = claimDailyBonus(base.dailyBonusState, NOW, getRewardedGoldAmount(base));
+      if (expected == null) {
+        throw new Error('fixture는 NOW 시점에 수령 가능해야 한다');
+      }
+
+      const screen = await renderGame(base, {}, null, { preserveDailyBonus: true });
+      await waitFor(() => expect(screen.getByText(messages.sheetTitleDailyBonus)).toBeTruthy());
+
+      // 추가 탭(SheetAction 누름) 없이 자동 수령: 지속 상태의 dailyBonusState가
+      // claimDailyBonus 결과(newState)와 정확히 일치하고, 골드는 수령 전 + goldAwarded와 같다.
+      await waitFor(() => expect(getLatestPersistedState().dailyBonusState).toEqual(expected.newState));
+      expect(getLatestPersistedState().gold).toBe(base.gold + expected.goldAwarded);
     });
 
     test('수령 불가일(claimDailyBonus=null)엔 시트·지급·발화 없이 안전 처리된다 (#376 AC-4)', async () => {
