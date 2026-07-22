@@ -343,3 +343,86 @@ describe('progress-scaled rewards (#207)', () => {
     expect(claimed!.gold - migrated.gold).toBe(SLOTS[0]!.rewardGoldMin);
   });
 });
+
+describe('광고 미지원 시 watch_ad 제외 (#366)', () => {
+  const dayKey = getMissionDayKey(DAY_A);
+
+  test('adSupported 두 경로를 한 번에 커버한다: true면 watch_ad 포함, false면 제외', () => {
+    const withAd = getDailyMissions(dayKey, ALL_AREAS, undefined, true);
+    const withoutAd = getDailyMissions(dayKey, ALL_AREAS, undefined, false);
+    // true 경로: watch_ad 포함.
+    expect(withAd.some((m) => m.type === 'watch_ad')).toBe(true);
+    // false 경로: watch_ad 제외.
+    expect(withoutAd.some((m) => m.type === 'watch_ad')).toBe(false);
+  });
+
+  test('adSupported 기본값(true)은 기존 동작과 동일하다(회귀 없음)', () => {
+    const missions = getDailyMissions(dayKey, ALL_AREAS);
+    expect(missions).toEqual(getDailyMissions(dayKey, ALL_AREAS, undefined, true));
+    expect(missions).toHaveLength(SLOT_COUNT);
+    expect(missions.some((m) => m.type === 'watch_ad')).toBe(true);
+  });
+
+  test('adSupported=false면 watch_ad 슬롯이 제외되고 나머지는 그대로다', () => {
+    const withAd = getDailyMissions(dayKey, ALL_AREAS, undefined, true);
+    const withoutAd = getDailyMissions(dayKey, ALL_AREAS, undefined, false);
+    expect(withoutAd.some((m) => m.type === 'watch_ad')).toBe(false);
+    expect(withoutAd).toHaveLength(SLOT_COUNT - 1);
+    // 제외 외에는 슬롯/타깃/보상이 불변.
+    expect(withoutAd).toEqual(withAd.filter((m) => m.type !== 'watch_ad'));
+  });
+
+  test('adSupported=false 목록도 결정적이다(같은 dayKey·adSupported → 같은 목록)', () => {
+    expect(getDailyMissions(dayKey, ALL_AREAS, undefined, false)).toEqual(
+      getDailyMissions(dayKey, ALL_AREAS, undefined, false)
+    );
+  });
+
+  test('snapshot도 adSupported=false면 watch_ad를 제외한다', () => {
+    const snap = getDailyMissionsSnapshot(
+      createInitialDailyMissionState(),
+      DAY_A,
+      ALL_AREAS,
+      undefined,
+      false
+    );
+    expect(snap.missions.some((m) => m.type === 'watch_ad')).toBe(false);
+    expect(snap.missions).toHaveLength(SLOT_COUNT - 1);
+  });
+
+  test('광고 미지원 환경에서 남은 미션을 모두 완료·수령해 100% 완주가 가능하다', () => {
+    const shown = getDailyMissions(dayKey, ALL_AREAS, undefined, false);
+    expect(shown.every((m) => m.type !== 'watch_ad')).toBe(true);
+
+    // 표시되는 미션들의 진행도를 target까지 채운 상태를 구성한다.
+    const rolled = rolloverDailyMissions(createInitialDailyMissionState(), dayKey, ALL_AREAS);
+    const progress = [...rolled.progress];
+    for (const mission of shown) {
+      progress[mission.slot] = mission.target;
+    }
+    let gameState: GameState = { ...createInitialState(), dailyMissionState: { ...rolled, progress } };
+
+    // 표시되는 모든 슬롯을 수령 → 전부 성공(영구 미완 슬롯 없음).
+    for (const mission of shown) {
+      const next = claimMission(gameState, mission.slot, DAY_A, undefined, false);
+      expect(next).not.toBeNull();
+      gameState = next!;
+    }
+    const finalSnap = getDailyMissionsSnapshot(gameState.dailyMissionState, DAY_A, ALL_AREAS, undefined, false);
+    expect(finalSnap.missions.every((m) => m.claimed)).toBe(true);
+    expect(finalSnap.missions.some((m) => m.claimable)).toBe(false);
+  });
+
+  test('adSupported=false면 watch_ad 슬롯은 완료돼 있어도 수령할 수 없다(광고 지원 시엔 수령 가능)', () => {
+    const adSlot = getDailyMissions(dayKey, ALL_AREAS, undefined, true).find((m) => m.type === 'watch_ad')!;
+    const rolled = rolloverDailyMissions(createInitialDailyMissionState(), dayKey, ALL_AREAS);
+    const progress = [...rolled.progress];
+    progress[adSlot.slot] = adSlot.target;
+    const gameState: GameState = { ...createInitialState(), dailyMissionState: { ...rolled, progress } };
+
+    // 광고 미지원: watch_ad 슬롯이 목록에서 빠져 수령 불가.
+    expect(claimMission(gameState, adSlot.slot, DAY_A, undefined, false)).toBeNull();
+    // 광고 지원: 동일 상태에서 수령 가능(회귀 없음).
+    expect(claimMission(gameState, adSlot.slot, DAY_A, undefined, true)).not.toBeNull();
+  });
+});

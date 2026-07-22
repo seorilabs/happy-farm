@@ -2311,13 +2311,21 @@ function FarmGameBody({
   // be claimed. Recomputed on every state change; the date only flips at midnight.
   const missionClaimableCount = useMemo(
     () =>
-      getDailyMissionsSnapshot(gameState.dailyMissionState, Date.now(), gameState.unlockedAreas).missions.filter(
-        (mission) => mission.claimable
-      ).length +
-      getWeeklyMissionsSnapshot(gameState.weeklyMissionState, Date.now(), gameState.unlockedAreas).missions.filter(
-        (mission) => mission.claimable
-      ).length,
-    [gameState]
+      getDailyMissionsSnapshot(
+        gameState.dailyMissionState,
+        Date.now(),
+        gameState.unlockedAreas,
+        undefined,
+        rewardedAd.isAdSupported
+      ).missions.filter((mission) => mission.claimable).length +
+      getWeeklyMissionsSnapshot(
+        gameState.weeklyMissionState,
+        Date.now(),
+        gameState.unlockedAreas,
+        undefined,
+        rewardedAd.isAdSupported
+      ).missions.filter((mission) => mission.claimable).length,
+    [gameState, rewardedAd.isAdSupported]
   );
   const labActionableCount = useMemo(
     () =>
@@ -2779,7 +2787,7 @@ function FarmGameBody({
     setGameState((prev) => {
       const beforeGold = prev.gold;
       // 진행도 스케일 광고 보상을 주입해 시트 표시 금액과 동일한 스케일로 지급한다.
-      const next = claimMission(prev, slot, now, getRewardedGoldAmount(prev));
+      const next = claimMission(prev, slot, now, getRewardedGoldAmount(prev), rewardedAd.isAdSupported);
       if (next == null) {
         return prev;
       }
@@ -2800,7 +2808,7 @@ function FarmGameBody({
     setGameState((prev) => {
       const beforeGold = prev.gold;
       // 일일 미션 수령과 동일하게 진행도 스케일 광고 보상을 주입한다.
-      const next = claimWeeklyMission(prev, slot, now, getRewardedGoldAmount(prev));
+      const next = claimWeeklyMission(prev, slot, now, getRewardedGoldAmount(prev), rewardedAd.isAdSupported);
       if (next == null) {
         return prev;
       }
@@ -4695,6 +4703,7 @@ function FarmGameBody({
             locale={locale}
             messages={messages}
             now={Date.now()}
+            adSupported={rewardedAd.isAdSupported}
             onClaim={claimMissionReward}
             onClaimWeekly={claimWeeklyMissionReward}
           />

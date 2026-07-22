@@ -127,14 +127,24 @@ function resolveMissions(areaKeys: readonly (AreaKey | null)[], adRewardGold?: n
   }));
 }
 
+// 광고 미지원/무필 환경에서 watch_ad 주간 미션은 영구 미완이 되어 100% 완주를 봉쇄한다(#366).
+// 광고가 지원되지 않으면 표시·수령 목록에서 watch_ad 슬롯을 제외한다(일일 미션과 동일 정책).
+// 진행도 기록 경로는 건드리지 않는다(광고 미지원 환경에선 watch_ad 진행이 발생하지 않음).
+function isMissionAvailable(type: WeeklyMissionType, adSupported: boolean): boolean {
+  return adSupported || type !== 'watch_ad';
+}
+
 // 해당 주의 주간 미션 "미리보기"를 결정론적으로 반환한다(구역을 즉석 추첨). 같은
 // (weekKey, unlockedAreas, adRewardGold)면 항상 동일. UI 프리뷰/테스트용.
 export function getWeeklyMissions(
   weekKey: string,
   unlockedAreas?: readonly AreaKey[],
-  adRewardGold?: number
+  adRewardGold?: number,
+  adSupported = true
 ): WeeklyMission[] {
-  return resolveMissions(pickFeaturedAreas(weekKey, unlockedAreas), adRewardGold);
+  return resolveMissions(pickFeaturedAreas(weekKey, unlockedAreas), adRewardGold).filter((mission) =>
+    isMissionAvailable(mission.type, adSupported)
+  );
 }
 
 export function createInitialWeeklyMissionState(): WeeklyMissionState {
@@ -339,16 +349,19 @@ export function getWeeklyMissionsSnapshot(
   state: WeeklyMissionState,
   now = Date.now(),
   unlockedAreas?: readonly AreaKey[],
-  adRewardGold?: number
+  adRewardGold?: number,
+  adSupported = true
 ): WeeklyMissionsSnapshot {
   const weekKey = getMissionWeekKey(now);
   const rolled = rolloverWeeklyMissions(state, weekKey, unlockedAreas);
-  const missions = resolveMissions(rolled.areaKeys, adRewardGold).map((mission) => {
-    const progress = rolled.progress[mission.slot] ?? 0;
-    const completed = progress >= mission.target;
-    const claimed = rolled.claimedSlots.includes(mission.slot);
-    return { ...mission, progress, completed, claimed, claimable: completed && !claimed };
-  });
+  const missions = resolveMissions(rolled.areaKeys, adRewardGold)
+    .filter((mission) => isMissionAvailable(mission.type, adSupported))
+    .map((mission) => {
+      const progress = rolled.progress[mission.slot] ?? 0;
+      const completed = progress >= mission.target;
+      const claimed = rolled.claimedSlots.includes(mission.slot);
+      return { ...mission, progress, completed, claimed, claimable: completed && !claimed };
+    });
   return { state: rolled, weekKey, missions };
 }
 
@@ -357,9 +370,10 @@ export function canClaimWeeklyMission(
   state: WeeklyMissionState,
   slot: number,
   now = Date.now(),
-  unlockedAreas?: readonly AreaKey[]
+  unlockedAreas?: readonly AreaKey[],
+  adSupported = true
 ): boolean {
-  const snapshot = getWeeklyMissionsSnapshot(state, now, unlockedAreas);
+  const snapshot = getWeeklyMissionsSnapshot(state, now, unlockedAreas, undefined, adSupported);
   return snapshot.missions.some((mission) => mission.slot === slot && mission.claimable);
 }
 
@@ -370,9 +384,16 @@ export function claimWeeklyMission(
   gameState: GameState,
   slot: number,
   now = Date.now(),
-  adRewardGold?: number
+  adRewardGold?: number,
+  adSupported = true
 ): GameState | null {
-  const snapshot = getWeeklyMissionsSnapshot(gameState.weeklyMissionState, now, gameState.unlockedAreas, adRewardGold);
+  const snapshot = getWeeklyMissionsSnapshot(
+    gameState.weeklyMissionState,
+    now,
+    gameState.unlockedAreas,
+    adRewardGold,
+    adSupported
+  );
   const mission = snapshot.missions.find((candidate) => candidate.slot === slot);
   if (mission == null || !mission.claimable) {
     return null;

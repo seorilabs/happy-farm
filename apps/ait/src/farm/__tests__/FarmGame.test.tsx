@@ -1111,6 +1111,44 @@ describe('FarmGame UI flow', () => {
     });
   });
 
+  describe('미션 시트 광고 미지원 watch_ad 제외 (#366)', () => {
+    const messages = getFarmMessages(DEFAULT_LOCALE);
+
+    // 신규 nav/HUD 없이 기존 '오늘의 미션' 진입점으로 기존 미션 시트를 연다. adSupported는
+    // useRewardedAd의 isAdSupported로 결정된다(기본 false / createReadyRewardedAd true).
+    async function openMissionsSheet(adSupported: boolean) {
+      const props = adSupported ? { useRewardedAd: () => createReadyRewardedAd() } : {};
+      const screen = await renderGame({ ...createInitialState(), onboardingCompleted: true }, props);
+      await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+      fireEvent.press(screen.getByLabelText(messages.missionsButtonAccessibilityLabel));
+      await waitFor(() => expect(screen.getByText(messages.missionsWeeklyTitle)).toBeTruthy());
+      return screen;
+    }
+
+    // AC-6: 제외가 기존 미션 시트 내부에서 일어나며 신규 nav/HUD를 추가하지 않는다.
+    test('광고 미지원 watch_ad 제외는 기존 미션 시트 안에서 일어난다(신규 nav/HUD 없음)', async () => {
+      const screen = await openMissionsSheet(false);
+      // 기존 미션 시트(주간 타이틀)가 열려 있고, 그 안에서 일일·주간 watch_ad가 빠진다.
+      expect(screen.getByText(messages.missionsWeeklyTitle)).toBeTruthy();
+      expect(screen.queryByText(messages.missionWatchAdLabel(1))).toBeNull();
+      expect(screen.queryByText(messages.weeklyMissionWatchAdLabel(5))).toBeNull();
+    });
+
+    // AC-5: 제외 방식이라 신규 문구가 없고, 남은 미션은 기존 라벨로 렌더된다.
+    test('광고 미지원 미션 시트는 신규 문구 없이 기존 라벨로 렌더된다', async () => {
+      const screen = await openMissionsSheet(false);
+      // 주간 수확(target 150 고정) 미션이 기존 라벨로 표시된다(신규 i18n 키 없이).
+      expect(screen.getByText(messages.weeklyMissionHarvestLabel(150))).toBeTruthy();
+      expect(screen.queryByText(messages.missionWatchAdLabel(1))).toBeNull();
+    });
+
+    test('광고 지원 시 watch_ad 미션이 표시된다(회귀)', async () => {
+      const screen = await openMissionsSheet(true);
+      expect(screen.getByText(messages.missionWatchAdLabel(1))).toBeTruthy();
+      expect(screen.getByText(messages.weeklyMissionWatchAdLabel(5))).toBeTruthy();
+    });
+  });
+
   describe('seed-strip sort toggle (#192)', () => {
     const messages = getFarmMessages(DEFAULT_LOCALE);
     // Past onboarding so the seed strip is fully interactive (no coachmark gate).
