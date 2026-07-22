@@ -1114,31 +1114,37 @@ describe('FarmGame UI flow', () => {
   describe('미션 시트 광고 미지원 watch_ad 제외 (#366)', () => {
     const messages = getFarmMessages(DEFAULT_LOCALE);
 
-    test('광고 미지원 시 기존 미션 시트에서 watch_ad가 제외되고 나머지는 기존 라벨로 표시된다', async () => {
-      // 기본 useRewardedAd는 isAdSupported=false(광고 미지원). 신규 nav/HUD 없이 기존
-      // '오늘의 미션' 진입점으로 기존 미션 시트를 연다.
-      const screen = await renderGame({ ...createInitialState(), onboardingCompleted: true });
+    // 신규 nav/HUD 없이 기존 '오늘의 미션' 진입점으로 기존 미션 시트를 연다. adSupported는
+    // useRewardedAd의 isAdSupported로 결정된다(기본 false / createReadyRewardedAd true).
+    async function openMissionsSheet(adSupported: boolean) {
+      const props = adSupported ? { useRewardedAd: () => createReadyRewardedAd() } : {};
+      const screen = await renderGame({ ...createInitialState(), onboardingCompleted: true }, props);
       await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
       fireEvent.press(screen.getByLabelText(messages.missionsButtonAccessibilityLabel));
-
-      // 기존 미션 시트가 열린다(주간 타이틀로 확인).
       await waitFor(() => expect(screen.getByText(messages.missionsWeeklyTitle)).toBeTruthy());
-      // 광고 미지원: 일일·주간 watch_ad 미션이 목록에서 빠진다.
+      return screen;
+    }
+
+    // AC-6: 제외가 기존 미션 시트 내부에서 일어나며 신규 nav/HUD를 추가하지 않는다.
+    test('광고 미지원 watch_ad 제외는 기존 미션 시트 안에서 일어난다(신규 nav/HUD 없음)', async () => {
+      const screen = await openMissionsSheet(false);
+      // 기존 미션 시트(주간 타이틀)가 열려 있고, 그 안에서 일일·주간 watch_ad가 빠진다.
+      expect(screen.getByText(messages.missionsWeeklyTitle)).toBeTruthy();
       expect(screen.queryByText(messages.missionWatchAdLabel(1))).toBeNull();
       expect(screen.queryByText(messages.weeklyMissionWatchAdLabel(5))).toBeNull();
-      // 나머지 미션은 기존 라벨로 정상 표시된다(신규 i18n 문구 없이 렌더 — 주간 수확 target 150 고정).
+    });
+
+    // AC-5: 제외 방식이라 신규 문구가 없고, 남은 미션은 기존 라벨로 렌더된다.
+    test('광고 미지원 미션 시트는 신규 문구 없이 기존 라벨로 렌더된다', async () => {
+      const screen = await openMissionsSheet(false);
+      // 주간 수확(target 150 고정) 미션이 기존 라벨로 표시된다(신규 i18n 키 없이).
       expect(screen.getByText(messages.weeklyMissionHarvestLabel(150))).toBeTruthy();
+      expect(screen.queryByText(messages.missionWatchAdLabel(1))).toBeNull();
     });
 
     test('광고 지원 시 watch_ad 미션이 표시된다(회귀)', async () => {
-      const screen = await renderGame(
-        { ...createInitialState(), onboardingCompleted: true },
-        { useRewardedAd: () => createReadyRewardedAd() }
-      );
-      await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
-      fireEvent.press(screen.getByLabelText(messages.missionsButtonAccessibilityLabel));
-
-      await waitFor(() => expect(screen.getByText(messages.missionWatchAdLabel(1))).toBeTruthy());
+      const screen = await openMissionsSheet(true);
+      expect(screen.getByText(messages.missionWatchAdLabel(1))).toBeTruthy();
       expect(screen.getByText(messages.weeklyMissionWatchAdLabel(5))).toBeTruthy();
     });
   });

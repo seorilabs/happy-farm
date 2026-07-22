@@ -347,6 +347,15 @@ describe('progress-scaled rewards (#207)', () => {
 describe('광고 미지원 시 watch_ad 제외 (#366)', () => {
   const dayKey = getMissionDayKey(DAY_A);
 
+  test('adSupported 두 경로를 한 번에 커버한다: true면 watch_ad 포함, false면 제외', () => {
+    const withAd = getDailyMissions(dayKey, ALL_AREAS, undefined, true);
+    const withoutAd = getDailyMissions(dayKey, ALL_AREAS, undefined, false);
+    // true 경로: watch_ad 포함.
+    expect(withAd.some((m) => m.type === 'watch_ad')).toBe(true);
+    // false 경로: watch_ad 제외.
+    expect(withoutAd.some((m) => m.type === 'watch_ad')).toBe(false);
+  });
+
   test('adSupported 기본값(true)은 기존 동작과 동일하다(회귀 없음)', () => {
     const missions = getDailyMissions(dayKey, ALL_AREAS);
     expect(missions).toEqual(getDailyMissions(dayKey, ALL_AREAS, undefined, true));
