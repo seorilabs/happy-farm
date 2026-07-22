@@ -1111,6 +1111,38 @@ describe('FarmGame UI flow', () => {
     });
   });
 
+  describe('미션 시트 광고 미지원 watch_ad 제외 (#366)', () => {
+    const messages = getFarmMessages(DEFAULT_LOCALE);
+
+    test('광고 미지원 시 기존 미션 시트에서 watch_ad가 제외되고 나머지는 기존 라벨로 표시된다', async () => {
+      // 기본 useRewardedAd는 isAdSupported=false(광고 미지원). 신규 nav/HUD 없이 기존
+      // '오늘의 미션' 진입점으로 기존 미션 시트를 연다.
+      const screen = await renderGame({ ...createInitialState(), onboardingCompleted: true });
+      await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+      fireEvent.press(screen.getByLabelText(messages.missionsButtonAccessibilityLabel));
+
+      // 기존 미션 시트가 열린다(주간 타이틀로 확인).
+      await waitFor(() => expect(screen.getByText(messages.missionsWeeklyTitle)).toBeTruthy());
+      // 광고 미지원: 일일·주간 watch_ad 미션이 목록에서 빠진다.
+      expect(screen.queryByText(messages.missionWatchAdLabel(1))).toBeNull();
+      expect(screen.queryByText(messages.weeklyMissionWatchAdLabel(5))).toBeNull();
+      // 나머지 미션은 기존 라벨로 정상 표시된다(신규 i18n 문구 없이 렌더 — 주간 수확 target 150 고정).
+      expect(screen.getByText(messages.weeklyMissionHarvestLabel(150))).toBeTruthy();
+    });
+
+    test('광고 지원 시 watch_ad 미션이 표시된다(회귀)', async () => {
+      const screen = await renderGame(
+        { ...createInitialState(), onboardingCompleted: true },
+        { useRewardedAd: () => createReadyRewardedAd() }
+      );
+      await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+      fireEvent.press(screen.getByLabelText(messages.missionsButtonAccessibilityLabel));
+
+      await waitFor(() => expect(screen.getByText(messages.missionWatchAdLabel(1))).toBeTruthy());
+      expect(screen.getByText(messages.weeklyMissionWatchAdLabel(5))).toBeTruthy();
+    });
+  });
+
   describe('seed-strip sort toggle (#192)', () => {
     const messages = getFarmMessages(DEFAULT_LOCALE);
     // Past onboarding so the seed strip is fully interactive (no coachmark gate).
