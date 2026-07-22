@@ -1063,6 +1063,52 @@ describe('FarmGame UI flow', () => {
       expect(cropCalls()).toHaveLength(1);
       expect(notificationEvents(track, 'crop_of_the_day')).toHaveLength(1);
     });
+
+    test('게임 틱 시뮬레이션: harvest 스케줄 호출 횟수가 실제 nextReadyAt 타깃 수를 따른다(고정 1 → 더 이른 작물 심으면 2)', async () => {
+      const track = jest.fn();
+      const scheduleHarvestReady = jest.fn(async () => undefined);
+      const notifications: FarmGameNotifications = {
+        isSupported: true,
+        requestPermission: jest.fn(async () => true),
+        scheduleHarvestReady,
+        cancelHarvestReady: jest.fn(async () => undefined),
+        scheduleReminder: jest.fn(async () => undefined),
+        cancelReminder: jest.fn(async () => undefined),
+      };
+      const base = createInitialState();
+      const state: GameState = {
+        ...base,
+        onboardingCompleted: true,
+        gold: 1_000,
+        unlockedAreas: FARM_AREAS.map((area) => area.key),
+        // plot 0만 성장 중 rice(50s) — 고정 타깃. 나머지는 빈 밭(심기 가능).
+        plots: base.plots.map((plot, index) =>
+          index === 0 ? { ...plot, cropType: 'rice' as const, startTime: NOW, state: 1 as const } : plot
+        ),
+      };
+      const screen = await renderGame(
+        state,
+        { analytics: createFarmAnalytics(track), notifications },
+        { harvestNotificationsEnabled: true, comebackRemindersEnabled: false }
+      );
+
+      await waitFor(() => expect(scheduleHarvestReady).toHaveBeenCalledTimes(1));
+
+      // 게임 틱 시뮬레이션: 타깃(rice)이 안 바뀌면 250ms 틱을 여러 번 진행해도 1회 유지.
+      for (let i = 0; i < 10; i += 1) {
+        await act(async () => {
+          jest.advanceTimersByTime(GAME_TICK_INTERVAL_MS);
+        });
+      }
+      expect(scheduleHarvestReady).toHaveBeenCalledTimes(1);
+
+      // 더 이른 작물(당근 2s)을 빈 밭에 심어 nextReadyAt을 실제로 바꾸면 정확히 1회 더 발생.
+      fireEvent.press(screen.getByText('당근'));
+      await act(async () => {
+        fireEvent.press(screen.getByTestId('plot-cell-1'));
+      });
+      await waitFor(() => expect(scheduleHarvestReady).toHaveBeenCalledTimes(2));
+    });
   });
 
   describe('seed-strip sort toggle (#192)', () => {
