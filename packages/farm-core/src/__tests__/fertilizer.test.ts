@@ -7,7 +7,9 @@ import {
   FERTILIZER_COST_MULTIPLIER,
   FERTILIZER_MIN_COST,
   applyFertilizer,
+  applyFertilizerToAllGrowing,
   getFertilizerCost,
+  previewFertilizeAll,
 } from '../fertilizer';
 import type { CropKey, GameState, PlotState } from '../types';
 
@@ -27,6 +29,16 @@ function withGrowingPlot(
     plot.id === id ? { ...plot, cropType: cropKey, startTime, state: 1 as PlotState } : plot
   );
   return { ...state, plots };
+}
+
+// 여러 밭을 한 번에 성장 중(state 1)으로 만든다. 일괄 비료 테스트용.
+function withGrowingPlots(
+  state: GameState,
+  ids: number[],
+  cropKey: CropKey,
+  startTime: number
+): GameState {
+  return ids.reduce((next, id) => withGrowingPlot(next, id, cropKey, startTime), state);
 }
 
 // The net gold the crop would earn over the plot's remaining (wall-clock) grow
@@ -210,5 +222,186 @@ describe('applyFertilizer', () => {
     // 않음). 유일한 차이는 비료의 골드 차감뿐이다.
     expect(fertResult.state.plots[0]).toEqual(adResult.state.plots[0]);
     expect(fertResult.state.plots[0]!.state).toBe(2);
+  });
+});
+
+describe('applyFertilizerToAllGrowing', () => {
+  // 개별 getFertilizerCost의 합(원본 상태 기준). 각 밭 비용은 다른 밭 완료와 무관하므로
+  // 일괄 적용 총액이 이 합과 정확히 같아야 "순 진행 이득 0" 불변식이 밭별로 보존된다.
+  function sumIndividualCost(state: GameState, ids: number[], now: number): number {
+    return ids.reduce((sum, id) => {
+      const plot = state.plots.find((candidate) => candidate.id === id)!;
+      return sum + getFertilizerCost(state, plot, now);
+    }, 0);
+  }
+
+  test('fertilizes every growing plot within budget and returns a summary', () => {
+    const growingIds = [0, 1, 2];
+    const state = withGrowingPlots(
+      { ...createInitialState(), gold: 10_000_000 },
+      growingIds,
+      STARTER_CROP,
+      NOW
+    );
+    const expectedTotal = sumIndividualCost(state, growingIds, NOW);
+
+    const result = applyFertilizerToAllGrowing(state, NOW);
+
+    expect(result.appliedCount).toBe(growingIds.length);
+    expect(result.appliedPlotIds).toEqual(growingIds);
+    expect(result.totalCost).toBe(expectedTotal);
+    expect(result.state.gold).toBe(10_000_000 - expectedTotal);
+    for (const id of growingIds) {
+      expect(result.state.plots.find((plot) => plot.id === id)!.state).toBe(2);
+    }
+    // 순수: 입력 상태는 불변.
+    expect(state.gold).toBe(10_000_000);
+    for (const id of growingIds) {
+      expect(state.plots.find((plot) => plot.id === id)!.state).toBe(1);
+    }
+  });
+
+  // 순 진행 이득 0 불변식: 일괄 적용 총액 == 밭별 개별 비용의 합.
+  test('net-progress-zero: total charge equals the sum of individual getFertilizerCost', () => {
+    const growingIds = [0, 1, 2, 3];
+    const state = withGrowingPlots(
+      { ...createInitialState(), gold: 1e12 },
+      growingIds,
+      STARTER_CROP,
+      NOW
+    );
+    const perPlot = sumIndividualCost(state, growingIds, NOW);
+
+    const result = applyFertilizerToAllGrowing(state, NOW);
+
+    expect(result.appliedCount).toBe(growingIds.length);
+    expect(result.totalCost).toBe(perPlot);
+    // 일괄 적용이 밭을 하나씩 적용한 것과 골드/총액이 동일함을 교차 검증한다.
+    let sequential = state;
+    let sequentialTotal = 0;
+    for (const id of growingIds) {
+      const step = applyFertilizer(sequential, id, NOW);
+      sequential = step.state;
+      sequentialTotal += step.cost;
+    }
+    expect(result.totalCost).toBe(sequentialTotal);
+    expect(result.state.gold).toBe(sequential.gold);
+  });
+
+  test('partial application within budget leaves over-budget plots unapplied', () => {
+    const growingIds = [0, 1, 2];
+    const rich = withGrowingPlots(
+      { ...createInitialState(), gold: 1e12 },
+      growingIds,
+      STARTER_CROP,
+      NOW
+    );
+    // 동일 작물이므로 밭별 비용이 같다. 정확히 2칸만 감당하도록 골드를 맞춘다.
+    const unitCost = getFertilizerCost(rich, rich.plots.find((p) => p.id === 0)!, NOW);
+    const budget = unitCost * 2 + (unitCost - 1);
+    const state = { ...rich, gold: budget };
+
+    const result = applyFertilizerToAllGrowing(state, NOW);
+
+    expect(result.appliedCount).toBe(2);
+    expect(result.appliedPlotIds).toEqual([0, 1]);
+    expect(result.totalCost).toBe(unitCost * 2);
+    expect(result.state.gold).toBe(budget - unitCost * 2);
+    // 예산을 넘긴 마지막 밭은 여전히 성장 중(state 1)으로 남는다.
+    expect(result.state.plots.find((plot) => plot.id === 2)!.state).toBe(1);
+    expect(result.state.plots.find((plot) => plot.id === 0)!.state).toBe(2);
+  });
+
+  test('no-op returns the original state reference when no plot is growing', () => {
+    const base = { ...createInitialState(), gold: 1_000_000 };
+    const result = applyFertilizerToAllGrowing(base, NOW);
+    expect(result.appliedCount).toBe(0);
+    expect(result.totalCost).toBe(0);
+    expect(result.appliedPlotIds).toEqual([]);
+    expect(result.state).toBe(base);
+  });
+
+  test('no-op returns the original reference when gold cannot afford any plot', () => {
+    const rich = withGrowingPlots(
+      { ...createInitialState(), gold: 1e12 },
+      [0, 1],
+      STARTER_CROP,
+      NOW
+    );
+    const unitCost = getFertilizerCost(rich, rich.plots.find((p) => p.id === 0)!, NOW);
+    const poor = { ...rich, gold: unitCost - 1 };
+
+    const result = applyFertilizerToAllGrowing(poor, NOW);
+    expect(result.appliedCount).toBe(0);
+    expect(result.state).toBe(poor);
+    // 모든 성장 밭이 그대로 성장 중이다.
+    expect(result.state.plots.find((plot) => plot.id === 0)!.state).toBe(1);
+    expect(result.state.plots.find((plot) => plot.id === 1)!.state).toBe(1);
+  });
+
+  test('ignores non-growing plots (empty/ripe) and fertilizes only growing ones', () => {
+    const growing = withGrowingPlots(
+      { ...createInitialState(), gold: 1e12 },
+      [0, 2],
+      STARTER_CROP,
+      NOW
+    );
+    // 밭 1을 익은 상태(state 2)로 둔다 — 대상에서 제외돼야 한다.
+    const state: GameState = {
+      ...growing,
+      plots: growing.plots.map((plot) =>
+        plot.id === 1 ? { ...plot, cropType: STARTER_CROP, startTime: NOW, state: 2 as PlotState } : plot
+      ),
+    };
+
+    const result = applyFertilizerToAllGrowing(state, NOW);
+
+    expect(result.appliedPlotIds).toEqual([0, 2]);
+    expect(result.state.plots.find((plot) => plot.id === 1)!.state).toBe(2);
+  });
+});
+
+describe('previewFertilizeAll', () => {
+  test('agrees with applyFertilizerToAllGrowing on count and cost (full budget)', () => {
+    const state = withGrowingPlots(
+      { ...createInitialState(), gold: 1e12 },
+      [0, 1, 2],
+      STARTER_CROP,
+      NOW
+    );
+    const preview = previewFertilizeAll(state, NOW);
+    const applied = applyFertilizerToAllGrowing(state, NOW);
+
+    expect(preview.growingCount).toBe(3);
+    expect(preview.affordableCount).toBe(applied.appliedCount);
+    expect(preview.totalCost).toBe(applied.totalCost);
+  });
+
+  test('affordableCount respects budget while growingCount ignores it', () => {
+    const rich = withGrowingPlots(
+      { ...createInitialState(), gold: 1e12 },
+      [0, 1, 2],
+      STARTER_CROP,
+      NOW
+    );
+    const unitCost = getFertilizerCost(rich, rich.plots.find((p) => p.id === 0)!, NOW);
+    const state = { ...rich, gold: unitCost * 2 };
+
+    const preview = previewFertilizeAll(state, NOW);
+    const applied = applyFertilizerToAllGrowing(state, NOW);
+
+    expect(preview.growingCount).toBe(3);
+    expect(preview.affordableCount).toBe(2);
+    expect(preview.totalCost).toBe(unitCost * 2);
+    // 부분 예산에서도 preview와 apply가 정확히 일치한다.
+    expect(preview.affordableCount).toBe(applied.appliedCount);
+    expect(preview.totalCost).toBe(applied.totalCost);
+  });
+
+  test('returns zero counts when nothing is growing', () => {
+    const preview = previewFertilizeAll({ ...createInitialState(), gold: 1_000_000 }, NOW);
+    expect(preview.growingCount).toBe(0);
+    expect(preview.affordableCount).toBe(0);
+    expect(preview.totalCost).toBe(0);
   });
 });

@@ -96,3 +96,88 @@ export function applyFertilizer(gameState: GameState, plotId: number, now = Date
     cost,
   };
 }
+
+export type FertilizeAllPreview = {
+  // 성장 중이면서 비료 대상(cost>0)인 밭 수(예산 무관).
+  growingCount: number;
+  // 현재 골드로 실제 적용될 밭 수. 원본 밭 배열 순서로 결정적으로 순회하며, 남은
+  // 골드가 그 밭 비용을 감당하지 못하면 건너뛰고 다음 밭을 계속 시도한다(부분 적용).
+  affordableCount: number;
+  // affordableCount개 밭에 실제 청구될 총 골드(적용 대상 밭 비용의 합).
+  totalCost: number;
+};
+
+// 일괄 비료의 미리보기(순수). 상태를 만들지 않고 UI 노출 게이트/버튼 라벨용
+// 집계(적용 가능 수·총 비용)만 결정적으로 계산한다. applyFertilizerToAllGrowing과
+// "동일한 밭 순회·동일한 예산 그리디"를 공유하므로 두 함수의 수/비용은 항상 일치한다
+// (fertilizer.test.ts가 이 일치를 못박는다).
+export function previewFertilizeAll(gameState: GameState, now: number = Date.now()): FertilizeAllPreview {
+  const safeNow = Number.isFinite(now) ? now : Date.now();
+  let growingCount = 0;
+  let affordableCount = 0;
+  let totalCost = 0;
+  let remainingGold = gameState.gold;
+  for (const plot of gameState.plots) {
+    if (plot.state !== 1) {
+      continue;
+    }
+    const cost = getFertilizerCost(gameState, plot, safeNow);
+    if (cost <= 0) {
+      continue;
+    }
+    growingCount += 1;
+    if (remainingGold >= cost) {
+      remainingGold -= cost;
+      totalCost += cost;
+      affordableCount += 1;
+    }
+  }
+  return { growingCount, affordableCount, totalCost };
+}
+
+export type FertilizeAllResult = {
+  state: GameState;
+  // 실제 비료가 적용되어 성장이 완료된 밭의 id들(원본 순서).
+  appliedPlotIds: number[];
+  appliedCount: number;
+  // 적용된 밭에서 차감된 골드의 합. 각 밭 비용은 개별 getFertilizerCost와 동일하다.
+  totalCost: number;
+};
+
+// 성장 중인 모든 밭에 비료를 일괄 적용한다(순수·결정적). 원본 밭 배열 순서로 단일-밭
+// 전이(applyFertilizer)를 순차 적용해 각 밭의 완료 불변식·가격 정책을 그대로 보존하면서
+// 배치 UI 피드백용 요약을 한 번에 돌려준다(collectAllReadyProduce와 동일한 시퀀싱 패턴).
+// 골드 한도 내에서만 적용하고 예산을 넘는 밭은 미적용으로 남긴다(부분 적용). 적용할 밭이
+// 없거나(성장 중 0) 아무 밭도 감당하지 못하면 원본 상태 참조를 그대로 반환한다(no-op).
+export function applyFertilizerToAllGrowing(
+  gameState: GameState,
+  now: number = Date.now()
+): FertilizeAllResult {
+  const safeNow = Number.isFinite(now) ? now : Date.now();
+  let state = gameState;
+  const appliedPlotIds: number[] = [];
+  let totalCost = 0;
+
+  for (const plot of gameState.plots) {
+    // 원본 스냅샷 순서로 순회한다. 각 밭 비용은 다른 밭의 완료와 무관하므로(밭별 남은
+    // 성장·글로벌 모디파이어에만 의존) 순서로 총액이 달라지지 않는다.
+    if (plot.state !== 1) {
+      continue;
+    }
+    const result = applyFertilizer(state, plot.id, safeNow);
+    if (!result.applied) {
+      // 골드 부족(cost>0)·대상 아님(cost 0) 모두 미적용으로 남기고 다음 밭을 시도한다.
+      continue;
+    }
+    totalCost += result.cost;
+    state = result.state;
+    appliedPlotIds.push(plot.id);
+  }
+
+  return {
+    state,
+    appliedPlotIds,
+    appliedCount: appliedPlotIds.length,
+    totalCost,
+  };
+}
