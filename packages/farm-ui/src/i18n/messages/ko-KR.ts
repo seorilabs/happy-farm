@@ -417,6 +417,7 @@ export const koFarmMessages = {
   firstHarvestTitle: '첫 수확 완료! 🎉',
   firstHarvestSubtitle: '농부의 길이 시작됐어요!',
   dailyBonusClaimAction: (amount: string) => `+${amount}G 받기`,
+  dailyBonusConfirmAction: '받았어요',
   cropOfTheDayLabel: '오늘의 작물',
   cropOfTheDayDesc: (cropName: string, multiplier: number) => `${cropName} · ×${multiplier} 판매 보너스`,
   weeklyEventLabel: '주말 작물 축제',

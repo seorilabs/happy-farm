@@ -398,6 +398,7 @@ export const zhHansFarmMessages: FarmMessages = {
   firstHarvestTitle: '首次收获！🎉',
   firstHarvestSubtitle: '你的农夫之路开始啦！',
   dailyBonusClaimAction: (amount) => `领取 +${amount}G`,
+  dailyBonusConfirmAction: '知道了',
   cropOfTheDayLabel: '今日作物',
   cropOfTheDayDesc: (cropName, multiplier) => `${cropName} · ×${multiplier} 销售加成`,
   weeklyEventLabel: '周末作物庆典',

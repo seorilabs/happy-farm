@@ -232,18 +232,29 @@ async function renderGame(
   savedState: GameState | null,
   props: Partial<React.ComponentProps<typeof FarmGame>> = {},
   savedSettings: unknown = null,
-  options: { preserveOnboarding?: boolean } = {}
+  options: { preserveOnboarding?: boolean; preserveDailyBonus?: boolean } = {}
 ) {
   const state = savedState ?? createInitialState();
-  mockPersistence.readPersistedGameState.mockResolvedValueOnce(
-    options.preserveOnboarding
-      ? state
-      : {
-          ...state,
-          onboardingCompleted: true,
-          onboardingStep: null,
-        }
-  );
+  const withOnboarding = options.preserveOnboarding
+    ? state
+    : {
+        ...state,
+        onboardingCompleted: true,
+        onboardingStep: null,
+      };
+  // #376 데일리 보너스는 열람(auto_popup 포함) 즉시 자동 수령되므로, 그냥 두면 거의
+  // 모든 테스트가 마운트 시 auto_popup으로 보너스를 받아 골드 기준선이 흔들린다.
+  // 데일리 보너스 플로우 자체를 검증하는 테스트만 preserveDailyBonus로 옵트인하고,
+  // 그 외에는 오늘 이미 수령한 상태로 시작해 auto_popup·골드 변화를 배제한다.
+  const normalizedState = options.preserveDailyBonus
+    ? withOnboarding
+    : {
+        ...withOnboarding,
+        // 현재 클록(가짜 타이머면 NOW, 실제 타이머면 real time) 기준으로 방금 수령한
+        // 상태를 만들어, 타이머 설정과 무관하게 auto_popup이 뜨지 않게 한다.
+        dailyBonusState: { lastClaimedAt: Date.now(), streak: withOnboarding.dailyBonusState?.streak ?? 0 },
+      };
+  mockPersistence.readPersistedGameState.mockResolvedValueOnce(normalizedState);
   mockPersistence.readPersistedGameSettings.mockResolvedValueOnce(savedSettings);
 
   const view = render(<FarmGame persistence={mockPersistence} {...props} />);
@@ -1231,6 +1242,23 @@ describe('FarmGame UI flow', () => {
     // 온보딩 코치마크 게이트 없이 navRow가 온전히 상호작용되도록 완료 상태로 시작.
     const completedState = (): GameState => ({ ...createInitialState(), onboardingCompleted: true });
 
+    // #376 데일리 보너스는 열람 즉시 auto_popup으로 자동 수령되므로, 더보기 메뉴에
+    // 진입점이 남아 있으려면 복귀 recap이 auto_popup을 억제한 상태여야 한다. 오프라인
+    // 체인 수익으로 recap을 띄우고 닫아, 데일리 보너스를 미수령·가용 상태로 유지한 채
+    // 메뉴 구조를 검증한다.
+    const renderMoreMenuWithDailyBonus = async () => {
+      mockPersistence.readLastSeenAt.mockResolvedValueOnce(NOW - 2 * 60 * 60 * 1000);
+      const state: GameState = {
+        ...completedState(),
+        chainFarms: [{ id: 1, archetype: 'plains', goldPerHour: 3600, lastCollectedAt: NOW - 2 * 60 * 60 * 1000 }],
+      };
+      const screen = await renderGame(state, {}, null, { preserveDailyBonus: true });
+      await waitFor(() => expect(screen.getByText('다시 오셨네요!')).toBeTruthy());
+      fireEvent.press(screen.getByLabelText(messages.sheetCloseAccessibilityLabel));
+      await waitFor(() => expect(screen.queryByText('다시 오셨네요!')).toBeNull());
+      return screen;
+    };
+
     test('상시 navRow는 상점·미션·더보기만 노출하고 나머지는 더보기 뒤로 숨긴다', async () => {
       const screen = await renderGame(completedState());
       await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
@@ -1250,8 +1278,7 @@ describe('FarmGame UI flow', () => {
     });
 
     test('더보기 시트에서 출석 보너스·룰렛·도감·연구소·개척·업적에 모두 도달할 수 있다', async () => {
-      const screen = await renderGame(completedState());
-      await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+      const screen = await renderMoreMenuWithDailyBonus();
 
       fireEvent.press(screen.getByTestId('more-nav-button'));
 
@@ -1270,9 +1297,8 @@ describe('FarmGame UI flow', () => {
     });
 
     test('묶인 항목의 배지가 더보기 버튼에 롤업 합산으로 노출되고 항목별로도 유지된다', async () => {
-      // 신규 완료 상태에선 출석 보너스와 무료 룰렛이 준비돼 롤업 배지 = 2다.
-      const screen = await renderGame(completedState());
-      await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+      // 완료 상태에서 출석 보너스와 무료 룰렛이 준비돼 롤업 배지 = 2다.
+      const screen = await renderMoreMenuWithDailyBonus();
 
       const moreButton = screen.getByTestId('more-nav-button');
       expect(within(moreButton).getByText('2')).toBeTruthy();
@@ -1286,8 +1312,7 @@ describe('FarmGame UI flow', () => {
     });
 
     test('더보기 시트가 성격별 섹션 헤더로 그룹화되고 8개 진입점이 유지된다 (#270, #294)', async () => {
-      const screen = await renderGame(completedState());
-      await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+      const screen = await renderMoreMenuWithDailyBonus();
 
       fireEvent.press(screen.getByTestId('more-nav-button'));
 
@@ -1313,51 +1338,65 @@ describe('FarmGame UI flow', () => {
       expect(screen.getByText(messages.sheetTitleWorkshop)).toBeTruthy();
     });
 
-    test('닫은 자동 보너스를 더보기에서 다시 열고 source·배지를 수령 후 정리한다 (#294)', async () => {
+    test('auto_popup 열람 즉시 자동 수령되고 배지가 정리된다 (#294/#376)', async () => {
       const track = jest.fn();
-      const screen = await renderGame(completedState(), { analytics: createFarmAnalytics(track) });
+      const screen = await renderGame(completedState(), { analytics: createFarmAnalytics(track) }, null, {
+        preserveDailyBonus: true,
+      });
 
       await waitFor(() => expect(screen.getByText(messages.sheetTitleDailyBonus)).toBeTruthy());
+      // #376 auto_popup 열람 즉시 자동 수령: opened·claimed(source auto_popup)가 각각 1회.
       expect(
         track.mock.calls.filter(([event, params]) =>
           event === 'daily_bonus_opened' && params?.source === 'auto_popup'
         )
       ).toHaveLength(1);
+      await waitFor(() =>
+        expect(
+          track.mock.calls.filter(([event, params]) =>
+            event === 'daily_bonus_claimed' && params?.source === 'auto_popup'
+          )
+        ).toHaveLength(1)
+      );
 
-      // Tick/re-render while the sheet remains open must not duplicate an impression.
+      // 시트는 "수령 완료" 표시 + 확인 버튼만 남고, 탭-수령 버튼 경로는 사라진다.
+      expect(screen.getByText(messages.dailyBonusConfirmAction)).toBeTruthy();
+      expect(
+        screen.queryByText(messages.dailyBonusClaimAction(formatMoney(50, DEFAULT_LOCALE)))
+      ).toBeNull();
+
+      // 틱/리렌더가 반복돼도 중복 수령·중복 발화가 없다(기존 멱등 보장 수준).
       await act(async () => {
         jest.advanceTimersByTime(GAME_TICK_INTERVAL_MS * 2);
       });
       expect(track.mock.calls.filter(([event]) => event === 'daily_bonus_opened')).toHaveLength(1);
+      expect(track.mock.calls.filter(([event]) => event === 'daily_bonus_claimed')).toHaveLength(1);
 
-      fireEvent.press(screen.getByLabelText(messages.sheetCloseAccessibilityLabel));
+      // 확인 버튼으로 닫으면 이미 수령돼 더보기 재진입점(출석 보너스)이 사라지고,
+      // 룰렛 배지(1)만 남는다.
+      fireEvent.press(screen.getByText(messages.dailyBonusConfirmAction));
       await act(async () => {
         jest.advanceTimersByTime(180);
       });
       fireEvent.press(screen.getByTestId('more-nav-button'));
-
-      const dailyBonusEntry = screen.getByLabelText(messages.dailyBonusButtonAccessibilityLabel);
-      expect(within(dailyBonusEntry).getByText('1')).toBeTruthy();
-      fireEvent.press(dailyBonusEntry);
-      await waitFor(() => expect(screen.getByText(messages.sheetTitleDailyBonus)).toBeTruthy());
-      expect(
-        track.mock.calls.filter(([event, params]) =>
-          event === 'daily_bonus_opened' && params?.source === 'more'
-        )
-      ).toHaveLength(1);
-
-      const claim = screen.getByText(messages.dailyBonusClaimAction(formatMoney(50, DEFAULT_LOCALE)));
-      fireEvent.press(claim);
-      fireEvent.press(claim);
-      expect(
-        track.mock.calls.filter(([event, params]) =>
-          event === 'daily_bonus_claimed' && params?.source === 'more'
-        )
-      ).toHaveLength(1);
-
-      fireEvent.press(screen.getByTestId('more-nav-button'));
       expect(screen.queryByLabelText(messages.dailyBonusButtonAccessibilityLabel)).toBeNull();
       expect(within(screen.getByTestId('more-nav-button')).getByText('1')).toBeTruthy();
+    });
+
+    test('이미 수령한 날엔 시트가 열리지 않아 자동 수령·발화가 일어나지 않는다 (#376)', async () => {
+      const track = jest.fn();
+      // 이미 오늘 수령한 상태(쿨다운 중) → auto_popup·더보기 진입점 모두 없음.
+      const claimedState: GameState = {
+        ...createInitialState(),
+        gold: 1_000,
+        dailyBonusState: { lastClaimedAt: NOW, streak: 3 },
+      };
+      const screen = await renderGame(claimedState, { analytics: createFarmAnalytics(track) });
+      await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+      expect(screen.queryByText(messages.sheetTitleDailyBonus)).toBeNull();
+      fireEvent.press(screen.getByTestId('more-nav-button'));
+      expect(screen.queryByLabelText(messages.dailyBonusButtonAccessibilityLabel)).toBeNull();
+      expect(track.mock.calls.filter(([event]) => event === 'daily_bonus_claimed')).toHaveLength(0);
     });
   });
 
@@ -1803,7 +1842,10 @@ describe('FarmGame UI flow', () => {
     const renderOnboardingGame = (
       savedState: GameState | null,
       props: Partial<React.ComponentProps<typeof FarmGame>> = {}
-    ) => renderGame(savedState, props, null, { preserveOnboarding: true });
+    ) =>
+      // 온보딩 플로우는 신규 저장의 가용한 데일리 보너스가 온보딩 뒤로 유예됐다가
+      // 완료 후 자동 수령되는 흐름을 검증하므로, 기본 수령 처리를 끄고 보존한다.
+      renderGame(savedState, props, null, { preserveOnboarding: true, preserveDailyBonus: true });
     const createRewardStepState = (): GameState => {
       const base = createInitialState();
       return {
@@ -1893,7 +1935,8 @@ describe('FarmGame UI flow', () => {
         expect.objectContaining({ source: 'auto_popup' })
       );
       expect(screen.queryByTestId('notification-prompt-card')).toBeNull();
-      fireEvent.press(screen.getByText(messages.dailyBonusClaimAction(formatMoney(50, DEFAULT_LOCALE))));
+      // #376 자동 수령 후엔 확인 버튼으로 시트를 닫으면 알림 권한 프롬프트가 뒤이어 뜬다.
+      fireEvent.press(screen.getByText(messages.dailyBonusConfirmAction));
       await waitFor(() => expect(screen.getByTestId('notification-prompt-card')).toBeTruthy());
     });
 
@@ -2056,7 +2099,12 @@ describe('FarmGame UI flow', () => {
     });
 
     test('resumes reward confirmation without paying or tracking the harvest twice', async () => {
-      const rewardSave = createRewardStepState();
+      // 이 테스트는 수확 보상 이중 지급만 검증하므로, 온보딩 완료 후 유예 데일리 보너스
+      // 자동 수령이 골드를 흔들지 않도록 이미 수령한 상태로 고정한다(#376).
+      const rewardSave: GameState = {
+        ...createRewardStepState(),
+        dailyBonusState: { lastClaimedAt: NOW, streak: 0 },
+      };
       const creditedGold = rewardSave.gold;
       const resumedTrack = jest.fn();
       const resumed = await renderOnboardingGame(rewardSave, { analytics: createFarmAnalytics(resumedTrack) });
@@ -4754,7 +4802,10 @@ describe('FarmGame UI flow', () => {
       ...createInitialState(),
       chainFarms: [{ id: 1, archetype: 'plains', goldPerHour: 3600, lastCollectedAt: NOW - 2 * 60 * 60 * 1000 }],
     };
-    const screen = await renderGame(chainState, { analytics: createFarmAnalytics(track) });
+    // 복귀 recap이 auto_popup을 억제하므로 데일리 보너스가 welcome_back CTA로 열린다.
+    const screen = await renderGame(chainState, { analytics: createFarmAnalytics(track) }, null, {
+      preserveDailyBonus: true,
+    });
 
     await waitFor(() => expect(screen.getByText('다시 오셨네요!')).toBeTruthy());
     fireEvent.press(screen.getByText('데일리 보너스 받기'));

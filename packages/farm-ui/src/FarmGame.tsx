@@ -814,6 +814,10 @@ function FarmGameBody({
   const [activeSheet, setActiveSheet] = useState<ActiveSheet>(null);
   // #372 상점 시트 내부 활성 탭. 상점 진입 시 항상 첫 탭(확장)부터 보도록 초기화한다.
   const [shopTab, setShopTab] = useState<ShopTabKey>('expand');
+  // #376 데일리 보너스는 열람 즉시 자동 수령되므로, 방금 지급된 streak·골드를
+  // 시트 "수령 완료" 표시용으로 고정한다. 수령 후 dailyBonusState가 다음 회차 기준으로
+  // 갱신돼 previewDailyBonus 값이 바뀌어도, 화면엔 방금 받은 값이 그대로 남는다.
+  const [dailyBonusClaim, setDailyBonusClaim] = useState<{ streak: number; goldAwarded: number } | null>(null);
   // A return-card action can receive two native taps before React commits the
   // destination sheet. Reserve its immutable snapshot synchronously so offline
   // gold and analytics are exactly-once for this mount.
@@ -1248,6 +1252,8 @@ function FarmGameBody({
   useEffect(() => {
     if (activeSheet?.type !== 'dailyBonus') {
       dailyBonusOpenedSourceRef.current = null;
+      // 시트를 벗어나면 고정해 둔 수령 표시값을 비운다(다음 열람 때 다시 채워짐).
+      setDailyBonusClaim(null);
       return;
     }
     if (dailyBonusOpenedSourceRef.current === activeSheet.source) {
@@ -1257,12 +1263,47 @@ function FarmGameBody({
     if (buildContext == null) {
       return;
     }
-    dailyBonusOpenedSourceRef.current = activeSheet.source;
+    const source = activeSheet.source;
+    // source-transition 가드로 이 블록은 열람 전이당 정확히 1회만 실행된다.
+    // (StrictMode 이중 마운트/리렌더에도 ref가 유지돼 중복 실행되지 않음)
+    dailyBonusOpenedSourceRef.current = source;
     farmAnalytics.trackDailyBonusOpened({
-      source: activeSheet.source,
+      source,
       context: buildContext(),
     });
-  }, [activeSheet, farmAnalytics]);
+
+    // #376 열람 즉시 자동 수령. 열람 경로 3곳(more/auto_popup/welcome_back)은 모두
+    // isDailyBonusAvailable/preview.available 게이트를 통과해야 열리므로 이 시점엔
+    // 원칙적으로 항상 수령 가능하다. 다만 클록 역전 등 희귀 케이스로 claim이 null이면
+    // 지급·이벤트 발화 없이 시트를 조용히 닫아 기존 가드 의미를 유지한다.
+    const now = Date.now();
+    const result = claimDailyBonus(gameState.dailyBonusState, now, getRewardedGoldAmount(gameState));
+    if (result == null) {
+      setActiveSheet(null);
+      return;
+    }
+    // 지급은 순수 함수 결과를 기준으로 하되, 동시 경로(다른 열람 트리거)의 이중 지급은
+    // functional updater가 최신 prev로 재평가해 막는다: 이미 수령됐으면 null → prev 유지.
+    setGameState((prev) => {
+      const applied = claimDailyBonus(prev.dailyBonusState, now, getRewardedGoldAmount(prev));
+      if (applied == null) {
+        return prev;
+      }
+      return {
+        ...prev,
+        gold: prev.gold + applied.goldAwarded,
+        dailyBonusState: applied.newState,
+      };
+    });
+    setDailyBonusClaim({ streak: result.streak, goldAwarded: result.goldAwarded });
+    farmAnalytics.trackDailyBonusClaimed({
+      streak: result.streak,
+      rewardValue: result.goldAwarded,
+      isFirstClaim: result.isFirstClaim,
+      source,
+      context: buildContext(),
+    });
+  }, [activeSheet, farmAnalytics, gameState]);
 
   const flushCropReadySummary = useCallback(
     (context?: GameAnalyticsContext, flushedAt = Date.now()) => {
@@ -4081,6 +4122,13 @@ function FarmGameBody({
     activeSheet?.type === 'dailyBonus'
       ? previewDailyBonus(gameState.dailyBonusState, Date.now(), getRewardedGoldAmount(gameState))
       : { available: false as const, streak: 1, goldAwarded: 50 };
+  // #376 자동 수령 후엔 고정해 둔 수령값을 우선 표시한다. 자동 수령 effect가 실행되기
+  // 직전(열람 첫 프레임)엔 dailyBonusClaim이 아직 null이라 preview로 폴백하는데,
+  // preview와 claim은 같은 수령 전 상태에 같은 공식을 적용하므로 값이 동일하다.
+  const dailyBonusDisplay = dailyBonusClaim ?? {
+    streak: dailyBonusPreview.streak,
+    goldAwarded: dailyBonusPreview.goldAwarded,
+  };
   const dailyBonusAvailable = isDailyBonusAvailable(
     gameState.dailyBonusState,
     tickNowMsRef.current
@@ -4595,7 +4643,7 @@ function FarmGameBody({
 
       <Sheet
         activeSheet={activeSheet}
-        description={getSheetDescription(activeSheet, messages, locale, getLocalizedCropName, collectionSummary, dailyBonusPreview.streak)}
+        description={getSheetDescription(activeSheet, messages, locale, getLocalizedCropName, collectionSummary, dailyBonusDisplay.streak)}
         title={getSheetTitle(activeSheet, messages)}
         closeLabel={messages.sheetCloseAccessibilityLabel}
         bottomInset={bottomSafeInset}
@@ -5038,65 +5086,21 @@ function FarmGameBody({
 
         {activeSheet?.type === 'dailyBonus' ? (
           <View>
+            {/* #376 열람 즉시 자동 수령: 탭-수령 버튼을 없애고 "수령 완료" 표시(streak +
+                획득 골드)와 확인(닫기) 버튼 1개만 남긴다. 실제 지급·계측은 열람 시점의
+                자동 수령 effect가 처리한다. */}
             <View style={styles.welcomeBackRow}>
               <Text style={styles.welcomeBackIcon}>🎁</Text>
               <View style={styles.welcomeBackRowText}>
                 <Text style={styles.welcomeBackRowLabel}>
-                  {getDailyBonusLabel(dailyBonusPreview.streak, dailyBonusPreview.goldAwarded, locale).streakLabel}
+                  {getDailyBonusLabel(dailyBonusDisplay.streak, dailyBonusDisplay.goldAwarded, locale).streakLabel}
                 </Text>
                 <Text style={styles.welcomeBackRowValue}>
-                  +{formatMoney(dailyBonusPreview.goldAwarded, locale)}G
+                  +{formatMoney(dailyBonusDisplay.goldAwarded, locale)}G
                 </Text>
               </View>
             </View>
-            <SheetAction
-              label={messages.dailyBonusClaimAction(formatMoney(dailyBonusPreview.goldAwarded, locale))}
-              onPress={() => {
-                const now = Date.now();
-                // Guard against clock reversal or race: if the bonus is no
-                // longer available at tap time, keep the Sheet open rather than
-                // closing it silently with no feedback.
-                if (!isDailyBonusAvailable(gameState.dailyBonusState, now)) {
-                  return;
-                }
-                // The functional updater preserves idempotency: a concurrent
-                // second tap evaluates claimDailyBonus against the already-
-                // updated prev.dailyBonusState and gets null, so gold is only
-                // awarded once.
-                // Capture the actually-applied claim from the functional
-                // updater so analytics fires exactly once: a concurrent second
-                // tap evaluates against the already-updated state, gets null,
-                // and leaves the holder empty — so no duplicate emit. (A holder
-                // object is used so TS keeps the union type after the closure.)
-                const claimHolder: {
-                  value: { streak: number; goldAwarded: number; isFirstClaim: boolean } | null;
-                } = { value: null };
-                setGameState((prev) => {
-                  const result = claimDailyBonus(prev.dailyBonusState, now, getRewardedGoldAmount(prev));
-                  if (result == null) return prev;
-                  claimHolder.value = {
-                    streak: result.streak,
-                    goldAwarded: result.goldAwarded,
-                    isFirstClaim: result.isFirstClaim,
-                  };
-                  return {
-                    ...prev,
-                    gold: prev.gold + result.goldAwarded,
-                    dailyBonusState: result.newState,
-                  };
-                });
-                if (claimHolder.value != null) {
-                  farmAnalytics.trackDailyBonusClaimed({
-                    streak: claimHolder.value.streak,
-                    rewardValue: claimHolder.value.goldAwarded,
-                    isFirstClaim: claimHolder.value.isFirstClaim,
-                    source: activeSheet.source,
-                    context: analyticsContext(),
-                  });
-                }
-                setActiveSheet(null);
-              }}
-            />
+            <SheetAction label={messages.dailyBonusConfirmAction} onPress={() => setActiveSheet(null)} />
           </View>
         ) : null}
 
