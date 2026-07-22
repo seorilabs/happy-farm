@@ -1246,13 +1246,15 @@ describe('FarmGame UI flow', () => {
     // 진입점이 남아 있으려면 복귀 recap이 auto_popup을 억제한 상태여야 한다. 오프라인
     // 체인 수익으로 recap을 띄우고 닫아, 데일리 보너스를 미수령·가용 상태로 유지한 채
     // 메뉴 구조를 검증한다.
-    const renderMoreMenuWithDailyBonus = async () => {
+    const renderMoreMenuWithDailyBonus = async (
+      props: Partial<React.ComponentProps<typeof FarmGame>> = {}
+    ) => {
       mockPersistence.readLastSeenAt.mockResolvedValueOnce(NOW - 2 * 60 * 60 * 1000);
       const state: GameState = {
         ...completedState(),
         chainFarms: [{ id: 1, archetype: 'plains', goldPerHour: 3600, lastCollectedAt: NOW - 2 * 60 * 60 * 1000 }],
       };
-      const screen = await renderGame(state, {}, null, { preserveDailyBonus: true });
+      const screen = await renderGame(state, props, null, { preserveDailyBonus: true });
       await waitFor(() => expect(screen.getByText('다시 오셨네요!')).toBeTruthy());
       fireEvent.press(screen.getByLabelText(messages.sheetCloseAccessibilityLabel));
       await waitFor(() => expect(screen.queryByText('다시 오셨네요!')).toBeNull());
@@ -1388,6 +1390,44 @@ describe('FarmGame UI flow', () => {
       fireEvent.press(screen.getByTestId('more-nav-button'));
       expect(screen.queryByLabelText(messages.dailyBonusButtonAccessibilityLabel)).toBeNull();
       expect(within(screen.getByTestId('more-nav-button')).getByText('1')).toBeTruthy();
+    });
+
+    test('더보기에서 데일리 보너스를 열면 추가 탭 없이 source=more로 자동 수령된다 (#376 AC-1 more)', async () => {
+      const track = jest.fn();
+      const screen = await renderMoreMenuWithDailyBonus({ analytics: createFarmAnalytics(track) });
+
+      fireEvent.press(screen.getByTestId('more-nav-button'));
+      const goldBefore = getLatestPersistedState().gold;
+
+      // 더보기의 출석 보너스 진입점을 누르면 시트가 열리며(source=more) 추가 탭 없이 즉시 수령된다.
+      fireEvent.press(screen.getByLabelText(messages.dailyBonusButtonAccessibilityLabel));
+      await waitFor(() => expect(screen.getByText(messages.sheetTitleDailyBonus)).toBeTruthy());
+      await waitFor(() =>
+        expect(
+          track.mock.calls.filter(([event, params]) => event === 'daily_bonus_claimed' && params?.source === 'more')
+        ).toHaveLength(1)
+      );
+      // 골드 지급 + dailyBonusState 갱신 + 확인 버튼만(탭-수령 버튼 없음).
+      expect(getLatestPersistedState().gold).toBeGreaterThan(goldBefore);
+      expect(getLatestPersistedState().dailyBonusState.lastClaimedAt).not.toBeNull();
+      expect(screen.getByText(messages.dailyBonusConfirmAction)).toBeTruthy();
+    });
+
+    test('자동 수령은 시트가 열려 있는 동안 틱·리렌더가 반복돼도 정확히 1회만 발화한다 (#376 AC-6 중복 방지)', async () => {
+      const track = jest.fn();
+      const screen = await renderGame(completedState(), { analytics: createFarmAnalytics(track) }, null, {
+        preserveDailyBonus: true,
+      });
+
+      await waitFor(() => expect(screen.getByText(messages.sheetTitleDailyBonus)).toBeTruthy());
+      await waitFor(() =>
+        expect(track.mock.calls.filter(([event]) => event === 'daily_bonus_claimed')).toHaveLength(1)
+      );
+      // 시트를 연 채 게임 틱을 여러 번 진행해도(가짜 타이머) 자동 수령이 재발화되지 않는다.
+      await act(async () => {
+        jest.advanceTimersByTime(GAME_TICK_INTERVAL_MS * 5);
+      });
+      expect(track.mock.calls.filter(([event]) => event === 'daily_bonus_claimed')).toHaveLength(1);
     });
 
     test('수령 불가일(claimDailyBonus=null)엔 시트·지급·발화 없이 안전 처리된다 (#376 AC-4)', async () => {
@@ -4829,6 +4869,20 @@ describe('FarmGame UI flow', () => {
       'daily_bonus_opened',
       expect.objectContaining({ source: 'welcome_back' })
     );
+    // #376 AC-1(welcome_back): 시트가 열리며 추가 탭 없이 즉시 자동 수령되고
+    // dailyBonusState가 갱신된다. daily_bonus_claimed도 source=welcome_back로 발화한다.
+    await waitFor(() =>
+      expect(
+        track.mock.calls.filter(
+          ([event, params]) => event === 'daily_bonus_claimed' && params?.source === 'welcome_back'
+        )
+      ).toHaveLength(1)
+    );
+    await waitFor(() =>
+      expect(getLatestPersistedState().dailyBonusState.lastClaimedAt).not.toBeNull()
+    );
+    // 탭-수령 버튼 없이 확인 버튼만 남는다.
+    expect(screen.getByText(getFarmMessages(DEFAULT_LOCALE).dailyBonusConfirmAction)).toBeTruthy();
   });
 
   test('does not show the recap after only a brief absence', async () => {
