@@ -1359,6 +1359,13 @@ describe('FarmGame UI flow', () => {
         ).toHaveLength(1)
       );
 
+      // AC-1: 추가 탭 없이 골드가 지급되고 dailyBonusState가 claimDailyBonus 결과로
+      // 갱신된다(수령 완료 → lastClaimedAt 설정, 골드는 초기값보다 증가).
+      await waitFor(() =>
+        expect(getLatestPersistedState().dailyBonusState.lastClaimedAt).not.toBeNull()
+      );
+      expect(getLatestPersistedState().gold).toBeGreaterThan(completedState().gold);
+
       // 시트는 "수령 완료" 표시 + 확인 버튼만 남고, 탭-수령 버튼 경로는 사라진다.
       expect(screen.getByText(messages.dailyBonusConfirmAction)).toBeTruthy();
       expect(
@@ -1383,9 +1390,11 @@ describe('FarmGame UI flow', () => {
       expect(within(screen.getByTestId('more-nav-button')).getByText('1')).toBeTruthy();
     });
 
-    test('이미 수령한 날엔 시트가 열리지 않아 자동 수령·발화가 일어나지 않는다 (#376)', async () => {
+    test('수령 불가일(claimDailyBonus=null)엔 시트·지급·발화 없이 안전 처리된다 (#376 AC-4)', async () => {
       const track = jest.fn();
-      // 이미 오늘 수령한 상태(쿨다운 중) → auto_popup·더보기 진입점 모두 없음.
+      // 이미 오늘 수령한 상태(쿨다운 중) → claimDailyBonus는 null을 반환한다. 열람 경로가
+      // 게이트로 막혀 시트가 열리지 않고, 골드 지급·이벤트 발화도 없어야 한다(AC-4의
+      // 관측 가능한 보장: null 반환 시 무지급·무발화).
       const claimedState: GameState = {
         ...createInitialState(),
         gold: 1_000,
@@ -1397,6 +1406,8 @@ describe('FarmGame UI flow', () => {
       fireEvent.press(screen.getByTestId('more-nav-button'));
       expect(screen.queryByLabelText(messages.dailyBonusButtonAccessibilityLabel)).toBeNull();
       expect(track.mock.calls.filter(([event]) => event === 'daily_bonus_claimed')).toHaveLength(0);
+      // 골드가 초기값 그대로 유지된다(무지급).
+      expect(getLatestPersistedState().gold).toBe(1_000);
     });
   });
 
