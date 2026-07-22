@@ -66,7 +66,9 @@ import {
   GROWTH_AD_MIN_REMAINING_MS,
   applyGrowthAdSkip,
   applyFertilizer,
+  applyFertilizerToAllGrowing,
   getFertilizerCost,
+  previewFertilizeAll,
   getGrowthAdSkipMs,
   HARVEST_BONUS_BOOST_DURATION_MS,
   HARVEST_BONUS_MULTIPLIER,
@@ -264,6 +266,12 @@ const HARVEST_ALL_MIN_COUNT = 2;
 // is selected and at least this many empty plots are waiting, so single-tap
 // planting stays the norm and the batch button is reserved for the chore case.
 const PLANT_ALL_MIN_COUNT = 2;
+// "전체 비료"(#359) 단축 버튼도 같은 원칙: 성장 중이면서 지금 골드로 감당 가능한 밭이
+// 이만큼 있을 때만 조건부 행에 노출한다. 한두 칸은 밭 시트 안 단일 비료로 충분하다.
+const FERTILIZE_ALL_MIN_COUNT = 2;
+// 큰 골드 지출이라 1탭으로 즉시 실행하지 않는다. 1차 탭은 확인(버튼 라벨 전환), 2차 탭이
+// 실행이며, 이 시간 안에 다시 누르지 않으면 확인 상태가 자동 해제된다(오조작 방지).
+const FERTILIZE_ALL_CONFIRM_WINDOW_MS = 4000;
 // Harvest combo pacing (window + tier thresholds) now lives in balance.json and
 // is imported from farm-core above. Re-exported so existing consumers/tests keep
 // reading the thresholds from this module.
@@ -2415,6 +2423,24 @@ function FarmGameBody({
   // 비료 성공 부수효과(토스트·시트 닫힘)를 시트 1회 오픈당 한 번만 발화하게 하는
   // 가드. 시트가 열릴 때 false로 리셋한다(#227 리뷰).
   const fertilizeGuardRef = useRef(false);
+  // 전체 비료(#359) 노출/라벨용 프리뷰. plantAllPreview와 동일하게 tick마다 재계산한다.
+  const fertilizeAllPreview = useMemo(
+    () => previewFertilizeAll(gameState, tickNowMsRef.current),
+    [gameState, tick]
+  );
+  // 2탭 확인의 "확인 대기" 상태. 핸들러 분기는 ref(동기, 더블탭 경쟁 방지)로 판정하고,
+  // state는 버튼 라벨 재렌더용으로만 미러링한다.
+  const fertilizeAllArmedRef = useRef(false);
+  const [fertilizeAllArmed, setFertilizeAllArmed] = useState(false);
+  const fertilizeAllDisarmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // 언마운트 시 확인 자동해제 타이머를 정리한다(리크 방지).
+  useEffect(() => {
+    return () => {
+      if (fertilizeAllDisarmTimerRef.current != null) {
+        clearTimeout(fertilizeAllDisarmTimerRef.current);
+      }
+    };
+  }, []);
   // 익은 작물 summary 중복 방지 상태(plotId → 집계한 심기 인스턴스 startTime).
   // 250ms 틱 루프가 setGameState 커밋 전에 다시 돌아 같은 익음을 반복 집계하던 문제
   // (#266)를 막는다. ref로 보관해 렌더 간 유지하면서 즉시 갱신한다.
@@ -3878,6 +3904,45 @@ function FarmGameBody({
     toast(messages.fertilizerDoneToast(formatMoney(preview.cost, locale)));
   }
 
+  // 전체 비료(#359) 확인 상태 해제(타이머 정리 포함).
+  function disarmFertilizeAll() {
+    fertilizeAllArmedRef.current = false;
+    setFertilizeAllArmed(false);
+    if (fertilizeAllDisarmTimerRef.current != null) {
+      clearTimeout(fertilizeAllDisarmTimerRef.current);
+      fertilizeAllDisarmTimerRef.current = null;
+    }
+  }
+
+  // 전체 비료(#359): 성장 중인 밭 전체를 골드로 즉시 완료한다. 큰 지출이므로 1차 탭은
+  // 확인 단계(버튼 라벨이 확인 문구로 전환), 2차 탭에서만 실행한다. 실행 시점 커밋
+  // 상태로 프리뷰를 다시 계산해 토스트가 말하는 수/골드와 실제 차감을 일치시키고, 실제
+  // 상태 변경은 함수형 updater가 라이브 상태에서 한 번만 적용한다(plantAllCrops와 동일).
+  function onFertilizeAllPress() {
+    const now = Date.now();
+    const preview = previewFertilizeAll(gameState, now);
+    if (preview.affordableCount < FERTILIZE_ALL_MIN_COUNT) {
+      // tick으로 대상이 임계 미만이 되었으면 조용히 확인 해제(경계 상황 방어).
+      disarmFertilizeAll();
+      return;
+    }
+    if (!fertilizeAllArmedRef.current) {
+      fertilizeAllArmedRef.current = true;
+      setFertilizeAllArmed(true);
+      if (fertilizeAllDisarmTimerRef.current != null) {
+        clearTimeout(fertilizeAllDisarmTimerRef.current);
+      }
+      fertilizeAllDisarmTimerRef.current = setTimeout(disarmFertilizeAll, FERTILIZE_ALL_CONFIRM_WINDOW_MS);
+      return;
+    }
+    disarmFertilizeAll();
+    setGameState((state) => applyFertilizerToAllGrowing(state, now).state);
+    triggerHaptic(15);
+    toast(
+      messages.fertilizeAllDoneToast(preview.affordableCount, formatMoney(preview.totalCost, locale))
+    );
+  }
+
   async function activateHarvestBonusWithAd() {
     await showRewardedAd('harvestBonusAd', HARVEST_BONUS_MULTIPLIER, () => {
       setActiveSheet(null);
@@ -4242,6 +4307,28 @@ function FarmGameBody({
                 formatMoney(plantAllPreview.totalCost, locale)
               )}
               onPress={plantAllCrops}
+            />
+          </View>
+        ) : null}
+
+        {/* 전체 비료(#359): 성장 중이면서 지금 감당 가능한 밭이 임계 이상일 때만 나타나는
+            조건부 행(상시 요소 아님). 1탭 확인 → 2탭 실행으로 큰 골드 지출을 방어한다. */}
+        {fertilizeAllPreview.affordableCount >= FERTILIZE_ALL_MIN_COUNT ? (
+          <View style={styles.toolActionRow}>
+            <HarvestAllButton
+              testID="fertilize-all-button"
+              label={
+                fertilizeAllArmed
+                  ? messages.fertilizeAllConfirmButton(
+                      fertilizeAllPreview.affordableCount,
+                      formatMoney(fertilizeAllPreview.totalCost, locale)
+                    )
+                  : messages.fertilizeAllButton(
+                      fertilizeAllPreview.affordableCount,
+                      formatMoney(fertilizeAllPreview.totalCost, locale)
+                    )
+              }
+              onPress={onFertilizeAllPress}
             />
           </View>
         ) : null}

@@ -34,6 +34,7 @@ import {
   getAreaCropKeys,
   getCropOfTheDayStatus,
   getFertilizerCost,
+  previewFertilizeAll,
   getPlotCost,
   getWeeklyEventStatus,
   getEnvironmentTone,
@@ -820,6 +821,74 @@ describe('FarmGame UI flow', () => {
       fireEvent.press(fertilizerAction);
       expect(screen.queryByText('GET')).toBeNull();
       expect(screen.queryByText(/비료로 바로 키웠어요/)).toBeNull();
+    });
+  });
+
+  describe('전체 비료 (#359)', () => {
+    // 성장 중(state 1) 밭 여러 개 + 충분한 골드. 온보딩 완료로 자유 조작 상태.
+    function createMultiGrowingState(gold: number, growingCount: number): GameState {
+      const base = createInitialState();
+      return {
+        ...base,
+        onboardingCompleted: true,
+        gold,
+        plots: base.plots.map((plot, index) =>
+          index < growingCount
+            ? { ...plot, cropType: 'carrot' as const, startTime: NOW, state: 1 as const }
+            : plot
+        ),
+      };
+    }
+
+    test('성장 중 다수 밭에서 전체 비료 버튼이 노출되고, 2탭 확인 후 일괄 적용된다', async () => {
+      const state = createMultiGrowingState(100_000, 3);
+      // 컴포넌트와 같은 순수 함수·같은 NOW로 프리뷰를 계산해 정확한 차감액을 검증한다.
+      const preview = previewFertilizeAll(state, NOW);
+      expect(preview.affordableCount).toBe(3);
+      expect(preview.totalCost).toBeGreaterThan(0);
+
+      const screen = await renderGame(state);
+      await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+
+      // 조건부 버튼 노출(성장 중 + 지불 가능 3칸 ≥ 임계 2).
+      const button = screen.getByTestId('fertilize-all-button');
+      expect(button).toBeTruthy();
+
+      // 1차 탭: 확인 단계 전환. 실행/차감/토스트 없음(골드 불변).
+      fireEvent.press(button);
+      expect(screen.queryByText(/곳을 비료로 바로 키웠어요/)).toBeNull();
+      expect(screen.getByText(`${formatMoney(100_000, 'ko-KR')}G`)).toBeTruthy();
+      expect(screen.queryByText('GET')).toBeNull();
+
+      // 2차 탭: 실행 → 완료 토스트 + 정확한 골드 차감 + 성장 완료(GET) 3칸.
+      fireEvent.press(screen.getByTestId('fertilize-all-button'));
+      await waitFor(() => expect(screen.getByText(/곳을 비료로 바로 키웠어요/)).toBeTruthy());
+      expect(screen.getByText(`${formatMoney(100_000 - preview.totalCost, 'ko-KR')}G`)).toBeTruthy();
+      expect(screen.getAllByText('GET')).toHaveLength(3);
+      // 대상이 사라져 버튼도 사라진다.
+      expect(screen.queryByTestId('fertilize-all-button')).toBeNull();
+    });
+
+    test('한 번 탭만으로는 실행되지 않는다(확인 게이트)', async () => {
+      const state = createMultiGrowingState(100_000, 3);
+      const screen = await renderGame(state);
+      await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+
+      fireEvent.press(screen.getByTestId('fertilize-all-button'));
+      // 단일 탭: 골드 차감·완료·토스트 어느 것도 발생하지 않는다.
+      expect(screen.getByText(`${formatMoney(100_000, 'ko-KR')}G`)).toBeTruthy();
+      expect(screen.queryByText('GET')).toBeNull();
+      expect(screen.queryByText(/곳을 비료로 바로 키웠어요/)).toBeNull();
+      // 버튼은 확인 라벨로 남아 있다(대상은 여전히 존재).
+      expect(screen.getByTestId('fertilize-all-button')).toBeTruthy();
+    });
+
+    test('지불 가능 밭이 임계 미만이면 버튼이 나타나지 않는다', async () => {
+      // 성장 중 1칸(임계 2 미만)이면 밭 시트 안 단일 비료로 충분하므로 노출하지 않는다.
+      const state = createMultiGrowingState(100_000, 1);
+      const screen = await renderGame(state);
+      await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+      expect(screen.queryByTestId('fertilize-all-button')).toBeNull();
     });
   });
 
