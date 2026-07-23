@@ -164,6 +164,7 @@ import {
   type AnimalProduceCollectionOutcome,
   getProductionStates,
   getProductionRecipeLabel,
+  getRecipe,
   startCraft,
   cancelCraft,
   collectCraft,
@@ -606,6 +607,27 @@ type PendingFarmCommandEffect =
       type: 'animalProduceCollected';
       animalKey: AnimalKey;
       outcome: AnimalProduceCollectionOutcome | null;
+    }
+  | {
+      id: number;
+      type: 'craftStarted';
+      recipeKey: ProductionRecipeKey;
+      // null이면 재료 부족·이미 진행 중 등으로 시작이 성사되지 않은 no-op이다.
+      started: boolean;
+    }
+  | {
+      id: number;
+      type: 'craftCollected';
+      recipeKey: ProductionRecipeKey;
+      // 성공 시 지급된 골드, no-op(미완료·이중 수집)이면 null.
+      gold: number | null;
+    }
+  | {
+      id: number;
+      type: 'craftCanceled';
+      recipeKey: ProductionRecipeKey;
+      // 성공 시 환불된 입력 작물 총량, no-op(미진행·완료됨)이면 null.
+      refundedCount: number | null;
     }
   | {
       id: number;
@@ -1664,6 +1686,13 @@ function FarmGameBody({
               context,
             });
           }
+          if (effect.surface === 'workshop') {
+            farmAnalytics.trackCraftCollectAll({
+              collectedCount: effect.collectedCount,
+              totalGold: effect.totalGold,
+              context: analyticsContext(),
+            });
+          }
           if (effect.totalGold > 0) {
             pulseGold();
           }
@@ -1728,6 +1757,43 @@ function FarmGameBody({
           pulseGold();
         }
         toast(messages.animalCollectedToast(getAnimalLabel(effect.animalKey, locale).name));
+        continue;
+      }
+
+      if (effect.type === 'craftStarted') {
+        if (!effect.started) {
+          toast(messages.workshopNeedIngredientsToast);
+          continue;
+        }
+        toast(messages.workshopStartedToast(getProductionRecipeLabel(effect.recipeKey, locale).name));
+        farmAnalytics.trackCraftStarted({ recipeKey: effect.recipeKey, context: analyticsContext() });
+        continue;
+      }
+
+      if (effect.type === 'craftCollected') {
+        if (effect.gold == null) {
+          continue;
+        }
+        pulseGold();
+        toast(messages.workshopCollectedToast(getProductionRecipeLabel(effect.recipeKey, locale).name));
+        farmAnalytics.trackCraftCollected({
+          recipeKey: effect.recipeKey,
+          revenue: effect.gold,
+          context: analyticsContext(),
+        });
+        continue;
+      }
+
+      if (effect.type === 'craftCanceled') {
+        if (effect.refundedCount == null) {
+          continue;
+        }
+        toast(messages.workshopCanceledToast(getProductionRecipeLabel(effect.recipeKey, locale).name));
+        farmAnalytics.trackCraftCanceled({
+          recipeKey: effect.recipeKey,
+          refundedCount: effect.refundedCount,
+          context: analyticsContext(),
+        });
         continue;
       }
 
@@ -2440,6 +2506,16 @@ function FarmGameBody({
         context: buildContext(state),
       });
     }
+    if (activeSheet?.type === 'production' && activeSheet.tab === 'workshop') {
+      const state = gameStateRef.current;
+      const statuses = getProductionStates(state, Date.now());
+      farmAnalytics.trackProductionScreen({
+        source: activeSheet.source,
+        craftingCount: statuses.filter((status) => status.phase === 'crafting').length,
+        readyCount: statuses.filter((status) => status.phase === 'ready').length,
+        context: buildContext(state),
+      });
+    }
   }, [activeSheet, rewardedAd.isAdSupported, farmAnalytics]);
 
   // 보상형 광고 CTA가 노출되는 시트가 열릴 때 아직 로드되지 않았다면 재로드를 킥해
@@ -3053,40 +3129,72 @@ function FarmGameBody({
     setActiveSheet({ type: 'production', tab: 'workshop', source: 'more' });
   }
 
+  // 시작/수집/취소는 core 순수 전이 성공 여부를 command effect로 넘겨, 토스트·계측을
+  // functional updater 밖(드레인)에서 한 번만 처리한다(StrictMode updater 재실행 중복 방지).
   function startCraftNow(key: ProductionRecipeKey) {
+    const effectId = ++commandEffectIdRef.current;
     setGameState((state) => {
       const next = startCraft(state, key, Date.now());
-      if (next == null) {
-        toast(messages.workshopNeedIngredientsToast);
-        return state;
+      if (
+        !handledCommandEffectIdsRef.current.has(effectId) &&
+        !pendingCommandEffectsRef.current.some((effect) => effect.id === effectId)
+      ) {
+        pendingCommandEffectsRef.current.push({
+          id: effectId,
+          type: 'craftStarted',
+          recipeKey: key,
+          started: next != null,
+        });
       }
-      toast(messages.workshopStartedToast(getProductionRecipeLabel(key, locale).name));
-      return next;
+      return next ?? state;
     });
+    setCommandEffectVersion((version) => version + 1);
   }
 
   function collectCraftNow(key: ProductionRecipeKey) {
+    const effectId = ++commandEffectIdRef.current;
     setGameState((state) => {
       const next = collectCraft(state, key, Date.now());
-      if (next == null) {
-        return state;
+      if (
+        !handledCommandEffectIdsRef.current.has(effectId) &&
+        !pendingCommandEffectsRef.current.some((effect) => effect.id === effectId)
+      ) {
+        pendingCommandEffectsRef.current.push({
+          id: effectId,
+          type: 'craftCollected',
+          recipeKey: key,
+          gold: next == null ? null : next.gold - state.gold,
+        });
       }
-      pulseGold();
-      toast(messages.workshopCollectedToast(getProductionRecipeLabel(key, locale).name));
-      return next;
+      return next ?? state;
     });
+    setCommandEffectVersion((version) => version + 1);
   }
 
   function cancelCraftNow(key: ProductionRecipeKey) {
     const now = Date.now();
+    const effectId = ++commandEffectIdRef.current;
     setGameState((state) => {
       const next = cancelCraft(state, key, now);
-      if (next == null) {
-        return state;
+      let refundedCount: number | null = null;
+      if (next != null) {
+        const recipe = getRecipe(key);
+        refundedCount = recipe == null ? 0 : recipe.inputs.reduce((sum, input) => sum + input.qty, 0);
       }
-      toast(messages.workshopCanceledToast(getProductionRecipeLabel(key, locale).name));
-      return next;
+      if (
+        !handledCommandEffectIdsRef.current.has(effectId) &&
+        !pendingCommandEffectsRef.current.some((effect) => effect.id === effectId)
+      ) {
+        pendingCommandEffectsRef.current.push({
+          id: effectId,
+          type: 'craftCanceled',
+          recipeKey: key,
+          refundedCount,
+        });
+      }
+      return next ?? state;
     });
+    setCommandEffectVersion((version) => version + 1);
   }
 
   function collectAllCrafts() {

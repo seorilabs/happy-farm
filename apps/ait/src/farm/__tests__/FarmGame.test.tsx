@@ -2004,6 +2004,13 @@ describe('FarmGame UI flow', () => {
       expect(
         track.mock.calls.filter(([eventName]) => eventName.startsWith('animal_'))
       ).toHaveLength(0);
+      // 일괄 수집은 배치당 craft_collect_all 1건만 발화한다(개별 craft_collected 아님).
+      const collectAll = track.mock.calls.filter(([eventName]) => eventName === 'craft_collect_all');
+      expect(collectAll).toHaveLength(1);
+      expect(collectAll[0]![1]).toEqual(
+        expect.objectContaining({ collected_count: 2, total_gold: totalGold, schema_version: 1 })
+      );
+      expect(track.mock.calls.filter(([eventName]) => eventName === 'craft_collected')).toHaveLength(0);
     });
 
     test('cancels an in-progress workshop craft once on a rapid double press and refunds inputs', async () => {
@@ -2042,6 +2049,109 @@ describe('FarmGame UI flow', () => {
       expect(screen.queryByTestId(`workshop-cancel-${recipe.key}`)).toBeNull();
       expect(within(screen.getByTestId(`recipe-card-${recipe.key}`)).getByText(messages.workshopReadyToCraftLabel)).toBeTruthy();
       expect(onGoldPulse).not.toHaveBeenCalled();
+    });
+
+    // #421 공방 퍼널 계측 배선. core 트래커 계약은 analytics.test.ts에서, 여기서는 실제
+    // 시트/핸들러가 올바른 이벤트를 (상태 전이 성공 시에만, 오픈당 1회) 발화하는지 고정한다.
+    const craftEvents = (track: jest.Mock, name: string) =>
+      track.mock.calls.filter(([eventName]) => eventName === name);
+
+    async function openWorkshopFromMore(state: GameState, track: jest.Mock) {
+      const localMessages = getFarmMessages(DEFAULT_LOCALE);
+      const screen = await renderGame(state, { analytics: createFarmAnalytics(track) });
+      fireEvent.press(screen.getByTestId('more-nav-button'));
+      fireEvent.press(screen.getByLabelText(localMessages.productionButtonAccessibilityLabel));
+      fireEvent.press(screen.getByTestId('production-tab-workshop'));
+      await waitFor(() => expect(screen.getByTestId('workshop-sheet')).toBeTruthy());
+      return screen;
+    }
+
+    test('공방 진입 시 production_screen을 오픈당 1회만 발화한다 (#421)', async () => {
+      const track = jest.fn();
+      const recipe = PRODUCTION_RECIPES[0]!;
+      const base = createInitialState();
+      const state: GameState = {
+        ...base,
+        production: { ...base.production, crafting: { [recipe.key]: NOW - recipe.timerMs } }, // 1 ready
+      };
+      await openWorkshopFromMore(state, track);
+
+      await waitFor(() => expect(craftEvents(track, 'production_screen')).toHaveLength(1));
+      expect(craftEvents(track, 'production_screen')[0]![1]).toEqual(
+        expect.objectContaining({ source: 'more', crafting_count: 0, ready_count: 1, schema_version: 1 })
+      );
+      // gameState 종속 틱 리렌더로 재발화하지 않는다(crop_ready #326 재발 방지).
+      await act(async () => {
+        jest.advanceTimersByTime(GAME_TICK_INTERVAL_MS * 4);
+      });
+      expect(craftEvents(track, 'production_screen')).toHaveLength(1);
+    });
+
+    test('가공 시작 성공 시 craft_started를 1회 발화한다 (#421)', async () => {
+      const track = jest.fn();
+      const recipe = PRODUCTION_RECIPES[0]!;
+      const base = createInitialState();
+      const inventory = { ...base.production.inventory };
+      for (const input of recipe.inputs) {
+        inventory[input.crop] = (inventory[input.crop] ?? 0) + input.qty;
+      }
+      const state: GameState = { ...base, production: { inventory, crafting: {} } };
+      const localMessages = getFarmMessages(DEFAULT_LOCALE);
+      const screen = await openWorkshopFromMore(state, track);
+
+      await act(async () => {
+        fireEvent.press(
+          within(screen.getByTestId(`recipe-card-${recipe.key}`)).getByText(localMessages.workshopStartAction)
+        );
+      });
+      await waitFor(() => expect(craftEvents(track, 'craft_started')).toHaveLength(1));
+      expect(craftEvents(track, 'craft_started')[0]![1]).toEqual(
+        expect.objectContaining({ recipe: recipe.key, schema_version: 1 })
+      );
+    });
+
+    test('완료된 가공 수집 성공 시 craft_collected를 수익과 함께 1회 발화한다 (#421)', async () => {
+      const track = jest.fn();
+      const recipe = PRODUCTION_RECIPES[0]!;
+      const base = createInitialState();
+      const state: GameState = {
+        ...base,
+        production: { ...base.production, crafting: { [recipe.key]: NOW - recipe.timerMs } },
+      };
+      const localMessages = getFarmMessages(DEFAULT_LOCALE);
+      const screen = await openWorkshopFromMore(state, track);
+
+      await act(async () => {
+        fireEvent.press(
+          within(screen.getByTestId(`recipe-card-${recipe.key}`)).getByText(
+            localMessages.workshopCollectAction(formatMoney(recipe.sellPrice, DEFAULT_LOCALE))
+          )
+        );
+      });
+      await waitFor(() => expect(craftEvents(track, 'craft_collected')).toHaveLength(1));
+      expect(craftEvents(track, 'craft_collected')[0]![1]).toEqual(
+        expect.objectContaining({ recipe: recipe.key, revenue: recipe.sellPrice, schema_version: 1 })
+      );
+    });
+
+    test('진행 중 가공 취소 성공 시 craft_canceled를 환불량과 함께 1회 발화한다 (#421)', async () => {
+      const track = jest.fn();
+      const recipe = PRODUCTION_RECIPES[0]!;
+      const refundedCount = recipe.inputs.reduce((sum, input) => sum + input.qty, 0);
+      const base = createInitialState();
+      const state: GameState = {
+        ...base,
+        production: { ...base.production, crafting: { [recipe.key]: NOW } }, // 진행 중(미완료)
+      };
+      const screen = await openWorkshopFromMore(state, track);
+
+      await act(async () => {
+        fireEvent.press(screen.getByTestId(`workshop-cancel-${recipe.key}`));
+      });
+      await waitFor(() => expect(craftEvents(track, 'craft_canceled')).toHaveLength(1));
+      expect(craftEvents(track, 'craft_canceled')[0]![1]).toEqual(
+        expect.objectContaining({ recipe: recipe.key, refunded_count: refundedCount, schema_version: 1 })
+      );
     });
   });
 

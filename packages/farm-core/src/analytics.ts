@@ -7,6 +7,7 @@ import type {
   GameState,
   OnboardingStep,
   PrestigeSkillKey,
+  ProductionRecipeKey,
   RegionArchetypeKey,
   ResearchNodeKey,
 } from './types';
@@ -478,6 +479,72 @@ export function createFarmAnalytics(track: TrackGameEvent = noopTrackGameEvent) 
         base_revenue_total: params.baseRevenueTotal,
         final_revenue_total: params.finalRevenueTotal,
         rare_count: params.rareCount,
+        schema_version: 1,
+        ...params.context,
+      });
+    },
+
+    // 공방(가공) 퍼널. 시트 오픈은 오픈당 1회(호출부의 시트 전이 가드), 시작/수집/취소는
+    // core 상태 전이가 성공한 경우에만 1건씩 발화한다(틱 기반 반복 발화 금지 — crop_ready #326).
+    trackProductionScreen: (params: {
+      source: AnimalsScreenSource;
+      craftingCount: number;
+      readyCount: number;
+      context: GameAnalyticsContext;
+    }) => {
+      track('production_screen', {
+        source: params.source,
+        crafting_count: params.craftingCount,
+        ready_count: params.readyCount,
+        schema_version: 1,
+        ...params.context,
+      });
+    },
+
+    trackCraftStarted: (params: { recipeKey: ProductionRecipeKey; context: GameAnalyticsContext }) => {
+      track('craft_started', {
+        recipe: params.recipeKey,
+        schema_version: 1,
+        ...params.context,
+      });
+    },
+
+    trackCraftCollected: (params: {
+      recipeKey: ProductionRecipeKey;
+      revenue: number;
+      context: GameAnalyticsContext;
+    }) => {
+      track('craft_collected', {
+        recipe: params.recipeKey,
+        revenue: params.revenue,
+        schema_version: 1,
+        ...params.context,
+      });
+    },
+
+    trackCraftCanceled: (params: {
+      recipeKey: ProductionRecipeKey;
+      refundedCount: number;
+      context: GameAnalyticsContext;
+    }) => {
+      track('craft_canceled', {
+        recipe: params.recipeKey,
+        refunded_count: params.refundedCount,
+        schema_version: 1,
+        ...params.context,
+      });
+    },
+
+    // 한 번의 '일괄 수집' 탭이 하나의 퍼널 스텝으로 읽히도록, 가공품 개별이 아니라
+    // 커밋된 배치당 1건만 발화한다(harvest_all과 동일한 집계 경계).
+    trackCraftCollectAll: (params: {
+      collectedCount: number;
+      totalGold: number;
+      context: GameAnalyticsContext;
+    }) => {
+      track('craft_collect_all', {
+        collected_count: params.collectedCount,
+        total_gold: params.totalGold,
         schema_version: 1,
         ...params.context,
       });

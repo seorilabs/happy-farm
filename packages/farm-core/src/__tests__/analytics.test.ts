@@ -479,6 +479,59 @@ describe('farm analytics adapter contract', () => {
       expect.objectContaining({ is_rare: 0, rare_multiplier: 1 })
     );
   });
+
+  test('공방(가공) 퍼널 5개 이벤트를 exact payload로 emit하고 AIT 파라미터 예산을 지킨다 (#421)', () => {
+    const track = jest.fn();
+    const analytics = createFarmAnalytics(track);
+    const context = getGameAnalyticsContext(createInitialState(), 0, 5_000);
+
+    analytics.trackProductionScreen({ source: 'more', craftingCount: 2, readyCount: 1, context });
+    analytics.trackCraftStarted({ recipeKey: 'bread', context });
+    analytics.trackCraftCollected({ recipeKey: 'bread', revenue: 300, context });
+    analytics.trackCraftCanceled({ recipeKey: 'bread', refundedCount: 3, context });
+    analytics.trackCraftCollectAll({ collectedCount: 4, totalGold: 1200, context });
+
+    expect(track.mock.calls).toEqual([
+      ['production_screen', {
+        source: 'more',
+        crafting_count: 2,
+        ready_count: 1,
+        schema_version: 1,
+        ...context,
+      }],
+      ['craft_started', {
+        recipe: 'bread',
+        schema_version: 1,
+        ...context,
+      }],
+      ['craft_collected', {
+        recipe: 'bread',
+        revenue: 300,
+        schema_version: 1,
+        ...context,
+      }],
+      ['craft_canceled', {
+        recipe: 'bread',
+        refunded_count: 3,
+        schema_version: 1,
+        ...context,
+      }],
+      ['craft_collect_all', {
+        collected_count: 4,
+        total_gold: 1200,
+        schema_version: 1,
+        ...context,
+      }],
+    ]);
+
+    // GA4 이벤트당 25개 파라미터 예산(context 12 + 이벤트 필드)을 넘지 않는다.
+    for (const [, params] of track.mock.calls) {
+      expect(Object.keys(params as Record<string, unknown>).length).toBeLessThanOrEqual(25);
+    }
+    // 컨텍스트의 gold(보유 골드)와 수집 수익이 충돌하지 않도록 craft_collected는 revenue로 기록한다.
+    expect(track.mock.calls[2]![1]).not.toHaveProperty('gold', 300);
+    expect(track.mock.calls[2]![1]).toHaveProperty('gold', context.gold);
+  });
 });
 
 describe('Firebase 애널리틱스 값 정규화(공유 어댑터 헬퍼)', () => {
