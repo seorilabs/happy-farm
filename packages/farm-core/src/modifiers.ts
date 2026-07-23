@@ -10,7 +10,7 @@ import {
   type FarmProductivityEstimate,
 } from './constants';
 import { getMasterySellMultiplier, getMasterySpeedMultiplier } from './mastery';
-import { isCropPlantable } from './research';
+import { getResearchEffectValue, isCropPlantable } from './research';
 import { getCropOfTheDayStatus } from './cropOfTheDay';
 import { getWeeklyEventMultiplier, getWeeklyEventSpeedMultiplier } from './weeklyEvent';
 
@@ -53,11 +53,14 @@ export function getGlobalModifiers(gameState: GameState, now = Date.now()): Glob
 
   return {
     speedMultiplier:
-      (getSpeedMultiplier(gameState.upgrades.speed) * (1 + getSkillEffectValue(gameState, 'global_speed'))) /
+      (getSpeedMultiplier(gameState.upgrades.speed) *
+        (1 + getSkillEffectValue(gameState, 'global_speed')) *
+        (1 + getResearchEffectValue(gameState, 'speed_multiplier'))) /
       regionGrowTimeMult,
     profitMultiplier:
       getProfitMultiplier(gameState.upgrades.profit) *
       (1 + getSkillEffectValue(gameState, 'global_profit')) *
+      (1 + getResearchEffectValue(gameState, 'profit_multiplier')) *
       regionSellMult,
     harvestMultiplier,
     cropCostMultiplier: regionScale,

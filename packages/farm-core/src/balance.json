@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "agentPurpose": "Canonical balance data for the farm-game runtime and simulation scripts. Agents should modify this file first, run npm run sim:balance, then update Obsidian balance notes with findings.",
   "goals": {
     "firstMinute": "Teach plant-grow-harvest with carrot/wheat.",
@@ -164,15 +164,19 @@
     { "key": "ad_amplifier", "icon": "📺", "baseCost": 3, "costGrowth": 2, "maxLevel": 4, "effectPerLevel": 0.5 }
   ],
   "research": {
-    "agentPurpose": "Research points (RP) come from donating harvests instead of selling them (rate vs final sale value). Nodes unlock automation, breeding, and the donation amplifier; node costs are RP.",
+    "agentPurpose": "Research points (RP) come from donating harvests instead of selling them (rate vs final sale value). One-time nodes unlock automation/breeding; four repeatable scale studies provide an endless late-game RP sink. Repeatable costs grow geometrically and their positive effects feed the live economy paths.",
     "donationRpRate": 0.05,
     "donationAmplifierBonus": 0.5,
     "nodes": [
-      { "key": "auto_harvest", "cost": 50000, "requires": null },
-      { "key": "auto_replant", "cost": 250000, "requires": "auto_harvest" },
-      { "key": "breeding_lab", "cost": 1000000, "requires": null },
-      { "key": "breeding_advanced", "cost": 50000000, "requires": "breeding_lab" },
-      { "key": "donation_amplifier", "cost": 5000000, "requires": null }
+      { "key": "auto_harvest", "cost": 50000, "costGrowth": 1, "maxLevel": 1, "requires": null, "category": "automation", "effect": null, "effectPerLevel": 0 },
+      { "key": "auto_replant", "cost": 250000, "costGrowth": 1, "maxLevel": 1, "requires": "auto_harvest", "category": "automation", "effect": null, "effectPerLevel": 0 },
+      { "key": "donation_amplifier", "cost": 5000000, "costGrowth": 1, "maxLevel": 1, "requires": null, "category": "automation", "effect": null, "effectPerLevel": 0 },
+      { "key": "market_studies", "cost": 2000000, "costGrowth": 1.75, "maxLevel": null, "requires": "donation_amplifier", "category": "scaling", "effect": "profit_multiplier", "effectPerLevel": 0.03 },
+      { "key": "growth_studies", "cost": 3000000, "costGrowth": 1.8, "maxLevel": null, "requires": "donation_amplifier", "category": "scaling", "effect": "speed_multiplier", "effectPerLevel": 0.02 },
+      { "key": "offline_studies", "cost": 5000000, "costGrowth": 1.85, "maxLevel": null, "requires": "donation_amplifier", "category": "scaling", "effect": "offline_cap_ms", "effectPerLevel": 7200000 },
+      { "key": "mutation_studies", "cost": 8000000, "costGrowth": 1.9, "maxLevel": null, "requires": "breeding_lab", "category": "scaling", "effect": "mutation_chance_multiplier", "effectPerLevel": 0.05 },
+      { "key": "breeding_lab", "cost": 1000000, "costGrowth": 1, "maxLevel": 1, "requires": null, "category": "breeding", "effect": null, "effectPerLevel": 0 },
+      { "key": "breeding_advanced", "cost": 50000000, "costGrowth": 1, "maxLevel": 1, "requires": "breeding_lab", "category": "breeding", "effect": null, "effectPerLevel": 0 }
     ]
   },
   "breeding": {

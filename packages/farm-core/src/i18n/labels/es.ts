@@ -142,6 +142,10 @@ export const esLabels: LabelBundle = {
     breeding_lab: { name: 'Laboratorio de Cruce', description: 'Cruza dos cultivos para crear nuevas variedades.' },
     breeding_advanced: { name: 'Cruce Avanzado', description: 'Desbloquea combinaciones de cruce poco comunes.' },
     donation_amplifier: { name: 'Amplificador de Donación', description: 'Las donaciones dan un 50% más de puntos de investigación.' },
+    market_studies: { name: 'Estudios de Mercado', description: '+3% de beneficio por venta por nivel, en todas partes.' },
+    growth_studies: { name: 'Estudios de Crecimiento', description: 'Todos los cultivos crecen un 2% más rápido por nivel.' },
+    offline_studies: { name: 'Estudios sin Conexión', description: '+2 h al límite de ingresos sin conexión de la granja activa por nivel.' },
+    mutation_studies: { name: 'Estudios de Mutación', description: '+5% de probabilidad para mutaciones desbloqueadas por nivel.' },
   },
   achievementTrack: {
     harvest_total: { name: 'Cosechas Totales' },

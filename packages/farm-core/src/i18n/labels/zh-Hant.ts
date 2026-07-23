@@ -142,6 +142,10 @@ export const zhHantLabels: LabelBundle = {
     breeding_lab: { name: '育種實驗室', description: '將兩種作物雜交培育出新品種。' },
     breeding_advanced: { name: '進階育種', description: '解鎖稀有作物的雜交組合。' },
     donation_amplifier: { name: '捐獻增幅', description: '捐獻可額外獲得 50% 研究點數。' },
+    market_studies: { name: '市場研究', description: '每級使所有販售收益增加 3%。' },
+    growth_studies: { name: '成長研究', description: '每級使所有作物成長速度提高 2%。' },
+    offline_studies: { name: '離線研究', description: '每級使目前農場的離線收益上限增加 2 小時。' },
+    mutation_studies: { name: '變異研究', description: '每級使已解鎖變異的出現機率提高 5%。' },
   },
   achievementTrack: {
     harvest_total: { name: '累計收成' },

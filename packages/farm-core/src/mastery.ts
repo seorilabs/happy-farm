@@ -1,5 +1,6 @@
 import balance from './balance.json';
 import type { CropKey, GameState, MasteryRankKey, MutationKey } from './types';
+import { getResearchEffectValue } from './research';
 
 export type MasteryRank = {
   key: MasteryRankKey;
@@ -109,7 +110,8 @@ export function getMutationChance(gameState: GameState, cropKey: CropKey, kind: 
   if (minRankIndex < 0 || rankIndex < minRankIndex) {
     return 0;
   }
-  return kind.baseChance + kind.chancePerRankAboveMin * (rankIndex - minRankIndex);
+  const baseChance = kind.baseChance + kind.chancePerRankAboveMin * (rankIndex - minRankIndex);
+  return baseChance * (1 + getResearchEffectValue(gameState, 'mutation_chance_multiplier'));
 }
 
 // Consumes exactly one roll in [0, 1) so callers can replay the same roll

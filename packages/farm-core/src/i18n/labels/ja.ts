@@ -142,6 +142,10 @@ export const jaLabels: LabelBundle = {
     breeding_lab: { name: '交配研究', description: '2つの作物を交配して新品種を生み出します。' },
     breeding_advanced: { name: '上級交配', description: '希少な交配の組み合わせを解放します。' },
     donation_amplifier: { name: '献納増幅', description: '献納で得られる研究ポイントが50%増えます。' },
+    market_studies: { name: '市場研究', description: 'すべての販売利益がレベルごとに3%増えます。' },
+    growth_studies: { name: '成長研究', description: 'すべての作物がレベルごとに2%速く育ちます。' },
+    offline_studies: { name: 'オフライン研究', description: '稼働中農場のオフライン収益上限がレベルごとに2時間増えます。' },
+    mutation_studies: { name: '変異研究', description: '解放済み変異の出現率がレベルごとに5%増えます。' },
   },
   achievementTrack: {
     harvest_total: { name: '累計収穫' },

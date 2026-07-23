@@ -5,8 +5,19 @@ import { recordMissionProgressEvent } from './missionEvents';
 export type ResearchNode = {
   key: ResearchNodeKey;
   cost: number;
+  costGrowth: number;
+  maxLevel: number | null;
   requires: ResearchNodeKey | null;
+  category: 'automation' | 'scaling' | 'breeding';
+  effect: ResearchNodeEffect | null;
+  effectPerLevel: number;
 };
+
+export type ResearchNodeEffect =
+  | 'profit_multiplier'
+  | 'speed_multiplier'
+  | 'offline_cap_ms'
+  | 'mutation_chance_multiplier';
 
 export type BreedingRecipe = {
   crop: CropKey;
@@ -44,18 +55,43 @@ function getKnownNode(nodeKey: ResearchNodeKey): ResearchNode {
 }
 
 export function isNodeUnlocked(gameState: GameState, nodeKey: ResearchNodeKey): boolean {
-  return gameState.research.unlockedNodes.includes(nodeKey);
+  return getResearchNodeLevel(gameState, nodeKey) > 0;
+}
+
+export function getResearchNodeLevel(gameState: GameState, nodeKey: ResearchNodeKey): number {
+  const storedLevel = gameState.research.nodeLevels?.[nodeKey];
+  if (typeof storedLevel === 'number' && Number.isFinite(storedLevel) && storedLevel > 0) {
+    return Math.floor(storedLevel);
+  }
+  // In-memory callers may still hand us a pre-nodeLevels state. Treat legacy
+  // unlockedNodes as level 1 until the next save migration persists nodeLevels.
+  return gameState.research.unlockedNodes.includes(nodeKey) ? 1 : 0;
+}
+
+export function getResearchNodeCost(gameState: GameState, nodeKey: ResearchNodeKey): number | null {
+  const node = getKnownNode(nodeKey);
+  const level = getResearchNodeLevel(gameState, nodeKey);
+  if (node.maxLevel != null && level >= node.maxLevel) {
+    return null;
+  }
+  const rawCost = node.cost * Math.pow(node.costGrowth, level);
+  return Math.min(Number.MAX_SAFE_INTEGER, Math.max(1, Math.floor(rawCost)));
+}
+
+export function getResearchEffectValue(gameState: GameState, effect: ResearchNodeEffect): number {
+  return RESEARCH_NODES.filter((node) => node.effect === effect).reduce(
+    (total, node) => total + getResearchNodeLevel(gameState, node.key) * node.effectPerLevel,
+    0
+  );
 }
 
 export function canUnlockNode(gameState: GameState, nodeKey: ResearchNodeKey): boolean {
   const node = getKnownNode(nodeKey);
-  if (isNodeUnlocked(gameState, nodeKey)) {
-    return false;
-  }
   if (node.requires != null && !isNodeUnlocked(gameState, node.requires)) {
     return false;
   }
-  return gameState.research.points >= node.cost;
+  const cost = getResearchNodeCost(gameState, nodeKey);
+  return cost != null && gameState.research.points >= cost;
 }
 
 export function unlockNode(gameState: GameState, nodeKey: ResearchNodeKey): GameState | null {
@@ -63,12 +99,19 @@ export function unlockNode(gameState: GameState, nodeKey: ResearchNodeKey): Game
     return null;
   }
   const node = getKnownNode(nodeKey);
+  const currentLevel = getResearchNodeLevel(gameState, nodeKey);
+  const cost = getResearchNodeCost(gameState, nodeKey);
+  if (cost == null) {
+    return null;
+  }
   return {
     ...gameState,
     research: {
       ...gameState.research,
-      points: gameState.research.points - node.cost,
-      unlockedNodes: [...gameState.research.unlockedNodes, nodeKey],
+      points: gameState.research.points - cost,
+      nodeLevels: { ...gameState.research.nodeLevels, [nodeKey]: currentLevel + 1 },
+      unlockedNodes:
+        currentLevel > 0 ? gameState.research.unlockedNodes : [...gameState.research.unlockedNodes, node.key],
     },
   };
 }
@@ -141,7 +184,14 @@ export function breedCrop(gameState: GameState, cropKey: CropKey, now = Date.now
 }
 
 export function createInitialResearchState(): ResearchState {
-  return { points: 0, totalPointsEarned: 0, unlockedNodes: [], unlockedBreeds: [], acknowledgedOpportunities: [] };
+  return {
+    points: 0,
+    totalPointsEarned: 0,
+    nodeLevels: {},
+    unlockedNodes: [],
+    unlockedBreeds: [],
+    acknowledgedOpportunities: [],
+  };
 }
 
 // 연구실 진입 유도 배지용: 지금 당장 행동 가능한 "발견 기회"의 안정적 키 목록.
@@ -197,17 +247,41 @@ export function normalizeResearchState(value: unknown): ResearchState {
   const loaded = (typeof value === 'object' && value != null ? value : {}) as Partial<ResearchState>;
   const points = normalizePoints(loaded.points);
 
-  const unlockedNodes = Array.isArray(loaded.unlockedNodes)
+  const legacyUnlockedNodes = Array.isArray(loaded.unlockedNodes)
     ? loaded.unlockedNodes
         .filter(isKnownNodeKey)
         .filter((nodeKey, index, items) => items.indexOf(nodeKey) === index)
     : [];
 
-  // Drop nodes whose prerequisite is missing so the tree can never load into
-  // an unreachable shape.
-  const reachableNodes = unlockedNodes.filter((nodeKey) => {
+  const candidateLevels: Partial<Record<ResearchNodeKey, number>> = {};
+  if (typeof loaded.nodeLevels === 'object' && loaded.nodeLevels != null) {
+    for (const [rawKey, rawLevel] of Object.entries(loaded.nodeLevels)) {
+      if (!isKnownNodeKey(rawKey) || typeof rawLevel !== 'number' || !Number.isFinite(rawLevel)) continue;
+      const node = getKnownNode(rawKey);
+      const level = Math.max(0, Math.floor(rawLevel));
+      const cappedLevel = node.maxLevel == null ? level : Math.min(level, node.maxLevel);
+      if (cappedLevel > 0) {
+        candidateLevels[rawKey] = cappedLevel;
+      }
+    }
+  }
+  for (const nodeKey of legacyUnlockedNodes) {
+    candidateLevels[nodeKey] = Math.max(1, candidateLevels[nodeKey] ?? 0);
+  }
+
+  function hasReachablePrerequisites(nodeKey: ResearchNodeKey, visiting = new Set<ResearchNodeKey>()): boolean {
+    if ((candidateLevels[nodeKey] ?? 0) <= 0 || visiting.has(nodeKey)) return false;
     const node = getKnownNode(nodeKey);
-    return node.requires == null || unlockedNodes.includes(node.requires);
+    if (node.requires == null) return true;
+    const nextVisiting = new Set(visiting);
+    nextVisiting.add(nodeKey);
+    return hasReachablePrerequisites(node.requires, nextVisiting);
+  }
+
+  const nodeLevels: Partial<Record<ResearchNodeKey, number>> = {};
+  const unlockedNodes = RESEARCH_NODES.filter((node) => hasReachablePrerequisites(node.key)).map((node) => {
+    nodeLevels[node.key] = candidateLevels[node.key];
+    return node.key;
   });
 
   const unlockedBreeds = Array.isArray(loaded.unlockedBreeds)
@@ -228,7 +302,8 @@ export function normalizeResearchState(value: unknown): ResearchState {
   return {
     points,
     totalPointsEarned: Math.max(points, normalizePoints(loaded.totalPointsEarned)),
-    unlockedNodes: reachableNodes,
+    nodeLevels,
+    unlockedNodes,
     unlockedBreeds,
     acknowledgedOpportunities,
   };

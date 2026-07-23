@@ -32,6 +32,7 @@ import {
   getChainIncome,
   isAreaUnlocked,
   getPrestigeSkillLabel,
+  getResearchNodeLabel,
   getPrestigeCost,
   getRewardedGoldAmount,
   getSkillLevel,
@@ -870,7 +871,38 @@ describe('LabSheet', () => {
 
     expect(screen.getByText(messages.automationSection)).toBeTruthy();
     expect(screen.getByText(messages.researchNodesSection)).toBeTruthy();
+    expect(screen.getByText(messages.automationResearchSection)).toBeTruthy();
+    expect(screen.getByText(messages.scalingResearchSection)).toBeTruthy();
+    expect(screen.getByText(messages.breedingResearchSection)).toBeTruthy();
     expect(screen.getByText(messages.breedingSection)).toBeTruthy();
+  });
+
+  test('shows repeatable scale research level and buys the next tier inside the lab', () => {
+    const base = createInitialState();
+    const state: GameState = {
+      ...base,
+      research: {
+        ...base.research,
+        points: 10_000_000,
+        nodeLevels: { donation_amplifier: 1, market_studies: 1 },
+        unlockedNodes: ['donation_amplifier', 'market_studies'],
+      },
+    };
+    const onUnlockNode = jest.fn();
+    const screen = render(
+      <LabSheet
+        gameState={state}
+        locale={LOCALE}
+        messages={messages}
+        onToggleAutomation={jest.fn()}
+        onUnlockNode={onUnlockNode}
+        onBreed={jest.fn()}
+      />
+    );
+    const title = `${getResearchNodeLabel('market_studies', LOCALE).name} · ${messages.researchNodeLevelLabel(1)}`;
+
+    fireEvent.press(screen.getByText(title));
+    expect(onUnlockNode).toHaveBeenCalledWith('market_studies');
   });
 
   test('toggles the always-available donation automation setting', () => {

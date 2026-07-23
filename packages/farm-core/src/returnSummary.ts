@@ -12,6 +12,7 @@ import {
   OFFLINE_INCOME_CAP_MS,
   OFFLINE_INCOME_EFFICIENCY_RATIO,
 } from './constants';
+import { getResearchEffectValue } from './research';
 
 const MS_PER_HOUR = 60 * 60 * 1000;
 
@@ -20,6 +21,10 @@ const MS_PER_HOUR = 60 * 60 * 1000;
 // for a few seconds) should never trigger the "welcome back" moment — it only
 // feels rewarding when real time has passed.
 export const RETURN_SUMMARY_MIN_AWAY_MS = 10 * 60 * 1000;
+
+export function getActiveFarmOfflineCapMs(gameState: GameState): number {
+  return OFFLINE_INCOME_CAP_MS + getResearchEffectValue(gameState, 'offline_cap_ms');
+}
 
 export type ReturnSummary = {
   // Wall-clock instant at which every amount/count below was captured.
@@ -78,7 +83,7 @@ export function getActiveFarmOfflineGold(gameState: GameState, awayMs: number): 
   if (!Number.isFinite(awayMs) || awayMs <= 0) {
     return 0;
   }
-  const cappedMs = Math.min(awayMs, OFFLINE_INCOME_CAP_MS);
+  const cappedMs = Math.min(awayMs, getActiveFarmOfflineCapMs(gameState));
   if (cappedMs <= 0) {
     return 0;
   }
