@@ -3357,6 +3357,98 @@ describe('FarmGame UI flow', () => {
     expect(screen.queryByText('숙련도 달성!')).toBeNull();
   });
 
+  describe('crop_harvested source and payout integrity (#396)', () => {
+    function cropHarvestEvents(track: jest.Mock) {
+      return track.mock.calls
+        .filter(([name]) => name === 'crop_harvested')
+        .map(([, params]) => params as Record<string, unknown>);
+    }
+
+    test('수동 정상 수확은 실제 골드 지급액을 manual revenue로 기록한다', async () => {
+      const track = jest.fn();
+      const screen = await renderGame(createReadyHarvestState(), { analytics: createFarmAnalytics(track) });
+
+      fireEvent.press(within(screen.getByTestId('plot-cell-0')).getByText('GET'));
+
+      await waitFor(() => expect(cropHarvestEvents(track)).toHaveLength(1));
+      await waitFor(() => expect(screen.getByText(`${50 + CROPS.carrot!.sell}G`)).toBeTruthy());
+      expect(cropHarvestEvents(track)).toEqual([
+        expect.objectContaining({
+          harvest_source: 'manual',
+          reward_type: 'gold',
+          revenue: CROPS.carrot!.sell,
+          research_points_gained: 0,
+          schema_version: 2,
+        }),
+      ]);
+    });
+
+    test('수동 기부 수확의 의도된 revenue=0은 RP 보상으로 명시 구분한다', async () => {
+      const base = createReadyHarvestState();
+      const state: GameState = {
+        ...base,
+        automationSettings: { ...base.automationSettings, donationModeEnabled: true },
+      };
+      const track = jest.fn();
+      const screen = await renderGame(state, { analytics: createFarmAnalytics(track) });
+
+      fireEvent.press(within(screen.getByTestId('plot-cell-0')).getByText('GET'));
+
+      await waitFor(() => expect(cropHarvestEvents(track)).toHaveLength(1));
+      expect(screen.getByText('50G')).toBeTruthy();
+      expect(cropHarvestEvents(track)).toEqual([
+        expect.objectContaining({
+          harvest_source: 'manual',
+          reward_type: 'research_points',
+          revenue: 0,
+          research_points_gained: expect.any(Number),
+          schema_version: 2,
+        }),
+      ]);
+      expect(Number(cropHarvestEvents(track)[0]!.research_points_gained)).toBeGreaterThan(0);
+    });
+
+    test('일괄 수확의 per-crop revenue 합계가 실제 batch 골드 지급액과 일치한다', async () => {
+      const track = jest.fn();
+      const screen = await renderGame(createReadyHarvestState(), { analytics: createFarmAnalytics(track) });
+
+      fireEvent.press(screen.getByLabelText('🧺 모두 수확 2'));
+
+      await waitFor(() => expect(cropHarvestEvents(track)).toHaveLength(2));
+      await waitFor(() => expect(screen.getByText(`${50 + CROPS.carrot!.sell * 2}G`)).toBeTruthy());
+      const events = cropHarvestEvents(track);
+      expect(events).toEqual([
+        expect.objectContaining({ harvest_source: 'batch', reward_type: 'gold' }),
+        expect.objectContaining({ harvest_source: 'batch', reward_type: 'gold' }),
+      ]);
+      expect(events.reduce((total, event) => total + Number(event.revenue), 0)).toBe(CROPS.carrot!.sell * 2);
+    });
+
+    test('자동 수확의 per-crop revenue 합계가 실제 auto 골드 지급액과 일치한다', async () => {
+      const base = createReadyHarvestState();
+      const state: GameState = {
+        ...base,
+        research: { ...base.research, unlockedNodes: ['auto_harvest'] },
+        automationSettings: { autoHarvestEnabled: true, autoReplantEnabled: false, donationModeEnabled: false },
+      };
+      const track = jest.fn();
+      const screen = await renderGame(state, { analytics: createFarmAnalytics(track) });
+
+      await act(async () => {
+        jest.advanceTimersByTime(GAME_TICK_INTERVAL_MS + 50);
+      });
+
+      await waitFor(() => expect(cropHarvestEvents(track)).toHaveLength(2));
+      await waitFor(() => expect(screen.getByText(`${50 + CROPS.carrot!.sell * 2}G`)).toBeTruthy());
+      const events = cropHarvestEvents(track);
+      expect(events).toEqual([
+        expect.objectContaining({ harvest_source: 'auto', reward_type: 'gold' }),
+        expect.objectContaining({ harvest_source: 'auto', reward_type: 'gold' }),
+      ]);
+      expect(events.reduce((total, event) => total + Number(event.revenue), 0)).toBe(CROPS.carrot!.sell * 2);
+    });
+  });
+
   // ---------------------------------------------------------------------------
   // First harvest celebration overlay
   // ---------------------------------------------------------------------------

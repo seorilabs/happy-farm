@@ -63,6 +63,72 @@ describe('farm analytics adapter contract', () => {
     );
   });
 
+  test('crop_harvested는 실제 골드 지급액과 기부 RP를 source·reward_type으로 구분한다 (#396)', () => {
+    const track = jest.fn();
+    const analytics = createFarmAnalytics(track);
+    const context = getGameAnalyticsContext(createInitialState(), 0, 5_000);
+
+    analytics.trackCropHarvested({
+      cropKey: 'carrot',
+      areaKey: 'starter_field',
+      cropTier: 1,
+      goldGained: 20,
+      researchPointsGained: 0,
+      donated: false,
+      harvestSource: 'manual',
+      isFirstMeaningfulHarvest: false,
+      isFirstCropHarvest: false,
+      context,
+    });
+    analytics.trackCropHarvested({
+      cropKey: 'carrot',
+      areaKey: 'starter_field',
+      cropTier: 1,
+      goldGained: 0,
+      researchPointsGained: 3,
+      donated: true,
+      harvestSource: 'auto',
+      isFirstMeaningfulHarvest: false,
+      isFirstCropHarvest: false,
+      context,
+    });
+
+    expect(track.mock.calls).toEqual([
+      [
+        'crop_harvested',
+        {
+          crop: 'carrot',
+          area: 'starter_field',
+          crop_tier: 1,
+          revenue: 20,
+          research_points_gained: 0,
+          reward_type: 'gold',
+          harvest_source: 'manual',
+          is_first_meaningful_harvest: false,
+          is_first_crop_harvest: false,
+          schema_version: 2,
+          ...context,
+        },
+      ],
+      [
+        'crop_harvested',
+        {
+          crop: 'carrot',
+          area: 'starter_field',
+          crop_tier: 1,
+          revenue: 0,
+          research_points_gained: 3,
+          reward_type: 'research_points',
+          harvest_source: 'auto',
+          is_first_meaningful_harvest: false,
+          is_first_crop_harvest: false,
+          schema_version: 2,
+          ...context,
+        },
+      ],
+    ]);
+  });
+
   test('harvest_combo_completed는 수동 콤보 종료 계약을 exact payload로 emit한다 (#348)', () => {
     const track = jest.fn();
     const analytics = createFarmAnalytics(track);
@@ -247,7 +313,10 @@ describe('farm analytics adapter contract', () => {
       cropKey: 'carrot',
       areaKey: 'starter_field',
       cropTier: 1,
-      revenue: 20,
+      goldGained: 20,
+      researchPointsGained: 0,
+      donated: false,
+      harvestSource: 'manual',
       isFirstMeaningfulHarvest: true,
       isFirstCropHarvest: true,
       context,

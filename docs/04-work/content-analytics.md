@@ -28,7 +28,7 @@ happy-farm **개별 콘텐츠(작물·구역·기능 퍼널)** 세부 지표의 
 | `crop_planted` | `crop`, `area`, `crop_tier`, `crop_cost` | 심기 |
 | `crop_ready_summary` | `crop`, `area`, `crop_tier`, `ready_count`, `window_seconds`, `schema_version` | 60초 rolling window의 성장 완료 집계(bucket별 1건) |
 | `crop_ready` | `crop`, `area`, `crop_tier` | 배칭 전 버전의 legacy 성장 완료 이벤트 |
-| `crop_harvested` | `crop`, `area`, `crop_tier`, `revenue`, `is_first_crop_harvest` | 수확·매출 |
+| `crop_harvested` | `crop`, `area`, `crop_tier`, `revenue`, `research_points_gained`, `reward_type`, `harvest_source`, `is_first_crop_harvest`, `schema_version` | 수확·실지급 보상·경로 |
 | `crop_of_the_day_harvested` | `crop`, `multiplier` | 오늘의 작물 수확 |
 | `breed_unlocked` | `crop` | 교배 해금 |
 
@@ -46,13 +46,23 @@ happy-farm **개별 콘텐츠(작물·구역·기능 퍼널)** 세부 지표의 
 - **심기→수확 전환율** = `harvested / planted` (작물별 완주율)
 - **수확당 평균 매출** = `revenue / harvested`
 
+`crop_harvested.schema_version=2`부터 현재의 실제 수확 경로를 모두 기록한다.
+`harvest_source`는 `manual | batch | auto`이며 수확 후 재심기도 `batch`에 포함한다. `reward_type`은
+`gold | research_points` stable key다. `revenue`는 canonical 수확 결과에서 실제로 지급된
+골드와 정확히 같으므로 정상 골드 수확에서는 양수다. 기부 모드는 골드 대신 RP를 지급해
+`revenue=0`, `reward_type=research_points`, `research_points_gained>0`으로 명시 구분한다.
+offline 정산은 작물을 익은 상태로만 남기며 수확하지 않고, combo는 수동 수확의 후처리
+summary이므로 별도 `harvest_source`가 아니다. schema v2 전 `crop_harvested`는 수동 단일
+수확에서만 발생했으므로 source가 없는 legacy 행은 분석 시 `manual`로 간주한다.
+
 `crop_ready_summary`는 같은 window 안에서 `(crop, area, crop_tier)`가 같은 익음을
 `ready_count`로 합친다. 정상 active window는 60초 뒤 flush하며, 앱 background/inactive,
 unmount, prestige/reset/cloud restore에서는 유실을 줄이고 새 농장 context 혼합을 막기 위해
 부분 window를 best-effort로 먼저 flush한다. 이때 `window_seconds`에는 실제 경과 초가 기록된다.
 배칭 배포 전후를 함께 조회할 때는 반드시 위의 legacy 호환 합계식을 사용한다. #288의
 기존 `crop_ready` 대비 수확 비율은 과다 발화 기간을 포함하므로 신규 계약 배포 뒤 다시
-baseline을 잡고, 자동수확 사용자는 crop별 수확 이벤트가 없으므로 별도 cohort로 분리한다.
+baseline을 잡는다. schema v2부터 자동수확도 crop별 이벤트를 내므로, 수동 행동 전환을 볼
+때는 `harvest_source=manual` cohort로 제한한다.
 
 ### 2) 구역(area) 차원
 | 소스 이벤트 | 파라미터 | 용도 |
@@ -101,8 +111,9 @@ baseline을 잡고, 자동수확 사용자는 crop별 수확 이벤트가 없으
 
 `harvest_combo_completed`는 **수동 단일 수확 streak가 끝날 때 1건** 발생한다. 단일
 수확 streak도 포함하며, 화면 연출용 콤보에는 들어가는 `harvest_all`과 자동 수확은 이
-계측 accumulator에서 제외한다. 따라서 배포 전 `crop_harvested` timestamp를 1.5초
-간격으로 재구성한 값과 직접 섞지 않고, 배포 이후 직접 이벤트만 새 baseline으로 쓴다.
+계측 accumulator에서 제외한다. schema v2 이후 원본 수확을 함께 볼 때도
+`crop_harvested.harvest_source=manual`만 비교한다. 배포 전 `crop_harvested` timestamp를
+1.5초 간격으로 재구성한 값과 직접 섞지 않고, 배포 이후 직접 이벤트만 새 baseline으로 쓴다.
 
 | 소스 이벤트 | 파라미터 | 계약 |
 |---|---|---|
