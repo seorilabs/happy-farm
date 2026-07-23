@@ -1,5 +1,12 @@
 /// <reference types="jest" />
 
+// Countdown unit tests isolate upgrade math. Daily weather integration is
+// covered separately in weatherModifier.test.ts.
+jest.mock('../weather', () => ({
+  getWeatherSpeedMultiplier: () => 1,
+  getWeatherSellMultiplier: () => 1,
+}));
+
 import { createInitialState } from '../constants';
 import {
   getPlotGrowthDisplay,

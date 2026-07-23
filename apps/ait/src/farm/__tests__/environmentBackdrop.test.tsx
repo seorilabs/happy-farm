@@ -146,4 +146,68 @@ describe('EnvironmentBackdrop', () => {
     ).toBe('transparent');
     expect(screen.UNSAFE_queryByProps({ testID: 'environment-area-horizon' })).toBeNull();
   });
+
+  test('renders deterministic rain and snow layers when weather effects are enabled', () => {
+    const screen = render(
+      <EnvironmentBackdrop
+        phase="day"
+        minutesOfDay={12 * 60}
+        backgroundColor="#eaf6e6"
+        weatherKey="rain"
+      />
+    );
+
+    expect(screen.UNSAFE_getByProps({ testID: 'environment-weather-tone-rain' })).toBeTruthy();
+    expect(screen.UNSAFE_getByProps({ testID: 'environment-weather-rain' })).toBeTruthy();
+    for (let index = 0; index < 12; index += 1) {
+      expect(screen.UNSAFE_getByProps({ testID: `environment-rain-drop-${index}` })).toBeTruthy();
+    }
+    expect(screen.UNSAFE_queryByProps({ testID: 'environment-rain-drop-12' })).toBeNull();
+
+    screen.rerender(
+      <EnvironmentBackdrop
+        phase="day"
+        minutesOfDay={12 * 60}
+        backgroundColor="#eaf6e6"
+        weatherKey="snow"
+      />
+    );
+
+    expect(screen.UNSAFE_getByProps({ testID: 'environment-weather-tone-snow' })).toBeTruthy();
+    expect(screen.UNSAFE_getByProps({ testID: 'environment-weather-snow' })).toBeTruthy();
+    for (let index = 0; index < 12; index += 1) {
+      expect(screen.UNSAFE_getByProps({ testID: `environment-snow-flake-${index}` })).toBeTruthy();
+    }
+    expect(screen.UNSAFE_queryByProps({ testID: 'environment-snow-flake-12' })).toBeNull();
+  });
+
+  test('keeps the weather tone but suppresses precipitation in reduced-effects mode', () => {
+    const screen = render(
+      <EnvironmentBackdrop
+        phase="day"
+        minutesOfDay={12 * 60}
+        backgroundColor="#eaf6e6"
+        weatherKey="rain"
+        weatherEffectsEnabled={false}
+      />
+    );
+
+    expect(screen.UNSAFE_getByProps({ testID: 'environment-weather-tone-rain' })).toBeTruthy();
+    expect(screen.UNSAFE_queryByProps({ testID: 'environment-weather-rain' })).toBeNull();
+    expect(screen.UNSAFE_queryByProps({ testID: 'environment-rain-drop-0' })).toBeNull();
+
+    screen.rerender(
+      <EnvironmentBackdrop
+        phase="day"
+        minutesOfDay={12 * 60}
+        backgroundColor="#eaf6e6"
+        weatherKey="snow"
+        weatherEffectsEnabled={false}
+      />
+    );
+
+    expect(screen.UNSAFE_getByProps({ testID: 'environment-weather-tone-snow' })).toBeTruthy();
+    expect(screen.UNSAFE_queryByProps({ testID: 'environment-weather-snow' })).toBeNull();
+    expect(screen.UNSAFE_queryByProps({ testID: 'environment-snow-flake-0' })).toBeNull();
+  });
 });

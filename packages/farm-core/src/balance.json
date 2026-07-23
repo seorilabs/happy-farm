@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 3,
+  "schemaVersion": 4,
   "agentPurpose": "Canonical balance data for the farm-game runtime and simulation scripts. Agents should modify this file first, run npm run sim:balance, then update Obsidian balance notes with findings.",
   "goals": {
     "firstMinute": "Teach plant-grow-harvest with carrot/wheat.",
@@ -38,6 +38,15 @@
   "resetOffset": {
     "agentPurpose": "Daily/weekly reset boundary offset (#251). All calendar-day resets (오늘의 작물·일일/주간 미션·룰렛·주말 축제·광고 일일 한도) previously rolled over at UTC 00:00 = KST 09:00 (commute/school time). offsetMs shifts every boundary via the shared getResetDayIndex(now, offsetMs) helper so it lands in a low-activity local window instead. Default 68400000 = 19h: KST(UTC+9) 04:00 reset (UTC 19:00), so the boundary falls in the dead of night and Friday/Sunday evening prime time sits fully inside the day. Must be in [0, 86400000). Live-ops/per-market tunable here.",
     "offsetMs": 68400000
+  },
+  "weather": {
+    "agentPurpose": "Save-free daily ambient weather. A reset-day hash selects one weighted type; sell/speed bonuses are global, lightweight, and multiplicative with the existing crop modifier stack. Clear days are neutral. Precipitation is presentation metadata only and can be suppressed by the ambient-effects setting without changing gameplay.",
+    "types": [
+      { "key": "clear", "icon": "☀️", "weight": 45, "axis": null, "multiplier": 1, "precipitation": null },
+      { "key": "rain", "icon": "🌧️", "weight": 25, "axis": "speed", "multiplier": 1.08, "precipitation": "rain" },
+      { "key": "cloudy", "icon": "☁️", "weight": 20, "axis": "sell", "multiplier": 1.05, "precipitation": null },
+      { "key": "snow", "icon": "🌨️", "weight": 10, "axis": "sell", "multiplier": 1.08, "precipitation": "snow" }
+    ]
   },
   "ads": {
     "agentPurpose": "Rewarded-ad frequency gates. Each rewarded ad (growthAd, harvestBonusAd, plotDiscountAd, offlineBonusAd, wheelBonusAd) is bounded by a per-day limit (...DailyLimit) and a cooldown (...CooldownMs) that throttles rapid re-watching within a day; rewardedGold instead uses a sliding-window model (rewardedGoldWindowMs / rewardedGoldMaxUsesPerWindow / rewardedGoldDailyLimit). plotDiscountAdCooldownMs and wheelBonusAdCooldownMs are intentionally 0 because their daily limits are 1 - the once-per-day cap is already the effective gate. offlineBonusAd also has a daily limit of 1, but keeps a 6-hour cooldown to prevent back-to-back claims across the 04:00 reset boundary and to match the return-interstitial cadence. Invariant enforced by scripts/check-balance.mjs: any rewarded ad whose daily limit is >= 2 must have cooldown > 0, otherwise the same-day limit could be spent back-to-back and the frequency gate is meaningless.",

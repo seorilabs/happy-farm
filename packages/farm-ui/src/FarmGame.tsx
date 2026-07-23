@@ -29,6 +29,7 @@ import {
   breedCrop,
   buySkill,
   getCropOfTheDayStatus,
+  getWeather,
   getWeeklyEventStatus,
   canPrestige,
   canUnlockNode,
@@ -2336,6 +2337,7 @@ function FarmGameBody({
   const minutesOfDay = getLocalMinutesOfDay(new Date());
   const environmentTone = useMemo(() => getEnvironmentTone(minutesOfDay), [minutesOfDay]);
   const areaEnvironmentTheme = useMemo(() => getAreaEnvironmentTheme(selectedArea), [selectedArea]);
+  const weather = getWeather(tickNowMsRef.current);
 
   // Header stats show the full modifier stack (upgrades, mastery-independent
   // prestige skills, region scaling) so the display matches the actual math;
@@ -4432,6 +4434,8 @@ function FarmGameBody({
           minutesOfDay={minutesOfDay}
           backgroundColor={environmentTone.backgroundColor}
           areaTheme={areaEnvironmentTheme}
+          weatherKey={weather.key}
+          weatherEffectsEnabled={gameSettings.weatherEffectsEnabled}
         />
         <ScrollView
           testID="farm-scroll"
@@ -4936,6 +4940,8 @@ function FarmGameBody({
             boostRemainingMs={safeBoostRemainingMs}
             offlineGoldPerHour={activeFarmOfflineGoldPerHour}
             offlineIncomeCapMs={activeFarmOfflineCapMs}
+            weather={weather}
+            weatherRemainingMs={Math.max(0, weather.windowEndAt - tickNowMsRef.current)}
             weeklyEventActive={weeklyEvent.active}
             weeklyEventAreaName={getLocalizedAreaLabel(weeklyEvent.areaKey).name}
             weeklyEventMultiplier={weeklyEvent.multiplier}
@@ -5028,6 +5034,12 @@ function FarmGameBody({
               desc={messages.hapticsDesc}
               value={gameSettings.hapticsEnabled}
               onPress={() => updateGameSettings({ hapticsEnabled: !gameSettings.hapticsEnabled })}
+            />
+            <SettingToggle
+              label={messages.weatherEffectsLabel}
+              desc={messages.weatherEffectsDesc}
+              value={gameSettings.weatherEffectsEnabled}
+              onPress={() => updateGameSettings({ weatherEffectsEnabled: !gameSettings.weatherEffectsEnabled })}
             />
 
             <Text style={styles.sheetSectionTitle}>{messages.notificationSection}</Text>
