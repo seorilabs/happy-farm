@@ -400,6 +400,7 @@ export const zhHantFarmMessages: FarmMessages = {
   firstHarvestTitle: '首次收成！🎉',
   firstHarvestSubtitle: '你的農耕之旅開始了！',
   dailyBonusClaimAction: (amount) => `領取 +${amount}G`,
+  dailyBonusConfirmAction: '知道了',
   cropOfTheDayLabel: '每日作物',
   cropOfTheDayDesc: (cropName, multiplier) => `${cropName} · ×${multiplier} 販售加成`,
   weeklyEventLabel: '週末作物慶典',

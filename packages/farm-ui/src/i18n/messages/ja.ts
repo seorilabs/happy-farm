@@ -400,6 +400,7 @@ export const jaFarmMessages: FarmMessages = {
   firstHarvestTitle: '初収穫完了！ 🎉',
   firstHarvestSubtitle: '農家への道が始まりました！',
   dailyBonusClaimAction: (amount) => `+${amount}G を受け取る`,
+  dailyBonusConfirmAction: '受け取りました',
   cropOfTheDayLabel: '今日の作物',
   cropOfTheDayDesc: (cropName, multiplier) => `${cropName} · ×${multiplier} 販売ボーナス`,
   weeklyEventLabel: '週末作物フェス',

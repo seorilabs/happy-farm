@@ -400,6 +400,7 @@ export const deFarmMessages: FarmMessages = {
   firstHarvestTitle: 'Erste Ernte! 🎉',
   firstHarvestSubtitle: 'Deine Farm-Reise beginnt!',
   dailyBonusClaimAction: (amount) => `+${amount}G abholen`,
+  dailyBonusConfirmAction: 'Alles klar',
   cropOfTheDayLabel: 'Pflanze des Tages',
   cropOfTheDayDesc: (cropName, multiplier) => `${cropName} · ×${multiplier} Verkaufsbonus`,
   weeklyEventLabel: 'Wochenend-Erntefest',
