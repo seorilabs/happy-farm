@@ -24,6 +24,9 @@ type EnvironmentBackdropProps = {
 type PhasePalette = {
   bands: readonly [string, string, string, string, string];
   glow: string;
+  // Translucent overlays preserve the selected area's terrain identity while
+  // shifting the same two distant curves into the active time-of-day palette.
+  hills: readonly [string, string];
 };
 
 const MINUTES_PER_DAY = 24 * 60;
@@ -38,6 +41,7 @@ const PHASE_PALETTES: Record<EnvironmentPhase, PhasePalette> = {
       'rgba(213, 218, 234, 0.12)',
     ],
     glow: 'rgba(219, 224, 241, 0.36)',
+    hills: ['rgba(45, 54, 88, 0.26)', 'rgba(31, 44, 69, 0.34)'],
   },
   dawn: {
     bands: [
@@ -48,6 +52,7 @@ const PHASE_PALETTES: Record<EnvironmentPhase, PhasePalette> = {
       'rgba(255, 230, 174, 0.38)',
     ],
     glow: 'rgba(255, 205, 117, 0.52)',
+    hills: ['rgba(118, 88, 131, 0.16)', 'rgba(91, 83, 111, 0.22)'],
   },
   day: {
     bands: [
@@ -58,6 +63,7 @@ const PHASE_PALETTES: Record<EnvironmentPhase, PhasePalette> = {
       'rgba(224, 242, 205, 0.16)',
     ],
     glow: 'rgba(255, 240, 169, 0.30)',
+    hills: ['rgba(63, 126, 91, 0.10)', 'rgba(43, 104, 72, 0.14)'],
   },
   dusk: {
     bands: [
@@ -68,6 +74,7 @@ const PHASE_PALETTES: Record<EnvironmentPhase, PhasePalette> = {
       'rgba(255, 210, 151, 0.40)',
     ],
     glow: 'rgba(255, 167, 104, 0.48)',
+    hills: ['rgba(116, 72, 111, 0.20)', 'rgba(79, 60, 91, 0.28)'],
   },
 };
 
@@ -297,9 +304,34 @@ export const EnvironmentBackdrop = memo(function EnvironmentBackdrop({
 
       {areaTheme.motif != null ? (
         <View testID="environment-area-horizon" style={styles.areaHorizon}>
-          <View style={[styles.horizonBack, { backgroundColor: areaTheme.horizonColor }]} />
-          <View style={[styles.horizonFront, { backgroundColor: areaTheme.groundColor }]} />
-          <AreaMotif motif={areaTheme.motif} color={areaTheme.accentColor} />
+          <View
+            testID={`environment-hills-${phase}`}
+            pointerEvents="none"
+            accessible={false}
+            accessibilityElementsHidden
+            importantForAccessibility="no-hide-descendants"
+            style={styles.motifFill}
+          >
+            <View
+              testID="environment-hill-back"
+              style={[styles.horizonBack, { backgroundColor: areaTheme.horizonColor }]}
+            >
+              <View
+                testID={`environment-hill-back-tint-${phase}`}
+                style={[styles.hillPhaseTint, { backgroundColor: palette.hills[0] }]}
+              />
+            </View>
+            <View
+              testID="environment-hill-front"
+              style={[styles.horizonFront, { backgroundColor: areaTheme.groundColor }]}
+            >
+              <View
+                testID={`environment-hill-front-tint-${phase}`}
+                style={[styles.hillPhaseTint, { backgroundColor: palette.hills[1] }]}
+              />
+            </View>
+            <AreaMotif motif={areaTheme.motif} color={areaTheme.accentColor} />
+          </View>
         </View>
       ) : null}
 
@@ -417,16 +449,19 @@ const styles = StyleSheet.create({
   },
   skyBands: {
     ...StyleSheet.absoluteFillObject,
+    zIndex: 0,
   },
   weatherTone: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(69, 86, 116, 0.18)',
+    zIndex: 4,
   },
   snowTone: {
     backgroundColor: 'rgba(225, 235, 246, 0.22)',
   },
   weatherParticles: {
     ...StyleSheet.absoluteFillObject,
+    zIndex: 5,
   },
   rainDrop: {
     position: 'absolute',
@@ -467,6 +502,7 @@ const styles = StyleSheet.create({
   },
   areaTint: {
     ...StyleSheet.absoluteFillObject,
+    zIndex: 1,
   },
   areaHorizon: {
     position: 'absolute',
@@ -475,6 +511,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     height: '40%',
     overflow: 'hidden',
+    zIndex: 2,
   },
   horizonBack: {
     position: 'absolute',
@@ -484,6 +521,7 @@ const styles = StyleSheet.create({
     height: '74%',
     borderTopLeftRadius: 999,
     borderTopRightRadius: 999,
+    overflow: 'hidden',
     transform: [{ rotate: '-4deg' }],
   },
   horizonFront: {
@@ -494,7 +532,11 @@ const styles = StyleSheet.create({
     height: '72%',
     borderTopLeftRadius: 999,
     borderTopRightRadius: 999,
+    overflow: 'hidden',
     transform: [{ rotate: '3deg' }],
+  },
+  hillPhaseTint: {
+    ...StyleSheet.absoluteFillObject,
   },
   motifFill: {
     ...StyleSheet.absoluteFillObject,
@@ -602,6 +644,7 @@ const styles = StyleSheet.create({
     top: 48,
     height: 52,
     borderRadius: 999,
+    zIndex: 3,
   },
   sunHalo: {
     position: 'absolute',
@@ -611,6 +654,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderRadius: 27,
     backgroundColor: 'rgba(255, 231, 118, 0.28)',
+    zIndex: 3,
   },
   sun: {
     width: 34,
@@ -629,6 +673,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff4c7',
     borderWidth: 2,
     borderColor: 'rgba(255, 255, 255, 0.86)',
+    zIndex: 3,
   },
   moonCrater: {
     position: 'absolute',
@@ -653,11 +698,13 @@ const styles = StyleSheet.create({
     shadowColor: '#ffffff',
     shadowOpacity: 0.8,
     shadowRadius: 2,
+    zIndex: 3,
   },
   cloud: {
     position: 'absolute',
     width: 76,
     height: 34,
+    zIndex: 3,
   },
   cloudPuff: {
     position: 'absolute',
