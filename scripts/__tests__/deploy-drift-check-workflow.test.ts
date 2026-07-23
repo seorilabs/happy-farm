@@ -15,14 +15,23 @@ const WORKFLOW = fs.readFileSync(
 describe('deploy-drift-check 워크플로우 (#420)', () => {
   test('AC-1: schedule(daily cron) + workflow_dispatch 트리거, runs-on: seorilabs-rpi-arm64', () => {
     expect(WORKFLOW).toMatch(/^on:/m);
-    // schedule 아래 cron 항목(매일 실행)
     expect(WORKFLOW).toMatch(/schedule:/);
-    expect(WORKFLOW).toMatch(/- cron: '[^']+'/);
     expect(WORKFLOW).toMatch(/workflow_dispatch:/);
     expect(WORKFLOW).toMatch(/runs-on: seorilabs-rpi-arm64/);
     // 이슈 발행을 위한 권한
     expect(WORKFLOW).toMatch(/issues: write/);
     expect(WORKFLOW).toMatch(/actions: read/);
+
+    // cron이 "매일" 실행인지(=일/월/요일 필드가 모두 '*') 직접 검증한다.
+    const cronMatch = WORKFLOW.match(/- cron: '([^']+)'/);
+    expect(cronMatch).not.toBeNull();
+    const fields = (cronMatch as RegExpMatchArray)[1].trim().split(/\s+/);
+    expect(fields).toHaveLength(5); // minute hour day-of-month month day-of-week
+    const [, , dayOfMonth, month, dayOfWeek] = fields;
+    // 일·월·요일이 모두 '*'이면 매일 1회 실행(daily) 보장
+    expect(dayOfMonth).toBe('*');
+    expect(month).toBe('*');
+    expect(dayOfWeek).toBe('*');
   });
 
   test('AC-2: 최신 v태그 + 채널별 성공 배포 run(단독 + deploy-all 잡) 수집·비교', () => {

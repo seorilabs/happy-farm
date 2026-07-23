@@ -118,7 +118,7 @@ describe('formatAge', () => {
 });
 
 describe('renderDriftTable', () => {
-  test('표에 최신 태그·채널 행·상태가 포함된다', () => {
+  test('AC-3: step summary 표에 최신 태그·채널 행·드리프트 상태가 포함된다', () => {
     const rows = [
       {
         channel: 'AIT (WEB)',
@@ -157,7 +157,7 @@ describe('renderDriftTable', () => {
 });
 
 describe('pickNewerRun', () => {
-  test('created_at이 더 최근인 run을 고른다 (단독 vs deploy-all 경유)', () => {
+  test('AC-2: created_at이 더 최근인 run을 고른다 (단독 run vs deploy-all 경유)', () => {
     const older = { created_at: '2026-07-13T00:00:00Z', html_url: 'a' };
     const newer = { created_at: '2026-07-23T00:00:00Z', html_url: 'b' };
     expect(pickNewerRun(older, newer)).toBe(newer);
@@ -186,7 +186,7 @@ describe('channelAgeHours', () => {
 describe('buildChannelRow (#420 채널 수집·비교)', () => {
   const referenceMs = Date.parse('2026-07-23T00:00:00Z'); // 최신 태그 v1.8.3 시각 가정
 
-  test('WEB(AIT)가 v1.7.0에 10일 정체하면 드리프트로 판정한다 (#420 재현)', () => {
+  test('AC-2: 수집한 단독/deploy-all run과 태그로 WEB(AIT) v1.7.0 정체를 드리프트로 판정한다 (#420 재현)', () => {
     const row = buildChannelRow({
       channel: 'AIT (WEB)',
       run: { created_at: '2026-07-13T00:00:00Z', html_url: 'https://example.com/run/ait' },
@@ -250,7 +250,7 @@ describe('buildChannelRow (#420 채널 수집·비교)', () => {
 
 // AC-3: 드리프트 감지 시 발행하는 이슈/코멘트 본문이 마커와 표를 담는지 검증.
 describe('buildIssueBody', () => {
-  test('본문에 마커·표·점검 메타가 포함된다', () => {
+  test('AC-3: 드리프트 이슈/코멘트 본문에 마커·채널 비교 표·점검 메타가 포함된다', () => {
     const rows = [
       {
         channel: 'AIT (WEB)',
@@ -276,7 +276,7 @@ describe('buildIssueBody', () => {
 });
 
 describe('chooseIssueAction', () => {
-  test('마커가 있는 열린 이슈가 있으면 코멘트를 택한다', () => {
+  test('AC-3: 마커가 있는 열린 이슈가 있으면 코멘트, 없으면 생성을 택한다', () => {
     const action = chooseIssueAction([
       { number: 10, body: `기존 드리프트 이슈\n${ISSUE_MARKER}` },
     ]);
