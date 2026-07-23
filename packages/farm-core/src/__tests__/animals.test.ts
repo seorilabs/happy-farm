@@ -23,6 +23,8 @@ import { createPrestigedState } from '../prestige';
 import { getAnimalLabel } from '../i18n';
 import type { AnimalKey, GameState } from '../types';
 import { META_LAYER_KEYS } from '../types';
+import { getDailyMissionsSnapshot } from '../missions';
+import { getWeeklyMissionsSnapshot } from '../weeklyMissions';
 
 const FIRST = ANIMALS[0]!.key;
 const SECOND = ANIMALS[1]!.key;
@@ -229,6 +231,16 @@ describe('feedAnimal / collectProduce cycle', () => {
     // 급여 상태가 비워져 다시 유휴(재급여 가능).
     expect(collected.animals.feeding[FIRST]).toBeUndefined();
     expect(getAnimalState(collected, FIRST, readyAt)!.phase).toBe('idle');
+    expect(
+      getDailyMissionsSnapshot(collected.dailyMissionState, readyAt, collected.unlockedAreas).missions.find(
+        (mission) => mission.type === 'collect_produce'
+      )!.progress
+    ).toBe(1);
+    expect(
+      getWeeklyMissionsSnapshot(collected.weeklyMissionState, readyAt, collected.unlockedAreas).missions.find(
+        (mission) => mission.type === 'collect_produce'
+      )!.progress
+    ).toBe(1);
 
     // 이중 수확 불가.
     expect(collectProduce(collected, FIRST, readyAt)).toBeNull();

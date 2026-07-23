@@ -1,5 +1,6 @@
 import balance from './balance.json';
 import type { CropKey, GameState, ProductionRecipeKey } from './types';
+import { recordMissionProgressEvent } from './missionEvents';
 
 // 생산 가공 공방(#250). 작물을 즉시 판매만 하던 모델에 "잉여 작물 → 고부가 가공품"
 // 이라는 계획형 골드 싱크를 더한다. 수확 파이프라인(performHarvest)이 매 수확마다
@@ -276,7 +277,7 @@ export function collectCraft(state: GameState, key: ProductionRecipeKey, now: nu
   }
   const crafting = { ...state.production.crafting };
   delete crafting[key];
-  return {
+  const next: GameState = {
     ...state,
     gold: state.gold + recipe.sellPrice,
     production: {
@@ -284,6 +285,7 @@ export function collectCraft(state: GameState, key: ProductionRecipeKey, now: nu
       crafting,
     },
   };
+  return recordMissionProgressEvent(next, { type: 'craft_complete' }, now);
 }
 
 export type CollectAllReadyCraftsResult = {

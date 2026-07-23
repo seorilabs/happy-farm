@@ -1,5 +1,6 @@
 import balance from './balance.json';
 import type { DecorationKey, GameState } from './types';
+import { recordMissionProgressEvent } from './missionEvents';
 
 // Cosmetic farm decorations. A late-game gold sink and self-expression layer:
 // the player spends surplus gold on purely cosmetic items (fence, scarecrow,
@@ -83,14 +84,15 @@ export function canPurchaseDecoration(state: GameState, key: DecorationKey): boo
 // Pure buy: returns a new state with gold deducted and the decoration recorded,
 // or null when the purchase is not allowed (unknown key, already owned, or
 // insufficient gold) so callers never double-charge or double-own.
-export function purchaseDecoration(state: GameState, key: DecorationKey): GameState | null {
+export function purchaseDecoration(state: GameState, key: DecorationKey, now = Date.now()): GameState | null {
   const decoration = getDecoration(key);
   if (decoration == null || !canPurchaseDecoration(state, key)) {
     return null;
   }
-  return {
+  const next: GameState = {
     ...state,
     gold: state.gold - decoration.price,
     placedDecorations: [...state.placedDecorations, key],
   };
+  return recordMissionProgressEvent(next, { type: 'spend_gold', amount: decoration.price }, now);
 }

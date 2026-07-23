@@ -16,6 +16,8 @@ export * from './growthStage';
 export * from './harvest';
 export * from './mastery';
 export * from './metricsSink';
+export * from './missionAvailability';
+export * from './missionEvents';
 export * from './missions';
 export * from './modifiers';
 export * from './prestige';

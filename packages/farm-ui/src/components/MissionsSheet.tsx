@@ -26,6 +26,14 @@ function getMissionLabel(mission: DailyMissionView, locale: SupportedLocale, mes
       return messages.missionWatchAdLabel(mission.target);
     case 'plant':
       return messages.missionPlantLabel(mission.target);
+    case 'collect_produce':
+      return messages.missionCollectProduceLabel(mission.target);
+    case 'craft_complete':
+      return messages.missionCraftCompleteLabel(mission.target);
+    case 'spend_gold':
+      return messages.missionSpendGoldLabel(formatMoney(mission.target, locale));
+    case 'breed':
+      return messages.missionBreedLabel(mission.target);
     case 'harvest':
     default:
       return messages.missionHarvestLabel(mission.target);
@@ -46,6 +54,14 @@ function getWeeklyMissionLabel(
       return messages.weeklyMissionWatchAdLabel(mission.target);
     case 'donate':
       return messages.weeklyMissionDonateLabel(mission.target);
+    case 'collect_produce':
+      return messages.weeklyMissionCollectProduceLabel(mission.target);
+    case 'craft_complete':
+      return messages.weeklyMissionCraftCompleteLabel(mission.target);
+    case 'spend_gold':
+      return messages.weeklyMissionSpendGoldLabel(formatMoney(mission.target, locale));
+    case 'breed':
+      return messages.weeklyMissionBreedLabel(mission.target);
     case 'harvest':
     default:
       return messages.weeklyMissionHarvestLabel(mission.target);
@@ -130,14 +146,16 @@ export function MissionsSheet({
     now,
     gameState.unlockedAreas,
     adRewardGold,
-    adSupported
+    adSupported,
+    gameState
   );
   const weeklySnapshot = getWeeklyMissionsSnapshot(
     gameState.weeklyMissionState,
     now,
     gameState.unlockedAreas,
     adRewardGold,
-    adSupported
+    adSupported,
+    gameState
   );
 
   return (

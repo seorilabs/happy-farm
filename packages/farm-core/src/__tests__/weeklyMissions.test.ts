@@ -11,6 +11,7 @@ import {
   recordWeeklyAdWatchProgress,
   recordWeeklyHarvestProgress,
   rolloverWeeklyMissions,
+  type WeeklyMissionType,
   type WeeklyMissionState,
 } from '../weeklyMissions';
 import balance from '../balance.json';
@@ -36,6 +37,20 @@ function weekStartMs(now: number): number {
 const MON = weekStartMs(Date.UTC(2026, 6, 1)); // a concrete reset-week start
 const WEEK_COUNT = getWeeklyMissions(getMissionWeekKey(MON), ALL_AREAS).length;
 
+describe('weekly mission balance contract (#378)', () => {
+  test('balance 주간 슬롯 타입을 WeeklyMissionType으로 자동 확장하고 같은 순서로 해석한다', () => {
+    const balanceTypes: WeeklyMissionType[] = balance.missions.weekly.slots.map((slot) => slot.type);
+    const resolvedTypes: WeeklyMissionType[] = getWeeklyMissions(getMissionWeekKey(MON), ALL_AREAS).map(
+      (mission) => mission.type
+    );
+
+    expect(balanceTypes).toEqual(
+      expect.arrayContaining(['collect_produce', 'craft_complete', 'spend_gold', 'breed'])
+    );
+    expect(resolvedTypes).toEqual(balanceTypes);
+  });
+});
+
 describe('getMissionWeekKey (reset-week boundary)', () => {
   test('the derived week start is aligned to a reset-day boundary and is a flip point', () => {
     // MON은 리셋 일 경계에 정렬돼 있다(오프셋 반영).
@@ -51,6 +66,39 @@ describe('getMissionWeekKey (reset-week boundary)', () => {
     expect(getMissionWeekKey(MON + WEEK_MS)).not.toBe(key); // 다음 주 시작
     // Numerically consecutive.
     expect(Number(getMissionWeekKey(MON + WEEK_MS))).toBe(Number(key) + 1);
+  });
+});
+
+describe('weekly mission availability (#378)', () => {
+  test('미해금 딥 시스템 목표는 숨기고 해금 후 결정론적으로 노출한다', () => {
+    const base = createInitialState();
+    const weekKey = getMissionWeekKey(MON);
+    const lockedTypes = getWeeklyMissions(weekKey, base.unlockedAreas, undefined, true, base).map(
+      (mission) => mission.type
+    );
+    expect(lockedTypes).toContain('spend_gold');
+    expect(lockedTypes).not.toContain('collect_produce');
+    expect(lockedTypes).not.toContain('craft_complete');
+    expect(lockedTypes).not.toContain('breed');
+
+    const cropKey = Object.keys(CROPS)[0] as CropKey;
+    const unlocked: GameState = {
+      ...base,
+      harvestedCropKeys: [cropKey],
+      lifetimeStats: { ...base.lifetimeStats, totalHarvests: 1 },
+      animals: { ...base.animals, owned: [balance.animals.kinds[0]!.key] },
+      research: { ...base.research, unlockedNodes: ['breeding_lab'] },
+    };
+    const unlockedTypes = getWeeklyMissions(
+      weekKey,
+      unlocked.unlockedAreas,
+      undefined,
+      true,
+      unlocked
+    ).map((mission) => mission.type);
+    expect(unlockedTypes).toEqual(
+      expect.arrayContaining(['collect_produce', 'craft_complete', 'spend_gold', 'breed'])
+    );
   });
 });
 
@@ -396,7 +444,8 @@ describe('광고 미지원 시 주간 watch_ad 제외 (#366)', () => {
   });
 
   test('광고 미지원 환경에서 남은 주간 미션을 모두 완료·수령해 100% 완주가 가능하다', () => {
-    const shown = getWeeklyMissions(weekKey, ALL_AREAS, undefined, false);
+    const base = createInitialState();
+    const shown = getWeeklyMissions(weekKey, ALL_AREAS, undefined, false, base);
     expect(shown.every((m) => m.type !== 'watch_ad')).toBe(true);
 
     const rolled = rolloverWeeklyMissions(createInitialWeeklyMissionState(), weekKey, ALL_AREAS);
@@ -404,14 +453,21 @@ describe('광고 미지원 시 주간 watch_ad 제외 (#366)', () => {
     for (const mission of shown) {
       progress[mission.slot] = mission.target;
     }
-    let gameState: GameState = { ...createInitialState(), weeklyMissionState: { ...rolled, progress } };
+    let gameState: GameState = { ...base, weeklyMissionState: { ...rolled, progress } };
 
     for (const mission of shown) {
       const next = claimWeeklyMission(gameState, mission.slot, MON, undefined, false);
       expect(next).not.toBeNull();
       gameState = next!;
     }
-    const finalSnap = getWeeklyMissionsSnapshot(gameState.weeklyMissionState, MON, ALL_AREAS, undefined, false);
+    const finalSnap = getWeeklyMissionsSnapshot(
+      gameState.weeklyMissionState,
+      MON,
+      ALL_AREAS,
+      undefined,
+      false,
+      gameState
+    );
     expect(finalSnap.missions.every((m) => m.claimed)).toBe(true);
     expect(finalSnap.missions.some((m) => m.claimable)).toBe(false);
   });

@@ -125,6 +125,7 @@ import {
   getEnvironmentTone,
   getLocalMinutesOfDay,
   getDailyMissionsSnapshot,
+  recordMissionProgressEvent,
   claimMission,
   recordAdWatchProgress,
   getWeeklyMissionsSnapshot,
@@ -2379,14 +2380,16 @@ function FarmGameBody({
         Date.now(),
         gameState.unlockedAreas,
         undefined,
-        rewardedAd.isAdSupported
+        rewardedAd.isAdSupported,
+        gameState
       ).missions.filter((mission) => mission.claimable).length +
       getWeeklyMissionsSnapshot(
         gameState.weeklyMissionState,
         Date.now(),
         gameState.unlockedAreas,
         undefined,
-        rewardedAd.isAdSupported
+        rewardedAd.isAdSupported,
+        gameState
       ).missions.filter((mission) => mission.claimable).length,
     [gameState, rewardedAd.isAdSupported]
   );
@@ -3534,7 +3537,11 @@ function FarmGameBody({
           nextPlotCount: state.unlockedPlotCount + 1,
           context: analyticsContext(state),
         });
-        return { ...state, gold: state.gold - cost, unlockedPlotCount: state.unlockedPlotCount + 1 };
+        return recordMissionProgressEvent(
+          { ...state, gold: state.gold - cost, unlockedPlotCount: state.unlockedPlotCount + 1 },
+          { type: 'spend_gold', amount: cost },
+          Date.now()
+        );
       });
       toast(messages.rewardedPlotToast(formatMoney(discountedCost, locale)));
     });
@@ -7237,11 +7244,16 @@ function ShopPlotRow({
           onDone(messages.insufficientGoldToast);
           return;
         }
-        setGameState((state) => ({
-          ...state,
-          gold: state.gold - cost,
-          unlockedPlotCount: state.unlockedPlotCount + 1,
-        }));
+        setGameState((state) =>
+          recordMissionProgressEvent(
+            {
+              ...state,
+              gold: state.gold - cost,
+              unlockedPlotCount: state.unlockedPlotCount + 1,
+            },
+            { type: 'spend_gold', amount: cost }
+          )
+        );
         analytics.trackPlotUnlocked({
           method: 'gold',
           cost,
@@ -7321,11 +7333,14 @@ function ShopAreaUnlockRows({
             if (!canUnlockArea(state, area.key)) {
               return state;
             }
-            return {
-              ...state,
-              gold: state.gold - area.unlock.cost,
-              unlockedAreas: [...state.unlockedAreas, area.key],
-            };
+            return recordMissionProgressEvent(
+              {
+                ...state,
+                gold: state.gold - area.unlock.cost,
+                unlockedAreas: [...state.unlockedAreas, area.key],
+              },
+              { type: 'spend_gold', amount: area.unlock.cost }
+            );
           });
           analytics.trackAreaUnlocked({
             areaKey: area.key,
@@ -7517,11 +7532,16 @@ function ShopUpgradeRow({
           }
           purchasedLevelRef.current = level;
           setBurstGeneration((generation) => generation + 1);
-          setGameState((state) => ({
-            ...state,
-            gold: state.gold - cost,
-            upgrades: { ...state.upgrades, [kind]: state.upgrades[kind] + 1 },
-          }));
+          setGameState((state) =>
+            recordMissionProgressEvent(
+              {
+                ...state,
+                gold: state.gold - cost,
+                upgrades: { ...state.upgrades, [kind]: state.upgrades[kind] + 1 },
+              },
+              { type: 'spend_gold', amount: cost }
+            )
+          );
           analytics.trackUpgradePurchased({
             kind,
             cost,

@@ -25,6 +25,8 @@ import { createPrestigedState } from '../prestige';
 import { getProductionRecipeLabel } from '../i18n';
 import type { CropKey, GameState, ProductionRecipeKey } from '../types';
 import { META_LAYER_KEYS } from '../types';
+import { getDailyMissionsSnapshot } from '../missions';
+import { getWeeklyMissionsSnapshot } from '../weeklyMissions';
 
 const FIRST = PRODUCTION_RECIPES[0]!;
 const MS_PER_HOUR = 60 * 60 * 1000;
@@ -268,6 +270,16 @@ describe('startCraft / collectCraft cycle', () => {
     expect(collected.gold).toBe(crafting.gold + FIRST.sellPrice);
     expect(collected.production.crafting[FIRST.key]).toBeUndefined();
     expect(getProductionState(collected, FIRST.key, readyAt)!.phase).toBe('idle');
+    expect(
+      getDailyMissionsSnapshot(collected.dailyMissionState, readyAt, collected.unlockedAreas).missions.find(
+        (mission) => mission.type === 'craft_complete'
+      )!.progress
+    ).toBe(1);
+    expect(
+      getWeeklyMissionsSnapshot(collected.weeklyMissionState, readyAt, collected.unlockedAreas).missions.find(
+        (mission) => mission.type === 'craft_complete'
+      )!.progress
+    ).toBe(1);
     // 이중 수집 불가.
     expect(collectCraft(collected, FIRST.key, readyAt)).toBeNull();
   });

@@ -13,6 +13,7 @@ import { getDonationRp, isCropPlantable, isNodeUnlocked } from './research';
 import { addCropToInventory } from './production';
 import { recordHarvestProgress, recordPlantProgress } from './missions';
 import { recordWeeklyHarvestProgress } from './weeklyMissions';
+import { recordMissionProgressEvent } from './missionEvents';
 
 export type HarvestOptions = {
   now?: number;
@@ -318,7 +319,7 @@ export function performPlant(gameState: GameState, plotIndex: number, cropKey: C
 
   const nextPlots = [...gameState.plots];
   nextPlots[plotIndex] = { ...plot, cropType: cropKey, startTime: now, state: 1 };
-  return {
+  const next: GameState = {
     ...gameState,
     gold: gameState.gold - cost,
     plots: nextPlots,
@@ -326,6 +327,7 @@ export function performPlant(gameState: GameState, plotIndex: number, cropKey: C
     // 재사용하므로 모든 심기 경로가 자동으로 기록된다(수확이 performHarvest에서 기록되는 것과 동형).
     dailyMissionState: recordPlantProgress(gameState.dailyMissionState, now, gameState.unlockedAreas),
   };
+  return recordMissionProgressEvent(next, { type: 'spend_gold', amount: cost }, now);
 }
 
 // True for a plot that is empty and ready to receive a seed: unlocked and idle.
