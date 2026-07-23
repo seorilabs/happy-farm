@@ -92,6 +92,55 @@ describe('EnvironmentBackdrop', () => {
     expect(new Set(palettes.map((palette) => JSON.stringify(palette))).size).toBe(phases.length);
   });
 
+  test.each([
+    ['night', 60, 'environment-moon', 'rgba(45, 54, 88, 0.26)', 'rgba(31, 44, 69, 0.34)'],
+    ['dawn', 7 * 60, 'environment-sun', 'rgba(118, 88, 131, 0.16)', 'rgba(91, 83, 111, 0.22)'],
+    ['day', 12 * 60, 'environment-sun', 'rgba(63, 126, 91, 0.10)', 'rgba(43, 104, 72, 0.14)'],
+    ['dusk', 19 * 60, 'environment-sun', 'rgba(116, 72, 111, 0.20)', 'rgba(79, 60, 91, 0.28)'],
+  ] as const)(
+    'renders the %s hills inside the non-interactive backdrop with a distinct phase palette (#361)',
+    (phase, minutesOfDay, celestialTestID, backTint, frontTint) => {
+      const screen = render(
+        <EnvironmentBackdrop
+          phase={phase}
+          minutesOfDay={minutesOfDay}
+          backgroundColor="#eaf6e6"
+          areaTheme={getAreaEnvironmentTheme('starter_field')}
+        />
+      );
+      const backdrop = screen.UNSAFE_getByProps({ testID: `environment-backdrop-${phase}` });
+      const horizon = within(backdrop).UNSAFE_getByProps({ testID: 'environment-area-horizon' });
+      const hills = within(horizon).UNSAFE_getByProps({ testID: `environment-hills-${phase}` });
+
+      expect(hills.props.pointerEvents).toBe('none');
+      expect(hills.props.accessible).toBe(false);
+      expect(hills.props.accessibilityElementsHidden).toBe(true);
+      expect(hills.props.importantForAccessibility).toBe('no-hide-descendants');
+      expect(within(hills).UNSAFE_getByProps({ testID: 'environment-hill-back' })).toBeTruthy();
+      expect(within(hills).UNSAFE_getByProps({ testID: 'environment-hill-front' })).toBeTruthy();
+      expect(
+        StyleSheet.flatten(
+          within(hills).UNSAFE_getByProps({ testID: `environment-hill-back-tint-${phase}` }).props.style
+        ).backgroundColor
+      ).toBe(backTint);
+      expect(
+        StyleSheet.flatten(
+          within(hills).UNSAFE_getByProps({ testID: `environment-hill-front-tint-${phase}` }).props.style
+        ).backgroundColor
+      ).toBe(frontTint);
+
+      const skyZIndex = StyleSheet.flatten(
+        screen.UNSAFE_getByProps({ testID: `environment-sky-bands-${phase}` }).props.style
+      ).zIndex;
+      const hillZIndex = StyleSheet.flatten(horizon.props.style).zIndex;
+      const celestialZIndex = StyleSheet.flatten(
+        screen.UNSAFE_getByProps({ testID: celestialTestID }).props.style
+      ).zIndex;
+      expect(hillZIndex).toBeGreaterThan(skyZIndex);
+      expect(hillZIndex).toBeLessThan(celestialZIndex);
+    }
+  );
+
   test('composes visually distinct area themes without replacing the time-of-day sky', () => {
     const areaKeys = ['starter_field', 'orchard', 'mystic_field'] as const;
     const screen = render(

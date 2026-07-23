@@ -402,7 +402,7 @@ describe('FarmGame UI flow', () => {
     expect(backdropNow()).toBeTruthy();
   });
 
-  test('wires seasonal ambience only into the background backdrop, keeping navRow at three (#353 AC-4, AC-5)', async () => {
+  test('keeps decorative ambience and hills behind farm content with navRow at three (#353, #361)', async () => {
     const screen = await renderGame({ ...createInitialState(), onboardingCompleted: true });
     await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
 
@@ -425,6 +425,11 @@ describe('FarmGame UI flow', () => {
     // 배경 backdrop이 먼저, 그 위에 farm-scroll(플롯 등 상호작용 레이어)이 온다.
     expect(scrollChild.props.testID).toBe('farm-scroll');
     expect(backdropChild.props.seasonalParticle).toBe(getSeasonalAmbience(new Date()).particle);
+    expect(
+      screen.UNSAFE_getByProps({
+        testID: `environment-hills-${getEnvironmentTone(getLocalMinutesOfDay(new Date())).phase}`,
+      })
+    ).toBeTruthy();
   });
 
   test('renders initial farm and supports a plant-grow-harvest loop', async () => {
