@@ -117,13 +117,14 @@ function driftFixture(overrides: Partial<Fixture> = {}): Fixture {
 }
 
 describe('deploy-drift-run (#420 워크플로우 실행 본체)', () => {
-  test('AC-2: github-script REST로 최신 v* 태그와 채널별 최근 성공 배포 태그(deploy-apps-in-toss·deploy-google-play 단독 run + deploy-all 내 해당 잡 성공 포함)를 수집·비교한다', async () => {
+  test('AC-2: 최신 v* 태그와 채널별 최근 성공 배포 태그(deploy-apps-in-toss·deploy-google-play 단독 run + deploy-all 내 해당 잡 성공 포함) 수집·비교 (gh api 대신 github-script REST)', async () => {
     const fx = driftFixture();
     const ctx = makeCtx(fx);
     const result = await run({ ...ctx, drift });
 
-    // 최신 v태그 수집을 위해 git tag --sort 를 호출했다.
+    // 최신 v* 태그 수집: git tag --sort 로 최신순 목록을 얻어 최상단을 최신 태그로 삼는다.
     expect(ctx.execCalls.some((a) => a.includes('--sort=-v:refname') && !a.includes('--points-at'))).toBe(true);
+    expect(result.latestTag).toBe('v1.8.3'); // 수집된 최신 v* 태그
     // 채널 단독 run과 deploy-all run을 모두 조회했다.
     const queried = ctx.github.rest.actions.listWorkflowRuns.mock.calls.map((c) => c[0].workflow_id);
     expect(queried).toEqual(expect.arrayContaining(['deploy-apps-in-toss.yml', 'deploy-google-play.yml', 'deploy-all.yml']));
