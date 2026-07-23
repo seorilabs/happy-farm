@@ -278,6 +278,8 @@ export const zhHantFarmMessages: FarmMessages = {
   mapButtonAccessibilityLabel: '開拓地圖',
   prestigeStarsChipAccessibilityLabel: (stars, availableSkills) =>
     `聲望星星 ${stars}，可購買技能 ${availableSkills}，開啟開拓地圖`,
+  statsPrestigeStarsLabel: '聲望星星',
+  statsPrestigeSkillsAvailableLabel: '可購買技能',
   sheetTitleMap: '開拓地圖',
   sheetDescriptionMap: '讓農場畢業納入連鎖，並開拓新的地區。',
   sheetTitlePrestigeConfirm: '開拓新地區',

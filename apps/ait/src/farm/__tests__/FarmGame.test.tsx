@@ -47,6 +47,7 @@ import {
   getRegionArchetypeLabel,
   getResetDayIndex,
   getResetDayStart,
+  getTitleLabel,
   getUpgradeCost,
   recordAdWatchProgress,
   recordWeeklyAdWatchProgress,
@@ -621,6 +622,46 @@ describe('FarmGame UI flow', () => {
     expect(screen.getByTestId('stats-offline-income-cap')).toHaveTextContent(
       messages.statsOfflineIncomeCap(formatDuration(OFFLINE_INCOME_CAP_MS, DEFAULT_LOCALE))
     );
+  });
+
+  test('demotes the active title, crop-of-the-day detail, and prestige star breakdown into the stats sheet (#355)', async () => {
+    const base = createInitialState();
+    const state: GameState = {
+      ...base,
+      onboardingCompleted: true,
+      activeTitle: 'harvest_master',
+      prestige: { ...base.prestige, stars: 2 },
+    };
+    const cotd = getCropOfTheDayStatus(NOW, state);
+    const titleName = getTitleLabel('harvest_master', DEFAULT_LOCALE).name;
+    const screen = await renderGame(state);
+    await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+
+    // 헤더의 제목 행에는 활성 칭호 배지가 더 이상 상시 노출되지 않는다(단일 요약 chip만 유지).
+    expect(within(screen.getByTestId('title-group')).queryByText(titleName)).toBeNull();
+    // ★ 칩(#379)은 잔여 화폐 카운트/개척 지도 shortcut으로 헤더에 유지된다.
+    expect(screen.getByTestId('prestige-stars-chip')).toBeTruthy();
+    // 강등된 지표는 시트를 열기 전에는 노출되지 않는다.
+    expect(screen.queryByTestId('stats-active-title')).toBeNull();
+
+    // 단일 요약 chip 탭 → '농장 현황' 시트에서 강등된 세 지표가 모두 한 뎁스로 도달된다.
+    fireEvent.press(screen.getByTestId('cotd-chip'));
+    await waitFor(() => expect(screen.getByTestId('stats-sheet')).toBeTruthy());
+    expect(screen.getByTestId('stats-crop-of-the-day-bonus')).toHaveTextContent(`⭐×${cotd.multiplier}`);
+    expect(screen.getByTestId('stats-active-title')).toHaveTextContent(titleName);
+    expect(screen.getByTestId('stats-prestige-stars')).toHaveTextContent('★ 2');
+    expect(screen.getByTestId('stats-prestige-skills')).toBeTruthy();
+  });
+
+  test('shows a placeholder in the stats sheet when no title is equipped (#355)', async () => {
+    const base = createInitialState();
+    const state: GameState = { ...base, onboardingCompleted: true, activeTitle: null };
+    const screen = await renderGame(state);
+    await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+
+    fireEvent.press(screen.getByTestId('cotd-chip'));
+    await waitFor(() => expect(screen.getByTestId('stats-sheet')).toBeTruthy());
+    expect(screen.getByTestId('stats-active-title')).toHaveTextContent('—');
   });
 
   test('wires saved farm records and the live research/collection totals into the stats sheet (#291)', async () => {

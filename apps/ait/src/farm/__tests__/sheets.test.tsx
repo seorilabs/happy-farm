@@ -506,6 +506,15 @@ describe('StatsSheet', () => {
     offlineGoldPerHour: 0,
     offlineIncomeCapMs: 24 * HOUR_MS,
   };
+  // 헤더에서 강등해 온 보조 지표(#355) 기본값. 개별 케이스가 필요 시 override 한다.
+  const demotedHeaderProps = {
+    cropOfTheDayIcon: '🥕',
+    cropOfTheDayName: '당근',
+    cropOfTheDayMultiplier: 2,
+    activeTitleName: null,
+    prestigeStars: 0,
+    purchasableSkillCount: 0,
+  };
   const initialState = createInitialState();
   const initialCollection = getCollectionSummary(initialState);
   const emptyFarmRecords = {
@@ -522,6 +531,7 @@ describe('StatsSheet', () => {
   test('renders research/profit/growth stats and the boost as active with a remaining time', () => {
     const screen = render(
       <StatsSheet
+        {...demotedHeaderProps}
         {...offlineIncomeProps}
         offlineGoldPerHour={1_234_567}
         messages={messages}
@@ -580,6 +590,7 @@ describe('StatsSheet', () => {
   test('shows the boost row as inactive and the festival banner when a festival is live', () => {
     const screen = render(
       <StatsSheet
+        {...demotedHeaderProps}
         {...offlineIncomeProps}
         messages={messages}
         locale={LOCALE}
@@ -613,6 +624,7 @@ describe('StatsSheet', () => {
   test('distinguishes the golden sell flavor in live and teaser copy with an axis fallback', () => {
     const renderFestival = (active: boolean, typeKey: string, axis: 'sell' | 'speed', remainingMs: number) => (
       <StatsSheet
+        {...demotedHeaderProps}
         {...offlineIncomeProps}
         messages={messages}
         locale={LOCALE}
@@ -658,6 +670,7 @@ describe('StatsSheet', () => {
   test('shows the harvest (speed) festival copy when the live event is a harvest type (#243)', () => {
     const screen = render(
       <StatsSheet
+        {...demotedHeaderProps}
         {...offlineIncomeProps}
         messages={messages}
         locale={LOCALE}
@@ -687,6 +700,7 @@ describe('StatsSheet', () => {
     const enMessages = getFarmMessages('en-US');
     const screen = render(
       <StatsSheet
+        {...demotedHeaderProps}
         {...offlineIncomeProps}
         offlineGoldPerHour={1_234}
         messages={enMessages}
@@ -729,6 +743,7 @@ describe('StatsSheet', () => {
     };
     const screen = render(
       <StatsSheet
+        {...demotedHeaderProps}
         {...offlineIncomeProps}
         messages={enMessages}
         locale="en-US"

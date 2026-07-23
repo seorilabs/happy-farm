@@ -86,6 +86,12 @@ export function StatsSheet({
   weeklyEventAxis,
   weeklyEventTypeKey,
   weeklyEventRemainingMs,
+  cropOfTheDayIcon,
+  cropOfTheDayName,
+  cropOfTheDayMultiplier,
+  activeTitleName,
+  prestigeStars,
+  purchasableSkillCount,
   farmRecords,
 }: {
   messages: FarmMessages;
@@ -106,6 +112,14 @@ export function StatsSheet({
   // 같은 axis 안에서도 이벤트 플레이버를 구분하는 balance roster key.
   weeklyEventTypeKey: string;
   weeklyEventRemainingMs: number;
+  // 헤더 밀도 완화(#355)로 상단에서 강등해 온 보조 지표들.
+  cropOfTheDayIcon: string;
+  cropOfTheDayName: string;
+  cropOfTheDayMultiplier: number;
+  // 장착한 칭호가 없으면 null.
+  activeTitleName: string | null;
+  prestigeStars: number;
+  purchasableSkillCount: number;
   farmRecords: FarmRecordStats;
 }) {
   const weeklyEventPresentation = getWeeklyEventPresentation(messages, weeklyEventTypeKey, weeklyEventAxis);
@@ -117,6 +131,13 @@ export function StatsSheet({
   return (
     <View testID="stats-sheet">
       <Text style={styles.researchBadge}>{messages.researchBadge(researchLevel)}</Text>
+      <StatRow
+        label={messages.cropOfTheDayLabel}
+        value={`${cropOfTheDayIcon} ${cropOfTheDayName}`}
+        sub={`⭐×${cropOfTheDayMultiplier}`}
+        valueTestID="stats-crop-of-the-day"
+        subTestID="stats-crop-of-the-day-bonus"
+      />
       <StatRow
         label={messages.profitLabel}
         value={formatMultiplier(profitMultiplier)}
@@ -141,6 +162,26 @@ export function StatsSheet({
         subTestID="stats-offline-income-cap"
         valueTestID="stats-offline-income"
       />
+
+      {/* 헤더 ★ 칩(#379)은 잔여 화폐 카운트/맵 진입 shortcut으로 유지하고, 별점 분해
+          (보유 별 + 구매 가능 스킬)와 활성 칭호는 이 시트로 강등한다(#355). */}
+      <View testID="stats-prestige-section">
+        <StatRow
+          label={messages.statsPrestigeStarsLabel}
+          value={`★ ${formatMoney(prestigeStars, locale)}`}
+          valueTestID="stats-prestige-stars"
+        />
+        <StatRow
+          label={messages.statsPrestigeSkillsAvailableLabel}
+          value={formatMoney(purchasableSkillCount, locale)}
+          valueTestID="stats-prestige-skills"
+        />
+        <StatRow
+          label={messages.titlesSection}
+          value={activeTitleName ?? '—'}
+          valueTestID="stats-active-title"
+        />
+      </View>
 
       <Text testID="weekly-event-title" style={styles.sectionTitle}>
         {weeklyEventPresentation.badgeIcon} {weeklyEventTitle}

@@ -288,6 +288,8 @@ export const koFarmMessages = {
   mapButtonAccessibilityLabel: '개척 지도',
   prestigeStarsChipAccessibilityLabel: (stars: number, availableSkills: number) =>
     `명성 별 ${stars}개, 구매 가능한 스킬 ${availableSkills}개, 개척 지도 열기`,
+  statsPrestigeStarsLabel: '명성 별',
+  statsPrestigeSkillsAvailableLabel: '구매 가능 스킬',
   sheetTitleMap: '개척 지도',
   sheetDescriptionMap: '농장을 졸업시켜 체인으로 만들고 새 지역을 개척해요.',
   sheetTitlePrestigeConfirm: '새 지역 개척',
