@@ -47,6 +47,25 @@ function getKnownCrop(cropKey: CropKey) {
   return crop;
 }
 
+// Converts the canonical pure harvest outcome into the UI/analytics event
+// shape. Manual, batch, and automation callers all reuse this mapping so crop,
+// area, tier, and exact paid rewards cannot drift by source.
+export function createCropHarvestedGameEvent(
+  outcome: HarvestOutcome,
+  plotIndex: number
+): CropHarvestedGameEvent {
+  const crop = getKnownCrop(outcome.cropKey);
+  const { state, ...harvest } = outcome;
+  void state;
+  return {
+    type: 'cropHarvested',
+    plotIndex,
+    areaKey: crop.area,
+    cropTier: crop.tier,
+    ...harvest,
+  };
+}
+
 export function executeFarmGameCommand(
   gameState: GameState,
   command: FarmGameCommand,
@@ -112,20 +131,11 @@ function executeHarvestCropCommand(
     return { status: 'blocked', reason: 'plotUnavailable', events: [] };
   }
 
-  const crop = getKnownCrop(outcome.cropKey);
-  const { state, ...harvest } = outcome;
+  const event = createCropHarvestedGameEvent(outcome, plotIndex);
 
   return {
     status: 'applied',
-    state,
-    events: [
-      {
-        type: 'cropHarvested',
-        plotIndex,
-        areaKey: crop.area,
-        cropTier: crop.tier,
-        ...harvest,
-      },
-    ],
+    state: outcome.state,
+    events: [event],
   };
 }

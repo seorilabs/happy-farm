@@ -524,6 +524,7 @@ export function performHarvestAndReplant(
 
 export type AutomationTickResult = {
   state: GameState;
+  harvests: HarvestAllEntry[];
   harvestedCount: number;
   replantedCount: number;
   goldGained: number;
@@ -538,6 +539,7 @@ export function runAutomationTick(gameState: GameState, options: HarvestOptions 
   const rng = options.rng ?? Math.random;
   const result: AutomationTickResult = {
     state: gameState,
+    harvests: [],
     harvestedCount: 0,
     replantedCount: 0,
     goldGained: 0,
@@ -562,6 +564,7 @@ export function runAutomationTick(gameState: GameState, options: HarvestOptions 
       continue;
     }
     result.state = outcome.state;
+    result.harvests.push({ plotIndex, outcome });
     result.harvestedCount += 1;
     result.goldGained += outcome.goldGained;
     result.rpGained += outcome.rpGained;

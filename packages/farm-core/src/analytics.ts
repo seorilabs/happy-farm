@@ -53,6 +53,12 @@ export type DailyBonusSource = 'auto_popup' | 'more' | 'welcome_back';
 export type HarvestComboTier = 'normal' | 'great' | 'legendary';
 export type HarvestComboEndReason = 'timeout' | 'background' | 'prestige' | 'reset' | 'cloud_restore';
 
+// Stable source/reward dimensions for crop_harvested. Offline settlement only
+// advances time and leaves crops ripe, while combo is a summary over manual
+// harvests, so neither is a separate harvest source.
+export type HarvestSource = 'manual' | 'batch' | 'auto';
+export type HarvestRewardType = 'gold' | 'research_points';
+
 export type GameAnalyticsContext = {
   gold: number;
   plot_count: number;
@@ -157,18 +163,29 @@ export function createFarmAnalytics(track: TrackGameEvent = noopTrackGameEvent) 
       cropKey: CropKey;
       areaKey: AreaKey;
       cropTier: number;
-      revenue: number;
+      goldGained: number;
+      researchPointsGained: number;
+      donated: boolean;
+      harvestSource: HarvestSource;
       isFirstMeaningfulHarvest: boolean;
       isFirstCropHarvest: boolean;
       context: GameAnalyticsContext;
     }) => {
+      // revenue is the exact gold credited by the canonical harvest outcome.
+      // Donation mode intentionally credits RP instead, so its zero revenue is
+      // explicitly distinguishable rather than looking like a logging defect.
+      const rewardType: HarvestRewardType = params.donated ? 'research_points' : 'gold';
       track('crop_harvested', {
         crop: params.cropKey,
         area: params.areaKey,
         crop_tier: params.cropTier,
-        revenue: params.revenue,
+        revenue: params.goldGained,
+        research_points_gained: params.researchPointsGained,
+        reward_type: rewardType,
+        harvest_source: params.harvestSource,
         is_first_meaningful_harvest: params.isFirstMeaningfulHarvest,
         is_first_crop_harvest: params.isFirstCropHarvest,
+        schema_version: 2,
         ...params.context,
       });
 
@@ -177,7 +194,10 @@ export function createFarmAnalytics(track: TrackGameEvent = noopTrackGameEvent) 
           crop: params.cropKey,
           area: params.areaKey,
           crop_tier: params.cropTier,
-          revenue: params.revenue,
+          revenue: params.goldGained,
+          research_points_gained: params.researchPointsGained,
+          reward_type: rewardType,
+          harvest_source: params.harvestSource,
           ...params.context,
         });
       }

@@ -46,8 +46,8 @@ happy-farm 활성화·리텐션 퍼널 측정의 단일 기준 문서. 이벤트
 | 심기 | `crop_planted` | `crop`, `area`, `crop_tier`, `crop_cost`, context |
 | 수확 안내 | `onboarding_step_view` (`step` = `harvest`, `step_index` = 3) | `step`, `step_index`, context |
 | 수확 준비 집계 | `crop_ready_summary` | `crop`, `area`, `crop_tier`, `ready_count`, `window_seconds`, `schema_version`, context |
-| 수확 | `crop_harvested` | `crop`, `area`, `crop_tier`, `revenue`, `is_first_crop_harvest`, `is_first_meaningful_harvest`, context |
-| **첫 유의미 수확** | `first_meaningful_harvest` | `crop`, `area`, `crop_tier`, `revenue`, context |
+| 수확 | `crop_harvested` | `crop`, `area`, `crop_tier`, `revenue`, `research_points_gained`, `reward_type`, `harvest_source`, `is_first_crop_harvest`, `is_first_meaningful_harvest`, `schema_version`, context |
+| **첫 유의미 수확** | `first_meaningful_harvest` | `crop`, `area`, `crop_tier`, `revenue`, `research_points_gained`, `reward_type`, `harvest_source`, context |
 | 첫 수확 보상 확인 | `onboarding_step_view` (`step` = `reward`, `step_index` = 4) | `step`, `step_index`, context |
 | 온보딩 완료 | `onboarding_complete` | context |
 | 데일리 보너스 노출 | `daily_bonus_opened` | `source` (`auto_popup` / `more` / `welcome_back`), context |

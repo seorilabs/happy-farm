@@ -90,6 +90,7 @@ import {
   type GameState,
   type HarvestComboEndReason,
   type HarvestComboTier,
+  type HarvestSource,
   type RewardedAdController,
   type RewardedAdShowResult,
   type RewardedAdType,
@@ -105,6 +106,7 @@ import {
   DEFAULT_LOCALE,
   LOCALE_ENDONYMS,
   SUPPORTED_LOCALES,
+  createCropHarvestedGameEvent,
   executeFarmGameCommand,
   formatDuration,
   formatHourlyGold,
@@ -417,6 +419,27 @@ export type FarmGamePersistence = {
 type UseFarmAd = (adGroupId?: string) => RewardedAdController;
 type FarmAnalytics = ReturnType<typeof createFarmAnalytics>;
 type FarmGameMarket = 'appsInToss' | 'mobile';
+
+function trackCropHarvestedEvent(
+  analytics: FarmAnalytics,
+  event: CropHarvestedGameEvent,
+  harvestSource: HarvestSource,
+  context: GameAnalyticsContext
+) {
+  analytics.trackCropHarvested({
+    cropKey: event.cropKey,
+    areaKey: event.areaKey,
+    cropTier: event.cropTier,
+    goldGained: event.goldGained,
+    researchPointsGained: event.rpGained,
+    donated: event.donated,
+    harvestSource,
+    isFirstMeaningfulHarvest: event.isFirstMeaningfulHarvest,
+    isFirstCropHarvest: event.isNewCropDiscovery,
+    context,
+  });
+}
+
 export type FarmGameAdGroupIds = {
   rewarded?: string;
   interstitial?: string;
@@ -521,6 +544,7 @@ type PendingFarmCommandEffect =
   | {
       id: number;
       type: 'harvestedAll';
+      harvestEvents: CropHarvestedGameEvent[];
       fx: { plotIndex: number; goldGained: number; tone: HarvestPop['tone'] }[];
       rankUps: { cropKey: CropKey; rankKey: MasteryRankKey; rankIcon: string }[];
       firstMutationFlash: MutationCelebrationKey | null;
@@ -1539,11 +1563,15 @@ function FarmGameBody({
           if (effect.totalGoldGained > 0) {
             pulseGold();
           }
+          const context = analyticsContext();
+          for (const event of effect.harvestEvents) {
+            trackCropHarvestedEvent(farmAnalytics, event, 'batch', context);
+          }
           farmAnalytics.trackHarvestAll({
             harvestedCount: effect.harvestedCount,
             totalGold: effect.totalGoldGained,
             specialCount: effect.specialCount,
-            context: analyticsContext(),
+            context,
           });
           if (effect.specialCount > 0 && Platform.OS === 'android') {
             triggerHaptic([0, 24, 36, 48]);
@@ -1604,15 +1632,7 @@ function FarmGameBody({
       const { event } = effect;
       const context = analyticsContext();
       recordManualHarvestCombo(effect.now, event.goldGained, context);
-      farmAnalytics.trackCropHarvested({
-        cropKey: event.cropKey,
-        areaKey: event.areaKey,
-        cropTier: event.cropTier,
-        revenue: event.goldGained,
-        isFirstMeaningfulHarvest: event.isFirstMeaningfulHarvest,
-        isFirstCropHarvest: event.isNewCropDiscovery,
-        context,
-      });
+      trackCropHarvestedEvent(farmAnalytics, event, 'manual', context);
       if (event.isFirstMeaningfulHarvest) {
         showFirstHarvestCelebration({
           cropIcon: getCrop(event.cropKey).icon,
@@ -2576,12 +2596,22 @@ function FarmGameBody({
       next = { ...next, plots: grownPlots };
     }
 
-    // Automation shares the manual harvest pipeline but stays silent: no
-    // toast/vibration/sound, and no per-crop analytics from the tick loop.
+    // Automation shares the manual harvest pipeline but stays visually silent:
+    // no toast/vibration/sound. Each canonical outcome still emits
+    // crop_harvested with source=auto, while the volume summary stays throttled.
     const automation = runAutomationTick(next, { now });
     const summary = autoHarvestSummaryRef.current;
     if (automation.harvestedCount > 0) {
       next = automation.state;
+      const context = analyticsContext(automation.state);
+      for (const { plotIndex, outcome } of automation.harvests) {
+        trackCropHarvestedEvent(
+          farmAnalytics,
+          createCropHarvestedGameEvent(outcome, plotIndex),
+          'auto',
+          context
+        );
+      }
       if (summary.harvestedCount === 0 && summary.replantedCount === 0) {
         // First accumulation opens a fresh batching window.
         summary.windowStartedAt = now;
@@ -2607,7 +2637,7 @@ function FarmGameBody({
     if (next !== gameState) {
       setGameState(() => next);
     }
-  }, [analyticsContext, flushCropReadySummary, gameState, tick]);
+  }, [analyticsContext, farmAnalytics, flushCropReadySummary, gameState, tick]);
 
   function openShop() {
     setShopTab('expand');
@@ -3804,6 +3834,9 @@ function FarmGameBody({
     pendingCommandEffectsRef.current.push({
       id: effectId,
       type: 'harvestedAll',
+      harvestEvents: result.harvests.map(({ plotIndex, outcome }) =>
+        createCropHarvestedGameEvent(outcome, plotIndex)
+      ),
       fx: result.harvests.map(({ plotIndex, outcome }) => {
         const mk = outcome.mutation?.key;
         const tone: HarvestPop['tone'] = isMutationCelebrationKey(mk)
