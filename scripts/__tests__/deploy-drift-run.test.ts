@@ -125,7 +125,16 @@ describe('deploy-drift-run (#420 워크플로우 실행 본체)', () => {
     expect(ctx.execCalls.some((a) => a.includes('--points-at') && a.includes('shaAIT'))).toBe(true);
     expect(ctx.execCalls.some((a) => a.includes('--points-at') && a.includes('shaGP'))).toBe(true);
 
-    // 두 채널 모두 최신(v1.8.3)보다 뒤처져 드리프트로 감지된다.
+    // 수집 결과: 채널별 "최근 성공 배포 태그"가 각 소스에서 정확히 수집된다.
+    const byChannel = Object.fromEntries(result.channels.map((c) => [c.channel, c]));
+    expect(byChannel['AIT (WEB)'].deployedTag).toBe('v1.7.0'); // deploy-apps-in-toss 단독 run
+    expect(byChannel['Google Play (Android)'].deployedTag).toBe('v1.8.1'); // deploy-all 채널 잡 경유
+
+    // 비교 결과: 최신 v1.8.3 대비 뒤처짐(gap)과 드리프트 판정이 정확하다.
+    expect(byChannel['AIT (WEB)'].gap).toBe(4); // v1.8.3 → v1.7.0
+    expect(byChannel['AIT (WEB)'].drift).toBe(true);
+    expect(byChannel['Google Play (Android)'].gap).toBe(2); // v1.8.3 → v1.8.1
+    expect(byChannel['Google Play (Android)'].drift).toBe(true);
     expect(result.driftedChannels).toEqual(expect.arrayContaining(['AIT (WEB)', 'Google Play (Android)']));
   });
 

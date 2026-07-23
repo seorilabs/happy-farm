@@ -144,6 +144,14 @@ async function run({ github, context, core, exec, drift }) {
   const table = driftLib.renderDriftTable(latestTag, rows);
   const driftedChannels = channelRows.filter((r) => r.eval.drift);
 
+  // 채널별 수집·비교 결과 요약(테스트/후속 처리에서 채널→배포태그·뒤처짐을 확인).
+  const channels = channelRows.map((r) => ({
+    channel: r.channel,
+    deployedTag: r.deployedTag,
+    gap: r.eval.gap,
+    drift: r.eval.drift,
+  }));
+
   // --- 3) step summary 출력 ------------------------------------------
   core.summary.addHeading('채널 배포 드리프트 점검').addRaw(table, true);
   if (driftedChannels.length > 0) {
@@ -155,7 +163,7 @@ async function run({ github, context, core, exec, drift }) {
 
   if (driftedChannels.length === 0) {
     core.info('드리프트 없음 — 이슈를 생성/코멘트하지 않습니다.');
-    return { latestTag, driftedChannels: [], issue: null };
+    return { latestTag, channels, driftedChannels: [], issue: null };
   }
 
   // --- 4) 드리프트 감지 시 이슈 생성 또는 코멘트 ----------------------
@@ -186,7 +194,7 @@ async function run({ github, context, core, exec, drift }) {
       body,
     });
     core.info(`기존 드리프트 이슈 #${decision.issueNumber} 에 코멘트했습니다.`);
-    return { latestTag, driftedChannels: driftedChannels.map((r) => r.channel), issue: { action: 'comment', number: decision.issueNumber } };
+    return { latestTag, channels, driftedChannels: driftedChannels.map((r) => r.channel), issue: { action: 'comment', number: decision.issueNumber } };
   }
 
   const created = await github.rest.issues.create({
@@ -196,7 +204,7 @@ async function run({ github, context, core, exec, drift }) {
     body,
   });
   core.info(`드리프트 이슈 #${created.data.number} 를 생성했습니다.`);
-  return { latestTag, driftedChannels: driftedChannels.map((r) => r.channel), issue: { action: 'create', number: created.data.number } };
+  return { latestTag, channels, driftedChannels: driftedChannels.map((r) => r.channel), issue: { action: 'create', number: created.data.number } };
 }
 
 module.exports = { run, CHANNELS };
