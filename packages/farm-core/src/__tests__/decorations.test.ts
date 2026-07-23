@@ -5,22 +5,29 @@ import {
   canPurchaseDecoration,
   createInitialPlacedDecorations,
   getDecoration,
+  getOwnedDecorations,
   isDecorationOwned,
   isKnownDecorationKey,
   normalizePlacedDecorations,
+  placeDecorationInSlot,
   purchaseDecoration,
   getPlacedDecorations,
+  storeDecoration,
 } from '../decorations';
 import { createInitialState, migrateLoadedState } from '../constants';
 import { createPrestigedState } from '../prestige';
 import { getDecorationLabel } from '../i18n';
-import type { DecorationKey, GameState } from '../types';
+import type { DecorationKey, DecorationPlacement, GameState } from '../types';
 import { META_LAYER_KEYS } from '../types';
 
 const FIRST = DECORATIONS[0]!.key;
 const SECOND = DECORATIONS[1]!.key;
 
-function stateWithGold(gold: number, placedDecorations: DecorationKey[] = []): GameState {
+function placement(key: DecorationKey, slot: number | null): DecorationPlacement {
+  return { key, slot };
+}
+
+function stateWithGold(gold: number, placedDecorations: DecorationPlacement[] = []): GameState {
   return { ...createInitialState(), gold, placedDecorations };
 }
 
@@ -88,7 +95,7 @@ describe('purchaseDecoration', () => {
     const after = purchaseDecoration(before, FIRST);
     expect(after).not.toBeNull();
     expect(after!.gold).toBe(100);
-    expect(after!.placedDecorations).toEqual([FIRST]);
+    expect(after!.placedDecorations).toEqual([placement(FIRST, 0)]);
     // Pure: the original state is untouched.
     expect(before.gold).toBe(decoration.price + 100);
     expect(before.placedDecorations).toEqual([]);
@@ -103,7 +110,7 @@ describe('purchaseDecoration', () => {
 
   test('cannot buy the same decoration twice', () => {
     const decoration = getDecoration(FIRST)!;
-    const owned = stateWithGold(decoration.price * 5, [FIRST]);
+    const owned = stateWithGold(decoration.price * 5, [placement(FIRST, 0)]);
     expect(isDecorationOwned(owned.placedDecorations, FIRST)).toBe(true);
     expect(canPurchaseDecoration(owned, FIRST)).toBe(false);
     expect(purchaseDecoration(owned, FIRST)).toBeNull();
@@ -118,13 +125,27 @@ describe('purchaseDecoration', () => {
 describe('normalizePlacedDecorations', () => {
   test('drops unknown keys, de-duplicates, and uses catalog order', () => {
     const messy = [SECOND, 'ghost', FIRST, FIRST, 99] as unknown;
-    expect(normalizePlacedDecorations(messy)).toEqual([FIRST, SECOND]);
+    expect(normalizePlacedDecorations(messy)).toEqual([placement(FIRST, 0), placement(SECOND, 1)]);
   });
 
   test('non-array input normalizes to empty', () => {
     expect(normalizePlacedDecorations(undefined)).toEqual([]);
     expect(normalizePlacedDecorations('fence')).toEqual([]);
     expect(normalizePlacedDecorations(createInitialPlacedDecorations())).toEqual([]);
+  });
+
+  test('preserves valid modern slots and stores colliding or invalid placements without losing ownership', () => {
+    const normalized = normalizePlacedDecorations([
+      { key: FIRST, slot: 4 },
+      { key: SECOND, slot: 4 },
+      { key: DECORATIONS[2]!.key, slot: 999 },
+    ]);
+
+    expect(normalized).toEqual([
+      placement(FIRST, 4),
+      placement(SECOND, null),
+      placement(DECORATIONS[2]!.key, null),
+    ]);
   });
 });
 
@@ -133,19 +154,55 @@ describe('getPlacedDecorations (render layer)', () => {
     expect(getPlacedDecorations(stateWithGold(0))).toEqual([]);
   });
 
-  test('resolves owned keys to catalog entries in catalog order', () => {
-    // Store the keys out of catalog order to prove the render order is stable.
-    const state = stateWithGold(0, [SECOND, FIRST]);
+  test('resolves only placed items to catalog entries in slot order', () => {
+    const state = stateWithGold(0, [placement(SECOND, 1), placement(FIRST, 0)]);
     const placed = getPlacedDecorations(state);
     expect(placed.map((decoration) => decoration.key)).toEqual([FIRST, SECOND]);
     // Each entry carries the icon/price needed to render.
-    expect(placed[0]).toEqual(getDecoration(FIRST));
-    expect(placed[1]).toEqual(getDecoration(SECOND));
+    expect(placed[0]).toEqual({ ...getDecoration(FIRST), slot: 0 });
+    expect(placed[1]).toEqual({ ...getDecoration(SECOND), slot: 1 });
   });
 
   test('drops unknown/legacy keys from the render list', () => {
-    const state = stateWithGold(0, [FIRST, 'removed_in_v2' as DecorationKey]);
+    const state = stateWithGold(0, [
+      placement(FIRST, 0),
+      placement('removed_in_v2' as DecorationKey, 1),
+    ]);
     expect(getPlacedDecorations(state).map((decoration) => decoration.key)).toEqual([FIRST]);
+  });
+
+  test('keeps stored ownership out of the farm render layer', () => {
+    const state = stateWithGold(0, [placement(FIRST, null), placement(SECOND, 3)]);
+    expect(getOwnedDecorations(state).map(({ key, slot }) => ({ key, slot }))).toEqual([
+      placement(FIRST, null),
+      placement(SECOND, 3),
+    ]);
+    expect(getPlacedDecorations(state).map(({ key, slot }) => ({ key, slot }))).toEqual([
+      placement(SECOND, 3),
+    ]);
+  });
+});
+
+describe('fixed-grid placement', () => {
+  test('moves, stores, and restores an owned decoration without changing ownership', () => {
+    const before = stateWithGold(0, [placement(FIRST, 0), placement(SECOND, 2)]);
+    const moved = placeDecorationInSlot(before, FIRST, 1)!;
+    expect(moved.placedDecorations).toEqual([placement(FIRST, 1), placement(SECOND, 2)]);
+    expect(before.placedDecorations).toEqual([placement(FIRST, 0), placement(SECOND, 2)]);
+
+    const stored = storeDecoration(moved, FIRST)!;
+    expect(stored.placedDecorations).toEqual([placement(FIRST, null), placement(SECOND, 2)]);
+    expect(isDecorationOwned(stored.placedDecorations, FIRST)).toBe(true);
+
+    const restored = placeDecorationInSlot(stored, FIRST, 4)!;
+    expect(restored.placedDecorations).toEqual([placement(FIRST, 4), placement(SECOND, 2)]);
+  });
+
+  test('rejects occupied or out-of-range slots and unowned keys', () => {
+    const state = stateWithGold(0, [placement(FIRST, 0), placement(SECOND, 2)]);
+    expect(placeDecorationInSlot(state, FIRST, 2)).toBeNull();
+    expect(placeDecorationInSlot(state, FIRST, -1)).toBeNull();
+    expect(placeDecorationInSlot(state, DECORATIONS[2]!.key, 3)).toBeNull();
   });
 });
 
@@ -158,7 +215,15 @@ describe('save migration & prestige', () => {
     const base = createInitialState();
     const loaded = { placedDecorations: [FIRST, 'removed_in_v2', SECOND] } as unknown as Partial<GameState>;
     const migrated = migrateLoadedState(loaded, base);
-    expect(migrated.placedDecorations).toEqual([FIRST, SECOND]);
+    expect(migrated.placedDecorations).toEqual([placement(FIRST, 0), placement(SECOND, 1)]);
+  });
+
+  test('modern placement records survive save migration and restore exactly', () => {
+    const loaded = {
+      placedDecorations: [placement(FIRST, 6), placement(SECOND, null)],
+    } as Partial<GameState>;
+    const migrated = migrateLoadedState(loaded, createInitialState());
+    expect(migrated.placedDecorations).toEqual([placement(FIRST, 6), placement(SECOND, null)]);
   });
 
   test('a save without placedDecorations loads as empty', () => {
@@ -171,7 +236,7 @@ describe('save migration & prestige', () => {
     const decoration = getDecoration(FIRST)!;
     const owned = purchaseDecoration(stateWithGold(decoration.price + 5_000), FIRST)!;
     const prestiged = createPrestigedState(owned);
-    expect(prestiged.placedDecorations).toEqual([FIRST]);
+    expect(prestiged.placedDecorations).toEqual([placement(FIRST, 0)]);
   });
 });
 
@@ -205,7 +270,11 @@ describe('catalog tier coverage (#210)', () => {
     const legacySave = ['lantern', 'signpost', 'pond', 'ghost_item', 'signpost'];
     const normalized = normalizePlacedDecorations(legacySave);
     // 알 수 없는 키 제거·중복 제거 후 카탈로그 선언 순서로 정렬된다.
-    expect(normalized).toEqual(['signpost', 'pond', 'lantern']);
+    expect(normalized).toEqual([
+      placement('signpost', 0),
+      placement('pond', 1),
+      placement('lantern', 2),
+    ]);
 
     // getPlacedDecorations도 같은 순서 계약으로 렌더 목록을 만든다(신규 항목이 카탈로그
     // 뒤에 추가돼도 기존 보유분의 순서는 변하지 않는다).

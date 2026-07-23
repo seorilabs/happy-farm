@@ -9,6 +9,7 @@ import {
   COLLECTION_AREA_REWARDS,
   COMBO_WINDOW_MS,
   CROPS,
+  DECORATIONS,
   DEFAULT_LOCALE,
   FARM_AREAS,
   HARVEST_BONUS_AD_COOLDOWN_MS,
@@ -3351,6 +3352,72 @@ describe('FarmGame UI flow', () => {
       // 상점 시트를 열어야 비로소 탭 바가 등장한다.
       fireEvent.press(screen.getByTestId('shop-nav-button'));
       expect(screen.getByTestId('shop-tab-bar')).toBeTruthy();
+    });
+
+    test('꾸미기 모드에서 고정 슬롯 배치·이동·회수 상태를 저장하고 플롯 히트 영역을 덮지 않는다 (#370)', async () => {
+      const first = DECORATIONS[0]!;
+      const second = DECORATIONS[1]!;
+      const base = createInitialState();
+      const state: GameState = {
+        ...base,
+        onboardingCompleted: true,
+        dailyBonusState: { lastClaimedAt: NOW, streak: 1 },
+        placedDecorations: [
+          { key: first.key, slot: 0 },
+          { key: second.key, slot: null },
+        ],
+      };
+      const messages = getFarmMessages(DEFAULT_LOCALE);
+      const screen = await renderGame(state);
+
+      await waitFor(() =>
+        expect(getLatestPersistedState().placedDecorations).toEqual([
+          { key: first.key, slot: 0 },
+          { key: second.key, slot: null },
+        ])
+      );
+      const hiddenQuery = { includeHiddenElements: true };
+      const farmGrid = screen.getByTestId('farm-decoration-grid', hiddenQuery);
+      expect(within(screen.getByTestId('farm-scroll')).getByTestId('farm-decoration-grid', hiddenQuery)).toBeTruthy();
+      expect(
+        within(screen.getByTestId('plot-grid-container')).queryByTestId('farm-decoration-grid', hiddenQuery)
+      ).toBeNull();
+      expect(farmGrid.props.pointerEvents).toBe('none');
+      expect(
+        within(screen.getByTestId('farm-decoration-slot-0', hiddenQuery)).getByText(first.icon, hiddenQuery)
+      ).toBeTruthy();
+
+      fireEvent.press(screen.getByTestId('shop-nav-button'));
+      fireEvent.press(screen.getByTestId('shop-tab-decorate'));
+      fireEvent.press(screen.getByTestId('decoration-layout-open-action'));
+      expect(screen.getByText(messages.sheetTitleDecorationLayout)).toBeTruthy();
+
+      fireEvent.press(screen.getByTestId(`decoration-inventory-${second.key}`));
+      fireEvent.press(screen.getByTestId('decoration-slot-1'));
+      await waitFor(() =>
+        expect(getLatestPersistedState().placedDecorations).toEqual([
+          { key: first.key, slot: 0 },
+          { key: second.key, slot: 1 },
+        ])
+      );
+
+      fireEvent.press(screen.getByTestId('decoration-slot-0'));
+      fireEvent.press(screen.getByTestId('decoration-store-action'));
+      await waitFor(() =>
+        expect(getLatestPersistedState().placedDecorations).toEqual([
+          { key: first.key, slot: null },
+          { key: second.key, slot: 1 },
+        ])
+      );
+
+      fireEvent.press(screen.getByLabelText(messages.sheetCloseAccessibilityLabel));
+      await waitFor(() => expect(screen.queryByText(messages.sheetTitleDecorationLayout)).toBeNull());
+      expect(
+        within(screen.getByTestId('farm-decoration-slot-0', hiddenQuery)).queryByText(first.icon, hiddenQuery)
+      ).toBeNull();
+      expect(
+        within(screen.getByTestId('farm-decoration-slot-1', hiddenQuery)).getByText(second.icon, hiddenQuery)
+      ).toBeTruthy();
     });
   });
 

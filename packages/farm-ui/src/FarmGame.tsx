@@ -88,6 +88,7 @@ import {
   type AnimalsScreenSource,
   type CollectionRewardKey,
   type CropKey,
+  type DecorationKey,
   type DailyBonusSource,
   type GameAnalyticsContext,
   type GameState,
@@ -141,10 +142,13 @@ import {
   getDecorationLabel,
   getAnimalLabel,
   DECORATIONS,
+  DECORATION_GRID_SLOT_COUNT,
   canPurchaseDecoration,
   isDecorationOwned,
+  placeDecorationInSlot,
   purchaseDecoration,
   getPlacedDecorations,
+  storeDecoration,
   applyWheelReward,
   getWheelStatus,
   spinBonusWheel,
@@ -231,6 +235,7 @@ import { getWeeklyEventPresentation } from './weeklyEventPresentation';
 import { AchievementsSheet } from './components/AchievementsSheet';
 import { ChainMapSheet, PrestigeConfirmSheet } from './components/ChainMapSheet';
 import { CollectionSheet } from './components/CollectionSheet';
+import { DecorationLayoutSheet } from './components/DecorationLayoutSheet';
 import { EnvironmentBackdrop } from './components/EnvironmentBackdrop';
 import { FarmOnboarding, ONBOARDING_STEPS, type OnboardingStep } from './components/FarmOnboarding';
 import { LabSheet } from './components/LabSheet';
@@ -412,6 +417,7 @@ type ActiveSheet =
   | DailyBonusSheet
   | { type: 'wheel' }
   | { type: 'production'; tab: ProductionTabKey; source: AnimalsScreenSource }
+  | { type: 'decorationLayout' }
   | { type: 'resetConfirm' }
   | null;
 
@@ -2788,6 +2794,18 @@ function FarmGameBody({
     setActiveSheet({ type: 'shop' });
   }
 
+  function openDecorationLayout() {
+    setActiveSheet({ type: 'decorationLayout' });
+  }
+
+  function placeDecoration(key: DecorationKey, slot: number) {
+    setGameState((state) => placeDecorationInSlot(state, key, slot) ?? state);
+  }
+
+  function collectDecoration(key: DecorationKey) {
+    setGameState((state) => storeDecoration(state, key) ?? state);
+  }
+
   function openCollection() {
     setActiveSheet({ type: 'collection' });
   }
@@ -5024,6 +5042,12 @@ function FarmGameBody({
                   <View testID="shop-tab-panel-decorate">
                     <Text style={styles.sheetSectionTitle}>{messages.decorationSection}</Text>
                     <Text style={styles.researchSummary}>{messages.decorationSummary}</Text>
+                    <SheetAction
+                      testID="decoration-layout-open-action"
+                      label={messages.decorationArrangeAction}
+                      secondary
+                      onPress={openDecorationLayout}
+                    />
                     <ShopDecorationRows
                       gameState={gameState}
                       locale={locale}
@@ -5470,6 +5494,16 @@ function FarmGameBody({
             onCancelCraft={cancelCraftNow}
             onCollectCraft={collectCraftNow}
             onCollectAllCrafts={collectAllCrafts}
+          />
+        ) : null}
+
+        {activeSheet?.type === 'decorationLayout' ? (
+          <DecorationLayoutSheet
+            gameState={gameState}
+            locale={locale}
+            messages={messages}
+            onPlace={placeDecoration}
+            onStore={collectDecoration}
           />
         ) : null}
 
@@ -7338,6 +7372,9 @@ function getSheetTitle(activeSheet: ActiveSheet, messages: FarmMessages) {
   if (activeSheet?.type === 'production') {
     return messages.sheetTitleProduction;
   }
+  if (activeSheet?.type === 'decorationLayout') {
+    return messages.sheetTitleDecorationLayout;
+  }
   if (activeSheet?.type === 'welcomeBack') {
     return messages.sheetTitleWelcomeBack;
   }
@@ -7414,6 +7451,9 @@ function getSheetDescription(
   }
   if (activeSheet?.type === 'production') {
     return messages.sheetDescriptionProduction;
+  }
+  if (activeSheet?.type === 'decorationLayout') {
+    return messages.sheetDescriptionDecorationLayout;
   }
   if (activeSheet?.type === 'welcomeBack') {
     return messages.sheetDescriptionWelcomeBack(formatDuration(activeSheet.summary.awayMs, locale));
@@ -7673,12 +7713,11 @@ function ShopAreaUnlockRows({
   );
 }
 
-// Cosmetic layer that surfaces owned decorations on the main farm screen so the
-// gold spent on them is actually visible (the shop copy promises "decorate your
-// farm"). Rendered below the plot grid — never over it — so it can't cover a
-// plant/harvest hit area, and hidden entirely when nothing is owned. Purely
-// decorative, so the whole strip is removed from the accessibility tree to keep
-// it from interrupting the plot-state labels a screen-reader user relies on.
+// Cosmetic layer that surfaces placed decorations in their fixed saved slots.
+// Rendered below the plot grid — never over it — so it cannot cover a
+// plant/harvest hit area, and hidden entirely when nothing is placed. The whole
+// grid is non-interactive and removed from the accessibility tree; editing lives
+// in the dedicated decoration-layout sheet.
 // 소유 동물 스트립(#360): 농장 장면 하단(장식 스트립과 동일 레이어)에 소유 동물을
 // 아이콘으로 요약 노출한다. phase==='ready' 동물은 미세 강조(글로우+뱃지)로 수확 가능함을
 // 알리고, 스트립 전체가 하나의 탭 타깃으로 기존 동물 시트(openAnimals)를 연다. 소유
@@ -7728,17 +7767,27 @@ function FarmDecorationStrip({ gameState }: { gameState: GameState }) {
   if (placed.length === 0) {
     return null;
   }
+  const placementBySlot = new Map(placed.map((decoration) => [decoration.slot, decoration]));
   return (
     <View
-      style={styles.decorationStrip}
+      testID="farm-decoration-grid"
+      pointerEvents="none"
+      style={styles.decorationGrid}
       importantForAccessibility="no-hide-descendants"
       accessibilityElementsHidden
     >
-      {placed.map((decoration) => (
-        <Text key={decoration.key} style={styles.decorationStripIcon}>
-          {decoration.icon}
-        </Text>
-      ))}
+      {Array.from({ length: DECORATION_GRID_SLOT_COUNT }, (_, slot) => {
+        const decoration = placementBySlot.get(slot);
+        return (
+          <View
+            key={slot}
+            testID={`farm-decoration-slot-${slot}`}
+            style={[styles.decorationGridSlot, decoration != null && styles.decorationGridSlotFilled]}
+          >
+            {decoration != null ? <Text style={styles.decorationGridIcon}>{decoration.icon}</Text> : null}
+          </View>
+        );
+      })}
     </View>
   );
 }

@@ -236,20 +236,30 @@ export const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: PLOT_GAP,
   },
-  // Cosmetic decoration strip beneath the plot grid. A soft ground-line border
-  // that reads as the edge of the farm; wraps so a large collection flows onto
-  // multiple rows instead of overflowing.
-  decorationStrip: {
+  // Fixed decoration grid below the plot container. It never overlays the plot
+  // hit area; empty cells keep saved slot coordinates visually stable.
+  decorationGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    alignItems: 'center',
-    gap: 6,
+    justifyContent: 'space-between',
+    rowGap: 6,
     marginTop: 14,
     paddingTop: 12,
     borderTopWidth: 1,
     borderTopColor: 'rgba(120, 87, 46, 0.25)',
   },
-  decorationStripIcon: {
+  decorationGridSlot: {
+    width: '18%',
+    aspectRatio: 1.35,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.16)',
+  },
+  decorationGridSlotFilled: {
+    backgroundColor: 'rgba(255, 247, 214, 0.5)',
+  },
+  decorationGridIcon: {
     fontSize: 26,
   },
   // 소유 동물 스트립(#360): 장식 스트립과 같은 레이어·같은 상단 구분선. 전체가 하나의
