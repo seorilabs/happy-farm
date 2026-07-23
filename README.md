@@ -8,7 +8,7 @@ AppsInToss Granite React Native 버전의 `행복한 농장 타이쿤`입니다.
 - `apps/mobile`에 Google Play/App Store용 표준 React Native Android/iOS 타깃을 추가했습니다.
 - `packages/farm-core`에 원본의 `balance.json`, 작물/구역/광고 제한/업그레이드 경제 로직을 분리했습니다.
 - AIT 타깃은 AppsInToss 네이티브 `Storage`로 저장/불러오기/초기화를 처리합니다.
-- 전면/보상형 광고 호출은 `loadFullScreenAd`/`showFullScreenAd` 흐름으로 포팅했지만, 실제 광고 그룹 ID는 아직 비워 두었습니다.
+- 전면/보상형 광고 호출은 `loadFullScreenAd`/`showFullScreenAd` 흐름으로 포팅했습니다. 보상형 광고 그룹 ID는 `apps/ait/src/pages/index.tsx`에 설정했고, 전면형 ID는 Firebase Remote Config 미주입 또는 공란 시 비활성화됩니다.
 
 ## 명령어
 
@@ -47,7 +47,7 @@ intoss://happy-farm/
 ## 출시 전 차단 사항
 
 - `apps/ait/granite.config.ts`의 `brand.icon`은 승인된 AppsInToss 콘솔 로고 URL로 설정했습니다.
-- 보상형/전면형 광고 그룹 ID를 `apps/ait/src/farm/FarmGame.tsx`에 연결해야 광고 보상이 활성화됩니다.
+- 공용 게임 컴포넌트는 `packages/farm-ui/src/FarmGame.tsx`이며, AppsInToss 광고 그룹 ID는 `apps/ait/src/pages/index.tsx`에서 주입합니다. 보상형 ID는 설정 완료했고, 전면형 광고 활성화에는 Firebase Remote Config의 `appsintoss_interstitial_ad_group_id` 운영값 주입이 필요합니다.
 - Google Play package name은 `com.seorilabs.happyfarm`으로 확정했습니다.
 - 고객지원 이메일은 `cs@seorilabs.com`, 개인정보 처리방침은 `https://www.seorilabs.com/privacy`로 확정했습니다.
 - Google Play 광고 포함 여부와 한국 게임 배포 선언은 `yes`로 확정했습니다.
