@@ -275,6 +275,12 @@ const HARVEST_NOTIFICATION_MIN_LEAD_MS = 60_000;
 const PROGRESS_ANIMATION_DURATION_MS = GAME_TICK_INTERVAL_MS;
 // Fresh-plant sprout "bounce in" duration.
 const PLANT_POP_DURATION_MS = 320;
+const GOLD_PULSE_RISE_MS = 120;
+const GOLD_PULSE_SETTLE_MS = 220;
+// Coin/spark particles finish as the gold HUD finishes its matching pulse.
+export const HARVEST_BURST_DURATION_MS = GOLD_PULSE_RISE_MS + GOLD_PULSE_SETTLE_MS;
+export const HARVEST_BURST_PARTICLE_COUNT = 6;
+export const HARVEST_FX_MAX_CONCURRENT = 8;
 // The "Harvest All" shortcut only appears once enough plots are ripe that
 // tapping each one becomes a chore; a single ripe plot is a quick one-tap.
 const HARVEST_ALL_MIN_COUNT = 2;
@@ -645,9 +651,18 @@ type HarvestPop = {
 // Imperative handle so a harvest can fire a burst without lifting pop state into
 // FarmGame: spawning/removing pops re-renders only the overlay, never the plot
 // grid, keeping rapid tapping cheap on low-end devices.
-type HarvestFxHandle = {
+export type HarvestFxHandle = {
   spawn: (index: number, label: string, tone: HarvestPop['tone']) => void;
 };
+
+const HARVEST_BURST_PARTICLES = [
+  { kind: 'coin', sprayX: -0.38, sprayY: -0.42, targetX: -4, targetY: 2, rotation: -24 },
+  { kind: 'spark', sprayX: -0.12, sprayY: -0.62, targetX: 3, targetY: -3, rotation: 32 },
+  { kind: 'coin', sprayX: 0.2, sprayY: -0.52, targetX: 7, targetY: 2, rotation: 18 },
+  { kind: 'spark', sprayX: 0.42, sprayY: -0.24, targetX: -1, targetY: -5, rotation: 58 },
+  { kind: 'coin', sprayX: 0.3, sprayY: 0.04, targetX: 5, targetY: 4, rotation: -12 },
+  { kind: 'spark', sprayX: -0.34, sprayY: -0.06, targetX: -6, targetY: -2, rotation: 74 },
+] as const;
 
 // Imperative handle to fire the full-screen mutation flash overlay without
 // lifting flash state into FarmGame (avoids re-rendering the whole tree).
@@ -1080,13 +1095,13 @@ function FarmGameBody({
     Animated.sequence([
       Animated.timing(goldPulse, {
         toValue: 1,
-        duration: 120,
+        duration: GOLD_PULSE_RISE_MS,
         easing: Easing.out(Easing.quad),
         useNativeDriver: true,
       }),
       Animated.timing(goldPulse, {
         toValue: 0,
-        duration: 220,
+        duration: GOLD_PULSE_SETTLE_MS,
         easing: Easing.in(Easing.quad),
         useNativeDriver: true,
       }),
@@ -6924,7 +6939,7 @@ function GrowingCropIcon({
   );
 }
 
-const HarvestFxOverlay = React.forwardRef<HarvestFxHandle, { tileSize: number }>(function HarvestFxOverlay(
+export const HarvestFxOverlay = React.forwardRef<HarvestFxHandle, { tileSize: number }>(function HarvestFxOverlay(
   { tileSize },
   ref
 ) {
@@ -6939,7 +6954,10 @@ const HarvestFxOverlay = React.forwardRef<HarvestFxHandle, { tileSize: number }>
         setPops((prev) => {
           // Cap concurrent pops so rapid tapping can never grow the overlay
           // unbounded before each pop self-removes at the end of its animation.
-          const next = prev.length >= 8 ? prev.slice(prev.length - 7) : prev;
+          const next =
+            prev.length >= HARVEST_FX_MAX_CONCURRENT
+              ? prev.slice(prev.length - (HARVEST_FX_MAX_CONCURRENT - 1))
+              : prev;
           return [...next, { id, index, label, tone }];
         });
       },
@@ -6974,6 +6992,11 @@ function HarvestPopText({
     progressRef.current = new Animated.Value(0);
   }
   const progress = progressRef.current;
+  const burstProgressRef = useRef<Animated.Value | null>(null);
+  if (burstProgressRef.current == null) {
+    burstProgressRef.current = new Animated.Value(0);
+  }
+  const burstProgress = burstProgressRef.current;
   const onDoneRef = useRef(onDone);
   onDoneRef.current = onDone;
 
@@ -6981,19 +7004,27 @@ function HarvestPopText({
   const mutationConfig = mutationTone == null ? null : MUTATION_CELEBRATION_CONFIG[mutationTone];
 
   useEffect(() => {
-    const animation = Animated.timing(progress, {
-      toValue: 1,
-      duration: mutationConfig?.popDurationMs ?? 900,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: true,
-    });
+    const animation = Animated.parallel([
+      Animated.timing(progress, {
+        toValue: 1,
+        duration: mutationConfig?.popDurationMs ?? 900,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(burstProgress, {
+        toValue: 1,
+        duration: HARVEST_BURST_DURATION_MS,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]);
     animation.start(({ finished }) => {
       if (finished) {
         onDoneRef.current(pop.id);
       }
     });
     return () => animation.stop();
-  }, [mutationConfig?.popDurationMs, pop.id, progress]);
+  }, [burstProgress, mutationConfig?.popDurationMs, pop.id, progress]);
 
   const col = pop.index % PLOT_COLUMNS;
   const row = Math.floor(pop.index / PLOT_COLUMNS);
@@ -7024,9 +7055,59 @@ function HarvestPopText({
   });
 
   const icon = mutationConfig == null ? '' : `${mutationConfig.popIcon} `;
+  // All particles converge on the same point just above the plot grid. That
+  // point sits in the direction of the top-left gold HUD, whose 340ms pulse is
+  // driven from the same harvest effect and shares HARVEST_BURST_DURATION_MS.
+  const convergeX = -left - tileSize * 0.25;
+  const convergeY = -top - tileSize * 0.85;
 
   return (
     <View pointerEvents="none" style={[styles.harvestPop, { left, top, width: tileSize, height: tileSize }]}>
+      <View
+        testID={`harvest-burst-${pop.id}`}
+        accessible={false}
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
+        style={styles.harvestBurst}
+      >
+        {HARVEST_BURST_PARTICLES.map((particle, index) => {
+          const translateX = burstProgress.interpolate({
+            inputRange: [0, 0.36, 1],
+            outputRange: [0, particle.sprayX * tileSize, convergeX + particle.targetX],
+          });
+          const translateY = burstProgress.interpolate({
+            inputRange: [0, 0.36, 1],
+            outputRange: [0, particle.sprayY * tileSize, convergeY + particle.targetY],
+          });
+          const particleScale = burstProgress.interpolate({
+            inputRange: [0, 0.2, 0.58, 1],
+            outputRange: [0.35, 1.18, 0.88, 0.25],
+          });
+          const particleOpacity = burstProgress.interpolate({
+            inputRange: [0, 0.08, 0.58, 1],
+            outputRange: [0, 1, 1, 0],
+          });
+          const rotate = burstProgress.interpolate({
+            inputRange: [0, 1],
+            outputRange: [`${particle.rotation}deg`, `${particle.rotation + 160}deg`],
+          });
+
+          return (
+            <Animated.View
+              key={index}
+              testID={`harvest-particle-${particle.kind}`}
+              style={[
+                styles.harvestParticle,
+                particle.kind === 'coin' ? styles.harvestParticleCoin : styles.harvestParticleSpark,
+                {
+                  opacity: particleOpacity,
+                  transform: [{ translateX }, { translateY }, { scale: particleScale }, { rotate }],
+                },
+              ]}
+            />
+          );
+        })}
+      </View>
       <Animated.Text
         testID={`harvest-pop-${pop.tone}`}
         style={[

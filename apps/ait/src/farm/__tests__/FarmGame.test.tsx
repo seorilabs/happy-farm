@@ -4245,6 +4245,42 @@ describe('FarmGame UI flow', () => {
     expect(playHarvest).toHaveBeenCalledTimes(1);
   });
 
+  test('keeps the harvest burst and gold pulse when sound and haptics are disabled (#368)', async () => {
+    const playHarvest = jest.fn();
+    const onGoldPulse = jest.fn();
+    const vibrateSpy = jest.spyOn(Vibration, 'vibrate').mockImplementation(() => undefined);
+    __setGoldPulseTestHook(onGoldPulse);
+    try {
+      const screen = await renderGame(
+        createReadyHarvestState(),
+        {
+          audio: {
+            isSupported: true,
+            playHarvest,
+            playComboMilestone: jest.fn(),
+            playEffect: jest.fn(),
+            setBackgroundMusicEnabled: jest.fn(),
+          },
+        },
+        { soundEffectsEnabled: false, hapticsEnabled: false }
+      );
+      await waitFor(() => expect(screen.getByText('50G')).toBeTruthy());
+      vibrateSpy.mockClear();
+
+      fireEvent.press(within(screen.getByTestId('plot-cell-0')).getByText('GET'));
+
+      await waitFor(() => {
+        expect(screen.UNSAFE_getByProps({ testID: 'harvest-burst-1' })).toBeTruthy();
+        expect(onGoldPulse).toHaveBeenCalledTimes(1);
+      });
+      expect(playHarvest).not.toHaveBeenCalled();
+      expect(vibrateSpy).not.toHaveBeenCalled();
+    } finally {
+      __setGoldPulseTestHook(undefined);
+      vibrateSpy.mockRestore();
+    }
+  });
+
   describe('collection reward claim side-effects', () => {
     // Constants derived from balance data — safe to compute once at describe scope.
     const claimMessages = getFarmMessages();
