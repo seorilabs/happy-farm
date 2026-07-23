@@ -117,4 +117,35 @@ describe('AppsInToss analytics lifecycle (#395)', () => {
     expect(track).not.toHaveBeenCalledWith('ait_first_touch', expect.anything());
     expect(track).toHaveBeenCalledWith('ait_session_start', { session_source: 'initialization' });
   });
+
+  test('AppState inactive→background 중복 콜백은 최초 inactive 세션 기준점을 뒤로 미루지 않는다', async () => {
+    const initialTimeMs = 1_700_000_000_000;
+    let currentTimeMs = initialTimeMs;
+    const track = jest.fn();
+    const startNewSession = jest.fn();
+    const lifecycle = createAppsInTossAnalyticsLifecycle({
+      storage: createMemoryStorage(),
+      track,
+      startNewSession,
+      flush: jest.fn(),
+      now: () => currentTimeMs,
+    });
+    await lifecycle.initialize(true);
+    track.mockClear();
+
+    lifecycle.handleAppStateChange('inactive');
+    currentTimeMs += 10_000;
+    lifecycle.handleAppStateChange('background');
+    currentTimeMs = initialTimeMs + AIT_ANALYTICS_SESSION_TIMEOUT_MS;
+    lifecycle.handleAppStateChange('active');
+
+    // inactive 기준으로는 정확히 30분, background 기준으로는 29분 50초다.
+    // 최초 inactive 시각을 보존해야만 새 세션이 시작된다.
+    expect(startNewSession).toHaveBeenCalledTimes(1);
+    expect(track).toHaveBeenCalledTimes(1);
+    expect(track).toHaveBeenCalledWith('ait_session_start', {
+      session_source: 'foreground_resume',
+      background_duration_ms: AIT_ANALYTICS_SESSION_TIMEOUT_MS,
+    });
+  });
 });
