@@ -1,10 +1,12 @@
 import { AppsInToss } from '@apps-in-toss/framework';
 import { TDSProvider } from '@toss/tds-react-native';
 import React, { useEffect, type PropsWithChildren } from 'react';
+import { AppState } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { type InitialProps } from '@granite-js/react-native';
 import { context } from '../require.context';
 import { initializeAppsInTossFirebaseServices } from './firebaseWeb';
+import { handleAppsInTossAnalyticsAppStateChange } from './firebaseWeb/analytics';
 
 function AppContainer({ children }: PropsWithChildren<InitialProps>) {
   useEffect(() => {
@@ -13,6 +15,9 @@ function AppContainer({ children }: PropsWithChildren<InitialProps>) {
     initializeAppsInTossFirebaseServices().catch((error: unknown) => {
       console.warn('[ait] Firebase services init failed', error);
     });
+
+    const subscription = AppState.addEventListener('change', handleAppsInTossAnalyticsAppStateChange);
+    return () => subscription.remove();
   }, []);
 
   return (

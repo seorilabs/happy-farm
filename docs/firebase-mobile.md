@@ -30,7 +30,16 @@ measurementId = G-LQQQQZHG1V
 
 Firebase Web API key는 service credential이 아니며, AIT 실기기 smoke test를 위해 client config를 `apps/ait/src/firebaseWeb/app.ts`에 고정했습니다. 서비스 계정 JSON, Admin SDK credential, private key는 앱에 넣지 않습니다.
 
-AIT 앱 시작 시 `firebase/app`으로 Web App을 초기화하고, `firebase/analytics`의 `isSupported()`가 true인 환경에서만 Analytics를 초기화합니다. 지원되는 경우 `ait_firebase_initialized` smoke event와 FarmGame 이벤트를 Firebase Analytics로 전송합니다. dev bundle에서는 DebugView 확인을 위해 `debug_mode=1`을 함께 붙입니다. AppsInToss 실기기에서 Analytics 지원이 false이거나 초기화가 실패하면 게임은 계속 no-op analytics로 동작합니다.
+AIT 앱 시작 시 GA4 Measurement Protocol 클라이언트와 Remote Config REST 클라이언트를 초기화합니다. Measurement Protocol 설정이 주입된 경우 `ait_firebase_initialized` smoke event와 FarmGame 이벤트를 전송하고, dev bundle에서는 DebugView 확인을 위해 `debug_mode=1`을 함께 붙입니다. 설정이 없거나 초기화가 실패하면 게임은 계속 no-op analytics로 동작합니다.
+
+현재 AIT는 Granite React Native 런타임 제약 때문에 Firebase Web SDK 대신 GA4 Measurement Protocol을 사용합니다. Measurement Protocol 예약 이름인 `first_open`, `first_visit`, `session_start`, `user_engagement`는 직접 전송할 수 없으므로 다음 계약을 사용합니다.
+
+- `ait_first_touch`: `ait_ga4_first_touch_recorded` Storage 플래그로 신규 설치 생애 1회만 전송합니다. 계측 도입 전에 이미 `ait_ga4_client_id`가 있던 기존 사용자는 플래그만 마이그레이션해 신규 코호트 오염을 막습니다. WEB first-touch 코호트의 BigQuery 기준 이벤트입니다.
+- `ait_session_start`: 앱 초기화와 30분 이상 백그라운드 복귀에 전송하는 진단 이벤트입니다.
+- 실제 GA4 세션 경계: 모든 이벤트의 `session_id`로 집계하며, 30분 이상 백그라운드 복귀 시 새 ID를 발급합니다. `session_start` 예약 이벤트를 위조하지 않습니다.
+- 두 lifecycle 이벤트도 `app_market`, `release_version`, `release_build_number` 공통 파라미터를 포함합니다.
+
+Measurement Protocol 단독 WEB 스트림은 자동 수집 기반 표준 리포트가 일부 제한될 수 있으므로 WEB D1/D7은 `ait_first_touch`와 `session_id`를 사용한 BigQuery 쿼리를 권위 기준으로 봅니다.
 
 ## 설정 파일
 

@@ -69,7 +69,7 @@ describe('createGa4MeasurementProtocolClient — 설정/초기화', () => {
 
     const result = await client.initialize();
 
-    expect(result).toEqual({ status: 'ready' });
+    expect(result).toEqual({ status: 'ready', isNewClient: true });
     expect(storage.setItem).toHaveBeenCalledWith(GA4_CLIENT_ID_STORAGE_KEY, 'client-fixed');
   });
 
@@ -83,6 +83,13 @@ describe('createGa4MeasurementProtocolClient — 설정/초기화', () => {
 
     expect(storage.setItem).not.toHaveBeenCalled();
     expect(at(post.mock.calls, 0)[1].includes('persisted-id')).toBe(true);
+  });
+
+  test('저장된 client_id가 있으면 기존 client로 초기화 결과에 표시한다', async () => {
+    const storage = createMemoryStorage({ [GA4_CLIENT_ID_STORAGE_KEY]: 'persisted-id' });
+    const { client } = createHarness({ storage });
+
+    await expect(client.initialize()).resolves.toEqual({ status: 'ready', isNewClient: false });
   });
 
   test('스토리지 접근이 실패하면 error를 반환한다', async () => {
@@ -126,6 +133,22 @@ describe('createGa4MeasurementProtocolClient — 큐잉/전송', () => {
       session_id: '1700000000000',
       engagement_time_msec: 100,
     });
+  });
+
+  test('30분 세션 경계에서 startNewSession이 이후 이벤트에 새 session_id를 적용한다 (#395)', async () => {
+    let currentTimeMs = 1_700_000_000_000;
+    const { client, posted } = createHarness({ now: () => currentTimeMs });
+    await client.initialize();
+
+    client.track('game_start');
+    client.flush();
+    currentTimeMs += 30 * 60 * 1000;
+    client.startNewSession();
+    client.track('ait_session_start');
+    client.flush();
+
+    expect(at(at(posted, 0).body.events, 0).params.session_id).toBe('1700000000000');
+    expect(at(at(posted, 1).body.events, 0).params.session_id).toBe('1700001800000');
   });
 
   test('URL에 measurement_id와 api_secret이 쿼리로 실린다', async () => {

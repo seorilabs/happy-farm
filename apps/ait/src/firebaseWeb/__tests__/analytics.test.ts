@@ -90,6 +90,53 @@ describe('trackAppsInTossAnalyticsEvent — 큐잉/정규화/전송', () => {
     expect(sentEventNames()).toContain('ait_firebase_initialized');
   });
 
+  test('초기화 lifecycle 이벤트에 release_version 등 시장 공통 파라미터를 포함한다 (#395)', async () => {
+    const { initializeAppsInTossAnalytics } = loadAnalytics();
+
+    await initializeAppsInTossAnalytics();
+    jest.runOnlyPendingTimers();
+
+    const events = mockFetch.mock.calls.flatMap((_call, index) => parseBody(index).events);
+    const firstTouch = events.find((event) => event.name === 'ait_first_touch');
+    const sessionStart = events.find((event) => event.name === 'ait_session_start');
+    expect(firstTouch?.params).toMatchObject({
+      lifecycle_source: 'first_install',
+      app_market: 'apps_in_toss',
+      release_version: expect.any(String),
+      release_build_number: expect.any(Number),
+    });
+    expect(sessionStart?.params).toMatchObject({
+      session_source: 'initialization',
+      app_market: 'apps_in_toss',
+      release_version: expect.any(String),
+      release_build_number: expect.any(Number),
+    });
+  });
+
+  test('30분 이상 백그라운드 복귀는 새 session_id의 lifecycle 이벤트와 공통 파라미터를 전송한다 (#395)', async () => {
+    jest.setSystemTime(1_700_000_000_000);
+    const { handleAppsInTossAnalyticsAppStateChange, initializeAppsInTossAnalytics } = loadAnalytics();
+    await initializeAppsInTossAnalytics();
+    jest.runOnlyPendingTimers();
+    mockFetch.mockClear();
+
+    jest.setSystemTime(1_700_000_000_000);
+    handleAppsInTossAnalyticsAppStateChange('background');
+    jest.setSystemTime(1_700_001_800_000);
+    handleAppsInTossAnalyticsAppStateChange('active');
+    jest.runOnlyPendingTimers();
+
+    const sessionStart = parseBody(0).events.find((event) => event.name === 'ait_session_start');
+    expect(sessionStart?.params).toMatchObject({
+      session_source: 'foreground_resume',
+      background_duration_ms: 30 * 60 * 1000,
+      session_id: '1700001800000',
+      app_market: 'apps_in_toss',
+      release_version: expect.any(String),
+      release_build_number: expect.any(Number),
+    });
+  });
+
   test('초기화 완료 후 발생한 이벤트도 시장 공통 파라미터가 실린다', async () => {
     const { trackAppsInTossAnalyticsEvent, initializeAppsInTossAnalytics } = loadAnalytics();
 
@@ -159,6 +206,24 @@ describe('trackAppsInTossAnalyticsEvent — 큐잉/정규화/전송', () => {
 });
 
 describe('initializeAppsInTossAnalytics — 멱등/재사용', () => {
+  test('기존 ait_ga4_client_id 사용자는 first-touch 플래그만 마이그레이션하고 이벤트를 발화하지 않는다 (#395 AC-2)', async () => {
+    mockStorage.getItem.mockImplementation(async (key) => {
+      if (key === 'ait_ga4_client_id') {
+        return 'persisted-client-id';
+      }
+      return null;
+    });
+    const { initializeAppsInTossAnalytics } = loadAnalytics();
+
+    await initializeAppsInTossAnalytics();
+    jest.runOnlyPendingTimers();
+
+    expect(mockStorage.setItem).not.toHaveBeenCalledWith('ait_ga4_client_id', expect.anything());
+    expect(mockStorage.setItem).toHaveBeenCalledWith('ait_ga4_first_touch_recorded', '1');
+    expect(sentEventNames()).not.toContain('ait_first_touch');
+    expect(sentEventNames()).toContain('ait_session_start');
+  });
+
   test('여러 번 호출해도 client_id는 한 번만 생성한다(멱등)', async () => {
     const { initializeAppsInTossAnalytics } = loadAnalytics();
 
@@ -167,6 +232,7 @@ describe('initializeAppsInTossAnalytics — 멱등/재사용', () => {
     await Promise.all([first, second]);
 
     expect(first).toBe(second);
-    expect(mockStorage.setItem).toHaveBeenCalledTimes(1);
+    expect(mockStorage.setItem.mock.calls.filter(([key]) => key === 'ait_ga4_client_id')).toHaveLength(1);
+    expect(mockStorage.setItem.mock.calls.filter(([key]) => key === 'ait_ga4_first_touch_recorded')).toHaveLength(1);
   });
 });
