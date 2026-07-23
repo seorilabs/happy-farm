@@ -21,6 +21,13 @@ export type ResearchNodeKey = (typeof balance.research.nodes)[number]['key'];
 
 export type DecorationKey = (typeof balance.decorations.items)[number]['key'];
 
+export type DecorationPlacement = {
+  key: DecorationKey;
+  // Fixed-grid slot index. null keeps ownership while the item is stored in the
+  // decorating inventory. Coordinates remain cosmetic and never affect balance.
+  slot: number | null;
+};
+
 export type AnimalKey = (typeof balance.animals.kinds)[number]['key'];
 
 export type ProductionRecipeKey = (typeof balance.production.recipes)[number]['key'];
@@ -175,10 +182,10 @@ export type GameState = {
   // chain-farm income concept, then never again. A meta-layer flag so it
   // persists across every subsequent graduation.
   prestigeGuideSeen: boolean;
-  // Cosmetic decorations the player has bought and placed on the farm. Purely
-  // self-expression / late-game gold sink — owning a decoration has no gameplay
-  // effect. A meta-layer field so the collection persists across every prestige.
-  placedDecorations: DecorationKey[];
+  // Cosmetic decorations the player owns plus their optional fixed-grid slot.
+  // A null slot means stored/unplaced. Purely self-expression / late-game gold
+  // sink — ownership and placement survive every prestige.
+  placedDecorations: DecorationPlacement[];
   // Daily fortune-wheel tracking: free-spin time plus the authoritative bonus-ad
   // day/count/last-use fields. Reward slots stay derived from balance + injected
   // rng. A meta-layer field so both daily caps carry across prestige.
