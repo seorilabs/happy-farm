@@ -69,6 +69,7 @@ describe('farm balance and model invariants', () => {
     expect(state.harvestedCropKeys).toEqual([]);
     expect(state.onboardingCompleted).toBe(false);
     expect(state.onboardingStep).toBe('selectSeed');
+    expect(state.firstSeedSelected).toBe(false);
     expect(state.onboardingReturnSettledAt).toBeNull();
     expect(ONBOARDING_STEPS).toEqual(['selectSeed', 'plant', 'harvest', 'reward']);
     expect(state.upgrades).toEqual({ speed: 1, profit: 1 });
@@ -397,6 +398,41 @@ describe('farm save migration', () => {
     expect(lifetimeHarvested.onboardingStep).toBe('reward');
     expect(planted.onboardingStep).toBe('harvest');
     expect(untouched.onboardingStep).toBe('selectSeed');
+  });
+
+  test('migrates the lifetime first-seed flag from explicit state or proven legacy progress (#371)', () => {
+    const base = createInitialState();
+    const explicit = migrateLoadedState({ ...base, firstSeedSelected: true }, base);
+    const planted = migrateLoadedState(
+      {
+        ...base,
+        firstSeedSelected: undefined,
+        plots: [{ id: 0, cropType: 'carrot', startTime: NOW - 500, state: 1 }],
+      } as unknown as Partial<GameState>,
+      base
+    );
+    const harvested = migrateLoadedState(
+      {
+        ...base,
+        firstSeedSelected: undefined,
+        lifetimeStats: { ...base.lifetimeStats, totalHarvests: 1 },
+      } as unknown as Partial<GameState>,
+      base
+    );
+    const resumedAfterSelection = migrateLoadedState(
+      { ...base, firstSeedSelected: undefined, onboardingStep: 'plant' } as unknown as Partial<GameState>,
+      base
+    );
+    const untouched = migrateLoadedState(
+      { ...base, firstSeedSelected: undefined } as unknown as Partial<GameState>,
+      base
+    );
+
+    expect(explicit.firstSeedSelected).toBe(true);
+    expect(planted.firstSeedSelected).toBe(true);
+    expect(harvested.firstSeedSelected).toBe(true);
+    expect(resumedAfterSelection.firstSeedSelected).toBe(true);
+    expect(untouched.firstSeedSelected).toBe(false);
   });
 
   test('rejects invalid persisted onboarding steps and resolves them from progress', () => {

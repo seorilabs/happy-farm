@@ -27,6 +27,7 @@ import {
   claimDailyBonus,
   createFarmAnalytics,
   createInitialState,
+  migrateLoadedState,
   getRewardedGoldAmount,
   formatDuration,
   formatHourlyGold,
@@ -835,6 +836,53 @@ describe('FarmGame UI flow', () => {
     expect(screen.getByTestId('stats-record-collection-discovered')).toHaveTextContent(
       `2 / ${getCropKeys().length}`
     );
+  });
+
+  describe('first seed lifetime analytics (#371)', () => {
+    test('persists the first selection as a lifetime GameState flag', async () => {
+      const firstTrack = jest.fn();
+      const firstScreen = await renderGame(createInitialState(), {
+        analytics: createFarmAnalytics(firstTrack),
+      });
+
+      fireEvent.press(firstScreen.getByTestId('seed-tool-carrot'));
+      await waitFor(() => expect(getLatestPersistedState().firstSeedSelected).toBe(true));
+      expect(firstTrack).toHaveBeenCalledWith('first_seed_selected', expect.anything());
+      expect(firstTrack).not.toHaveBeenCalledWith('seed_selected', expect.anything());
+    });
+
+    test('emits only seed_selected when a remounted game loads the persisted lifetime flag', async () => {
+      const returningTrack = jest.fn();
+      const returningScreen = await renderGame(
+        { ...createInitialState(), firstSeedSelected: true },
+        {
+          analytics: createFarmAnalytics(returningTrack),
+        }
+      );
+      fireEvent.press(returningScreen.getByTestId('seed-tool-carrot'));
+
+      expect(returningTrack).toHaveBeenCalledWith('seed_selected', expect.anything());
+      expect(returningTrack).not.toHaveBeenCalledWith('first_seed_selected', expect.anything());
+    });
+
+    test('does not emit first_seed_selected for a progressed legacy save', async () => {
+      const base = createInitialState();
+      const legacy = migrateLoadedState(
+        {
+          ...base,
+          firstSeedSelected: undefined,
+          lifetimeStats: { ...base.lifetimeStats, totalHarvests: 1 },
+        } as unknown as Partial<GameState>,
+        base
+      );
+      const track = jest.fn();
+      const screen = await renderGame(legacy, { analytics: createFarmAnalytics(track) });
+
+      fireEvent.press(screen.getByTestId('seed-tool-carrot'));
+
+      expect(track).toHaveBeenCalledWith('seed_selected', expect.anything());
+      expect(track).not.toHaveBeenCalledWith('first_seed_selected', expect.anything());
+    });
   });
 
   describe('seed-strip event bonus badges (#226, #354)', () => {

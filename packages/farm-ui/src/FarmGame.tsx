@@ -1041,7 +1041,6 @@ function FarmGameBody({
   const lastScheduledCropReminderAtRef = useRef<number | null>(null);
   const tickNowMsRef = useRef(Date.now());
   const gameStartTrackedRef = useRef(false);
-  const firstSeedSelectedRef = useRef(false);
   const claimedRewardKeysRef = useRef<Set<CollectionRewardKey>>(new Set());
   const achievementClaimInFlightRef = useRef(false);
   const commandEffectIdRef = useRef(0);
@@ -3535,8 +3534,15 @@ function FarmGameBody({
       return;
     }
 
-    const isFirstSeedSelection = !firstSeedSelectedRef.current;
-    firstSeedSelectedRef.current = true;
+    // The lifetime flag is the source of truth. Mirror the reservation into the
+    // existing latest-state ref before React commits so two same-frame taps
+    // cannot both claim the first event, while the functional update preserves
+    // any concurrent game-state changes and persists the flag across remounts.
+    const isFirstSeedSelection = !gameStateRef.current.firstSeedSelected;
+    if (isFirstSeedSelection) {
+      gameStateRef.current = { ...gameStateRef.current, firstSeedSelected: true };
+      setGameState((state) => (state.firstSeedSelected ? state : { ...state, firstSeedSelected: true }));
+    }
     farmAnalytics.trackSeedSelected(cropKey, crop.area, isFirstSeedSelection, analyticsContext());
     setSelectedArea(crop.area);
     setSelectedTool(cropKey);
