@@ -296,6 +296,32 @@ export const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  harvestBurst: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  harvestParticle: {
+    position: 'absolute',
+    left: '50%',
+    top: '50%',
+    width: 8,
+    height: 8,
+    marginLeft: -4,
+    marginTop: -4,
+  },
+  harvestParticleCoin: {
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#fff1a3',
+    backgroundColor: '#f6b91e',
+  },
+  harvestParticleSpark: {
+    width: 7,
+    height: 7,
+    marginLeft: -3.5,
+    marginTop: -3.5,
+    borderRadius: 1,
+    backgroundColor: '#fff7c2',
+  },
   harvestPopText: {
     color: '#f7b733',
     fontSize: 18,
