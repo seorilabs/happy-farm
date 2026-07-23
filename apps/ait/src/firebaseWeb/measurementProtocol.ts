@@ -23,7 +23,7 @@ const MAX_PENDING_EVENTS = 200;
 const DEFAULT_FLUSH_DELAY_MS = 1000;
 
 export type Ga4McpInitResult =
-  | { status: 'ready' }
+  | { status: 'ready'; isNewClient: boolean }
   | { status: 'disabled'; reason: 'no_config' }
   | { status: 'error'; reason: string };
 
@@ -53,6 +53,8 @@ export type Ga4MeasurementProtocolClient = {
   initialize: () => Promise<Ga4McpInitResult>;
   /** 이벤트 전송(TrackGameEvent 호환). 준비 전이면 큐잉, 수집 비활성/미설정이면 무시. */
   track: TrackGameEvent;
+  /** 기존 버퍼를 비운 뒤 현재 시각을 기준으로 새 GA4 session_id를 시작한다. */
+  startNewSession: () => void;
   /** 버퍼 잔여 이벤트를 즉시 전송(백그라운드 전환/종료 훅에서 호출 권장). */
   flush: () => void;
   /** 수집 on/off. off면 이후 이벤트는 버퍼에 쌓지 않고 즉시 무시한다. */
@@ -161,6 +163,14 @@ export function createGa4MeasurementProtocolClient(
     }, flushDelayMs);
   }
 
+  function startNewSession(): void {
+    // 이전 세션 이벤트가 새 session_id로 잘못 묶이지 않도록 먼저 비운다.
+    if (ready) {
+      flush();
+    }
+    sessionId = String(now());
+  }
+
   const track: TrackGameEvent = (name, params = {}) => {
     if (!hasConfig || !collectionEnabled) {
       return;
@@ -188,17 +198,18 @@ export function createGa4MeasurementProtocolClient(
     }
     try {
       const stored = await storage.getItem(GA4_CLIENT_ID_STORAGE_KEY);
+      const isNewClient = stored == null || stored === '';
       if (stored != null && stored !== '') {
         clientId = stored;
       } else {
         clientId = generateClientId();
         await storage.setItem(GA4_CLIENT_ID_STORAGE_KEY, clientId);
       }
-      sessionId = String(now());
+      startNewSession();
       ready = true;
       // 준비 완료 시점에 큐에 쌓인 이벤트를 즉시 전송해 유실을 막는다.
       flush();
-      return { status: 'ready' };
+      return { status: 'ready', isNewClient };
     } catch (error) {
       const reason = error instanceof Error ? error.message : 'unknown';
       return { status: 'error', reason };
@@ -209,5 +220,5 @@ export function createGa4MeasurementProtocolClient(
     collectionEnabled = enabled;
   }
 
-  return { initialize, track, flush, setCollectionEnabled };
+  return { initialize, track, startNewSession, flush, setCollectionEnabled };
 }

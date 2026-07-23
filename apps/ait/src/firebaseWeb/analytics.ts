@@ -10,6 +10,7 @@ import {
 } from '../../../../packages/farm-core/src';
 
 import { APPS_IN_TOSS_GA4_MEASUREMENT_ID } from './firebaseWebConfig';
+import { createAppsInTossAnalyticsLifecycle } from './analyticsLifecycle';
 import { GA4_MP_API_SECRET } from './mpSecret.generated';
 import { createGa4MeasurementProtocolClient, type Ga4McpInitResult } from './measurementProtocol';
 import { createAppsInTossSelfServerTracker } from './metricsServer';
@@ -48,6 +49,16 @@ const mpClient = createGa4MeasurementProtocolClient({
   },
 });
 
+const analyticsLifecycle = createAppsInTossAnalyticsLifecycle({
+  storage: {
+    getItem: (key) => Storage.getItem(key),
+    setItem: (key, value) => Storage.setItem(key, value),
+  },
+  track: (name, params) => mpClient.track(name, normalizeAnalyticsParams(params)),
+  startNewSession: mpClient.startNewSession,
+  flush: mpClient.flush,
+});
+
 let initializePromise: Promise<AppsInTossAnalyticsInitResult> | null = null;
 
 function normalizeAnalyticsParams(params: Record<string, AnalyticsValue> = {}) {
@@ -80,8 +91,13 @@ function mapInitResult(result: Ga4McpInitResult): AppsInTossAnalyticsInitResult 
 }
 
 async function initializeAnalytics(): Promise<AppsInTossAnalyticsInitResult> {
-  const result = mapInitResult(await mpClient.initialize());
+  const mpResult = await mpClient.initialize();
+  const result = mapInitResult(mpResult);
   if (result.status === 'ready') {
+    const lifecycle = await analyticsLifecycle.initialize(mpResult.status === 'ready' && mpResult.isNewClient);
+    if (lifecycle.firstTouch === 'storage_error') {
+      console.warn(`[ait-analytics] lifecycle storage error: ${lifecycle.reason}`);
+    }
     // 초기화 완료 마커(웹 스트림 전용). BigQuery/DebugView에서 web 수집 여부 확인용.
     mpClient.track('ait_firebase_initialized', normalizeAnalyticsParams());
   } else if (result.status === 'error') {
@@ -116,6 +132,8 @@ export const trackAppsInTossAnalyticsEvent: TrackGameEvent = (name, params = {})
 export function setAppsInTossAnalyticsCollectionEnabled(enabled: boolean) {
   mpClient.setCollectionEnabled(enabled);
 }
+
+export const handleAppsInTossAnalyticsAppStateChange = analyticsLifecycle.handleAppStateChange;
 
 // Firebase(GA4 MP) 전송에 자체 지표 서버 전송을 fanout으로 결합한다. 자체 서버 tracker가
 // null(엔드포인트 미설정)이면 MP tracker만 남아 현 동작과 동일하다.
