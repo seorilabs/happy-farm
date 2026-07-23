@@ -89,20 +89,28 @@ function makeCtx(fx: Fixture) {
   return { github, core, exec, context, summaryEvents, execCalls };
 }
 
-// AIT는 v1.7.0(단독 run, 7/13), Google Play는 v1.8.1(deploy-all 채널 잡, 7/16)에 정체.
+// 수집 소스 커버리지:
+//  - AIT: 단독 run(7/13, v1.7.0)과 deploy-all 채널 잡(7/10, v1.6.5)이 둘 다 있어 최신(단독)을 택한다.
+//  - Google Play: 단독 배포 없음 → deploy-all 채널 잡(7/16, v1.8.1)으로만 수집한다.
+// deploy-all run 목록은 API처럼 최신순: [100(7/16, GP잡), 90(7/10, AIT잡)].
 function driftFixture(overrides: Partial<Fixture> = {}): Fixture {
   return {
     runsByWorkflow: {
       'deploy-apps-in-toss.yml': [
-        { id: 1, head_sha: 'shaAIT', created_at: '2026-07-13T00:00:00Z', html_url: 'https://x/ait' },
+        { id: 1, head_sha: 'shaAIT17', created_at: '2026-07-13T00:00:00Z', html_url: 'https://x/ait' },
       ],
       'deploy-google-play.yml': [], // 단독 배포 없음 → deploy-all 경유로 수집
-      'deploy-all.yml': [{ id: 100, head_sha: 'shaGP', created_at: '2026-07-16T00:00:00Z', html_url: 'https://x/all' }],
+      'deploy-all.yml': [
+        { id: 100, head_sha: 'shaGP', created_at: '2026-07-16T00:00:00Z', html_url: 'https://x/all-gp' },
+        { id: 90, head_sha: 'shaAIT16', created_at: '2026-07-10T00:00:00Z', html_url: 'https://x/all-ait' },
+      ],
     },
     jobsByRun: {
       100: [{ name: 'Deploy Google Play / Google Play artifact deploy', conclusion: 'success' }],
+      90: [{ name: 'Deploy AIT / AIT artifact deploy', conclusion: 'success' }],
     },
-    pointsAt: { shaAIT: 'v1.7.0', shaGP: 'v1.8.1' },
+    // shaAIT17=단독(7/13) v1.7.0, shaAIT16=deploy-all(7/10) v1.6.5, shaGP=deploy-all(7/16) v1.8.1
+    pointsAt: { shaAIT17: 'v1.7.0', shaAIT16: 'v1.6.5', shaGP: 'v1.8.1' },
     openIssues: [],
     ...overrides,
   };
@@ -119,16 +127,19 @@ describe('deploy-drift-run (#420 워크플로우 실행 본체)', () => {
     // 채널 단독 run과 deploy-all run을 모두 조회했다.
     const queried = ctx.github.rest.actions.listWorkflowRuns.mock.calls.map((c) => c[0].workflow_id);
     expect(queried).toEqual(expect.arrayContaining(['deploy-apps-in-toss.yml', 'deploy-google-play.yml', 'deploy-all.yml']));
-    // deploy-all 내 채널 잡 성공을 확인했다.
+    // deploy-all 내 채널 잡 성공을 확인했다(두 deploy-all run 모두 잡을 조회).
     expect(ctx.github.rest.actions.listJobsForWorkflowRun).toHaveBeenCalledWith(expect.objectContaining({ run_id: 100 }));
-    // head_sha → 배포 태그 역매핑을 수행했다.
-    expect(ctx.execCalls.some((a) => a.includes('--points-at') && a.includes('shaAIT'))).toBe(true);
-    expect(ctx.execCalls.some((a) => a.includes('--points-at') && a.includes('shaGP'))).toBe(true);
+    expect(ctx.github.rest.actions.listJobsForWorkflowRun).toHaveBeenCalledWith(expect.objectContaining({ run_id: 90 }));
+    // head_sha → 배포 태그 역매핑을 수행했다(단독·deploy-all 양쪽 sha 모두).
+    expect(ctx.execCalls.some((a) => a.includes('--points-at') && a.includes('shaAIT17'))).toBe(true); // 단독
+    expect(ctx.execCalls.some((a) => a.includes('--points-at') && a.includes('shaGP'))).toBe(true); // deploy-all
 
     // 수집 결과: 채널별 "최근 성공 배포 태그"가 각 소스에서 정확히 수집된다.
     const byChannel = Object.fromEntries(result.channels.map((c) => [c.channel, c]));
-    expect(byChannel['AIT (WEB)'].deployedTag).toBe('v1.7.0'); // deploy-apps-in-toss 단독 run
-    expect(byChannel['Google Play (Android)'].deployedTag).toBe('v1.8.1'); // deploy-all 채널 잡 경유
+    // AIT는 단독 run(7/13, v1.7.0)과 deploy-all 잡(7/10, v1.6.5)이 둘 다 있고 → 최신(단독)을 택한다.
+    expect(byChannel['AIT (WEB)'].deployedTag).toBe('v1.7.0'); // v1.6.5(구 deploy-all)가 아니라 최신 단독 run
+    // Google Play는 단독 배포가 없어 deploy-all 채널 잡(성공)으로 수집한다.
+    expect(byChannel['Google Play (Android)'].deployedTag).toBe('v1.8.1');
 
     // 비교 결과: 최신 v1.8.3 대비 뒤처짐(gap)과 드리프트 판정이 정확하다.
     expect(byChannel['AIT (WEB)'].gap).toBe(4); // v1.8.3 → v1.7.0
@@ -172,7 +183,7 @@ describe('deploy-drift-run (#420 워크플로우 실행 본체)', () => {
   });
 
   test('AC-3: 모든 채널이 최신 태그면 이슈를 만들지 않고 요약만 남긴다', async () => {
-    const fx = driftFixture({ pointsAt: { shaAIT: 'v1.8.3', shaGP: 'v1.8.3' } });
+    const fx = driftFixture({ pointsAt: { shaAIT17: 'v1.8.3', shaAIT16: 'v1.6.5', shaGP: 'v1.8.3' } });
     const ctx = makeCtx(fx);
     const result = await run({ ...ctx, drift });
 
