@@ -6,6 +6,7 @@ import {
   type AreaEnvironmentMotif,
   type AreaEnvironmentTheme,
   type EnvironmentPhase,
+  type WeatherKey,
 } from '../../../farm-core/src';
 
 type EnvironmentBackdropProps = {
@@ -13,6 +14,8 @@ type EnvironmentBackdropProps = {
   minutesOfDay: number;
   backgroundColor: string;
   areaTheme?: AreaEnvironmentTheme;
+  weatherKey?: WeatherKey;
+  weatherEffectsEnabled?: boolean;
 };
 
 type PhasePalette = {
@@ -81,6 +84,21 @@ const STAR_POSITIONS = [
 const CLOUD_POSITIONS = [
   { left: '12%', top: 18, scale: 0.8, opacity: 0.62 },
   { left: '64%', top: 43, scale: 1, opacity: 0.72 },
+] as const;
+
+const PRECIPITATION_POSITIONS = [
+  { left: '5%', top: '8%', size: 3 },
+  { left: '13%', top: '31%', size: 4 },
+  { left: '21%', top: '16%', size: 3 },
+  { left: '30%', top: '51%', size: 5 },
+  { left: '38%', top: '23%', size: 4 },
+  { left: '46%', top: '67%', size: 3 },
+  { left: '54%', top: '10%', size: 5 },
+  { left: '62%', top: '42%', size: 3 },
+  { left: '70%', top: '73%', size: 4 },
+  { left: '78%', top: '20%', size: 3 },
+  { left: '86%', top: '55%', size: 5 },
+  { left: '94%', top: '34%', size: 4 },
 ] as const;
 
 function clamp01(value: number): number {
@@ -234,6 +252,8 @@ export const EnvironmentBackdrop = memo(function EnvironmentBackdrop({
   minutesOfDay,
   backgroundColor,
   areaTheme = DEFAULT_AREA_ENVIRONMENT_THEME,
+  weatherKey = 'clear',
+  weatherEffectsEnabled = true,
 }: EnvironmentBackdropProps) {
   const palette = PHASE_PALETTES[phase];
   const isNight = phase === 'night';
@@ -307,6 +327,46 @@ export const EnvironmentBackdrop = memo(function EnvironmentBackdrop({
           {phase === 'day' ? CLOUD_POSITIONS.map((_, index) => <Cloud key={index} index={index} />) : null}
         </>
       )}
+
+      {weatherKey !== 'clear' ? (
+        <View
+          testID={`environment-weather-tone-${weatherKey}`}
+          style={[styles.weatherTone, weatherKey === 'snow' && styles.snowTone]}
+        />
+      ) : null}
+
+      {weatherEffectsEnabled && weatherKey === 'rain' ? (
+        <View testID="environment-weather-rain" style={styles.weatherParticles}>
+          {PRECIPITATION_POSITIONS.map((position, index) => (
+            <View
+              key={index}
+              testID={`environment-rain-drop-${index}`}
+              style={[styles.rainDrop, { left: position.left, top: position.top }]}
+            />
+          ))}
+        </View>
+      ) : null}
+
+      {weatherEffectsEnabled && weatherKey === 'snow' ? (
+        <View testID="environment-weather-snow" style={styles.weatherParticles}>
+          {PRECIPITATION_POSITIONS.map((position, index) => (
+            <View
+              key={index}
+              testID={`environment-snow-flake-${index}`}
+              style={[
+                styles.snowFlake,
+                {
+                  left: position.left,
+                  top: position.top,
+                  width: position.size,
+                  height: position.size,
+                  borderRadius: position.size / 2,
+                },
+              ]}
+            />
+          ))}
+        </View>
+      ) : null}
     </View>
   );
 });
@@ -322,6 +382,30 @@ const styles = StyleSheet.create({
   },
   skyBands: {
     ...StyleSheet.absoluteFillObject,
+  },
+  weatherTone: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(69, 86, 116, 0.18)',
+  },
+  snowTone: {
+    backgroundColor: 'rgba(225, 235, 246, 0.22)',
+  },
+  weatherParticles: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  rainDrop: {
+    position: 'absolute',
+    width: 2,
+    height: 24,
+    borderRadius: 2,
+    backgroundColor: 'rgba(164, 211, 237, 0.72)',
+    transform: [{ rotate: '16deg' }],
+  },
+  snowFlake: {
+    position: 'absolute',
+    backgroundColor: 'rgba(255, 255, 255, 0.90)',
+    borderWidth: 1,
+    borderColor: 'rgba(202, 222, 240, 0.74)',
   },
   areaTint: {
     ...StyleSheet.absoluteFillObject,

@@ -371,6 +371,39 @@ for (const type of weeklyTypes) {
   );
 }
 
+// 6c) 일일 날씨: 전역 보너스는 능동 경제를 뒤집지 않는 10% 이내의 경량 배수다.
+const weatherTypes = balance.weather?.types ?? [];
+const weatherKeys = new Set(weatherTypes.map((weather) => weather.key));
+check(weatherTypes.length >= 3, 'weather.types는 최소 3종이어야 합니다.');
+check(weatherKeys.size === weatherTypes.length, 'weather.types key는 중복될 수 없습니다.');
+for (const weather of weatherTypes) {
+  check(
+    weather.axis == null || weather.axis === 'sell' || weather.axis === 'speed',
+    `날씨 ${weather.key}: axis는 null, 'sell', 'speed' 중 하나여야 합니다.`
+  );
+  check(
+    Number.isFinite(weather.multiplier) && weather.multiplier >= 1 && weather.multiplier <= 1.1,
+    `날씨 ${weather.key}: multiplier는 1 이상 1.1 이하의 유한수여야 합니다.`
+  );
+  check(
+    Number.isInteger(weather.weight) && weather.weight >= 1,
+    `날씨 ${weather.key}: weight는 양의 정수여야 합니다.`
+  );
+  check(
+    weather.precipitation == null || weather.precipitation === 'rain' || weather.precipitation === 'snow',
+    `날씨 ${weather.key}: precipitation은 null, 'rain', 'snow' 중 하나여야 합니다.`
+  );
+  if (weather.axis == null) {
+    check(weather.multiplier === 1, `중립 날씨 ${weather.key}: multiplier는 1이어야 합니다.`);
+  } else {
+    check(weather.multiplier > 1, `보너스 날씨 ${weather.key}: multiplier는 1보다 커야 합니다.`);
+  }
+}
+check(
+  weatherTypes.some((weather) => weather.precipitation != null),
+  'weather.types에는 최소 1종의 강수 날씨가 있어야 합니다.'
+);
+
 // 7) 프레스티지/체인.
 const graduation = balance.regions?.graduation ?? {};
 check(graduation.costBase > 0, 'regions.graduation.costBase는 0보다 커야 합니다.');

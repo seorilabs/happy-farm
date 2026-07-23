@@ -28,6 +28,7 @@ export * from './resetBoundary';
 export * from './returnSummary';
 export * from './seedSort';
 export * from './weeklyEvent';
+export * from './weather';
 export * from './weeklyMissions';
 export * from './wheel';
 export {
