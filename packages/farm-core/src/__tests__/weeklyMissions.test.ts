@@ -11,6 +11,7 @@ import {
   recordWeeklyAdWatchProgress,
   recordWeeklyHarvestProgress,
   rolloverWeeklyMissions,
+  type WeeklyMissionType,
   type WeeklyMissionState,
 } from '../weeklyMissions';
 import balance from '../balance.json';
@@ -35,6 +36,20 @@ function weekStartMs(now: number): number {
 
 const MON = weekStartMs(Date.UTC(2026, 6, 1)); // a concrete reset-week start
 const WEEK_COUNT = getWeeklyMissions(getMissionWeekKey(MON), ALL_AREAS).length;
+
+describe('weekly mission balance contract (#378)', () => {
+  test('balance 주간 슬롯 타입을 WeeklyMissionType으로 자동 확장하고 같은 순서로 해석한다', () => {
+    const balanceTypes: WeeklyMissionType[] = balance.missions.weekly.slots.map((slot) => slot.type);
+    const resolvedTypes: WeeklyMissionType[] = getWeeklyMissions(getMissionWeekKey(MON), ALL_AREAS).map(
+      (mission) => mission.type
+    );
+
+    expect(balanceTypes).toEqual(
+      expect.arrayContaining(['collect_produce', 'craft_complete', 'spend_gold', 'breed'])
+    );
+    expect(resolvedTypes).toEqual(balanceTypes);
+  });
+});
 
 describe('getMissionWeekKey (reset-week boundary)', () => {
   test('the derived week start is aligned to a reset-day boundary and is a flip point', () => {

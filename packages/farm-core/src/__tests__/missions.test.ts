@@ -13,6 +13,7 @@ import {
   recordPlantProgress,
   rolloverDailyMissions,
   type DailyMissionState,
+  type MissionType,
 } from '../missions';
 import balance from '../balance.json';
 import { CROPS, createInitialState, migrateLoadedState } from '../constants';
@@ -33,6 +34,18 @@ const DAY_B = DAY_A + DAY_MS; // next calendar day
 const ALL_AREAS = [...new Set((Object.keys(CROPS) as CropKey[]).map((key) => CROPS[key]!.area))] as AreaKey[];
 
 describe('getDailyMissions determinism', () => {
+  test('balance 일일 슬롯 타입을 MissionType으로 자동 확장하고 같은 순서로 해석한다 (#378)', () => {
+    const balanceTypes: MissionType[] = balance.missions.slots.map((slot) => slot.type);
+    const resolvedTypes: MissionType[] = getDailyMissions(getMissionDayKey(DAY_A), ALL_AREAS).map(
+      (mission) => mission.type
+    );
+
+    expect(balanceTypes).toEqual(
+      expect.arrayContaining(['collect_produce', 'craft_complete', 'spend_gold', 'breed'])
+    );
+    expect(resolvedTypes).toEqual(balanceTypes);
+  });
+
   test('returns one mission per slot with distinct types, stable for a given day', () => {
     const keyA = getMissionDayKey(DAY_A);
     const a1 = getDailyMissions(keyA, ALL_AREAS);
