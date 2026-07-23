@@ -29,9 +29,6 @@ export const styles = StyleSheet.create({
     justifyContent: 'flex-start',
     gap: 12,
   },
-  mobileHeaderTop: {
-    justifyContent: 'space-between',
-  },
   titleGroup: {
     minWidth: 0,
     flex: 1,
@@ -39,9 +36,6 @@ export const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-  },
-  mobileTitleGroup: {
-    flex: 1,
   },
   homeIcon: {
     fontSize: 26,

@@ -644,13 +644,50 @@ describe('FarmGame UI flow', () => {
     // 강등된 지표는 시트를 열기 전에는 노출되지 않는다.
     expect(screen.queryByTestId('stats-active-title')).toBeNull();
 
-    // 단일 요약 chip 탭 → '농장 현황' 시트에서 강등된 세 지표가 모두 한 뎁스로 도달된다.
+    // AC-2: 단일 요약 chip(openStats) 한 뎁스 뒤 '농장 현황' 시트에서 강등된 세 지표가
+    // 모두 도달된다 — 오늘의 작물 상세(작물 + ⭐×배수)·활성 칭호·명성 별 분해(별 + 스킬).
     fireEvent.press(screen.getByTestId('cotd-chip'));
     await waitFor(() => expect(screen.getByTestId('stats-sheet')).toBeTruthy());
+    expect(screen.getByTestId('stats-crop-of-the-day')).toBeTruthy();
     expect(screen.getByTestId('stats-crop-of-the-day-bonus')).toHaveTextContent(`⭐×${cotd.multiplier}`);
     expect(screen.getByTestId('stats-active-title')).toHaveTextContent(titleName);
     expect(screen.getByTestId('stats-prestige-stars')).toHaveTextContent('★ 2');
     expect(screen.getByTestId('stats-prestige-skills')).toBeTruthy();
+
+    // AC-2: 강등 정보를 옮기며 신규 탭 타깃/HUD 진입점을 만들지 않았다 — navRow는 여전히 3개.
+    expect(within(screen.getByTestId('nav-row')).getAllByRole('button')).toHaveLength(3);
+  });
+
+  test('keeps the navRow at exactly three NavButtons after the header declutter (#355 AC-4)', async () => {
+    const screen = await renderGame({ ...createInitialState(), onboardingCompleted: true });
+    await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+
+    // navRow 진입점은 상점·미션·더보기 3개로 정확히 유지된다(#355로 늘거나 줄지 않음).
+    expect(within(screen.getByTestId('nav-row')).getAllByRole('button')).toHaveLength(3);
+    expect(screen.getByTestId('shop-nav-button')).toBeTruthy();
+    expect(screen.getByTestId('more-nav-button')).toBeTruthy();
+    expect(
+      screen.getByLabelText(getFarmMessages(DEFAULT_LOCALE).missionsButtonAccessibilityLabel)
+    ).toBeTruthy();
+  });
+
+  test('lays out the core header row identically on mobile without a wrap fallback (#355 AC-5)', async () => {
+    // 밀도를 낮춰 mobile 전용 줄바꿈 fallback을 제거했다. mobile market에서도 핵심
+    // 헤더 행(header-top)이 기본 flex-start 레이아웃으로 렌더되고, space-between 같은
+    // 줄바꿈 유도 fallback에 의존하지 않는다.
+    const screen = await renderGame({ ...createInitialState(), onboardingCompleted: true }, {
+      market: 'mobile',
+    });
+    await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+
+    const headerTopStyle = StyleSheet.flatten(screen.getByTestId('header-top').props.style);
+    expect(headerTopStyle.justifyContent).toBe('flex-start');
+    const titleGroupStyle = StyleSheet.flatten(screen.getByTestId('title-group').props.style);
+    expect(titleGroupStyle.flex).toBe(1);
+
+    // 핵심 상시 지표(골드·시간당 생산)와 단일 요약 chip이 모두 한 행 안에 유지된다.
+    expect(screen.getByTestId('cotd-chip')).toBeTruthy();
+    expect(within(screen.getByTestId('nav-row')).getAllByRole('button')).toHaveLength(3);
   });
 
   test('shows a placeholder in the stats sheet when no title is equipped (#355)', async () => {

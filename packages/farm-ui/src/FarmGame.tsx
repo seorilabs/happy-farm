@@ -830,7 +830,6 @@ function FarmGameBody({
   useInterstitialAd = useUnsupportedAd,
   audio = defaultFarmAudio,
   notifications = defaultFarmNotifications,
-  market = 'appsInToss',
   preferredLocale = DEFAULT_LOCALE,
   adGroupIds = {},
 }: FarmGameProps = {}) {
@@ -1011,7 +1010,6 @@ function FarmGameBody({
   const rewardedAd = useRewardedAd(adGroupIds.rewarded);
   const interstitialAd = useInterstitialAd(adGroupIds.interstitial);
   const farmAnalytics = analytics;
-  const isMobileMarket = market === 'mobile';
   const locale = normalizeLocale(gameSettings.locale);
   const messages = useMemo(() => getFarmMessages(locale), [locale]);
   const resetConfirmValue = messages.resetConfirmText;
@@ -4307,8 +4305,11 @@ function FarmGameBody({
   return (
     <View testID="farm-root" style={[styles.root, { backgroundColor: environmentTone.backgroundColor }]}>
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
-        <View style={[styles.headerTop, isMobileMarket && styles.mobileHeaderTop]}>
-          <View testID="title-group" style={[styles.titleGroup, isMobileMarket && styles.mobileTitleGroup]}>
+        {/* 헤더 밀도 완화(#355)로 제목 행 상시 요소를 줄였으므로, mobile 전용 줄바꿈
+            fallback(mobileHeaderTop/mobileTitleGroup)에 더는 의존하지 않는다. 핵심 행은
+            market와 무관하게 동일 레이아웃으로 렌더한다. */}
+        <View testID="header-top" style={styles.headerTop}>
+          <View testID="title-group" style={styles.titleGroup}>
             <Text style={styles.homeIcon}>🏡</Text>
             <View style={styles.titleTextGroup}>
               <Text style={styles.title}>{messages.appTitle}</Text>
@@ -4390,7 +4391,12 @@ function FarmGameBody({
           />
         ) : null}
 
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.navRow}>
+        <ScrollView
+          testID="nav-row"
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.navRow}
+        >
           <NavButton
             testID="shop-nav-button"
             label={messages.shopButton}
@@ -5509,6 +5515,7 @@ function NavButton({
   return (
     <Pressable
       testID={testID}
+      accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
       style={[styles.navButton, highlight && styles.navButtonHighlight]}
       onPress={onPress}
