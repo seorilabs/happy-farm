@@ -6709,6 +6709,17 @@ const PlotCell = React.memo(function PlotCell({
         style={[styles.plotTile, tileSizeStyle, styles.emptyPlot]}
         onPress={handlePress}
       >
+        <View
+          testID={`empty-plot-affordance-${index}`}
+          accessible={false}
+          pointerEvents="none"
+          style={styles.emptyPlotAffordance}
+        >
+          <View testID={`empty-plot-seed-${index}`} style={styles.emptyPlotSeed} />
+          <View style={styles.emptyPlotPlusBadge}>
+            <Text style={styles.emptyPlotPlusGlyph}>+</Text>
+          </View>
+        </View>
         <Text style={styles.emptyPlotText}>{messages.emptyPlot}</Text>
       </Pressable>
     );
