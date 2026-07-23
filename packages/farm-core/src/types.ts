@@ -168,6 +168,10 @@ export type GameState = {
   // Last active onboarding step. Persisted so an interrupted first session can
   // resume from the same point; null once onboarding is completed or skipped.
   onboardingStep: OnboardingStep | null;
+  // Whether the player has ever selected a seed. This lifetime analytics guard
+  // is persisted so first_seed_selected can fire at most once across remounts
+  // and prestige resets.
+  firstSeedSelected: boolean;
   // Source lastSeenAt used for the most recent automatic return settlement
   // while onboarding was incomplete. Makes the two-key save/last-seen write
   // idempotent if the process stops between those writes.
@@ -233,6 +237,7 @@ export const META_LAYER_KEYS = [
   'weeklyMissionState',
   'onboardingCompleted',
   'onboardingStep',
+  'firstSeedSelected',
   'onboardingReturnSettledAt',
   'harvestNotificationPromptSeen',
   'prestigeGuideSeen',

@@ -855,6 +855,7 @@ export function createInitialState(): GameState {
     weeklyMissionState: createInitialWeeklyMissionState(),
     onboardingCompleted: false,
     onboardingStep: 'selectSeed',
+    firstSeedSelected: false,
     onboardingReturnSettledAt: null,
     harvestNotificationPromptSeen: false,
     prestigeGuideSeen: false,
@@ -999,6 +1000,18 @@ export function migrateLoadedState(loaded: Partial<GameState>, base: GameState):
     0
   );
   merged.lifetimeStats.totalHarvests = Math.max(merged.lifetimeStats.totalHarvests, provenHarvests);
+  // first_seed_selected is a lifetime event. Saves created before the explicit
+  // flag inherit true whenever persisted progress proves a seed was already
+  // selected; otherwise a genuinely untouched player keeps the initial false.
+  const onboardingStepProvesSeedSelection =
+    loaded.onboardingStep === 'plant' || loaded.onboardingStep === 'harvest' || loaded.onboardingStep === 'reward';
+  const progressProvesSeedSelection =
+    merged.plots.some((plot) => plot.cropType != null) ||
+    merged.harvestedCropKeys.length > 0 ||
+    merged.lifetimeStats.totalHarvests > 0 ||
+    provenHarvests > 0 ||
+    onboardingStepProvesSeedSelection;
+  merged.firstSeedSelected = loaded.firstSeedSelected === true || progressProvesSeedSelection;
   merged.claimedAchievements = normalizeClaimedAchievements(loaded.claimedAchievements);
   merged.activeTitle = normalizeActiveTitle(loaded.activeTitle, merged.claimedAchievements);
   merged.prestige = normalizePrestigeProgress(loaded.prestige);
