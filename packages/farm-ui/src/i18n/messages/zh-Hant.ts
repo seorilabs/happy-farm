@@ -435,13 +435,13 @@ export const zhHantFarmMessages: FarmMessages = {
     `${themeName} ×${multiplier} 販售 · ${remaining} 後結束`,
   weeklyEventHarvestDesc: (themeName, multiplier, remaining) =>
     `${themeName} ×${multiplier} 成長速度 · ${remaining} 後結束`,
-  weeklyEventGoldenLabel: '黃金週末市集',
+  weeklyEventGoldenLabel: '黃金豐收節',
   weeklyEventGoldenDesc: (themeName, multiplier, remaining) =>
-    `${themeName} 販售價 ×${multiplier} · ${remaining} 後結束`,
+    `${themeName} 變異機率 ×${multiplier} · ${remaining} 後結束`,
   weeklyEventTeaserLabel: '即將登場的週末慶典',
   weeklyEventTeaserDesc: (themeName, remaining) => `${remaining} 後舉辦 ${themeName} 作物慶典`,
-  weeklyEventGoldenTeaserLabel: '即將登場的黃金週末市集',
-  weeklyEventGoldenTeaserDesc: (themeName, remaining) => `${remaining} 後舉辦 ${themeName} 黃金市集`,
+  weeklyEventGoldenTeaserLabel: '即將登場的黃金豐收節',
+  weeklyEventGoldenTeaserDesc: (themeName, remaining) => `${remaining} 後舉辦 ${themeName} 黃金豐收節`,
   onboardingProgress: (current, total) => `${current} / ${total}`,
   onboardingSkip: '略過',
   onboardingQuickStart: '快速開始',

@@ -12,7 +12,11 @@ import {
 import { getMasterySellMultiplier, getMasterySpeedMultiplier } from './mastery';
 import { getResearchEffectValue, isCropPlantable } from './research';
 import { getCropOfTheDayStatus } from './cropOfTheDay';
-import { getWeeklyEventMultiplier, getWeeklyEventSpeedMultiplier } from './weeklyEvent';
+import {
+  getWeeklyEventMultiplier,
+  getWeeklyEventMutationMultiplier,
+  getWeeklyEventSpeedMultiplier,
+} from './weeklyEvent';
 import { getWeatherSellMultiplier, getWeatherSpeedMultiplier } from './weather';
 
 // Prestige skill/region effects are read straight from balance.json here
@@ -41,7 +45,10 @@ export type GlobalModifiers = {
   cropCostMultiplier: number;
 };
 
-export type CropModifiers = GlobalModifiers;
+export type CropModifiers = GlobalModifiers & {
+  // Multiplies mutation chances only; it never changes sale/growth economics.
+  mutationChanceMultiplier: number;
+};
 
 export function getGlobalModifiers(gameState: GameState, now = Date.now()): GlobalModifiers {
   const archetype = REGION_ARCHETYPES_BY_KEY.get(gameState.prestige.currentRegionArchetype);
@@ -76,6 +83,7 @@ export function getCropModifiers(gameState: GameState, cropKey: CropKey, now = D
   const cotd = getCropOfTheDayStatus(now, gameState);
   return {
     ...global,
+    mutationChanceMultiplier: getWeeklyEventMutationMultiplier(cropKey, now, gameState.unlockedAreas),
     // A harvest (speed-axis) weekend festival speeds up the featured area's growth;
     // getWeeklyEventSpeedMultiplier is 1 on non-speed weekends, so sale festivals
     // leave growth speed unchanged.

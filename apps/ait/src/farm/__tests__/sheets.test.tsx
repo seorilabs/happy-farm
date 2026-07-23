@@ -665,8 +665,13 @@ describe('StatsSheet', () => {
     expect(screen.queryByTestId('weekly-event-teaser')).toBeNull();
   });
 
-  test('distinguishes the golden sell flavor in live and teaser copy with an axis fallback', () => {
-    const renderFestival = (active: boolean, typeKey: string, axis: 'sell' | 'speed', remainingMs: number) => (
+  test('distinguishes the golden mutation festival in live and teaser copy with an axis fallback', () => {
+    const renderFestival = (
+      active: boolean,
+      typeKey: string,
+      axis: 'sell' | 'speed' | 'mutation',
+      remainingMs: number
+    ) => (
       <StatsSheet
         {...demotedHeaderProps}
         {...offlineIncomeProps}
@@ -680,7 +685,7 @@ describe('StatsSheet', () => {
         boostRemainingMs={0}
         weeklyEventActive={active}
         weeklyEventAreaName="초보 농장"
-        weeklyEventMultiplier={active ? 1.5 : 1}
+        weeklyEventMultiplier={active ? (axis === 'mutation' ? 2 : 1.5) : 1}
         weeklyEventAxis={axis}
         weeklyEventTypeKey={typeKey}
         weeklyEventRemainingMs={remainingMs}
@@ -688,17 +693,17 @@ describe('StatsSheet', () => {
       />
     );
 
-    const screen = render(renderFestival(true, 'golden_sale', 'sell', 5 * HOUR_MS));
+    const screen = render(renderFestival(true, 'golden_sale', 'mutation', 5 * HOUR_MS));
     expect(screen.getByTestId('weekly-event-title')).toHaveTextContent(
-      `🪙 ${messages.weeklyEventGoldenLabel}`,
+      `✨ ${messages.weeklyEventGoldenLabel}`,
     );
     expect(screen.getByTestId('weekly-event-banner')).toHaveTextContent(
-      messages.weeklyEventGoldenDesc('초보 농장', 1.5, formatRemainingTime(5 * HOUR_MS, LOCALE)),
+      messages.weeklyEventGoldenDesc('초보 농장', 2, formatRemainingTime(5 * HOUR_MS, LOCALE)),
     );
 
-    screen.rerender(renderFestival(false, 'golden_sale', 'sell', 2 * HOUR_MS));
+    screen.rerender(renderFestival(false, 'golden_sale', 'mutation', 2 * HOUR_MS));
     expect(screen.getByTestId('weekly-event-title')).toHaveTextContent(
-      `🪙 ${messages.weeklyEventGoldenTeaserLabel}`,
+      `✨ ${messages.weeklyEventGoldenTeaserLabel}`,
     );
     expect(screen.getByTestId('weekly-event-teaser')).toHaveTextContent(
       messages.weeklyEventGoldenTeaserDesc('초보 농장', formatRemainingTime(2 * HOUR_MS, LOCALE)),

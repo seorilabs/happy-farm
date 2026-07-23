@@ -435,13 +435,13 @@ export const deFarmMessages: FarmMessages = {
     `${themeName} ×${multiplier} Verkauf · endet in ${remaining}`,
   weeklyEventHarvestDesc: (themeName, multiplier, remaining) =>
     `${themeName} ×${multiplier} Wachstumstempo · endet in ${remaining}`,
-  weeklyEventGoldenLabel: 'Goldener Wochenendmarkt',
+  weeklyEventGoldenLabel: 'Goldenes Erntefest',
   weeklyEventGoldenDesc: (themeName, multiplier, remaining) =>
-    `${themeName} verkauft für ×${multiplier} · endet in ${remaining}`,
+    `${themeName}: Mutationschance ×${multiplier} · endet in ${remaining}`,
   weeklyEventTeaserLabel: 'Kommendes Wochenendfest',
   weeklyEventTeaserDesc: (themeName, remaining) => `${themeName}-Erntefest in ${remaining}`,
-  weeklyEventGoldenTeaserLabel: 'Kommender Goldener Wochenendmarkt',
-  weeklyEventGoldenTeaserDesc: (themeName, remaining) => `Goldener Markt für ${themeName} in ${remaining}`,
+  weeklyEventGoldenTeaserLabel: 'Kommendes Goldenes Erntefest',
+  weeklyEventGoldenTeaserDesc: (themeName, remaining) => `Goldenes Erntefest für ${themeName} in ${remaining}`,
   onboardingProgress: (current, total) => `${current} / ${total}`,
   onboardingSkip: 'Überspringen',
   onboardingQuickStart: 'Schnellstart',

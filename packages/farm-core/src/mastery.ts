@@ -104,26 +104,40 @@ export function getMasterySpeedMultiplier(gameState: GameState, cropKey: CropKey
   return rank == null ? 1 : 1 + rank.speedBonus;
 }
 
-export function getMutationChance(gameState: GameState, cropKey: CropKey, kind: MutationKind): number {
+export function getMutationChance(
+  gameState: GameState,
+  cropKey: CropKey,
+  kind: MutationKind,
+  mutationChanceMultiplier = 1
+): number {
   const { rankIndex } = getMasteryStatus(gameState, cropKey);
   const minRankIndex = MASTERY_RANKS.findIndex((rank) => rank.key === kind.minRank);
   if (minRankIndex < 0 || rankIndex < minRankIndex) {
     return 0;
   }
   const baseChance = kind.baseChance + kind.chancePerRankAboveMin * (rankIndex - minRankIndex);
-  return baseChance * (1 + getResearchEffectValue(gameState, 'mutation_chance_multiplier'));
+  return (
+    baseChance *
+    (1 + getResearchEffectValue(gameState, 'mutation_chance_multiplier')) *
+    mutationChanceMultiplier
+  );
 }
 
 // Consumes exactly one roll in [0, 1) so callers can replay the same roll
 // inside a React state updater and reach the same outcome.
-export function rollMutation(gameState: GameState, cropKey: CropKey, roll: number): MutationKind | null {
+export function rollMutation(
+  gameState: GameState,
+  cropKey: CropKey,
+  roll: number,
+  mutationChanceMultiplier = 1
+): MutationKind | null {
   if (!Number.isFinite(roll) || roll < 0) {
     return null;
   }
 
   let cumulative = 0;
   for (const kind of MUTATION_KINDS_BY_RARITY) {
-    cumulative += getMutationChance(gameState, cropKey, kind);
+    cumulative += getMutationChance(gameState, cropKey, kind, mutationChanceMultiplier);
     if (roll < cumulative) {
       return kind;
     }

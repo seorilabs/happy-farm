@@ -432,13 +432,13 @@ export const zhHansFarmMessages: FarmMessages = {
   weeklyEventDesc: (themeName, multiplier, remaining) => `${themeName} ×${multiplier} 销售 · 距结束 ${remaining}`,
   weeklyEventHarvestDesc: (themeName, multiplier, remaining) =>
     `${themeName} ×${multiplier} 生长速度 · 距结束 ${remaining}`,
-  weeklyEventGoldenLabel: '黄金周末集市',
+  weeklyEventGoldenLabel: '黄金丰收节',
   weeklyEventGoldenDesc: (themeName, multiplier, remaining) =>
-    `${themeName} 售价 ×${multiplier} · 距结束 ${remaining}`,
+    `${themeName}突变概率 ×${multiplier} · 距结束 ${remaining}`,
   weeklyEventTeaserLabel: '即将到来的周末庆典',
   weeklyEventTeaserDesc: (themeName, remaining) => `距${themeName}作物庆典还有 ${remaining}`,
-  weeklyEventGoldenTeaserLabel: '即将到来的黄金周末集市',
-  weeklyEventGoldenTeaserDesc: (themeName, remaining) => `距${themeName}黄金集市还有 ${remaining}`,
+  weeklyEventGoldenTeaserLabel: '即将到来的黄金丰收节',
+  weeklyEventGoldenTeaserDesc: (themeName, remaining) => `距${themeName}黄金丰收节还有 ${remaining}`,
   onboardingProgress: (current, total) => `${current} / ${total}`,
   onboardingSkip: '跳过',
   onboardingQuickStart: '立即开始',
