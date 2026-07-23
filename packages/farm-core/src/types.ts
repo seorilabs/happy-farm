@@ -28,6 +28,9 @@ export type BreedingRecipeKey = (typeof balance.breeding.recipes)[number]['crop'
 export type ResearchState = {
   points: number;
   totalPointsEarned: number;
+  // 반복/티어 연구의 현재 레벨. 기존 save의 unlockedNodes는 migration에서
+  // level 1로 승격하며, 호환성을 위해 unlockedNodes도 함께 유지한다.
+  nodeLevels: Partial<Record<ResearchNodeKey, number>>;
   unlockedNodes: ResearchNodeKey[];
   unlockedBreeds: CropKey[];
   // 연구실 진입 유도 배지를 위해, 마지막으로 Lab을 열어 "확인"한 시점의 발견 기회

@@ -115,6 +115,22 @@ describe('mutations', () => {
     );
   });
 
+  test('mutation studies multiply the chance of already unlocked mutations', () => {
+    const golden = getMutationKind('golden');
+    const thresholds = getMasteryThresholds('carrot');
+    const base = stateWithCounts({ carrot: thresholds[0]! });
+    const researched: GameState = {
+      ...base,
+      research: {
+        ...base.research,
+        nodeLevels: { mutation_studies: 2 },
+        unlockedNodes: ['mutation_studies'],
+      },
+    };
+
+    expect(getMutationChance(researched, 'carrot', golden)).toBeCloseTo(golden.baseChance * 1.1);
+  });
+
   test('a single roll resolves rarest mutation first', () => {
     const thresholds = getMasteryThresholds('carrot');
     const silverState = stateWithCounts({ carrot: thresholds[1]! });

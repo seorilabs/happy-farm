@@ -389,12 +389,60 @@ for (const skill of balance.prestigeSkills ?? []) {
   check(skill.effectPerLevel > 0, `프레스티지 스킬 ${skill.key}: effectPerLevel은 0보다 커야 합니다.`);
 }
 
-// 9) 연구 노드: 비용>0, requires는 유효 노드 키 또는 null.
+// 9) 연구 노드: 반복 연구의 비용은 엄격히 우상향하고 효과는 역효과가 없는 양수다.
 const nodes = balance.research?.nodes ?? [];
 const nodeKeys = new Set(nodes.map((node) => node.key));
+check(nodeKeys.size === nodes.length, '연구 노드 key는 중복될 수 없습니다.');
+const researchEffects = new Set([
+  'profit_multiplier',
+  'speed_multiplier',
+  'offline_cap_ms',
+  'mutation_chance_multiplier',
+]);
 for (const node of nodes) {
   check(node.cost > 0, `연구 노드 ${node.key}: cost는 0보다 커야 합니다.`);
+  check(node.costGrowth >= 1, `연구 노드 ${node.key}: costGrowth는 1 이상이어야 합니다.`);
+  check(
+    node.maxLevel == null || (Number.isInteger(node.maxLevel) && node.maxLevel > 0),
+    `연구 노드 ${node.key}: maxLevel은 null 또는 양의 정수여야 합니다.`
+  );
   check(node.requires == null || nodeKeys.has(node.requires), `연구 노드 ${node.key}: requires "${node.requires}"가 유효한 노드가 아닙니다.`);
+  check(
+    ['automation', 'scaling', 'breeding'].includes(node.category),
+    `연구 노드 ${node.key}: category가 유효해야 합니다.`
+  );
+  if (node.effect == null) {
+    check(node.effectPerLevel === 0, `연구 노드 ${node.key}: 효과가 없으면 effectPerLevel은 0이어야 합니다.`);
+  } else {
+    check(researchEffects.has(node.effect), `연구 노드 ${node.key}: effect "${node.effect}"가 유효해야 합니다.`);
+    check(node.effectPerLevel > 0, `연구 노드 ${node.key}: effectPerLevel은 0보다 커야 합니다(역효과 금지).`);
+  }
+  if (node.maxLevel == null) {
+    check(node.costGrowth > 1, `반복 연구 ${node.key}: costGrowth는 1보다 커야 합니다.`);
+    for (let level = 0; level < 12; level += 1) {
+      const current = Math.floor(node.cost * Math.pow(node.costGrowth, level));
+      const next = Math.floor(node.cost * Math.pow(node.costGrowth, level + 1));
+      check(next > current, `반복 연구 ${node.key}: Lv.${level}→${level + 1} 비용은 엄격히 우상향해야 합니다.`);
+    }
+  }
+}
+const scalingNodes = nodes.filter((node) => node.category === 'scaling');
+check(scalingNodes.length >= 3, '스케일 연구는 최소 3개여야 합니다.');
+check(
+  scalingNodes.some((node) => node.maxLevel == null),
+  '후반 RP 막다른 길 방지를 위해 무제한 반복 가능한 스케일 연구가 필요합니다.'
+);
+
+function hasResearchCycle(nodeKey, visiting = new Set()) {
+  if (visiting.has(nodeKey)) return true;
+  const node = nodes.find((candidate) => candidate.key === nodeKey);
+  if (node?.requires == null) return false;
+  const nextVisiting = new Set(visiting);
+  nextVisiting.add(nodeKey);
+  return hasResearchCycle(node.requires, nextVisiting);
+}
+for (const node of nodes) {
+  check(!hasResearchCycle(node.key), `연구 노드 ${node.key}: requires 순환이 없어야 합니다.`);
 }
 check(
   (balance.research?.donationRpRate ?? 0) > 0 && balance.research.donationRpRate < 1,

@@ -142,6 +142,10 @@ export const enUSLabels: LabelBundle = {
     breeding_lab: { name: 'Breeding Lab', description: 'Crossbreed two crops into new varieties.' },
     breeding_advanced: { name: 'Advanced Breeding', description: 'Unlocks rare crossbreeding combos.' },
     donation_amplifier: { name: 'Donation Amplifier', description: 'Donations grant 50% more research points.' },
+    market_studies: { name: 'Market Studies', description: '+3% sale profit per level, everywhere.' },
+    growth_studies: { name: 'Growth Studies', description: 'All crops grow 2% faster per level.' },
+    offline_studies: { name: 'Offline Studies', description: '+2h active-farm offline income cap per level.' },
+    mutation_studies: { name: 'Mutation Studies', description: '+5% chance for unlocked mutations per level.' },
   },
   achievementTrack: {
     harvest_total: { name: 'Total Harvests' },

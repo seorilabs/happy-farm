@@ -142,6 +142,10 @@ export const zhHansLabels: LabelBundle = {
     breeding_lab: { name: '杂交研究', description: '将两种作物杂交培育出新品种。' },
     breeding_advanced: { name: '高级杂交', description: '解锁稀有作物的杂交组合。' },
     donation_amplifier: { name: '捐赠增幅', description: '捐赠获得的研究点数增加50%。' },
+    market_studies: { name: '市场研究', description: '每级使所有销售收益增加3%。' },
+    growth_studies: { name: '生长研究', description: '每级使所有作物生长速度提高2%。' },
+    offline_studies: { name: '离线研究', description: '每级使当前农场的离线收益上限增加2小时。' },
+    mutation_studies: { name: '变异研究', description: '每级使已解锁变异的出现概率提高5%。' },
   },
   achievementTrack: {
     harvest_total: { name: '累计收获' },

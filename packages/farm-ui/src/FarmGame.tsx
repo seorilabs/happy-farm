@@ -53,6 +53,7 @@ import {
   getSkillCost,
   getRegionArchetypeLabel,
   getResearchNodeLabel,
+  getResearchNodeLevel,
   getTitleLabel,
   prestigeFarm,
   runAutomationTick,
@@ -76,7 +77,6 @@ import {
   HARVEST_BONUS_BOOST_DURATION_MS,
   HARVEST_BONUS_MULTIPLIER,
   OFFLINE_BONUS_MULTIPLIER,
-  OFFLINE_INCOME_CAP_MS,
   getAdLimits,
   MAX_PLOTS,
   PLOT_DISCOUNT_AD_PERCENT,
@@ -116,6 +116,7 @@ import {
   formatSignedPercent,
   getReturnSummary,
   getActiveFarmOfflineGoldPerHour,
+  getActiveFarmOfflineCapMs,
   type ReturnSummary,
   getAreaLabel,
   getAreaUnlockRequirementText,
@@ -2344,6 +2345,7 @@ function FarmGameBody({
     () => getActiveFarmOfflineGoldPerHour(gameState),
     [gameState]
   );
+  const activeFarmOfflineCapMs = useMemo(() => getActiveFarmOfflineCapMs(gameState), [gameState]);
   const researchLevel = useMemo(
     () => getMinUpgradeLevel(gameState),
     [gameState.upgrades.profit, gameState.upgrades.speed]
@@ -3031,10 +3033,11 @@ function FarmGameBody({
       toast(messages.insufficientRpToast);
       return;
     }
+    const nextLevel = getResearchNodeLevel(gameState, nodeKey) + 1;
     setGameState((state) => unlockNode(state, nodeKey) ?? state);
-    farmAnalytics.trackResearchNodeUnlocked({ nodeKey, context: analyticsContext() });
+    farmAnalytics.trackResearchNodeUnlocked({ nodeKey, nextLevel, context: analyticsContext() });
     playSoundEffect('unlock');
-    toast(messages.researchNodeUnlockedToast(getResearchNodeLabel(nodeKey, locale).name));
+    toast(messages.researchNodeUnlockedToast(getResearchNodeLabel(nodeKey, locale).name, nextLevel));
   }
 
   function breedHybrid(cropKey: CropKey) {
@@ -4932,7 +4935,7 @@ function FarmGameBody({
             boostMultiplier={harvestBonusBoost.multiplier}
             boostRemainingMs={safeBoostRemainingMs}
             offlineGoldPerHour={activeFarmOfflineGoldPerHour}
-            offlineIncomeCapMs={OFFLINE_INCOME_CAP_MS}
+            offlineIncomeCapMs={activeFarmOfflineCapMs}
             weeklyEventActive={weeklyEvent.active}
             weeklyEventAreaName={getLocalizedAreaLabel(weeklyEvent.areaKey).name}
             weeklyEventMultiplier={weeklyEvent.multiplier}

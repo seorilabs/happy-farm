@@ -355,9 +355,14 @@ export function createFarmAnalytics(track: TrackGameEvent = noopTrackGameEvent) 
       });
     },
 
-    trackResearchNodeUnlocked: (params: { nodeKey: ResearchNodeKey; context: GameAnalyticsContext }) => {
+    trackResearchNodeUnlocked: (params: {
+      nodeKey: ResearchNodeKey;
+      nextLevel: number;
+      context: GameAnalyticsContext;
+    }) => {
       track('research_node_unlocked', {
         node_key: params.nodeKey,
+        next_level: params.nextLevel,
         ...params.context,
       });
     },

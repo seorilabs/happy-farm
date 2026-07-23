@@ -9,6 +9,9 @@ import {
   canUnlockNode,
   getBreedingRecipeStatus,
   getDonationRp,
+  getResearchEffectValue,
+  getResearchNodeCost,
+  getResearchNodeLevel,
   isCropPlantable,
   isHybridCrop,
   normalizeAutomationSettings,
@@ -104,6 +107,33 @@ describe('research nodes', () => {
     expect(unlocked!.research.points).toBe(0);
     expect(unlocked!.research.unlockedNodes).toEqual(['auto_harvest']);
     expect(unlockNode(unlocked!, 'auto_harvest')).toBeNull();
+  });
+
+  test('scale studies are repeatable, grow in cost, and remain an RP sink', () => {
+    const market = RESEARCH_NODES.find((node) => node.key === 'market_studies')!;
+    const base = createInitialState();
+    const rich: GameState = {
+      ...base,
+      research: {
+        ...base.research,
+        points: Number.MAX_SAFE_INTEGER,
+        nodeLevels: { donation_amplifier: 1 },
+        unlockedNodes: ['donation_amplifier'],
+      },
+    };
+
+    expect(market.maxLevel).toBeNull();
+    expect(getResearchNodeCost(rich, market.key)).toBe(market.cost);
+    const first = unlockNode(rich, market.key)!;
+    expect(getResearchNodeLevel(first, market.key)).toBe(1);
+    expect(getResearchNodeCost(first, market.key)).toBe(Math.floor(market.cost * market.costGrowth));
+
+    const second = unlockNode(first, market.key)!;
+    expect(getResearchNodeLevel(second, market.key)).toBe(2);
+    expect(second.research.unlockedNodes.filter((key) => key === market.key)).toHaveLength(1);
+    expect(getResearchEffectValue(second, 'profit_multiplier')).toBeCloseTo(market.effectPerLevel * 2);
+    expect(getResearchNodeCost(second, market.key)).toBeGreaterThan(getResearchNodeCost(first, market.key)!);
+    expect(canUnlockNode(second, market.key)).toBe(true);
   });
 
   test('donation RP follows the rate and the amplifier node', () => {
@@ -309,6 +339,7 @@ describe('gated areas', () => {
         research: {
           points: 0,
           totalPointsEarned: 0,
+          nodeLevels: {},
           unlockedNodes: ['breeding_lab'],
           unlockedBreeds: [],
           acknowledgedOpportunities: [],
@@ -344,6 +375,7 @@ describe('research save migration', () => {
     expect(normalizeResearchState(undefined)).toEqual({
       points: 0,
       totalPointsEarned: 0,
+      nodeLevels: {},
       unlockedNodes: [],
       unlockedBreeds: [],
       acknowledgedOpportunities: [],
@@ -358,6 +390,7 @@ describe('research save migration', () => {
 
     // auto_replant requires auto_harvest, so it cannot survive on its own.
     expect(normalized.unlockedNodes).toEqual(['breeding_lab']);
+    expect(normalized.nodeLevels).toEqual({ breeding_lab: 1 });
     expect(normalized.unlockedBreeds).toEqual(['crystalberry']);
     expect(normalized.points).toBe(120);
     expect(normalized.totalPointsEarned).toBe(120);
@@ -380,6 +413,7 @@ describe('research save migration', () => {
         research: {
           points: 50,
           totalPointsEarned: 80,
+          nodeLevels: {},
           unlockedNodes: ['breeding_lab'],
           unlockedBreeds: [],
           acknowledgedOpportunities: [],

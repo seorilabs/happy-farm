@@ -187,6 +187,22 @@ describe('region and skill modifiers', () => {
     expect(mods.speedMultiplier).toBeCloseTo(1 + getSkillEffect(skilled, 'global_speed'));
   });
 
+  test('repeatable RP studies feed global profit and growth modifiers', () => {
+    const base = createInitialState();
+    const researched: GameState = {
+      ...base,
+      research: {
+        ...base.research,
+        nodeLevels: { market_studies: 2, growth_studies: 3 },
+        unlockedNodes: ['market_studies', 'growth_studies'],
+      },
+    };
+
+    const mods = getGlobalModifiers(researched, NOW);
+    expect(mods.profitMultiplier).toBeCloseTo(1.06);
+    expect(mods.speedMultiplier).toBeCloseTo(1.06);
+  });
+
   test('skill purchases respect star balance, cost growth, and max level', () => {
     const skill = PRESTIGE_SKILLS.find((candidate) => candidate.key === 'global_profit')!;
     const base = createInitialState();

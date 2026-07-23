@@ -142,6 +142,10 @@ export const koKRLabels: LabelBundle = {
     breeding_lab: { name: '교배 연구', description: '두 작물을 교배해 신품종을 만들어요.' },
     breeding_advanced: { name: '고급 교배', description: '희귀 작물 교배 조합을 해금해요.' },
     donation_amplifier: { name: '헌납 증폭', description: '헌납으로 받는 연구 포인트가 50% 늘어나요.' },
+    market_studies: { name: '시장 연구', description: '모든 판매 수익이 레벨당 3% 늘어나요.' },
+    growth_studies: { name: '성장 연구', description: '모든 작물의 성장 속도가 레벨당 2% 빨라져요.' },
+    offline_studies: { name: '오프라인 연구', description: '활성 농장의 오프라인 수익 상한이 레벨당 2시간 늘어나요.' },
+    mutation_studies: { name: '변이 연구', description: '해금된 변이의 출현 확률이 레벨당 5% 늘어나요.' },
   },
   achievementTrack: {
     harvest_total: { name: '누적 수확' },

@@ -142,6 +142,10 @@ export const deLabels: LabelBundle = {
     breeding_lab: { name: 'Zuchtlabor', description: 'Kreuze zwei Pflanzen zu neuen Sorten.' },
     breeding_advanced: { name: 'Fortgeschrittene Zucht', description: 'Schaltet seltene Kreuzungskombis frei.' },
     donation_amplifier: { name: 'Spenden-Verstärker', description: 'Spenden geben 50 % mehr Forschungspunkte.' },
+    market_studies: { name: 'Marktforschung', description: '+3 % Verkaufsgewinn pro Stufe, überall.' },
+    growth_studies: { name: 'Wachstumsforschung', description: 'Alle Pflanzen wachsen pro Stufe 2 % schneller.' },
+    offline_studies: { name: 'Offline-Forschung', description: '+2 Std. Offline-Ertragsgrenze der aktiven Farm pro Stufe.' },
+    mutation_studies: { name: 'Mutationsforschung', description: '+5 % Chance auf freigeschaltete Mutationen pro Stufe.' },
   },
   achievementTrack: {
     harvest_total: { name: 'Ernten gesamt' },

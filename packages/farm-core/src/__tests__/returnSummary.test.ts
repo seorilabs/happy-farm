@@ -15,6 +15,7 @@ import {
   collectReturnSummaryOfflineGoldWithAdBonus,
   creditActiveFarmOfflineGold,
   getActiveFarmOfflineGold,
+  getActiveFarmOfflineCapMs,
   getActiveFarmOfflineGoldPerHour,
   getReturnSummary,
   RETURN_SUMMARY_MIN_AWAY_MS,
@@ -259,6 +260,25 @@ describe('getReturnSummary', () => {
     expect(growing).toEqual(before);
     expect(getActiveFarmOfflineGoldPerHour(base)).toBe(0);
     expect(getActiveFarmOfflineGoldPerHour(withReadyCrop(0, base))).toBe(0);
+  });
+
+  test('offline studies extend the active-farm accrual cap per level', () => {
+    const base = createInitialState();
+    const researched: GameState = {
+      ...base,
+      research: {
+        ...base.research,
+        nodeLevels: { offline_studies: 2 },
+        unlockedNodes: ['offline_studies'],
+      },
+    };
+    const growing = withGrowingCrop(0, 'wheat', researched);
+    const extendedCap = OFFLINE_INCOME_CAP_MS + 4 * MS_PER_HOUR;
+
+    expect(getActiveFarmOfflineCapMs(researched)).toBe(extendedCap);
+    expect(getActiveFarmOfflineGold(growing, 10 * extendedCap)).toBe(
+      Math.floor((expectedGoldPerHour(['wheat'], researched) * extendedCap) / MS_PER_HOUR)
+    );
   });
 
   // #273: 오프라인 튜닝 불변식 — 오프라인 세션 수익은 동일 시간 온라인 능동

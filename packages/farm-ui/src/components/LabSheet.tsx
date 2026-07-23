@@ -9,7 +9,9 @@ import {
   formatMoney,
   getBreedingRecipeStatus,
   getCropLabel,
+  getResearchNodeCost,
   getResearchNodeLabel,
+  getResearchNodeLevel,
   isNodeUnlocked,
   type CropKey,
   type GameState,
@@ -45,6 +47,28 @@ export function LabSheet({
 }) {
   const autoHarvestUnlocked = isNodeUnlocked(gameState, 'auto_harvest');
   const autoReplantUnlocked = isNodeUnlocked(gameState, 'auto_replant');
+
+  function renderResearchNodes(category: 'automation' | 'scaling' | 'breeding') {
+    return RESEARCH_NODES.filter((node) => node.category === category).map((node) => {
+      const label = getResearchNodeLabel(node.key, locale);
+      const level = getResearchNodeLevel(gameState, node.key);
+      const cost = getResearchNodeCost(gameState, node.key);
+      const requirementText =
+        node.requires != null && !isNodeUnlocked(gameState, node.requires)
+          ? messages.nodeRequiresLabel(getResearchNodeLabel(node.requires, locale).name)
+          : null;
+      return (
+        <ShopCard
+          key={node.key}
+          title={node.maxLevel === 1 ? label.name : `${label.name} · ${messages.researchNodeLevelLabel(level)}`}
+          desc={requirementText == null ? label.description : `${label.description} · ${requirementText}`}
+          price={cost == null ? messages.completePrice : messages.rpPrice(formatMoney(cost, locale))}
+          disabled={!canUnlockNode(gameState, node.key)}
+          onPress={() => onUnlockNode(node.key)}
+        />
+      );
+    });
+  }
 
   return (
     <View>
@@ -83,24 +107,12 @@ export function LabSheet({
       />
 
       <Text style={sheetPartStyles.sheetSectionTitle}>{messages.researchNodesSection}</Text>
-      {RESEARCH_NODES.map((node) => {
-        const label = getResearchNodeLabel(node.key, locale);
-        const unlocked = isNodeUnlocked(gameState, node.key);
-        const requirementText =
-          node.requires != null && !isNodeUnlocked(gameState, node.requires)
-            ? messages.nodeRequiresLabel(getResearchNodeLabel(node.requires, locale).name)
-            : null;
-        return (
-          <ShopCard
-            key={node.key}
-            title={label.name}
-            desc={requirementText == null ? label.description : `${label.description} · ${requirementText}`}
-            price={unlocked ? messages.completePrice : messages.rpPrice(formatMoney(node.cost, locale))}
-            disabled={unlocked || !canUnlockNode(gameState, node.key)}
-            onPress={() => onUnlockNode(node.key)}
-          />
-        );
-      })}
+      <Text style={styles.nodeGroupTitle}>{messages.automationResearchSection}</Text>
+      {renderResearchNodes('automation')}
+      <Text style={styles.nodeGroupTitle}>{messages.scalingResearchSection}</Text>
+      {renderResearchNodes('scaling')}
+      <Text style={styles.nodeGroupTitle}>{messages.breedingResearchSection}</Text>
+      {renderResearchNodes('breeding')}
 
       <Text style={sheetPartStyles.sheetSectionTitle}>{messages.breedingSection}</Text>
       {BREEDING_RECIPES.map((recipe) => {
@@ -147,6 +159,13 @@ const styles = StyleSheet.create({
   rpBannerText: {
     color: '#5b3fc4',
     fontSize: 15,
+    fontWeight: '900',
+  },
+  nodeGroupTitle: {
+    marginTop: 4,
+    marginBottom: 8,
+    color: '#344054',
+    fontSize: 14,
     fontWeight: '900',
   },
 });
