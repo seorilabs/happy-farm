@@ -3,7 +3,7 @@
 happy-farm **개별 콘텐츠(작물·구역·기능 퍼널)** 세부 지표의 단일 기준 문서.
 공통 지표(DAU/리텐션/광고 노출 등)는 backoffice `AppMetricDaily`가 이미 다루므로,
 이 문서는 "앱 안에서 무엇이 얼마나 소비되는가"(작물별 심기·수확·매출, 구역 언락
-전환, 온보딩 단계 통과율, 수동 수확 콤보 baseline)를 다룬다.
+전환, 온보딩 단계 통과율, 수동 수확 콤보와 동물 퍼널 baseline)를 다룬다.
 
 이벤트 계약은 `packages/farm-core/src/analytics.ts`, 콘텐츠 키(작물/구역)는
 `packages/farm-core/src/balance.json`·`types.ts`가 진실원본이다. 광고 placement 지표는
@@ -153,14 +153,53 @@ combo window가 끝났거나 다음 수확 시 이미 window를 넘은 경우다
 집중도를 함께 보고 #320의 A/B 실험 가능 여부를 다시 판단하며, 이 계측만으로 보상 기능을
 unblock하지 않는다.
 
-### 5) 광고 placement 차원
+### 5) 동물 구매·급여·산출 수집 퍼널 baseline
+
+동물 기능의 진입부터 산출 수집까지를 아래 5개 schema v1 이벤트로 계측한다. 모든
+이벤트에는 `GameAnalyticsContext`가 함께 실리며 stable animal key만 저장한다.
+
+| 소스 이벤트 | 주요 파라미터 | 계약 |
+|---|---|---|
+| `animals_screen` | `source`, `owned_count`, `feeding_count`, `ready_count` | 동물 시트가 실제로 열릴 때 1건. `source=more \| welcome_back` |
+| `animal_purchased` | `animal`, `purchase_cost`, `owned_count_after` | 구매 상태 변경이 성공한 뒤 1건 |
+| `animal_fed` | `animal`, `feed_cost`, `produce_timer_ms`, `owned_count` | 급여 상태 변경이 성공한 뒤 1건 |
+| `animal_produce_collected` | `animal`, `collection_mode`, `base_revenue`, `final_revenue`, `is_rare`, `rare_multiplier`, `ready_wait_ms` | 동물별 수집 성공마다 1건. `collection_mode=single \| collect_all` |
+| `animal_produce_collect_all` | `collected_count`, `base_revenue_total`, `final_revenue_total`, `rare_count` | 동물 일괄 수집의 item 이벤트가 모두 기록된 뒤 1건 |
+
+현재 canonical 수집 결과는 희귀 산출 보상 구현 전 baseline이므로 항상
+`base_revenue=final_revenue=producePrice`, `is_rare=false`, `rare_multiplier=1`이다.
+`ready_wait_ms`는 준비 완료 시점부터 실제 수집까지의 대기 시간이며 음수가 아니다.
+일괄 수집은 동물 catalog 순서대로 item 이벤트 N건을 먼저 기록한 뒤 합계 summary 1건을
+기록한다. 작업실 일괄 수집은 동물 이벤트를 만들지 않는다.
+
+구매·급여·단일 수집의 성공 이벤트는 immutable pending effect가 확정된 상태 변경을
+소비할 때만 발생한다. React StrictMode 재실행이나 빠른 중복 탭으로 같은 성공 이벤트를
+두 번 기록하지 않으며, 잔액 부족·준비 전 수집 같은 실패 또는 no-op에는 성공 이벤트를
+기록하지 않는다. 시트가 열린 동안의 clock tick도 `animals_screen`을 반복하지 않는다.
+
+`analytics/queries/animal-funnel-metrics.sql`은 당일 미완료 export를 제외한 최근 **28개
+완료일(D-28~D-1)** 을 기본 window로 사용해 다음을 독립 블록으로 산출한다.
+
+- **퍼널**: 화면 진입→구매→급여→산출 수집 사용자와 단계 전환율
+- **수집 빈도·경로**: 단일/일괄 수집 건수, 사용자, 수익, 평균 대기 시간
+- **동물별 분포**: 구매·급여·수집량과 수익
+- **사용자 집중도**: 수집량·수익 top1/top2/top10% share와 HHI
+- **계약 품질**: 필수 파라미터 누락, enum·범위·schema 및 baseline 결과 위반
+
+첫 daily export에서는 품질 블록의 `quality_status`와 필수 파라미터 누락을 먼저 확인한다.
+`observed_events=0`은 `no_data`로 분리하며 전환율 0으로 해석하지 않는다. 최소 28일이
+쌓인 뒤 수집 빈도·대기 시간·사용자 집중도를 함께 보고 #322의 희귀 산출 보상 설계를
+다시 판단한다. 이 baseline 계측만으로 #322를 unblock하거나 보상 RNG·경제를 변경하지 않는다.
+
+### 6) 광고 placement 차원
 `docs/04-work/ad-analytics.md` 및 `analytics/queries/ad-placement-metrics.sql`를
 그대로 따른다. 콘텐츠 대시보드에서는 placement별 impression/click/complete/fail/blocked
 카운트를 콘텐츠 지표와 나란히 보여준다(정의 중복 금지, 참조만).
 
 ## 집계·저장 파이프라인
-- **집계 참조 쿼리**: `analytics/queries/content-metrics.sql`(작물·구역 일별 집계)과
-  `analytics/queries/harvest-combo-metrics.sql`(수동 콤보 28일 baseline). 둘 다 BigQuery
+- **집계 참조 쿼리**: `analytics/queries/content-metrics.sql`(작물·구역 일별 집계),
+  `analytics/queries/harvest-combo-metrics.sql`(수동 콤보 28일 baseline),
+  `analytics/queries/animal-funnel-metrics.sql`(동물 퍼널 28일 baseline). 모두 BigQuery
   콘솔에서 실행 가능한 GoogleSQL이며, backoffice 수집기는 작물·구역 일별 정의를 구현한다.
 - **저장(백오피스)**: happy-farm 전용 일별 스냅샷 테이블
   (`happy_farm_crop_daily` / `happy_farm_area_daily` / `happy_farm_funnel_daily` /

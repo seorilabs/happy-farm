@@ -233,11 +233,33 @@ export function canCollectProduce(state: GameState, key: AnimalKey, now: number 
 
 // 순수 수확: 산출물 판매가를 골드로 지급하고 급여 상태를 비워(다시 유휴) 새 상태를
 // 반환한다. 아직 준비되지 않았거나 급여 중이 아니면 null(이중 수확 방지).
-export function collectProduce(state: GameState, key: AnimalKey, now: number = Date.now()): GameState | null {
+export type AnimalProduceCollectionOutcome = {
+  animalKey: AnimalKey;
+  baseRevenue: number;
+  finalRevenue: number;
+  isRare: false;
+  rareMultiplier: 1;
+  // The deterministic time between readyAt and the captured collection instant.
+  readyWaitMs: number;
+};
+
+export type CollectProduceWithOutcomeResult = {
+  state: GameState;
+  outcome: AnimalProduceCollectionOutcome;
+};
+
+export function collectProduceWithOutcome(
+  state: GameState,
+  key: AnimalKey,
+  now: number = Date.now()
+): CollectProduceWithOutcomeResult | null {
   const animal = getAnimal(key);
   if (animal == null || !canCollectProduce(state, key, now)) {
     return null;
   }
+  const safeNow = Number.isFinite(now) ? now : Date.now();
+  const fedAt = state.animals.feeding[key]!;
+  const readyAt = fedAt + animal.produceTimerMs;
   const nextFeeding = { ...state.animals.feeding };
   delete nextFeeding[key];
   const next: GameState = {
@@ -248,12 +270,30 @@ export function collectProduce(state: GameState, key: AnimalKey, now: number = D
       feeding: nextFeeding,
     },
   };
-  return recordMissionProgressEvent(next, { type: 'collect_produce' }, now);
+  return {
+    state: recordMissionProgressEvent(next, { type: 'collect_produce' }, safeNow),
+    outcome: {
+      animalKey: key,
+      baseRevenue: animal.producePrice,
+      finalRevenue: animal.producePrice,
+      isRare: false,
+      rareMultiplier: 1,
+      readyWaitMs: Math.max(0, safeNow - readyAt),
+    },
+  };
+}
+
+// Backward-compatible state-only facade. UI analytics paths consume the
+// canonical outcome above, while existing domain callers can keep composing
+// the original pure GameState transition.
+export function collectProduce(state: GameState, key: AnimalKey, now: number = Date.now()): GameState | null {
+  return collectProduceWithOutcome(state, key, now)?.state ?? null;
 }
 
 export type CollectAllReadyProduceResult = {
   state: GameState;
   collectedKeys: AnimalKey[];
+  outcomes: AnimalProduceCollectionOutcome[];
   collectedCount: number;
   totalGold: number;
 };
@@ -269,24 +309,27 @@ export function collectAllReadyProduce(
   const safeNow = Number.isFinite(now) ? now : Date.now();
   let state = gameState;
   const collectedKeys: AnimalKey[] = [];
+  const outcomes: AnimalProduceCollectionOutcome[] = [];
   let totalGold = 0;
 
   for (const status of getAnimalStates(gameState, safeNow)) {
     if (status.phase !== 'ready') {
       continue;
     }
-    const next = collectProduce(state, status.key, safeNow);
-    if (next == null) {
+    const result = collectProduceWithOutcome(state, status.key, safeNow);
+    if (result == null) {
       continue;
     }
-    totalGold += next.gold - state.gold;
-    state = next;
+    totalGold += result.outcome.finalRevenue;
+    state = result.state;
     collectedKeys.push(status.key);
+    outcomes.push(result.outcome);
   }
 
   return {
     state,
     collectedKeys,
+    outcomes,
     collectedCount: collectedKeys.length,
     totalGold,
   };
