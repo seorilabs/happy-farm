@@ -5,6 +5,7 @@ import { CROP_OF_THE_DAY_MULTIPLIER, getCropOfTheDayStatus } from '../cropOfTheD
 import { getCropModifiers, getGlobalModifiers } from '../modifiers';
 import { getResetDayStart } from '../resetBoundary';
 import { isCropPlantable, isHybridCrop } from '../research';
+import { getWeatherSellMultiplier } from '../weather';
 import { getWeeklyEventMultiplier } from '../weeklyEvent';
 import type { CropKey, GameState } from '../types';
 
@@ -14,10 +15,14 @@ import type { CropKey, GameState } from '../types';
 
 const MULT = CROP_OF_THE_DAY_MULTIPLIER;
 
-// profitMultiplier를 전역 배수로 나눈 순수 crop별 배수 인자. 신규 상태에서는
+// profitMultiplier에서 전역·날씨 배수를 나눈 순수 crop별 배수 인자. 신규 상태에서는
 // mastery=1이므로, 주간이벤트가 없는 날에는 이 값이 곧 cotd 인자(=MULT 또는 1)다.
 function cotdProfitFactor(state: GameState, cropKey: CropKey, now: number): number {
-  return getCropModifiers(state, cropKey, now).profitMultiplier / getGlobalModifiers(state, now).profitMultiplier;
+  return (
+    getCropModifiers(state, cropKey, now).profitMultiplier /
+    getGlobalModifiers(state, now).profitMultiplier /
+    getWeatherSellMultiplier(now)
+  );
 }
 
 function isPlantable(state: GameState, cropKey: CropKey): boolean {

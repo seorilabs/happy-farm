@@ -7,6 +7,8 @@ import {
   formatMoney,
   formatRemainingTime,
   type SupportedLocale,
+  type WeatherKey,
+  type WeatherStatus,
 } from '../../../farm-core/src';
 
 import type { FarmMessages } from '../i18n';
@@ -17,6 +19,19 @@ import { getWeeklyEventPresentation } from '../weeklyEventPresentation';
 // 그 미만은 소수 1자리로 표기한다(과밀 완화 전 summaryColumn과 동일한 표기를 보존).
 function formatMultiplier(value: number) {
   return value >= 100 ? `×${Math.round(value).toLocaleString()}` : `×${value.toFixed(1)}`;
+}
+
+function getWeatherName(messages: FarmMessages, weatherKey: WeatherKey): string {
+  switch (weatherKey) {
+    case 'rain':
+      return messages.weatherRainLabel;
+    case 'cloudy':
+      return messages.weatherCloudyLabel;
+    case 'snow':
+      return messages.weatherSnowLabel;
+    default:
+      return messages.weatherClearLabel;
+  }
 }
 
 // UI-facing record names intentionally narrow legacy LifetimeStats semantics:
@@ -80,6 +95,8 @@ export function StatsSheet({
   boostRemainingMs,
   offlineGoldPerHour,
   offlineIncomeCapMs,
+  weather,
+  weatherRemainingMs,
   weeklyEventActive,
   weeklyEventAreaName,
   weeklyEventMultiplier,
@@ -104,6 +121,8 @@ export function StatsSheet({
   boostRemainingMs: number;
   offlineGoldPerHour: number;
   offlineIncomeCapMs: number;
+  weather?: WeatherStatus;
+  weatherRemainingMs?: number;
   weeklyEventActive: boolean;
   weeklyEventAreaName: string;
   weeklyEventMultiplier: number;
@@ -127,6 +146,12 @@ export function StatsSheet({
     ? weeklyEventPresentation.activeLabel
     : weeklyEventPresentation.teaserLabel;
   const weeklyEventRemaining = formatRemainingTime(weeklyEventRemainingMs, locale);
+  const weatherEffect =
+    weather?.axis === 'speed'
+      ? messages.weatherSpeedBonus(weather.multiplier)
+      : weather?.axis === 'sell'
+        ? messages.weatherSellBonus(weather.multiplier)
+        : messages.weatherNoBonus;
 
   return (
     <View testID="stats-sheet">
@@ -182,6 +207,21 @@ export function StatsSheet({
           valueTestID="stats-active-title"
         />
       </View>
+
+      {weather != null ? (
+        <View testID="weather-status-section">
+          <Text testID="weather-status-title" style={styles.sectionTitle}>
+            {weather.icon} {messages.weatherSection}
+          </Text>
+          <Text style={styles.eventDesc} testID="weather-status-banner">
+            {messages.weatherDesc(
+              getWeatherName(messages, weather.key),
+              weatherEffect,
+              formatRemainingTime(Math.max(0, weatherRemainingMs ?? 0), locale)
+            )}
+          </Text>
+        </View>
+      ) : null}
 
       <Text testID="weekly-event-title" style={styles.sectionTitle}>
         {weeklyEventPresentation.badgeIcon} {weeklyEventTitle}

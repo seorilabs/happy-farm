@@ -128,6 +128,7 @@ describe('farm storage', () => {
       soundEffectsEnabled: false,
       backgroundMusicEnabled: true,
       hapticsEnabled: true,
+      weatherEffectsEnabled: false,
       harvestNotificationsEnabled: false,
       comebackRemindersEnabled: false,
     });
@@ -139,6 +140,7 @@ describe('farm storage', () => {
         soundEffectsEnabled: false,
         backgroundMusicEnabled: true,
         hapticsEnabled: true,
+        weatherEffectsEnabled: false,
         harvestNotificationsEnabled: false,
         comebackRemindersEnabled: false,
       })

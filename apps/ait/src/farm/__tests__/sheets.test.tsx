@@ -587,6 +587,50 @@ describe('StatsSheet', () => {
     );
   });
 
+  test('shows today weather and its localized economy effect in the existing stats sheet', () => {
+    const screen = render(
+      <StatsSheet
+        {...offlineIncomeProps}
+        {...demotedHeaderProps}
+        messages={messages}
+        locale={LOCALE}
+        researchLevel={0}
+        profitMultiplier={1}
+        speedMultiplier={1.08}
+        boostActive={false}
+        boostMultiplier={1}
+        boostRemainingMs={0}
+        weather={{
+          key: 'rain',
+          icon: '🌧️',
+          weight: 25,
+          axis: 'speed',
+          multiplier: 1.08,
+          precipitation: 'rain',
+          windowStartAt: 0,
+          windowEndAt: 24 * HOUR_MS,
+        }}
+        weatherRemainingMs={2 * HOUR_MS}
+        weeklyEventActive={false}
+        weeklyEventAreaName="초보 농장"
+        weeklyEventMultiplier={1}
+        weeklyEventAxis="sell"
+        weeklyEventTypeKey="sale"
+        weeklyEventRemainingMs={HOUR_MS}
+        farmRecords={emptyFarmRecords}
+      />
+    );
+
+    expect(screen.getByTestId('weather-status-title')).toHaveTextContent(`🌧️ ${messages.weatherSection}`);
+    expect(screen.getByTestId('weather-status-banner')).toHaveTextContent(
+      messages.weatherDesc(
+        messages.weatherRainLabel,
+        messages.weatherSpeedBonus(1.08),
+        formatRemainingTime(2 * HOUR_MS, LOCALE)
+      )
+    );
+  });
+
   test('shows the boost row as inactive and the festival banner when a festival is live', () => {
     const screen = render(
       <StatsSheet

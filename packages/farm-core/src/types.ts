@@ -15,6 +15,8 @@ export type MasteryRankKey = (typeof balance.mastery.ranks)[number]['key'];
 
 export type MutationKey = (typeof balance.mutations.kinds)[number]['key'];
 
+export type WeatherKey = (typeof balance.weather.types)[number]['key'];
+
 export type ResearchNodeKey = (typeof balance.research.nodes)[number]['key'];
 
 export type DecorationKey = (typeof balance.decorations.items)[number]['key'];
