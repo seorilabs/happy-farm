@@ -1,5 +1,6 @@
 import type {
   AchievementTrackKey,
+  AnimalKey,
   AreaKey,
   CollectionRewardKey,
   CropKey,
@@ -58,6 +59,8 @@ export type HarvestComboEndReason = 'timeout' | 'background' | 'prestige' | 'res
 // harvests, so neither is a separate harvest source.
 export type HarvestSource = 'manual' | 'batch' | 'auto';
 export type HarvestRewardType = 'gold' | 'research_points';
+export type AnimalsScreenSource = 'more' | 'welcome_back';
+export type AnimalProduceCollectionMode = 'single' | 'collect_all';
 
 export type GameAnalyticsContext = {
   gold: number;
@@ -384,6 +387,98 @@ export function createFarmAnalytics(track: TrackGameEvent = noopTrackGameEvent) 
         track_key: params.trackKey,
         tier: params.tier,
         stars_awarded: params.starsAwarded,
+        ...params.context,
+      });
+    },
+
+    // Ranch funnel baseline. Every event carries schema_version=1 and the
+    // shared game context so purchase, feeding, and collection cohorts remain
+    // joinable across markets without localized labels.
+    trackAnimalsScreen: (params: {
+      source: AnimalsScreenSource;
+      ownedCount: number;
+      feedingCount: number;
+      readyCount: number;
+      context: GameAnalyticsContext;
+    }) => {
+      track('animals_screen', {
+        source: params.source,
+        owned_count: params.ownedCount,
+        feeding_count: params.feedingCount,
+        ready_count: params.readyCount,
+        schema_version: 1,
+        ...params.context,
+      });
+    },
+
+    trackAnimalPurchased: (params: {
+      animalKey: AnimalKey;
+      purchaseCost: number;
+      ownedCountAfter: number;
+      context: GameAnalyticsContext;
+    }) => {
+      track('animal_purchased', {
+        animal: params.animalKey,
+        purchase_cost: params.purchaseCost,
+        owned_count_after: params.ownedCountAfter,
+        schema_version: 1,
+        ...params.context,
+      });
+    },
+
+    trackAnimalFed: (params: {
+      animalKey: AnimalKey;
+      feedCost: number;
+      produceTimerMs: number;
+      ownedCount: number;
+      context: GameAnalyticsContext;
+    }) => {
+      track('animal_fed', {
+        animal: params.animalKey,
+        feed_cost: params.feedCost,
+        produce_timer_ms: params.produceTimerMs,
+        owned_count: params.ownedCount,
+        schema_version: 1,
+        ...params.context,
+      });
+    },
+
+    trackAnimalProduceCollected: (params: {
+      animalKey: AnimalKey;
+      collectionMode: AnimalProduceCollectionMode;
+      baseRevenue: number;
+      finalRevenue: number;
+      isRare: boolean;
+      rareMultiplier: number;
+      readyWaitMs: number;
+      context: GameAnalyticsContext;
+    }) => {
+      track('animal_produce_collected', {
+        animal: params.animalKey,
+        collection_mode: params.collectionMode,
+        base_revenue: params.baseRevenue,
+        final_revenue: params.finalRevenue,
+        is_rare: params.isRare,
+        rare_multiplier: params.rareMultiplier,
+        ready_wait_ms: params.readyWaitMs,
+        schema_version: 1,
+        ...params.context,
+      });
+    },
+
+    trackAnimalProduceCollectAll: (params: {
+      collectedCount: number;
+      baseRevenueTotal: number;
+      finalRevenueTotal: number;
+      rareCount: number;
+      context: GameAnalyticsContext;
+    }) => {
+      track('animal_produce_collect_all', {
+        collected_count: params.collectedCount,
+        base_revenue_total: params.baseRevenueTotal,
+        final_revenue_total: params.finalRevenueTotal,
+        rare_count: params.rareCount,
+        schema_version: 1,
         ...params.context,
       });
     },

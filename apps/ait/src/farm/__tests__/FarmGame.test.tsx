@@ -1497,6 +1497,165 @@ describe('FarmGame UI flow', () => {
     });
   });
 
+  describe('animal funnel analytics (#349)', () => {
+    const messages = getFarmMessages(DEFAULT_LOCALE);
+    const animalEvents = (track: jest.Mock, name: string) =>
+      track.mock.calls.filter(([eventName]) => eventName === name);
+
+    async function openAnimalsFromMore(
+      state: GameState,
+      track: jest.Mock,
+      strictMode = false
+    ) {
+      if (!strictMode) {
+        const screen = await renderGame(state, { analytics: createFarmAnalytics(track) });
+        fireEvent.press(screen.getByTestId('more-nav-button'));
+        fireEvent.press(screen.getByLabelText(messages.animalsButtonAccessibilityLabel));
+        await waitFor(() => expect(screen.getByTestId('animals-sheet')).toBeTruthy());
+        return screen;
+      }
+
+      mockPersistence.readPersistedGameState.mockReset().mockResolvedValue({
+        ...state,
+        onboardingCompleted: true,
+        onboardingStep: null,
+        dailyBonusState: { lastClaimedAt: NOW, streak: 1 },
+      });
+      mockPersistence.readPersistedGameSettings.mockReset().mockResolvedValue(null);
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+      const screen = render(
+        <React.StrictMode>
+          <FarmGame persistence={mockPersistence} analytics={createFarmAnalytics(track)} />
+        </React.StrictMode>
+      );
+      await act(async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      await waitFor(() => expect(screen.getByTestId('more-nav-button')).toBeTruthy());
+      fireEvent.press(screen.getByTestId('more-nav-button'));
+      fireEvent.press(screen.getByLabelText(messages.animalsButtonAccessibilityLabel));
+      await waitFor(() => expect(screen.getByTestId('animals-sheet')).toBeTruthy());
+      consoleErrorSpy.mockRestore();
+      return screen;
+    }
+
+    test('tracks one more-source screen impression across timer rerenders', async () => {
+      const track = jest.fn();
+      const animal = ANIMALS[0]!;
+      const base = createInitialState();
+      const state: GameState = {
+        ...base,
+        animals: {
+          owned: [animal.key],
+          feeding: { [animal.key]: NOW - animal.produceTimerMs },
+        },
+      };
+      await openAnimalsFromMore(state, track);
+
+      await waitFor(() => expect(animalEvents(track, 'animals_screen')).toHaveLength(1));
+      expect(animalEvents(track, 'animals_screen')[0]![1]).toEqual(
+        expect.objectContaining({
+          source: 'more',
+          owned_count: 1,
+          feeding_count: 1,
+          ready_count: 1,
+          schema_version: 1,
+        })
+      );
+      await act(async () => {
+        jest.advanceTimersByTime(GAME_TICK_INTERVAL_MS * 4);
+      });
+      expect(animalEvents(track, 'animals_screen')).toHaveLength(1);
+    });
+
+    test('tracks purchase and feed once each on rapid double presses', async () => {
+      const track = jest.fn();
+      const animal = ANIMALS[0]!;
+      const state: GameState = {
+        ...createInitialState(),
+        gold: animal.purchaseCost + animal.feedCost + 100,
+      };
+      const screen = await openAnimalsFromMore(state, track);
+      const build = screen.getByText(messages.animalsBuildAction(formatMoney(animal.purchaseCost, DEFAULT_LOCALE)));
+
+      await act(async () => {
+        fireEvent.press(build);
+        fireEvent.press(build);
+      });
+      await waitFor(() => expect(animalEvents(track, 'animal_purchased')).toHaveLength(1));
+      expect(animalEvents(track, 'animal_purchased')[0]![1]).toEqual(
+        expect.objectContaining({
+          animal: animal.key,
+          purchase_cost: animal.purchaseCost,
+          owned_count_after: 1,
+          schema_version: 1,
+        })
+      );
+
+      const feed = await waitFor(() =>
+        screen.getByText(messages.animalsFeedAction(formatMoney(animal.feedCost, DEFAULT_LOCALE)))
+      );
+      await act(async () => {
+        fireEvent.press(feed);
+        fireEvent.press(feed);
+      });
+      await waitFor(() => expect(animalEvents(track, 'animal_fed')).toHaveLength(1));
+      expect(animalEvents(track, 'animal_fed')[0]![1]).toEqual(
+        expect.objectContaining({
+          animal: animal.key,
+          feed_cost: animal.feedCost,
+          produce_timer_ms: animal.produceTimerMs,
+          owned_count: 1,
+          schema_version: 1,
+        })
+      );
+    });
+
+    test('emits one canonical single-collection event under StrictMode and rapid double press', async () => {
+      const track = jest.fn();
+      const animal = ANIMALS[0]!;
+      const base = createInitialState();
+      const state: GameState = {
+        ...base,
+        animals: {
+          owned: [animal.key],
+          feeding: { [animal.key]: NOW - animal.produceTimerMs - 321 },
+        },
+      };
+      const screen = await openAnimalsFromMore(state, track, true);
+      const collect = screen.getByText(
+        messages.animalsCollectAction(formatMoney(animal.producePrice, DEFAULT_LOCALE))
+      );
+
+      await act(async () => {
+        fireEvent.press(collect);
+        fireEvent.press(collect);
+      });
+      await waitFor(() => expect(animalEvents(track, 'animal_produce_collected')).toHaveLength(1));
+      expect(animalEvents(track, 'animal_produce_collected')[0]![1]).toEqual(
+        expect.objectContaining({
+          animal: animal.key,
+          collection_mode: 'single',
+          base_revenue: animal.producePrice,
+          final_revenue: animal.producePrice,
+          is_rare: false,
+          rare_multiplier: 1,
+          ready_wait_ms: 321,
+          schema_version: 1,
+        })
+      );
+      expect(animalEvents(track, 'animal_produce_collect_all')).toHaveLength(0);
+
+      // A stale callback after the committed collection is a no-op and must
+      // not emit another success event.
+      await act(async () => {
+        fireEvent.press(collect);
+      });
+      expect(animalEvents(track, 'animal_produce_collected')).toHaveLength(1);
+    });
+  });
+
   describe('ready output collect-all', () => {
     let onGoldPulse: jest.Mock;
 
@@ -1510,6 +1669,7 @@ describe('FarmGame UI flow', () => {
     });
 
     test('collects all ready animal produce once on a rapid double press', async () => {
+      const track = jest.fn();
       const ready = ANIMALS.slice(0, 2);
       expect(ready).toHaveLength(2);
       const base = createInitialState();
@@ -1522,7 +1682,7 @@ describe('FarmGame UI flow', () => {
       };
       const totalGold = ready.reduce((sum, animal) => sum + animal.producePrice, 0);
       const messages = getFarmMessages(DEFAULT_LOCALE);
-      const screen = await renderGame(state);
+      const screen = await renderGame(state, { analytics: createFarmAnalytics(track) });
 
       fireEvent.press(screen.getByTestId('more-nav-button'));
       fireEvent.press(screen.getByLabelText(messages.animalsButtonAccessibilityLabel));
@@ -1539,9 +1699,38 @@ describe('FarmGame UI flow', () => {
       expect(screen.queryByTestId('animals-collect-all-action')).toBeNull();
       expect(screen.getAllByText(messages.animalsIdleLabel)).toHaveLength(2);
       expect(onGoldPulse).toHaveBeenCalledTimes(1);
+      const collectionCalls = track.mock.calls.filter(([eventName]) =>
+        eventName === 'animal_produce_collected' || eventName === 'animal_produce_collect_all'
+      );
+      expect(collectionCalls.map(([eventName]) => eventName)).toEqual([
+        'animal_produce_collected',
+        'animal_produce_collected',
+        'animal_produce_collect_all',
+      ]);
+      expect(collectionCalls.slice(0, 2).map(([, params]) => params)).toEqual(
+        ready.map((animal) =>
+          expect.objectContaining({
+            animal: animal.key,
+            collection_mode: 'collect_all',
+            base_revenue: animal.producePrice,
+            final_revenue: animal.producePrice,
+            is_rare: false,
+            rare_multiplier: 1,
+          })
+        )
+      );
+      expect(collectionCalls[2]![1]).toEqual(
+        expect.objectContaining({
+          collected_count: 2,
+          base_revenue_total: totalGold,
+          final_revenue_total: totalGold,
+          rare_count: 0,
+        })
+      );
     });
 
     test('collects all completed workshop goods once with one English summary', async () => {
+      const track = jest.fn();
       const ready = PRODUCTION_RECIPES.slice(0, 2);
       expect(ready).toHaveLength(2);
       const base = createInitialState();
@@ -1554,7 +1743,10 @@ describe('FarmGame UI flow', () => {
       };
       const totalGold = ready.reduce((sum, recipe) => sum + recipe.sellPrice, 0);
       const messages = getFarmMessages('en-US');
-      const screen = await renderGame(state, { preferredLocale: 'en-US' });
+      const screen = await renderGame(state, {
+        preferredLocale: 'en-US',
+        analytics: createFarmAnalytics(track),
+      });
 
       fireEvent.press(screen.getByTestId('more-nav-button'));
       fireEvent.press(screen.getByLabelText(messages.workshopButtonAccessibilityLabel));
@@ -1574,6 +1766,9 @@ describe('FarmGame UI flow', () => {
         expect(within(screen.getByTestId(`recipe-card-${recipe.key}`)).getByText(messages.workshopNeedIngredientsLabel)).toBeTruthy();
       }
       expect(onGoldPulse).toHaveBeenCalledTimes(1);
+      expect(
+        track.mock.calls.filter(([eventName]) => eventName.startsWith('animal_'))
+      ).toHaveLength(0);
     });
 
     test('cancels an in-progress workshop craft once on a rapid double press and refunds inputs', async () => {
@@ -1885,6 +2080,7 @@ describe('FarmGame UI flow', () => {
     });
 
     test('ready animal row settles offline gold before opening the ranch sheet', async () => {
+      const track = jest.fn();
       const state = withReadyReturnLoops(
         // This crop matured while the player was away. The load-time tick will
         // reconcile state 1 → 2 before the CTA is tapped, so the card snapshot
@@ -1896,7 +2092,7 @@ describe('FarmGame UI flow', () => {
 
       const offlineGold = getActiveFarmOfflineGold(state, TWO_HOURS_MS);
       expect(offlineGold).toBeGreaterThan(0);
-      const screen = await renderGame(state);
+      const screen = await renderGame(state, { analytics: createFarmAnalytics(track) });
 
       const animalRow = await waitFor(() => screen.getByTestId('welcome-back-animal-row'));
       expect(screen.getByText(messages.welcomeBackAnimalLabel)).toBeTruthy();
@@ -1910,6 +2106,17 @@ describe('FarmGame UI flow', () => {
       await waitFor(() =>
         expect(screen.getByText(`${formatMoney(state.gold + offlineGold, DEFAULT_LOCALE)}G`)).toBeTruthy()
       );
+      await waitFor(() =>
+        expect(
+          track.mock.calls.filter(([eventName, params]) =>
+            eventName === 'animals_screen' && params?.source === 'welcome_back'
+          )
+        ).toHaveLength(1)
+      );
+      await act(async () => {
+        jest.advanceTimersByTime(GAME_TICK_INTERVAL_MS * 2);
+      });
+      expect(track.mock.calls.filter(([eventName]) => eventName === 'animals_screen')).toHaveLength(1);
     });
 
     test('ready workshop row opens the workshop and keeps long English copy on one line', async () => {

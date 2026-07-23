@@ -388,6 +388,97 @@ describe('farm analytics adapter contract', () => {
     );
     expect(track).toHaveBeenCalledWith('onboarding_complete', expect.objectContaining({ gold: context.gold }));
   });
+
+  test('동물 퍼널 5개 이벤트를 exact payload로 emit하고 AIT 파라미터 예산을 지킨다 (#349)', () => {
+    const track = jest.fn();
+    const analytics = createFarmAnalytics(track);
+    const context = getGameAnalyticsContext(createInitialState(), 0, 5_000);
+
+    analytics.trackAnimalsScreen({
+      source: 'welcome_back',
+      ownedCount: 3,
+      feedingCount: 2,
+      readyCount: 1,
+      context,
+    });
+    analytics.trackAnimalPurchased({ animalKey: 'chicken', purchaseCost: 600, ownedCountAfter: 4, context });
+    analytics.trackAnimalFed({
+      animalKey: 'chicken',
+      feedCost: 20,
+      produceTimerMs: 60_000,
+      ownedCount: 4,
+      context,
+    });
+    analytics.trackAnimalProduceCollected({
+      animalKey: 'chicken',
+      collectionMode: 'single',
+      baseRevenue: 35,
+      finalRevenue: 35,
+      isRare: false,
+      rareMultiplier: 1,
+      readyWaitMs: 321,
+      context,
+    });
+    analytics.trackAnimalProduceCollectAll({
+      collectedCount: 2,
+      baseRevenueTotal: 100,
+      finalRevenueTotal: 100,
+      rareCount: 0,
+      context,
+    });
+
+    expect(track.mock.calls).toEqual([
+      ['animals_screen', {
+        source: 'welcome_back',
+        owned_count: 3,
+        feeding_count: 2,
+        ready_count: 1,
+        schema_version: 1,
+        ...context,
+      }],
+      ['animal_purchased', {
+        animal: 'chicken',
+        purchase_cost: 600,
+        owned_count_after: 4,
+        schema_version: 1,
+        ...context,
+      }],
+      ['animal_fed', {
+        animal: 'chicken',
+        feed_cost: 20,
+        produce_timer_ms: 60_000,
+        owned_count: 4,
+        schema_version: 1,
+        ...context,
+      }],
+      ['animal_produce_collected', {
+        animal: 'chicken',
+        collection_mode: 'single',
+        base_revenue: 35,
+        final_revenue: 35,
+        is_rare: false,
+        rare_multiplier: 1,
+        ready_wait_ms: 321,
+        schema_version: 1,
+        ...context,
+      }],
+      ['animal_produce_collect_all', {
+        collected_count: 2,
+        base_revenue_total: 100,
+        final_revenue_total: 100,
+        rare_count: 0,
+        schema_version: 1,
+        ...context,
+      }],
+    ]);
+
+    for (const [, params] of track.mock.calls) {
+      expect(Object.keys(params as Record<string, unknown>).length).toBeLessThanOrEqual(25);
+    }
+    expect(toFirebaseAnalyticsParams(track.mock.calls[3]![1])).toEqual(
+      expect.objectContaining({ is_rare: 0, rare_multiplier: 1 })
+    );
+  });
 });
 
 describe('Firebase 애널리틱스 값 정규화(공유 어댑터 헬퍼)', () => {

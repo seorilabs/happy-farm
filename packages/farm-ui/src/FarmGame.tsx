@@ -85,6 +85,7 @@ import {
   REWARDED_GOLD_MAX_USES_PER_WINDOW,
   REWARDED_GOLD_WINDOW_MS,
   type AreaKey,
+  type AnimalsScreenSource,
   type CollectionRewardKey,
   type CropKey,
   type DailyBonusSource,
@@ -149,11 +150,13 @@ import {
   spinWheel,
   type WheelReward,
   getAnimalStates,
+  getAnimal,
   purchaseAnimal,
   feedAnimal,
-  collectProduce,
+  collectProduceWithOutcome,
   collectAllReadyProduce,
   type AnimalKey,
+  type AnimalProduceCollectionOutcome,
   getProductionStates,
   getProductionRecipeLabel,
   startCraft,
@@ -402,7 +405,7 @@ type ActiveSheet =
   | { type: 'welcomeBack'; summary: ReturnSummary }
   | DailyBonusSheet
   | { type: 'wheel' }
-  | { type: 'animals' }
+  | { type: 'animals'; source: AnimalsScreenSource }
   | { type: 'workshop' }
   | { type: 'resetConfirm' }
   | null;
@@ -570,6 +573,28 @@ type PendingFarmCommandEffect =
       surface: 'animals' | 'workshop';
       collectedCount: number;
       totalGold: number;
+      animalOutcomes: AnimalProduceCollectionOutcome[];
+    }
+  | {
+      id: number;
+      type: 'animalPurchaseAttempted';
+      animalKey: AnimalKey;
+      purchaseCost: number | null;
+      ownedCountAfter: number | null;
+    }
+  | {
+      id: number;
+      type: 'animalFeedAttempted';
+      animalKey: AnimalKey;
+      feedCost: number | null;
+      produceTimerMs: number | null;
+      ownedCount: number | null;
+    }
+  | {
+      id: number;
+      type: 'animalProduceCollected';
+      animalKey: AnimalKey;
+      outcome: AnimalProduceCollectionOutcome | null;
     }
   | {
       id: number;
@@ -1594,6 +1619,34 @@ function FarmGameBody({
         // next completed set can always be collected.
         collectAllReadyInFlightRef.current[effect.surface] = false;
         if (effect.collectedCount > 0) {
+          if (effect.surface === 'animals') {
+            const context = analyticsContext();
+            for (const outcome of effect.animalOutcomes) {
+              farmAnalytics.trackAnimalProduceCollected({
+                animalKey: outcome.animalKey,
+                collectionMode: 'collect_all',
+                baseRevenue: outcome.baseRevenue,
+                finalRevenue: outcome.finalRevenue,
+                isRare: outcome.isRare,
+                rareMultiplier: outcome.rareMultiplier,
+                readyWaitMs: outcome.readyWaitMs,
+                context,
+              });
+            }
+            farmAnalytics.trackAnimalProduceCollectAll({
+              collectedCount: effect.animalOutcomes.length,
+              baseRevenueTotal: effect.animalOutcomes.reduce(
+                (total, outcome) => total + outcome.baseRevenue,
+                0
+              ),
+              finalRevenueTotal: effect.animalOutcomes.reduce(
+                (total, outcome) => total + outcome.finalRevenue,
+                0
+              ),
+              rareCount: effect.animalOutcomes.filter((outcome) => outcome.isRare).length,
+              context,
+            });
+          }
           if (effect.totalGold > 0) {
             pulseGold();
           }
@@ -1603,6 +1656,61 @@ function FarmGameBody({
               : messages.workshopCollectedAllToast(formatMoney(effect.totalGold, locale), effect.collectedCount)
           );
         }
+        continue;
+      }
+
+      if (effect.type === 'animalPurchaseAttempted') {
+        animalActionInFlightRef.current.delete(`purchase:${effect.animalKey}`);
+        if (effect.purchaseCost == null || effect.ownedCountAfter == null) {
+          toast(messages.insufficientGoldToast);
+          continue;
+        }
+        farmAnalytics.trackAnimalPurchased({
+          animalKey: effect.animalKey,
+          purchaseCost: effect.purchaseCost,
+          ownedCountAfter: effect.ownedCountAfter,
+          context: analyticsContext(),
+        });
+        toast(messages.animalBuiltToast(getAnimalLabel(effect.animalKey, locale).name));
+        continue;
+      }
+
+      if (effect.type === 'animalFeedAttempted') {
+        animalActionInFlightRef.current.delete(`feed:${effect.animalKey}`);
+        if (effect.feedCost == null || effect.produceTimerMs == null || effect.ownedCount == null) {
+          toast(messages.insufficientGoldToast);
+          continue;
+        }
+        farmAnalytics.trackAnimalFed({
+          animalKey: effect.animalKey,
+          feedCost: effect.feedCost,
+          produceTimerMs: effect.produceTimerMs,
+          ownedCount: effect.ownedCount,
+          context: analyticsContext(),
+        });
+        toast(messages.animalFedToast(getAnimalLabel(effect.animalKey, locale).name));
+        continue;
+      }
+
+      if (effect.type === 'animalProduceCollected') {
+        animalActionInFlightRef.current.delete(`collect:${effect.animalKey}`);
+        if (effect.outcome == null) {
+          continue;
+        }
+        farmAnalytics.trackAnimalProduceCollected({
+          animalKey: effect.outcome.animalKey,
+          collectionMode: 'single',
+          baseRevenue: effect.outcome.baseRevenue,
+          finalRevenue: effect.outcome.finalRevenue,
+          isRare: effect.outcome.isRare,
+          rareMultiplier: effect.outcome.rareMultiplier,
+          readyWaitMs: effect.outcome.readyWaitMs,
+          context: analyticsContext(),
+        });
+        if (effect.outcome.finalRevenue > 0) {
+          pulseGold();
+        }
+        toast(messages.animalCollectedToast(getAnimalLabel(effect.animalKey, locale).name));
         continue;
       }
 
@@ -2303,6 +2411,17 @@ function FarmGameBody({
     if (activeSheet?.type === 'collection') {
       farmAnalytics.trackCollectionScreen(buildContext());
     }
+    if (activeSheet?.type === 'animals') {
+      const state = gameStateRef.current;
+      const statuses = getAnimalStates(state, Date.now());
+      farmAnalytics.trackAnimalsScreen({
+        source: activeSheet.source,
+        ownedCount: state.animals.owned.length,
+        feedingCount: Object.keys(state.animals.feeding).length,
+        readyCount: statuses.filter((status) => status.phase === 'ready').length,
+        context: buildContext(state),
+      });
+    }
   }, [activeSheet, rewardedAd.isAdSupported, farmAnalytics]);
 
   // 보상형 광고 CTA가 노출되는 시트가 열릴 때 아직 로드되지 않았다면 재로드를 킥해
@@ -2527,6 +2646,9 @@ function FarmGameBody({
   // command drain effect releases it after each attempt (success or no-op).
   const harvestAllInFlightRef = useRef(false);
   const collectAllReadyInFlightRef = useRef({ animals: false, workshop: false });
+  // Synchronous one-action reservations close the pre-render double-tap gap.
+  // The command-effect drain releases each key after success or no-op.
+  const animalActionInFlightRef = useRef<Set<string>>(new Set());
   // 비료 성공 부수효과(토스트·시트 닫힘)를 시트 1회 오픈당 한 번만 발화하게 하는
   // 가드. 시트가 열릴 때 false로 리셋한다(#227 리뷰).
   const fertilizeGuardRef = useRef(false);
@@ -2771,43 +2893,89 @@ function FarmGameBody({
   // 위임하고, 여기서는 상태 반영과 토스트/펄스만 담당한다. 각 액션은 functional
   // updater 안에서 재검증해 이중 차감/이중 수확을 막는다.
   function openAnimals() {
-    setActiveSheet({ type: 'animals' });
+    setActiveSheet({ type: 'animals', source: 'more' });
   }
 
   function buyAnimal(key: AnimalKey) {
+    const actionKey = `purchase:${key}`;
+    if (animalActionInFlightRef.current.has(actionKey)) {
+      return;
+    }
+    animalActionInFlightRef.current.add(actionKey);
+    const effectId = ++commandEffectIdRef.current;
     setGameState((state) => {
       const next = purchaseAnimal(state, key);
-      if (next == null) {
-        toast(messages.insufficientGoldToast);
-        return state;
+      const animal = getAnimal(key);
+      if (
+        !handledCommandEffectIdsRef.current.has(effectId) &&
+        !pendingCommandEffectsRef.current.some((effect) => effect.id === effectId)
+      ) {
+        pendingCommandEffectsRef.current.push({
+          id: effectId,
+          type: 'animalPurchaseAttempted',
+          animalKey: key,
+          purchaseCost: next != null && animal != null ? animal.purchaseCost : null,
+          ownedCountAfter: next?.animals.owned.length ?? null,
+        });
       }
-      toast(messages.animalBuiltToast(getAnimalLabel(key, locale).name));
-      return next;
+      return next ?? state;
     });
+    setCommandEffectVersion((version) => version + 1);
   }
 
   function feedAnimalNow(key: AnimalKey) {
+    const actionKey = `feed:${key}`;
+    if (animalActionInFlightRef.current.has(actionKey)) {
+      return;
+    }
+    animalActionInFlightRef.current.add(actionKey);
+    const now = Date.now();
+    const effectId = ++commandEffectIdRef.current;
     setGameState((state) => {
-      const next = feedAnimal(state, key, Date.now());
-      if (next == null) {
-        toast(messages.insufficientGoldToast);
-        return state;
+      const next = feedAnimal(state, key, now);
+      const animal = getAnimal(key);
+      if (
+        !handledCommandEffectIdsRef.current.has(effectId) &&
+        !pendingCommandEffectsRef.current.some((effect) => effect.id === effectId)
+      ) {
+        pendingCommandEffectsRef.current.push({
+          id: effectId,
+          type: 'animalFeedAttempted',
+          animalKey: key,
+          feedCost: next != null && animal != null ? animal.feedCost : null,
+          produceTimerMs: next != null && animal != null ? animal.produceTimerMs : null,
+          ownedCount: next?.animals.owned.length ?? null,
+        });
       }
-      toast(messages.animalFedToast(getAnimalLabel(key, locale).name));
-      return next;
+      return next ?? state;
     });
+    setCommandEffectVersion((version) => version + 1);
   }
 
   function collectAnimalProduce(key: AnimalKey) {
+    const actionKey = `collect:${key}`;
+    if (animalActionInFlightRef.current.has(actionKey)) {
+      return;
+    }
+    animalActionInFlightRef.current.add(actionKey);
+    const now = Date.now();
+    const effectId = ++commandEffectIdRef.current;
     setGameState((state) => {
-      const next = collectProduce(state, key, Date.now());
-      if (next == null) {
-        return state;
+      const result = collectProduceWithOutcome(state, key, now);
+      if (
+        !handledCommandEffectIdsRef.current.has(effectId) &&
+        !pendingCommandEffectsRef.current.some((effect) => effect.id === effectId)
+      ) {
+        pendingCommandEffectsRef.current.push({
+          id: effectId,
+          type: 'animalProduceCollected',
+          animalKey: key,
+          outcome: result?.outcome ?? null,
+        });
       }
-      pulseGold();
-      toast(messages.animalCollectedToast(getAnimalLabel(key, locale).name));
-      return next;
+      return result?.state ?? state;
     });
+    setCommandEffectVersion((version) => version + 1);
   }
 
   function collectAllReadyItems(surface: 'animals' | 'workshop') {
@@ -2819,8 +2987,8 @@ function FarmGameBody({
     const now = Date.now();
     const effectId = ++commandEffectIdRef.current;
     setGameState((state) => {
-      const result =
-        surface === 'animals' ? collectAllReadyProduce(state, now) : collectAllReadyCrafts(state, now);
+      const animalResult = surface === 'animals' ? collectAllReadyProduce(state, now) : null;
+      const result = animalResult ?? collectAllReadyCrafts(state, now);
       // The synchronous in-flight ref keeps a second press out of this setter.
       // React may still replay one functional updater in development, so the
       // operation ID is deduped against both queued and already-drained effects.
@@ -2834,6 +3002,7 @@ function FarmGameBody({
           surface,
           collectedCount: result.collectedCount,
           totalGold: result.totalGold,
+          animalOutcomes: animalResult?.outcomes ?? [],
         });
       }
       return result.collectedCount > 0 ? result.state : state;
@@ -3128,7 +3297,7 @@ function FarmGameBody({
     if (!collectReturnSummaryOffline(summary)) {
       return;
     }
-    setActiveSheet({ type: target });
+    setActiveSheet(target === 'animals' ? { type: 'animals', source: 'welcome_back' } : { type: 'workshop' });
   }
 
   function openPrestigeConfirm() {

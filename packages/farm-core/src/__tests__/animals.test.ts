@@ -7,6 +7,7 @@ import {
   canPurchaseAnimal,
   collectAllReadyProduce,
   collectProduce,
+  collectProduceWithOutcome,
   createInitialAnimalsState,
   feedAnimal,
   getAnimal,
@@ -226,7 +227,16 @@ describe('feedAnimal / collectProduce cycle', () => {
     expect(ready.remainingMs).toBe(0);
     expect(canCollectProduce(fed, FIRST, readyAt)).toBe(true);
 
-    const collected = collectProduce(fed, FIRST, readyAt)!;
+    const result = collectProduceWithOutcome(fed, FIRST, readyAt + 321)!;
+    const collected = result.state;
+    expect(result.outcome).toEqual({
+      animalKey: FIRST,
+      baseRevenue: animal.producePrice,
+      finalRevenue: animal.producePrice,
+      isRare: false,
+      rareMultiplier: 1,
+      readyWaitMs: 321,
+    });
     expect(collected.gold).toBe(animal.producePrice);
     // 급여 상태가 비워져 다시 유휴(재급여 가능).
     expect(collected.animals.feeding[FIRST]).toBeUndefined();
@@ -282,6 +292,24 @@ describe('collectAllReadyProduce', () => {
     const result = collectAllReadyProduce(before, now);
 
     expect(result.collectedKeys).toEqual([first.key, second.key]);
+    expect(result.outcomes).toEqual([
+      {
+        animalKey: first.key,
+        baseRevenue: first.producePrice,
+        finalRevenue: first.producePrice,
+        isRare: false,
+        rareMultiplier: 1,
+        readyWaitMs: 0,
+      },
+      {
+        animalKey: second.key,
+        baseRevenue: second.producePrice,
+        finalRevenue: second.producePrice,
+        isRare: false,
+        rareMultiplier: 1,
+        readyWaitMs: 1,
+      },
+    ]);
     expect(result.collectedCount).toBe(2);
     expect(result.totalGold).toBe(first.producePrice + second.producePrice);
     expect(result.state.gold).toBe(before.gold + result.totalGold);
@@ -302,6 +330,7 @@ describe('collectAllReadyProduce', () => {
 
     expect(result.state).toBe(before);
     expect(result.collectedKeys).toEqual([]);
+    expect(result.outcomes).toEqual([]);
     expect(result.collectedCount).toBe(0);
     expect(result.totalGold).toBe(0);
   });
