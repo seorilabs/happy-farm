@@ -658,6 +658,41 @@ describe('FarmGame UI flow', () => {
     expect(within(screen.getByTestId('nav-row')).getAllByRole('button')).toHaveLength(3);
   });
 
+  test('reaches all three demoted metrics via the single openStats header tab with no new entry point (#355 AC-2)', async () => {
+    const base = createInitialState();
+    const state: GameState = {
+      ...base,
+      onboardingCompleted: true,
+      activeTitle: 'harvest_master',
+      prestige: { ...base.prestige, stars: 2 },
+    };
+    const cotd = getCropOfTheDayStatus(NOW, state);
+    const titleName = getTitleLabel('harvest_master', DEFAULT_LOCALE).name;
+    const screen = await renderGame(state);
+    await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+
+    // 강등된 세 정보는 시트를 열기 전(=헤더 상시 노출 아님)에는 렌더 트리에 없다.
+    expect(screen.queryByTestId('stats-crop-of-the-day')).toBeNull();
+    expect(screen.queryByTestId('stats-prestige-stars')).toBeNull();
+    expect(screen.queryByTestId('stats-active-title')).toBeNull();
+
+    // 헤더의 단일 요약 탭(cotd-chip) '하나'만 눌러 openStats로 한 뎁스 뒤 시트에 도달한다.
+    fireEvent.press(screen.getByTestId('cotd-chip'));
+    await waitFor(() => expect(screen.getByTestId('stats-sheet')).toBeTruthy());
+
+    // (a) 오늘의 작물 상세 — 작물 + ⭐×배수가 시트 안에 있다.
+    expect(screen.getByTestId('stats-crop-of-the-day')).toBeTruthy();
+    expect(screen.getByTestId('stats-crop-of-the-day-bonus')).toHaveTextContent(`⭐×${cotd.multiplier}`);
+    // (b) 활성 칭호 — 장착 칭호명이 시트 안에 있다.
+    expect(screen.getByTestId('stats-active-title')).toHaveTextContent(titleName);
+    // (c) 프리스티지 별점 분해 — 보유 별 + 구매 가능 스킬이 시트 안에 있다.
+    expect(screen.getByTestId('stats-prestige-stars')).toHaveTextContent('★ 2');
+    expect(screen.getByTestId('stats-prestige-skills')).toBeTruthy();
+
+    // 신규 탭 타깃/HUD 진입점 증가 없음 — navRow는 여전히 정확히 3개다.
+    expect(within(screen.getByTestId('nav-row')).getAllByRole('button')).toHaveLength(3);
+  });
+
   test('keeps the navRow at exactly three NavButtons after the header declutter (#355 AC-4)', async () => {
     const screen = await renderGame({ ...createInitialState(), onboardingCompleted: true });
     await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
@@ -671,21 +706,27 @@ describe('FarmGame UI flow', () => {
     ).toBeTruthy();
   });
 
-  test('lays out the core header row identically on mobile without a wrap fallback (#355 AC-5)', async () => {
-    // 밀도를 낮춰 mobile 전용 줄바꿈 fallback을 제거했다. mobile market에서도 핵심
-    // 헤더 행(header-top)이 기본 flex-start 레이아웃으로 렌더되고, space-between 같은
-    // 줄바꿈 유도 fallback에 의존하지 않는다.
+  test('does not apply the mobile wrap fallback to the core header row on the mobile market (#355 AC-5)', async () => {
+    // 밀도를 낮춰 제거한 mobile 전용 줄바꿈 fallback(mobileHeaderTop=space-between /
+    // mobileTitleGroup)이 mobile market에서도 핵심 헤더 행에 적용되지 않음을 고정한다.
+    // fallback이 되살아나면 아래 assertion이 깨진다 → '줄바꿈 fallback 의존 없음' 회귀 가드.
     const screen = await renderGame({ ...createInitialState(), onboardingCompleted: true }, {
       market: 'mobile',
     });
     await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
 
     const headerTopStyle = StyleSheet.flatten(screen.getByTestId('header-top').props.style);
+    // 제거한 mobileHeaderTop fallback의 space-between이 mobile에서도 적용되지 않고, 기본
+    // flex-start 레이아웃을 유지한다.
     expect(headerTopStyle.justifyContent).toBe('flex-start');
+    expect(headerTopStyle.justifyContent).not.toBe('space-between');
+    // 핵심 행은 줄바꿈(wrap)으로 넘치지 않는다.
+    expect(headerTopStyle.flexWrap).not.toBe('wrap');
+    // 제거한 mobileTitleGroup fallback 없이 title-group이 기본 flex 레이아웃을 유지한다.
     const titleGroupStyle = StyleSheet.flatten(screen.getByTestId('title-group').props.style);
     expect(titleGroupStyle.flex).toBe(1);
 
-    // 핵심 상시 지표(골드·시간당 생산)와 단일 요약 chip이 모두 한 행 안에 유지된다.
+    // mobile에서도 핵심 상시 지표·단일 요약 chip·navRow 3개가 한 행 안에 유지된다.
     expect(screen.getByTestId('cotd-chip')).toBeTruthy();
     expect(within(screen.getByTestId('nav-row')).getAllByRole('button')).toHaveLength(3);
   });
