@@ -6,6 +6,50 @@
 
 export type EnvironmentPhase = 'night' | 'dawn' | 'day' | 'dusk';
 
+// 계절 앰비언트(#353): 시간대 톤과 독립적인 월(月) 기반 계절 연출. 배경에 계절별
+// 낙하 파티클(봄=꽃잎/여름=없음/가을=낙엽/겨울=눈)을 얹기 위한 순수 결정론 매핑으로,
+// 게임플레이·경제에 영향이 없다(순수 장식). UI 비의존이라 3마켓 공유·테스트 가능.
+export type SeasonKey = 'spring' | 'summer' | 'autumn' | 'winter';
+export type SeasonalAmbienceParticle = 'petal' | 'leaf' | 'snow' | 'none';
+export type SeasonalAmbience = {
+  season: SeasonKey;
+  // 여름은 '맑음'이라 낙하 파티클이 없다('none').
+  particle: SeasonalAmbienceParticle;
+};
+
+// 월(0=1월..11=12월, 로컬 시계) → 계절. 북반구 기준으로 3~5월=봄, 6~8월=여름,
+// 9~11월=가을, 12·1·2월=겨울. 12월(11)과 1·2월(0·1)이 모두 겨울로 감싸진다.
+const SEASON_BY_MONTH: readonly SeasonKey[] = [
+  'winter', // 0 = 1월
+  'winter', // 1 = 2월
+  'spring', // 2 = 3월
+  'spring', // 3 = 4월
+  'spring', // 4 = 5월
+  'summer', // 5 = 6월
+  'summer', // 6 = 7월
+  'summer', // 7 = 8월
+  'autumn', // 8 = 9월
+  'autumn', // 9 = 10월
+  'autumn', // 10 = 11월
+  'winter', // 11 = 12월
+];
+
+const PARTICLE_BY_SEASON: Record<SeasonKey, SeasonalAmbienceParticle> = {
+  spring: 'petal',
+  summer: 'none',
+  autumn: 'leaf',
+  winter: 'snow',
+};
+
+// 디바이스 로컬 날짜(Date)에서 계절 앰비언트를 결정론적으로 산출한다. 같은 월이면
+// 항상 같은 결과를 준다. 비정상 Date(Invalid)는 파티클이 없는 여름으로 폴백해 렌더
+// 레이어를 안전하게 억제한다. 월은 방어적으로 [0,11]로 wrap한다.
+export function getSeasonalAmbience(date: Date): SeasonalAmbience {
+  const month = Number.isFinite(date.getTime()) ? date.getMonth() : 5;
+  const season = SEASON_BY_MONTH[((month % 12) + 12) % 12] ?? 'summer';
+  return { season, particle: PARTICLE_BY_SEASON[season] };
+}
+
 export type EnvironmentTone = {
   phase: EnvironmentPhase;
   // 최상위 컨테이너에 적용할 배경색(#rrggbb).

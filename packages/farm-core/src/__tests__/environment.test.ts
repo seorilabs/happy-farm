@@ -1,6 +1,12 @@
 /// <reference types="jest" />
 
-import { getEnvironmentTone, getLocalMinutesOfDay, type EnvironmentPhase } from '../environment';
+import {
+  getEnvironmentTone,
+  getLocalMinutesOfDay,
+  getSeasonalAmbience,
+  type EnvironmentPhase,
+  type SeasonalAmbience,
+} from '../environment';
 
 const HEX = /^#[0-9a-f]{6}$/;
 
@@ -70,5 +76,47 @@ describe('getLocalMinutesOfDay', () => {
   test('derives minutes-of-day from a local Date', () => {
     const date = new Date(2026, 5, 30, 9, 45); // local 09:45
     expect(getLocalMinutesOfDay(date)).toBe(9 * 60 + 45);
+  });
+});
+
+describe('getSeasonalAmbience (#353)', () => {
+  // 월(0=1월..11=12월) → 기대 계절/파티클. 봄=꽃잎, 여름=없음, 가을=낙엽, 겨울=눈.
+  const EXPECTED: readonly SeasonalAmbience[] = [
+    { season: 'winter', particle: 'snow' }, // 1월
+    { season: 'winter', particle: 'snow' }, // 2월
+    { season: 'spring', particle: 'petal' }, // 3월
+    { season: 'spring', particle: 'petal' }, // 4월
+    { season: 'spring', particle: 'petal' }, // 5월
+    { season: 'summer', particle: 'none' }, // 6월
+    { season: 'summer', particle: 'none' }, // 7월
+    { season: 'summer', particle: 'none' }, // 8월
+    { season: 'autumn', particle: 'leaf' }, // 9월
+    { season: 'autumn', particle: 'leaf' }, // 10월
+    { season: 'autumn', particle: 'leaf' }, // 11월
+    { season: 'winter', particle: 'snow' }, // 12월
+  ];
+
+  test.each(EXPECTED.map((expected, month) => [month, expected] as const))(
+    'maps month index %i deterministically to its season and particle',
+    (month, expected) => {
+      const date = new Date(2026, month, 15, 12, 0);
+      expect(getSeasonalAmbience(date)).toEqual(expected);
+    }
+  );
+
+  test('wraps the December→January boundary to winter on both sides', () => {
+    expect(getSeasonalAmbience(new Date(2026, 11, 31, 23, 59)).season).toBe('winter');
+    expect(getSeasonalAmbience(new Date(2027, 0, 1, 0, 0)).season).toBe('winter');
+  });
+
+  test('is deterministic for the same month', () => {
+    const a = getSeasonalAmbience(new Date(2026, 3, 2, 8, 0));
+    const b = getSeasonalAmbience(new Date(2099, 3, 27, 21, 30));
+    expect(a).toEqual(b);
+    expect(a).toEqual({ season: 'spring', particle: 'petal' });
+  });
+
+  test('falls back to a particle-free summer for an invalid Date', () => {
+    expect(getSeasonalAmbience(new Date(NaN))).toEqual({ season: 'summer', particle: 'none' });
   });
 });

@@ -130,6 +130,7 @@ import {
   COMBO_LEGENDARY_THRESHOLD,
   getEnvironmentTone,
   getLocalMinutesOfDay,
+  getSeasonalAmbience,
   getDailyMissionsSnapshot,
   recordMissionProgressEvent,
   claimMission,
@@ -2451,8 +2452,11 @@ function FarmGameBody({
   // minute-of-day and memoizes the tone on the integer minute — the background
   // color recomputes at most once per minute (no extra interval, no per-tick
   // churn) and shifts gradually across day/dusk/night.
-  const minutesOfDay = getLocalMinutesOfDay(new Date());
+  const environmentNow = new Date();
+  const minutesOfDay = getLocalMinutesOfDay(environmentNow);
   const environmentTone = useMemo(() => getEnvironmentTone(minutesOfDay), [minutesOfDay]);
+  // 계절 앰비언트 파티클(#353): 시간대 톤과 독립적인 월 기반 결정론 연출.
+  const seasonalParticle = getSeasonalAmbience(environmentNow).particle;
   const areaEnvironmentTheme = useMemo(() => getAreaEnvironmentTheme(selectedArea), [selectedArea]);
   const weather = getWeather(tickNowMsRef.current);
 
@@ -4608,6 +4612,7 @@ function FarmGameBody({
           areaTheme={areaEnvironmentTheme}
           weatherKey={weather.key}
           weatherEffectsEnabled={gameSettings.weatherEffectsEnabled}
+          seasonalParticle={seasonalParticle}
         />
         <ScrollView
           testID="farm-scroll"

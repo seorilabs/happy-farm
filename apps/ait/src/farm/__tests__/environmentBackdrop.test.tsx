@@ -210,4 +210,90 @@ describe('EnvironmentBackdrop', () => {
     expect(screen.UNSAFE_queryByProps({ testID: 'environment-weather-snow' })).toBeNull();
     expect(screen.UNSAFE_queryByProps({ testID: 'environment-snow-flake-0' })).toBeNull();
   });
+
+  test.each(['petal', 'leaf', 'snow'] as const)(
+    'renders a deterministic %s seasonal ambient layer on a clear day (#353)',
+    (particle) => {
+      const screen = render(
+        <EnvironmentBackdrop
+          phase="day"
+          minutesOfDay={12 * 60}
+          backgroundColor="#eaf6e6"
+          weatherKey="clear"
+          seasonalParticle={particle}
+        />
+      );
+
+      // 계절 레이어는 접근성 제외/터치 불가한 backdrop 서브트리 안에 있다.
+      const backdrop = screen.UNSAFE_getByProps({ testID: 'environment-backdrop-day' });
+      expect(backdrop.props.pointerEvents).toBe('none');
+      expect(backdrop.props.accessibilityElementsHidden).toBe(true);
+
+      expect(screen.UNSAFE_getByProps({ testID: `environment-seasonal-${particle}` })).toBeTruthy();
+      for (let index = 0; index < 12; index += 1) {
+        expect(screen.UNSAFE_getByProps({ testID: `environment-seasonal-particle-${index}` })).toBeTruthy();
+      }
+      expect(screen.UNSAFE_queryByProps({ testID: 'environment-seasonal-particle-12' })).toBeNull();
+    }
+  );
+
+  test('renders no seasonal layer for summer (particle "none") (#353)', () => {
+    const screen = render(
+      <EnvironmentBackdrop
+        phase="day"
+        minutesOfDay={12 * 60}
+        backgroundColor="#eaf6e6"
+        weatherKey="clear"
+        seasonalParticle="none"
+      />
+    );
+
+    expect(screen.UNSAFE_queryByProps({ testID: 'environment-seasonal-particle-0' })).toBeNull();
+    expect(screen.UNSAFE_queryByProps({ testID: 'environment-seasonal-none' })).toBeNull();
+  });
+
+  test('suppresses the seasonal layer when weather effects are off (reduced-effects/motion) (#353)', () => {
+    const screen = render(
+      <EnvironmentBackdrop
+        phase="day"
+        minutesOfDay={12 * 60}
+        backgroundColor="#eaf6e6"
+        weatherKey="clear"
+        seasonalParticle="petal"
+        weatherEffectsEnabled={false}
+      />
+    );
+
+    expect(screen.UNSAFE_queryByProps({ testID: 'environment-seasonal-petal' })).toBeNull();
+    expect(screen.UNSAFE_queryByProps({ testID: 'environment-seasonal-particle-0' })).toBeNull();
+  });
+
+  test('yields to active precipitation so seasonal and weather particles do not stack (#353)', () => {
+    // 겨울(눈) 계절이라도 이미 강수(눈) 날씨가 파티클을 그리면 계절 레이어는 양보한다.
+    const screen = render(
+      <EnvironmentBackdrop
+        phase="day"
+        minutesOfDay={12 * 60}
+        backgroundColor="#eaf6e6"
+        weatherKey="snow"
+        seasonalParticle="snow"
+      />
+    );
+
+    expect(screen.UNSAFE_getByProps({ testID: 'environment-weather-snow' })).toBeTruthy();
+    expect(screen.UNSAFE_queryByProps({ testID: 'environment-seasonal-snow' })).toBeNull();
+
+    // 강수 없는 흐림에서는 계절 레이어가 노출된다.
+    screen.rerender(
+      <EnvironmentBackdrop
+        phase="day"
+        minutesOfDay={12 * 60}
+        backgroundColor="#eaf6e6"
+        weatherKey="cloudy"
+        seasonalParticle="snow"
+      />
+    );
+
+    expect(screen.UNSAFE_getByProps({ testID: 'environment-seasonal-snow' })).toBeTruthy();
+  });
 });
