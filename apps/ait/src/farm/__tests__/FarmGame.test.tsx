@@ -47,6 +47,7 @@ import {
   getRegionArchetypeLabel,
   getResetDayIndex,
   getResetDayStart,
+  getSeasonalAmbience,
   getTitleLabel,
   getUpgradeCost,
   recordAdWatchProgress,
@@ -399,6 +400,31 @@ describe('FarmGame UI flow', () => {
     expect(rootBackground()).not.toBe(firstBackground);
     expect(expectedPhaseNow()).not.toBe(firstPhase);
     expect(backdropNow()).toBeTruthy();
+  });
+
+  test('wires seasonal ambience only into the background backdrop, keeping navRow at three (#353 AC-4, AC-5)', async () => {
+    const screen = await renderGame({ ...createInitialState(), onboardingCompleted: true });
+    await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+
+    // AC-5: 계절 연출로 상시 진입점이 늘지 않는다 — navRow는 정확히 3개.
+    expect(within(screen.getByTestId('nav-row')).getAllByRole('button')).toHaveLength(3);
+
+    // AC-4: 계절 파티클은 농장 스테이지의 '배경' backdrop 레이어(child[0])로만 전달된다
+    //       (시트/헤더 아님). 전달 값은 현재 로컬 월의 결정론 계절 파티클과 일치한다.
+    const farmStage = screen.getByTestId('farm-stage');
+    const backdropChild = farmStage.children[0];
+    const scrollChild = farmStage.children[1];
+    if (
+      backdropChild == null ||
+      scrollChild == null ||
+      typeof backdropChild === 'string' ||
+      typeof scrollChild === 'string'
+    ) {
+      throw new Error('farm stage must render the backdrop as its first (background) child');
+    }
+    // 배경 backdrop이 먼저, 그 위에 farm-scroll(플롯 등 상호작용 레이어)이 온다.
+    expect(scrollChild.props.testID).toBe('farm-scroll');
+    expect(backdropChild.props.seasonalParticle).toBe(getSeasonalAmbience(new Date()).particle);
   });
 
   test('renders initial farm and supports a plant-grow-harvest loop', async () => {

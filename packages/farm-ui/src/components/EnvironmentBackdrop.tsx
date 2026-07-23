@@ -6,6 +6,7 @@ import {
   type AreaEnvironmentMotif,
   type AreaEnvironmentTheme,
   type EnvironmentPhase,
+  type SeasonalAmbienceParticle,
   type WeatherKey,
 } from '../../../farm-core/src';
 
@@ -16,6 +17,8 @@ type EnvironmentBackdropProps = {
   areaTheme?: AreaEnvironmentTheme;
   weatherKey?: WeatherKey;
   weatherEffectsEnabled?: boolean;
+  // 계절 앰비언트(#353): 월 기반 낙하 파티클(봄=꽃잎/가을=낙엽/겨울=눈, 여름='none').
+  seasonalParticle?: SeasonalAmbienceParticle;
 };
 
 type PhasePalette = {
@@ -254,10 +257,19 @@ export const EnvironmentBackdrop = memo(function EnvironmentBackdrop({
   areaTheme = DEFAULT_AREA_ENVIRONMENT_THEME,
   weatherKey = 'clear',
   weatherEffectsEnabled = true,
+  seasonalParticle = 'none',
 }: EnvironmentBackdropProps) {
   const palette = PHASE_PALETTES[phase];
   const isNight = phase === 'night';
   const hasHorizonGlow = phase === 'dawn' || phase === 'dusk';
+  // 계절 앰비언트는 순수 장식이라 이펙트/모션 축소 설정(weatherEffectsEnabled)이 off면
+  // 억제한다. 또한 이미 강수(비/눈) 파티클을 그리는 날에는 겹쳐 그리지 않도록, 활성
+  // 강수 날씨에서는 계절 레이어를 양보한다(맑음·흐림에서만 계절 파티클 노출).
+  const showSeasonalParticles =
+    weatherEffectsEnabled &&
+    seasonalParticle !== 'none' &&
+    weatherKey !== 'rain' &&
+    weatherKey !== 'snow';
 
   return (
     <View
@@ -367,6 +379,29 @@ export const EnvironmentBackdrop = memo(function EnvironmentBackdrop({
           ))}
         </View>
       ) : null}
+
+      {showSeasonalParticles ? (
+        <View testID={`environment-seasonal-${seasonalParticle}`} style={styles.weatherParticles}>
+          {PRECIPITATION_POSITIONS.map((position, index) => (
+            <View
+              key={index}
+              testID={`environment-seasonal-particle-${index}`}
+              style={[
+                styles.seasonalParticle,
+                seasonalParticle === 'petal' && styles.seasonalPetal,
+                seasonalParticle === 'leaf' && styles.seasonalLeaf,
+                seasonalParticle === 'snow' && styles.seasonalSnow,
+                {
+                  left: position.left,
+                  top: position.top,
+                  width: position.size + 2,
+                  height: position.size + 2,
+                },
+              ]}
+            />
+          ))}
+        </View>
+      ) : null}
     </View>
   );
 });
@@ -406,6 +441,29 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.90)',
     borderWidth: 1,
     borderColor: 'rgba(202, 222, 240, 0.74)',
+  },
+  seasonalParticle: {
+    position: 'absolute',
+  },
+  // 봄: 연분홍 꽃잎(둥근 타원).
+  seasonalPetal: {
+    borderRadius: 999,
+    backgroundColor: 'rgba(247, 190, 214, 0.78)',
+    transform: [{ rotate: '24deg' }],
+  },
+  // 가을: 호박색 낙엽(모서리를 비대칭으로 굴린 잎 형태).
+  seasonalLeaf: {
+    borderTopLeftRadius: 999,
+    borderBottomRightRadius: 999,
+    backgroundColor: 'rgba(214, 138, 74, 0.78)',
+    transform: [{ rotate: '-18deg' }],
+  },
+  // 겨울: 흰 눈송이(강수 눈과 톤을 맞추되 계절 레이어로 분리).
+  seasonalSnow: {
+    borderRadius: 999,
+    backgroundColor: 'rgba(255, 255, 255, 0.88)',
+    borderWidth: 1,
+    borderColor: 'rgba(202, 222, 240, 0.70)',
   },
   areaTint: {
     ...StyleSheet.absoluteFillObject,

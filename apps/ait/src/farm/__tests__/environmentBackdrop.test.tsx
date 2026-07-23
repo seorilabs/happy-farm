@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { StyleSheet } from 'react-native';
-import { cleanup, render } from '@testing-library/react-native';
+import { cleanup, render, within } from '@testing-library/react-native';
 
 import { getAreaEnvironmentTheme } from '../../../../../packages/farm-core/src';
 import { EnvironmentBackdrop } from '../../../../../packages/farm-ui/src/components/EnvironmentBackdrop';
@@ -209,5 +209,95 @@ describe('EnvironmentBackdrop', () => {
     expect(screen.UNSAFE_getByProps({ testID: 'environment-weather-tone-snow' })).toBeTruthy();
     expect(screen.UNSAFE_queryByProps({ testID: 'environment-weather-snow' })).toBeNull();
     expect(screen.UNSAFE_queryByProps({ testID: 'environment-snow-flake-0' })).toBeNull();
+  });
+
+  test.each(['petal', 'leaf', 'snow'] as const)(
+    'renders the %s seasonal layer inside the non-interactive, accessibility-hidden background backdrop (#353 AC-2)',
+    (particle) => {
+      const screen = render(
+        <EnvironmentBackdrop
+          phase="day"
+          minutesOfDay={12 * 60}
+          backgroundColor="#eaf6e6"
+          weatherKey="clear"
+          seasonalParticle={particle}
+        />
+      );
+
+      // 배경 backdrop은 터치 불가 + 접근성 제외라, 그 안의 계절 레이어도 스크린리더·터치·
+      // 플롯 오클루전에 영향이 없다(밭 타일 뒤 absolute-fill 배경 레이어).
+      const backdrop = screen.UNSAFE_getByProps({ testID: 'environment-backdrop-day' });
+      expect(backdrop.props.pointerEvents).toBe('none');
+      expect(backdrop.props.accessibilityElementsHidden).toBe(true);
+      expect(backdrop.props.importantForAccessibility).toBe('no-hide-descendants');
+
+      // 계절 레이어와 파티클이 그 backdrop 서브트리 '내부'에 거주한다(배경 레이어 전용).
+      const layer = within(backdrop).UNSAFE_getByProps({ testID: `environment-seasonal-${particle}` });
+      expect(layer).toBeTruthy();
+      for (let index = 0; index < 12; index += 1) {
+        expect(within(layer).UNSAFE_getByProps({ testID: `environment-seasonal-particle-${index}` })).toBeTruthy();
+      }
+      expect(within(layer).UNSAFE_queryByProps({ testID: 'environment-seasonal-particle-12' })).toBeNull();
+    }
+  );
+
+  test('renders no seasonal layer for summer (particle "none") (#353)', () => {
+    const screen = render(
+      <EnvironmentBackdrop
+        phase="day"
+        minutesOfDay={12 * 60}
+        backgroundColor="#eaf6e6"
+        weatherKey="clear"
+        seasonalParticle="none"
+      />
+    );
+
+    expect(screen.UNSAFE_queryByProps({ testID: 'environment-seasonal-particle-0' })).toBeNull();
+    expect(screen.UNSAFE_queryByProps({ testID: 'environment-seasonal-none' })).toBeNull();
+  });
+
+  test('disables the seasonal layer when the effects/reduced-motion setting is off (#353 AC-3)', () => {
+    const screen = render(
+      <EnvironmentBackdrop
+        phase="day"
+        minutesOfDay={12 * 60}
+        backgroundColor="#eaf6e6"
+        weatherKey="clear"
+        seasonalParticle="petal"
+        weatherEffectsEnabled={false}
+      />
+    );
+
+    expect(screen.UNSAFE_queryByProps({ testID: 'environment-seasonal-petal' })).toBeNull();
+    expect(screen.UNSAFE_queryByProps({ testID: 'environment-seasonal-particle-0' })).toBeNull();
+  });
+
+  test('yields to active precipitation so seasonal and weather particles do not stack (#353)', () => {
+    // 겨울(눈) 계절이라도 이미 강수(눈) 날씨가 파티클을 그리면 계절 레이어는 양보한다.
+    const screen = render(
+      <EnvironmentBackdrop
+        phase="day"
+        minutesOfDay={12 * 60}
+        backgroundColor="#eaf6e6"
+        weatherKey="snow"
+        seasonalParticle="snow"
+      />
+    );
+
+    expect(screen.UNSAFE_getByProps({ testID: 'environment-weather-snow' })).toBeTruthy();
+    expect(screen.UNSAFE_queryByProps({ testID: 'environment-seasonal-snow' })).toBeNull();
+
+    // 강수 없는 흐림에서는 계절 레이어가 노출된다.
+    screen.rerender(
+      <EnvironmentBackdrop
+        phase="day"
+        minutesOfDay={12 * 60}
+        backgroundColor="#eaf6e6"
+        weatherKey="cloudy"
+        seasonalParticle="snow"
+      />
+    );
+
+    expect(screen.UNSAFE_getByProps({ testID: 'environment-seasonal-snow' })).toBeTruthy();
   });
 });
