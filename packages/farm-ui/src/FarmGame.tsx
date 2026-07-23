@@ -47,6 +47,7 @@ import {
   getCropPurchaseCost,
   getFarmHourlyProductivity,
   getGlobalModifiers,
+  getAreaEnvironmentTheme,
   getOnboardingCropKey,
   getPrestigeSkillLabel,
   getSkillCost,
@@ -2333,6 +2334,7 @@ function FarmGameBody({
   // churn) and shifts gradually across day/dusk/night.
   const minutesOfDay = getLocalMinutesOfDay(new Date());
   const environmentTone = useMemo(() => getEnvironmentTone(minutesOfDay), [minutesOfDay]);
+  const areaEnvironmentTheme = useMemo(() => getAreaEnvironmentTheme(selectedArea), [selectedArea]);
 
   // Header stats show the full modifier stack (upgrades, mastery-independent
   // prestige skills, region scaling) so the display matches the actual math;
@@ -4426,6 +4428,7 @@ function FarmGameBody({
           phase={environmentTone.phase}
           minutesOfDay={minutesOfDay}
           backgroundColor={environmentTone.backgroundColor}
+          areaTheme={areaEnvironmentTheme}
         />
         <ScrollView
           testID="farm-scroll"

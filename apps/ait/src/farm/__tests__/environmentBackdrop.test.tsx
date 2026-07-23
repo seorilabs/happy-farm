@@ -4,6 +4,7 @@ import React from 'react';
 import { StyleSheet } from 'react-native';
 import { cleanup, render } from '@testing-library/react-native';
 
+import { getAreaEnvironmentTheme } from '../../../../../packages/farm-core/src';
 import { EnvironmentBackdrop } from '../../../../../packages/farm-ui/src/components/EnvironmentBackdrop';
 
 describe('EnvironmentBackdrop', () => {
@@ -89,5 +90,60 @@ describe('EnvironmentBackdrop', () => {
     }
 
     expect(new Set(palettes.map((palette) => JSON.stringify(palette))).size).toBe(phases.length);
+  });
+
+  test('composes visually distinct area themes without replacing the time-of-day sky', () => {
+    const areaKeys = ['starter_field', 'orchard', 'mystic_field'] as const;
+    const screen = render(
+      <EnvironmentBackdrop
+        phase="day"
+        minutesOfDay={12 * 60}
+        backgroundColor="#eaf6e6"
+        areaTheme={getAreaEnvironmentTheme(areaKeys[0])}
+      />
+    );
+    const signatures: string[] = [];
+
+    for (const areaKey of areaKeys) {
+      const theme = getAreaEnvironmentTheme(areaKey);
+      screen.rerender(
+        <EnvironmentBackdrop
+          phase="day"
+          minutesOfDay={12 * 60}
+          backgroundColor="#eaf6e6"
+          areaTheme={theme}
+        />
+      );
+
+      expect(screen.UNSAFE_getByProps({ testID: 'environment-backdrop-day' })).toBeTruthy();
+      expect(screen.UNSAFE_getByProps({ testID: 'environment-sun' })).toBeTruthy();
+      expect(screen.UNSAFE_getByProps({ testID: `environment-area-motif-${theme.motif}` })).toBeTruthy();
+
+      signatures.push(
+        JSON.stringify([
+          StyleSheet.flatten(
+            screen.UNSAFE_getByProps({ testID: `environment-area-layer-${theme.key}` }).props.style
+          ).backgroundColor,
+          theme.horizonColor,
+          theme.groundColor,
+        ])
+      );
+    }
+
+    expect(new Set(signatures).size).toBe(areaKeys.length);
+  });
+
+  test('uses a neutral fallback when no area theme is supplied', () => {
+    const screen = render(
+      <EnvironmentBackdrop phase="night" minutesOfDay={60} backgroundColor="#dfe4f2" />
+    );
+
+    expect(screen.UNSAFE_getByProps({ testID: 'environment-backdrop-night' })).toBeTruthy();
+    expect(screen.UNSAFE_getByProps({ testID: 'environment-moon' })).toBeTruthy();
+    expect(
+      StyleSheet.flatten(screen.UNSAFE_getByProps({ testID: 'environment-area-layer-default' }).props.style)
+        .backgroundColor
+    ).toBe('transparent');
+    expect(screen.UNSAFE_queryByProps({ testID: 'environment-area-horizon' })).toBeNull();
   });
 });
