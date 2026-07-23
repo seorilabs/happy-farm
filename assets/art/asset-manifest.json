@@ -56,6 +56,8 @@
     { "name": "crop_sacred_rice", "size": 256, "prompt": "a small golden bowl of luminous white rice with a gentle halo of light above it" },
     { "name": "stage_sprout", "size": 256, "prompt": "a tiny fresh green seedling sprout with two small leaves emerging from a little mound of brown soil" },
     { "name": "stage_sapling", "size": 256, "prompt": "a young green plant with several leaves growing from a small mound of brown soil, taller than a seedling but not yet bearing fruit" },
+    { "name": "stage_budding", "size": 256, "prompt": "a medium-height young green farm plant with four broad leaves and one clearly closed cream-colored flower bud at the top, growing from a small mound of brown soil, visibly more developed than a sapling but not flowering or bearing fruit" },
+    { "name": "stage_mature", "size": 256, "prompt": "a full-grown leafy green farm plant with a wide canopy and one large open five-petal cream flower at the top, growing from a small mound of brown soil, visibly taller and fuller than the budding plant" },
     { "name": "app_icon", "size": 1024, "transparent": false, "aspect_ratio": "1:1", "prompt": "mobile game app icon composition, full-bleed square: a cozy little farmhouse with a terracotta orange tiled roof and cream walls sitting on a lush green hill, in the foreground a plump orange carrot and a round red tomato growing from a small patch of brown tilled soil, fresh green grass, soft warm green gradient background filling the whole frame, bright cheerful daylight, composition fills the entire square edge to edge with generous margins around the subjects so nothing important sits near the edges" }
   ]
 }

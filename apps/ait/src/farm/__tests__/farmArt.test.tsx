@@ -72,11 +72,10 @@ describe('appsInTossFarmArt', () => {
   });
 
   test('maps growth stages to hosted art URIs', () => {
-    expect(appsInTossFarmArt.stageIcon?.('sprout')).toEqual({
-      uri: 'https://happy-farm-tycoon.web.app/art/stage_sprout.png',
-    });
-    expect(appsInTossFarmArt.stageIcon?.('sapling')).toEqual({
-      uri: 'https://happy-farm-tycoon.web.app/art/stage_sapling.png',
-    });
+    for (const stage of ['sprout', 'sapling', 'budding', 'mature'] as const) {
+      expect(appsInTossFarmArt.stageIcon?.(stage)).toEqual({
+        uri: `https://happy-farm-tycoon.web.app/art/stage_${stage}.png`,
+      });
+    }
   });
 });
