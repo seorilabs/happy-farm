@@ -206,6 +206,24 @@ describe('trackAppsInTossAnalyticsEvent — 큐잉/정규화/전송', () => {
 });
 
 describe('initializeAppsInTossAnalytics — 멱등/재사용', () => {
+  test('기존 ait_ga4_client_id 사용자는 first-touch 플래그만 마이그레이션하고 이벤트를 발화하지 않는다 (#395 AC-2)', async () => {
+    mockStorage.getItem.mockImplementation(async (key) => {
+      if (key === 'ait_ga4_client_id') {
+        return 'persisted-client-id';
+      }
+      return null;
+    });
+    const { initializeAppsInTossAnalytics } = loadAnalytics();
+
+    await initializeAppsInTossAnalytics();
+    jest.runOnlyPendingTimers();
+
+    expect(mockStorage.setItem).not.toHaveBeenCalledWith('ait_ga4_client_id', expect.anything());
+    expect(mockStorage.setItem).toHaveBeenCalledWith('ait_ga4_first_touch_recorded', '1');
+    expect(sentEventNames()).not.toContain('ait_first_touch');
+    expect(sentEventNames()).toContain('ait_session_start');
+  });
+
   test('여러 번 호출해도 client_id는 한 번만 생성한다(멱등)', async () => {
     const { initializeAppsInTossAnalytics } = loadAnalytics();
 
