@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { StyleSheet } from 'react-native';
-import { cleanup, render } from '@testing-library/react-native';
+import { cleanup, render, within } from '@testing-library/react-native';
 
 import { getAreaEnvironmentTheme } from '../../../../../packages/farm-core/src';
 import { EnvironmentBackdrop } from '../../../../../packages/farm-ui/src/components/EnvironmentBackdrop';
@@ -212,7 +212,7 @@ describe('EnvironmentBackdrop', () => {
   });
 
   test.each(['petal', 'leaf', 'snow'] as const)(
-    'renders a deterministic %s seasonal ambient layer on a clear day (#353)',
+    'renders the %s seasonal layer inside the non-interactive, accessibility-hidden background backdrop (#353 AC-2)',
     (particle) => {
       const screen = render(
         <EnvironmentBackdrop
@@ -224,16 +224,20 @@ describe('EnvironmentBackdrop', () => {
         />
       );
 
-      // 계절 레이어는 접근성 제외/터치 불가한 backdrop 서브트리 안에 있다.
+      // 배경 backdrop은 터치 불가 + 접근성 제외라, 그 안의 계절 레이어도 스크린리더·터치·
+      // 플롯 오클루전에 영향이 없다(밭 타일 뒤 absolute-fill 배경 레이어).
       const backdrop = screen.UNSAFE_getByProps({ testID: 'environment-backdrop-day' });
       expect(backdrop.props.pointerEvents).toBe('none');
       expect(backdrop.props.accessibilityElementsHidden).toBe(true);
+      expect(backdrop.props.importantForAccessibility).toBe('no-hide-descendants');
 
-      expect(screen.UNSAFE_getByProps({ testID: `environment-seasonal-${particle}` })).toBeTruthy();
+      // 계절 레이어와 파티클이 그 backdrop 서브트리 '내부'에 거주한다(배경 레이어 전용).
+      const layer = within(backdrop).UNSAFE_getByProps({ testID: `environment-seasonal-${particle}` });
+      expect(layer).toBeTruthy();
       for (let index = 0; index < 12; index += 1) {
-        expect(screen.UNSAFE_getByProps({ testID: `environment-seasonal-particle-${index}` })).toBeTruthy();
+        expect(within(layer).UNSAFE_getByProps({ testID: `environment-seasonal-particle-${index}` })).toBeTruthy();
       }
-      expect(screen.UNSAFE_queryByProps({ testID: 'environment-seasonal-particle-12' })).toBeNull();
+      expect(within(layer).UNSAFE_queryByProps({ testID: 'environment-seasonal-particle-12' })).toBeNull();
     }
   );
 
@@ -252,7 +256,7 @@ describe('EnvironmentBackdrop', () => {
     expect(screen.UNSAFE_queryByProps({ testID: 'environment-seasonal-none' })).toBeNull();
   });
 
-  test('suppresses the seasonal layer when weather effects are off (reduced-effects/motion) (#353)', () => {
+  test('disables the seasonal layer when the effects/reduced-motion setting is off (#353 AC-3)', () => {
     const screen = render(
       <EnvironmentBackdrop
         phase="day"
