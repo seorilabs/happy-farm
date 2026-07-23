@@ -532,6 +532,40 @@ describe('farm analytics adapter contract', () => {
     expect(track.mock.calls[2]![1]).not.toHaveProperty('gold', 300);
     expect(track.mock.calls[2]![1]).toHaveProperty('gold', context.gold);
   });
+
+  test('AC-1: 공방 트래커 5종이 recipe key·수량·GameAnalyticsContext 파라미터를 포함해 추가됐다 (#421)', () => {
+    const track = jest.fn();
+    const analytics = createFarmAnalytics(track);
+    const context = getGameAnalyticsContext(createInitialState(), 0, 5_000);
+    const contextKeys = Object.keys(context);
+
+    // 다섯 트래커가 모두 존재하고 호출 가능하다(계약 추가 여부).
+    analytics.trackProductionScreen({ source: 'more', craftingCount: 2, readyCount: 1, context });
+    analytics.trackCraftStarted({ recipeKey: 'bread', context });
+    analytics.trackCraftCollected({ recipeKey: 'bread', revenue: 300, context });
+    analytics.trackCraftCanceled({ recipeKey: 'bread', refundedCount: 3, context });
+    analytics.trackCraftCollectAll({ collectedCount: 4, totalGold: 1200, context });
+
+    const byName = Object.fromEntries(track.mock.calls.map(([name, params]) => [name, params]));
+
+    // recipe key 파라미터(시작/수집/취소).
+    expect(byName.craft_started).toEqual(expect.objectContaining({ recipe: 'bread' }));
+    expect(byName.craft_collected).toEqual(expect.objectContaining({ recipe: 'bread' }));
+    expect(byName.craft_canceled).toEqual(expect.objectContaining({ recipe: 'bread' }));
+
+    // 수량 파라미터(수집 수익·환불량·일괄 건수·시트 오픈 카운트).
+    expect(byName.craft_collected).toEqual(expect.objectContaining({ revenue: 300 }));
+    expect(byName.craft_canceled).toEqual(expect.objectContaining({ refunded_count: 3 }));
+    expect(byName.craft_collect_all).toEqual(expect.objectContaining({ collected_count: 4, total_gold: 1200 }));
+    expect(byName.production_screen).toEqual(expect.objectContaining({ crafting_count: 2, ready_count: 1 }));
+
+    // 모든 공방 이벤트가 GameAnalyticsContext 전체 키를 포함한다.
+    for (const name of ['production_screen', 'craft_started', 'craft_collected', 'craft_canceled', 'craft_collect_all']) {
+      for (const key of contextKeys) {
+        expect(byName[name]).toHaveProperty(key);
+      }
+    }
+  });
 });
 
 describe('Firebase 애널리틱스 값 정규화(공유 어댑터 헬퍼)', () => {

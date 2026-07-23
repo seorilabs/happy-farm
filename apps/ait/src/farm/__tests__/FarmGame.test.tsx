@@ -2087,7 +2087,7 @@ describe('FarmGame UI flow', () => {
       expect(craftEvents(track, 'production_screen')).toHaveLength(1);
     });
 
-    test('가공 시작 성공 시 craft_started를 1회 발화한다 (#421)', async () => {
+    test('AC-2: startCraftNow 배선 — 시작 상태 전이 성공 시에만 craft_started를 1회 발화한다 (#421)', async () => {
       const track = jest.fn();
       const recipe = PRODUCTION_RECIPES[0]!;
       const base = createInitialState();
@@ -2095,9 +2095,23 @@ describe('FarmGame UI flow', () => {
       for (const input of recipe.inputs) {
         inventory[input.crop] = (inventory[input.crop] ?? 0) + input.qty;
       }
+      // 재료가 없는 두 번째 레시피는 시작 전이가 실패(no-op)해야 한다.
+      const idleRecipe = PRODUCTION_RECIPES.find(
+        (candidate) => candidate.key !== recipe.key && candidate.inputs.some((input) => (inventory[input.crop] ?? 0) < input.qty)
+      );
       const state: GameState = { ...base, production: { inventory, crafting: {} } };
       const localMessages = getFarmMessages(DEFAULT_LOCALE);
       const screen = await openWorkshopFromMore(state, track);
+
+      // 재료 부족 레시피의 시작 버튼은 비활성이라 상태 전이가 없고 이벤트도 없어야 한다(성공 시에만 발화).
+      if (idleRecipe != null) {
+        await act(async () => {
+          fireEvent.press(
+            within(screen.getByTestId(`recipe-card-${idleRecipe.key}`)).getByText(localMessages.workshopStartAction)
+          );
+        });
+        expect(craftEvents(track, 'craft_started')).toHaveLength(0);
+      }
 
       await act(async () => {
         fireEvent.press(
@@ -2110,7 +2124,7 @@ describe('FarmGame UI flow', () => {
       );
     });
 
-    test('완료된 가공 수집 성공 시 craft_collected를 수익과 함께 1회 발화한다 (#421)', async () => {
+    test('AC-2: collectCraftNow 배선 — 완료된 가공 수집 성공 시 craft_collected를 수익과 함께 1회 발화한다 (#421)', async () => {
       const track = jest.fn();
       const recipe = PRODUCTION_RECIPES[0]!;
       const base = createInitialState();
@@ -2134,7 +2148,7 @@ describe('FarmGame UI flow', () => {
       );
     });
 
-    test('진행 중 가공 취소 성공 시 craft_canceled를 환불량과 함께 1회 발화한다 (#421)', async () => {
+    test('AC-2: cancelCraftNow 배선 — 진행 중 가공 취소 성공 시 craft_canceled를 환불량과 함께 1회 발화한다 (#421)', async () => {
       const track = jest.fn();
       const recipe = PRODUCTION_RECIPES[0]!;
       const refundedCount = recipe.inputs.reduce((sum, input) => sum + input.qty, 0);
@@ -2152,6 +2166,32 @@ describe('FarmGame UI flow', () => {
       expect(craftEvents(track, 'craft_canceled')[0]![1]).toEqual(
         expect.objectContaining({ recipe: recipe.key, refunded_count: refundedCount, schema_version: 1 })
       );
+    });
+
+    test('AC-2: 일괄 수집 배선 — 배치 커밋당 craft_collect_all을 1회만 발화한다 (#421)', async () => {
+      const track = jest.fn();
+      const ready = PRODUCTION_RECIPES.slice(0, 2);
+      expect(ready).toHaveLength(2);
+      const totalGold = ready.reduce((sum, r) => sum + r.sellPrice, 0);
+      const base = createInitialState();
+      const state: GameState = {
+        ...base,
+        production: {
+          ...base.production,
+          crafting: Object.fromEntries(ready.map((r) => [r.key, NOW - r.timerMs])),
+        },
+      };
+      const screen = await openWorkshopFromMore(state, track);
+
+      await act(async () => {
+        fireEvent.press(screen.getByTestId('workshop-collect-all-action'));
+      });
+      await waitFor(() => expect(craftEvents(track, 'craft_collect_all')).toHaveLength(1));
+      expect(craftEvents(track, 'craft_collect_all')[0]![1]).toEqual(
+        expect.objectContaining({ collected_count: 2, total_gold: totalGold, schema_version: 1 })
+      );
+      // 배치는 하나의 퍼널 스텝이므로 개별 craft_collected는 발화하지 않는다.
+      expect(craftEvents(track, 'craft_collected')).toHaveLength(0);
     });
   });
 
