@@ -3,6 +3,7 @@
 import {
   getWeeklyEventStatus,
   getWeeklyEventMultiplier,
+  getWeeklyEventMutationMultiplier,
   getWeeklyEventSpeedMultiplier,
   WEEKLY_EVENT_MULTIPLIER,
   WEEKLY_EVENT_TYPES,
@@ -10,6 +11,8 @@ import {
 import { CROPS, createInitialState } from '../constants';
 import { getCropModifiers } from '../modifiers';
 import { getCropOfTheDayStatus } from '../cropOfTheDay';
+import { performHarvest } from '../harvest';
+import { getMasteryThresholds, MUTATION_KINDS } from '../mastery';
 import balance from '../balance.json';
 import { RESET_OFFSET_MS } from '../resetBoundary';
 import type { AreaKey, CropKey } from '../types';
@@ -53,7 +56,7 @@ function findWeekendNoonOfType(typeKey: string, unlockedAreas?: AreaKey[]): numb
 }
 
 const SALE_NOON = findWeekendNoonOfType('sale');
-const GOLDEN_SALE_NOON = findWeekendNoonOfType('golden_sale');
+const GOLDEN_HARVEST_NOON = findWeekendNoonOfType('golden_sale');
 const HARVEST_NOON = findWeekendNoonOfType('harvest');
 
 describe('weeklyEvent balance data', () => {
@@ -68,19 +71,17 @@ describe('weeklyEvent balance data', () => {
     expect(fri.windowEndAt - fri.windowStartAt).toBe(balance.weeklyEvent.weekendLengthDays * DAY_MS);
   });
 
-  test('splits the legacy sell draw into sale and golden flavor without changing axis odds', () => {
+  test('keeps deterministic type weights while giving golden_sale a distinct mutation axis', () => {
     expect(WEEKLY_EVENT_TYPES).toEqual([
       { key: 'sale', axis: 'sell', multiplier: 1.5, weight: 1 },
-      { key: 'golden_sale', axis: 'sell', multiplier: 1.5, weight: 1 },
+      { key: 'golden_sale', axis: 'mutation', multiplier: 2, weight: 1 },
       { key: 'harvest', axis: 'speed', multiplier: 1.5, weight: 2 },
     ]);
-    const sellWeight = WEEKLY_EVENT_TYPES
-      .filter((type) => type.axis === 'sell')
-      .reduce((sum, type) => sum + type.weight, 0);
-    const speedWeight = WEEKLY_EVENT_TYPES
-      .filter((type) => type.axis === 'speed')
-      .reduce((sum, type) => sum + type.weight, 0);
-    expect(sellWeight).toBe(speedWeight);
+    expect(WEEKLY_EVENT_TYPES.map(({ key, weight }) => ({ key, weight }))).toEqual([
+      { key: 'sale', weight: 1 },
+      { key: 'golden_sale', weight: 1 },
+      { key: 'harvest', weight: 2 },
+    ]);
   });
 });
 
@@ -90,7 +91,7 @@ describe('getWeeklyEventStatus', () => {
     expect(fri.active).toBe(true);
     expect(fri.windowStartAt).toBe(WINDOW_START);
     expect(fri.windowEndAt).toBe(WINDOW_END);
-    expect(fri.multiplier).toBe(WEEKLY_EVENT_MULTIPLIER);
+    expect(fri.multiplier).toBe(WEEKLY_EVENT_TYPES.find((type) => type.key === fri.typeKey)?.multiplier);
     expect(fri.cropKeys.length).toBeGreaterThan(0);
     // Theme + window stay constant for every instant in the same weekend: the
     // start of each in-window day plus the final instant before it closes.
@@ -143,17 +144,24 @@ describe('getWeeklyEventMultiplier (sale axis)', () => {
     expect(getWeeklyEventMultiplier(featured, WINDOW_END)).toBe(1);
     // A sale weekend leaves the speed axis untouched.
     expect(getWeeklyEventSpeedMultiplier(featured, SALE_NOON)).toBe(1);
+    expect(getWeeklyEventMutationMultiplier(featured, SALE_NOON)).toBe(1);
   });
+});
 
-  test('the golden sale flavor uses the same sell modifier and leaves speed untouched', () => {
-    const status = getWeeklyEventStatus(GOLDEN_SALE_NOON);
+describe('getWeeklyEventMutationMultiplier (golden harvest axis)', () => {
+  test('boosts only featured-area crops while live and keeps inactive/non-featured baselines at 1', () => {
+    const status = getWeeklyEventStatus(GOLDEN_HARVEST_NOON);
     expect(status.typeKey).toBe('golden_sale');
-    expect(status.axis).toBe('sell');
-    expect(status.multiplier).toBe(1.5);
+    expect(status.axis).toBe('mutation');
+    expect(status.multiplier).toBe(2);
     const featured = status.cropKeys[0]!;
+    const other = (Object.keys(CROPS) as CropKey[]).find((key) => CROPS[key]!.area !== status.areaKey)!;
 
-    expect(getWeeklyEventMultiplier(featured, GOLDEN_SALE_NOON)).toBe(status.multiplier);
-    expect(getWeeklyEventSpeedMultiplier(featured, GOLDEN_SALE_NOON)).toBe(1);
+    expect(getWeeklyEventMutationMultiplier(featured, GOLDEN_HARVEST_NOON)).toBe(2);
+    expect(getWeeklyEventMutationMultiplier(other, GOLDEN_HARVEST_NOON)).toBe(1);
+    expect(getWeeklyEventMutationMultiplier(featured, status.windowStartAt - 1)).toBe(1);
+    expect(getWeeklyEventMultiplier(featured, GOLDEN_HARVEST_NOON)).toBe(1);
+    expect(getWeeklyEventSpeedMultiplier(featured, GOLDEN_HARVEST_NOON)).toBe(1);
   });
 });
 
@@ -168,6 +176,7 @@ describe('getWeeklyEventSpeedMultiplier (harvest axis)', () => {
     expect(getWeeklyEventSpeedMultiplier(other, HARVEST_NOON)).toBe(1);
     // A harvest weekend does not touch the sale axis (back-compat: sell stays 1).
     expect(getWeeklyEventMultiplier(featured, HARVEST_NOON)).toBe(1);
+    expect(getWeeklyEventMutationMultiplier(featured, HARVEST_NOON)).toBe(1);
     // Just before its window opens the harvest boost is inactive → speed axis is 1.
     const beforeWindow = getWeeklyEventStatus(HARVEST_NOON).windowStartAt - 60_000;
     expect(getWeeklyEventSpeedMultiplier(featured, beforeWindow)).toBe(1);
@@ -239,6 +248,55 @@ describe('weekly event sale integration', () => {
     expect(featuredMods.speedMultiplier).toBeCloseTo(otherMods.speedMultiplier * status.multiplier);
     // Sale price of the featured crop is NOT boosted on a harvest weekend.
     expect(featuredMods.profitMultiplier).toBeCloseTo(otherMods.profitMultiplier);
+  });
+
+  test('golden_sale flows through getCropModifiers as mutation chance only for the featured area', () => {
+    const state = createInitialState();
+    const status = getWeeklyEventStatus(GOLDEN_HARVEST_NOON, state.unlockedAreas);
+    expect(status.axis).toBe('mutation');
+    const cotd = getCropOfTheDayStatus(GOLDEN_HARVEST_NOON, state).cropKey;
+    const featured = status.cropKeys.find((key) => key !== cotd)!;
+    const other = (Object.keys(CROPS) as CropKey[]).find(
+      (key) => CROPS[key]!.area !== status.areaKey && key !== cotd
+    )!;
+
+    const featuredMods = getCropModifiers(state, featured, GOLDEN_HARVEST_NOON);
+    const otherMods = getCropModifiers(state, other, GOLDEN_HARVEST_NOON);
+    expect(featuredMods.mutationChanceMultiplier).toBe(2);
+    expect(otherMods.mutationChanceMultiplier).toBe(1);
+    expect(featuredMods.profitMultiplier).toBeCloseTo(otherMods.profitMultiplier);
+    expect(featuredMods.speedMultiplier).toBeCloseTo(otherMods.speedMultiplier);
+
+    const inactiveMods = getCropModifiers(state, featured, status.windowStartAt - 1);
+    expect(inactiveMods.mutationChanceMultiplier).toBe(1);
+  });
+
+  test('the canonical harvest roll receives the live mutation multiplier', () => {
+    const base = createInitialState();
+    const status = getWeeklyEventStatus(GOLDEN_HARVEST_NOON, base.unlockedAreas);
+    const featured = status.cropKeys[0]!;
+    const bronzeThreshold = getMasteryThresholds(featured)[0]!;
+    const golden = MUTATION_KINDS.find((kind) => kind.key === 'golden')!;
+    const state = {
+      ...base,
+      harvestCounts: { [featured]: bronzeThreshold },
+      plots: base.plots.map((plot, index) =>
+        index === 0 ? { ...plot, cropType: featured, startTime: 0, state: 2 as const } : plot
+      ),
+    };
+    const rollBetweenBaselineAndFestivalChance = golden.baseChance * 1.5;
+
+    const inactive = performHarvest(state, 0, {
+      now: status.windowStartAt - 1,
+      rng: () => rollBetweenBaselineAndFestivalChance,
+    });
+    const active = performHarvest(state, 0, {
+      now: GOLDEN_HARVEST_NOON,
+      rng: () => rollBetweenBaselineAndFestivalChance,
+    });
+
+    expect(inactive?.mutation).toBeNull();
+    expect(active?.mutation?.key).toBe('golden');
   });
 });
 

@@ -435,13 +435,13 @@ export const jaFarmMessages: FarmMessages = {
     `${themeName} ×${multiplier} 販売 · 終了まで${remaining}`,
   weeklyEventHarvestDesc: (themeName, multiplier, remaining) =>
     `${themeName} ×${multiplier} 成長速度 · 終了まで${remaining}`,
-  weeklyEventGoldenLabel: '黄金週末マーケット',
+  weeklyEventGoldenLabel: '黄金収穫祭',
   weeklyEventGoldenDesc: (themeName, multiplier, remaining) =>
-    `${themeName}の販売が ×${multiplier} · 終了まで${remaining}`,
+    `${themeName}の変異確率 ×${multiplier} · 終了まで${remaining}`,
   weeklyEventTeaserLabel: 'まもなく週末フェス',
   weeklyEventTeaserDesc: (themeName, remaining) => `${themeName}の作物フェスまで${remaining}`,
-  weeklyEventGoldenTeaserLabel: 'まもなく黄金週末マーケット',
-  weeklyEventGoldenTeaserDesc: (themeName, remaining) => `${themeName}の黄金マーケットまで${remaining}`,
+  weeklyEventGoldenTeaserLabel: 'まもなく黄金収穫祭',
+  weeklyEventGoldenTeaserDesc: (themeName, remaining) => `${themeName}の黄金収穫祭まで${remaining}`,
   onboardingProgress: (current, total) => `${current} / ${total}`,
   onboardingSkip: 'スキップ',
   onboardingQuickStart: 'すぐに始める',

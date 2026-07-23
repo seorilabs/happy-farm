@@ -435,13 +435,13 @@ export const enFarmMessages: FarmMessages = {
     `${themeName} ×${multiplier} sell · ends in ${remaining}`,
   weeklyEventHarvestDesc: (themeName, multiplier, remaining) =>
     `${themeName} ×${multiplier} grow speed · ends in ${remaining}`,
-  weeklyEventGoldenLabel: 'Golden Weekend Market',
+  weeklyEventGoldenLabel: 'Golden Harvest Festival',
   weeklyEventGoldenDesc: (themeName, multiplier, remaining) =>
-    `${themeName} sells for ×${multiplier} · ends in ${remaining}`,
+    `${themeName} mutation chance ×${multiplier} · ends in ${remaining}`,
   weeklyEventTeaserLabel: 'Upcoming Weekend Festival',
   weeklyEventTeaserDesc: (themeName, remaining) => `${themeName} crop festival in ${remaining}`,
-  weeklyEventGoldenTeaserLabel: 'Upcoming Golden Weekend Market',
-  weeklyEventGoldenTeaserDesc: (themeName, remaining) => `Golden market for ${themeName} in ${remaining}`,
+  weeklyEventGoldenTeaserLabel: 'Upcoming Golden Harvest Festival',
+  weeklyEventGoldenTeaserDesc: (themeName, remaining) => `Golden harvest festival for ${themeName} in ${remaining}`,
   onboardingProgress: (current, total) => `${current} / ${total}`,
   onboardingSkip: 'Skip',
   onboardingQuickStart: 'Quick start',

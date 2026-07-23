@@ -4,10 +4,11 @@ import { CROPS } from './constants';
 import { RESET_OFFSET_MS } from './resetBoundary';
 
 // Weekend crop festival. A purely time-deterministic, save-state-free live event:
-// every weekend (Friday–Sunday, UTC) one area's crops sell for a limited-time
-// bonus. The featured area rotates each weekend, giving the week-one lifecycle a
-// recurring reason to come back. Mirrors cropOfTheDay's deterministic-hash design
-// so the same instant always yields the same event with no persistence.
+// every weekend (Friday–Sunday, UTC) one area's crops receive a limited-time
+// sale, growth-speed, or mutation-chance bonus. The featured area rotates each
+// weekend, giving the week-one lifecycle a recurring reason to come back. Mirrors
+// cropOfTheDay's deterministic-hash design so the same instant always yields the
+// same event with no persistence.
 
 // Festival sale bonus and window length now live in balance.json so live ops can
 // tune event strength/duration without code changes. Defaults stay 1.5 / 3.
@@ -31,10 +32,10 @@ if (!Number.isInteger(WEEKEND_LENGTH_DAYS) || WEEKEND_LENGTH_DAYS < 1) {
 }
 
 // The event AXIS decides which modifier the weekend boost multiplies: a 'sell'
-// festival lifts the featured area's sale price (legacy behavior); a 'speed'
-// festival lifts its growth speed. Extend here (+ getCropModifiers wiring) to add
-// new axes without touching the rotation/UI plumbing.
-export type WeeklyEventAxis = 'sell' | 'speed';
+// festival lifts the featured area's sale price (legacy behavior), a 'speed'
+// festival lifts its growth speed, and a 'mutation' festival lifts mutation
+// chances. All axes are scoped to the featured area by the shared lookup below.
+export type WeeklyEventAxis = 'sell' | 'speed' | 'mutation';
 
 export type WeeklyEventType = {
   key: string;
@@ -62,8 +63,10 @@ function parseWeeklyEventTypes(): WeeklyEventType[] {
     if (typeof type.key !== 'string' || type.key.length === 0) {
       throw new Error(`Invalid weeklyEvent.types[${index}].key (must be a non-empty string)`);
     }
-    if (type.axis !== 'sell' && type.axis !== 'speed') {
-      throw new Error(`Invalid weeklyEvent.types[${index}].axis: ${String(type.axis)} (must be 'sell' or 'speed')`);
+    if (type.axis !== 'sell' && type.axis !== 'speed' && type.axis !== 'mutation') {
+      throw new Error(
+        `Invalid weeklyEvent.types[${index}].axis: ${String(type.axis)} (must be 'sell', 'speed', or 'mutation')`
+      );
     }
     if (typeof type.multiplier !== 'number' || !Number.isFinite(type.multiplier) || type.multiplier < 1) {
       throw new Error(
@@ -127,7 +130,7 @@ const STARTER_AREAS = balance.areas
 
 // The pool the weekend theme is drawn from. With no unlockedAreas (legacy
 // callers / pure time queries) every area stays eligible. With a list, only the
-// player's unlocked areas are featurable so the ×1.5 bonus is always reachable;
+// player's unlocked areas are featurable so the rotated bonus is always reachable;
 // the order (FEATURABLE_AREAS) is preserved so the draw stays deterministic.
 function getEligibleAreas(unlockedAreas?: readonly AreaKey[]): AreaKey[] {
   if (unlockedAreas == null) {
@@ -255,4 +258,16 @@ export function getWeeklyEventSpeedMultiplier(
   unlockedAreas?: readonly AreaKey[]
 ): number {
   return getWeeklyEventAxisMultiplier(cropKey, 'speed', now, unlockedAreas);
+}
+
+// Mutation-axis festival multiplier: increases the chance of every already
+// unlocked mutation for crops in the featured area. The canonical harvest path
+// receives this through getCropModifiers; non-mutation weekends, weekdays, and
+// crops outside the featured area all retain the exact baseline multiplier 1.
+export function getWeeklyEventMutationMultiplier(
+  cropKey: CropKey,
+  now = Date.now(),
+  unlockedAreas?: readonly AreaKey[]
+): number {
+  return getWeeklyEventAxisMultiplier(cropKey, 'mutation', now, unlockedAreas);
 }

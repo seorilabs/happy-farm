@@ -212,7 +212,7 @@ export function performHarvest(gameState: GameState, plotIndex: number, options:
   const cropKey = plot.cropType;
   const crop = getKnownCrop(cropKey);
   const modifiers = getCropModifiers(gameState, cropKey, now);
-  const mutation = rollMutation(gameState, cropKey, rng());
+  const mutation = rollMutation(gameState, cropKey, rng(), modifiers.mutationChanceMultiplier);
   const mutationMultiplier = mutation?.sellMultiplier ?? 1;
   const saleValue = Math.floor(crop.sell * modifiers.profitMultiplier * modifiers.harvestMultiplier * mutationMultiplier);
 

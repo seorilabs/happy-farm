@@ -453,15 +453,15 @@ export const koFarmMessages = {
   // 수확(성장속도) 축제: 판매가 아닌 성장속도 배수를 강조한다.
   weeklyEventHarvestDesc: (themeName: string, multiplier: number, remaining: string) =>
     `${themeName} ×${multiplier} 성장속도 · 종료까지 ${remaining}`,
-  weeklyEventGoldenLabel: '황금 주말 장터',
+  weeklyEventGoldenLabel: '황금 수확 축제',
   weeklyEventGoldenDesc: (themeName: string, multiplier: number, remaining: string) =>
-    `${themeName} 판매가 ×${multiplier} · 종료까지 ${remaining}`,
+    `${themeName} 돌연변이 확률 ×${multiplier} · 종료까지 ${remaining}`,
   weeklyEventTeaserLabel: '다가오는 주말 축제',
   weeklyEventTeaserDesc: (themeName: string, remaining: string) =>
     `${themeName} 작물 축제까지 ${remaining}`,
-  weeklyEventGoldenTeaserLabel: '다가오는 황금 주말 장터',
+  weeklyEventGoldenTeaserLabel: '다가오는 황금 수확 축제',
   weeklyEventGoldenTeaserDesc: (themeName: string, remaining: string) =>
-    `${themeName} 황금 장터까지 ${remaining}`,
+    `${themeName} 황금 수확 축제까지 ${remaining}`,
   onboardingProgress: (current: number, total: number) => `${current} / ${total}`,
   onboardingSkip: '건너뛰기',
   // #274: selectSeed 정체 완화 — 탭 한 번으로 대표 씨앗을 자동 선택해 심기 단계로 진행.

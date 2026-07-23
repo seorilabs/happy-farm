@@ -353,13 +353,14 @@ for (let i = 0; i < kinds.length; i += 1) {
   }
 }
 
-// 6b) 주말 축제 이벤트 종류: 비어있지 않은 목록, axis는 sell/speed, 배수>=1, 가중치는 양의 정수.
+// 6b) 주말 축제 이벤트 종류: 비어있지 않은 목록, 지원 axis, 배수>=1, 가중치는 양의 정수.
 const weeklyTypes = balance.weeklyEvent?.types ?? [];
 check(Array.isArray(weeklyTypes) && weeklyTypes.length > 0, 'weeklyEvent.types는 비어있지 않은 배열이어야 합니다.');
+const weeklyEventAxes = new Set(['sell', 'speed', 'mutation']);
 for (const type of weeklyTypes) {
   check(
-    type.axis === 'sell' || type.axis === 'speed',
-    `주말 축제 종류 ${type.key}: axis는 'sell' 또는 'speed'여야 합니다(현재 ${type.axis}).`
+    weeklyEventAxes.has(type.axis),
+    `주말 축제 종류 ${type.key}: axis는 'sell', 'speed', 'mutation' 중 하나여야 합니다(현재 ${type.axis}).`
   );
   check(
     Number.isFinite(type.multiplier) && type.multiplier >= 1,
@@ -368,6 +369,16 @@ for (const type of weeklyTypes) {
   check(
     Number.isInteger(type.weight) && type.weight >= 1,
     `주말 축제 종류 ${type.key}: weight는 양의 정수여야 합니다.`
+  );
+}
+const saleFestival = weeklyTypes.find((type) => type.key === 'sale');
+const goldenFestival = weeklyTypes.find((type) => type.key === 'golden_sale');
+check(saleFestival != null, "weeklyEvent.types에 'sale' 타입이 있어야 합니다.");
+check(goldenFestival != null, "weeklyEvent.types에 'golden_sale' 타입이 있어야 합니다.");
+if (saleFestival != null && goldenFestival != null) {
+  check(
+    saleFestival.axis !== goldenFestival.axis || saleFestival.multiplier !== goldenFestival.multiplier,
+    "주말 축제 'sale'과 'golden_sale'은 axis 또는 multiplier가 달라야 합니다."
   );
 }
 

@@ -7,6 +7,7 @@ import {
   formatMoney,
   formatRemainingTime,
   type SupportedLocale,
+  type WeeklyEventAxis,
   type WeatherKey,
   type WeatherStatus,
 } from '../../../farm-core/src';
@@ -126,8 +127,8 @@ export function StatsSheet({
   weeklyEventActive: boolean;
   weeklyEventAreaName: string;
   weeklyEventMultiplier: number;
-  // 'speed'면 수확(성장속도) 축제, 그 외('sell')면 판매 축제로 문구를 분기한다.
-  weeklyEventAxis: 'sell' | 'speed';
+  // 축에 따라 판매·성장속도·돌연변이 확률 문구를 분기한다.
+  weeklyEventAxis: WeeklyEventAxis;
   // 같은 axis 안에서도 이벤트 플레이버를 구분하는 balance roster key.
   weeklyEventTypeKey: string;
   weeklyEventRemainingMs: number;

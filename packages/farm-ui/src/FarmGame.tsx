@@ -4798,7 +4798,7 @@ function FarmGameBody({
               // memo(ToolButton) 얕은 비교가 깨지지 않도록 배열이 아닌 문자열
               // 프리미티브로 넘긴다. 보너스가 없는 작물은 undefined → 동등 비교.
               const cotdBadge = key === cropOfTheDay.cropKey ? `⭐×${cropOfTheDay.multiplier}` : undefined;
-              // 기본 판매 축제는 🎉, 황금 판매 주말은 🪙, 수확 축제는 ⚡ 배지로
+              // 기본 판매 축제는 🎉, 황금 변이 축제는 ✨, 수확 축제는 ⚡ 배지로
               // 같은 axis 안의 typeKey 플레이버까지 구분한다.
               const weeklyBadge =
                 weeklyEvent.active && weeklyEvent.cropKeys.includes(key)
