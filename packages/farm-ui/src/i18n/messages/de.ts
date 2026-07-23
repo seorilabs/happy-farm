@@ -276,6 +276,8 @@ export const deFarmMessages: FarmMessages = {
   workshopNeedIngredientsToast: 'Nicht genug Zutaten.',
   mapButton: '🗺️ Pionier',
   mapButtonAccessibilityLabel: 'Pionierkarte',
+  prestigeStarsChipAccessibilityLabel: (stars, availableSkills) =>
+    `${stars} Prestige-Sterne, ${availableSkills} verfügbare Fähigkeiten, Pionierkarte öffnen`,
   sheetTitleMap: 'Pionierkarte',
   sheetDescriptionMap: 'Mach Farmen zu Kettenfarmen und erschließe neue Regionen.',
   sheetTitlePrestigeConfirm: 'Neue Region erschließen',

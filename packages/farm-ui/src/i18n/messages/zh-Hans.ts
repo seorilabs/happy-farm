@@ -275,6 +275,8 @@ export const zhHansFarmMessages: FarmMessages = {
   workshopNeedIngredientsToast: '材料不足。',
   mapButton: '🗺️ 开拓',
   mapButtonAccessibilityLabel: '开拓地图',
+  prestigeStarsChipAccessibilityLabel: (stars, availableSkills) =>
+    `声望星星 ${stars}，可购买技能 ${availableSkills}，打开开拓地图`,
   sheetTitleMap: '开拓地图',
   sheetDescriptionMap: '让农场毕业成为连锁并开拓新地区。',
   sheetTitlePrestigeConfirm: '开拓新地区',

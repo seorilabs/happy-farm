@@ -94,12 +94,18 @@ export const styles = StyleSheet.create({
   },
   starsChip: {
     minHeight: 34,
+    justifyContent: 'center',
     overflow: 'hidden',
     borderRadius: 8,
     paddingHorizontal: 10,
+    backgroundColor: '#fff3d6',
+  },
+  starsChipPressed: {
+    opacity: 0.72,
+  },
+  starsChipText: {
     lineHeight: 34,
     color: '#8a4b0f',
-    backgroundColor: '#fff3d6',
     fontSize: 13,
     fontWeight: '900',
   },

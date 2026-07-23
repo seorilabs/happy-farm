@@ -23,6 +23,7 @@ import {
   BREEDING_RECIPES,
   CROPS,
   FARM_AREAS,
+  PRESTIGE_SKILLS,
   REGION_ARCHETYPES,
   RESEARCH_NODES,
   breedCrop,
@@ -48,6 +49,7 @@ import {
   getGlobalModifiers,
   getOnboardingCropKey,
   getPrestigeSkillLabel,
+  getSkillCost,
   getRegionArchetypeLabel,
   getResearchNodeLabel,
   getTitleLabel,
@@ -2522,9 +2524,20 @@ function FarmGameBody({
   // (#266)를 막는다. ref로 보관해 렌더 간 유지하면서 즉시 갱신한다.
   const cropReadyLogStateRef = useRef<CropReadyLogState>({});
   const chainIncome = useMemo(() => getChainIncome(gameState), [gameState, tick]);
+  const purchasablePrestigeSkillCount = useMemo(
+    () =>
+      PRESTIGE_SKILLS.filter((skill) => {
+        const cost = getSkillCost(gameState, skill.key);
+        return cost != null && gameState.prestige.stars >= cost;
+      }).length,
+    [gameState]
+  );
   const mapActionableCount = useMemo(
-    () => (chainIncome.accruedGold > 0 ? 1 : 0) + (canPrestige(gameState).allowed ? 1 : 0),
-    [chainIncome.accruedGold, gameState]
+    () =>
+      (chainIncome.accruedGold > 0 ? 1 : 0) +
+      (canPrestige(gameState).allowed ? 1 : 0) +
+      purchasablePrestigeSkillCount,
+    [chainIncome.accruedGold, gameState, purchasablePrestigeSkillCount]
   );
   const nextAreaGoal = useMemo(() => getNextAreaGoal(gameState), [gameState]);
 
@@ -4279,7 +4292,19 @@ function FarmGameBody({
           </View>
 
           <View style={styles.headerActions}>
-            <Text testID="prestige-stars-chip" style={styles.starsChip}>★ {gameState.prestige.stars}</Text>
+            <Pressable
+              testID="prestige-stars-chip"
+              accessibilityRole="button"
+              accessibilityLabel={messages.prestigeStarsChipAccessibilityLabel(
+                gameState.prestige.stars,
+                purchasablePrestigeSkillCount
+              )}
+              hitSlop={6}
+              style={({ pressed }) => [styles.starsChip, pressed && styles.starsChipPressed]}
+              onPress={openMap}
+            >
+              <Text style={styles.starsChipText}>★ {gameState.prestige.stars}</Text>
+            </Pressable>
             <Pressable
               accessibilityLabel={messages.settingsAccessibilityLabel}
               hitSlop={8}
