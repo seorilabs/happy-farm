@@ -14,7 +14,7 @@ const WORKFLOW = fs.readFileSync(
 );
 
 describe('deploy-drift-check 워크플로우 (#420)', () => {
-  test('AC-1: schedule(daily) + workflow_dispatch 트리거, runs-on: seorilabs-rpi-arm64', () => {
+  test('AC-1: .github/workflows/deploy-drift-check.yml 신설 — schedule(daily) + workflow_dispatch, runs-on: seorilabs-rpi-arm64', () => {
     expect(WORKFLOW).toMatch(/^on:/m);
     expect(WORKFLOW).toMatch(/\n {2}schedule:/);
     expect(WORKFLOW).toMatch(/\n {2}workflow_dispatch:/);
@@ -35,7 +35,7 @@ describe('deploy-drift-check 워크플로우 (#420)', () => {
     expect(dayOfWeek).toBe('*');
   });
 
-  test('AC-2/AC-3: 실행 본체를 scripts/deploy-drift-run.js 에 위임한다(통합 테스트 대상)', () => {
+  test('실행 본체를 scripts/deploy-drift-run.js 에 위임한다(AC-2/AC-3 통합 테스트 대상)', () => {
     // 수집·비교·요약·이슈 발행 로직은 모듈로 분리돼 목 주입 테스트가 가능하다.
     expect(WORKFLOW).toContain("require(path.resolve(process.env.GITHUB_WORKSPACE, 'scripts/deploy-drift-run.js'))");
     expect(WORKFLOW).toMatch(/await run\(\{ github, context, core, exec \}\)/);

@@ -109,7 +109,7 @@ function driftFixture(overrides: Partial<Fixture> = {}): Fixture {
 }
 
 describe('deploy-drift-run (#420 워크플로우 실행 본체)', () => {
-  test('AC-2: 단독 run + deploy-all 채널 잡을 수집해 채널별 배포 태그를 비교, 드리프트를 감지한다', async () => {
+  test('AC-2: github-script REST로 최신 v* 태그와 채널별 최근 성공 배포 태그(deploy-apps-in-toss·deploy-google-play 단독 run + deploy-all 내 해당 잡 성공 포함)를 수집·비교한다', async () => {
     const fx = driftFixture();
     const ctx = makeCtx(fx);
     const result = await run({ ...ctx, drift });
@@ -129,7 +129,7 @@ describe('deploy-drift-run (#420 워크플로우 실행 본체)', () => {
     expect(result.driftedChannels).toEqual(expect.arrayContaining(['AIT (WEB)', 'Google Play (Android)']));
   });
 
-  test('AC-3: 드리프트 시 step summary 표를 쓰고, 마커가 없으면 이슈를 생성한다', async () => {
+  test('AC-3: 드리프트 감지 시 step summary에 채널별 최신 태그 vs 최종 배포 태그 표를 출력하고, 동일 주제 open 이슈가 없으면 이슈를 자동 생성한다(본문 숨김 마커)', async () => {
     const fx = driftFixture({ openIssues: [] });
     const ctx = makeCtx(fx);
     const result = await run({ ...ctx, drift });
@@ -149,7 +149,7 @@ describe('deploy-drift-run (#420 워크플로우 실행 본체)', () => {
     expect(result.issue).toEqual({ action: 'create', number: 999 });
   });
 
-  test('AC-3: 동일 주제(마커) 열린 이슈가 있으면 새로 만들지 않고 코멘트한다', async () => {
+  test('AC-3: 동일 주제 open 이슈(본문 숨김 마커)가 있으면 새로 만들지 않고 코멘트한다', async () => {
     const fx = driftFixture({
       openIssues: [{ number: 55, body: `기존 드리프트 이슈\n${drift.ISSUE_MARKER}` }],
     });
