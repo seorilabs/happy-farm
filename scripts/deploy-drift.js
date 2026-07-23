@@ -116,6 +116,95 @@ function renderDriftTable(latestTag, rows) {
 }
 
 /**
+ * 두 배포 run 중 더 최근(created_at) run을 고른다.
+ * 채널의 최종 배포를 "단독 run"과 "deploy-all 경유 run" 중 최신으로 정하는 데 쓴다.
+ * @param {{created_at: string}|null} a
+ * @param {{created_at: string}|null} b
+ * @returns {{created_at: string}|null}
+ */
+function pickNewerRun(a, b) {
+  if (!a) {
+    return b ?? null;
+  }
+  if (!b) {
+    return a;
+  }
+  return new Date(a.created_at).getTime() >= new Date(b.created_at).getTime() ? a : b;
+}
+
+/**
+ * 기준 시각(최신 태그 시각)과 채널 최종 배포 시각의 차를 시간 단위로 계산한다(음수는 0).
+ * @param {number} referenceMs
+ * @param {number|null} deployMs
+ * @returns {number|null}
+ */
+function channelAgeHours(referenceMs, deployMs) {
+  if (deployMs == null) {
+    return null;
+  }
+  return Math.max(0, (referenceMs - deployMs) / 3_600_000);
+}
+
+/**
+ * 수집한 배포 run·태그로 채널 표 행(판정 포함)을 만든다.
+ * 워크플로우가 IO(태그/GH API)로 채운 값을 넘기면 여기서 판정·정규화한다.
+ * @param {Object} params
+ * @param {string} params.channel
+ * @param {{created_at: string, html_url?: string}|null} params.run 채널 최종 성공 배포 run
+ * @param {string|null} params.deployedTag run head_sha로 역매핑한 배포 태그
+ * @param {number} params.referenceMs 최신 태그 시각(ms)
+ * @param {string[]} params.sortedTagsDesc
+ * @param {string} params.latestTag
+ * @param {boolean} [params.external]
+ * @param {string} [params.note]
+ * @returns {{channel: string, deployedTag: string|null, deployRunUrl: string|null, ageHours: number|null, eval: ReturnType<typeof evaluateChannel>, note?: string}}
+ */
+function buildChannelRow({ channel, run, deployedTag, referenceMs, sortedTagsDesc, latestTag, external = false, note }) {
+  const deployMs = run ? new Date(run.created_at).getTime() : null;
+  const ageHours = external ? null : channelAgeHours(referenceMs, deployMs);
+  const evalResult = evaluateChannel({
+    sortedTagsDesc,
+    latestTag,
+    deployedTag: external ? null : deployedTag ?? null,
+    ageHours,
+    external,
+  });
+  const row = {
+    channel,
+    deployedTag: external ? null : deployedTag ?? null,
+    deployRunUrl: run && run.html_url ? run.html_url : null,
+    ageHours,
+    eval: evalResult,
+  };
+  if (note) {
+    row.note = note;
+  }
+  return row;
+}
+
+/**
+ * 드리프트 이슈/코멘트 본문(마커 포함)을 만든다.
+ * @param {Object} params
+ * @param {string} params.table renderDriftTable 결과
+ * @param {string} params.runUrl 점검 워크플로우 run URL
+ * @param {string} params.checkedAtIso 점검 시각 ISO 문자열
+ * @returns {string}
+ */
+function buildIssueBody({ table, runUrl, checkedAtIso }) {
+  return [
+    ISSUE_MARKER,
+    '## 채널 배포 드리프트 감지',
+    '',
+    `점검 시각(UTC): ${checkedAtIso}`,
+    `점검 워크플로우: ${runUrl}`,
+    '',
+    table,
+    '',
+    '위 채널이 최신 릴리즈 태그를 따라잡지 못했습니다. `deploy-all` 또는 채널별 배포 워크플로우를 실행해 주세요.',
+  ].join('\n');
+}
+
+/**
  * 열린 이슈 목록에서 드리프트 이슈 마커를 찾아 생성/코멘트 여부를 결정한다.
  * @param {Array<{number: number, body?: string|null, pull_request?: unknown}>} openIssues
  * @returns {{action: 'create'} | {action: 'comment', issueNumber: number}}
@@ -139,4 +228,8 @@ module.exports = {
   formatAge,
   renderDriftTable,
   chooseIssueAction,
+  pickNewerRun,
+  channelAgeHours,
+  buildChannelRow,
+  buildIssueBody,
 };

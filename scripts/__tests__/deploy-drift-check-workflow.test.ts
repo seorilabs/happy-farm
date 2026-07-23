@@ -38,9 +38,10 @@ describe('deploy-drift-check 워크플로우 (#420)', () => {
     expect(WORKFLOW).toMatch(/listWorkflowRuns/);
     expect(WORKFLOW).toMatch(/listJobsForWorkflowRun/);
     expect(WORKFLOW).toMatch(/conclusion === 'success'/);
-    // 순수 판정 로직 재사용
+    // 순수 판정 로직 재사용(수집→행/판정)
     expect(WORKFLOW).toContain("require(path.resolve(process.env.GITHUB_WORKSPACE, 'scripts/deploy-drift.js'))");
-    expect(WORKFLOW).toMatch(/drift\.evaluateChannel/);
+    expect(WORKFLOW).toMatch(/drift\.pickNewerRun/);
+    expect(WORKFLOW).toMatch(/drift\.buildChannelRow/);
   });
 
   test('AC-3: step summary 표 출력 + 마커 기반 이슈 생성/코멘트', () => {
@@ -49,7 +50,7 @@ describe('deploy-drift-check 워크플로우 (#420)', () => {
     expect(WORKFLOW).toMatch(/drift\.renderDriftTable/);
     // 동일 주제 open 이슈 판별(숨김 마커) → 없으면 생성, 있으면 코멘트
     expect(WORKFLOW).toMatch(/drift\.chooseIssueAction/);
-    expect(WORKFLOW).toMatch(/drift\.ISSUE_MARKER/);
+    expect(WORKFLOW).toMatch(/drift\.buildIssueBody/);
     expect(WORKFLOW).toMatch(/issues\.create\b/);
     expect(WORKFLOW).toMatch(/issues\.createComment/);
     expect(WORKFLOW).toMatch(/listForRepo/);

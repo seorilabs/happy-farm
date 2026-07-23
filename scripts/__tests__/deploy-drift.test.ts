@@ -6,9 +6,13 @@ import {
   DRIFT_AGE_HOURS,
   DRIFT_TAG_GAP,
   ISSUE_MARKER,
+  buildChannelRow,
+  buildIssueBody,
+  channelAgeHours,
   chooseIssueAction,
   evaluateChannel,
   formatAge,
+  pickNewerRun,
   renderDriftTable,
   tagGap,
 } from '../deploy-drift';
@@ -149,6 +153,125 @@ describe('renderDriftTable', () => {
     expect(table).toContain('[v1.7.0](https://example.com/run/1)');
     expect(table).toContain('⚠️ 드리프트');
     expect(table).toContain('GH Actions 밖');
+  });
+});
+
+describe('pickNewerRun', () => {
+  test('created_at이 더 최근인 run을 고른다 (단독 vs deploy-all 경유)', () => {
+    const older = { created_at: '2026-07-13T00:00:00Z', html_url: 'a' };
+    const newer = { created_at: '2026-07-23T00:00:00Z', html_url: 'b' };
+    expect(pickNewerRun(older, newer)).toBe(newer);
+    expect(pickNewerRun(newer, older)).toBe(newer);
+  });
+
+  test('한쪽이 없으면 나머지를, 둘 다 없으면 null을 반환한다', () => {
+    const run = { created_at: '2026-07-23T00:00:00Z' };
+    expect(pickNewerRun(run, null)).toBe(run);
+    expect(pickNewerRun(null, run)).toBe(run);
+    expect(pickNewerRun(null, null)).toBeNull();
+  });
+});
+
+describe('channelAgeHours', () => {
+  test('기준 시각과 배포 시각의 차를 시간으로, 음수는 0으로, 없으면 null', () => {
+    const ref = Date.parse('2026-07-23T00:00:00Z');
+    const deploy = Date.parse('2026-07-13T00:00:00Z');
+    expect(channelAgeHours(ref, deploy)).toBeCloseTo(240, 5); // 10일
+    expect(channelAgeHours(deploy, ref)).toBe(0); // 음수 클램프
+    expect(channelAgeHours(ref, null)).toBeNull();
+  });
+});
+
+// AC-2: 수집한 배포 run + 태그로 채널 판정 행을 만드는 워크플로우 실사용 경로를 검증.
+describe('buildChannelRow (#420 채널 수집·비교)', () => {
+  const referenceMs = Date.parse('2026-07-23T00:00:00Z'); // 최신 태그 v1.8.3 시각 가정
+
+  test('WEB(AIT)가 v1.7.0에 10일 정체하면 드리프트로 판정한다 (#420 재현)', () => {
+    const row = buildChannelRow({
+      channel: 'AIT (WEB)',
+      run: { created_at: '2026-07-13T00:00:00Z', html_url: 'https://example.com/run/ait' },
+      deployedTag: 'v1.7.0',
+      referenceMs,
+      sortedTagsDesc: TAGS,
+      latestTag: LATEST,
+    });
+    expect(row.deployedTag).toBe('v1.7.0');
+    expect(row.deployRunUrl).toBe('https://example.com/run/ait');
+    expect(row.ageHours).toBeCloseTo(240, 5);
+    expect(row.eval.drift).toBe(true);
+    expect(row.eval.gap).toBe(4);
+  });
+
+  test('최신 태그를 배포한 채널은 드리프트가 아니다', () => {
+    const row = buildChannelRow({
+      channel: 'Google Play',
+      run: { created_at: '2026-07-23T00:00:00Z', html_url: 'https://example.com/run/gp' },
+      deployedTag: 'v1.8.3',
+      referenceMs,
+      sortedTagsDesc: TAGS,
+      latestTag: LATEST,
+    });
+    expect(row.eval.drift).toBe(false);
+    expect(row.ageHours).toBe(0);
+  });
+
+  test('성공 배포 run이 없으면 태그·URL이 null이고 드리프트(불명)로 본다', () => {
+    const row = buildChannelRow({
+      channel: 'Google Play',
+      run: null,
+      deployedTag: null,
+      referenceMs,
+      sortedTagsDesc: TAGS,
+      latestTag: LATEST,
+    });
+    expect(row.deployedTag).toBeNull();
+    expect(row.deployRunUrl).toBeNull();
+    expect(row.ageHours).toBeNull();
+    expect(row.eval.drift).toBe(true);
+    expect(row.eval.reasons).toContain('unknown-tag');
+  });
+
+  test('external(iOS) 행은 판정 제외, note를 보존한다', () => {
+    const row = buildChannelRow({
+      channel: 'iOS (App Store)',
+      run: null,
+      deployedTag: null,
+      referenceMs,
+      sortedTagsDesc: TAGS,
+      latestTag: LATEST,
+      external: true,
+      note: 'Xcode Cloud 경로',
+    });
+    expect(row.eval.external).toBe(true);
+    expect(row.eval.drift).toBe(false);
+    expect(row.note).toBe('Xcode Cloud 경로');
+  });
+});
+
+// AC-3: 드리프트 감지 시 발행하는 이슈/코멘트 본문이 마커와 표를 담는지 검증.
+describe('buildIssueBody', () => {
+  test('본문에 마커·표·점검 메타가 포함된다', () => {
+    const rows = [
+      {
+        channel: 'AIT (WEB)',
+        deployedTag: 'v1.7.0',
+        deployRunUrl: 'https://example.com/run/ait',
+        ageHours: 240,
+        eval: evaluateChannel({ sortedTagsDesc: TAGS, latestTag: LATEST, deployedTag: 'v1.7.0', ageHours: 240 }),
+      },
+    ];
+    const table = renderDriftTable(LATEST, rows);
+    const body = buildIssueBody({
+      table,
+      runUrl: 'https://example.com/actions/runs/1',
+      checkedAtIso: '2026-07-23T20:00:00.000Z',
+    });
+    expect(body).toContain(ISSUE_MARKER);
+    expect(body.startsWith(ISSUE_MARKER)).toBe(true); // 마커가 최상단(재조회 매칭용)
+    expect(body).toContain('채널 배포 드리프트 감지');
+    expect(body).toContain('2026-07-23T20:00:00.000Z');
+    expect(body).toContain('https://example.com/actions/runs/1');
+    expect(body).toContain(table);
   });
 });
 
