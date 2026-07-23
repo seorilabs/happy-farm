@@ -280,6 +280,8 @@ export const deFarmMessages: FarmMessages = {
   mapButtonAccessibilityLabel: 'Pionierkarte',
   prestigeStarsChipAccessibilityLabel: (stars, availableSkills) =>
     `${stars} Prestige-Sterne, ${availableSkills} verfügbare Fähigkeiten, Pionierkarte öffnen`,
+  statsPrestigeStarsLabel: 'Prestige-Sterne',
+  statsPrestigeSkillsAvailableLabel: 'Verfügbare Fähigkeiten',
   sheetTitleMap: 'Pionierkarte',
   sheetDescriptionMap: 'Mach Farmen zu Kettenfarmen und erschließe neue Regionen.',
   sheetTitlePrestigeConfirm: 'Neue Region erschließen',

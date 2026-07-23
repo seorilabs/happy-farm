@@ -280,6 +280,8 @@ export const frFarmMessages: FarmMessages = {
   mapButtonAccessibilityLabel: 'Carte du pionnier',
   prestigeStarsChipAccessibilityLabel: (stars, availableSkills) =>
     `${stars} étoiles de prestige, ${availableSkills} compétences disponibles, ouvrir la carte du pionnier`,
+  statsPrestigeStarsLabel: 'Étoiles de prestige',
+  statsPrestigeSkillsAvailableLabel: 'Compétences disponibles',
   sheetTitleMap: 'Carte du pionnier',
   sheetDescriptionMap: 'Diplôme des fermes dans ta chaîne et explore de nouvelles régions.',
   sheetTitlePrestigeConfirm: 'Explorer une nouvelle région',

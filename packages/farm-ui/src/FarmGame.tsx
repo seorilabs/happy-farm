@@ -856,7 +856,6 @@ function FarmGameBody({
   useInterstitialAd = useUnsupportedAd,
   audio = defaultFarmAudio,
   notifications = defaultFarmNotifications,
-  market = 'appsInToss',
   preferredLocale = DEFAULT_LOCALE,
   adGroupIds = {},
 }: FarmGameProps = {}) {
@@ -1037,7 +1036,6 @@ function FarmGameBody({
   const rewardedAd = useRewardedAd(adGroupIds.rewarded);
   const interstitialAd = useInterstitialAd(adGroupIds.interstitial);
   const farmAnalytics = analytics;
-  const isMobileMarket = market === 'mobile';
   const locale = normalizeLocale(gameSettings.locale);
   const messages = useMemo(() => getFarmMessages(locale), [locale]);
   const resetConfirmValue = messages.resetConfirmText;
@@ -4478,18 +4476,19 @@ function FarmGameBody({
   return (
     <View testID="farm-root" style={[styles.root, { backgroundColor: environmentTone.backgroundColor }]}>
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
-        <View style={[styles.headerTop, isMobileMarket && styles.mobileHeaderTop]}>
-          <View testID="title-group" style={[styles.titleGroup, isMobileMarket && styles.mobileTitleGroup]}>
+        {/* 헤더 밀도 완화(#355)로 제목 행 상시 요소를 줄였으므로, mobile 전용 줄바꿈
+            fallback(mobileHeaderTop/mobileTitleGroup)에 더는 의존하지 않는다. 핵심 행은
+            market와 무관하게 동일 레이아웃으로 렌더한다. */}
+        <View testID="header-top" style={styles.headerTop}>
+          <View testID="title-group" style={styles.titleGroup}>
             <Text style={styles.homeIcon}>🏡</Text>
             <View style={styles.titleTextGroup}>
               <Text style={styles.title}>{messages.appTitle}</Text>
               <View style={styles.subtitleRow}>
                 <Text style={styles.subtitle}>{messages.appSubtitle}</Text>
-                {gameState.activeTitle != null ? (
-                  <Text style={styles.titleBadge} numberOfLines={1}>
-                    {getTitleLabel(gameState.activeTitle, locale).name}
-                  </Text>
-                ) : null}
+                {/* 헤더 밀도 완화(#355): 활성 칭호 배지와 오늘의 작물 배수 상세는 이
+                    단일 요약 chip 탭(openStats) 뒤 '농장 현황' 시트로 강등했다. 헤더에는
+                    어떤 작물이 featured인지 알리는 compact teaser + 진입 화살표만 남긴다. */}
                 <Pressable
                   testID="cotd-chip"
                   accessibilityRole="button"
@@ -4499,8 +4498,7 @@ function FarmGameBody({
                   onPress={openStats}
                 >
                   <Text style={styles.cotdChipText} numberOfLines={1}>
-                    🌱 {getCrop(cropOfTheDay.cropKey).icon} {getLocalizedCropName(cropOfTheDay.cropKey)} ×
-                    {cropOfTheDay.multiplier} ›
+                    🌱 {getCrop(cropOfTheDay.cropKey).icon} {getLocalizedCropName(cropOfTheDay.cropKey)} ›
                   </Text>
                 </Pressable>
               </View>
@@ -4564,7 +4562,12 @@ function FarmGameBody({
           />
         ) : null}
 
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.navRow}>
+        <ScrollView
+          testID="nav-row"
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.navRow}
+        >
           <NavButton
             testID="shop-nav-button"
             label={messages.shopButton}
@@ -5120,6 +5123,14 @@ function FarmGameBody({
               0,
               (weeklyEvent.active ? weeklyEvent.windowEndAt : weeklyEvent.windowStartAt) - tickNowMsRef.current
             )}
+            cropOfTheDayIcon={getCrop(cropOfTheDay.cropKey).icon}
+            cropOfTheDayName={getLocalizedCropName(cropOfTheDay.cropKey)}
+            cropOfTheDayMultiplier={cropOfTheDay.multiplier}
+            activeTitleName={
+              gameState.activeTitle != null ? getTitleLabel(gameState.activeTitle, locale).name : null
+            }
+            prestigeStars={gameState.prestige.stars}
+            purchasableSkillCount={purchasablePrestigeSkillCount}
             farmRecords={farmRecordStats}
           />
         ) : null}
@@ -5685,6 +5696,7 @@ function NavButton({
   return (
     <Pressable
       testID={testID}
+      accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
       style={[styles.navButton, highlight && styles.navButtonHighlight]}
       onPress={onPress}
