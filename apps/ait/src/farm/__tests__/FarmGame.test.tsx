@@ -1342,6 +1342,22 @@ describe('FarmGame UI flow', () => {
       expect(screen.getByText(messages.sheetTitleWorkshop)).toBeTruthy();
     });
 
+    test('더보기 growth의 개척 항목은 구매 가능한 명성 스킬 수를 배지로 표시한다 (#379)', async () => {
+      const base = completedState();
+      const state: GameState = {
+        ...base,
+        prestige: { ...base.prestige, stars: 2 },
+      };
+      const screen = await renderGame(state);
+
+      fireEvent.press(screen.getByTestId('more-nav-button'));
+
+      // ★2로는 starting_capital(1), global_profit(2), global_speed(2) 세 스킬을 살 수 있다.
+      // 체인 수금/개척 준비는 없는 상태라 map 배지는 affordable skill 수와 정확히 같다.
+      const mapEntry = screen.getByLabelText(messages.mapButtonAccessibilityLabel);
+      expect(within(mapEntry).getByText('3')).toBeTruthy();
+    });
+
     test('auto_popup 열람 즉시 자동 수령되고 배지가 정리된다 (#294/#376)', async () => {
       const track = jest.fn();
       const screen = await renderGame(completedState(), { analytics: createFarmAnalytics(track) }, null, {
@@ -3485,6 +3501,40 @@ describe('FarmGame UI flow', () => {
 
     await waitFor(() => expect(screen.getByText(`${formatMoney(expectedGold)}G`)).toBeTruthy());
     expect(screen.queryByText('GET')).toBeNull();
+  });
+
+  test('기존 ★ 칩은 접근 가능한 button이며 탭하면 기존 ChainMapSheet를 연다 (#379)', async () => {
+    const messages = getFarmMessages(DEFAULT_LOCALE);
+    const base = createInitialState();
+    const state: GameState = {
+      ...base,
+      onboardingCompleted: true,
+      prestige: { ...base.prestige, stars: 2 },
+    };
+    const screen = await renderGame(state);
+
+    const starsChip = await waitFor(() => screen.getByTestId('prestige-stars-chip'));
+    expect(starsChip.props.accessibilityRole).toBe('button');
+    expect(starsChip.props.accessibilityLabel).toBe(
+      messages.prestigeStarsChipAccessibilityLabel(2, 3)
+    );
+
+    fireEvent.press(starsChip);
+
+    expect(screen.getByText(messages.sheetTitleMap)).toBeTruthy();
+    expect(screen.getByText(messages.skillsSection)).toBeTruthy();
+  });
+
+  test('온보딩 중 명성 미해금 상태에서도 ★ 칩은 빈 ChainMapSheet를 안전하게 연다 (#379)', async () => {
+    const messages = getFarmMessages(DEFAULT_LOCALE);
+    const screen = await renderGame(createInitialState(), {}, null, { preserveOnboarding: true });
+    const starsChip = await waitFor(() => screen.getByTestId('prestige-stars-chip'));
+
+    fireEvent.press(starsChip);
+
+    expect(screen.getByText(messages.sheetTitleMap)).toBeTruthy();
+    expect(screen.getByText(messages.chainEmptyDesc)).toBeTruthy();
+    expect(screen.getByText(messages.skillsSection)).toBeTruthy();
   });
 
   test('pioneers a new region, resets the farm layer, and starts a chain farm', async () => {

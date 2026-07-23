@@ -276,6 +276,8 @@ export const enFarmMessages: FarmMessages = {
   workshopNeedIngredientsToast: 'Not enough ingredients.',
   mapButton: '🗺️ Pioneer',
   mapButtonAccessibilityLabel: 'Pioneer Map',
+  prestigeStarsChipAccessibilityLabel: (stars, availableSkills) =>
+    `${stars} prestige stars, ${availableSkills} skills available, open Pioneer Map`,
   sheetTitleMap: 'Pioneer Map',
   sheetDescriptionMap: 'Graduate farms into your chain and pioneer new regions.',
   sheetTitlePrestigeConfirm: 'Pioneer a New Region',

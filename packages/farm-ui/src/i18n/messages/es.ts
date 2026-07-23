@@ -276,6 +276,8 @@ export const esFarmMessages: FarmMessages = {
   workshopNeedIngredientsToast: 'Ingredientes insuficientes.',
   mapButton: '🗺️ Colonizar',
   mapButtonAccessibilityLabel: 'Mapa de Colonización',
+  prestigeStarsChipAccessibilityLabel: (stars, availableSkills) =>
+    `${stars} estrellas de prestigio, ${availableSkills} habilidades disponibles, abrir el mapa de colonización`,
   sheetTitleMap: 'Mapa de Colonización',
   sheetDescriptionMap: 'Gradúa granjas a tu cadena y coloniza nuevas regiones.',
   sheetTitlePrestigeConfirm: 'Colonizar una Nueva Región',

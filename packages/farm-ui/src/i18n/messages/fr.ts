@@ -276,6 +276,8 @@ export const frFarmMessages: FarmMessages = {
   workshopNeedIngredientsToast: `Pas assez d'ingrédients.`,
   mapButton: '🗺️ Pionnier',
   mapButtonAccessibilityLabel: 'Carte du pionnier',
+  prestigeStarsChipAccessibilityLabel: (stars, availableSkills) =>
+    `${stars} étoiles de prestige, ${availableSkills} compétences disponibles, ouvrir la carte du pionnier`,
   sheetTitleMap: 'Carte du pionnier',
   sheetDescriptionMap: 'Diplôme des fermes dans ta chaîne et explore de nouvelles régions.',
   sheetTitlePrestigeConfirm: 'Explorer une nouvelle région',

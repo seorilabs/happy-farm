@@ -276,6 +276,8 @@ export const jaFarmMessages: FarmMessages = {
   workshopNeedIngredientsToast: '材料が足りません。',
   mapButton: '🗺️ 開拓',
   mapButtonAccessibilityLabel: '開拓マップ',
+  prestigeStarsChipAccessibilityLabel: (stars, availableSkills) =>
+    `名声スター${stars}個、購入可能なスキル${availableSkills}個、開拓マップを開く`,
   sheetTitleMap: '開拓マップ',
   sheetDescriptionMap: '農場を卒業させてチェーンにし、新しい地域を開拓します。',
   sheetTitlePrestigeConfirm: '新しい地域を開拓',
