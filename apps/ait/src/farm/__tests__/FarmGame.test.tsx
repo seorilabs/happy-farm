@@ -4661,11 +4661,20 @@ describe('FarmGame UI flow', () => {
       ).toHaveLength(1);
 
       const action = screen.getByText(messages.wheelBonusSpinAction);
-      fireEvent.press(action);
-      fireEvent.press(action);
+      // #365: 보너스 스핀의 실제 랜덤 결과에는 harvest_boost가 포함된다. 이 테스트는
+      // 광고 배치의 earned·중복 탭 방지만 검증하므로 첫 gold 슬롯을 결정론적으로 골라,
+      // 정상적인 harvest_boost 당첨을 상태 누수로 오인하는 간헐 실패를 막는다.
+      const randomSpy = jest.spyOn(Math, 'random').mockReturnValue(0);
+      try {
+        fireEvent.press(action);
+        fireEvent.press(action);
+      } finally {
+        randomSpy.mockRestore();
+      }
       await waitFor(() => expect(rewardedAd.showAd).toHaveBeenCalledTimes(1));
       await waitFor(() => {
         const persisted = getLatestPersistedState();
+        expect(persisted.gold).toBeGreaterThan(state.gold);
         expect(persisted.wheelState.bonusSpinsUsed).toBe(1);
         expect(persisted.wheelState.lastBonusSpinAt).toBe(NOW);
         expect(persisted.adUsage.harvestBonusAd).toEqual(state.adUsage.harvestBonusAd);
