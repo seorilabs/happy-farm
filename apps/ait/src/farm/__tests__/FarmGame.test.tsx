@@ -371,9 +371,16 @@ describe('FarmGame UI flow', () => {
     expect(backdropChild.props.phase).toBe(firstPhase);
     expect(scrollChild.props.testID).toBe('farm-scroll');
     expect(screen.getByTestId('plot-grid')).toBeTruthy();
+    expect(screen.UNSAFE_getByProps({ testID: 'environment-area-layer-meadow' })).toBeTruthy();
     expect(StyleSheet.flatten(screen.getByTestId('farm-scroll').props.contentContainerStyle).paddingTop).toBe(
       MAIN_CONTENT_TOP_PADDING
     );
+
+    // Area selection changes only the backdrop's area layer; the current time
+    // phase/celestial presentation remains mounted and unchanged.
+    fireEvent.press(screen.getByTestId('area-tab-vegetable_field'));
+    expect(screen.UNSAFE_getByProps({ testID: 'environment-area-layer-furrows' })).toBeTruthy();
+    expect(backdropNow()).toBeTruthy();
 
     // Advancing 12h lands in a different phase; one game tick re-renders and the
     // backdrop tracks the new minute's tone (proves the wiring, not just the math).

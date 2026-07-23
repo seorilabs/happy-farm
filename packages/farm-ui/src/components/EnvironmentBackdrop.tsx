@@ -1,12 +1,18 @@
 import React, { memo } from 'react';
 import { StyleSheet, View, type ViewStyle } from 'react-native';
 
-import type { EnvironmentPhase } from '../../../farm-core/src';
+import {
+  DEFAULT_AREA_ENVIRONMENT_THEME,
+  type AreaEnvironmentMotif,
+  type AreaEnvironmentTheme,
+  type EnvironmentPhase,
+} from '../../../farm-core/src';
 
 type EnvironmentBackdropProps = {
   phase: EnvironmentPhase;
   minutesOfDay: number;
   backgroundColor: string;
+  areaTheme?: AreaEnvironmentTheme;
 };
 
 type PhasePalette = {
@@ -129,10 +135,105 @@ function Cloud({ index }: { index: number }) {
   );
 }
 
+function AreaMotif({ motif, color }: { motif: AreaEnvironmentMotif; color: string }) {
+  if (motif === 'furrows') {
+    return (
+      <View testID="environment-area-motif-furrows" style={styles.motifFill}>
+        {[0, 1, 2].map((index) => (
+          <View
+            key={index}
+            style={[styles.furrow, { bottom: 7 + index * 8, backgroundColor: color, opacity: 0.34 + index * 0.1 }]}
+          />
+        ))}
+      </View>
+    );
+  }
+
+  if (motif === 'orchard') {
+    return (
+      <View testID="environment-area-motif-orchard" style={styles.motifFill}>
+        {[18, 48, 78].map((left, index) => (
+          <View key={left} style={[styles.orchardTree, { left: `${left}%` }]}>
+            <View style={[styles.orchardCrown, { backgroundColor: index === 1 ? color : 'rgba(63, 122, 66, 0.64)' }]} />
+            <View style={[styles.orchardTrunk, { backgroundColor: color }]} />
+          </View>
+        ))}
+      </View>
+    );
+  }
+
+  if (motif === 'glasshouse' || motif === 'prism') {
+    return (
+      <View testID={`environment-area-motif-${motif}`} style={styles.motifFill}>
+        <View style={[styles.glasshouse, { borderColor: color }]}>
+          <View style={[styles.glasshousePane, { borderColor: color }]} />
+          <View style={[styles.glasshouseRoof, { borderColor: color }]} />
+        </View>
+        {motif === 'prism' ? (
+          <View style={[styles.prism, { borderColor: color, backgroundColor: 'rgba(255, 255, 255, 0.16)' }]} />
+        ) : null}
+      </View>
+    );
+  }
+
+  if (motif === 'crystal') {
+    return (
+      <View testID="environment-area-motif-crystal" style={styles.motifFill}>
+        {[24, 50, 74].map((left, index) => (
+          <View
+            key={left}
+            style={[
+              styles.crystal,
+              {
+                left: `${left}%`,
+                height: 22 + index * 7,
+                backgroundColor: color,
+                opacity: 0.48 + index * 0.1,
+              },
+            ]}
+          />
+        ))}
+      </View>
+    );
+  }
+
+  if (motif === 'summit') {
+    return (
+      <View testID="environment-area-motif-summit" style={styles.motifFill}>
+        <View style={[styles.summit, styles.summitLeft, { backgroundColor: color }]} />
+        <View style={[styles.summit, styles.summitRight, { backgroundColor: color }]} />
+      </View>
+    );
+  }
+
+  const isBlossom = motif === 'blossom';
+  return (
+    <View testID={`environment-area-motif-${motif}`} style={styles.motifFill}>
+      {[20, 40, 63, 82].map((left, index) => (
+        <View
+          key={left}
+          style={[
+            styles.meadowAccent,
+            {
+              left: `${left}%`,
+              bottom: 11 + (index % 2) * 9,
+              backgroundColor: color,
+              width: isBlossom ? 9 : 5,
+              height: isBlossom ? 9 : 12,
+              borderRadius: isBlossom ? 5 : 3,
+            },
+          ]}
+        />
+      ))}
+    </View>
+  );
+}
+
 export const EnvironmentBackdrop = memo(function EnvironmentBackdrop({
   phase,
   minutesOfDay,
   backgroundColor,
+  areaTheme = DEFAULT_AREA_ENVIRONMENT_THEME,
 }: EnvironmentBackdropProps) {
   const palette = PHASE_PALETTES[phase];
   const isNight = phase === 'night';
@@ -156,6 +257,19 @@ export const EnvironmentBackdrop = memo(function EnvironmentBackdrop({
           />
         ))}
       </View>
+
+      <View
+        testID={`environment-area-layer-${areaTheme.key}`}
+        style={[styles.areaTint, { backgroundColor: areaTheme.skyTint }]}
+      />
+
+      {areaTheme.motif != null ? (
+        <View testID="environment-area-horizon" style={styles.areaHorizon}>
+          <View style={[styles.horizonBack, { backgroundColor: areaTheme.horizonColor }]} />
+          <View style={[styles.horizonFront, { backgroundColor: areaTheme.groundColor }]} />
+          <AreaMotif motif={areaTheme.motif} color={areaTheme.accentColor} />
+        </View>
+      ) : null}
 
       {hasHorizonGlow ? (
         <View testID="environment-horizon-glow" style={[styles.horizonGlow, { backgroundColor: palette.glow }]} />
@@ -208,6 +322,133 @@ const styles = StyleSheet.create({
   },
   skyBands: {
     ...StyleSheet.absoluteFillObject,
+  },
+  areaTint: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  areaHorizon: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: '40%',
+    overflow: 'hidden',
+  },
+  horizonBack: {
+    position: 'absolute',
+    left: '-12%',
+    right: '28%',
+    bottom: '12%',
+    height: '74%',
+    borderTopLeftRadius: 999,
+    borderTopRightRadius: 999,
+    transform: [{ rotate: '-4deg' }],
+  },
+  horizonFront: {
+    position: 'absolute',
+    left: '20%',
+    right: '-16%',
+    bottom: '-8%',
+    height: '72%',
+    borderTopLeftRadius: 999,
+    borderTopRightRadius: 999,
+    transform: [{ rotate: '3deg' }],
+  },
+  motifFill: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  meadowAccent: {
+    position: 'absolute',
+  },
+  furrow: {
+    position: 'absolute',
+    left: '7%',
+    right: '7%',
+    height: 3,
+    borderRadius: 999,
+    transform: [{ rotate: '-2deg' }],
+  },
+  orchardTree: {
+    position: 'absolute',
+    bottom: 6,
+    width: 30,
+    height: 48,
+    marginLeft: -15,
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+  },
+  orchardCrown: {
+    position: 'absolute',
+    top: 0,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+  },
+  orchardTrunk: {
+    width: 6,
+    height: 25,
+    borderRadius: 3,
+  },
+  glasshouse: {
+    position: 'absolute',
+    left: '22%',
+    right: '22%',
+    bottom: 7,
+    height: 46,
+    borderWidth: 2,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.10)',
+  },
+  glasshousePane: {
+    position: 'absolute',
+    left: '50%',
+    top: 0,
+    bottom: 0,
+    borderLeftWidth: 1,
+  },
+  glasshouseRoof: {
+    position: 'absolute',
+    left: 8,
+    right: 8,
+    top: 15,
+    borderTopWidth: 1,
+  },
+  prism: {
+    position: 'absolute',
+    right: '17%',
+    bottom: 28,
+    width: 20,
+    height: 20,
+    borderWidth: 2,
+    transform: [{ rotate: '45deg' }],
+  },
+  crystal: {
+    position: 'absolute',
+    bottom: 7,
+    width: 14,
+    borderTopLeftRadius: 7,
+    borderTopRightRadius: 7,
+    transform: [{ rotate: '8deg' }],
+  },
+  summit: {
+    position: 'absolute',
+    bottom: -31,
+    width: 82,
+    height: 82,
+    borderRadius: 8,
+    opacity: 0.48,
+    transform: [{ rotate: '45deg' }],
+  },
+  summitLeft: {
+    left: '18%',
+  },
+  summitRight: {
+    right: '12%',
+    width: 62,
+    height: 62,
+    bottom: -23,
+    opacity: 0.34,
   },
   skyBand: {
     flex: 1,

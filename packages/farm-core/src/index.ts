@@ -1,6 +1,7 @@
 export * from './achievements';
 export * from './adLimits';
 export * from './animals';
+export * from './areaEnvironment';
 export * from './analytics';
 export * from './ads';
 export * from './commands';
