@@ -15,7 +15,8 @@ describe('mobileFarmArt', () => {
   });
 
   test('growth stages resolve to bundled assets', () => {
-    expect(mobileFarmArt.stageIcon?.('sprout')).toBeDefined();
-    expect(mobileFarmArt.stageIcon?.('sapling')).toBeDefined();
+    for (const stage of ['sprout', 'sapling', 'budding', 'mature'] as const) {
+      expect(mobileFarmArt.stageIcon?.(stage)).toBeDefined();
+    }
   });
 });

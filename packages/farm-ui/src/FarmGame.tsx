@@ -6612,12 +6612,12 @@ function GrowingCropIcon({
   plantToken: number | undefined;
   onPlantPulseDone: () => void;
 }) {
-  // sprout/sapling share the generic stage art; budding/mature show the crop's
-  // own art (the budding dim/shrink treatment below applies to both paths).
+  // Prefer dedicated art for all four stages. A partial host keeps the previous
+  // behavior: budding/mature use crop art, while sprout/sapling use emoji.
   const art = useFarmArt();
   const cropArtSource = useCropArtSource(cropKey);
-  const artSource =
-    stage === 'sprout' || stage === 'sapling' ? (art.stageIcon?.(stage) ?? null) : cropArtSource;
+  const stageArtSource = art.stageIcon?.(stage) ?? null;
+  const artSource = stageArtSource ?? (stage === 'budding' || stage === 'mature' ? cropArtSource : null);
   const [artFailed, setArtFailed] = useState(false);
   const popRef = useRef<Animated.Value | null>(null);
   if (popRef.current == null) {
@@ -6634,6 +6634,12 @@ function GrowingCropIcon({
   const lastTokenRef = useRef<number | undefined>(undefined);
   const onDoneRef = useRef(onPlantPulseDone);
   onDoneRef.current = onPlantPulseDone;
+
+  useEffect(() => {
+    // A hosted image failure should affect only the current stage. When the
+    // plot advances, attempt the next stage asset instead of staying on emoji.
+    setArtFailed(false);
+  }, [cropKey, stage]);
 
   useEffect(() => {
     if (plantToken == null || plantToken === lastTokenRef.current) {
@@ -6683,10 +6689,11 @@ function GrowingCropIcon({
     return () => animation.stop();
   }, [nearlyReady, readyPulse]);
 
-  // The budding stage shows the crop's own icon as a dim, shrunk preview so the
-  // reveal feels gradual; sprout/sapling glyphs and the mature icon render full.
-  const previewScale = stage === 'budding' ? 0.78 : 1;
-  const previewOpacity = stage === 'budding' ? 0.72 : 1;
+  // Preserve the old dim crop-preview treatment only for hosts that do not yet
+  // provide dedicated budding art. The new stage sprite renders at full clarity.
+  const usesLegacyBuddingPreview = stage === 'budding' && stageArtSource == null;
+  const previewScale = usesLegacyBuddingPreview ? 0.78 : 1;
+  const previewOpacity = usesLegacyBuddingPreview ? 0.72 : 1;
   const popScale = pop.interpolate({ inputRange: [0, 1], outputRange: [0.4, 1] });
   const popOpacity = pop.interpolate({ inputRange: [0, 0.4, 1], outputRange: [0.2, 1, 1] });
   const pulseScale = readyPulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.12] });
@@ -6697,6 +6704,7 @@ function GrowingCropIcon({
     return (
       <Animated.View style={{ opacity, transform: [{ scale }] }}>
         <Image
+          testID={`growing-crop-art-${stage}`}
           source={artSource}
           onError={() => setArtFailed(true)}
           style={styles.cropImage}
@@ -6706,7 +6714,12 @@ function GrowingCropIcon({
     );
   }
   return (
-    <Animated.Text style={[styles.cropIcon, { opacity, transform: [{ scale }] }]}>{icon}</Animated.Text>
+    <Animated.Text
+      testID={`growing-crop-fallback-${stage}`}
+      style={[styles.cropIcon, { opacity, transform: [{ scale }] }]}
+    >
+      {icon}
+    </Animated.Text>
   );
 }
 

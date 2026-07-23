@@ -52,6 +52,8 @@ import crop_star_pineapple from './assets/crop_star_pineapple.png';
 import crop_moon_peach from './assets/crop_moon_peach.png';
 import crop_aurora_kiwi from './assets/crop_aurora_kiwi.png';
 import crop_sacred_rice from './assets/crop_sacred_rice.png';
+import stage_budding from './assets/stage_budding.png';
+import stage_mature from './assets/stage_mature.png';
 import stage_sapling from './assets/stage_sapling.png';
 import stage_sprout from './assets/stage_sprout.png';
 
@@ -108,6 +110,8 @@ const cropArt: Record<CropKey, number> = {
 const stageArt = {
   sprout: stage_sprout,
   sapling: stage_sapling,
+  budding: stage_budding,
+  mature: stage_mature,
 } as const;
 
 export const mobileFarmArt: FarmArt = {

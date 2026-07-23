@@ -59,7 +59,11 @@ import {
   type RewardedAdController,
   type RewardedAdShowResult,
 } from '../../../../../packages/farm-core/src';
-import { getFarmMessages, type FarmGameNotifications } from '../../../../../packages/farm-ui/src';
+import {
+  getFarmMessages,
+  type FarmArt,
+  type FarmGameNotifications,
+} from '../../../../../packages/farm-ui/src';
 import {
   MAIN_CONTENT_TOP_PADDING,
   MAIN_HORIZONTAL_PADDING,
@@ -2500,7 +2504,7 @@ describe('FarmGame UI flow', () => {
     }
   });
 
-  test('advances the growth-stage glyph as a crop matures (sprout → leaf)', async () => {
+  test('advances all four emoji fallback stages when no host art is provided', async () => {
     const screen = await renderGame(null);
 
     await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
@@ -2518,6 +2522,53 @@ describe('FarmGame UI flow', () => {
     });
     await waitFor(() => expect(screen.getByText('🌿')).toBeTruthy());
     expect(screen.queryByText('🌱')).toBeNull();
+
+    await act(async () => {
+      jest.advanceTimersByTime(400);
+    });
+    await waitFor(() => expect(screen.getByTestId('growing-crop-fallback-budding')).toHaveTextContent('🥕'));
+
+    await act(async () => {
+      jest.advanceTimersByTime(500);
+    });
+    await waitFor(() => expect(screen.getByTestId('growing-crop-fallback-mature')).toHaveTextContent('🥕'));
+  });
+
+  test('renders a dedicated host image for every growth stage and retries after each stage change', async () => {
+    const stageArt: FarmArt = {
+      stageIcon: (stage) => ({ uri: `https://example.com/art/stage_${stage}.png` }),
+    };
+    const screen = await renderGame(null, { art: stageArt });
+
+    await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+    fireEvent.press(screen.getByText('초보 밭'));
+    fireEvent.press(screen.getByText('당근'));
+    fireEvent.press(screen.getAllByText('빈 밭')[0]!);
+
+    const expectStageArt = (stage: 'sprout' | 'sapling' | 'budding' | 'mature') => {
+      expect(screen.getByTestId(`growing-crop-art-${stage}`).props.source).toEqual({
+        uri: `https://example.com/art/stage_${stage}.png`,
+      });
+    };
+
+    expectStageArt('sprout');
+    fireEvent(screen.getByTestId('growing-crop-art-sprout'), 'error');
+    expect(screen.getByTestId('growing-crop-fallback-sprout')).toHaveTextContent('🌱');
+
+    await act(async () => {
+      jest.advanceTimersByTime(950);
+    });
+    await waitFor(() => expectStageArt('sapling'));
+
+    await act(async () => {
+      jest.advanceTimersByTime(400);
+    });
+    await waitFor(() => expectStageArt('budding'));
+
+    await act(async () => {
+      jest.advanceTimersByTime(500);
+    });
+    await waitFor(() => expectStageArt('mature'));
   });
 
   test('keeps rapid harvest state updates from overwriting each other', async () => {

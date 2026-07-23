@@ -7,11 +7,11 @@ import {
   type TextStyle,
 } from 'react-native';
 
-import type { CropKey } from '../../farm-core/src';
+import type { CropGrowthStage, CropKey } from '../../farm-core/src';
 
-// Growth-stage art shared by every crop; budding/mature reuse the crop's own
-// icon (see getCropGrowthStage), so only the two generic stages need art.
-export type FarmStageArtKey = 'sprout' | 'sapling';
+// Growth-stage art shared by every crop. Hosts may provide any subset; missing
+// stages keep the existing crop-art/emoji fallback path.
+export type FarmStageArtKey = CropGrowthStage;
 
 // Host-provided image resolvers for the generated art set
 // (assets/art/asset-manifest.json). Every resolver may return null and the
