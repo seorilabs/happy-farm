@@ -1,5 +1,6 @@
 import balance from './balance.json';
 import type { AnimalKey, GameState } from './types';
+import { recordMissionProgressEvent } from './missionEvents';
 
 // 동물 사육/생산 루프. 작물(초 단위 성장)과는 다른 주기(수 분~수십 분)의 보조
 // 재방문 루프를 제공한다: 사료(골드)를 투입 → 결정적 타이머 경과 → 산출물 수집
@@ -177,12 +178,12 @@ export function canPurchaseAnimal(state: GameState, key: AnimalKey): boolean {
 
 // 순수 구매: 골드를 차감하고 소유 목록에 추가한 새 상태를 반환한다. 허용되지 않으면
 // (미지의 키·이미 소유·골드 부족) null을 반환해 이중 차감/이중 소유를 막는다.
-export function purchaseAnimal(state: GameState, key: AnimalKey): GameState | null {
+export function purchaseAnimal(state: GameState, key: AnimalKey, now = Date.now()): GameState | null {
   const animal = getAnimal(key);
   if (animal == null || !canPurchaseAnimal(state, key)) {
     return null;
   }
-  return {
+  const next: GameState = {
     ...state,
     gold: state.gold - animal.purchaseCost,
     animals: {
@@ -190,6 +191,7 @@ export function purchaseAnimal(state: GameState, key: AnimalKey): GameState | nu
       feeding: state.animals.feeding,
     },
   };
+  return recordMissionProgressEvent(next, { type: 'spend_gold', amount: animal.purchaseCost }, now);
 }
 
 // 급여할 수 있는가: 소유했고, 현재 급여 중이 아니며(유휴), 골드가 충분할 때만 true.
@@ -212,7 +214,7 @@ export function feedAnimal(state: GameState, key: AnimalKey, now: number = Date.
     return null;
   }
   const safeNow = Number.isFinite(now) ? now : Date.now();
-  return {
+  const next: GameState = {
     ...state,
     gold: state.gold - animal.feedCost,
     animals: {
@@ -220,6 +222,7 @@ export function feedAnimal(state: GameState, key: AnimalKey, now: number = Date.
       feeding: { ...state.animals.feeding, [key]: safeNow },
     },
   };
+  return recordMissionProgressEvent(next, { type: 'spend_gold', amount: animal.feedCost }, safeNow);
 }
 
 // 수확할 수 있는가: 소유했고 급여 후 타이머가 완료됐을 때만 true.
@@ -237,7 +240,7 @@ export function collectProduce(state: GameState, key: AnimalKey, now: number = D
   }
   const nextFeeding = { ...state.animals.feeding };
   delete nextFeeding[key];
-  return {
+  const next: GameState = {
     ...state,
     gold: state.gold + animal.producePrice,
     animals: {
@@ -245,6 +248,7 @@ export function collectProduce(state: GameState, key: AnimalKey, now: number = D
       feeding: nextFeeding,
     },
   };
+  return recordMissionProgressEvent(next, { type: 'collect_produce' }, now);
 }
 
 export type CollectAllReadyProduceResult = {

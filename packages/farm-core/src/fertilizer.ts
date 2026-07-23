@@ -3,6 +3,7 @@ import type { GameState, Plot } from './types';
 import { CROPS, getCropEconomyEstimate } from './constants';
 import { getCropModifiers } from './modifiers';
 import { getPlotRemainingWallClockMs } from './harvest';
+import { recordMissionProgressEvent } from './missionEvents';
 
 // 골드 소비 비료(즉시 성장 촉진). 성장 중인 밭에 골드를 지불해 남은 성장을 즉시
 // 완료하는 능동 진행 가속 + 잉여 골드 싱크(#227). 광고 성장 스킵과 달리 골드로
@@ -90,8 +91,13 @@ export function applyFertilizer(gameState: GameState, plotId: number, now = Date
 
   const nextPlots = [...gameState.plots];
   nextPlots[plotIndex] = { ...plot, state: 2 };
+  const next = recordMissionProgressEvent(
+    { ...gameState, gold: gameState.gold - cost, plots: nextPlots },
+    { type: 'spend_gold', amount: cost },
+    now
+  );
   return {
-    state: { ...gameState, gold: gameState.gold - cost, plots: nextPlots },
+    state: next,
     applied: true,
     cost,
   };

@@ -17,8 +17,10 @@ import {
 import balance from '../balance.json';
 import { CROPS, createInitialState, migrateLoadedState } from '../constants';
 import { performHarvest, performPlant } from '../harvest';
+import { getWeeklyMissionsSnapshot } from '../weeklyMissions';
+import { getCropPurchaseCost } from '../modifiers';
 
-// 일일 미션 슬롯 수(현재 4종: harvest/harvest_area/watch_ad/plant). 슬롯 추가 시
+// 일일 미션 슬롯 수. 슬롯 추가 시
 // balance.json이 단일 출처이므로 테스트 상태 배열 길이도 여기서 파생한다.
 const SLOT_COUNT = balance.missions.slots.length;
 import { createPrestigedState } from '../prestige';
@@ -59,6 +61,37 @@ describe('getDailyMissions determinism', () => {
     const missions = getDailyMissions(getMissionDayKey(DAY_A), unlocked);
     const areaMission = missions.find((m) => m.type === 'harvest_area');
     expect(areaMission?.areaKey).toBe(unlocked[0]);
+  });
+
+  test('미해금 세이브는 딥 시스템 목표를 숨기고 해금 뒤 같은 결정론 슬롯을 노출한다 (#378)', () => {
+    const base = createInitialState();
+    const dayKey = getMissionDayKey(DAY_A);
+    const lockedTypes = getDailyMissions(dayKey, base.unlockedAreas, undefined, true, base).map(
+      (mission) => mission.type
+    );
+    expect(lockedTypes).toContain('spend_gold');
+    expect(lockedTypes).not.toContain('collect_produce');
+    expect(lockedTypes).not.toContain('craft_complete');
+    expect(lockedTypes).not.toContain('breed');
+
+    const cropKey = Object.keys(CROPS)[0] as CropKey;
+    const unlocked: GameState = {
+      ...base,
+      harvestedCropKeys: [cropKey],
+      lifetimeStats: { ...base.lifetimeStats, totalHarvests: 1 },
+      animals: { ...base.animals, owned: [balance.animals.kinds[0]!.key] },
+      research: { ...base.research, unlockedNodes: ['breeding_lab'] },
+    };
+    const unlockedTypes = getDailyMissions(
+      dayKey,
+      unlocked.unlockedAreas,
+      undefined,
+      true,
+      unlocked
+    ).map((mission) => mission.type);
+    expect(unlockedTypes).toEqual(
+      expect.arrayContaining(['collect_produce', 'craft_complete', 'spend_gold', 'breed'])
+    );
   });
 });
 
@@ -107,7 +140,7 @@ describe('progress tracking', () => {
     expect(after.progress[harvestMission.slot]).toBe(0);
   });
 
-  test('레거시 3-slot 세이브(길이 3)가 4-slot으로 늘어난 뒤 첫 심기도 진행이 보존·기록된다 (#254)', () => {
+  test('레거시 3-slot 세이브가 현재 슬롯 수로 늘어난 뒤 첫 심기도 진행이 보존·기록된다 (#254)', () => {
     const missions = getDailyMissions(getMissionDayKey(DAY_A), ALL_AREAS);
     const plantMission = missions.find((m) => m.type === 'plant')!;
     const harvestMission = missions.find((m) => m.type === 'harvest')!;
@@ -119,7 +152,7 @@ describe('progress tracking', () => {
       claimedSlots: [],
     };
     const after = recordPlantProgress(legacy, DAY_A, ALL_AREAS);
-    // 길이가 슬롯 수(4)로 정규화되고, 롤오버(리셋) 없이 기존 수확 진행(2)이 보존되며
+    // 길이가 현재 슬롯 수로 정규화되고, 롤오버(리셋) 없이 기존 수확 진행(2)이 보존되며
     // 신규 plant 슬롯에만 +1 기록된다(길이 가드 회귀 방지).
     expect(after.progress).toHaveLength(SLOT_COUNT);
     expect(after.progress[harvestMission.slot]).toBe(2);
@@ -137,6 +170,13 @@ describe('progress tracking', () => {
     const snapshot = getDailyMissionsSnapshot(planted!.dailyMissionState, DAY_A, planted!.unlockedAreas);
     const plantMission = snapshot.missions.find((m) => m.type === 'plant')!;
     expect(plantMission.progress).toBe(1);
+    const spent = getCropPurchaseCost(state, cropKey, DAY_A);
+    expect(snapshot.missions.find((m) => m.type === 'spend_gold')!.progress).toBe(spent);
+    expect(
+      getWeeklyMissionsSnapshot(planted!.weeklyMissionState, DAY_A, planted!.unlockedAreas).missions.find(
+        (mission) => mission.type === 'spend_gold'
+      )!.progress
+    ).toBe(spent);
   });
 
   test('performHarvest feeds daily-mission progress through the canonical pipeline', () => {
@@ -391,7 +431,8 @@ describe('광고 미지원 시 watch_ad 제외 (#366)', () => {
   });
 
   test('광고 미지원 환경에서 남은 미션을 모두 완료·수령해 100% 완주가 가능하다', () => {
-    const shown = getDailyMissions(dayKey, ALL_AREAS, undefined, false);
+    const base = createInitialState();
+    const shown = getDailyMissions(dayKey, ALL_AREAS, undefined, false, base);
     expect(shown.every((m) => m.type !== 'watch_ad')).toBe(true);
 
     // 표시되는 미션들의 진행도를 target까지 채운 상태를 구성한다.
@@ -400,7 +441,7 @@ describe('광고 미지원 시 watch_ad 제외 (#366)', () => {
     for (const mission of shown) {
       progress[mission.slot] = mission.target;
     }
-    let gameState: GameState = { ...createInitialState(), dailyMissionState: { ...rolled, progress } };
+    let gameState: GameState = { ...base, dailyMissionState: { ...rolled, progress } };
 
     // 표시되는 모든 슬롯을 수령 → 전부 성공(영구 미완 슬롯 없음).
     for (const mission of shown) {
@@ -408,7 +449,14 @@ describe('광고 미지원 시 watch_ad 제외 (#366)', () => {
       expect(next).not.toBeNull();
       gameState = next!;
     }
-    const finalSnap = getDailyMissionsSnapshot(gameState.dailyMissionState, DAY_A, ALL_AREAS, undefined, false);
+    const finalSnap = getDailyMissionsSnapshot(
+      gameState.dailyMissionState,
+      DAY_A,
+      ALL_AREAS,
+      undefined,
+      false,
+      gameState
+    );
     expect(finalSnap.missions.every((m) => m.claimed)).toBe(true);
     expect(finalSnap.missions.some((m) => m.claimable)).toBe(false);
   });

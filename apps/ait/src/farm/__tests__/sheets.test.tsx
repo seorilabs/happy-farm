@@ -57,12 +57,49 @@ import { ChainMapSheet, PrestigeConfirmSheet } from '../../../../../packages/far
 import { WheelSheet } from '../../../../../packages/farm-ui/src/components/WheelSheet';
 import { AnimalsSheet } from '../../../../../packages/farm-ui/src/components/AnimalsSheet';
 import { WorkshopSheet } from '../../../../../packages/farm-ui/src/components/WorkshopSheet';
+import { MissionsSheet } from '../../../../../packages/farm-ui/src/components/MissionsSheet';
 
 const LOCALE = DEFAULT_LOCALE;
 const messages = getFarmMessages(LOCALE);
 const NOW = Date.parse('2026-05-27T03:00:00.000Z');
 
 afterEach(cleanup);
+
+describe('diversified mission availability (#378)', () => {
+  const renderMissions = (gameState: GameState) => (
+    <MissionsSheet
+      gameState={gameState}
+      locale={LOCALE}
+      messages={messages}
+      now={NOW}
+      adSupported
+      onClaim={jest.fn()}
+      onClaimWeekly={jest.fn()}
+    />
+  );
+
+  test('기존 MissionsSheet에서만 해금된 동물·공방·교배 목표를 노출한다', () => {
+    const base = createInitialState();
+    const screen = render(renderMissions(base));
+
+    expect(screen.getAllByText(/골드 .*G 사용하기/).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/동물 산출물/)).toBeNull();
+    expect(screen.queryByText(/가공품/)).toBeNull();
+    expect(screen.queryByText(/새 품종/)).toBeNull();
+
+    const unlocked: GameState = {
+      ...base,
+      lifetimeStats: { ...base.lifetimeStats, totalHarvests: 1 },
+      animals: { ...base.animals, owned: [ANIMALS[0]!.key] },
+      research: { ...base.research, unlockedNodes: ['breeding_lab'] },
+    };
+    screen.rerender(renderMissions(unlocked));
+
+    expect(screen.getAllByText(/동물 산출물/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/가공품/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/새 품종/).length).toBeGreaterThan(0);
+  });
+});
 
 describe('ready output batch actions', () => {
   function withReadyAnimals(count: number): GameState {

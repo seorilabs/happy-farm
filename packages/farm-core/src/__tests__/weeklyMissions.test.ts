@@ -54,6 +54,39 @@ describe('getMissionWeekKey (reset-week boundary)', () => {
   });
 });
 
+describe('weekly mission availability (#378)', () => {
+  test('미해금 딥 시스템 목표는 숨기고 해금 후 결정론적으로 노출한다', () => {
+    const base = createInitialState();
+    const weekKey = getMissionWeekKey(MON);
+    const lockedTypes = getWeeklyMissions(weekKey, base.unlockedAreas, undefined, true, base).map(
+      (mission) => mission.type
+    );
+    expect(lockedTypes).toContain('spend_gold');
+    expect(lockedTypes).not.toContain('collect_produce');
+    expect(lockedTypes).not.toContain('craft_complete');
+    expect(lockedTypes).not.toContain('breed');
+
+    const cropKey = Object.keys(CROPS)[0] as CropKey;
+    const unlocked: GameState = {
+      ...base,
+      harvestedCropKeys: [cropKey],
+      lifetimeStats: { ...base.lifetimeStats, totalHarvests: 1 },
+      animals: { ...base.animals, owned: [balance.animals.kinds[0]!.key] },
+      research: { ...base.research, unlockedNodes: ['breeding_lab'] },
+    };
+    const unlockedTypes = getWeeklyMissions(
+      weekKey,
+      unlocked.unlockedAreas,
+      undefined,
+      true,
+      unlocked
+    ).map((mission) => mission.type);
+    expect(unlockedTypes).toEqual(
+      expect.arrayContaining(['collect_produce', 'craft_complete', 'spend_gold', 'breed'])
+    );
+  });
+});
+
 describe('getWeeklyMissions determinism', () => {
   test('same week + unlocked areas → identical missions', () => {
     const key = getMissionWeekKey(MON);
@@ -396,7 +429,8 @@ describe('광고 미지원 시 주간 watch_ad 제외 (#366)', () => {
   });
 
   test('광고 미지원 환경에서 남은 주간 미션을 모두 완료·수령해 100% 완주가 가능하다', () => {
-    const shown = getWeeklyMissions(weekKey, ALL_AREAS, undefined, false);
+    const base = createInitialState();
+    const shown = getWeeklyMissions(weekKey, ALL_AREAS, undefined, false, base);
     expect(shown.every((m) => m.type !== 'watch_ad')).toBe(true);
 
     const rolled = rolloverWeeklyMissions(createInitialWeeklyMissionState(), weekKey, ALL_AREAS);
@@ -404,14 +438,21 @@ describe('광고 미지원 시 주간 watch_ad 제외 (#366)', () => {
     for (const mission of shown) {
       progress[mission.slot] = mission.target;
     }
-    let gameState: GameState = { ...createInitialState(), weeklyMissionState: { ...rolled, progress } };
+    let gameState: GameState = { ...base, weeklyMissionState: { ...rolled, progress } };
 
     for (const mission of shown) {
       const next = claimWeeklyMission(gameState, mission.slot, MON, undefined, false);
       expect(next).not.toBeNull();
       gameState = next!;
     }
-    const finalSnap = getWeeklyMissionsSnapshot(gameState.weeklyMissionState, MON, ALL_AREAS, undefined, false);
+    const finalSnap = getWeeklyMissionsSnapshot(
+      gameState.weeklyMissionState,
+      MON,
+      ALL_AREAS,
+      undefined,
+      false,
+      gameState
+    );
     expect(finalSnap.missions.every((m) => m.claimed)).toBe(true);
     expect(finalSnap.missions.some((m) => m.claimable)).toBe(false);
   });

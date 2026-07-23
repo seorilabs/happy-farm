@@ -1,15 +1,15 @@
 // 주간 미션 트랙.
-// 일일 미션(오늘의 목표) 위에 "주(週)" 시간 지평을 얹어, 하루 3슬롯을 다 마쳐도 며칠에 걸쳐
+// 일일 미션(오늘의 목표) 위에 "주(週)" 시간 지평을 얹어, 하루 목표 뒤에도 며칠에 걸쳐
 // 이어갈 장기 목표를 제공한다. UTC 월요일 자정 경계로 주가 바뀌며(cropOfTheDay/일일 미션과 같은
 // UTC 일수 기반), 목표는 balance.missions.weekly.slots의 고정 목표를 쓰고 harvest_area의
 // "이번 주 구역"만 주 단위로 결정론적으로 회전한다. 진행도/수령/구역 스냅샷만 메타 레이어에 저장한다.
 //
-// 진행은 기존 이벤트 경로를 재사용해 누적한다: 수확 파이프라인(harvest 슬롯 +1, harvest_area는
-// 이번 주 구역과 일치 시 +1, donate 슬롯은 기부 모드 수확 시 +1)과 보상형 광고 시청(watch_ad).
+// 진행은 canonical 이벤트 경로를 재사용해 수확·광고·기부와 딥 시스템 행동을 함께 누적한다.
 
 import balance from './balance.json';
 import type { AreaKey, GameState } from './types';
 import { getResetDayIndex } from './resetBoundary';
+import { isMissionTypeUnlocked } from './missionAvailability';
 
 export type WeeklyMissionType = (typeof balance.missions.weekly.slots)[number]['type'];
 
@@ -130,8 +130,11 @@ function resolveMissions(areaKeys: readonly (AreaKey | null)[], adRewardGold?: n
 // 광고 미지원/무필 환경에서 watch_ad 주간 미션은 영구 미완이 되어 100% 완주를 봉쇄한다(#366).
 // 광고가 지원되지 않으면 표시·수령 목록에서 watch_ad 슬롯을 제외한다(일일 미션과 동일 정책).
 // 진행도 기록 경로는 건드리지 않는다(광고 미지원 환경에선 watch_ad 진행이 발생하지 않음).
-function isMissionAvailable(type: WeeklyMissionType, adSupported: boolean): boolean {
-  return adSupported || type !== 'watch_ad';
+function isMissionAvailable(type: WeeklyMissionType, adSupported: boolean, gameState?: GameState): boolean {
+  if (!adSupported && type === 'watch_ad') {
+    return false;
+  }
+  return gameState == null || isMissionTypeUnlocked(gameState, type);
 }
 
 // 해당 주의 주간 미션 "미리보기"를 결정론적으로 반환한다(구역을 즉석 추첨). 같은
@@ -140,10 +143,11 @@ export function getWeeklyMissions(
   weekKey: string,
   unlockedAreas?: readonly AreaKey[],
   adRewardGold?: number,
-  adSupported = true
+  adSupported = true,
+  gameState?: GameState
 ): WeeklyMission[] {
   return resolveMissions(pickFeaturedAreas(weekKey, unlockedAreas), adRewardGold).filter((mission) =>
-    isMissionAvailable(mission.type, adSupported)
+    isMissionAvailable(mission.type, adSupported, gameState)
   );
 }
 
@@ -279,8 +283,13 @@ function recordProgressForMatches(
   state: WeeklyMissionState,
   now: number,
   unlockedAreas: readonly AreaKey[] | undefined,
-  matches: (mission: WeeklyMission) => boolean
+  matches: (mission: WeeklyMission) => boolean,
+  amount = 1
 ): WeeklyMissionState {
+  const safeAmount = Number.isFinite(amount) && amount > 0 ? Math.floor(amount) : 0;
+  if (safeAmount <= 0) {
+    return state;
+  }
   const weekKey = getMissionWeekKey(now);
   const rolled = rolloverWeeklyMissions(state, weekKey, unlockedAreas);
   const missions = resolveMissions(rolled.areaKeys);
@@ -292,7 +301,7 @@ function recordProgressForMatches(
     if (progress === rolled.progress) {
       progress = [...rolled.progress];
     }
-    progress[mission.slot] = (progress[mission.slot] ?? 0) + 1;
+    progress[mission.slot] = (progress[mission.slot] ?? 0) + safeAmount;
   }
   return progress === rolled.progress ? rolled : { ...rolled, progress };
 }
@@ -328,6 +337,66 @@ export function recordWeeklyAdWatchProgress(
   return recordProgressForMatches(state, now, unlockedAreas, (mission) => mission.type === 'watch_ad');
 }
 
+export function recordWeeklyProduceCollectionProgress(
+  state: WeeklyMissionState,
+  amount = 1,
+  now = Date.now(),
+  unlockedAreas?: readonly AreaKey[]
+): WeeklyMissionState {
+  return recordProgressForMatches(
+    state,
+    now,
+    unlockedAreas,
+    (mission) => mission.type === 'collect_produce',
+    amount
+  );
+}
+
+export function recordWeeklyCraftCompletionProgress(
+  state: WeeklyMissionState,
+  amount = 1,
+  now = Date.now(),
+  unlockedAreas?: readonly AreaKey[]
+): WeeklyMissionState {
+  return recordProgressForMatches(
+    state,
+    now,
+    unlockedAreas,
+    (mission) => mission.type === 'craft_complete',
+    amount
+  );
+}
+
+export function recordWeeklyGoldSpentProgress(
+  state: WeeklyMissionState,
+  goldSpent: number,
+  now = Date.now(),
+  unlockedAreas?: readonly AreaKey[]
+): WeeklyMissionState {
+  return recordProgressForMatches(
+    state,
+    now,
+    unlockedAreas,
+    (mission) => mission.type === 'spend_gold',
+    goldSpent
+  );
+}
+
+export function recordWeeklyBreedProgress(
+  state: WeeklyMissionState,
+  amount = 1,
+  now = Date.now(),
+  unlockedAreas?: readonly AreaKey[]
+): WeeklyMissionState {
+  return recordProgressForMatches(
+    state,
+    now,
+    unlockedAreas,
+    (mission) => mission.type === 'breed',
+    amount
+  );
+}
+
 export type WeeklyMissionView = WeeklyMission & {
   progress: number;
   completed: boolean;
@@ -350,12 +419,13 @@ export function getWeeklyMissionsSnapshot(
   now = Date.now(),
   unlockedAreas?: readonly AreaKey[],
   adRewardGold?: number,
-  adSupported = true
+  adSupported = true,
+  gameState?: GameState
 ): WeeklyMissionsSnapshot {
   const weekKey = getMissionWeekKey(now);
   const rolled = rolloverWeeklyMissions(state, weekKey, unlockedAreas);
   const missions = resolveMissions(rolled.areaKeys, adRewardGold)
-    .filter((mission) => isMissionAvailable(mission.type, adSupported))
+    .filter((mission) => isMissionAvailable(mission.type, adSupported, gameState))
     .map((mission) => {
       const progress = rolled.progress[mission.slot] ?? 0;
       const completed = progress >= mission.target;
@@ -371,9 +441,10 @@ export function canClaimWeeklyMission(
   slot: number,
   now = Date.now(),
   unlockedAreas?: readonly AreaKey[],
-  adSupported = true
+  adSupported = true,
+  gameState?: GameState
 ): boolean {
-  const snapshot = getWeeklyMissionsSnapshot(state, now, unlockedAreas, undefined, adSupported);
+  const snapshot = getWeeklyMissionsSnapshot(state, now, unlockedAreas, undefined, adSupported, gameState);
   return snapshot.missions.some((mission) => mission.slot === slot && mission.claimable);
 }
 
@@ -392,7 +463,8 @@ export function claimWeeklyMission(
     now,
     gameState.unlockedAreas,
     adRewardGold,
-    adSupported
+    adSupported,
+    gameState
   );
   const mission = snapshot.missions.find((candidate) => candidate.slot === slot);
   if (mission == null || !mission.claimable) {

@@ -29,6 +29,8 @@ import {
 } from '../constants';
 import { performHarvest, runAutomationTick } from '../harvest';
 import { COLLECTION_FULL_REWARD_KEY, type CropKey, type GameState } from '../types';
+import { getDailyMissionsSnapshot } from '../missions';
+import { getWeeklyMissionsSnapshot } from '../weeklyMissions';
 
 function getRecipe(cropKey: string) {
   const recipe = BREEDING_RECIPES.find((candidate) => candidate.crop === cropKey);
@@ -180,16 +182,27 @@ describe('breeding', () => {
 
   test('breedCrop unlocks the crop for planting and feeds lifetime stats', () => {
     const ready = breedableState('crystalberry');
+    const now = Date.UTC(2026, 6, 1);
     expect(isCropPlantable(ready, 'crystalberry')).toBe(false);
 
-    const bred = breedCrop(ready, 'crystalberry');
+    const bred = breedCrop(ready, 'crystalberry', now);
     expect(bred).not.toBeNull();
     expect(bred!.research.points).toBe(0);
     expect(bred!.research.unlockedBreeds).toEqual(['crystalberry']);
     expect(bred!.lifetimeStats.breedsUnlocked).toBe(1);
     expect(isCropPlantable(bred!, 'crystalberry')).toBe(true);
+    expect(
+      getDailyMissionsSnapshot(bred!.dailyMissionState, now, bred!.unlockedAreas).missions.find(
+        (mission) => mission.type === 'breed'
+      )!.progress
+    ).toBe(1);
+    expect(
+      getWeeklyMissionsSnapshot(bred!.weeklyMissionState, now, bred!.unlockedAreas).missions.find(
+        (mission) => mission.type === 'breed'
+      )!.progress
+    ).toBe(1);
 
-    expect(breedCrop(bred!, 'crystalberry')).toBeNull();
+    expect(breedCrop(bred!, 'crystalberry', now)).toBeNull();
   });
 
   test('regular crops are always plantable once their area opens', () => {

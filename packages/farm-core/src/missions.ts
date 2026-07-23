@@ -1,5 +1,5 @@
 // 일일 미션(오늘의 목표) 로직.
-// UTC 하루마다 3종 미션(작물 수확 / 특정 구역 수확 / 광고 시청)으로 능동적 플레이를 유도한다.
+// UTC 하루마다 balance 슬롯의 미션으로 작물·동물·공방·교배·골드 소비 플레이를 유도한다.
 // 목표치는 날짜 해시로 결정되고, harvest_area 미션의 "오늘의 구역"은 하루가 시작될 때(롤오버)
 // 플레이어의 해금 구역에서 한 번 뽑아 DailyMissionState.areaKeys에 고정한다. 이렇게 하면 같은
 // 날 동안 해금 상태가 바뀌어도 미션 구역이 흔들리지 않아, 표시(snapshot)·진행도 기록(record)·
@@ -9,6 +9,7 @@
 import balance from './balance.json';
 import type { AreaKey, GameState } from './types';
 import { getResetDayIndex } from './resetBoundary';
+import { isMissionTypeUnlocked } from './missionAvailability';
 
 export type MissionType = (typeof balance.missions.slots)[number]['type'];
 
@@ -73,8 +74,11 @@ function getSlotRewardGold(slot: MissionSlotConfig, adRewardGold?: number): numb
 // (recordProgressForMatches)는 건드리지 않는다: 광고 미지원 환경에선 watch_ad 진행이 애초에
 // 발생하지 않으므로, 제외는 순수하게 표시/수령 레이어에서만 일어나면 충분하다. adSupported는
 // 결정론적 입력이라 같은 (dayKey, adSupported)면 같은 미션 목록을 만든다.
-function isMissionAvailable(type: MissionType, adSupported: boolean): boolean {
-  return adSupported || type !== 'watch_ad';
+function isMissionAvailable(type: MissionType, adSupported: boolean, gameState?: GameState): boolean {
+  if (!adSupported && type === 'watch_ad') {
+    return false;
+  }
+  return gameState == null || isMissionTypeUnlocked(gameState, type);
 }
 
 // 미션 추첨 풀(선언 순서 유지). harvest_area의 "오늘의 구역"을 여기서 뽑는다.
@@ -147,17 +151,18 @@ function resolveMissions(
   });
 }
 
-// 해당 날짜의 미션 3종 "미리보기"를 결정론적으로 반환한다(구역을 즉석에서 추첨). 실제 진행도
+// 해당 날짜의 미션 "미리보기"를 결정론적으로 반환한다(구역을 즉석에서 추첨). 실제 진행도
 // 기록/표시는 DailyMissionState.areaKeys에 고정된 구역을 쓰므로, 이 함수는 UI 프리뷰/테스트
 // 용도다. 같은 (dayKey, unlockedAreas, adRewardGold)면 항상 동일.
 export function getDailyMissions(
   dayKey: string,
   unlockedAreas?: readonly AreaKey[],
   adRewardGold?: number,
-  adSupported = true
+  adSupported = true,
+  gameState?: GameState
 ): DailyMission[] {
   return resolveMissions(dayKey, pickFeaturedAreas(dayKey, unlockedAreas), adRewardGold).filter((mission) =>
-    isMissionAvailable(mission.type, adSupported)
+    isMissionAvailable(mission.type, adSupported, gameState)
   );
 }
 
@@ -237,8 +242,13 @@ function recordProgressForMatches(
   state: DailyMissionState,
   now: number,
   unlockedAreas: readonly AreaKey[] | undefined,
-  matches: (mission: DailyMission) => boolean
+  matches: (mission: DailyMission) => boolean,
+  amount = 1
 ): DailyMissionState {
+  const safeAmount = Number.isFinite(amount) && amount > 0 ? Math.floor(amount) : 0;
+  if (safeAmount <= 0) {
+    return state;
+  }
   const dayKey = getMissionDayKey(now);
   const rolled = rolloverDailyMissions(state, dayKey, unlockedAreas);
   // 진행도 매칭은 이 날 고정된 areaKeys 기준 — unlockedAreas 시점 차이에 영향받지 않는다.
@@ -251,7 +261,7 @@ function recordProgressForMatches(
     if (progress === rolled.progress) {
       progress = [...rolled.progress];
     }
-    progress[mission.slot] = (progress[mission.slot] ?? 0) + 1;
+    progress[mission.slot] = (progress[mission.slot] ?? 0) + safeAmount;
   }
   return progress === rolled.progress ? rolled : { ...rolled, progress };
 }
@@ -294,6 +304,66 @@ export function recordAdWatchProgress(
   return recordProgressForMatches(state, now, unlockedAreas, (mission) => mission.type === 'watch_ad');
 }
 
+export function recordProduceCollectionProgress(
+  state: DailyMissionState,
+  amount = 1,
+  now = Date.now(),
+  unlockedAreas?: readonly AreaKey[]
+): DailyMissionState {
+  return recordProgressForMatches(
+    state,
+    now,
+    unlockedAreas,
+    (mission) => mission.type === 'collect_produce',
+    amount
+  );
+}
+
+export function recordCraftCompletionProgress(
+  state: DailyMissionState,
+  amount = 1,
+  now = Date.now(),
+  unlockedAreas?: readonly AreaKey[]
+): DailyMissionState {
+  return recordProgressForMatches(
+    state,
+    now,
+    unlockedAreas,
+    (mission) => mission.type === 'craft_complete',
+    amount
+  );
+}
+
+export function recordGoldSpentProgress(
+  state: DailyMissionState,
+  goldSpent: number,
+  now = Date.now(),
+  unlockedAreas?: readonly AreaKey[]
+): DailyMissionState {
+  return recordProgressForMatches(
+    state,
+    now,
+    unlockedAreas,
+    (mission) => mission.type === 'spend_gold',
+    goldSpent
+  );
+}
+
+export function recordBreedProgress(
+  state: DailyMissionState,
+  amount = 1,
+  now = Date.now(),
+  unlockedAreas?: readonly AreaKey[]
+): DailyMissionState {
+  return recordProgressForMatches(
+    state,
+    now,
+    unlockedAreas,
+    (mission) => mission.type === 'breed',
+    amount
+  );
+}
+
 export type DailyMissionView = DailyMission & {
   progress: number;
   completed: boolean;
@@ -318,12 +388,13 @@ export function getDailyMissionsSnapshot(
   now = Date.now(),
   unlockedAreas?: readonly AreaKey[],
   adRewardGold?: number,
-  adSupported = true
+  adSupported = true,
+  gameState?: GameState
 ): DailyMissionsSnapshot {
   const dayKey = getMissionDayKey(now);
   const rolled = rolloverDailyMissions(state, dayKey, unlockedAreas);
   const missions = resolveMissions(rolled.dayKey, rolled.areaKeys, adRewardGold)
-    .filter((mission) => isMissionAvailable(mission.type, adSupported))
+    .filter((mission) => isMissionAvailable(mission.type, adSupported, gameState))
     .map((mission) => {
       const progress = rolled.progress[mission.slot] ?? 0;
       const completed = progress >= mission.target;
@@ -339,9 +410,10 @@ export function canClaimMission(
   slot: number,
   now = Date.now(),
   unlockedAreas?: readonly AreaKey[],
-  adSupported = true
+  adSupported = true,
+  gameState?: GameState
 ): boolean {
-  const snapshot = getDailyMissionsSnapshot(state, now, unlockedAreas, undefined, adSupported);
+  const snapshot = getDailyMissionsSnapshot(state, now, unlockedAreas, undefined, adSupported, gameState);
   return snapshot.missions.some((mission) => mission.slot === slot && mission.claimable);
 }
 
@@ -360,7 +432,8 @@ export function claimMission(
     now,
     gameState.unlockedAreas,
     adRewardGold,
-    adSupported
+    adSupported,
+    gameState
   );
   const mission = snapshot.missions.find((candidate) => candidate.slot === slot);
   if (mission == null || !mission.claimable) {

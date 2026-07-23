@@ -1,5 +1,6 @@
 import balance from './balance.json';
 import type { AreaKey, AutomationSettings, CropKey, GameState, ResearchNodeKey, ResearchState } from './types';
+import { recordMissionProgressEvent } from './missionEvents';
 
 export type ResearchNode = {
   key: ResearchNodeKey;
@@ -118,13 +119,13 @@ export function getBreedingRecipeStatus(gameState: GameState, recipe: BreedingRe
   };
 }
 
-export function breedCrop(gameState: GameState, cropKey: CropKey): GameState | null {
+export function breedCrop(gameState: GameState, cropKey: CropKey, now = Date.now()): GameState | null {
   const recipe = BREEDING_RECIPES.find((candidate) => candidate.crop === cropKey);
   if (recipe == null || !getBreedingRecipeStatus(gameState, recipe).breedable) {
     return null;
   }
 
-  return {
+  const next: GameState = {
     ...gameState,
     research: {
       ...gameState.research,
@@ -136,6 +137,7 @@ export function breedCrop(gameState: GameState, cropKey: CropKey): GameState | n
       breedsUnlocked: gameState.lifetimeStats.breedsUnlocked + 1,
     },
   };
+  return recordMissionProgressEvent(next, { type: 'breed' }, now);
 }
 
 export function createInitialResearchState(): ResearchState {
