@@ -2087,28 +2087,36 @@ describe('FarmGame UI flow', () => {
       expect(craftEvents(track, 'production_screen')).toHaveLength(1);
     });
 
-    test('AC-2: startCraftNow/collectCraftNow/cancelCraftNow 배선 — 각 상태 전이 성공 시에만 이벤트를 발화한다 (#421)', async () => {
+    test('AC-2: FarmGame startCraftNow/collectCraftNow/cancelCraftNow/일괄 수집 경로에 배선 — 상태 전이 성공 시에만 발화 (#421)', async () => {
       const track = jest.fn();
+      // 5개 레시피를 서로 다른 phase로 두고 한 화면에서 네 경로를 모두 조작한다.
       const rStart = PRODUCTION_RECIPES[0]!;
       const rCancel = PRODUCTION_RECIPES[1]!;
       const rCollect = PRODUCTION_RECIPES[2]!;
+      const rBatchA = PRODUCTION_RECIPES[3]!;
+      const rBatchB = PRODUCTION_RECIPES[4]!;
       const base = createInitialState();
       const inventory = { ...base.production.inventory };
       for (const input of rStart.inputs) {
         inventory[input.crop] = (inventory[input.crop] ?? 0) + input.qty;
       }
-      // rCancel: 진행 중(미완료), rCollect: 완료(수집 가능), rStart: 재료 보유(시작 가능).
+      // rStart: 재료 보유(시작), rCancel: 진행 중(취소), rCollect/rBatchA/rBatchB: 완료(수집/일괄).
       const state: GameState = {
         ...base,
         production: {
           inventory,
-          crafting: { [rCancel.key]: NOW, [rCollect.key]: NOW - rCollect.timerMs },
+          crafting: {
+            [rCancel.key]: NOW,
+            [rCollect.key]: NOW - rCollect.timerMs,
+            [rBatchA.key]: NOW - rBatchA.timerMs,
+            [rBatchB.key]: NOW - rBatchB.timerMs,
+          },
         },
       };
       const localMessages = getFarmMessages(DEFAULT_LOCALE);
       const screen = await openWorkshopFromMore(state, track);
 
-      // 재료 부족 레시피의 시작 버튼은 비활성 → 상태 전이 없음 → 이벤트 없음(성공 시에만 발화).
+      // 성공 시에만 발화: 재료 부족 레시피의 비활성 시작 버튼은 상태 전이가 없어 이벤트도 없다.
       const idleRecipe = PRODUCTION_RECIPES.find(
         (candidate) =>
           candidate.key !== rStart.key &&
@@ -2124,7 +2132,7 @@ describe('FarmGame UI flow', () => {
         expect(craftEvents(track, 'craft_started')).toHaveLength(0);
       }
 
-      // startCraftNow → craft_started (1회, recipe key 포함).
+      // startCraftNow → craft_started (1회, recipe key).
       await act(async () => {
         fireEvent.press(
           within(screen.getByTestId(`recipe-card-${rStart.key}`)).getByText(localMessages.workshopStartAction)
@@ -2157,32 +2165,18 @@ describe('FarmGame UI flow', () => {
       expect(craftEvents(track, 'craft_canceled')[0]![1]).toEqual(
         expect.objectContaining({ recipe: rCancel.key, refunded_count: refundedCount, schema_version: 1 })
       );
-    });
 
-    test('AC-2: 일괄 수집 배선 — 배치 커밋당 craft_collect_all을 1회만 발화한다 (#421)', async () => {
-      const track = jest.fn();
-      const ready = PRODUCTION_RECIPES.slice(0, 2);
-      expect(ready).toHaveLength(2);
-      const totalGold = ready.reduce((sum, r) => sum + r.sellPrice, 0);
-      const base = createInitialState();
-      const state: GameState = {
-        ...base,
-        production: {
-          ...base.production,
-          crafting: Object.fromEntries(ready.map((r) => [r.key, NOW - r.timerMs])),
-        },
-      };
-      const screen = await openWorkshopFromMore(state, track);
-
+      // 일괄 수집(collectAllCrafts) → craft_collect_all (배치당 1회, 남은 완료분 2건).
+      const batchGold = rBatchA.sellPrice + rBatchB.sellPrice;
       await act(async () => {
         fireEvent.press(screen.getByTestId('workshop-collect-all-action'));
       });
       await waitFor(() => expect(craftEvents(track, 'craft_collect_all')).toHaveLength(1));
       expect(craftEvents(track, 'craft_collect_all')[0]![1]).toEqual(
-        expect.objectContaining({ collected_count: 2, total_gold: totalGold, schema_version: 1 })
+        expect.objectContaining({ collected_count: 2, total_gold: batchGold, schema_version: 1 })
       );
-      // 배치는 하나의 퍼널 스텝이므로 개별 craft_collected는 발화하지 않는다.
-      expect(craftEvents(track, 'craft_collected')).toHaveLength(0);
+      // 배치는 하나의 퍼널 스텝: 개별 수집(rCollect) 외에 추가 craft_collected는 발화하지 않는다.
+      expect(craftEvents(track, 'craft_collected')).toHaveLength(1);
     });
   });
 

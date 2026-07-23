@@ -533,7 +533,7 @@ describe('farm analytics adapter contract', () => {
     expect(track.mock.calls[2]![1]).toHaveProperty('gold', context.gold);
   });
 
-  test('AC-1: 공방 트래커 5종이 recipe key·수량·GameAnalyticsContext 파라미터를 포함해 추가됐다 (#421)', () => {
+  test('AC-1: analytics.ts에 trackCraftStarted/trackCraftCollected/trackCraftCanceled/trackCraftCollectAll/trackProductionScreen 추가 (recipe key·수량·GameAnalyticsContext 파라미터) (#421)', () => {
     const track = jest.fn();
     const analytics = createFarmAnalytics(track);
     const context = getGameAnalyticsContext(createInitialState(), 0, 5_000);
