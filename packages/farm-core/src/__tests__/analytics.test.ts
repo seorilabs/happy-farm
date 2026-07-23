@@ -539,7 +539,14 @@ describe('farm analytics adapter contract', () => {
     const context = getGameAnalyticsContext(createInitialState(), 0, 5_000);
     const contextKeys = Object.keys(context);
 
-    // 다섯 트래커가 모두 존재하고 호출 가능하다(계약 추가 여부).
+    // 다섯 트래커가 analytics.ts에 실제로 추가돼 함수로 존재한다.
+    expect(typeof analytics.trackProductionScreen).toBe('function');
+    expect(typeof analytics.trackCraftStarted).toBe('function');
+    expect(typeof analytics.trackCraftCollected).toBe('function');
+    expect(typeof analytics.trackCraftCanceled).toBe('function');
+    expect(typeof analytics.trackCraftCollectAll).toBe('function');
+
+    // 호출 시 각 이벤트가 계약된 파라미터로 발화된다.
     analytics.trackProductionScreen({ source: 'more', craftingCount: 2, readyCount: 1, context });
     analytics.trackCraftStarted({ recipeKey: 'bread', context });
     analytics.trackCraftCollected({ recipeKey: 'bread', revenue: 300, context });
