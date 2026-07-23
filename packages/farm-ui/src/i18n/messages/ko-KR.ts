@@ -247,6 +247,12 @@ export const koFarmMessages = {
   wheelRewardBoostToast: (time: string, multiplier: number) => `룰렛 당첨! ${time} 동안 수확 보상 ×${multiplier} 부스트!`,
   labButton: '🔬 연구소',
   labButtonAccessibilityLabel: '연구소',
+  productionButton: '🏭 생산',
+  productionButtonAccessibilityLabel: '동물과 공방 생산',
+  sheetTitleProduction: '생산',
+  sheetDescriptionProduction: '동물 산출물과 공방 가공품을 한곳에서 관리하세요.',
+  productionTabAnimals: '동물',
+  productionTabWorkshop: '공방',
   // 동물 사육/생산(#249): '더보기' 시트 뒤로 묶는 신규 진입점.
   animalsButton: '🐄 목장',
   animalsButtonAccessibilityLabel: '동물 목장',

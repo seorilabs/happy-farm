@@ -57,6 +57,7 @@ import { LabSheet } from '../../../../../packages/farm-ui/src/components/LabShee
 import { ChainMapSheet, PrestigeConfirmSheet } from '../../../../../packages/farm-ui/src/components/ChainMapSheet';
 import { WheelSheet } from '../../../../../packages/farm-ui/src/components/WheelSheet';
 import { AnimalsSheet } from '../../../../../packages/farm-ui/src/components/AnimalsSheet';
+import { ProductionSheet, type ProductionTabKey } from '../../../../../packages/farm-ui/src/components/ProductionSheet';
 import { WorkshopSheet } from '../../../../../packages/farm-ui/src/components/WorkshopSheet';
 import { MissionsSheet } from '../../../../../packages/farm-ui/src/components/MissionsSheet';
 
@@ -215,6 +216,59 @@ describe('ready output batch actions', () => {
     screen.rerender(renderSheet(NOW - recipe.timerMs));
     expect(screen.queryByTestId(`workshop-cancel-${recipe.key}`)).toBeNull();
     expect(screen.getByText(messages.workshopCollectAction(formatMoney(recipe.sellPrice, LOCALE)))).toBeTruthy();
+  });
+
+  test('production sheet preserves per-tab ready badges and switches between the existing loops (#369)', () => {
+    const animal = ANIMALS[0]!;
+    const recipe = PRODUCTION_RECIPES[0]!;
+    const base = createInitialState();
+    const state: GameState = {
+      ...base,
+      animals: {
+        owned: [animal.key],
+        feeding: { [animal.key]: NOW - animal.produceTimerMs },
+      },
+      production: {
+        ...base.production,
+        crafting: { [recipe.key]: NOW - recipe.timerMs },
+      },
+    };
+    const onTabChange = jest.fn();
+    const renderSheet = (activeTab: ProductionTabKey) => (
+      <ProductionSheet
+        activeTab={activeTab}
+        gameState={state}
+        locale={LOCALE}
+        messages={messages}
+        now={NOW}
+        getCropName={(cropKey) => getCropLabel(cropKey, LOCALE).name}
+        onTabChange={onTabChange}
+        onPurchaseAnimal={jest.fn()}
+        onFeedAnimal={jest.fn()}
+        onCollectAnimal={jest.fn()}
+        onCollectAllAnimals={jest.fn()}
+        onStartCraft={jest.fn()}
+        onCancelCraft={jest.fn()}
+        onCollectCraft={jest.fn()}
+        onCollectAllCrafts={jest.fn()}
+      />
+    );
+    const screen = render(renderSheet('animals'));
+
+    expect(screen.getByTestId('production-sheet')).toBeTruthy();
+    expect(screen.getByTestId('production-tab-animals').props.accessibilityState.selected).toBe(true);
+    expect(within(screen.getByTestId('production-tab-animals-badge')).getByText('1')).toBeTruthy();
+    expect(within(screen.getByTestId('production-tab-workshop-badge')).getByText('1')).toBeTruthy();
+    expect(screen.getByTestId('animals-sheet')).toBeTruthy();
+    expect(screen.queryByTestId('workshop-sheet')).toBeNull();
+
+    fireEvent.press(screen.getByTestId('production-tab-workshop'));
+    expect(onTabChange).toHaveBeenCalledWith('workshop');
+    screen.rerender(renderSheet('workshop'));
+
+    expect(screen.getByTestId('production-tab-workshop').props.accessibilityState.selected).toBe(true);
+    expect(screen.queryByTestId('animals-sheet')).toBeNull();
+    expect(screen.getByTestId('workshop-sheet')).toBeTruthy();
   });
 });
 

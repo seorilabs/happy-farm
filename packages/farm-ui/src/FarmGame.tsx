@@ -235,10 +235,9 @@ import { EnvironmentBackdrop } from './components/EnvironmentBackdrop';
 import { FarmOnboarding, ONBOARDING_STEPS, type OnboardingStep } from './components/FarmOnboarding';
 import { LabSheet } from './components/LabSheet';
 import { MissionsSheet } from './components/MissionsSheet';
+import { ProductionSheet, type ProductionTabKey } from './components/ProductionSheet';
 import { StatsSheet, type FarmRecordStats } from './components/StatsSheet';
 import { WheelSheet } from './components/WheelSheet';
-import { AnimalsSheet } from './components/AnimalsSheet';
-import { WorkshopSheet } from './components/WorkshopSheet';
 import { AdRewardCard, CloudSaveSection, SettingToggle, SheetAction, ShopCard, sheetPartStyles } from './components/SheetParts';
 import {
   DISCOVERY_BANNER_BASE_BOTTOM,
@@ -412,8 +411,7 @@ type ActiveSheet =
   | { type: 'welcomeBack'; summary: ReturnSummary }
   | DailyBonusSheet
   | { type: 'wheel' }
-  | { type: 'animals'; source: AnimalsScreenSource }
-  | { type: 'workshop' }
+  | { type: 'production'; tab: ProductionTabKey; source: AnimalsScreenSource }
   | { type: 'resetConfirm' }
   | null;
 
@@ -2400,13 +2398,14 @@ function FarmGameBody({
       );
     }
 
-    // 시트 타입 전이당 1회만 발화. 같은 시트가 열린 채 재실행되면 여기서 종료한다.
-    // 시트를 닫았다(null 등 다른 타입)가 다시 열면 타입이 바뀌므로 다시 1회 발화한다.
-    const sheetType = activeSheet?.type ?? null;
-    if (sheetImpressionTypeRef.current === sheetType) {
+    // 시트 타입 전이당 1회만 발화한다. 생산 시트는 탭까지 키에 포함해 공방에서 동물
+    // 탭으로 처음 전환할 때 기존 animals_screen 노출 이벤트가 보존되도록 한다.
+    const sheetImpressionKey =
+      activeSheet?.type === 'production' ? `${activeSheet.type}:${activeSheet.tab}` : (activeSheet?.type ?? null);
+    if (sheetImpressionTypeRef.current === sheetImpressionKey) {
       return;
     }
-    sheetImpressionTypeRef.current = sheetType;
+    sheetImpressionTypeRef.current = sheetImpressionKey;
     if (buildContext == null) {
       return;
     }
@@ -2425,7 +2424,7 @@ function FarmGameBody({
     if (activeSheet?.type === 'collection') {
       farmAnalytics.trackCollectionScreen(buildContext());
     }
-    if (activeSheet?.type === 'animals') {
+    if (activeSheet?.type === 'production' && activeSheet.tab === 'animals') {
       const state = gameStateRef.current;
       const statuses = getAnimalStates(state, Date.now());
       farmAnalytics.trackAnimalsScreen({
@@ -2910,7 +2909,7 @@ function FarmGameBody({
   // 위임하고, 여기서는 상태 반영과 토스트/펄스만 담당한다. 각 액션은 functional
   // updater 안에서 재검증해 이중 차감/이중 수확을 막는다.
   function openAnimals() {
-    setActiveSheet({ type: 'animals', source: 'more' });
+    setActiveSheet({ type: 'production', tab: 'animals', source: 'more' });
   }
 
   function buyAnimal(key: AnimalKey) {
@@ -3034,7 +3033,7 @@ function FarmGameBody({
   // 생산 가공 공방 시트('더보기' 뒤). 가공 시작/수집은 core 순수 함수에 위임하고,
   // functional updater 안에서 재검증해 이중 차감/이중 수집을 막는다.
   function openWorkshop() {
-    setActiveSheet({ type: 'workshop' });
+    setActiveSheet({ type: 'production', tab: 'workshop', source: 'more' });
   }
 
   function startCraftNow(key: ProductionRecipeKey) {
@@ -3314,7 +3313,7 @@ function FarmGameBody({
     if (!collectReturnSummaryOffline(summary)) {
       return;
     }
-    setActiveSheet(target === 'animals' ? { type: 'animals', source: 'welcome_back' } : { type: 'workshop' });
+    setActiveSheet({ type: 'production', tab: target, source: 'welcome_back' });
   }
 
   function openPrestigeConfirm() {
@@ -4436,18 +4435,11 @@ function FarmGameBody({
       onPress: openLab,
     },
     {
-      key: 'animals',
-      label: messages.animalsButton,
-      accessibilityLabel: messages.animalsButtonAccessibilityLabel,
-      badge: animalsReadyCount,
+      key: 'production',
+      label: messages.productionButton,
+      accessibilityLabel: messages.productionButtonAccessibilityLabel,
+      badge: animalsReadyCount + workshopReadyCount,
       onPress: openAnimals,
-    },
-    {
-      key: 'workshop',
-      label: messages.workshopButton,
-      accessibilityLabel: messages.workshopButtonAccessibilityLabel,
-      badge: workshopReadyCount,
-      onPress: openWorkshop,
     },
     {
       key: 'map',
@@ -4471,7 +4463,7 @@ function FarmGameBody({
   const moreMenuEntryByKey = new Map(moreMenuEntries.map((entry) => [entry.key, entry]));
   const moreMenuSections: { key: string; title: string; entryKeys: string[] }[] = [
     { key: 'daily', title: messages.moreSectionDaily, entryKeys: ['dailyBonus', 'wheel', 'collection'] },
-    { key: 'production', title: messages.moreSectionProduction, entryKeys: ['animals', 'workshop'] },
+    { key: 'production', title: messages.moreSectionProduction, entryKeys: ['production'] },
     { key: 'growth', title: messages.moreSectionGrowth, entryKeys: ['lab', 'map', 'achievements'] },
   ];
 
@@ -5461,30 +5453,23 @@ function FarmGameBody({
           />
         ) : null}
 
-        {activeSheet?.type === 'animals' ? (
-          <AnimalsSheet
-            gameState={gameState}
-            locale={locale}
-            messages={messages}
-            now={Date.now()}
-            onPurchase={buyAnimal}
-            onFeed={feedAnimalNow}
-            onCollect={collectAnimalProduce}
-            onCollectAll={collectAllAnimalProduce}
-          />
-        ) : null}
-
-        {activeSheet?.type === 'workshop' ? (
-          <WorkshopSheet
+        {activeSheet?.type === 'production' ? (
+          <ProductionSheet
+            activeTab={activeSheet.tab}
             gameState={gameState}
             locale={locale}
             messages={messages}
             now={Date.now()}
             getCropName={getLocalizedCropName}
-            onStart={startCraftNow}
-            onCancel={cancelCraftNow}
-            onCollect={collectCraftNow}
-            onCollectAll={collectAllCrafts}
+            onTabChange={(tab) => setActiveSheet({ ...activeSheet, tab })}
+            onPurchaseAnimal={buyAnimal}
+            onFeedAnimal={feedAnimalNow}
+            onCollectAnimal={collectAnimalProduce}
+            onCollectAllAnimals={collectAllAnimalProduce}
+            onStartCraft={startCraftNow}
+            onCancelCraft={cancelCraftNow}
+            onCollectCraft={collectCraftNow}
+            onCollectAllCrafts={collectAllCrafts}
           />
         ) : null}
 
@@ -7350,11 +7335,8 @@ function getSheetTitle(activeSheet: ActiveSheet, messages: FarmMessages) {
   if (activeSheet?.type === 'wheel') {
     return messages.sheetTitleWheel;
   }
-  if (activeSheet?.type === 'animals') {
-    return messages.sheetTitleAnimals;
-  }
-  if (activeSheet?.type === 'workshop') {
-    return messages.sheetTitleWorkshop;
+  if (activeSheet?.type === 'production') {
+    return messages.sheetTitleProduction;
   }
   if (activeSheet?.type === 'welcomeBack') {
     return messages.sheetTitleWelcomeBack;
@@ -7430,11 +7412,8 @@ function getSheetDescription(
   if (activeSheet?.type === 'wheel') {
     return messages.sheetDescriptionWheel;
   }
-  if (activeSheet?.type === 'animals') {
-    return messages.sheetDescriptionAnimals;
-  }
-  if (activeSheet?.type === 'workshop') {
-    return messages.sheetDescriptionWorkshop;
+  if (activeSheet?.type === 'production') {
+    return messages.sheetDescriptionProduction;
   }
   if (activeSheet?.type === 'welcomeBack') {
     return messages.sheetDescriptionWelcomeBack(formatDuration(activeSheet.summary.awayMs, locale));

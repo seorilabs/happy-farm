@@ -1476,7 +1476,38 @@ describe('FarmGame UI flow', () => {
       expect(within(wheelEntry).getByText('1')).toBeTruthy();
     });
 
-    test('더보기 시트가 성격별 섹션 헤더로 그룹화되고 8개 진입점이 유지된다 (#270, #294)', async () => {
+    test('생산 진입점은 동물·공방 수령 수를 합산하고 탭에는 각 수를 유지한다 (#369)', async () => {
+      const animal = ANIMALS[0]!;
+      const recipe = PRODUCTION_RECIPES[0]!;
+      const base = completedState();
+      const state: GameState = {
+        ...base,
+        dailyBonusState: { lastClaimedAt: NOW, streak: 1 },
+        animals: {
+          owned: [animal.key],
+          feeding: { [animal.key]: NOW - animal.produceTimerMs },
+        },
+        production: {
+          ...base.production,
+          crafting: { [recipe.key]: NOW - recipe.timerMs },
+        },
+      };
+      const screen = await renderGame(state);
+
+      // 무료 룰렛 1 + 통합 생산 2가 상단 더보기 배지에 롤업된다.
+      const moreButton = screen.getByTestId('more-nav-button');
+      expect(within(moreButton).getByText('3')).toBeTruthy();
+      fireEvent.press(moreButton);
+
+      const productionEntry = screen.getByLabelText(messages.productionButtonAccessibilityLabel);
+      expect(within(productionEntry).getByText('2')).toBeTruthy();
+      fireEvent.press(productionEntry);
+
+      expect(within(screen.getByTestId('production-tab-animals-badge')).getByText('1')).toBeTruthy();
+      expect(within(screen.getByTestId('production-tab-workshop-badge')).getByText('1')).toBeTruthy();
+    });
+
+    test('더보기 시트가 성격별 섹션 헤더로 그룹화되고 생산 통합 후 7개 진입점이 유지된다 (#270, #294, #369)', async () => {
       const screen = await renderMoreMenuWithDailyBonus();
 
       fireEvent.press(screen.getByTestId('more-nav-button'));
@@ -1486,21 +1517,25 @@ describe('FarmGame UI flow', () => {
       expect(screen.getByText(messages.moreSectionProduction)).toBeTruthy();
       expect(screen.getByText(messages.moreSectionGrowth)).toBeTruthy();
 
-      // 기존 7개 진입점과 출석 보너스 재진입점이 모두 존재한다.
+      // 기존 동물·공방 두 행은 생산 한 행으로 합쳐져 출석 보너스를 포함해 7개다.
       expect(screen.getByLabelText(messages.dailyBonusButtonAccessibilityLabel)).toBeTruthy();
       expect(screen.getByLabelText(messages.wheelButtonAccessibilityLabel)).toBeTruthy();
       expect(screen.getByLabelText(messages.collectionButtonAccessibilityLabel)).toBeTruthy();
       expect(screen.getByLabelText(messages.labButtonAccessibilityLabel)).toBeTruthy();
-      expect(screen.getByLabelText(messages.animalsButtonAccessibilityLabel)).toBeTruthy();
-      expect(screen.getByLabelText(messages.workshopButtonAccessibilityLabel)).toBeTruthy();
+      expect(screen.getByLabelText(messages.productionButtonAccessibilityLabel)).toBeTruthy();
+      expect(screen.queryByLabelText(messages.animalsButtonAccessibilityLabel)).toBeNull();
+      expect(screen.queryByLabelText(messages.workshopButtonAccessibilityLabel)).toBeNull();
       expect(screen.getByLabelText(messages.mapButtonAccessibilityLabel)).toBeTruthy();
       expect(screen.getByLabelText(messages.achievementsButtonAccessibilityLabel)).toBeTruthy();
 
-      // 그룹화 후에도 항목별 배지가 유지되고(룰렛=1), onPress 배선도 동일하다(공방 시트 전환).
+      // 통합 진입 후 동물 탭이 기본이고 공방 탭으로 전환할 수 있다.
       const wheelEntry = screen.getByLabelText(messages.wheelButtonAccessibilityLabel);
       expect(within(wheelEntry).getByText('1')).toBeTruthy();
-      fireEvent.press(screen.getByLabelText(messages.workshopButtonAccessibilityLabel));
-      expect(screen.getByText(messages.sheetTitleWorkshop)).toBeTruthy();
+      fireEvent.press(screen.getByLabelText(messages.productionButtonAccessibilityLabel));
+      expect(screen.getByText(messages.sheetTitleProduction)).toBeTruthy();
+      expect(screen.getByTestId('animals-sheet')).toBeTruthy();
+      fireEvent.press(screen.getByTestId('production-tab-workshop'));
+      expect(screen.getByTestId('workshop-sheet')).toBeTruthy();
     });
 
     test('더보기 growth의 개척 항목은 구매 가능한 명성 스킬 수를 배지로 표시한다 (#379)', async () => {
@@ -1660,7 +1695,7 @@ describe('FarmGame UI flow', () => {
       if (!strictMode) {
         const screen = await renderGame(state, { analytics: createFarmAnalytics(track) });
         fireEvent.press(screen.getByTestId('more-nav-button'));
-        fireEvent.press(screen.getByLabelText(messages.animalsButtonAccessibilityLabel));
+        fireEvent.press(screen.getByLabelText(messages.productionButtonAccessibilityLabel));
         await waitFor(() => expect(screen.getByTestId('animals-sheet')).toBeTruthy());
         return screen;
       }
@@ -1684,7 +1719,7 @@ describe('FarmGame UI flow', () => {
       });
       await waitFor(() => expect(screen.getByTestId('more-nav-button')).toBeTruthy());
       fireEvent.press(screen.getByTestId('more-nav-button'));
-      fireEvent.press(screen.getByLabelText(messages.animalsButtonAccessibilityLabel));
+      fireEvent.press(screen.getByLabelText(messages.productionButtonAccessibilityLabel));
       await waitFor(() => expect(screen.getByTestId('animals-sheet')).toBeTruthy());
       consoleErrorSpy.mockRestore();
       return screen;
@@ -1835,7 +1870,7 @@ describe('FarmGame UI flow', () => {
       const screen = await renderGame(state, { analytics: createFarmAnalytics(track) });
 
       fireEvent.press(screen.getByTestId('more-nav-button'));
-      fireEvent.press(screen.getByLabelText(messages.animalsButtonAccessibilityLabel));
+      fireEvent.press(screen.getByLabelText(messages.productionButtonAccessibilityLabel));
       const action = screen.getByTestId('animals-collect-all-action');
       await act(async () => {
         fireEvent.press(action);
@@ -1899,7 +1934,8 @@ describe('FarmGame UI flow', () => {
       });
 
       fireEvent.press(screen.getByTestId('more-nav-button'));
-      fireEvent.press(screen.getByLabelText(messages.workshopButtonAccessibilityLabel));
+      fireEvent.press(screen.getByLabelText(messages.productionButtonAccessibilityLabel));
+      fireEvent.press(screen.getByTestId('production-tab-workshop'));
       const action = screen.getByTestId('workshop-collect-all-action');
       expect(action.props.accessibilityLabel).toBe(messages.workshopCollectAllAction(2));
       await act(async () => {
@@ -1937,7 +1973,8 @@ describe('FarmGame UI flow', () => {
       const screen = await renderGame(afterStart, { preferredLocale: 'en-US' });
 
       fireEvent.press(screen.getByTestId('more-nav-button'));
-      fireEvent.press(screen.getByLabelText(messages.workshopButtonAccessibilityLabel));
+      fireEvent.press(screen.getByLabelText(messages.productionButtonAccessibilityLabel));
+      fireEvent.press(screen.getByTestId('production-tab-workshop'));
       const action = screen.getByTestId(`workshop-cancel-${recipe.key}`);
       await act(async () => {
         fireEvent.press(action);
@@ -2252,7 +2289,7 @@ describe('FarmGame UI flow', () => {
       fireEvent.press(animalRow);
       fireEvent.press(animalRow);
 
-      await waitFor(() => expect(screen.getByText(messages.sheetTitleAnimals)).toBeTruthy());
+      await waitFor(() => expect(screen.getByText(messages.sheetTitleProduction)).toBeTruthy());
       await waitFor(() =>
         expect(screen.getByText(`${formatMoney(state.gold + offlineGold, DEFAULT_LOCALE)}G`)).toBeTruthy()
       );
@@ -2287,7 +2324,7 @@ describe('FarmGame UI flow', () => {
 
       fireEvent.press(craftRow);
 
-      await waitFor(() => expect(screen.getByText(englishMessages.sheetTitleWorkshop)).toBeTruthy());
+      await waitFor(() => expect(screen.getByText(englishMessages.sheetTitleProduction)).toBeTruthy());
     });
   });
 
