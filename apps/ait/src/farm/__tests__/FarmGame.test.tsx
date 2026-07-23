@@ -2947,6 +2947,26 @@ describe('FarmGame UI flow', () => {
     }
   });
 
+  test('shows a static planting affordance inside empty plots without changing their interaction (#373)', async () => {
+    const messages = getFarmMessages(DEFAULT_LOCALE);
+    const state: GameState = { ...createInitialState(), onboardingCompleted: true };
+    const screen = await renderGame(state);
+
+    await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+    const firstPlot = screen.getByTestId('plot-cell-0');
+    expect(within(firstPlot).getByTestId('empty-plot-affordance-0')).toBeTruthy();
+    expect(within(firstPlot).getByTestId('empty-plot-seed-0')).toBeTruthy();
+    expect(within(firstPlot).getByText(messages.emptyPlot)).toBeTruthy();
+    expect(firstPlot.props.accessibilityLabel).toBe(messages.plotEmptyAccessibilityLabel(1));
+    expect(screen.queryByTestId('empty-plot-affordance-6')).toBeNull();
+
+    fireEvent.press(screen.getByTestId('seed-tool-carrot'));
+    fireEvent.press(firstPlot);
+
+    await waitFor(() => expect(screen.queryByTestId('empty-plot-affordance-0')).toBeNull());
+    expect(screen.getByTestId('growing-crop-fallback-sprout')).toBeTruthy();
+  });
+
   test('advances all four emoji fallback stages when no host art is provided', async () => {
     const screen = await renderGame(null);
 
