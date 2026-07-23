@@ -1,0 +1,227 @@
+name: Deploy Drift Check
+
+# 채널별 배포가 최신 릴리즈 태그를 따라잡고 있는지 매일 점검한다(#420).
+# 최신 v태그와 각 채널(AIT·Google Play)의 최근 성공 배포 태그를 비교해,
+# 태그 2개 이상 또는 72시간 이상 뒤처지면 step summary 경고 + 이슈로 알린다.
+# iOS는 Xcode Cloud(GH Actions 밖) 경로라 표에만 명시하고 판정에서 제외한다.
+on:
+  schedule:
+    # 매일 00:10 UTC(한국시간 09:10) — 정각 혼잡을 피해 10분 오프셋.
+    - cron: '10 0 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  issues: write
+
+concurrency:
+  group: happy-farm-deploy-drift-check
+  cancel-in-progress: false
+
+jobs:
+  drift-check:
+    name: Check channel deploy drift
+    runs-on: seorilabs-rpi-arm64
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Evaluate deploy drift
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const path = require('path');
+            const drift = require(path.resolve(process.env.GITHUB_WORKSPACE, 'scripts/deploy-drift.js'));
+
+            const { owner, repo } = context.repo;
+
+            // --- 1) v태그 목록(최신순)과 최신 태그 시각 수집 --------------------
+            const tagsOut = await exec.getExecOutput(
+              'git',
+              ['tag', '--list', 'v[0-9]*.[0-9]*.[0-9]*', '--sort=-v:refname'],
+              { silent: true },
+            );
+            const sortedTags = tagsOut.stdout.split('\n').map((s) => s.trim()).filter(Boolean);
+            const latestTag = sortedTags[0] ?? null;
+
+            if (!latestTag) {
+              core.summary.addHeading('배포 드리프트 점검').addRaw('vX.Y.Z 태그가 없어 점검을 건너뜁니다.');
+              await core.summary.write();
+              return;
+            }
+
+            async function tagDate(tag) {
+              const out = await exec.getExecOutput('git', ['log', '-1', '--format=%cI', tag], {
+                silent: true,
+                ignoreReturnCode: true,
+              });
+              const iso = out.stdout.trim();
+              return iso ? new Date(iso) : null;
+            }
+
+            async function shaToTag(sha) {
+              if (!sha) return null;
+              const out = await exec.getExecOutput(
+                'git',
+                ['tag', '--points-at', sha, '--list', 'v[0-9]*.[0-9]*.[0-9]*', '--sort=-v:refname'],
+                { silent: true, ignoreReturnCode: true },
+              );
+              const found = out.stdout.split('\n').map((s) => s.trim()).filter(Boolean);
+              return found[0] ?? null;
+            }
+
+            const latestTagDate = await tagDate(latestTag);
+            const referenceMs = (latestTagDate ?? new Date()).getTime();
+
+            // --- 2) 채널별 최근 성공 배포 run 수집 ------------------------------
+            // 단독 workflow_dispatch run 은 해당 워크플로우 파일 run 목록에서,
+            // deploy-all 경유 배포는 deploy-all run 의 채널 잡(conclusion=success)에서 찾는다.
+            async function latestStandaloneRun(workflowFile) {
+              const res = await github.rest.actions.listWorkflowRuns({
+                owner,
+                repo,
+                workflow_id: workflowFile,
+                status: 'success',
+                per_page: 20,
+              });
+              return res.data.workflow_runs[0] ?? null; // API는 최신순 정렬
+            }
+
+            async function latestDeployAllRunForJob(jobNameRegex) {
+              const res = await github.rest.actions.listWorkflowRuns({
+                owner,
+                repo,
+                workflow_id: 'deploy-all.yml',
+                per_page: 30,
+              });
+              for (const run of res.data.workflow_runs) {
+                const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRun, {
+                  owner,
+                  repo,
+                  run_id: run.id,
+                  per_page: 50,
+                });
+                const job = jobs.find((j) => jobNameRegex.test(j.name) && j.conclusion === 'success');
+                if (job) return run;
+              }
+              return null;
+            }
+
+            function pickNewer(a, b) {
+              if (!a) return b;
+              if (!b) return a;
+              return new Date(a.created_at) >= new Date(b.created_at) ? a : b;
+            }
+
+            async function resolveChannel({ channel, workflowFile, jobRegex }) {
+              const [standalone, viaAll] = await Promise.all([
+                latestStandaloneRun(workflowFile),
+                latestDeployAllRunForJob(jobRegex),
+              ]);
+              const run = pickNewer(standalone, viaAll);
+              const deployedTag = run ? await shaToTag(run.head_sha) : null;
+              const deployMs = run ? new Date(run.created_at).getTime() : null;
+              const ageHours = deployMs == null ? null : Math.max(0, (referenceMs - deployMs) / 3_600_000);
+              const evalResult = drift.evaluateChannel({
+                sortedTagsDesc: sortedTags,
+                latestTag,
+                deployedTag,
+                ageHours,
+              });
+              return {
+                channel,
+                deployedTag,
+                deployRunUrl: run ? run.html_url : null,
+                ageHours,
+                eval: evalResult,
+              };
+            }
+
+            const channelRows = await Promise.all([
+              resolveChannel({
+                channel: 'AIT (WEB)',
+                workflowFile: 'deploy-apps-in-toss.yml',
+                jobRegex: /Deploy AIT|AppsInToss|apps.?in.?toss/i,
+              }),
+              resolveChannel({
+                channel: 'Google Play (Android)',
+                workflowFile: 'deploy-google-play.yml',
+                jobRegex: /Deploy Google Play|Google Play/i,
+              }),
+            ]);
+
+            // iOS는 Xcode Cloud(GH Actions 밖)라 판정 제외, 표에만 명시(오탐 방지).
+            const iosRow = {
+              channel: 'iOS (App Store)',
+              deployedTag: null,
+              deployRunUrl: null,
+              ageHours: null,
+              eval: drift.evaluateChannel({ sortedTagsDesc: sortedTags, latestTag, deployedTag: null, ageHours: null, external: true }),
+              note: 'Xcode Cloud 경로 — GH Actions 밖',
+            };
+
+            const rows = [...channelRows, iosRow];
+            const table = drift.renderDriftTable(latestTag, rows);
+            const driftedChannels = channelRows.filter((r) => r.eval.drift);
+
+            // --- 3) step summary 출력 ------------------------------------------
+            core.summary.addHeading('채널 배포 드리프트 점검').addRaw(table, true);
+            if (driftedChannels.length > 0) {
+              core.summary.addRaw(`\n\n⚠️ 드리프트 감지: ${driftedChannels.map((r) => r.channel).join(', ')}`, true);
+            } else {
+              core.summary.addRaw('\n\n✅ 모든 채널이 최신 릴리즈 태그를 따라가고 있습니다.', true);
+            }
+            await core.summary.write();
+
+            if (driftedChannels.length === 0) {
+              core.info('드리프트 없음 — 이슈를 생성/코멘트하지 않습니다.');
+              return;
+            }
+
+            // --- 4) 드리프트 감지 시 이슈 생성 또는 코멘트 ----------------------
+            const openIssues = await github.paginate(github.rest.issues.listForRepo, {
+              owner,
+              repo,
+              state: 'open',
+              per_page: 100,
+            });
+            const decision = drift.chooseIssueAction(openIssues);
+
+            const bodyLines = [
+              drift.ISSUE_MARKER,
+              '## 채널 배포 드리프트 감지',
+              '',
+              `점검 시각(UTC): ${new Date().toISOString()}`,
+              `점검 워크플로우: ${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`,
+              '',
+              table,
+              '',
+              '위 채널이 최신 릴리즈 태그를 따라잡지 못했습니다. `deploy-all` 또는 채널별 배포 워크플로우를 실행해 주세요.',
+              '',
+              '---',
+              '_Generated by [Claude Code](https://claude.ai/code)_',
+            ];
+            const body = bodyLines.join('\n');
+
+            if (decision.action === 'comment') {
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: decision.issueNumber,
+                body,
+              });
+              core.info(`기존 드리프트 이슈 #${decision.issueNumber} 에 코멘트했습니다.`);
+            } else {
+              const created = await github.rest.issues.create({
+                owner,
+                repo,
+                title: `🚚 채널 배포 드리프트 감지 (최신 ${latestTag})`,
+                body,
+              });
+              core.info(`드리프트 이슈 #${created.data.number} 를 생성했습니다.`);
+            }
