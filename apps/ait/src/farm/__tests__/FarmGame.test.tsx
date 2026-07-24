@@ -2004,6 +2004,13 @@ describe('FarmGame UI flow', () => {
       expect(
         track.mock.calls.filter(([eventName]) => eventName.startsWith('animal_'))
       ).toHaveLength(0);
+      // 일괄 수집은 배치당 craft_collect_all 1건만 발화한다(개별 craft_collected 아님).
+      const collectAll = track.mock.calls.filter(([eventName]) => eventName === 'craft_collect_all');
+      expect(collectAll).toHaveLength(1);
+      expect(collectAll[0]![1]).toEqual(
+        expect.objectContaining({ collected_count: 2, total_gold: totalGold, schema_version: 1 })
+      );
+      expect(track.mock.calls.filter(([eventName]) => eventName === 'craft_collected')).toHaveLength(0);
     });
 
     test('cancels an in-progress workshop craft once on a rapid double press and refunds inputs', async () => {
@@ -2042,6 +2049,134 @@ describe('FarmGame UI flow', () => {
       expect(screen.queryByTestId(`workshop-cancel-${recipe.key}`)).toBeNull();
       expect(within(screen.getByTestId(`recipe-card-${recipe.key}`)).getByText(messages.workshopReadyToCraftLabel)).toBeTruthy();
       expect(onGoldPulse).not.toHaveBeenCalled();
+    });
+
+    // #421 공방 퍼널 계측 배선. core 트래커 계약은 analytics.test.ts에서, 여기서는 실제
+    // 시트/핸들러가 올바른 이벤트를 (상태 전이 성공 시에만, 오픈당 1회) 발화하는지 고정한다.
+    const craftEvents = (track: jest.Mock, name: string) =>
+      track.mock.calls.filter(([eventName]) => eventName === name);
+
+    async function openWorkshopFromMore(state: GameState, track: jest.Mock) {
+      const localMessages = getFarmMessages(DEFAULT_LOCALE);
+      const screen = await renderGame(state, { analytics: createFarmAnalytics(track) });
+      fireEvent.press(screen.getByTestId('more-nav-button'));
+      fireEvent.press(screen.getByLabelText(localMessages.productionButtonAccessibilityLabel));
+      fireEvent.press(screen.getByTestId('production-tab-workshop'));
+      await waitFor(() => expect(screen.getByTestId('workshop-sheet')).toBeTruthy());
+      return screen;
+    }
+
+    test('공방 진입 시 production_screen을 오픈당 1회만 발화한다 (#421)', async () => {
+      const track = jest.fn();
+      const recipe = PRODUCTION_RECIPES[0]!;
+      const base = createInitialState();
+      const state: GameState = {
+        ...base,
+        production: { ...base.production, crafting: { [recipe.key]: NOW - recipe.timerMs } }, // 1 ready
+      };
+      await openWorkshopFromMore(state, track);
+
+      await waitFor(() => expect(craftEvents(track, 'production_screen')).toHaveLength(1));
+      expect(craftEvents(track, 'production_screen')[0]![1]).toEqual(
+        expect.objectContaining({ source: 'more', crafting_count: 0, ready_count: 1, schema_version: 1 })
+      );
+      // gameState 종속 틱 리렌더로 재발화하지 않는다(crop_ready #326 재발 방지).
+      await act(async () => {
+        jest.advanceTimersByTime(GAME_TICK_INTERVAL_MS * 4);
+      });
+      expect(craftEvents(track, 'production_screen')).toHaveLength(1);
+    });
+
+    test('AC-2: FarmGame startCraftNow/collectCraftNow/cancelCraftNow/일괄 수집 경로에 배선 — 상태 전이 성공 시에만 발화 (#421)', async () => {
+      const track = jest.fn();
+      // 5개 레시피를 서로 다른 phase로 두고 한 화면에서 네 경로를 모두 조작한다.
+      const rStart = PRODUCTION_RECIPES[0]!;
+      const rCancel = PRODUCTION_RECIPES[1]!;
+      const rCollect = PRODUCTION_RECIPES[2]!;
+      const rBatchA = PRODUCTION_RECIPES[3]!;
+      const rBatchB = PRODUCTION_RECIPES[4]!;
+      const base = createInitialState();
+      const inventory = { ...base.production.inventory };
+      for (const input of rStart.inputs) {
+        inventory[input.crop] = (inventory[input.crop] ?? 0) + input.qty;
+      }
+      // rStart: 재료 보유(시작), rCancel: 진행 중(취소), rCollect/rBatchA/rBatchB: 완료(수집/일괄).
+      const state: GameState = {
+        ...base,
+        production: {
+          inventory,
+          crafting: {
+            [rCancel.key]: NOW,
+            [rCollect.key]: NOW - rCollect.timerMs,
+            [rBatchA.key]: NOW - rBatchA.timerMs,
+            [rBatchB.key]: NOW - rBatchB.timerMs,
+          },
+        },
+      };
+      const localMessages = getFarmMessages(DEFAULT_LOCALE);
+      const screen = await openWorkshopFromMore(state, track);
+
+      // 성공 시에만 발화: 재료 부족 레시피의 비활성 시작 버튼은 상태 전이가 없어 이벤트도 없다.
+      const idleRecipe = PRODUCTION_RECIPES.find(
+        (candidate) =>
+          candidate.key !== rStart.key &&
+          state.production.crafting[candidate.key] == null &&
+          candidate.inputs.some((input) => (inventory[input.crop] ?? 0) < input.qty)
+      );
+      if (idleRecipe != null) {
+        await act(async () => {
+          fireEvent.press(
+            within(screen.getByTestId(`recipe-card-${idleRecipe.key}`)).getByText(localMessages.workshopStartAction)
+          );
+        });
+        expect(craftEvents(track, 'craft_started')).toHaveLength(0);
+      }
+
+      // startCraftNow → craft_started (1회, recipe key).
+      await act(async () => {
+        fireEvent.press(
+          within(screen.getByTestId(`recipe-card-${rStart.key}`)).getByText(localMessages.workshopStartAction)
+        );
+      });
+      await waitFor(() => expect(craftEvents(track, 'craft_started')).toHaveLength(1));
+      expect(craftEvents(track, 'craft_started')[0]![1]).toEqual(
+        expect.objectContaining({ recipe: rStart.key, schema_version: 1 })
+      );
+
+      // collectCraftNow → craft_collected (수익 = sellPrice).
+      await act(async () => {
+        fireEvent.press(
+          within(screen.getByTestId(`recipe-card-${rCollect.key}`)).getByText(
+            localMessages.workshopCollectAction(formatMoney(rCollect.sellPrice, DEFAULT_LOCALE))
+          )
+        );
+      });
+      await waitFor(() => expect(craftEvents(track, 'craft_collected')).toHaveLength(1));
+      expect(craftEvents(track, 'craft_collected')[0]![1]).toEqual(
+        expect.objectContaining({ recipe: rCollect.key, revenue: rCollect.sellPrice, schema_version: 1 })
+      );
+
+      // cancelCraftNow → craft_canceled (환불 = 입력 qty 합).
+      const refundedCount = rCancel.inputs.reduce((sum, input) => sum + input.qty, 0);
+      await act(async () => {
+        fireEvent.press(screen.getByTestId(`workshop-cancel-${rCancel.key}`));
+      });
+      await waitFor(() => expect(craftEvents(track, 'craft_canceled')).toHaveLength(1));
+      expect(craftEvents(track, 'craft_canceled')[0]![1]).toEqual(
+        expect.objectContaining({ recipe: rCancel.key, refunded_count: refundedCount, schema_version: 1 })
+      );
+
+      // 일괄 수집(collectAllCrafts) → craft_collect_all (배치당 1회, 남은 완료분 2건).
+      const batchGold = rBatchA.sellPrice + rBatchB.sellPrice;
+      await act(async () => {
+        fireEvent.press(screen.getByTestId('workshop-collect-all-action'));
+      });
+      await waitFor(() => expect(craftEvents(track, 'craft_collect_all')).toHaveLength(1));
+      expect(craftEvents(track, 'craft_collect_all')[0]![1]).toEqual(
+        expect.objectContaining({ collected_count: 2, total_gold: batchGold, schema_version: 1 })
+      );
+      // 배치는 하나의 퍼널 스텝: 개별 수집(rCollect) 외에 추가 craft_collected는 발화하지 않는다.
+      expect(craftEvents(track, 'craft_collected')).toHaveLength(1);
     });
   });
 
