@@ -1,35 +1,60 @@
 /// <reference types="jest" />
 
 import { execFileSync } from 'node:child_process';
+import fs from 'node:fs';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { inflateRawSync } from 'node:zlib';
 
-const GRANITE_CONFIG_URL = pathToFileURL(
-  path.resolve(__dirname, '../../../granite.config.ts')
-).href;
+const REPO_ROOT = path.resolve(__dirname, '../../../../..');
+const AIT_ARTIFACT = path.join(REPO_ROOT, 'apps/ait/happy-farm.ait');
+const ZIP_LOCAL_FILE_HEADER = Buffer.from([0x50, 0x4b, 0x03, 0x04]);
+
+function readZipEntry(archive: Buffer, entryName: string): Buffer {
+  let offset = archive.indexOf(ZIP_LOCAL_FILE_HEADER);
+
+  while (offset >= 0) {
+    const compressionMethod = archive.readUInt16LE(offset + 8);
+    const compressedSize = archive.readUInt32LE(offset + 18);
+    const fileNameLength = archive.readUInt16LE(offset + 26);
+    const extraFieldLength = archive.readUInt16LE(offset + 28);
+    const fileNameStart = offset + 30;
+    const fileNameEnd = fileNameStart + fileNameLength;
+    const fileName = archive.subarray(fileNameStart, fileNameEnd).toString('utf8');
+    const dataStart = fileNameEnd + extraFieldLength;
+    const dataEnd = dataStart + compressedSize;
+
+    if (fileName === entryName) {
+      const compressed = archive.subarray(dataStart, dataEnd);
+      if (compressionMethod === 0) {
+        return compressed;
+      }
+      if (compressionMethod === 8) {
+        return inflateRawSync(compressed);
+      }
+      throw new Error(`지원하지 않는 ZIP 압축 방식입니다: ${compressionMethod}`);
+    }
+
+    offset = archive.indexOf(ZIP_LOCAL_FILE_HEADER, dataEnd);
+  }
+
+  throw new Error(`AIT 산출물에서 ${entryName} 엔트리를 찾지 못했습니다.`);
+}
 
 describe('AppsInToss 게임 내비게이션 설정', () => {
-  test('AIT 빌드 runtime setup script에 투명 게임 내비게이션 설정을 포함한다', () => {
-    const runtimeSetupScript = execFileSync(
-      process.execPath,
-      [
-        '--no-warnings',
-        '--experimental-strip-types',
-        '--input-type=module',
-        '--eval',
-        `
-          const configModule = await import(${JSON.stringify(GRANITE_CONFIG_URL)});
-          const config = await configModule.default;
-          const runtimeSetupScript = config.pluginConfigs
-            .map((pluginConfig) => pluginConfig.esbuild?.banner?.js)
-            .find((script) => script?.includes('e.__appsInToss='));
-          process.stdout.write(runtimeSetupScript ?? '');
-        `,
-      ],
-      { encoding: 'utf8' }
-    );
+  jest.setTimeout(120_000);
 
-    expect(runtimeSetupScript).toMatch(
+  test('생성된 .ait iOS bundle에 투명 게임 내비게이션 설정을 포함한다', () => {
+    execFileSync('pnpm', ['--dir', 'apps/ait', 'build'], {
+      cwd: REPO_ROOT,
+      encoding: 'utf8',
+      stdio: 'pipe',
+    });
+
+    expect(fs.existsSync(AIT_ARTIFACT)).toBe(true);
+    const artifact = fs.readFileSync(AIT_ARTIFACT);
+    const iosBundle = readZipEntry(artifact, 'bundle.ios.0_84_0.js').toString('utf8');
+
+    expect(iosBundle).toMatch(
       /navigationBar:\{transparentBackground:(?:!0|true),theme:"dark"\}/
     );
   });
