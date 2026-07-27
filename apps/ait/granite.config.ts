@@ -7,6 +7,10 @@ export default defineConfig({
   plugins: [
     appsInToss({
       appType: 'game',
+      navigationBar: {
+        transparentBackground: true,
+        theme: 'dark',
+      },
       brand: {
         displayName: '행복한 농장 타이쿤',
         primaryColor: '#2F8747',
