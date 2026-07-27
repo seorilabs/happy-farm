@@ -43,7 +43,7 @@ function readZipEntry(archive: Buffer, entryName: string): Buffer {
 describe('AppsInToss 게임 내비게이션 설정', () => {
   jest.setTimeout(120_000);
 
-  test('생성된 .ait iOS bundle에 투명 게임 내비게이션 설정을 포함한다', () => {
+  test('AC-3: 생성된 .ait 산출물에 navigationBar 투명 배경과 dark 테마를 포함한다', () => {
     execFileSync('pnpm', ['--dir', 'apps/ait', 'build'], {
       cwd: REPO_ROOT,
       encoding: 'utf8',
@@ -53,9 +53,10 @@ describe('AppsInToss 게임 내비게이션 설정', () => {
     expect(fs.existsSync(AIT_ARTIFACT)).toBe(true);
     const artifact = fs.readFileSync(AIT_ARTIFACT);
     const iosBundle = readZipEntry(artifact, 'bundle.ios.0_84_0.js').toString('utf8');
+    const serializedNavigationBar = iosBundle
+      .match(/navigationBar:\{transparentBackground:(?:!0|true),theme:"dark"\}/)?.[0]
+      .replace('!0', 'true');
 
-    expect(iosBundle).toMatch(
-      /navigationBar:\{transparentBackground:(?:!0|true),theme:"dark"\}/
-    );
+    expect(serializedNavigationBar).toBe('navigationBar:{transparentBackground:true,theme:"dark"}');
   });
 });
