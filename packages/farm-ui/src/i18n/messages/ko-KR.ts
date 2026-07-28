@@ -163,6 +163,7 @@ export const koFarmMessages = {
   speedUpgradeDesc: '작물 성장 속도 +10%',
   profitUpgradeDesc: '판매 수익 +10%',
   upgradeDescWithLevel: (description: string, level: number) => `${description} · Lv. ${level}`,
+  upgradeBuyMax: '최대',
   researchCompletedToast: '연구를 완료했어요.',
   saveLoadedToast: '농장 기록을 불러왔어요.',
   lockedCropToast: '아직 열리지 않은 구역의 작물이에요.',

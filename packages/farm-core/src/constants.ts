@@ -372,6 +372,49 @@ export function getUpgradeCost(type: 'speed' | 'profit', level: number) {
   return Math.floor(base * Math.pow(balance.economy.upgradeCostGrowth, level - 1));
 }
 
+// #426: 배치(일괄) 업그레이드 구매 미리보기. 후반 유저가 같은 버튼을 수백~수천 번
+// 반복 탭하지 않도록, 현재 골드로 살 수 있는 레벨 수와 총 비용을 사전에 계산한다.
+// 순수 함수이므로 UI와 무관하게 단위 테스트로 고정한다. 비용은 레벨마다 기하급수적으로
+// (upgradeCostGrowth 1.92) 증가하므로 골드가 아무리 많아도 루프는 빠르게 종료한다.
+// "+10" 배치 버튼의 목표 레벨 수.
+export const UPGRADE_BATCH_STEP = 10;
+// "최대" 배치의 안전 상한. 비용이 기하급수라 실제로는 훨씬 일찍 gold로 종료되지만,
+// 무한 루프 방지를 위한 방어적 상한을 둔다.
+export const UPGRADE_BATCH_MAX_SCAN = 10_000;
+
+export type UpgradeBatchPurchase = {
+  // 실제 구매 가능한 레벨 수(gold와 maxLevels로 클램프됨).
+  levels: number;
+  // 위 레벨 수를 사는 데 드는 총 비용.
+  totalCost: number;
+  // 시작(현재) 레벨.
+  fromLevel: number;
+  // 구매 후 레벨(fromLevel + levels).
+  toLevel: number;
+};
+
+export function getUpgradeBatchPurchase(
+  type: 'speed' | 'profit',
+  currentLevel: number,
+  gold: number,
+  maxLevels: number
+): UpgradeBatchPurchase {
+  let levels = 0;
+  let totalCost = 0;
+  const cap = Math.max(0, Math.floor(maxLevels));
+  for (let i = 0; i < cap; i += 1) {
+    // i번째 추가 레벨의 비용은 currentLevel+i에서 다음 레벨로 가는 비용이다
+    // (단일 구매가 getUpgradeCost(kind, level)로 level→level+1을 사는 것과 동형).
+    const nextCost = getUpgradeCost(type, currentLevel + i);
+    if (gold - totalCost < nextCost) {
+      break;
+    }
+    totalCost += nextCost;
+    levels += 1;
+  }
+  return { levels, totalCost, fromLevel: currentLevel, toLevel: currentLevel + levels };
+}
+
 export function getSpeedMultiplier(speedLevel: number) {
   return 1 + (speedLevel - 1) * balance.economy.upgradeStep;
 }

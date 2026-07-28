@@ -162,6 +162,7 @@ export const deFarmMessages: FarmMessages = {
   speedUpgradeDesc: 'Wachstumstempo +10%',
   profitUpgradeDesc: 'Verkaufsgewinn +10%',
   upgradeDescWithLevel: (description, level) => `${description} · Lv. ${level}`,
+  upgradeBuyMax: 'Max',
   researchCompletedToast: 'Forschung abgeschlossen.',
   saveLoadedToast: 'Farm-Daten geladen.',
   lockedCropToast: 'Diese Pflanze gehört zu einem gesperrten Gebiet.',

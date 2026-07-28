@@ -134,6 +134,7 @@ import {
   getSeasonalAmbience,
   getDailyMissionsSnapshot,
   recordMissionProgressEvent,
+  applyUpgradePurchase,
   claimMission,
   recordAdWatchProgress,
   getWeeklyMissionsSnapshot,
@@ -190,7 +191,10 @@ import {
   getPlotRemainingGrowthMs,
   getPlotRemainingWallClockMs,
   getRewardedAdLimitStatus,
+  getUpgradeBatchPurchase,
   getUpgradeCost,
+  UPGRADE_BATCH_MAX_SCAN,
+  UPGRADE_BATCH_STEP,
   isAreaUnlocked,
   isCropPlantable,
   isPlotGrowthComplete,
@@ -7995,6 +7999,34 @@ function ShopUpgradeRow({
   const [burstGeneration, setBurstGeneration] = useState(0);
   const purchasedLevelRef = useRef<number | null>(null);
 
+  // #426: 배치(일괄) 구매 미리보기. +10은 10레벨 전액(고정 가격)을 감당할 수 있을 때만,
+  // 최대는 2레벨 이상 살 수 있을 때만 활성화한다(1레벨은 단일 구매가 이미 담당).
+  const batchTen = getUpgradeBatchPurchase(kind, level, Number.POSITIVE_INFINITY, UPGRADE_BATCH_STEP);
+  const canBuyTen = gameState.gold >= batchTen.totalCost;
+  const batchMax = getUpgradeBatchPurchase(kind, level, gameState.gold, UPGRADE_BATCH_MAX_SCAN);
+  const canBuyMax = batchMax.levels >= 2;
+
+  // 배치 구매: 골드 차감·레벨 증가·미션 골드 소비를 한 번의 상태 업데이트로 원자적으로
+  // 처리한다. 단일 구매와 같은 purchasedLevelRef로 같은-프레임 중복 탭을 방어한다.
+  const buyBatch = (preview: { levels: number; totalCost: number }) => {
+    if (preview.levels <= 0 || purchasedLevelRef.current === level) {
+      return;
+    }
+    purchasedLevelRef.current = level;
+    setBurstGeneration((generation) => generation + 1);
+    setGameState((state) => applyUpgradePurchase(state, kind, preview.levels, preview.totalCost));
+    analytics.trackUpgradeBatchPurchased({
+      kind,
+      levelsPurchased: preview.levels,
+      totalCost: preview.totalCost,
+      fromLevel: level,
+      toLevel: level + preview.levels,
+      context: getAnalyticsContext(gameState),
+    });
+    onDone(messages.researchCompletedToast);
+    onMilestone();
+  };
+
   return (
     <View style={styles.upgradeCardHost}>
       <ShopCard
@@ -8016,16 +8048,7 @@ function ShopUpgradeRow({
           }
           purchasedLevelRef.current = level;
           setBurstGeneration((generation) => generation + 1);
-          setGameState((state) =>
-            recordMissionProgressEvent(
-              {
-                ...state,
-                gold: state.gold - cost,
-                upgrades: { ...state.upgrades, [kind]: state.upgrades[kind] + 1 },
-              },
-              { type: 'spend_gold', amount: cost }
-            )
-          );
+          setGameState((state) => applyUpgradePurchase(state, kind, 1, cost));
           analytics.trackUpgradePurchased({
             kind,
             cost,
@@ -8036,6 +8059,36 @@ function ShopUpgradeRow({
           onMilestone();
         }}
       />
+      <View style={styles.upgradeBatchRow}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityState={{ disabled: !canBuyTen }}
+          accessibilityLabel={`${title} +${UPGRADE_BATCH_STEP}, ${formatMoney(batchTen.totalCost, locale)}G`}
+          disabled={!canBuyTen}
+          style={[styles.upgradeBatchButton, !canBuyTen && styles.upgradeBatchButtonDisabled]}
+          testID={`upgrade-batch-ten-${kind}`}
+          onPress={() => buyBatch(batchTen)}
+        >
+          <Text style={styles.upgradeBatchLabel}>{`+${UPGRADE_BATCH_STEP}`}</Text>
+          <Text style={styles.upgradeBatchSub}>{`${formatMoney(batchTen.totalCost, locale)}G`}</Text>
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityState={{ disabled: !canBuyMax }}
+          accessibilityLabel={`${title} ${messages.upgradeBuyMax} +${batchMax.levels}, ${formatMoney(batchMax.totalCost, locale)}G`}
+          disabled={!canBuyMax}
+          style={[styles.upgradeBatchButton, !canBuyMax && styles.upgradeBatchButtonDisabled]}
+          testID={`upgrade-batch-max-${kind}`}
+          onPress={() => buyBatch(batchMax)}
+        >
+          <Text style={styles.upgradeBatchLabel}>
+            {canBuyMax ? `${messages.upgradeBuyMax} +${batchMax.levels}` : messages.upgradeBuyMax}
+          </Text>
+          {canBuyMax ? (
+            <Text style={styles.upgradeBatchSub}>{`${formatMoney(batchMax.totalCost, locale)}G`}</Text>
+          ) : null}
+        </Pressable>
+      </View>
       {burstGeneration > 0 ? (
         <UpgradeBurst
           key={burstGeneration}

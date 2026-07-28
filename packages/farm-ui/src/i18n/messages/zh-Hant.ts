@@ -162,6 +162,7 @@ export const zhHantFarmMessages: FarmMessages = {
   speedUpgradeDesc: '作物成長速度 +10%',
   profitUpgradeDesc: '販售收益 +10%',
   upgradeDescWithLevel: (description, level) => `${description} · Lv. ${level}`,
+  upgradeBuyMax: '最大',
   researchCompletedToast: '研究完成。',
   saveLoadedToast: '已載入農場紀錄。',
   lockedCropToast: '這是尚未開啟區域的作物。',

@@ -161,6 +161,7 @@ export const zhHansFarmMessages: FarmMessages = {
   speedUpgradeDesc: '作物生长速度 +10%',
   profitUpgradeDesc: '销售收益 +10%',
   upgradeDescWithLevel: (description, level) => `${description} · Lv. ${level}`,
+  upgradeBuyMax: '最大',
   researchCompletedToast: '研究已完成。',
   saveLoadedToast: '已加载农场记录。',
   lockedCropToast: '这是尚未开启区域的作物。',
