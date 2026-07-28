@@ -1,10 +1,13 @@
+/// <reference types="jest" />
+
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
 // #428 AC-5: 강제 업데이트 게이트의 운영 절차(언제 최소버전을 올리는지)가
 // docs/firebase-mobile.md에 문서화돼 있는지 회귀로 고정한다. 문서가 삭제되거나
-// 핵심 운영 지침이 빠지면 이 테스트가 실패한다.
-const DOC_PATH = path.resolve(__dirname, '../../../../../docs/firebase-mobile.md');
+// 핵심 운영 지침이 빠지면 이 테스트가 실패한다. (node:fs를 쓰는 fs 계약 테스트
+// contentMetricsQuery.test.ts와 동일한 패턴으로 farm-core 테스트 컨텍스트에 둔다.)
+const DOC_PATH = path.resolve(__dirname, '../../../../docs/firebase-mobile.md');
 const doc = readFileSync(DOC_PATH, 'utf8');
 
 describe('firebase-mobile.md 강제 업데이트 게이트 운영 문서 (#428 AC-5)', () => {
