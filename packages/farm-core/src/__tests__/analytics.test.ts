@@ -246,6 +246,27 @@ describe('farm analytics adapter contract', () => {
     expect(track).toHaveBeenCalledWith('notification_opened', { notification_kind: 'harvest' });
   });
 
+  // #428: 강제 업데이트 게이트 계측(모바일 전용)은 앱 기동 직후 게임 상태 context 이전에
+  // 발생할 수 있어 context 없이 정확한 이벤트명·파라미터로 emit한다.
+  test('update_gate_shown / update_gate_store_click를 context 없이 정확히 emit한다 (#428)', () => {
+    const track = jest.fn();
+    const analytics = createFarmAnalytics(track);
+
+    analytics.trackUpdateGateShown({ buildNumber: 42, minimumSupportedVersionCode: 50, platform: 'android' });
+    analytics.trackUpdateGateStoreClick({ buildNumber: 42, minimumSupportedVersionCode: 50, platform: 'ios' });
+
+    expect(track).toHaveBeenCalledWith('update_gate_shown', {
+      build_number: 42,
+      minimum_supported_version_code: 50,
+      platform: 'android',
+    });
+    expect(track).toHaveBeenCalledWith('update_gate_store_click', {
+      build_number: 42,
+      minimum_supported_version_code: 50,
+      platform: 'ios',
+    });
+  });
+
   test('첫 데일리 클레임은 daily_bonus_claimed(is_first_claim=true)와 전용 first_daily_bonus_claimed를 함께 emit한다 (#107)', () => {
     const track = jest.fn();
     const analytics = createFarmAnalytics(track);

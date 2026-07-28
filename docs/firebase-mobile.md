@@ -83,6 +83,27 @@ AppsInToss 보상형 광고는 AppsInToss 광고 그룹 ID가 발급된 뒤 `app
 
 게임 경제, gold, 저장 데이터는 계속 로컬 권위 상태이며 서버 신뢰값으로 쓰지 않습니다.
 
+## 강제 업데이트 게이트 (최소지원버전)
+
+모바일 앱(Google Play/App Store)은 기동 시 Remote Config `fetchAndActivate` 완료 후 설치된 빌드의 `RELEASE_INFO.buildNumber`를 `minimum_supported_version_code`와 비교해, 구버전이면 스토어로 유도하는 차단형 안내(닫기 불가 모달)를 노출합니다. AppsInToss(WEB)은 서버 배포형이라 이 게이트를 적용하지 않습니다.
+
+판정 로직은 `apps/mobile/src/firebase/updateGate.ts`의 순수 함수 `shouldPromptForceUpdate`이며, 다음 오차단 방지 가드를 지킵니다.
+
+- `minimum_supported_version_code`가 기본값 `1` 이하이면(미설정·fetch 실패 폴백 포함) 절대 발동하지 않습니다.
+- `buildNumber`가 유효한 양의 정수가 아니면(로컬/미버전 빌드의 `0` 등) 발동하지 않습니다.
+- 위를 모두 통과하고 `buildNumber < minimum_supported_version_code`일 때만 안내를 노출합니다.
+
+### 운영 절차 — 언제 최소버전을 올리나
+
+1. **원칙**: 이미 배포·전파된 수정을 구버전이 무효화하고 있고(예: 스팸/오작동), 스토어 자동 업데이트만으로는 전파가 느릴 때만 올립니다. 상시로 최신 빌드를 강제하지 않습니다.
+2. **선행 조건**: 올릴 목표 버전(고정 대상 `versionCode`/`buildNumber`)이 **이미 스토어에 승인·게시**되어 사용자가 실제로 업데이트할 수 있어야 합니다. 게시 전에 올리면 업데이트할 곳이 없어 사용자가 갇힙니다.
+3. **`force_update_url` 설정(권장, iOS는 필수)**:
+   - Android는 미설정 시 패키지명 기반 Play Store URL(`https://play.google.com/store/apps/details?id=com.seorilabs.happyfarm`)로 폴백합니다.
+   - iOS는 숫자 App Store ID가 레포에 없어 정식 딥링크를 구성할 수 없습니다. **iOS 운영 시 반드시 `force_update_url`에 해당 App Store 링크를 설정**하세요(미설정 시 App Store 앱만 여는 최후 폴백).
+4. **값 설정**: Firebase 콘솔 Remote Config에서 `minimum_supported_version_code`를 목표 버전으로 올리고 게시합니다. 클라이언트는 `minimumFetchIntervalMillis`(release 15분) 주기로 반영됩니다.
+5. **롤백**: 문제가 생기면 값을 다시 `1`로 내려 게이트를 즉시 해제합니다.
+6. **측정**: 배포 후 `update_gate_shown`/`update_gate_store_click`(파라미터 `build_number`/`minimum_supported_version_code`/`platform`)와 버전 분포 수렴 속도를 BigQuery로 확인합니다.
+
 ## 로컬 농장 알림
 
 모바일 앱은 첫 수확 뒤 표시되는 농장 알림 안내에서 사용자가 명시적으로 수락하거나, 설정에서 알림 토글을 직접 켠 경우에만 OS 알림 권한을 요청합니다. 안내 수락 시 `수확 알림`과 `복귀 리마인더`를 함께 켜며, 설정에서는 둘을 개별 해제할 수 있습니다.
