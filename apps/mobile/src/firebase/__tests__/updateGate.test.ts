@@ -1,5 +1,6 @@
 import { Platform } from 'react-native';
 
+import { RELEASE_INFO } from '../../../../../packages/farm-core/src';
 import { getRemoteNumber, getRemoteString } from '../remoteConfig';
 import {
   DEFAULT_MINIMUM_SUPPORTED_VERSION_CODE,
@@ -75,6 +76,23 @@ describe('evaluateForceUpdateGate — Remote Config 배선', () => {
   });
 
   const expectedPlatform = Platform.OS === 'ios' ? 'ios' : 'android';
+
+  // AC-1: 게이트가 minimum_supported_version_code(Remote Config)와 RELEASE_INFO.buildNumber
+  // 두 값을 실제로 읽어 비교함을 직접 단언한다.
+  it('AC-1: minimum_supported_version_code(RC)와 RELEASE_INFO.buildNumber를 읽어 비교한다', () => {
+    mockedGetRemoteNumber.mockReturnValue(50);
+
+    const result = evaluateForceUpdateGate();
+
+    // 최소버전은 정확히 이 Remote Config 키에서 읽는다.
+    expect(mockedGetRemoteNumber).toHaveBeenCalledWith('minimum_supported_version_code');
+    // 설치 빌드 번호는 RELEASE_INFO.buildNumber에서 읽는다(하드코딩이 아님).
+    expect(result.buildNumber).toBe(RELEASE_INFO.buildNumber);
+    expect(result.minimumSupportedVersionCode).toBe(50);
+    // 두 값의 비교 결과가 발동 여부를 결정한다(42 < 50 → 발동).
+    expect(result.shouldPrompt).toBe(RELEASE_INFO.buildNumber < 50);
+    expect(result.shouldPrompt).toBe(true);
+  });
 
   it('활성화된 최소버전이 빌드보다 높으면 발동하고 스토어 URL을 해석한다', () => {
     mockedGetRemoteNumber.mockReturnValue(50);
