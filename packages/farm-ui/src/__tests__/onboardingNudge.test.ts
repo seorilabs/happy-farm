@@ -16,21 +16,27 @@ import {
 
 const NOW = 1_700_000_000_000;
 
-// selectSeed 온보딩 병목 방어(#362)의 순수 결정 로직 회귀 테스트.
-// 실제 애니메이션/렌더는 헤드리스로 검증 불가하므로 여기서는 "언제/어디로
-// 유도할지"의 판정만 검증한다.
+// #427: selectSeed 단계 제거 후, 씨앗 유도(강조/넛지)는 직접 파종을 안내하는 plant
+// 단계로 귀속된다. 실제 애니메이션/렌더는 헤드리스로 검증 불가하므로 여기서는
+// "언제/어디로 유도할지"의 판정만 검증한다.
 
-describe('shouldFireStallNudge — AC-3 (세션당 1회, selectSeed 한정)', () => {
-  it('selectSeed에서 아직 발화 전이면 넛지를 발화한다', () => {
-    expect(shouldFireStallNudge('selectSeed', false)).toBe(true);
+// 아직 아무것도 심지 않은 미완료 상태 — plant 재개 경로를 대표한다.
+const untouchedPlantState = () => ({
+  ...createInitialState(),
+  onboardingStep: 'plant' as const,
+  plots: createInitialState().plots.map((plot) => ({ ...plot, cropType: null, startTime: null, state: 0 as const })),
+});
+
+describe('shouldFireStallNudge — AC-3 (세션당 1회, plant 한정)', () => {
+  it('plant에서 아직 발화 전이면 넛지를 발화한다', () => {
+    expect(shouldFireStallNudge('plant', false)).toBe(true);
   });
 
   it('이미 세션 내에서 발화했으면 다시 발화하지 않는다(1회 가드)', () => {
-    expect(shouldFireStallNudge('selectSeed', true)).toBe(false);
+    expect(shouldFireStallNudge('plant', true)).toBe(false);
   });
 
-  it('selectSeed가 아닌 단계에서는 발화하지 않는다', () => {
-    expect(shouldFireStallNudge('plant', false)).toBe(false);
+  it('plant가 아닌 단계에서는 발화하지 않는다', () => {
     expect(shouldFireStallNudge('harvest', false)).toBe(false);
     expect(shouldFireStallNudge('reward', false)).toBe(false);
     expect(shouldFireStallNudge(null, false)).toBe(false);
@@ -82,7 +88,7 @@ describe('resolveUnaffordableSeedNudge — AC-4 (감당 불가 탭 시 감당 �
   it('감당 불가 작물을 탭하면 감당 가능한 대표 작물로 유도한다', () => {
     const state = createInitialState();
     const expensive = findUnaffordableStarterCrop(state.gold);
-    const nudge = resolveUnaffordableSeedNudge(state, expensive, 'selectSeed', NOW);
+    const nudge = resolveUnaffordableSeedNudge(state, expensive, 'plant', NOW);
     expect(nudge).not.toBeNull();
     // 유도 대상은 실제로 감당 가능해야 한다.
     expect(state.gold).toBeGreaterThanOrEqual(getCropPurchaseCost(state, nudge!.cropKey, NOW));
@@ -95,13 +101,13 @@ describe('resolveUnaffordableSeedNudge — AC-4 (감당 불가 탭 시 감당 �
         state.unlockedAreas.includes(CROPS[candidate]!.area) &&
         state.gold >= getCropPurchaseCost(state, candidate, NOW)
     ) as CropKey;
-    expect(resolveUnaffordableSeedNudge(state, cheap, 'selectSeed', NOW)).toBeNull();
+    expect(resolveUnaffordableSeedNudge(state, cheap, 'plant', NOW)).toBeNull();
   });
 
-  it('selectSeed 단계가 아니면 유도하지 않는다', () => {
+  it('plant 단계가 아니면 유도하지 않는다', () => {
     const state = createInitialState();
     const expensive = findUnaffordableStarterCrop(state.gold);
-    expect(resolveUnaffordableSeedNudge(state, expensive, 'plant', NOW)).toBeNull();
+    expect(resolveUnaffordableSeedNudge(state, expensive, 'harvest', NOW)).toBeNull();
     expect(resolveUnaffordableSeedNudge(state, expensive, null, NOW)).toBeNull();
   });
 
@@ -110,22 +116,27 @@ describe('resolveUnaffordableSeedNudge — AC-4 (감당 불가 탭 시 감당 �
     const anyStarter = (Object.keys(CROPS) as CropKey[]).find((candidate) =>
       broke.unlockedAreas.includes(CROPS[candidate]!.area)
     ) as CropKey;
-    expect(resolveUnaffordableSeedNudge(broke, anyStarter, 'selectSeed', NOW)).toBeNull();
+    expect(resolveUnaffordableSeedNudge(broke, anyStarter, 'plant', NOW)).toBeNull();
   });
 });
 
-describe('AC-5 (기존 온보딩 계약 유지 + 신규 케이스 추가)', () => {
-  it('기존: resolveOnboardingStep가 미진행 초기 상태를 selectSeed로 해석한다(회귀 방지)', () => {
+describe('AC-5 (온보딩 계약: 자동 파종 신규 상태 + plant 재개 케이스)', () => {
+  it('신규(자동 파종) 초기 상태는 harvest로 해석된다 — selectSeed 제거 회귀 방지', () => {
     const state = createInitialState();
     expect(state.onboardingCompleted).toBe(false);
-    expect(resolveOnboardingStep(state, state.onboardingStep)).toBe('selectSeed');
+    // 첫 밭이 자동 파종되어 온보딩은 harvest부터 시작한다.
+    expect(resolveOnboardingStep(state, state.onboardingStep)).toBe('harvest');
+    // harvest 단계에서는 씨앗 stall 넛지가 발화하지 않는다.
+    expect(shouldFireStallNudge(resolveOnboardingStep(state, state.onboardingStep), false)).toBe(false);
   });
 
-  it('신규: selectSeed 초기 상태에서 대표 씨앗 선택·stall 넛지 판정이 함께 성립한다', () => {
-    const state = createInitialState();
-    // 신규 케이스 1: 대표 씨앗(quickStartCropKey)이 존재 → 바로 시작 CTA 진행 가능.
+  it('아무것도 심지 않은 미완료 상태는 plant로 재개하고, 거기서 씨앗 유도가 성립한다', () => {
+    const state = untouchedPlantState();
+    // 빈 밭·미수확 상태 → plant 재개.
+    expect(resolveOnboardingStep(state, null)).toBe('plant');
+    // 대표 씨앗(quickStartCropKey)이 존재 → 바로 시작 CTA 진행 가능.
     expect(getOnboardingCropKey(state, NOW)).not.toBeNull();
-    // 신규 케이스 2: 아직 넛지 미발화면 selectSeed에서 stall 넛지가 발화한다.
-    expect(shouldFireStallNudge(resolveOnboardingStep(state, state.onboardingStep), false)).toBe(true);
+    // 아직 넛지 미발화면 plant에서 stall 넛지가 발화한다.
+    expect(shouldFireStallNudge(resolveOnboardingStep(state, null), false)).toBe(true);
   });
 });

@@ -7,7 +7,7 @@ jest.mock('../weather', () => ({
   getWeatherSellMultiplier: () => 1,
 }));
 
-import { createInitialState } from '../constants';
+import { createEmptyPlots, createInitialState as createBaseInitialState } from '../constants';
 import {
   getPlotGrowthDisplay,
   getPlotGrowthRatio,
@@ -16,6 +16,10 @@ import {
   performPlant,
 } from '../harvest';
 import type { GameState } from '../types';
+
+// #427: createInitialState는 이제 첫 밭에 스타터 carrot을 자동 파종한다. 이 파일의
+// 카운트다운 테스트는 "빈 농장"을 전제로 하므로, 로컬에서 밭을 비운 초기 상태로 감싼다.
+const createInitialState = (): GameState => ({ ...createBaseInitialState(), plots: createEmptyPlots() });
 
 // carrot is a starter crop with a 2000ms grow time (balance.json).
 const CARROT = 'carrot';

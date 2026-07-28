@@ -13,7 +13,7 @@ import type {
 // initialization (all cross-module references happen inside functions called
 // after init), which CJS loading (jest/metro) tolerates. Keep any new
 // top-level code in these modules free of cross-module reads.
-import { createInitialState } from './constants';
+import { createEmptyPlots, createInitialState } from './constants';
 import { getFarmHourlyProductivity } from './modifiers';
 
 export type RegionArchetype = {
@@ -172,7 +172,9 @@ export function createPrestigedState(gameState: GameState): GameState {
   return {
     ...gameState,
     gold: getPrestigeStartingGold(gameState),
-    plots: fresh.plots,
+    // #427: createInitialState는 이제 신규 온보딩용 자동 파종 carrot을 담지만,
+    // 프레스티지 리셋은 빈 밭에서 다시 시작해야 한다(스타터 작물 무상 지급 방지).
+    plots: createEmptyPlots(),
     unlockedPlotCount: fresh.unlockedPlotCount,
     unlockedAreas: fresh.unlockedAreas,
     upgrades: fresh.upgrades,

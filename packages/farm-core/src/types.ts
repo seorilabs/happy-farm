@@ -103,7 +103,10 @@ export type Plot = {
   state: PlotState;
 };
 
-export type OnboardingStep = 'selectSeed' | 'plant' | 'harvest' | 'reward';
+// #427: selectSeed 단계는 제거됐다. 신규 유저는 첫 밭에 carrot이 자동 파종된 상태로
+// 시작해 온보딩이 harvest부터 열린다(첫 인터랙션 = 수확). plant 단계는 씨앗을 아직
+// 심지 못한 레거시(진행 중 selectSeed) 세이브의 재개 경로로만 남는다.
+export type OnboardingStep = 'plant' | 'harvest' | 'reward';
 
 export type AdUsage = {
   dailyKey: string;

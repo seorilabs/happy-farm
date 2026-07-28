@@ -9,10 +9,10 @@ import type { FarmMessages } from '../i18n';
 export { ONBOARDING_STEPS };
 export type { OnboardingStep };
 
-// Directional hint of the coachmark. The seed strip sits below the banner, so
-// that step points down; action steps point up and the final reward uses a gift.
+// Directional hint of the coachmark. Action steps point up at the plots and the
+// final reward uses a gift. (#427: selectSeed 단계 제거 — 첫 밭이 자동 파종되어
+// 온보딩은 harvest부터 시작한다.)
 const STEP_ARROW: Record<OnboardingStep, string> = {
-  selectSeed: '👇',
   plant: '👆',
   harvest: '👆',
   reward: '🎁',
@@ -20,8 +20,6 @@ const STEP_ARROW: Record<OnboardingStep, string> = {
 
 function getStepText(step: OnboardingStep, messages: FarmMessages): { title: string; description: string } {
   switch (step) {
-    case 'selectSeed':
-      return { title: messages.onboardingSelectSeedTitle, description: messages.onboardingSelectSeedDesc };
     case 'plant':
       return { title: messages.onboardingPlantTitle, description: messages.onboardingPlantDesc };
     case 'harvest':
@@ -45,8 +43,8 @@ export function FarmOnboarding({
   messages: FarmMessages;
   onSkip: () => void;
   onRewardConfirm: () => void;
-  // #274: selectSeed 단계에서만 노출되는 "바로 시작" CTA. 탭 시 대표 씨앗을
-  // 자동 선택해 plant 단계로 즉시 진행시킨다(직접 선택도 여전히 가능).
+  // #274/#427: plant(직접 파종) 단계에서 노출되는 "바로 시작" CTA. 탭 시 감당 가능한
+  // 대표 씨앗을 자동 선택해 빈 밭만 탭하면 되도록 만든다(직접 선택도 여전히 가능).
   onQuickStart?: () => void;
 }) {
   const { title, description } = getStepText(step, messages);
@@ -56,8 +54,8 @@ export function FarmOnboarding({
   // Skip is limited to the action stage. Once the first harvest is complete,
   // the explicit reward confirmation is the only way to finish the guide.
   const canSkip = step === 'harvest';
-  // "바로 시작"은 정체가 가장 심한 selectSeed 단계에서만 제공한다(#274).
-  const canQuickStart = step === 'selectSeed' && onQuickStart != null;
+  // "바로 시작"은 직접 파종을 안내하는 plant 단계에서만 제공한다(#274/#427).
+  const canQuickStart = step === 'plant' && onQuickStart != null;
   const canConfirmReward = step === 'reward';
 
   useEffect(() => {

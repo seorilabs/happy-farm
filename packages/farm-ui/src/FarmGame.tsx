@@ -1014,16 +1014,16 @@ function FarmGameBody({
   // so the onboarding skip/complete handlers can build a fresh context without
   // being recreated on every tick.
   const analyticsContextRef = useRef<GetAnalyticsContext | null>(null);
-  // Soft pulse driving the seed-strip emphasis ring while the selectSeed step is
-  // active, so the place to tap reads louder for brand-new players (#159).
+  // Soft pulse driving the seed-strip emphasis ring while the plant step is
+  // active, so the place to tap reads louder for brand-new players (#159/#427).
   const seedHighlightPulseRef = useRef<Animated.Value | null>(null);
   if (seedHighlightPulseRef.current == null) {
     seedHighlightPulseRef.current = new Animated.Value(0);
   }
   const seedHighlightPulse = seedHighlightPulseRef.current;
   // One-shot emphasis burst on the seed strip, distinct from the ambient pulse
-  // above. Fired when the player stalls at selectSeed (#362, once per session) or
-  // taps a seed they can't afford, to actively point at the affordable seed.
+  // above. Fired when the player stalls at the plant step (#362/#427, once per
+  // session) or taps a seed they can't afford, to actively point at the affordable seed.
   const seedNudgeBurstRef = useRef<Animated.Value | null>(null);
   if (seedNudgeBurstRef.current == null) {
     seedNudgeBurstRef.current = new Animated.Value(0);
@@ -2102,10 +2102,8 @@ function FarmGameBody({
     if (onboardingStep == null || gameState.onboardingCompleted) {
       return;
     }
-    if (onboardingStep === 'selectSeed' && selectedTool !== 'harvest') {
-      advanceOnboarding('plant');
-      return;
-    }
+    // #427: selectSeed 단계 제거. 신규 유저는 자동 파종된 첫 밭을 harvest부터 시작하고,
+    // plant 단계는 아직 심지 않은 레거시 세이브가 직접 파종을 완료하면 harvest로 넘어간다.
     if (onboardingStep === 'plant' && gameState.plots.some((plot) => plot.cropType != null)) {
       advanceOnboarding('harvest');
       return;
@@ -2113,7 +2111,7 @@ function FarmGameBody({
     if (onboardingStep === 'harvest' && gameState.harvestedCropKeys.length > 0) {
       advanceOnboarding('reward');
     }
-  }, [onboardingStep, selectedTool, gameState, advanceOnboarding]);
+  }, [onboardingStep, gameState, advanceOnboarding]);
 
   // Emit the onboarding funnel step-view once per step entry. Guarded by a ref so
   // it fires only when the step actually changes, not on every render tick (the
@@ -2178,8 +2176,8 @@ function FarmGameBody({
         dwellSeconds: Math.round(ONBOARDING_STALL_MS / 1000),
         context: buildContext(),
       });
-      // #362: selectSeed에서 정체가 감지되면(15초 무행동) 씨앗을 어디서 고르는지
-      // 능동적으로 한 번 짚어준다. 세션당 1회 가드는 shouldFireStallNudge로 판정.
+      // #362/#427: plant(직접 파종) 단계에서 정체가 감지되면(15초 무행동) 씨앗을 어디서
+      // 고르는지 능동적으로 한 번 짚어준다. 세션당 1회 가드는 shouldFireStallNudge로 판정.
       if (shouldFireStallNudge(step, stallNudgePlayedRef.current)) {
         stallNudgePlayedRef.current = true;
         playSeedNudgeBurst();
@@ -2188,12 +2186,13 @@ function FarmGameBody({
     return () => clearTimeout(timer);
   }, [onboardingStep, farmAnalytics, playSeedNudgeBurst]);
 
-  // Loop a gentle pulse on the seed-strip emphasis ring while the selectSeed step
+  // Loop a gentle pulse on the seed-strip emphasis ring while the plant step
   // is active so the place to tap reads louder for brand-new players; stop and
   // reset when the step moves on. Drives only the overlay ring's opacity (native
-  // driver), so the seed buttons themselves stay fully opaque.
+  // driver), so the seed buttons themselves stay fully opaque. (#427: selectSeed
+  // 제거로 씨앗 강조는 plant 단계에 귀속된다.)
   useEffect(() => {
-    if (onboardingStep !== 'selectSeed') {
+    if (onboardingStep !== 'plant') {
       seedHighlightPulse.stopAnimation();
       seedHighlightPulse.setValue(0);
       return;
@@ -3630,11 +3629,11 @@ function FarmGameBody({
     // switch to its area (so it's visible in the strip) and fire the emphasis
     // burst (#362). We still keep the toast so the reason for the redirect reads.
     if (
-      onboardingStepRef.current === 'selectSeed' &&
+      onboardingStepRef.current === 'plant' &&
       gameState.gold < getCropPurchaseCost(gameState, cropKey, Date.now())
     ) {
       toast(messages.insufficientGoldToast);
-      const nudge = resolveUnaffordableSeedNudge(gameState, cropKey, 'selectSeed', Date.now());
+      const nudge = resolveUnaffordableSeedNudge(gameState, cropKey, 'plant', Date.now());
       if (nudge != null) {
         setSelectedArea(getCrop(nudge.cropKey).area);
         playSeedNudgeBurst();
@@ -3656,11 +3655,11 @@ function FarmGameBody({
     setSelectedTool(cropKey);
   }
 
-  // #274: selectSeed 코치마크 "바로 시작" — 심을 수 있는 대표 씨앗을 자동 선택한다.
+  // #274/#427: plant 코치마크 "바로 시작" — 심을 수 있는 대표 씨앗을 자동 선택한다.
   // selectCrop을 그대로 태우므로 first_seed_selected 계측과 씨앗 선택 상태 세팅이
-  // 직접 선택과 동일하게 일어나고, 이어서 진행 이펙트가 selectSeed→plant로 넘겨
-  // onboarding_step_view(step=plant)까지 한 번에 발화한다. quickStartCropKey는 이미
-  // 해금·심기 가능 작물만 담으므로 selectCrop이 거절(잠김/미해금)로 no-op되지 않는다.
+  // 직접 선택과 동일하게 일어나, 이어서 빈 밭만 탭하면 plant→harvest로 진행한다.
+  // quickStartCropKey는 이미 해금·심기 가능 작물만 담으므로 selectCrop이 거절(잠김/
+  // 미해금)로 no-op되지 않는다.
   function quickStartOnboarding() {
     if (quickStartCropKey == null) {
       return;
@@ -4600,7 +4599,8 @@ function FarmGameBody({
   ];
 
   // Outline the target the current onboarding step points at to draw the eye.
-  const onboardingSeedHighlight = onboardingStep === 'selectSeed';
+  // #427: selectSeed 제거 후 씨앗 강조는 plant(직접 파종) 단계로 옮겨졌다.
+  const onboardingSeedHighlight = onboardingStep === 'plant';
   const onboardingPlotHighlight = onboardingStep === 'plant' || onboardingStep === 'harvest';
 
   // #367: 기본 온보딩을 마친 뒤, 다른 오버레이/시트가 떠 있지 않은 메인 화면에서만 딥 기능
@@ -4983,7 +4983,7 @@ function FarmGameBody({
           </ScrollView>
           {onboardingSeedHighlight ? (
             // Louder green ring whose opacity pulses to draw the eye to the seed
-            // strip during the selectSeed step (#159). Sits above the strip but
+            // strip during the plant step (#159/#427). Sits above the strip but
             // lets taps fall through to the seed buttons underneath.
             <Animated.View
               pointerEvents="none"

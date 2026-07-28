@@ -1,7 +1,8 @@
 /// <reference types="jest" />
 
 import {
-  createInitialState,
+  createEmptyPlots,
+  createInitialState as createBaseInitialState,
   getCropEconomyEstimate,
   getProfitMultiplier,
   getSpeedMultiplier,
@@ -23,6 +24,10 @@ import {
 import { CHAIN_OFFLINE_CAP_MS, getChainIncome } from '../prestige';
 import { PRODUCTION_RECIPES } from '../production';
 import type { AnimalKey, CropKey, GameState, ProductionRecipeKey } from '../types';
+
+// #427: createInitialState는 이제 첫 밭에 스타터 carrot을 자동 파종한다. 이 파일의
+// 오프라인 복귀 요약 테스트는 "빈 농장"을 전제로 하므로, 밭을 비운 초기 상태로 감싼다.
+const createInitialState = (): GameState => ({ ...createBaseInitialState(), plots: createEmptyPlots() });
 
 const NOW = Date.parse('2026-06-13T03:00:00.000Z');
 const MS_PER_HOUR = 60 * 60 * 1000;

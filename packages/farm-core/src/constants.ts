@@ -107,7 +107,10 @@ export const MAX_PLOTS = balance.economy.maxPlots;
 export const INITIAL_PLOTS = balance.economy.initialPlots;
 export const DEFAULT_GOLD = balance.economy.defaultGold;
 export const SAVE_KEY = 'farmTycoonSave';
-export const ONBOARDING_STEPS = ['selectSeed', 'plant', 'harvest', 'reward'] as const satisfies readonly OnboardingStep[];
+export const ONBOARDING_STEPS = ['plant', 'harvest', 'reward'] as const satisfies readonly OnboardingStep[];
+// #427: 신규 유저의 첫 밭에 자동 파종되는 씨앗. 가장 싼 1티어 작물이라 즉시 수확
+// 가능한 aha 순간을 만든다. 온보딩 시작 단계를 'harvest'로 여는 근거가 되는 상수.
+export const ONBOARDING_STARTER_CROP: CropKey = 'carrot';
 export const REWARDED_GOLD_AMOUNT = balance.ads.rewardedGoldAmount;
 export const REWARDED_GOLD_WINDOW_MS = balance.ads.rewardedGoldWindowMs;
 export const REWARDED_GOLD_MAX_USES_PER_WINDOW = balance.ads.rewardedGoldMaxUsesPerWindow;
@@ -826,7 +829,23 @@ export function recordRewardedAdUsage(
   };
 }
 
+// 모든 밭이 비어 있는(state 0) 초기 밭 배열. createInitialState의 자동 파종과
+// 무관하게 "빈 밭" 기본값이 필요한 곳(프레스티지 리셋·마이그레이션 폴백)에서 재사용한다.
+export function createEmptyPlots(): GameState['plots'] {
+  return Array.from({ length: MAX_PLOTS }, (_, i) => ({
+    id: i,
+    cropType: null,
+    startTime: null,
+    state: 0 as PlotState,
+  }));
+}
+
 export function createInitialState(): GameState {
+  // #427: 신규 유저는 첫 밭에 carrot이 이미 자란(state 2) 상태로 시작한다. 씨앗 선택
+  // 단계를 없애고 첫 인터랙션을 '수확'으로 옮겨 활성화를 높인다. startTime은 성장 완료
+  // 상태(state 2)에서 성장 계산에 쓰이지 않으므로 결정적 0으로 둔다.
+  const plots = createEmptyPlots();
+  plots[0] = { id: 0, cropType: ONBOARDING_STARTER_CROP, startTime: 0, state: 2 };
   return {
     gold: DEFAULT_GOLD,
     unlockedPlotCount: INITIAL_PLOTS,
@@ -844,17 +863,13 @@ export function createInitialState(): GameState {
     chainFarms: [],
     research: createInitialResearchState(),
     automationSettings: createInitialAutomationSettings(),
-    plots: Array.from({ length: MAX_PLOTS }, (_, i) => ({
-      id: i,
-      cropType: null,
-      startTime: null,
-      state: 0 as PlotState,
-    })),
+    plots,
     dailyBonusState: { lastClaimedAt: null, streak: 0 },
     dailyMissionState: createInitialDailyMissionState(),
     weeklyMissionState: createInitialWeeklyMissionState(),
     onboardingCompleted: false,
-    onboardingStep: 'selectSeed',
+    // 첫 밭 carrot이 이미 자란 상태이므로 온보딩은 harvest 단계부터 시작한다(#427).
+    onboardingStep: 'harvest',
     firstSeedSelected: false,
     onboardingReturnSettledAt: null,
     harvestNotificationPromptSeen: false,
@@ -957,7 +972,9 @@ export function resolveOnboardingStep(state: GameState, candidate: unknown): Onb
   if (state.plots.some((plot) => plot.cropType != null)) {
     return 'harvest';
   }
-  return 'selectSeed';
+  // #427: selectSeed 제거 후 "아직 아무것도 심지 않은" 미완료 세이브(레거시 진행 중
+  // selectSeed 포함)는 plant 단계로 재개해 직접 파종을 안내한다.
+  return 'plant';
 }
 
 export function migrateLoadedState(loaded: Partial<GameState>, base: GameState): GameState {
@@ -983,7 +1000,10 @@ export function migrateLoadedState(loaded: Partial<GameState>, base: GameState):
     },
   };
 
-  const plots = Array.isArray(loaded.plots) ? loaded.plots : base.plots;
+  // #427: base(createInitialState)는 이제 첫 밭에 자동 파종 carrot을 담는다. 기존
+  // 세이브 마이그레이션이 그 스타터 작물을 상속받지 않도록, loaded.plots가 없을 때의
+  // 폴백은 base가 아닌 빈 밭이다(자동 파종은 오직 신규 상태에서만 일어난다).
+  const plots = Array.isArray(loaded.plots) ? loaded.plots : createEmptyPlots();
   merged.plots = Array.from({ length: MAX_PLOTS }, (_, index) => normalizePlot(plots[index], index));
 
   // Mastery counters and the discovery list must stay in sync both ways:
@@ -1003,8 +1023,9 @@ export function migrateLoadedState(loaded: Partial<GameState>, base: GameState):
   // first_seed_selected is a lifetime event. Saves created before the explicit
   // flag inherit true whenever persisted progress proves a seed was already
   // selected; otherwise a genuinely untouched player keeps the initial false.
-  const onboardingStepProvesSeedSelection =
-    loaded.onboardingStep === 'plant' || loaded.onboardingStep === 'harvest' || loaded.onboardingStep === 'reward';
+  // #427: 'harvest'는 이제 자동 파종 신규 유저의 기본 시작 단계이므로 더 이상 수동
+  // 씨앗 선택의 증거가 아니다. 레거시에서 직접 파종을 진행하던 'plant'만 증거로 남긴다.
+  const onboardingStepProvesSeedSelection = loaded.onboardingStep === 'plant';
   const progressProvesSeedSelection =
     merged.plots.some((plot) => plot.cropType != null) ||
     merged.harvestedCropKeys.length > 0 ||
