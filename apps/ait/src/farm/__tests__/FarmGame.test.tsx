@@ -52,7 +52,10 @@ import {
   getResetDayStart,
   getSeasonalAmbience,
   getTitleLabel,
+  getUpgradeBatchPurchase,
   getUpgradeCost,
+  UPGRADE_BATCH_MAX_SCAN,
+  UPGRADE_BATCH_STEP,
   recordAdWatchProgress,
   recordWeeklyAdWatchProgress,
   sortCropKeysForStrip,
@@ -3334,6 +3337,102 @@ describe('FarmGame UI flow', () => {
     fireEvent.press(screen.getByTestId('shop-tab-expand'));
     fireEvent.press(screen.getByText('채소 밭 열기'));
     expect(screen.queryByText('채소 밭 열기')).toBeNull();
+  });
+
+  describe('배치(일괄) 업그레이드 구매 (#426)', () => {
+    const openUpgradeTab = (screen: ReturnType<typeof render>) => {
+      fireEvent.press(screen.getByText('🏪 상점'));
+      fireEvent.press(screen.getByTestId('shop-tab-upgrade'));
+    };
+
+    test('+10 배치가 10레벨을 한 번의 상태 갱신으로 사고 전용 계측을 emit한다', async () => {
+      const state: GameState = { ...createShopReadyState(), gold: 100_000_000, upgrades: { speed: 1, profit: 1 } };
+      const tenCost = getUpgradeBatchPurchase('speed', 1, Number.POSITIVE_INFINITY, UPGRADE_BATCH_STEP).totalCost;
+      const track = jest.fn();
+      const screen = await renderGame(state, { analytics: createFarmAnalytics(track) });
+
+      await waitFor(() => expect(screen.getByText(`${formatMoney(state.gold)}G`)).toBeTruthy());
+      openUpgradeTab(screen);
+
+      fireEvent.press(screen.getByTestId('upgrade-batch-ten-speed'));
+
+      // 골드가 10레벨 전액만큼 한 번에 차감된다.
+      await waitFor(() => expect(screen.getByText(`${formatMoney(state.gold - tenCost)}G`)).toBeTruthy());
+      const batchCalls = track.mock.calls.filter(([name]) => name === 'upgrade_batch_purchased');
+      expect(batchCalls).toHaveLength(1);
+      expect(batchCalls[0]![1]).toEqual(
+        expect.objectContaining({
+          upgrade_kind: 'speed',
+          levels_purchased: UPGRADE_BATCH_STEP,
+          total_cost: tenCost,
+          from_level: 1,
+          to_level: 1 + UPGRADE_BATCH_STEP,
+        })
+      );
+      // 단일 구매 이벤트는 발화하지 않는다(배치는 구분된 이벤트).
+      expect(track.mock.calls.filter(([name]) => name === 'upgrade_purchased')).toHaveLength(0);
+    });
+
+    test('최대 배치가 감당 가능한 모든 레벨을 사고 골드를 초과 지출하지 않는다', async () => {
+      const state: GameState = { ...createShopReadyState(), gold: 10_000, upgrades: { speed: 1, profit: 1 } };
+      const preview = getUpgradeBatchPurchase('speed', 1, state.gold, UPGRADE_BATCH_MAX_SCAN);
+      expect(preview.levels).toBeGreaterThanOrEqual(2); // 테스트 전제: 최대 활성
+      const track = jest.fn();
+      const screen = await renderGame(state, { analytics: createFarmAnalytics(track) });
+
+      await waitFor(() => expect(screen.getByText(`${formatMoney(state.gold)}G`)).toBeTruthy());
+      openUpgradeTab(screen);
+
+      fireEvent.press(screen.getByTestId('upgrade-batch-max-speed'));
+
+      await waitFor(() => expect(screen.getByText(`${formatMoney(state.gold - preview.totalCost)}G`)).toBeTruthy());
+      const batchCalls = track.mock.calls.filter(([name]) => name === 'upgrade_batch_purchased');
+      expect(batchCalls).toHaveLength(1);
+      expect(batchCalls[0]![1]).toEqual(
+        expect.objectContaining({
+          upgrade_kind: 'speed',
+          levels_purchased: preview.levels,
+          total_cost: preview.totalCost,
+          from_level: 1,
+          to_level: 1 + preview.levels,
+        })
+      );
+    });
+
+    test('골드가 10레벨 전액에 못 미치면 +10 버튼이 비활성화되고 눌러도 아무 일이 없다', async () => {
+      const state: GameState = { ...createShopReadyState(), gold: 10_000, upgrades: { speed: 1, profit: 1 } };
+      const track = jest.fn();
+      const screen = await renderGame(state, { analytics: createFarmAnalytics(track) });
+
+      await waitFor(() => expect(screen.getByText(`${formatMoney(state.gold)}G`)).toBeTruthy());
+      openUpgradeTab(screen);
+
+      const tenButton = screen.getByTestId('upgrade-batch-ten-speed');
+      expect(tenButton.props.accessibilityState.disabled).toBe(true);
+      fireEvent.press(tenButton);
+
+      expect(screen.getByText(`${formatMoney(state.gold)}G`)).toBeTruthy();
+      expect(track.mock.calls.filter(([name]) => name === 'upgrade_batch_purchased')).toHaveLength(0);
+    });
+
+    test('같은 프레임 중복 탭에도 최대 배치는 한 번만 적용된다', async () => {
+      const state: GameState = { ...createShopReadyState(), gold: 100_000_000, upgrades: { speed: 1, profit: 1 } };
+      const preview = getUpgradeBatchPurchase('speed', 1, state.gold, UPGRADE_BATCH_MAX_SCAN);
+      const track = jest.fn();
+      const screen = await renderGame(state, { analytics: createFarmAnalytics(track) });
+
+      await waitFor(() => expect(screen.getByText(`${formatMoney(state.gold)}G`)).toBeTruthy());
+      openUpgradeTab(screen);
+
+      const maxButton = screen.getByTestId('upgrade-batch-max-speed');
+      act(() => {
+        fireEvent.press(maxButton);
+        fireEvent.press(maxButton);
+      });
+
+      await waitFor(() => expect(screen.getByText(`${formatMoney(state.gold - preview.totalCost)}G`)).toBeTruthy());
+      expect(track.mock.calls.filter(([name]) => name === 'upgrade_batch_purchased')).toHaveLength(1);
+    });
   });
 
   test('guards a same-frame rapid upgrade press from duplicate charges and analytics', async () => {

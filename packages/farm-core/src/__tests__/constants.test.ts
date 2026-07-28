@@ -38,6 +38,9 @@ import {
   getHarvestBonusPromptStatus,
   getPlotCost,
   getProfitMultiplier,
+  getUpgradeBatchPurchase,
+  UPGRADE_BATCH_MAX_SCAN,
+  UPGRADE_BATCH_STEP,
   getRewardedAdLimitStatus,
   getSpeedMultiplier,
   getUpgradeCost,
@@ -752,5 +755,63 @@ describe('getRewardedGoldAmount', () => {
       expect(Number.isFinite(result)).toBe(true);
       expect(result).toBeGreaterThanOrEqual(REWARDED_GOLD_AMOUNT);
     }
+  });
+});
+
+describe('getUpgradeBatchPurchase — 배치(일괄) 업그레이드 구매 (#426)', () => {
+  // 매직 넘버 대신 getUpgradeCost로 기대 비용을 계산해 자기 정합적으로 검증한다.
+  const sumCost = (kind: 'speed' | 'profit', from: number, count: number) => {
+    let total = 0;
+    for (let i = 0; i < count; i += 1) {
+      total += getUpgradeCost(kind, from + i);
+    }
+    return total;
+  };
+
+  it('골드가 충분하면 +10을 전액 계산한다(레벨 수·총비용·from/to)', () => {
+    const from = 1;
+    const fullTenCost = sumCost('speed', from, UPGRADE_BATCH_STEP);
+    const result = getUpgradeBatchPurchase('speed', from, Number.POSITIVE_INFINITY, UPGRADE_BATCH_STEP);
+    expect(result).toEqual({
+      levels: UPGRADE_BATCH_STEP,
+      totalCost: fullTenCost,
+      fromLevel: from,
+      toLevel: from + UPGRADE_BATCH_STEP,
+    });
+  });
+
+  it('골드로 감당 가능한 만큼만 클램프한다(+10 목표, 3레벨만 가능)', () => {
+    const from = 4;
+    const affordThree = sumCost('profit', from, 3);
+    const affordFour = sumCost('profit', from, 4);
+    // 정확히 3레벨 값 → 3레벨, 4레벨엔 1 모자람.
+    const result = getUpgradeBatchPurchase('profit', from, affordFour - 1, UPGRADE_BATCH_STEP);
+    expect(result.levels).toBe(3);
+    expect(result.totalCost).toBe(affordThree);
+    expect(result.toLevel).toBe(from + 3);
+  });
+
+  it('최대(큰 상한)는 골드가 허용하는 모든 레벨을 산다', () => {
+    const from = 2;
+    const affordFive = sumCost('speed', from, 5);
+    const result = getUpgradeBatchPurchase('speed', from, affordFive, UPGRADE_BATCH_MAX_SCAN);
+    expect(result.levels).toBe(5);
+    expect(result.totalCost).toBe(affordFive);
+    expect(result.totalCost).toBeLessThanOrEqual(affordFive);
+  });
+
+  it('골드 부족(1레벨도 못 삼)이면 levels 0·totalCost 0을 반환한다', () => {
+    const result = getUpgradeBatchPurchase('speed', 1, 0, UPGRADE_BATCH_STEP);
+    expect(result).toEqual({ levels: 0, totalCost: 0, fromLevel: 1, toLevel: 1 });
+  });
+
+  it('절대 골드를 초과 지출하지 않는다(총비용 <= 보유 골드)', () => {
+    const from = 3;
+    const gold = 250_000;
+    const result = getUpgradeBatchPurchase('profit', from, gold, UPGRADE_BATCH_MAX_SCAN);
+    expect(result.totalCost).toBeLessThanOrEqual(gold);
+    // 한 레벨 더 샀다면 골드를 초과했어야 한다(경계 검증).
+    const oneMore = result.totalCost + getUpgradeCost('profit', from + result.levels);
+    expect(oneMore).toBeGreaterThan(gold);
   });
 });

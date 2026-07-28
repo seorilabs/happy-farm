@@ -162,6 +162,7 @@ export const frFarmMessages: FarmMessages = {
   speedUpgradeDesc: 'Vitesse de pousse +10 %',
   profitUpgradeDesc: 'Gain de vente +10 %',
   upgradeDescWithLevel: (description, level) => `${description} · Lv. ${level}`,
+  upgradeBuyMax: 'Max',
   researchCompletedToast: 'Recherche terminée.',
   saveLoadedToast: 'Records de la ferme chargés.',
   lockedCropToast: 'Cette culture appartient à une zone verrouillée.',

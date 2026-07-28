@@ -635,6 +635,38 @@ export const styles = StyleSheet.create({
   upgradeCardHost: {
     position: 'relative',
   },
+  // #426: 업그레이드 카드 내부의 배치(일괄) 구매 버튼 행. 카드 밀도를 해치지 않도록
+  // 단일 구매 카드 아래에 작게 배치한다(상단 HUD/navRow 무변경).
+  upgradeBatchRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 8,
+  },
+  upgradeBatchButton: {
+    flex: 1,
+    minHeight: 44,
+    borderRadius: 12,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    backgroundColor: '#eef4ee',
+    borderWidth: 1,
+    borderColor: '#cfe0d2',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  upgradeBatchButtonDisabled: {
+    opacity: 0.4,
+  },
+  upgradeBatchLabel: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#2f8747',
+  },
+  upgradeBatchSub: {
+    fontSize: 11,
+    color: '#5f6f63',
+    marginTop: 1,
+  },
   upgradeBurstOverlay: {
     ...StyleSheet.absoluteFillObject,
     zIndex: 4,

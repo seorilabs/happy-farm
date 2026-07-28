@@ -162,6 +162,7 @@ export const enFarmMessages: FarmMessages = {
   speedUpgradeDesc: 'Crop growth speed +10%',
   profitUpgradeDesc: 'Sale profit +10%',
   upgradeDescWithLevel: (description, level) => `${description} · Lv. ${level}`,
+  upgradeBuyMax: 'Max',
   researchCompletedToast: 'Research complete.',
   saveLoadedToast: 'Farm records loaded.',
   lockedCropToast: 'This crop belongs to a locked area.',

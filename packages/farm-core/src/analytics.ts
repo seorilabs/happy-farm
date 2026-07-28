@@ -235,6 +235,27 @@ export function createFarmAnalytics(track: TrackGameEvent = noopTrackGameEvent) 
       });
     },
 
+    // #426: 배치(일괄) 업그레이드 구매. 단일 구매(upgrade_purchased)와 구분되는 별도
+    // 이벤트로, 한 번의 상태 갱신으로 여러 레벨을 산 것을 levels_purchased/총비용/
+    // from_level·to_level로 기록한다(후반 반복 탭 감소 효과 측정용).
+    trackUpgradeBatchPurchased: (params: {
+      kind: 'speed' | 'profit';
+      levelsPurchased: number;
+      totalCost: number;
+      fromLevel: number;
+      toLevel: number;
+      context: GameAnalyticsContext;
+    }) => {
+      track('upgrade_batch_purchased', {
+        upgrade_kind: params.kind,
+        levels_purchased: params.levelsPurchased,
+        total_cost: params.totalCost,
+        from_level: params.fromLevel,
+        to_level: params.toLevel,
+        ...params.context,
+      });
+    },
+
     trackAreaUnlockClicked: (areaKey: AreaKey, context: GameAnalyticsContext) => {
       track('area_unlock_clicked', {
         area: areaKey,

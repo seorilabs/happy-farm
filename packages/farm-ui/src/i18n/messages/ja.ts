@@ -162,6 +162,7 @@ export const jaFarmMessages: FarmMessages = {
   speedUpgradeDesc: '作物の成長速度 +10%',
   profitUpgradeDesc: '販売利益 +10%',
   upgradeDescWithLevel: (description, level) => `${description} · Lv. ${level}`,
+  upgradeBuyMax: '最大',
   researchCompletedToast: '研究を完了しました。',
   saveLoadedToast: '農場の記録を読み込みました。',
   lockedCropToast: 'まだ開いていない区域の作物です。',
