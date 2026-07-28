@@ -16,7 +16,14 @@ import {
   type MissionType,
 } from '../missions';
 import balance from '../balance.json';
-import { CROPS, createEmptyPlots, createInitialState as createBaseInitialState, migrateLoadedState } from '../constants';
+import {
+  CROPS,
+  createEmptyPlots,
+  createInitialState as createBaseInitialState,
+  getUpgradeBatchPurchase,
+  migrateLoadedState,
+} from '../constants';
+import { applyUpgradePurchase } from '../missionEvents';
 import { performHarvest, performPlant } from '../harvest';
 import { getWeeklyMissionsSnapshot } from '../weeklyMissions';
 import { getCropPurchaseCost } from '../modifiers';
@@ -194,6 +201,37 @@ describe('progress tracking', () => {
         (mission) => mission.type === 'spend_gold'
       )!.progress
     ).toBe(spent);
+  });
+
+  test('applyUpgradePurchase는 골드 차감·레벨 증가·미션 골드 소비를 한 번의 전이로 처리한다 (#426)', () => {
+    const state: GameState = { ...createInitialState(), gold: 1_000_000, upgrades: { speed: 3, profit: 1 } };
+    const levels = 5;
+    const preview = getUpgradeBatchPurchase('speed', 3, state.gold, levels);
+    // 전제: 5레벨을 다 살 수 있어야 한다.
+    expect(preview.levels).toBe(levels);
+
+    const next = applyUpgradePurchase(state, 'speed', preview.levels, preview.totalCost, DAY_A);
+
+    // 골드 차감 + 레벨 증가(다른 종류는 불변).
+    expect(next.gold).toBe(state.gold - preview.totalCost);
+    expect(next.upgrades.speed).toBe(3 + levels);
+    expect(next.upgrades.profit).toBe(1);
+    // 미션 골드 소비가 총비용만큼 일일·주간에 한 번에 기록된다(canonical 파이프라인).
+    expect(
+      getDailyMissionsSnapshot(next.dailyMissionState, DAY_A, next.unlockedAreas).missions.find(
+        (m) => m.type === 'spend_gold'
+      )!.progress
+    ).toBe(preview.totalCost);
+    expect(
+      getWeeklyMissionsSnapshot(next.weeklyMissionState, DAY_A, next.unlockedAreas).missions.find(
+        (m) => m.type === 'spend_gold'
+      )!.progress
+    ).toBe(preview.totalCost);
+  });
+
+  test('applyUpgradePurchase는 levels<=0이면 no-op이다 (#426)', () => {
+    const state = createInitialState();
+    expect(applyUpgradePurchase(state, 'speed', 0, 0, DAY_A)).toBe(state);
   });
 
   test('performHarvest feeds daily-mission progress through the canonical pipeline', () => {

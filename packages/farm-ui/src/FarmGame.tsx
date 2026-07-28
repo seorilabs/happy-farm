@@ -134,6 +134,7 @@ import {
   getSeasonalAmbience,
   getDailyMissionsSnapshot,
   recordMissionProgressEvent,
+  applyUpgradePurchase,
   claimMission,
   recordAdWatchProgress,
   getWeeklyMissionsSnapshot,
@@ -8013,16 +8014,7 @@ function ShopUpgradeRow({
     }
     purchasedLevelRef.current = level;
     setBurstGeneration((generation) => generation + 1);
-    setGameState((state) =>
-      recordMissionProgressEvent(
-        {
-          ...state,
-          gold: state.gold - preview.totalCost,
-          upgrades: { ...state.upgrades, [kind]: state.upgrades[kind] + preview.levels },
-        },
-        { type: 'spend_gold', amount: preview.totalCost }
-      )
-    );
+    setGameState((state) => applyUpgradePurchase(state, kind, preview.levels, preview.totalCost));
     analytics.trackUpgradeBatchPurchased({
       kind,
       levelsPurchased: preview.levels,
@@ -8056,16 +8048,7 @@ function ShopUpgradeRow({
           }
           purchasedLevelRef.current = level;
           setBurstGeneration((generation) => generation + 1);
-          setGameState((state) =>
-            recordMissionProgressEvent(
-              {
-                ...state,
-                gold: state.gold - cost,
-                upgrades: { ...state.upgrades, [kind]: state.upgrades[kind] + 1 },
-              },
-              { type: 'spend_gold', amount: cost }
-            )
-          );
+          setGameState((state) => applyUpgradePurchase(state, kind, 1, cost));
           analytics.trackUpgradePurchased({
             kind,
             cost,
