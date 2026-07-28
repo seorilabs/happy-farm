@@ -703,6 +703,35 @@ export function createFarmAnalytics(track: TrackGameEvent = noopTrackGameEvent) 
       });
     },
 
+    // === 강제 업데이트 게이트 (#428, 모바일 전용) ===
+    // 최소지원버전 게이트가 발동해 업데이트 안내가 노출됐다. 앱 기동 직후 게임 상태
+    // context 이전에 발생할 수 있어 context를 요구하지 않는다. 버전 분포 수렴 속도를
+    // BQ로 측정하기 위한 계측이다.
+    trackUpdateGateShown: (params: {
+      buildNumber: number;
+      minimumSupportedVersionCode: number;
+      platform: string;
+    }) => {
+      track('update_gate_shown', {
+        build_number: params.buildNumber,
+        minimum_supported_version_code: params.minimumSupportedVersionCode,
+        platform: params.platform,
+      });
+    },
+
+    // 업데이트 안내에서 스토어 열기 버튼 클릭. shown 대비 클릭률로 안내 효과를 측정한다.
+    trackUpdateGateStoreClick: (params: {
+      buildNumber: number;
+      minimumSupportedVersionCode: number;
+      platform: string;
+    }) => {
+      track('update_gate_store_click', {
+        build_number: params.buildNumber,
+        minimum_supported_version_code: params.minimumSupportedVersionCode,
+        platform: params.platform,
+      });
+    },
+
     // === 첫 세션 온보딩 단계 퍼널 (#159) ===
     // 4단계 코치마크(selectSeed→plant→harvest→reward)의 단계별 진입/이탈을 GA4로
     // 특정하기 위한 계측. step은 단계 키, step_index는 1부터 시작하는 진행 번호다.
