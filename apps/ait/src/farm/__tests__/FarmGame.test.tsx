@@ -3345,6 +3345,28 @@ describe('FarmGame UI flow', () => {
       fireEvent.press(screen.getByTestId('shop-tab-upgrade'));
     };
 
+    test('UpgradeCard가 +10·최대 구매 가능 수량과 총 비용을 계산해 버튼에 표시한다 (AC-1)', async () => {
+      const messages = getFarmMessages(DEFAULT_LOCALE);
+      const state: GameState = { ...createShopReadyState(), gold: 100_000_000, upgrades: { speed: 1, profit: 1 } };
+      // UpgradeCard가 getUpgradeCost 기반 getUpgradeBatchPurchase로 계산할 기대값.
+      const ten = getUpgradeBatchPurchase('speed', 1, Number.POSITIVE_INFINITY, UPGRADE_BATCH_STEP);
+      const max = getUpgradeBatchPurchase('speed', 1, state.gold, UPGRADE_BATCH_MAX_SCAN);
+      const screen = await renderGame(state);
+
+      await waitFor(() => expect(screen.getByText(`${formatMoney(state.gold)}G`)).toBeTruthy());
+      openUpgradeTab(screen);
+
+      const tenButton = screen.getByTestId('upgrade-batch-ten-speed');
+      // +10: 목표 수량(+10)과 10레벨 전액 총비용을 계산해 표시한다.
+      expect(within(tenButton).getByText(`+${UPGRADE_BATCH_STEP}`)).toBeTruthy();
+      expect(within(tenButton).getByText(`${formatMoney(ten.totalCost)}G`)).toBeTruthy();
+
+      const maxButton = screen.getByTestId('upgrade-batch-max-speed');
+      // 최대: 감당 가능한 레벨 수(+N)와 그 총비용을 계산해 표시한다.
+      expect(within(maxButton).getByText(`${messages.upgradeBuyMax} +${max.levels}`)).toBeTruthy();
+      expect(within(maxButton).getByText(`${formatMoney(max.totalCost)}G`)).toBeTruthy();
+    });
+
     test('+10 배치가 10레벨을 한 번의 상태 갱신으로 사고 전용 계측을 emit한다', async () => {
       const state: GameState = { ...createShopReadyState(), gold: 100_000_000, upgrades: { speed: 1, profit: 1 } };
       const tenCost = getUpgradeBatchPurchase('speed', 1, Number.POSITIVE_INFINITY, UPGRADE_BATCH_STEP).totalCost;
