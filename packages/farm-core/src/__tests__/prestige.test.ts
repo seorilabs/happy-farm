@@ -22,8 +22,13 @@ import {
   prestigeFarm,
 } from '../prestige';
 import { getFarmHourlyProductivity, getGlobalModifiers, getCropPurchaseCost } from '../modifiers';
-import { CROPS, createInitialState, getAreaCropKeys, migrateLoadedState } from '../constants';
+import { CROPS, createEmptyPlots, createInitialState as createBaseInitialState, getAreaCropKeys, migrateLoadedState } from '../constants';
 import { FARM_LAYER_KEYS, META_LAYER_KEYS, type CropKey, type GameState } from '../types';
+
+// #427: createInitialState는 이제 첫 밭에 스타터 carrot을 자동 파종한다. 프레스티지
+// 리셋은 빈 밭에서 다시 시작하므로(createPrestigedState도 빈 밭 사용), 이 파일의
+// 기준 상태도 밭을 비운 초기 상태로 감싸 프레스티지 후 농장 레이어와 정합시킨다.
+const createInitialState = (): GameState => ({ ...createBaseInitialState(), plots: createEmptyPlots() });
 
 const NOW = Date.parse('2026-06-11T03:00:00.000Z');
 const MS_PER_HOUR = 60 * 60 * 1000;

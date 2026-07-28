@@ -16,7 +16,7 @@ import {
   type MissionType,
 } from '../missions';
 import balance from '../balance.json';
-import { CROPS, createInitialState, migrateLoadedState } from '../constants';
+import { CROPS, createEmptyPlots, createInitialState as createBaseInitialState, migrateLoadedState } from '../constants';
 import { performHarvest, performPlant } from '../harvest';
 import { getWeeklyMissionsSnapshot } from '../weeklyMissions';
 import { getCropPurchaseCost } from '../modifiers';
@@ -27,6 +27,10 @@ const SLOT_COUNT = balance.missions.slots.length;
 import { createPrestigedState } from '../prestige';
 import type { AreaKey, CropKey, GameState } from '../types';
 import { META_LAYER_KEYS } from '../types';
+
+// #427: createInitialState는 이제 첫 밭에 스타터 carrot을 자동 파종한다. 이 파일의
+// 미션 진행 테스트는 "빈 농장"을 전제로 하므로, 로컬에서 밭을 비운 초기 상태로 감싼다.
+const createInitialState = (): GameState => ({ ...createBaseInitialState(), plots: createEmptyPlots() });
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const DAY_A = Date.UTC(2026, 5, 30, 9); // 2026-06-30 09:00 UTC

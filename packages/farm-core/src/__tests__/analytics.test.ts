@@ -305,7 +305,7 @@ describe('farm analytics adapter contract', () => {
     );
 
     analytics.trackGameStart(context);
-    analytics.trackOnboardingStepView({ step: 'selectSeed', stepIndex: 1, context });
+    analytics.trackOnboardingStepView({ step: 'plant', stepIndex: 1, context });
     analytics.trackOnboardingComplete({ context });
     analytics.trackSeedSelected('carrot', 'starter_field', true, context);
     analytics.trackCropPlanted('carrot', 'starter_field', 1, 10, context);
@@ -374,13 +374,13 @@ describe('farm analytics adapter contract', () => {
       Date.parse('2026-05-27T03:00:05.000Z')
     );
 
-    analytics.trackOnboardingStepView({ step: 'selectSeed', stepIndex: 1, context });
+    analytics.trackOnboardingStepView({ step: 'plant', stepIndex: 1, context });
     analytics.trackOnboardingSkip({ skippedStep: 'harvest', stepIndex: 3, context });
     analytics.trackOnboardingComplete({ context });
 
     expect(track).toHaveBeenCalledWith(
       'onboarding_step_view',
-      expect.objectContaining({ step: 'selectSeed', step_index: 1, gold: context.gold })
+      expect.objectContaining({ step: 'plant', step_index: 1, gold: context.gold })
     );
     expect(track).toHaveBeenCalledWith(
       'onboarding_skip',

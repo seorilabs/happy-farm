@@ -1,6 +1,6 @@
 /// <reference types="jest" />
 
-import { CROPS, createInitialState, getGrowthAdSkipMs } from '../constants';
+import { CROPS, createEmptyPlots, createInitialState as createBaseInitialState, getGrowthAdSkipMs } from '../constants';
 import { getCropPurchaseCost } from '../modifiers';
 import {
   applyGrowthAdSkip,
@@ -13,6 +13,10 @@ import {
   performPlantAll,
 } from '../harvest';
 import type { CropKey, GameState, PlotState } from '../types';
+
+// #427: createInitialState는 이제 첫 밭에 스타터 carrot을 자동 파종한다. 이 파일의
+// 밭 메커닉 테스트는 "빈 농장"을 전제로 하므로, 로컬에서 밭을 비운 초기 상태로 감싼다.
+const createInitialState = (): GameState => ({ ...createBaseInitialState(), plots: createEmptyPlots() });
 
 // A crop whose area is NOT unlocked at game start — used to exercise the
 // "unplantable crop" guards in plant-all helpers.

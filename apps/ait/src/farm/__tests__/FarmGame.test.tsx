@@ -25,6 +25,7 @@ import {
   REGION_ARCHETYPES,
   claimAllAchievements,
   claimDailyBonus,
+  createEmptyPlots,
   createFarmAnalytics,
   createInitialState,
   migrateLoadedState,
@@ -238,6 +239,20 @@ function createActiveBoostState(now = NOW): GameState {
   };
 }
 
+// #427: 손대지 않은 자동 파종 스타터 밭(첫 밭 carrot ready + 나머지 빈 밭)만 빈 밭으로
+// 되돌린다. 테스트가 직접 세팅한 밭 구성은 시그니처가 달라 그대로 보존된다.
+function stripPristineStarterFarm(plots: GameState['plots']): GameState['plots'] {
+  const [first, ...rest] = plots;
+  // 자동 파종 스타터의 유일한 시그니처: carrot·ready(state 2)·startTime 0. 의도적으로
+  // 배치한 ready 작물은 실제 startTime을 가지므로 여기에 걸리지 않는다.
+  const isPristineStarter =
+    first?.cropType === 'carrot' &&
+    first.state === 2 &&
+    first.startTime === 0 &&
+    rest.every((plot) => plot.cropType == null && plot.state === 0);
+  return isPristineStarter ? createEmptyPlots() : plots;
+}
+
 async function renderGame(
   savedState: GameState | null,
   props: Partial<React.ComponentProps<typeof FarmGame>> = {},
@@ -249,6 +264,10 @@ async function renderGame(
     ? state
     : {
         ...state,
+        // #427: createInitialState는 이제 첫 밭에 스타터 carrot을 자동 파종한다.
+        // 온보딩을 건너뛴(완료 처리) 시나리오 테스트는 빈 농장을 전제로 하므로,
+        // 손대지 않은 pristine 스타터 밭이면 비워 준다(직접 밭을 세팅한 케이스는 유지).
+        plots: stripPristineStarterFarm(state.plots),
         onboardingCompleted: true,
         onboardingStep: null,
       };
@@ -2538,7 +2557,7 @@ describe('FarmGame UI flow', () => {
       };
     };
 
-    test('guides a brand-new player through seed → plant → harvest → reward without a competing sheet', async () => {
+    test('guides a brand-new player from the auto-planted harvest through reward without a competing sheet', async () => {
       const track = jest.fn();
       const notifications: FarmGameNotifications = {
         isSupported: true,
@@ -2557,36 +2576,28 @@ describe('FarmGame UI flow', () => {
 
       await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
 
-      // Step 1: pick a seed.
+      // #427: selectSeed·plant 단계는 제거됐다. 첫 밭에 carrot이 자동 파종된 채 이미
+      // 자라 있어, 신규 유저의 첫 인터랙션은 곧바로 harvest다(진행도 2/3).
       expect(screen.getByTestId('onboarding-coachmark')).toBeTruthy();
-      expect(screen.getByText(messages.onboardingSelectSeedTitle)).toBeTruthy();
-      expect(screen.getByText(messages.onboardingProgress(1, 4))).toBeTruthy();
+      expect(screen.getByText(messages.onboardingHarvestTitle)).toBeTruthy();
+      expect(screen.getByText(messages.onboardingProgress(2, 3))).toBeTruthy();
       // Fresh saves have an available daily bonus, but onboarding must own the
       // foreground until the first loop is complete.
       expect(screen.queryByText(messages.sheetTitleDailyBonus)).toBeNull();
       expect(track).not.toHaveBeenCalledWith('daily_bonus_opened', expect.anything());
-      fireEvent.press(screen.getByText('당근'));
 
-      // Step 2: plant it.
-      await waitFor(() => expect(screen.getByText(messages.onboardingPlantTitle)).toBeTruthy());
-      fireEvent.press(screen.getAllByText('빈 밭')[0]!);
-
-      // Step 3: harvest when ready.
-      await waitFor(() => expect(screen.getByText(messages.onboardingHarvestTitle)).toBeTruthy());
-      await act(async () => {
-        jest.advanceTimersByTime(2500);
-      });
+      // Step 1: harvest the ready starter crop (already ripe, no timer needed).
       await waitFor(() => expect(screen.getByText('GET')).toBeTruthy());
       fireEvent.press(screen.getByText('GET'));
 
-      // Step 4: the credited first-harvest reward is made explicit, then the
+      // Step 2: the credited first-harvest reward is made explicit, then the
       // player confirms it instead of being blocked by a 300G expansion.
       await waitFor(() => expect(screen.getByTestId('first-harvest-card')).toBeTruthy());
       await waitFor(() => expect(screen.getByText(messages.onboardingRewardTitle)).toBeTruthy());
       // Even when an ad is ready, its harvest-bonus sheet must not cover the
       // activation reward step.
       expect(screen.queryByText(messages.sheetTitleHarvestBonus)).toBeNull();
-      expect(screen.getByText(messages.onboardingProgress(4, 4))).toBeTruthy();
+      expect(screen.getByText(messages.onboardingProgress(3, 3))).toBeTruthy();
       expect(track).toHaveBeenCalledWith('first_meaningful_harvest', expect.anything());
       await waitFor(() => expect(getLatestPersistedState().onboardingStep).toBe('reward'));
       expect(getLatestPersistedState().onboardingCompleted).toBe(false);
@@ -2635,7 +2646,8 @@ describe('FarmGame UI flow', () => {
       expect(availableContentWidth - firstRowWidth).toBeLessThan(PLOT_COLUMNS);
       expect(initialGridStyle.borderWidth).toBeUndefined();
       expect(initialGridStyle.padding).toBeUndefined();
-      expect(screen.queryByTestId('onboarding-plot-highlight')).toBeNull();
+      // #427: 신규 유저는 harvest 단계로 시작하므로 밭 하이라이트가 처음부터 떠 있다.
+      expect(screen.getByTestId('onboarding-plot-highlight')).toBeTruthy();
 
       const expectStableGrid = () => {
         expect(StyleSheet.flatten(screen.getByTestId('plot-grid').props.style)).toEqual(initialGridStyle);
@@ -2662,12 +2674,7 @@ describe('FarmGame UI flow', () => {
         );
       };
 
-      fireEvent.press(screen.getByText('당근'));
-      await waitFor(() => expect(screen.getByText(messages.onboardingPlantTitle)).toBeTruthy());
-      expectStableGrid();
-      expectAbsoluteHighlight();
-
-      fireEvent.press(screen.getByTestId('plot-cell-0'));
+      // #427: harvest 단계로 시작 — 자동 파종된 밭이 강조된 채 그리드는 안정적이다.
       await waitFor(() => expect(screen.getByText(messages.onboardingHarvestTitle)).toBeTruthy());
       expectStableGrid();
       expectAbsoluteHighlight();
@@ -2682,8 +2689,11 @@ describe('FarmGame UI flow', () => {
     });
 
     test('resumes a persisted plant step with a deterministic seed selection', async () => {
+      // #427: plant는 아직 아무것도 심지 않은 레거시 재개 경로다 — 빈 밭이어야 plant
+      // 단계가 유지된다(밭에 작물이 있으면 곧바로 harvest로 넘어간다).
       const plantSave: GameState = {
         ...createInitialState(),
+        plots: createEmptyPlots(),
         onboardingCompleted: false,
         onboardingStep: 'plant',
       };
@@ -2707,7 +2717,8 @@ describe('FarmGame UI flow', () => {
       const resumedHarvest = await renderOnboardingGame(harvestSave);
 
       await waitFor(() => expect(resumedHarvest.getByText(messages.onboardingHarvestTitle)).toBeTruthy());
-      expect(resumedHarvest.getByText(messages.onboardingProgress(3, 4))).toBeTruthy();
+      // #427: ONBOARDING_STEPS=['plant','harvest','reward'] — harvest는 2/3다.
+      expect(resumedHarvest.getByText(messages.onboardingProgress(2, 3))).toBeTruthy();
       expect(resumedHarvest.queryByText(messages.sheetTitleDailyBonus)).toBeNull();
     });
 
@@ -2802,20 +2813,16 @@ describe('FarmGame UI flow', () => {
       fireEvent.changeText(screen.getByLabelText(messages.resetInputAccessibilityLabel), messages.resetConfirmText);
       fireEvent.press(screen.getByText(messages.resetDeleteAction));
 
-      await waitFor(() => expect(screen.getByText(messages.onboardingSelectSeedTitle)).toBeTruthy());
+      // #427: 리셋하면 자동 파종 신규 상태로 돌아가 harvest 단계에서 다시 시작한다.
+      await waitFor(() => expect(screen.getByText(messages.onboardingHarvestTitle)).toBeTruthy());
       expect(screen.queryByText(messages.onboardingRewardTitle)).toBeNull();
       await waitFor(() =>
         expect(getLatestPersistedState()).toEqual(
-          expect.objectContaining({ onboardingCompleted: false, onboardingStep: 'selectSeed' })
+          expect.objectContaining({ onboardingCompleted: false, onboardingStep: 'harvest' })
         )
       );
 
-      fireEvent.press(screen.getByTestId('onboarding-quick-start'));
-      await waitFor(() => expect(screen.getByText(messages.onboardingPlantTitle)).toBeTruthy());
-      fireEvent.press(screen.getAllByText('빈 밭')[0]!);
-      await act(async () => {
-        jest.advanceTimersByTime(2500);
-      });
+      // 자동 파종된 밭이 이미 자라 있으므로 곧바로 수확 → reward로 진행한다.
       fireEvent.press(await screen.findByText('GET'));
       await waitFor(() => expect(screen.getByText(messages.onboardingRewardTitle)).toBeTruthy());
       fireEvent.press(screen.getByTestId('first-harvest-overlay'));
@@ -2826,6 +2833,8 @@ describe('FarmGame UI flow', () => {
     test('replaces the local onboarding step when an incomplete cloud save is restored', async () => {
       const restoredState: GameState = {
         ...createInitialState(),
+        // #427: plant 재개는 빈 밭 전제(작물이 있으면 곧장 harvest로 넘어간다).
+        plots: createEmptyPlots(),
         onboardingCompleted: false,
         onboardingStep: 'plant',
       };
@@ -2861,9 +2870,9 @@ describe('FarmGame UI flow', () => {
       await waitFor(() => expect(screen.getByText(messages.sheetTitleDailyBonus)).toBeTruthy());
     });
 
-    test('keeps skip hidden until harvest and requires explicit confirmation', async () => {
-      // #159: 신규 사용자 다수가 첫 파종 전에 코치마크를 건너뛰고 이탈하므로,
-      // selectSeed·plant 단계에서는 건너뛰기를 숨기고 첫 파종 이후에만 노출한다.
+    test('shows skip only at harvest and requires explicit confirmation', async () => {
+      // #159/#427: 건너뛰기는 harvest 단계에서만 노출한다(reward는 별도 확인 버튼).
+      // 첫 파종이 자동화된 뒤 신규 유저의 시작 단계가 harvest이므로 여기서 바로 노출된다.
       const track = jest.fn();
       const screen = await renderOnboardingGame(null, {
         analytics: createFarmAnalytics(track),
@@ -2871,17 +2880,8 @@ describe('FarmGame UI flow', () => {
       });
 
       await waitFor(() => expect(screen.getByTestId('onboarding-coachmark')).toBeTruthy());
-      // selectSeed 단계: 건너뛰기 없음.
-      expect(screen.queryByTestId('onboarding-skip')).toBeNull();
-
-      fireEvent.press(screen.getByText('당근'));
-      await waitFor(() => expect(screen.getByText(messages.onboardingPlantTitle)).toBeTruthy());
-      // plant 단계: 여전히 건너뛰기 없음.
-      expect(screen.queryByTestId('onboarding-skip')).toBeNull();
-
-      fireEvent.press(screen.getAllByText('빈 밭')[0]!);
+      // harvest 단계(시작 단계): 건너뛰기가 노출된다.
       await waitFor(() => expect(screen.getByText(messages.onboardingHarvestTitle)).toBeTruthy());
-      // harvest 단계: 첫 파종을 마쳤으니 건너뛰기가 나타난다.
       const skip = await screen.findByTestId('onboarding-skip');
       fireEvent.press(skip);
 
@@ -2924,33 +2924,18 @@ describe('FarmGame UI flow', () => {
       const screen = await renderOnboardingGame(null, { analytics: createFarmAnalytics(track) });
 
       await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+      // #427: 신규 유저는 harvest(2/3)부터 시작한다 — 첫 발화 step은 selectSeed가 아니다.
       expect(track).toHaveBeenCalledWith(
         'onboarding_step_view',
-        expect.objectContaining({ step: 'selectSeed', step_index: 1 })
+        expect.objectContaining({ step: 'harvest', step_index: 2 })
       );
 
-      fireEvent.press(screen.getByText('당근'));
-      await waitFor(() => expect(screen.getByText(messages.onboardingPlantTitle)).toBeTruthy());
-      expect(track).toHaveBeenCalledWith(
-        'onboarding_step_view',
-        expect.objectContaining({ step: 'plant', step_index: 2 })
-      );
-
-      fireEvent.press(screen.getAllByText('빈 밭')[0]!);
-      await waitFor(() => expect(screen.getByText(messages.onboardingHarvestTitle)).toBeTruthy());
-      expect(track).toHaveBeenCalledWith(
-        'onboarding_step_view',
-        expect.objectContaining({ step: 'harvest', step_index: 3 })
-      );
-      await act(async () => {
-        jest.advanceTimersByTime(2500);
-      });
       await waitFor(() => expect(screen.getByText('GET')).toBeTruthy());
       fireEvent.press(screen.getByText('GET'));
       await waitFor(() => expect(screen.getByText(messages.onboardingRewardTitle)).toBeTruthy());
       expect(track).toHaveBeenCalledWith(
         'onboarding_step_view',
-        expect.objectContaining({ step: 'reward', step_index: 4 })
+        expect.objectContaining({ step: 'reward', step_index: 3 })
       );
       expect(track).toHaveBeenCalledWith('first_meaningful_harvest', expect.anything());
 
@@ -2959,94 +2944,101 @@ describe('FarmGame UI flow', () => {
       await waitFor(() => expect(screen.queryByTestId('onboarding-coachmark')).toBeNull());
       expect(track).toHaveBeenCalledWith('onboarding_complete', expect.anything());
       expect(track).not.toHaveBeenCalledWith('onboarding_skip', expect.anything());
+      // selectSeed step은 더 이상 발화하지 않는다.
+      expect(track).not.toHaveBeenCalledWith(
+        'onboarding_step_view',
+        expect.objectContaining({ step: 'selectSeed' })
+      );
 
       const viewedSteps = track.mock.calls
         .filter(([event]) => event === 'onboarding_step_view')
         .map(([, params]) => ({ step: params?.step, stepIndex: params?.step_index }));
       expect(viewedSteps).toEqual([
-        { step: 'selectSeed', stepIndex: 1 },
-        { step: 'plant', stepIndex: 2 },
-        { step: 'harvest', stepIndex: 3 },
-        { step: 'reward', stepIndex: 4 },
+        { step: 'harvest', stepIndex: 2 },
+        { step: 'reward', stepIndex: 3 },
       ]);
     });
 
-    test('quick-start CTA auto-picks a seed and advances to plant with the funnel intact (#274)', async () => {
+    // #427: selectSeed 단계 제거 후, 씨앗 관련 유도(바로 시작 CTA·미보유 가드·정체 넛지)는
+    // 아직 심지 않은 레거시 재개 경로인 plant 단계로 귀속된다. plant 재개 세이브로 검증한다.
+    const createPlantResumeSave = (): GameState => ({
+      ...createInitialState(),
+      plots: createEmptyPlots(),
+      onboardingCompleted: false,
+      onboardingStep: 'plant',
+    });
+
+    test('quick-start CTA on a resumed plant step auto-picks a seed so a plot tap advances to harvest (#274/#427)', async () => {
       const track = jest.fn();
-      const screen = await renderOnboardingGame(null, { analytics: createFarmAnalytics(track) });
+      const screen = await renderOnboardingGame(createPlantResumeSave(), { analytics: createFarmAnalytics(track) });
 
-      await waitFor(() => expect(screen.getByTestId('onboarding-coachmark')).toBeTruthy());
-      // selectSeed 단계: 직접 씨앗 탭 없이 "바로 시작" 한 번으로 진행한다.
-      expect(screen.getByText(messages.onboardingSelectSeedTitle)).toBeTruthy();
-      fireEvent.press(screen.getByTestId('onboarding-quick-start'));
-
-      // plant 단계까지 한 번에 진입한다.
       await waitFor(() => expect(screen.getByText(messages.onboardingPlantTitle)).toBeTruthy());
-      // 자동 선택 경로에서도 first_seed_selected 와 onboarding_step_view(step=plant)가
-      // 기존 계약대로 발화한다.
+      // plant 단계: 직접 씨앗 탭 없이 "바로 시작"으로 감당 가능한 대표 씨앗을 고른다.
+      fireEvent.press(screen.getByTestId('onboarding-quick-start'));
       expect(track).toHaveBeenCalledWith('first_seed_selected', expect.anything());
-      expect(track).toHaveBeenCalledWith(
-        'onboarding_step_view',
-        expect.objectContaining({ step: 'plant', step_index: 2 })
-      );
-      // CTA는 selectSeed 전용이라 plant 단계에서는 사라진다.
+
+      // 자동 선택된 씨앗으로 빈 밭을 탭하면 harvest로 진행한다.
+      fireEvent.press(screen.getAllByText('빈 밭')[0]!);
+      await waitFor(() => expect(screen.getByText(messages.onboardingHarvestTitle)).toBeTruthy());
+      await waitFor(() => expect(getLatestPersistedState().onboardingStep).toBe('harvest'));
+      // CTA는 plant 전용이라 harvest 단계에서는 사라진다.
       expect(screen.queryByTestId('onboarding-quick-start')).toBeNull();
     });
 
-    test('does not advance when the first selected seed is unaffordable', async () => {
+    test('does not advance a resumed plant step when the tapped seed is unaffordable', async () => {
       const track = jest.fn();
-      const screen = await renderOnboardingGame(null, { analytics: createFarmAnalytics(track) });
+      const screen = await renderOnboardingGame(createPlantResumeSave(), { analytics: createFarmAnalytics(track) });
 
-      await waitFor(() => expect(screen.getByText(messages.onboardingSelectSeedTitle)).toBeTruthy());
+      await waitFor(() => expect(screen.getByText(messages.onboardingPlantTitle)).toBeTruthy());
       // Onion costs more than the 50G first-session purse. Normal play permits
       // preselection, but onboarding must not lead into an impossible plant.
       fireEvent.press(screen.getByTestId('seed-tool-onion'));
 
-      expect(screen.getByText(messages.onboardingSelectSeedTitle)).toBeTruthy();
+      expect(screen.getByText(messages.onboardingPlantTitle)).toBeTruthy();
       expect(screen.getByText(messages.insufficientGoldToast)).toBeTruthy();
-      expect(track).not.toHaveBeenCalledWith('first_seed_selected', expect.anything());
     });
 
-    test('emits onboarding_stall once when the player lingers without acting (#274)', async () => {
+    test('emits onboarding_stall once when the player lingers on a resumed plant step (#274)', async () => {
       const track = jest.fn();
-      const screen = await renderOnboardingGame(null, { analytics: createFarmAnalytics(track) });
+      const screen = await renderOnboardingGame(createPlantResumeSave(), { analytics: createFarmAnalytics(track) });
 
-      await waitFor(() => expect(screen.getByTestId('onboarding-coachmark')).toBeTruthy());
+      await waitFor(() => expect(screen.getByText(messages.onboardingPlantTitle)).toBeTruthy());
       // 임계 이전에는 정체 이벤트가 없다.
       expect(track).not.toHaveBeenCalledWith('onboarding_stall', expect.anything());
 
-      // selectSeed에서 무행동으로 임계(15s)를 넘기면 stall이 1회 발화한다.
+      // plant에서 무행동으로 임계(15s)를 넘기면 stall이 1회 발화한다.
       await act(async () => {
         jest.advanceTimersByTime(ONBOARDING_STALL_MS);
       });
       await waitFor(() =>
         expect(track).toHaveBeenCalledWith(
           'onboarding_stall',
-          expect.objectContaining({ step: 'selectSeed', step_index: 1, dwell_seconds: 15 })
+          expect.objectContaining({ step: 'plant', step_index: 1, dwell_seconds: 15 })
         )
       );
       const stallCalls = track.mock.calls.filter(([event]) => event === 'onboarding_stall');
       expect(stallCalls).toHaveLength(1);
     });
 
-    test('does not stall the step the player acts on before the threshold (#274)', async () => {
+    test('does not stall the resumed plant step the player acts on before the threshold (#274)', async () => {
       const track = jest.fn();
-      const screen = await renderOnboardingGame(null, { analytics: createFarmAnalytics(track) });
+      const screen = await renderOnboardingGame(createPlantResumeSave(), { analytics: createFarmAnalytics(track) });
 
-      await waitFor(() => expect(screen.getByTestId('onboarding-coachmark')).toBeTruthy());
-      // 임계 전에 "바로 시작"으로 행동하면 selectSeed는 정체로 잡히지 않는다.
+      await waitFor(() => expect(screen.getByText(messages.onboardingPlantTitle)).toBeTruthy());
+      // 임계 전에 "바로 시작" + 파종으로 행동하면 plant는 정체로 잡히지 않는다.
       await act(async () => {
         jest.advanceTimersByTime(ONBOARDING_STALL_MS - 1000);
       });
       fireEvent.press(screen.getByTestId('onboarding-quick-start'));
-      await waitFor(() => expect(screen.getByText(messages.onboardingPlantTitle)).toBeTruthy());
+      fireEvent.press(screen.getAllByText('빈 밭')[0]!);
+      await waitFor(() => expect(screen.getByText(messages.onboardingHarvestTitle)).toBeTruthy());
       await act(async () => {
         jest.advanceTimersByTime(2000);
       });
-      // 이미 plant로 넘어갔으므로 selectSeed stall은 발화하지 않는다.
+      // 이미 harvest로 넘어갔으므로 plant stall은 발화하지 않는다.
       expect(track).not.toHaveBeenCalledWith(
         'onboarding_stall',
-        expect.objectContaining({ step: 'selectSeed' })
+        expect.objectContaining({ step: 'plant' })
       );
     });
 
@@ -6653,7 +6645,7 @@ describe('하단 safe-area 인셋 적용 (#236)', () => {
 
     test('온보딩이 끝나지 않은 신규 플레이어에게는 코치마크가 뜨지 않는다', async () => {
       const screen = await renderGame(
-        { ...animalsUnlockedState(), onboardingCompleted: false, onboardingStep: 'selectSeed' },
+        { ...animalsUnlockedState(), onboardingCompleted: false, onboardingStep: 'harvest' },
         {},
         null,
         { preserveOnboarding: true }

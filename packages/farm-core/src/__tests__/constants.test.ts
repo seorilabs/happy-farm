@@ -25,6 +25,7 @@ import {
   REWARDED_GOLD_MAX_USES_PER_WINDOW,
   REWARDED_GOLD_WINDOW_MS,
   canUnlockArea,
+  createEmptyPlots,
   createInitialAdUsage,
   createInitialState,
   getRewardedGoldAmount,
@@ -68,14 +69,17 @@ describe('farm balance and model invariants', () => {
     expect(state.unlockedAreas).toEqual(INITIAL_AREA_KEYS);
     expect(state.harvestedCropKeys).toEqual([]);
     expect(state.onboardingCompleted).toBe(false);
-    expect(state.onboardingStep).toBe('selectSeed');
+    // #427: selectSeed 제거 후 신규 유저는 harvest부터 시작한다.
+    expect(state.onboardingStep).toBe('harvest');
     expect(state.firstSeedSelected).toBe(false);
     expect(state.onboardingReturnSettledAt).toBeNull();
-    expect(ONBOARDING_STEPS).toEqual(['selectSeed', 'plant', 'harvest', 'reward']);
+    expect(ONBOARDING_STEPS).toEqual(['plant', 'harvest', 'reward']);
     expect(state.upgrades).toEqual({ speed: 1, profit: 1 });
     expect(state.plots).toHaveLength(MAX_PLOTS);
     expect(state.plots.map((plot) => plot.id)).toEqual(Array.from({ length: MAX_PLOTS }, (_, index) => index));
-    expect(state.plots.every((plot) => plot.cropType == null && plot.startTime == null && plot.state === 0)).toBe(
+    // #427: 첫 밭에는 자동 파종된 carrot이 이미 자란(state 2) 상태로 놓인다.
+    expect(state.plots[0]).toEqual({ id: 0, cropType: 'carrot', startTime: 0, state: 2 });
+    expect(state.plots.slice(1).every((plot) => plot.cropType == null && plot.startTime == null && plot.state === 0)).toBe(
       true
     );
   });
@@ -389,15 +393,57 @@ describe('farm save migration', () => {
       },
       base
     );
+    // #427: base는 이제 자동 파종 carrot을 담으므로, "아무것도 심지 않은" 케이스는
+    // 빈 밭을 명시해 plant 폴백을 검증한다.
     const untouched = migrateLoadedState(
-      { ...base, onboardingCompleted: false, onboardingStep: null },
+      { ...base, onboardingCompleted: false, onboardingStep: null, plots: createEmptyPlots() },
       base
     );
 
     expect(harvested.onboardingStep).toBe('reward');
     expect(lifetimeHarvested.onboardingStep).toBe('reward');
     expect(planted.onboardingStep).toBe('harvest');
-    expect(untouched.onboardingStep).toBe('selectSeed');
+    // #427: 아무것도 심지 않은 미완료 세이브는 이제 plant로 재개한다(selectSeed 제거).
+    expect(untouched.onboardingStep).toBe('plant');
+  });
+
+  // #427 AC1: 신규 상태는 첫 밭에 자동 파종된 carrot(ready)을 담는다.
+  test('createInitialState auto-plants a ready carrot only in the first plot (#427)', () => {
+    const state = createInitialState();
+    expect(state.plots[0]).toEqual({ id: 0, cropType: 'carrot', startTime: 0, state: 2 });
+    expect(state.plots.slice(1).every((plot) => plot.cropType == null && plot.state === 0)).toBe(true);
+    // 자동 파종 밭이 있으므로 온보딩은 harvest부터 시작한다.
+    expect(state.onboardingStep).toBe('harvest');
+    expect(state.onboardingCompleted).toBe(false);
+  });
+
+  // #427 AC4: 기존 세이브 마이그레이션은 스타터 carrot을 주입하지 않는다.
+  test('migrateLoadedState never injects the starter crop into existing saves (#427)', () => {
+    const base = createInitialState();
+
+    // (a) 완료 세이브가 자체 밭 구성을 그대로 유지한다(스타터 carrot 미주입).
+    const completedPlots = createEmptyPlots();
+    completedPlots[3] = { id: 3, cropType: 'wheat', startTime: 123, state: 1 };
+    const completed = migrateLoadedState(
+      { ...base, onboardingCompleted: true, plots: completedPlots },
+      base
+    );
+    expect(completed.plots[0]).toEqual({ id: 0, cropType: null, startTime: null, state: 0 });
+    expect(completed.plots[3]).toEqual({ id: 3, cropType: 'wheat', startTime: 123, state: 1 });
+
+    // (b) 진행 중(빈 밭) 세이브는 마이그레이션 후에도 빈 밭이다.
+    const inProgress = migrateLoadedState(
+      { ...base, onboardingCompleted: false, onboardingStep: 'plant', plots: createEmptyPlots() },
+      base
+    );
+    expect(inProgress.plots.every((plot) => plot.cropType == null && plot.state === 0)).toBe(true);
+
+    // (c) plots 필드가 없는(손상/부분) 세이브도 스타터 carrot이 아닌 빈 밭으로 폴백한다.
+    const missingPlots = migrateLoadedState(
+      { gold: 200, onboardingCompleted: false } as Partial<GameState>,
+      base
+    );
+    expect(missingPlots.plots.every((plot) => plot.cropType == null && plot.state === 0)).toBe(true);
   });
 
   test('migrates the lifetime first-seed flag from explicit state or proven legacy progress (#371)', () => {
@@ -423,8 +469,9 @@ describe('farm save migration', () => {
       { ...base, firstSeedSelected: undefined, onboardingStep: 'plant' } as unknown as Partial<GameState>,
       base
     );
+    // #427: base가 자동 파종 carrot을 담으므로, 진짜 미개시 세이브는 빈 밭으로 명시한다.
     const untouched = migrateLoadedState(
-      { ...base, firstSeedSelected: undefined } as unknown as Partial<GameState>,
+      { ...base, firstSeedSelected: undefined, plots: createEmptyPlots() } as unknown as Partial<GameState>,
       base
     );
 
