@@ -10,6 +10,7 @@ happy-farm **개별 콘텐츠(작물·구역·기능 퍼널)** 세부 지표의 
 `docs/04-work/ad-analytics.md`를 그대로 따른다(중복 정의하지 않는다).
 
 ## 핵심 원칙
+
 - **콘텐츠 이벤트는 stable key(crop/area 등)를 그대로 싣는다.** 번역 문자열이 아니라
   `carrot`·`starter_field` 같은 키를 파라미터로 보내 downstream 집계가 라벨 드리프트
   없이 동작한다(AGENTS.md: analytics key 미번역 규칙).
@@ -22,17 +23,19 @@ happy-farm **개별 콘텐츠(작물·구역·기능 퍼널)** 세부 지표의 
 ## 콘텐츠 차원과 소스 이벤트
 
 ### 1) 작물(crop) 차원
-| 소스 이벤트 | 파라미터 | 용도 |
-|---|---|---|
-| `seed_selected` / `first_seed_selected` | `crop`, `area` | 씨앗 선택(관심) |
-| `crop_planted` | `crop`, `area`, `crop_tier`, `crop_cost` | 심기 |
-| `crop_ready_summary` | `crop`, `area`, `crop_tier`, `ready_count`, `window_seconds`, `schema_version` | 60초 rolling window의 성장 완료 집계(bucket별 1건) |
-| `crop_ready` | `crop`, `area`, `crop_tier` | 배칭 전 버전의 legacy 성장 완료 이벤트 |
-| `crop_harvested` | `crop`, `area`, `crop_tier`, `revenue`, `research_points_gained`, `reward_type`, `harvest_source`, `is_first_crop_harvest`, `schema_version` | 수확·실지급 보상·경로 |
-| `crop_of_the_day_harvested` | `crop`, `multiplier` | 오늘의 작물 수확 |
-| `breed_unlocked` | `crop` | 교배 해금 |
+
+| 소스 이벤트                             | 파라미터                                                                                                                                     | 용도                                               |
+| --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| `seed_selected` / `first_seed_selected` | `crop`, `area`                                                                                                                               | 씨앗 선택(관심)                                    |
+| `crop_planted`                          | `crop`, `area`, `crop_tier`, `crop_cost`                                                                                                     | 심기                                               |
+| `crop_ready_summary`                    | `crop`, `area`, `crop_tier`, `ready_count`, `window_seconds`, `schema_version`                                                               | 60초 rolling window의 성장 완료 집계(bucket별 1건) |
+| `crop_ready`                            | `crop`, `area`, `crop_tier`                                                                                                                  | 배칭 전 버전의 legacy 성장 완료 이벤트             |
+| `crop_harvested`                        | `crop`, `area`, `crop_tier`, `revenue`, `research_points_gained`, `reward_type`, `harvest_source`, `is_first_crop_harvest`, `schema_version` | 수확·실지급 보상·경로                              |
+| `crop_of_the_day_harvested`             | `crop`, `multiplier`                                                                                                                         | 오늘의 작물 수확                                   |
+| `breed_unlocked`                        | `crop`                                                                                                                                       | 교배 해금                                          |
 
 작물×일자 집계 지표:
+
 - **planted** = `count(crop_planted)`
 - **harvested** = `count(crop_harvested)`
 - **revenue** = `sum(crop_harvested.revenue)`
@@ -43,6 +46,7 @@ happy-farm **개별 콘텐츠(작물·구역·기능 퍼널)** 세부 지표의 
 - **cotd_harvests** = `count(crop_of_the_day_harvested)`
 
 파생 지표:
+
 - **심기→수확 전환율** = `harvested / planted` (작물별 완주율)
 - **수확당 평균 매출** = `revenue / harvested`
 
@@ -65,13 +69,15 @@ baseline을 잡는다. schema v2부터 자동수확도 crop별 이벤트를 내�
 때는 `harvest_source=manual` cohort로 제한한다.
 
 ### 2) 구역(area) 차원
-| 소스 이벤트 | 파라미터 | 용도 |
-|---|---|---|
-| `area_unlock_clicked` | `area` | 언락 시도(관심) |
-| `area_unlocked` | `area`, `cost` | 언락 완료 |
-| `crop_planted` / `crop_harvested` | `area` | 구역별 활동량 |
+
+| 소스 이벤트                       | 파라미터       | 용도            |
+| --------------------------------- | -------------- | --------------- |
+| `area_unlock_clicked`             | `area`         | 언락 시도(관심) |
+| `area_unlocked`                   | `area`, `cost` | 언락 완료       |
+| `crop_planted` / `crop_harvested` | `area`         | 구역별 활동량   |
 
 구역×일자 집계 지표:
+
 - **unlock_clicked** = `count(area_unlock_clicked)`
 - **unlocked** = `count(area_unlocked)`
 - **unlock_cost_sum** = `sum(area_unlocked.cost)`
@@ -79,19 +85,22 @@ baseline을 잡는다. schema v2부터 자동수확도 crop별 이벤트를 내�
 - **harvested** = `count(crop_harvested)` (해당 area)
 
 파생 지표:
+
 - **구역 언락 전환율** = `unlocked / unlock_clicked`
 
 ### 3) 기능 퍼널(feature funnel) 차원
+
 `funnel`(퍼널 키) × `step`(단계) × 일자로 일반화해 저장한다.
 
-| 퍼널(`funnel`) | 소스 이벤트 → step | 지표 |
-|---|---|---|
-| `onboarding` | `onboarding_step_view`(step), `onboarding_skip`(skipped_step), `onboarding_stall`(step), `onboarding_complete`(step=`complete`) | 단계별 view/skip/stall + 완료 |
-| `prestige` | `prestige`(step=`prestige`) | 발생 수 |
-| `research` | `research_node_unlocked`(step=node_key) | 노드별 해금 수 |
-| `collection` | `collection_reward_claimed`(step=reward_key) | 리워드별 수령 수 |
+| 퍼널(`funnel`) | 소스 이벤트 → step                                                                                                              | 지표                          |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- |
+| `onboarding`   | `onboarding_step_view`(step), `onboarding_skip`(skipped_step), `onboarding_stall`(step), `onboarding_complete`(step=`complete`) | 단계별 view/skip/stall + 완료 |
+| `prestige`     | `prestige`(step=`prestige`)                                                                                                     | 발생 수                       |
+| `research`     | `research_node_unlocked`(step=node_key)                                                                                         | 노드별 해금 수                |
+| `collection`   | `collection_reward_claimed`(step=reward_key)                                                                                    | 리워드별 수령 수              |
 
 퍼널×단계×일자 집계 지표:
+
 - **count** = 이벤트 수(view/발생)
 - **users** = `count(distinct user_pseudo_id)`
 - **skips** = `count(onboarding_skip)` (onboarding 전용)
@@ -100,12 +109,14 @@ baseline을 잡는다. schema v2부터 자동수확도 crop별 이벤트를 내�
 파생 지표(온보딩): 단계별 **도달률** = `step_users / step1_users`,
 **이탈률** = `skips / step_users`.
 
-온보딩 단계 stable key는 `selectSeed`, `plant`, `harvest`, `reward` 순서다.
-`onboarding_step_view`/`onboarding_stall`은 이 네 값을 쓰고, `onboarding_skip`의
+온보딩 단계 stable key는 `plant`, `harvest`, `reward` 순서다. 신규 사용자는 첫 밭에
+당근이 자동 파종된 상태로 시작해 첫 노출 단계가 `harvest`이며, `plant`는 심지 못한
+레거시 진행 중 세이브의 재개 경로에만 남는다.
+`onboarding_step_view`/`onboarding_stall`은 이 세 값을 쓰고, `onboarding_skip`의
 `skipped_step`은 명시적 확인이 있는 `harvest`만 사용한다. 완료는 step 이벤트가
 아닌 `onboarding_complete`로 집계한다. 재진입 시 저장된 단계가 다시 노출될 수
-있으므로 도달률에는 이벤트 수가 아닌 고유 사용자를 쓴다. 이전 배포에서 수집된
-`unlock`은 역사 데이터로 보존하고 배포일/앱 버전으로 `reward`와 분리한다.
+있으므로 도달률에는 이벤트 수가 아닌 고유 사용자를 쓴다. 제거 전 `selectSeed`와
+이전 배포의 `unlock`은 역사 데이터로만 보존하고 배포일/앱 버전으로 분리한다.
 
 ### 4) 수동 수확 콤보 baseline
 
@@ -115,14 +126,14 @@ baseline을 잡는다. schema v2부터 자동수확도 crop별 이벤트를 내�
 `crop_harvested.harvest_source=manual`만 비교한다. 배포 전 `crop_harvested` timestamp를
 1.5초 간격으로 재구성한 값과 직접 섞지 않고, 배포 이후 직접 이벤트만 새 baseline으로 쓴다.
 
-| 소스 이벤트 | 파라미터 | 계약 |
-|---|---|---|
-| `harvest_combo_completed` | `manual_harvest_count` | streak 내 수동 단일 수확 수, 1 이상 |
-|  | `combo_tier` | `normal \| great \| legendary` stable key |
-|  | `duration_ms` | 첫 수확부터 마지막 수확까지. 단일 수확은 0이며 종료 대기 window는 제외 |
-|  | `base_revenue_total` | 기존 boost·변이 등은 반영하되 미래 콤보 보너스는 적용하기 전인 실제 골드 수익 합계 |
-|  | `end_reason` | `timeout \| background \| prestige \| reset \| cloud_restore` |
-|  | `schema_version` | 초기 계약은 `1` |
+| 소스 이벤트               | 파라미터               | 계약                                                                               |
+| ------------------------- | ---------------------- | ---------------------------------------------------------------------------------- |
+| `harvest_combo_completed` | `manual_harvest_count` | streak 내 수동 단일 수확 수, 1 이상                                                |
+|                           | `combo_tier`           | `normal \| great \| legendary` stable key                                          |
+|                           | `duration_ms`          | 첫 수확부터 마지막 수확까지. 단일 수확은 0이며 종료 대기 window는 제외             |
+|                           | `base_revenue_total`   | 기존 boost·변이 등은 반영하되 미래 콤보 보너스는 적용하기 전인 실제 골드 수익 합계 |
+|                           | `end_reason`           | `timeout \| background \| prestige \| reset \| cloud_restore`                      |
+|                           | `schema_version`       | 초기 계약은 `1`                                                                    |
 
 모든 이벤트에는 `GameAnalyticsContext`가 함께 실린다. `end_reason=background`는
 `AppState`의 background/inactive 경계를 합친 값이며, `timeout`은 마지막 수동 수확 뒤
@@ -158,13 +169,13 @@ unblock하지 않는다.
 동물 기능의 진입부터 산출 수집까지를 아래 5개 schema v1 이벤트로 계측한다. 모든
 이벤트에는 `GameAnalyticsContext`가 함께 실리며 stable animal key만 저장한다.
 
-| 소스 이벤트 | 주요 파라미터 | 계약 |
-|---|---|---|
-| `animals_screen` | `source`, `owned_count`, `feeding_count`, `ready_count` | 동물 시트가 실제로 열릴 때 1건. `source=more \| welcome_back` |
-| `animal_purchased` | `animal`, `purchase_cost`, `owned_count_after` | 구매 상태 변경이 성공한 뒤 1건 |
-| `animal_fed` | `animal`, `feed_cost`, `produce_timer_ms`, `owned_count` | 급여 상태 변경이 성공한 뒤 1건 |
-| `animal_produce_collected` | `animal`, `collection_mode`, `base_revenue`, `final_revenue`, `is_rare`, `rare_multiplier`, `ready_wait_ms` | 동물별 수집 성공마다 1건. `collection_mode=single \| collect_all` |
-| `animal_produce_collect_all` | `collected_count`, `base_revenue_total`, `final_revenue_total`, `rare_count` | 동물 일괄 수집의 item 이벤트가 모두 기록된 뒤 1건 |
+| 소스 이벤트                  | 주요 파라미터                                                                                               | 계약                                                              |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| `animals_screen`             | `source`, `owned_count`, `feeding_count`, `ready_count`                                                     | 동물 시트가 실제로 열릴 때 1건. `source=more \| welcome_back`     |
+| `animal_purchased`           | `animal`, `purchase_cost`, `owned_count_after`                                                              | 구매 상태 변경이 성공한 뒤 1건                                    |
+| `animal_fed`                 | `animal`, `feed_cost`, `produce_timer_ms`, `owned_count`                                                    | 급여 상태 변경이 성공한 뒤 1건                                    |
+| `animal_produce_collected`   | `animal`, `collection_mode`, `base_revenue`, `final_revenue`, `is_rare`, `rare_multiplier`, `ready_wait_ms` | 동물별 수집 성공마다 1건. `collection_mode=single \| collect_all` |
+| `animal_produce_collect_all` | `collected_count`, `base_revenue_total`, `final_revenue_total`, `rare_count`                                | 동물 일괄 수집의 item 이벤트가 모두 기록된 뒤 1건                 |
 
 현재 canonical 수집 결과는 희귀 산출 보상 구현 전 baseline이므로 항상
 `base_revenue=final_revenue=producePrice`, `is_rare=false`, `rare_multiplier=1`이다.
@@ -192,21 +203,23 @@ unblock하지 않는다.
 다시 판단한다. 이 baseline 계측만으로 #322를 unblock하거나 보상 RNG·경제를 변경하지 않는다.
 
 ### 6) 광고 placement 차원
+
 `docs/04-work/ad-analytics.md` 및 `analytics/queries/ad-placement-metrics.sql`를
 그대로 따른다. 콘텐츠 대시보드에서는 placement별 impression/click/complete/fail/blocked
 카운트를 콘텐츠 지표와 나란히 보여준다(정의 중복 금지, 참조만).
 
 ## 집계·저장 파이프라인
+
 - **집계 참조 쿼리**: `analytics/queries/content-metrics.sql`(작물·구역 일별 집계),
   `analytics/queries/harvest-combo-metrics.sql`(수동 콤보 28일 baseline),
   `analytics/queries/animal-funnel-metrics.sql`(동물 퍼널 28일 baseline). 모두 BigQuery
   콘솔에서 실행 가능한 GoogleSQL이며, backoffice 수집기는 작물·구역 일별 정의를 구현한다.
-- **저장(백오피스)**: happy-farm 전용 일별 스냅샷 테이블
-  (`happy_farm_crop_daily` / `happy_farm_area_daily` / `happy_farm_funnel_daily` /
-  `happy_farm_ad_placement_daily`)에 앱×일자×차원키로 멱등 upsert.
-- **대시보드**: `/analytics?app=happy-farm` 콘텐츠 지표 섹션에서 표/퍼널로 표시.
+- **저장(백오피스)**: 공통 앱 콘텐츠 스냅샷에 앱×마켓×일자 단위로 멱등 upsert한다.
+  수집 스펙은 행복한 농장 저장소의 `.seorilabs/backoffice.json`을 우선한다.
+- **대시보드**: `/apps/happy-farm/content` 전용 워크스페이스에서 표/퍼널로 표시.
 
 ## 변경 시 유지할 것
+
 - 새 작물/구역 키를 추가하면 `balance.json`에만 등록하면 집계가 자동 편입된다(키 하드코딩 금지).
 - 새 콘텐츠 이벤트를 추가하면 이 표와 해당 `analytics/queries/*.sql`, 필요한 backoffice
   수집 쿼리를 함께 갱신한다.

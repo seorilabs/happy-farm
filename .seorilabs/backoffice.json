@@ -1,0 +1,806 @@
+{
+  "$schema": "https://raw.githubusercontent.com/seorilabs/seorilabs-backoffice/main/docs/app-ops/manifest.schema.json",
+  "version": 1,
+  "summary": "행복한 농장 타이쿤의 세이브 안전성, 업데이트 게이트, 광고, 경제 콘텐츠와 런타임 플래그를 운영합니다.",
+  "tools": [
+    {
+      "id": "save-integrity",
+      "section": "operations",
+      "title": "세이브 무결성",
+      "description": "로컬 권위 세이브와 선택적 Firestore 백업의 상태를 읽기 전용으로 진단합니다.",
+      "runbook": "docs/04-work/backoffice-operations.md",
+      "operations": [
+        {
+          "id": "inspect-backup",
+          "label": "백업 상태 조회",
+          "description": "플레이어 참조와 마켓을 기준으로 백업 활성화·버전·최근 동기화 상태를 조회합니다.",
+          "intent": "read",
+          "inputs": [
+            {
+              "key": "player_ref",
+              "label": "플레이어 참조",
+              "type": "text",
+              "help": "이메일이나 표시 이름이 아니라 지원 채널에서 확인한 익명 참조만 입력합니다."
+            },
+            {
+              "key": "market",
+              "label": "마켓",
+              "type": "select",
+              "options": [
+                { "value": "apps_in_toss", "label": "AppsInToss" },
+                { "value": "google_play", "label": "Google Play" },
+                { "value": "app_store", "label": "App Store" }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "update-gate",
+      "section": "operations",
+      "title": "최소 지원 버전",
+      "description": "모바일 강제 업데이트 게이트의 현재 값과 노출·스토어 이동 전환을 확인합니다.",
+      "runbook": "docs/04-work/backoffice-operations.md",
+      "operations": [
+        {
+          "id": "inspect",
+          "label": "게이트 상태 조회",
+          "intent": "read"
+        },
+        {
+          "id": "set-minimum-version",
+          "label": "최소 지원 버전 변경",
+          "description": "스토어 배포 완료를 확인한 뒤 최소 versionCode와 이동 URL을 함께 변경합니다.",
+          "intent": "mutate",
+          "risk": "high",
+          "confirmation": "typed",
+          "inputs": [
+            {
+              "key": "rc_minimum_supported_version_code",
+              "label": "최소 versionCode",
+              "type": "number"
+            },
+            {
+              "key": "rc_force_update_url",
+              "label": "업데이트 URL",
+              "type": "text",
+              "placeholder": "https://..."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "rewarded-ad-health",
+      "section": "ads",
+      "title": "보상형 광고 상태",
+      "description": "실제 게임 placement별 노출·클릭·완료·실패·한도 차단 퍼널을 조회합니다.",
+      "runbook": "docs/04-work/backoffice-operations.md",
+      "operations": [
+        {
+          "id": "inspect-placement",
+          "label": "placement 퍼널 조회",
+          "intent": "read",
+          "inputs": [
+            {
+              "key": "placement",
+              "label": "광고 placement",
+              "type": "select",
+              "options": [
+                { "value": "shop_gold_reward", "label": "상점 보상 골드" },
+                { "value": "shop_plot_discount", "label": "상점 밭 할인" },
+                { "value": "growth_ad_sheet", "label": "성장 스킵" },
+                { "value": "harvest_bonus_sheet", "label": "수확 보너스" },
+                { "value": "return_offline_bonus", "label": "복귀 오프라인 보너스" },
+                { "value": "wheel_bonus_spin", "label": "룰렛 보너스 스핀" }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ad-controls",
+      "section": "ads",
+      "title": "광고 운영 제어",
+      "description": "공통 한도 override와 전 마켓 광고 kill switch의 안전한 변경 계약을 제공합니다.",
+      "runbook": "docs/04-work/backoffice-operations.md",
+      "operations": [
+        {
+          "id": "inspect",
+          "label": "유효 광고 설정 조회",
+          "intent": "read"
+        },
+        {
+          "id": "set-limits",
+          "label": "광고 한도 변경",
+          "description": "허용된 비음수 정수 필드만 담은 JSON override를 적용합니다.",
+          "intent": "mutate",
+          "risk": "medium",
+          "confirmation": "reason",
+          "inputs": [
+            {
+              "key": "rc_ad_limits_overrides",
+              "label": "광고 한도 JSON",
+              "type": "textarea",
+              "placeholder": "{\"rewardedGoldDailyLimit\":6,\"growthAdCooldownMs\":300000}",
+              "help": "빈 문자열은 balance.json 기본값으로 되돌립니다."
+            }
+          ]
+        },
+        {
+          "id": "emergency-disable",
+          "label": "전체 광고 긴급 중지",
+          "description": "모든 마켓의 광고를 비활성화하는 kill switch를 false로 변경합니다.",
+          "intent": "mutate",
+          "risk": "high",
+          "confirmation": "typed",
+          "inputs": [
+            {
+              "key": "rc_mobile_ads_global_enabled",
+              "label": "mobile_ads_global_enabled",
+              "type": "select",
+              "options": [{ "value": "false", "label": "false - 전체 광고 중지" }]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "economy-content",
+      "section": "content",
+      "title": "경제·콘텐츠 상태",
+      "description": "배포된 밸런스 카탈로그와 작물·구역·업그레이드·동물·공방 지표를 함께 확인합니다.",
+      "runbook": "docs/04-work/backoffice-operations.md",
+      "operations": [
+        {
+          "id": "inspect-catalog",
+          "label": "밸런스 카탈로그 조회",
+          "intent": "read",
+          "inputs": [
+            {
+              "key": "content_kind",
+              "label": "콘텐츠 종류",
+              "type": "select",
+              "options": [
+                { "value": "crop", "label": "작물" },
+                { "value": "area", "label": "구역" },
+                { "value": "upgrade", "label": "업그레이드" },
+                { "value": "animal", "label": "동물" },
+                { "value": "workshop", "label": "공방" }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "runtime-flags",
+      "section": "flags",
+      "title": "런타임 플래그",
+      "description": "활성 계측·Crashlytics·클라우드 백업 플래그를 조회하고 승인된 값만 변경합니다.",
+      "runbook": "docs/04-work/backoffice-operations.md",
+      "operations": [
+        {
+          "id": "inspect",
+          "label": "플래그 조회",
+          "intent": "read"
+        },
+        {
+          "id": "set",
+          "label": "플래그 변경",
+          "description": "legacy 및 예약 키를 제외한 활성 boolean 플래그만 변경합니다.",
+          "intent": "mutate",
+          "risk": "high",
+          "confirmation": "typed",
+          "inputs": [
+            {
+              "key": "flag_key",
+              "label": "플래그 키",
+              "type": "select",
+              "options": [
+                { "value": "analytics_collection_enabled", "label": "Analytics 수집" },
+                { "value": "crashlytics_collection_enabled", "label": "Crashlytics 수집" },
+                { "value": "cloud_save_backup_enabled", "label": "클라우드 백업" }
+              ]
+            },
+            {
+              "key": "target_value",
+              "label": "목표 값",
+              "type": "select",
+              "options": [
+                { "value": "true", "label": "true" },
+                { "value": "false", "label": "false" }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "analytics": {
+    "content": {
+      "market": {
+        "param": "app_market",
+        "platformMap": {
+          "android": "google_play",
+          "ios": "app_store",
+          "web": "apps_in_toss"
+        },
+        "values": [
+          { "key": "apps_in_toss", "label": "AppsInToss" },
+          { "key": "google_play", "label": "Google Play" },
+          { "key": "app_store", "label": "App Store" }
+        ]
+      },
+      "metrics": [
+        {
+          "key": "gameStartUsers",
+          "label": "게임 시작 사용자",
+          "event": "game_start",
+          "agg": "users"
+        },
+        {
+          "key": "firstHarvestUsers",
+          "label": "첫 의미 있는 수확",
+          "event": "first_meaningful_harvest",
+          "agg": "users"
+        },
+        {
+          "key": "onboardingCompleteUsers",
+          "label": "온보딩 완료 사용자",
+          "event": "onboarding_complete",
+          "agg": "users"
+        },
+        {
+          "key": "onboardingSkips",
+          "label": "온보딩 건너뛰기",
+          "event": "onboarding_skip",
+          "agg": "count"
+        },
+        {
+          "key": "firstDailyBonusUsers",
+          "label": "첫 데일리 보너스 사용자",
+          "event": "first_daily_bonus_claimed",
+          "agg": "users"
+        },
+        {
+          "key": "returnShownUsers",
+          "label": "복귀 요약 노출 사용자",
+          "event": "return_summary_shown",
+          "agg": "users"
+        },
+        {
+          "key": "returnCollectedUsers",
+          "label": "복귀 보상 수령 사용자",
+          "event": "return_summary_collected",
+          "agg": "users"
+        },
+        {
+          "key": "prestigeCount",
+          "label": "프레스티지",
+          "event": "prestige",
+          "agg": "count"
+        },
+        {
+          "key": "upgradePurchaseCount",
+          "label": "업그레이드 구매",
+          "event": ["upgrade_purchased", "upgrade_batch_purchased"],
+          "agg": "count"
+        },
+        {
+          "key": "updateGateShown",
+          "label": "업데이트 게이트 노출",
+          "event": "update_gate_shown",
+          "agg": "count"
+        },
+        {
+          "key": "updateGateStoreClicks",
+          "label": "업데이트 스토어 이동",
+          "event": "update_gate_store_click",
+          "agg": "count"
+        }
+      ],
+      "derived": [
+        {
+          "key": "firstHarvestRate",
+          "label": "첫 수확 활성화율",
+          "num": "firstHarvestUsers",
+          "den": "gameStartUsers",
+          "unit": "%",
+          "round": 1
+        },
+        {
+          "key": "onboardingCompleteRate",
+          "label": "온보딩 완료율",
+          "num": "onboardingCompleteUsers",
+          "den": "gameStartUsers",
+          "unit": "%",
+          "round": 1
+        },
+        {
+          "key": "firstDailyBonusRate",
+          "label": "첫 데일리 보너스 전환율",
+          "num": "firstDailyBonusUsers",
+          "den": "gameStartUsers",
+          "unit": "%",
+          "round": 1
+        },
+        {
+          "key": "returnCollectRate",
+          "label": "복귀 보상 수령률",
+          "num": "returnCollectedUsers",
+          "den": "returnShownUsers",
+          "unit": "%",
+          "round": 1
+        },
+        {
+          "key": "updateGateClickRate",
+          "label": "업데이트 스토어 이동률",
+          "num": "updateGateStoreClicks",
+          "den": "updateGateShown",
+          "unit": "%",
+          "round": 1
+        }
+      ],
+      "distributions": [
+        {
+          "key": "researchNodes",
+          "label": "연구 노드 해금",
+          "event": "research_node_unlocked",
+          "param": "node_key",
+          "topN": 12
+        },
+        {
+          "key": "collectionRewards",
+          "label": "컬렉션 보상",
+          "event": "collection_reward_claimed",
+          "param": "reward_key",
+          "topN": 12
+        },
+        {
+          "key": "onboardingSkippedStep",
+          "label": "온보딩 건너뛴 단계",
+          "event": "onboarding_skip",
+          "param": "skipped_step",
+          "topN": 3
+        },
+        {
+          "key": "comboEndReason",
+          "label": "수확 콤보 종료 사유",
+          "event": "harvest_combo_completed",
+          "param": "end_reason",
+          "topN": 5
+        },
+        {
+          "key": "adFailureReason",
+          "label": "광고 실패 사유",
+          "event": "ad_reward_failed",
+          "param": "reason",
+          "topN": 12
+        },
+        {
+          "key": "updateGatePlatform",
+          "label": "업데이트 게이트 플랫폼",
+          "event": "update_gate_shown",
+          "param": "platform",
+          "topN": 3
+        }
+      ],
+      "groups": [
+        {
+          "key": "crop",
+          "label": "작물 성과",
+          "param": "crop",
+          "orderBy": "revenue",
+          "topN": 20,
+          "metrics": [
+            {
+              "key": "planted",
+              "label": "심기",
+              "event": "crop_planted",
+              "agg": "count"
+            },
+            {
+              "key": "ready",
+              "label": "성장 완료",
+              "event": "crop_ready_summary",
+              "agg": "sum",
+              "param": "ready_count"
+            },
+            {
+              "key": "harvested",
+              "label": "수확",
+              "event": "crop_harvested",
+              "agg": "count"
+            },
+            {
+              "key": "harvesters",
+              "label": "수확자",
+              "event": "crop_harvested",
+              "agg": "users"
+            },
+            {
+              "key": "revenue",
+              "label": "골드 수익",
+              "event": "crop_harvested",
+              "agg": "sum",
+              "param": "revenue"
+            },
+            {
+              "key": "donations",
+              "label": "연구 기부",
+              "event": "crop_harvested",
+              "agg": "count",
+              "where": [
+                {
+                  "param": "reward_type",
+                  "op": "eq",
+                  "value": "research_points"
+                }
+              ]
+            },
+            {
+              "key": "firstHarvests",
+              "label": "첫 작물 수확",
+              "event": "crop_harvested",
+              "agg": "count",
+              "where": [
+                {
+                  "param": "is_first_crop_harvest",
+                  "op": "truthy"
+                }
+              ]
+            }
+          ],
+          "derived": [
+            {
+              "key": "plantToHarvest",
+              "label": "심기→수확",
+              "num": "harvested",
+              "den": "planted",
+              "unit": "%",
+              "round": 1
+            },
+            {
+              "key": "revenuePerHarvest",
+              "label": "수확당 골드",
+              "num": "revenue",
+              "den": "harvested",
+              "scale": 1,
+              "unit": "G",
+              "round": 0
+            }
+          ]
+        },
+        {
+          "key": "area",
+          "label": "구역 언락",
+          "param": "area",
+          "orderBy": "unlockClicked",
+          "metrics": [
+            {
+              "key": "unlockClicked",
+              "label": "언락 클릭",
+              "event": "area_unlock_clicked",
+              "agg": "count"
+            },
+            {
+              "key": "unlocked",
+              "label": "언락 완료",
+              "event": "area_unlocked",
+              "agg": "count"
+            },
+            {
+              "key": "unlockCost",
+              "label": "언락 비용",
+              "event": "area_unlocked",
+              "agg": "sum",
+              "param": "cost"
+            },
+            {
+              "key": "planted",
+              "label": "심기",
+              "event": "crop_planted",
+              "agg": "count"
+            },
+            {
+              "key": "harvested",
+              "label": "수확",
+              "event": "crop_harvested",
+              "agg": "count"
+            }
+          ],
+          "derived": [
+            {
+              "key": "unlockRate",
+              "label": "언락 전환율",
+              "num": "unlocked",
+              "den": "unlockClicked",
+              "unit": "%",
+              "round": 1
+            }
+          ]
+        },
+        {
+          "key": "onboarding",
+          "label": "온보딩 단계",
+          "param": "step",
+          "render": "funnel",
+          "order": ["plant", "harvest", "reward"],
+          "metrics": [
+            {
+              "key": "views",
+              "label": "노출",
+              "event": "onboarding_step_view",
+              "agg": "count"
+            },
+            {
+              "key": "users",
+              "label": "사용자",
+              "event": "onboarding_step_view",
+              "agg": "users"
+            },
+            {
+              "key": "stalls",
+              "label": "정체",
+              "event": "onboarding_stall",
+              "agg": "count"
+            }
+          ]
+        },
+        {
+          "key": "upgrade",
+          "label": "업그레이드 구매",
+          "param": "upgrade_kind",
+          "order": ["speed", "profit"],
+          "metrics": [
+            {
+              "key": "singlePurchases",
+              "label": "단일 구매",
+              "event": "upgrade_purchased",
+              "agg": "count"
+            },
+            {
+              "key": "batchPurchases",
+              "label": "일괄 구매",
+              "event": "upgrade_batch_purchased",
+              "agg": "count"
+            },
+            {
+              "key": "batchLevels",
+              "label": "일괄 구매 레벨",
+              "event": "upgrade_batch_purchased",
+              "agg": "sum",
+              "param": "levels_purchased"
+            },
+            {
+              "key": "singleCost",
+              "label": "단일 구매 비용",
+              "event": "upgrade_purchased",
+              "agg": "sum",
+              "param": "cost"
+            },
+            {
+              "key": "batchCost",
+              "label": "일괄 구매 비용",
+              "event": "upgrade_batch_purchased",
+              "agg": "sum",
+              "param": "total_cost"
+            }
+          ]
+        },
+        {
+          "key": "harvestCombo",
+          "label": "수동 수확 콤보",
+          "param": "combo_tier",
+          "order": ["normal", "great", "legendary"],
+          "metrics": [
+            {
+              "key": "completions",
+              "label": "완료",
+              "event": "harvest_combo_completed",
+              "agg": "count"
+            },
+            {
+              "key": "manualHarvests",
+              "label": "수동 수확",
+              "event": "harvest_combo_completed",
+              "agg": "sum",
+              "param": "manual_harvest_count"
+            },
+            {
+              "key": "baseRevenue",
+              "label": "기본 수익",
+              "event": "harvest_combo_completed",
+              "agg": "sum",
+              "param": "base_revenue_total"
+            },
+            {
+              "key": "averageDuration",
+              "label": "평균 지속시간",
+              "event": "harvest_combo_completed",
+              "agg": "avg",
+              "param": "duration_ms",
+              "unit": "ms",
+              "round": 0
+            }
+          ]
+        },
+        {
+          "key": "animal",
+          "label": "동물 퍼널",
+          "param": "animal",
+          "orderBy": "collections",
+          "metrics": [
+            {
+              "key": "purchases",
+              "label": "구매",
+              "event": "animal_purchased",
+              "agg": "count"
+            },
+            {
+              "key": "feeds",
+              "label": "급여",
+              "event": "animal_fed",
+              "agg": "count"
+            },
+            {
+              "key": "collections",
+              "label": "산출 수집",
+              "event": "animal_produce_collected",
+              "agg": "count"
+            },
+            {
+              "key": "revenue",
+              "label": "산출 수익",
+              "event": "animal_produce_collected",
+              "agg": "sum",
+              "param": "final_revenue"
+            },
+            {
+              "key": "rareCollections",
+              "label": "희귀 산출",
+              "event": "animal_produce_collected",
+              "agg": "count",
+              "where": [
+                {
+                  "param": "is_rare",
+                  "op": "truthy"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "key": "workshop",
+          "label": "공방 가공",
+          "param": "recipe",
+          "orderBy": "started",
+          "metrics": [
+            {
+              "key": "started",
+              "label": "제작 시작",
+              "event": "craft_started",
+              "agg": "count"
+            },
+            {
+              "key": "collected",
+              "label": "제작 수집",
+              "event": "craft_collected",
+              "agg": "count"
+            },
+            {
+              "key": "canceled",
+              "label": "제작 취소",
+              "event": "craft_canceled",
+              "agg": "count"
+            },
+            {
+              "key": "revenue",
+              "label": "가공 수익",
+              "event": "craft_collected",
+              "agg": "sum",
+              "param": "revenue"
+            }
+          ],
+          "derived": [
+            {
+              "key": "collectRate",
+              "label": "제작 수집률",
+              "num": "collected",
+              "den": "started",
+              "unit": "%",
+              "round": 1
+            }
+          ]
+        },
+        {
+          "key": "adPlacement",
+          "label": "광고 placement",
+          "param": "placement",
+          "order": [
+            "shop_gold_reward",
+            "shop_plot_discount",
+            "growth_ad_sheet",
+            "harvest_bonus_sheet",
+            "return_offline_bonus",
+            "wheel_bonus_spin"
+          ],
+          "metrics": [
+            {
+              "key": "impressions",
+              "label": "노출",
+              "event": "ad_reward_impression",
+              "agg": "count"
+            },
+            {
+              "key": "clicks",
+              "label": "클릭",
+              "event": "ad_reward_click",
+              "agg": "count"
+            },
+            {
+              "key": "completes",
+              "label": "완료",
+              "event": "ad_reward_completed",
+              "agg": "count"
+            },
+            {
+              "key": "fails",
+              "label": "실패",
+              "event": "ad_reward_failed",
+              "agg": "count"
+            },
+            {
+              "key": "notReadyFails",
+              "label": "미준비 실패",
+              "event": "ad_reward_failed",
+              "agg": "count",
+              "where": [
+                {
+                  "param": "reason",
+                  "op": "eq",
+                  "value": "not_ready"
+                }
+              ]
+            },
+            {
+              "key": "blocked",
+              "label": "한도 차단",
+              "event": "ad_limit_blocked",
+              "agg": "count"
+            }
+          ],
+          "derived": [
+            {
+              "key": "clickRate",
+              "label": "클릭률",
+              "num": "clicks",
+              "den": "impressions",
+              "unit": "%",
+              "round": 1
+            },
+            {
+              "key": "completeRate",
+              "label": "완료율",
+              "num": "completes",
+              "den": "clicks",
+              "unit": "%",
+              "round": 1
+            },
+            {
+              "key": "failRate",
+              "label": "실패율",
+              "num": "fails",
+              "den": "clicks",
+              "unit": "%",
+              "round": 1
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
