@@ -266,6 +266,7 @@ import {
   shouldRenderShopTabBar,
   type ShopTabKey,
 } from './shopTabs';
+import { useAnalyticsTransition } from './useAnalyticsTransition';
 
 // Game tick: drives idle re-renders so time-based UI (growth, cooldowns) advances.
 // The growth bar animates one tick at a time, so its duration is tied to this value
@@ -425,6 +426,13 @@ type ActiveSheet =
   | { type: 'decorationLayout' }
   | { type: 'resetConfirm' }
   | null;
+
+function getSheetAnalyticsTransitionKey(activeSheet: ActiveSheet): string | null {
+  if (activeSheet?.type === 'production') {
+    return `${activeSheet.type}:${activeSheet.tab}`;
+  }
+  return activeSheet?.type ?? null;
+}
 
 export type FarmGamePersistence = {
   readPersistedGameState: () => Promise<GameState>;
@@ -929,11 +937,6 @@ function FarmGameBody({
   // the request synchronously so rapid taps cannot open two ads or two spins.
   const wheelBonusSpinInFlightRef = useRef(false);
   const offlineBonusImpressionAtRef = useRef<number | null>(null);
-  // 마지막으로 시트 impression·collection_screen을 발화한 시트 타입을 기억한다.
-  // 방치형 특성상 시트가 열려 있는 동안에도 gameState가 계속 바뀌는데(작물 성장/
-  // 자동 수확/골드 누적), 시트 타입이 실제로 전이(open/close/switch)될 때만 발화해
-  // 같은 시트가 열린 채 이벤트가 반복 발화되는 것을 막는다.
-  const sheetImpressionTypeRef = useRef<string | null>(null);
   // First-session onboarding owns the foreground. A daily-bonus sheet
   // discovered during load waits here until the guide completes or the player
   // explicitly skips it, so a modal can never hide the first action.
@@ -2448,78 +2451,79 @@ function FarmGameBody({
     }
   }, [activeSheet]);
 
-  useEffect(() => {
-    // analyticsContext는 [gameState] 의존이라 gameState 변경마다 identity가 바뀐다.
-    // 이 effect의 deps에 넣으면 시트가 열린 동안 gameState 갱신마다 재실행되어
-    // impression이 재발화되므로, deps에서 제외하고 stable ref로 최신 컨텍스트를 만든다.
+  const sheetAnalyticsTransitionKey = getSheetAnalyticsTransitionKey(activeSheet);
+  useAnalyticsTransition(sheetAnalyticsTransitionKey, activeSheet, (transitionedSheet) => {
+    // transition key만 hook effect의 dependency다. analyticsContext/gameState는
+    // 최신 snapshot을 만드는 ref로만 읽으므로 250ms tick이 이 추적을 재실행하지 않는다.
     const buildContext = analyticsContextRef.current;
-
-    // welcomeBack(offlineBonus)은 시트 타입 전이 가드와 별개로 capturedAt 가드로
-    // 중복을 막는다. ad 지원 여부가 늦게 확정될 수 있어(타입 전이 없이 deps만 변경)
-    // 타입 전이 가드보다 먼저, 독립적으로 평가한다.
-    if (
-      activeSheet?.type === 'welcomeBack' &&
-      activeSheet.summary.offlineGold > 0 &&
-      rewardedAd.isAdSupported &&
-      offlineBonusImpressionAtRef.current !== activeSheet.summary.capturedAt &&
-      buildContext != null
-    ) {
-      offlineBonusImpressionAtRef.current = activeSheet.summary.capturedAt;
-      farmAnalytics.trackAdRewardImpression(
-        'offlineBonusAd',
-        getRewardedAdPlacement('offlineBonusAd'),
-        buildContext()
-      );
-    }
-
-    // 시트 타입 전이당 1회만 발화한다. 생산 시트는 탭까지 키에 포함해 공방에서 동물
-    // 탭으로 처음 전환할 때 기존 animals_screen 노출 이벤트가 보존되도록 한다.
-    const sheetImpressionKey =
-      activeSheet?.type === 'production' ? `${activeSheet.type}:${activeSheet.tab}` : (activeSheet?.type ?? null);
-    if (sheetImpressionTypeRef.current === sheetImpressionKey) {
-      return;
-    }
-    sheetImpressionTypeRef.current = sheetImpressionKey;
-    if (buildContext == null) {
+    if (transitionedSheet == null || buildContext == null) {
       return;
     }
 
-    if (activeSheet?.type === 'shop') {
+    if (transitionedSheet.type === 'shop') {
       const context = buildContext();
       farmAnalytics.trackAdRewardImpression('rewardedGold', getRewardedAdPlacement('rewardedGold'), context);
       farmAnalytics.trackAdRewardImpression('plotDiscountAd', getRewardedAdPlacement('plotDiscountAd'), context);
     }
-    if (activeSheet?.type === 'growthAd') {
+    if (transitionedSheet.type === 'growthAd') {
       farmAnalytics.trackAdRewardImpression('growthAd', getRewardedAdPlacement('growthAd'), buildContext());
     }
-    if (activeSheet?.type === 'harvestBonus') {
+    if (transitionedSheet.type === 'harvestBonus') {
       farmAnalytics.trackAdRewardImpression('harvestBonusAd', getRewardedAdPlacement('harvestBonusAd'), buildContext());
     }
-    if (activeSheet?.type === 'collection') {
+    if (transitionedSheet.type === 'collection') {
       farmAnalytics.trackCollectionScreen(buildContext());
     }
-    if (activeSheet?.type === 'production' && activeSheet.tab === 'animals') {
+    if (transitionedSheet.type === 'production' && transitionedSheet.tab === 'animals') {
       const state = gameStateRef.current;
       const statuses = getAnimalStates(state, Date.now());
       farmAnalytics.trackAnimalsScreen({
-        source: activeSheet.source,
+        source: transitionedSheet.source,
         ownedCount: state.animals.owned.length,
         feedingCount: Object.keys(state.animals.feeding).length,
         readyCount: statuses.filter((status) => status.phase === 'ready').length,
         context: buildContext(state),
       });
     }
-    if (activeSheet?.type === 'production' && activeSheet.tab === 'workshop') {
+    if (transitionedSheet.type === 'production' && transitionedSheet.tab === 'workshop') {
       const state = gameStateRef.current;
       const statuses = getProductionStates(state, Date.now());
       farmAnalytics.trackProductionScreen({
-        source: activeSheet.source,
+        source: transitionedSheet.source,
         craftingCount: statuses.filter((status) => status.phase === 'crafting').length,
         readyCount: statuses.filter((status) => status.phase === 'ready').length,
         context: buildContext(state),
       });
     }
-  }, [activeSheet, rewardedAd.isAdSupported, farmAnalytics]);
+  });
+
+  // 지원 여부가 시트 오픈 뒤 늦게 확정될 수 있는 welcomeBack만 capturedAt을 별도
+  // transition key로 사용한다. gameState/tick은 dependency가 아니며 기존 exactly-once
+  // capturedAt 가드를 함께 유지한다.
+  const offlineBonusAnalyticsTransitionKey =
+    activeSheet?.type === 'welcomeBack' &&
+    activeSheet.summary.offlineGold > 0 &&
+    rewardedAd.isAdSupported
+      ? activeSheet.summary.capturedAt
+      : null;
+  useAnalyticsTransition(offlineBonusAnalyticsTransitionKey, activeSheet, (transitionedSheet) => {
+    if (
+      transitionedSheet?.type !== 'welcomeBack' ||
+      offlineBonusImpressionAtRef.current === transitionedSheet.summary.capturedAt
+    ) {
+      return;
+    }
+    const buildContext = analyticsContextRef.current;
+    if (buildContext == null) {
+      return;
+    }
+    offlineBonusImpressionAtRef.current = transitionedSheet.summary.capturedAt;
+    farmAnalytics.trackAdRewardImpression(
+      'offlineBonusAd',
+      getRewardedAdPlacement('offlineBonusAd'),
+      buildContext()
+    );
+  });
 
   // 보상형 광고 CTA가 노출되는 시트가 열릴 때 아직 로드되지 않았다면 재로드를 킥해
   // 클릭 시점 미로드로 인한 실패(#374)를 줄인다. 이미 준비됐거나 미지원이면 no-op이고,

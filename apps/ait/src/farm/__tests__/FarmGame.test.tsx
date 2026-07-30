@@ -3906,8 +3906,12 @@ describe('FarmGame UI flow', () => {
 
     fireEvent.press(screen.getByText('🏪 상점'));
 
-    // 광고 CTA 시트(상점) 오픈 시 미로드면 재로드를 킥한다(AC2).
-    await waitFor(() => expect(rewardedAd.reloadAd).toHaveBeenCalled());
+    // 광고 CTA 시트(상점) 오픈 시 미로드면 재로드를 정확히 한 번 킥한다(AC2).
+    await waitFor(() => expect(rewardedAd.reloadAd).toHaveBeenCalledTimes(1));
+    await act(async () => {
+      jest.advanceTimersByTime(GAME_TICK_INTERVAL_MS * 8);
+    });
+    expect(rewardedAd.reloadAd).toHaveBeenCalledTimes(1);
 
     // 미로드 상태에서는 보상 CTA(골드·개간 할인)가 모두 대기 문구로 게이트되고
     // show가 호출되지 않는다(AC1).
@@ -5934,9 +5938,9 @@ describe('FarmGame UI flow', () => {
     expect(screen.queryByText('다시 오셨네요!')).toBeNull();
   });
 
-  // #356: 시트 impression·collection_screen이 시트 오픈(타입 전이)당 1회만 발화하는지
-  // 검증한다. 회귀 대상: analyticsContext(=[gameState] 의존)를 effect deps로 두면 시트가
-  // 열린 동안 gameState가 갱신될 때마다 impression이 재발화되던 GA4 과다 발화 버그.
+  // #356 후속: 시트 impression·collection_screen은 전용 transition tracker에서
+  // primitive key가 바뀔 때만 발화한다. analyticsContext/gameState 및 250ms tick은
+  // tracker dependency가 아니므로 열린 시트의 상태 갱신으로 재발화하지 않는다.
   //
   // 인수조건 ↔ 테스트 매핑(각 test 이름에 AC-n 태그를 달아 근거를 명시):
   //   AC-1(같은 시트 열린 채 gameState 갱신돼도 추가 발화 없음):
@@ -6039,7 +6043,7 @@ describe('FarmGame UI flow', () => {
     // AC-1·AC-2·AC-3 (growthAd): 성장 가속 시트도 타입 전이당 growthAd impression을 정확히
     // 1회만 발화(AC-2)하고, 열린 채 게임 틱이 반복돼도(방치형 재렌더) 추가 발화되지 않으며
     // (AC-1), 닫았다 다시 열면 다시 1회 발화(AC-3)한다. shop/collection과 동일한
-    // sheetImpressionTypeRef 가드 경로를 growthAd 타입에 대해 직접 검증한다.
+    // transition tracker 경로를 growthAd 타입에 대해 직접 검증한다.
     test('AC-1·AC-2·AC-3 (growthAd): 성장 가속 시트도 타입 전이당 growthAd impression 1건만 발화하고 재오픈 시 다시 1건 발화된다', async () => {
       // 성장 중인 밭(state 1) + 넉넉한 골드로 성장 가속 시트가 확실히 열리게 한다.
       const state: GameState = { ...createGrowingCropState(), gold: 100_000 };
