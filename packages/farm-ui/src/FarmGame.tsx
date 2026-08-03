@@ -187,6 +187,9 @@ import {
   getCropGrowthStage,
   isCropNearlyReady,
   type CropGrowthStage,
+  accumulateAutoHarvestSummary,
+  createAutoHarvestSummaryState,
+  isAutoHarvestSummaryDue,
   getDiscountedPlotCost,
   getPlotCost,
   getPlotGrowthDisplay,
@@ -1085,7 +1088,7 @@ function FarmGameBody({
     nodeKey: ResearchNodeKey;
     fromLevel: number;
   } | null>(null);
-  const autoHarvestSummaryRef = useRef({ harvestedCount: 0, replantedCount: 0, windowStartedAt: 0 });
+  const autoHarvestSummaryRef = useRef(createAutoHarvestSummaryState());
   const cropReadySummaryRef = useRef(createCropReadySummaryState());
   const rewardedAd = useRewardedAd(adGroupIds.rewarded);
   const interstitialAd = useInterstitialAd(adGroupIds.interstitial);
@@ -1439,6 +1442,30 @@ function FarmGameBody({
           areaKey: bucket.areaKey,
           cropTier: bucket.cropTier,
           readyCount: bucket.readyCount,
+          windowSeconds: Math.max(1, Math.floor((flushedAt - summary.windowStartedAt) / 1000)),
+          context: snapshotContext,
+        });
+      }
+    },
+    [farmAnalytics],
+  );
+
+  const flushAutoHarvestSummary = useCallback(
+    (context?: GameAnalyticsContext, flushedAt = Date.now()) => {
+      const summary = autoHarvestSummaryRef.current;
+      if (summary.harvestedCount === 0) {
+        return;
+      }
+      const snapshotContext = context ?? analyticsContextRef.current?.();
+      if (snapshotContext == null) {
+        return;
+      }
+
+      // 먼저 window를 retire해 background/inactive 연속 콜백에서도 exactly-once를 보장한다.
+      autoHarvestSummaryRef.current = createAutoHarvestSummaryState();
+      for (const bucket of summary.buckets) {
+        farmAnalytics.trackAutoHarvestSummary({
+          ...bucket,
           windowSeconds: Math.max(1, Math.floor((flushedAt - summary.windowStartedAt) / 1000)),
           context: snapshotContext,
         });
@@ -2286,6 +2313,7 @@ function FarmGameBody({
       if (nextState === 'background' || nextState === 'inactive') {
         manualHarvestComboPendingEndReasonRef.current = 'background';
         markSeen();
+        flushAutoHarvestSummary();
         flushCropReadySummary();
         flushManualHarvestCombo('background');
       } else if (nextState === 'active') {
@@ -2295,9 +2323,10 @@ function FarmGameBody({
     return () => {
       clearInterval(heartbeat);
       subscription.remove();
+      flushAutoHarvestSummary();
       flushCropReadySummary();
     };
-  }, [flushCropReadySummary, flushManualHarvestCombo, isSaveLoaded, persistence]);
+  }, [flushAutoHarvestSummary, flushCropReadySummary, flushManualHarvestCombo, isSaveLoaded, persistence]);
 
   useEffect(() => {
     if (!isSettingsLoaded) {
@@ -2841,39 +2870,49 @@ function FarmGameBody({
       next = { ...next, plots: grownPlots };
     }
 
-    // Automation shares the manual harvest pipeline but stays visually silent:
-    // no toast/vibration/sound. Each canonical outcome still emits
-    // crop_harvested with source=auto, while the volume summary stays throttled.
+    // Automation stays visually silent and analytics is bucketed per minute.
+    // Per-crop crop_harvested would turn idle processing throughput into hundreds
+    // of thousands of GA4 events, so only the first-harvest milestone remains immediate.
     const automation = runAutomationTick(next, { now });
-    const summary = autoHarvestSummaryRef.current;
     if (automation.harvestedCount > 0) {
       next = automation.state;
       const context = analyticsContext(automation.state);
-      for (const { plotIndex, outcome } of automation.harvests) {
-        trackCropHarvestedEvent(
-          farmAnalytics,
-          createCropHarvestedGameEvent(outcome, plotIndex),
-          'auto',
-          context
-        );
-      }
-      if (summary.harvestedCount === 0 && summary.replantedCount === 0) {
-        // First accumulation opens a fresh batching window.
-        summary.windowStartedAt = now;
-      }
-      summary.harvestedCount += automation.harvestedCount;
-      summary.replantedCount += automation.replantedCount;
+      const summaryEntries = automation.harvests.map(({ plotIndex, outcome }) => {
+        const crop = getCrop(outcome.cropKey);
+        const finalPlot = automation.state.plots[plotIndex];
+        const replanted = finalPlot?.state === 1 && finalPlot.cropType === outcome.cropKey;
+        if (outcome.isFirstMeaningfulHarvest) {
+          farmAnalytics.trackFirstMeaningfulHarvest({
+            cropKey: outcome.cropKey,
+            areaKey: crop.area,
+            cropTier: crop.tier,
+            goldGained: outcome.goldGained,
+            researchPointsGained: outcome.rpGained,
+            donated: outcome.donated,
+            harvestSource: 'auto',
+            context,
+          });
+        }
+        return {
+          cropKey: outcome.cropKey,
+          areaKey: crop.area,
+          cropTier: crop.tier,
+          goldGained: outcome.goldGained,
+          researchPointsGained: outcome.rpGained,
+          replanted,
+        };
+      });
+      autoHarvestSummaryRef.current = accumulateAutoHarvestSummary(
+        autoHarvestSummaryRef.current,
+        summaryEntries,
+        now,
+      );
     }
     // Flush is decoupled from harvest occurrence so a pending batch still goes
     // out (one interval later) when automation stops harvesting or is toggled
     // off mid-window.
-    if (summary.harvestedCount > 0 && now - summary.windowStartedAt >= AUTO_HARVEST_SUMMARY_INTERVAL_MS) {
-      farmAnalytics.trackAutoHarvestSummary({
-        harvestedCount: summary.harvestedCount,
-        replantedCount: summary.replantedCount,
-        context: analyticsContext(),
-      });
-      autoHarvestSummaryRef.current = { harvestedCount: 0, replantedCount: 0, windowStartedAt: now };
+    if (isAutoHarvestSummaryDue(autoHarvestSummaryRef.current, now, AUTO_HARVEST_SUMMARY_INTERVAL_MS)) {
+      flushAutoHarvestSummary(analyticsContext(next), now);
     }
     if (isCropReadySummaryDue(cropReadySummaryRef.current, now, CROP_READY_SUMMARY_INTERVAL_MS)) {
       flushCropReadySummary(analyticsContext(next), now);
@@ -2882,7 +2921,7 @@ function FarmGameBody({
     if (next !== gameState) {
       setGameState(() => next);
     }
-  }, [analyticsContext, farmAnalytics, flushCropReadySummary, gameState, tick]);
+  }, [analyticsContext, farmAnalytics, flushAutoHarvestSummary, flushCropReadySummary, gameState, tick]);
 
   function openShop() {
     setShopTab('expand');
@@ -3516,6 +3555,7 @@ function FarmGameBody({
       return;
     }
     flushManualHarvestCombo('prestige');
+    flushAutoHarvestSummary();
     flushCropReadySummary();
     cropReadyLogStateRef.current = {};
     prestigedLevelsRef.current.add(guardLevel);
@@ -3524,9 +3564,6 @@ function FarmGameBody({
     if (guardLevel === 0 && !gameState.prestigeGuideSeen) {
       prestigeGuidePendingRef.current = true;
     }
-    // Drop any pending auto-harvest batch so old-farm counts never flush
-    // under the new farm's analytics context.
-    autoHarvestSummaryRef.current = { harvestedCount: 0, replantedCount: 0, windowStartedAt: 0 };
     if (comboTimerRef.current != null) {
       clearTimeout(comboTimerRef.current);
       comboTimerRef.current = null;
@@ -3969,12 +4006,12 @@ function FarmGameBody({
     // removePersistedGameState is async; flush only after it settles so ticks
     // during the await cannot leave old-farm buckets for the reset state.
     flushManualHarvestCombo('reset');
+    flushAutoHarvestSummary();
     flushCropReadySummary();
     cropReadyLogStateRef.current = {};
     claimedRewardKeysRef.current.clear();
     achievementClaimInFlightRef.current = false;
     prestigedLevelsRef.current.clear();
-    autoHarvestSummaryRef.current = { harvestedCount: 0, replantedCount: 0, windowStartedAt: 0 };
     if (comboTimerRef.current != null) {
       clearTimeout(comboTimerRef.current);
       comboTimerRef.current = null;
@@ -4057,6 +4094,7 @@ function FarmGameBody({
       const outcome = await cloudSave.restoreFromCloud();
       if (outcome.status === 'restored') {
         flushManualHarvestCombo('cloud_restore');
+        flushAutoHarvestSummary();
         flushCropReadySummary();
         cropReadyLogStateRef.current = {};
         // The cloud payload may come from an older app version, so run it through

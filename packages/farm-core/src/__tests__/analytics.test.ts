@@ -129,6 +129,67 @@ describe('farm analytics adapter contract', () => {
     ]);
   });
 
+  test('경제·컨텍스트 숫자는 GA4 집계를 오염시키지 않도록 안전 범위로 제한한다 (#437)', () => {
+    const track = jest.fn();
+    const analytics = createFarmAnalytics(track);
+    const state = createInitialState();
+    state.gold = Number.MAX_VALUE;
+    state.research.points = Number.POSITIVE_INFINITY;
+    const context = getGameAnalyticsContext(state, 0, 5_000);
+
+    analytics.trackCropHarvested({
+      cropKey: 'carrot',
+      areaKey: 'starter_field',
+      cropTier: 1,
+      goldGained: Number.MAX_VALUE,
+      researchPointsGained: Number.POSITIVE_INFINITY,
+      donated: false,
+      harvestSource: 'manual',
+      isFirstMeaningfulHarvest: false,
+      isFirstCropHarvest: false,
+      context,
+    });
+    analytics.trackHarvestAll({
+      harvestedCount: 2,
+      totalGold: Number.MAX_VALUE,
+      specialCount: 0,
+      context,
+    });
+    analytics.trackAutoHarvestSummary({
+      cropKey: 'carrot',
+      areaKey: 'starter_field',
+      cropTier: 1,
+      harvestedCount: 10_000,
+      replantedCount: 10_000,
+      totalGold: Number.MAX_VALUE,
+      totalResearchPoints: Number.POSITIVE_INFINITY,
+      windowSeconds: 60,
+      context,
+    });
+
+    expect(context.gold).toBe(Number.MAX_SAFE_INTEGER);
+    expect(context.research_points).toBe(0);
+    expect(track).toHaveBeenCalledWith(
+      'crop_harvested',
+      expect.objectContaining({
+        revenue: Number.MAX_SAFE_INTEGER,
+        research_points_gained: 0,
+        gold: Number.MAX_SAFE_INTEGER,
+      }),
+    );
+    expect(track).toHaveBeenCalledWith(
+      'harvest_all',
+      expect.objectContaining({ total_gold: Number.MAX_SAFE_INTEGER }),
+    );
+    expect(track).toHaveBeenCalledWith(
+      'auto_harvest_summary',
+      expect.objectContaining({
+        total_gold: Number.MAX_SAFE_INTEGER,
+        total_research_points: 0,
+      }),
+    );
+  });
+
   test('harvest_combo_completed는 수동 콤보 종료 계약을 exact payload로 emit한다 (#348)', () => {
     const track = jest.fn();
     const analytics = createFarmAnalytics(track);

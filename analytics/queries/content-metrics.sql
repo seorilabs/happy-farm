@@ -6,7 +6,7 @@
 --
 -- 데이터셋: happy-farm-tycoon.analytics_539626577 (일일 events_YYYYMMDD 샤드)
 -- 이벤트 계약: packages/farm-core/src/analytics.ts
---   (crop_planted / crop_harvested / crop_ready_summary / legacy crop_ready / seed_selected /
+--   (crop_planted / crop_harvested / auto_harvest_summary / crop_ready_summary / legacy crop_ready / seed_selected /
 --    area_unlock_clicked / area_unlocked / crop_of_the_day_harvested)
 -- 콘텐츠 키: packages/farm-core/src/balance.json (crops[].key, areas[].key)
 --
@@ -28,7 +28,7 @@ BEGIN
   DECLARE window_days INT64 DEFAULT 28;
 
   WITH
-  -- 콘텐츠 이벤트만 추출하고 event_params에서 crop/area/revenue/ready-count/first-flag를 평탄화.
+  -- 콘텐츠 이벤트만 추출하고 event_params에서 crop/area/revenue/count/first-flag를 평탄화.
   content_events AS (
     SELECT
       PARSE_DATE('%Y%m%d', event_date) AS day,
@@ -38,6 +38,12 @@ BEGIN
       (SELECT ep.value.string_value FROM UNNEST(event_params) ep WHERE ep.key = 'area') AS area,
       (SELECT COALESCE(ep.value.double_value, ep.value.int_value)
          FROM UNNEST(event_params) ep WHERE ep.key = 'revenue') AS revenue,
+      (SELECT COALESCE(ep.value.double_value, ep.value.int_value)
+         FROM UNNEST(event_params) ep WHERE ep.key = 'total_gold') AS total_gold,
+      (SELECT COALESCE(ep.value.int_value, CAST(ep.value.double_value AS INT64))
+         FROM UNNEST(event_params) ep WHERE ep.key = 'harvested_count') AS harvested_count,
+      (SELECT ep.value.string_value
+         FROM UNNEST(event_params) ep WHERE ep.key = 'harvest_source') AS harvest_source,
       (SELECT COALESCE(ep.value.int_value, CAST(ep.value.double_value AS INT64))
          FROM UNNEST(event_params) ep WHERE ep.key = 'ready_count') AS ready_count,
       (SELECT ep.value.int_value FROM UNNEST(event_params) ep WHERE ep.key = 'is_first_crop_harvest') AS is_first_crop_harvest
@@ -52,7 +58,16 @@ BEGIN
         'crop_ready_summary',
         'crop_ready',
         'crop_harvested',
+        'auto_harvest_summary',
         'crop_of_the_day_harvested'
+      )
+      -- 1.8.7 이하의 auto per-crop 이벤트는 처리량/초대형 revenue를 반영하므로 제외한다.
+      AND NOT (
+        event_name = 'crop_harvested'
+        AND COALESCE(
+          (SELECT ep.value.string_value FROM UNNEST(event_params) ep WHERE ep.key = 'harvest_source'),
+          ''
+        ) = 'auto'
       )
   ),
 
@@ -69,12 +84,24 @@ BEGIN
           ELSE 0
         END
       ) AS ready,
-      COUNTIF(event_name = 'crop_harvested') AS harvested,
+      SUM(
+        CASE
+          WHEN event_name = 'crop_harvested' THEN 1
+          WHEN event_name = 'auto_harvest_summary' THEN COALESCE(harvested_count, 0)
+          ELSE 0
+        END
+      ) AS harvested,
       COUNTIF(event_name IN ('seed_selected', 'first_seed_selected')) AS seed_selected,
       COUNTIF(event_name = 'crop_harvested' AND is_first_crop_harvest = 1) AS first_harvests,
       COUNTIF(event_name = 'crop_of_the_day_harvested') AS cotd_harvests,
-      COUNT(DISTINCT IF(event_name = 'crop_harvested', user_pseudo_id, NULL)) AS harvesters,
-      SUM(IF(event_name = 'crop_harvested', COALESCE(revenue, 0), 0)) AS revenue
+      COUNT(DISTINCT IF(event_name IN ('crop_harvested', 'auto_harvest_summary'), user_pseudo_id, NULL)) AS harvesters,
+      SUM(
+        CASE
+          WHEN event_name = 'crop_harvested' THEN COALESCE(revenue, 0)
+          WHEN event_name = 'auto_harvest_summary' THEN COALESCE(total_gold, 0)
+          ELSE 0
+        END
+      ) AS revenue
     FROM content_events
     WHERE crop IS NOT NULL
     GROUP BY day, crop
@@ -116,7 +143,9 @@ BEGIN
       event_name,
       (SELECT ep.value.string_value FROM UNNEST(event_params) ep WHERE ep.key = 'area') AS area,
       (SELECT COALESCE(ep.value.double_value, ep.value.int_value)
-         FROM UNNEST(event_params) ep WHERE ep.key = 'cost') AS cost
+         FROM UNNEST(event_params) ep WHERE ep.key = 'cost') AS cost,
+      (SELECT COALESCE(ep.value.int_value, CAST(ep.value.double_value AS INT64))
+         FROM UNNEST(event_params) ep WHERE ep.key = 'harvested_count') AS harvested_count
     FROM `happy-farm-tycoon.analytics_539626577.events_*`
     WHERE _TABLE_SUFFIX
         BETWEEN FORMAT_DATE('%Y%m%d', DATE_SUB(CURRENT_DATE(), INTERVAL window_days DAY))
@@ -125,7 +154,15 @@ BEGIN
         'area_unlock_clicked',
         'area_unlocked',
         'crop_planted',
-        'crop_harvested'
+        'crop_harvested',
+        'auto_harvest_summary'
+      )
+      AND NOT (
+        event_name = 'crop_harvested'
+        AND COALESCE(
+          (SELECT ep.value.string_value FROM UNNEST(event_params) ep WHERE ep.key = 'harvest_source'),
+          ''
+        ) = 'auto'
       )
   ),
 
@@ -136,7 +173,13 @@ BEGIN
       COUNTIF(event_name = 'area_unlock_clicked') AS unlock_clicked,
       COUNTIF(event_name = 'area_unlocked')       AS unlocked,
       COUNTIF(event_name = 'crop_planted')        AS planted,
-      COUNTIF(event_name = 'crop_harvested')      AS harvested,
+      SUM(
+        CASE
+          WHEN event_name = 'crop_harvested' THEN 1
+          WHEN event_name = 'auto_harvest_summary' THEN COALESCE(harvested_count, 0)
+          ELSE 0
+        END
+      ) AS harvested,
       SUM(IF(event_name = 'area_unlocked', COALESCE(cost, 0), 0)) AS unlock_cost_sum
     FROM area_events
     WHERE area IS NOT NULL

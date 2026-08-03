@@ -30,16 +30,17 @@ happy-farm **개별 콘텐츠(작물·구역·기능 퍼널)** 세부 지표의 
 | `crop_planted`                          | `crop`, `area`, `crop_tier`, `crop_cost`                                                                                                     | 심기                                               |
 | `crop_ready_summary`                    | `crop`, `area`, `crop_tier`, `ready_count`, `window_seconds`, `schema_version`                                                               | 60초 rolling window의 성장 완료 집계(bucket별 1건) |
 | `crop_ready`                            | `crop`, `area`, `crop_tier`                                                                                                                  | 배칭 전 버전의 legacy 성장 완료 이벤트             |
-| `crop_harvested`                        | `crop`, `area`, `crop_tier`, `revenue`, `research_points_gained`, `reward_type`, `harvest_source`, `is_first_crop_harvest`, `schema_version` | 수확·실지급 보상·경로                              |
+| `crop_harvested`                        | `crop`, `area`, `crop_tier`, `revenue`, `research_points_gained`, `reward_type`, `harvest_source`, `is_first_crop_harvest`, `schema_version` | 수동·명시적 일괄 수확과 실지급 보상                |
+| `auto_harvest_summary`                  | `crop`, `area`, `crop_tier`, `harvested_count`, `replanted_count`, `total_gold`, `total_research_points`, `window_seconds`, `schema_version` | 60초 rolling window의 자동수확 집계                 |
 | `crop_of_the_day_harvested`             | `crop`, `multiplier`                                                                                                                         | 오늘의 작물 수확                                   |
 | `breed_unlocked`                        | `crop`                                                                                                                                       | 교배 해금                                          |
 
 작물×일자 집계 지표:
 
 - **planted** = `count(crop_planted)`
-- **harvested** = `count(crop_harvested)`
-- **revenue** = `sum(crop_harvested.revenue)`
-- **harvesters** = `count(distinct user_pseudo_id where crop_harvested)`
+- **harvested** = `count(crop_harvested where harvest_source != auto) + sum(auto_harvest_summary.harvested_count)`
+- **revenue** = `sum(crop_harvested.revenue where harvest_source != auto) + sum(auto_harvest_summary.total_gold)`
+- **harvesters** = `count(distinct user_pseudo_id where crop_harvested or auto_harvest_summary)`
 - **seed_selected** = `count(seed_selected) + count(first_seed_selected)`
 - **ready** = `sum(crop_ready_summary.ready_count) + count(legacy crop_ready)`
 - **first_harvests** = `count(crop_harvested where is_first_crop_harvest)`
@@ -50,8 +51,8 @@ happy-farm **개별 콘텐츠(작물·구역·기능 퍼널)** 세부 지표의 
 - **심기→수확 전환율** = `harvested / planted` (작물별 완주율)
 - **수확당 평균 매출** = `revenue / harvested`
 
-`crop_harvested.schema_version=2`부터 현재의 실제 수확 경로를 모두 기록한다.
-`harvest_source`는 `manual | batch | auto`이며 수확 후 재심기도 `batch`에 포함한다. `reward_type`은
+`crop_harvested.schema_version=2`의 `harvest_source`는 `manual | batch | auto`이며 수확 후
+재심기도 `batch`에 포함한다. `reward_type`은
 `gold | research_points` stable key다. `revenue`는 canonical 수확 결과에서 실제로 지급된
 골드와 정확히 같으므로 정상 골드 수확에서는 양수다. 기부 모드는 골드 대신 RP를 지급해
 `revenue=0`, `reward_type=research_points`, `research_points_gained>0`으로 명시 구분한다.
@@ -59,14 +60,19 @@ offline 정산은 작물을 익은 상태로만 남기며 수확하지 않고, c
 summary이므로 별도 `harvest_source`가 아니다. schema v2 전 `crop_harvested`는 수동 단일
 수확에서만 발생했으므로 source가 없는 legacy 행은 분석 시 `manual`로 간주한다.
 
+`auto_harvest_summary.schema_version=2`부터 자동수확은 per-crop `crop_harvested`를 보내지
+않고 `(crop, area, crop_tier)` bucket별 summary를 최대 60초에 1건 보낸다. 앱 background,
+프레스티지, 초기화, 클라우드 복원 경계에서는 부분 window를 먼저 flush한다. 1.8.7 이하의
+`harvest_source=auto` raw 이벤트는 자동화 처리량과 초대형 경제값으로 지표를 왜곡하므로
+현재 집계에서 제외하고 summary만 합산한다. 숫자 파라미터는 JS 안전 범위로 clamp한다.
+
 `crop_ready_summary`는 같은 window 안에서 `(crop, area, crop_tier)`가 같은 익음을
 `ready_count`로 합친다. 정상 active window는 60초 뒤 flush하며, 앱 background/inactive,
 unmount, prestige/reset/cloud restore에서는 유실을 줄이고 새 농장 context 혼합을 막기 위해
 부분 window를 best-effort로 먼저 flush한다. 이때 `window_seconds`에는 실제 경과 초가 기록된다.
 배칭 배포 전후를 함께 조회할 때는 반드시 위의 legacy 호환 합계식을 사용한다. #288의
 기존 `crop_ready` 대비 수확 비율은 과다 발화 기간을 포함하므로 신규 계약 배포 뒤 다시
-baseline을 잡는다. schema v2부터 자동수확도 crop별 이벤트를 내므로, 수동 행동 전환을 볼
-때는 `harvest_source=manual` cohort로 제한한다.
+baseline을 잡는다. 수동 행동 전환을 볼 때는 `harvest_source=manual` cohort로 제한한다.
 
 ### 2) 구역(area) 차원
 
@@ -74,7 +80,7 @@ baseline을 잡는다. schema v2부터 자동수확도 crop별 이벤트를 내�
 | --------------------------------- | -------------- | --------------- |
 | `area_unlock_clicked`             | `area`         | 언락 시도(관심) |
 | `area_unlocked`                   | `area`, `cost` | 언락 완료       |
-| `crop_planted` / `crop_harvested` | `area`         | 구역별 활동량   |
+| `crop_planted` / `crop_harvested` / `auto_harvest_summary` | `area` | 구역별 활동량 |
 
 구역×일자 집계 지표:
 
@@ -82,7 +88,7 @@ baseline을 잡는다. schema v2부터 자동수확도 crop별 이벤트를 내�
 - **unlocked** = `count(area_unlocked)`
 - **unlock_cost_sum** = `sum(area_unlocked.cost)`
 - **planted** = `count(crop_planted)` (해당 area)
-- **harvested** = `count(crop_harvested)` (해당 area)
+- **harvested** = 명시적 `crop_harvested` + `auto_harvest_summary.harvested_count` (해당 area)
 
 파생 지표:
 

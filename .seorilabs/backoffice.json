@@ -417,26 +417,61 @@
             },
             {
               "key": "harvested",
-              "label": "수확",
+              "label": "직접 수확",
               "event": "crop_harvested",
-              "agg": "count"
+              "agg": "count",
+              "where": [
+                {
+                  "param": "harvest_source",
+                  "op": "ne_or_unset",
+                  "value": "auto"
+                }
+              ]
+            },
+            {
+              "key": "autoHarvested",
+              "label": "자동 수확",
+              "event": "auto_harvest_summary",
+              "agg": "sum",
+              "param": "harvested_count"
             },
             {
               "key": "harvesters",
               "label": "수확자",
-              "event": "crop_harvested",
-              "agg": "users"
+              "event": ["crop_harvested", "auto_harvest_summary"],
+              "agg": "users",
+              "where": [
+                {
+                  "param": "harvest_source",
+                  "op": "ne_or_unset",
+                  "value": "auto"
+                }
+              ]
             },
             {
               "key": "revenue",
-              "label": "골드 수익",
+              "label": "직접 수확 골드",
               "event": "crop_harvested",
               "agg": "sum",
-              "param": "revenue"
+              "param": "revenue",
+              "where": [
+                {
+                  "param": "harvest_source",
+                  "op": "ne_or_unset",
+                  "value": "auto"
+                }
+              ]
+            },
+            {
+              "key": "autoRevenue",
+              "label": "자동 수확 골드",
+              "event": "auto_harvest_summary",
+              "agg": "sum",
+              "param": "total_gold"
             },
             {
               "key": "donations",
-              "label": "연구 기부",
+              "label": "직접 수확 연구 기부",
               "event": "crop_harvested",
               "agg": "count",
               "where": [
@@ -444,8 +479,20 @@
                   "param": "reward_type",
                   "op": "eq",
                   "value": "research_points"
+                },
+                {
+                  "param": "harvest_source",
+                  "op": "ne_or_unset",
+                  "value": "auto"
                 }
               ]
+            },
+            {
+              "key": "autoResearchPoints",
+              "label": "자동 수확 연구 포인트",
+              "event": "auto_harvest_summary",
+              "agg": "sum",
+              "param": "total_research_points"
             },
             {
               "key": "firstHarvests",
@@ -456,6 +503,11 @@
                 {
                   "param": "is_first_crop_harvest",
                   "op": "truthy"
+                },
+                {
+                  "param": "harvest_source",
+                  "op": "ne_or_unset",
+                  "value": "auto"
                 }
               ]
             }
@@ -463,7 +515,7 @@
           "derived": [
             {
               "key": "plantToHarvest",
-              "label": "심기→수확",
+              "label": "심기→직접 수확",
               "num": "harvested",
               "den": "planted",
               "unit": "%",
@@ -471,7 +523,7 @@
             },
             {
               "key": "revenuePerHarvest",
-              "label": "수확당 골드",
+              "label": "직접 수확당 골드",
               "num": "revenue",
               "den": "harvested",
               "scale": 1,
@@ -513,9 +565,23 @@
             },
             {
               "key": "harvested",
-              "label": "수확",
+              "label": "직접 수확",
               "event": "crop_harvested",
-              "agg": "count"
+              "agg": "count",
+              "where": [
+                {
+                  "param": "harvest_source",
+                  "op": "ne_or_unset",
+                  "value": "auto"
+                }
+              ]
+            },
+            {
+              "key": "autoHarvested",
+              "label": "자동 수확",
+              "event": "auto_harvest_summary",
+              "agg": "sum",
+              "param": "harvested_count"
             }
           ],
           "derived": [

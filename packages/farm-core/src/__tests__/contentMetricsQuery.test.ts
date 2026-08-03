@@ -47,6 +47,7 @@ describe('content-metrics.sql 계약 가드', () => {
     for (const event of [
       'crop_planted',
       'crop_harvested',
+      'auto_harvest_summary',
       'crop_ready_summary',
       'crop_ready',
       'seed_selected',
@@ -57,6 +58,16 @@ describe('content-metrics.sql 계약 가드', () => {
     ]) {
       expect(sql).toContain(`'${event}'`);
     }
+  });
+
+  test('자동수확은 legacy per-crop auto를 제외하고 summary count와 total_gold로 집계한다', () => {
+    expect(sql).toContain("event_name = 'crop_harvested'");
+    expect(sql).toMatch(
+      /AND COALESCE\([\s\S]*ep\.key = 'harvest_source'\),\s*''\s*\) = 'auto'/
+    );
+    expect(sql).toContain("event_name = 'auto_harvest_summary'");
+    expect(sql).toContain('COALESCE(harvested_count, 0)');
+    expect(sql).toContain('COALESCE(total_gold, 0)');
   });
 
   test('ready는 summary ready_count와 legacy crop_ready를 함께 합산한다', () => {
