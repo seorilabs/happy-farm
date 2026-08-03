@@ -17,6 +17,20 @@ export type AnalyticsValue = string | number | boolean;
 
 export type TrackGameEvent = (name: string, params?: Record<string, AnalyticsValue>) => void;
 
+export const MAX_SAFE_ANALYTICS_NUMBER = Number.MAX_SAFE_INTEGER;
+
+/** GA4 숫자 파라미터가 NaN/Infinity 또는 JS 안전 정수 범위를 넘어 집계를 오염시키지 않게 한다. */
+export function toSafeAnalyticsNumber(value: number): number {
+  if (!Number.isFinite(value)) {
+    return 0;
+  }
+  return Math.max(-MAX_SAFE_ANALYTICS_NUMBER, Math.min(MAX_SAFE_ANALYTICS_NUMBER, value));
+}
+
+function toSafeAnalyticsInteger(value: number): number {
+  return Math.trunc(toSafeAnalyticsNumber(value));
+}
+
 // Firebase 애널리틱스(웹 SDK·RN SDK 공통)는 파라미터 값으로 string·number만 받고,
 // boolean이나 NaN/Infinity는 그대로 넣으면 누락·거부된다. ait(웹)·mobile(RN) 어댑터가
 // 각자 같은 변환을 중복 구현하던 것을 공유 레이어로 모아 동작을 일치시킨다.
@@ -25,7 +39,7 @@ export function toFirebaseAnalyticsValue(value: AnalyticsValue): string | number
     return value ? 1 : 0;
   }
   if (typeof value === 'number') {
-    return Number.isFinite(value) ? value : 0;
+    return toSafeAnalyticsNumber(value);
   }
   return value;
 }
@@ -83,17 +97,17 @@ export function getGameAnalyticsContext(
   now = Date.now()
 ): GameAnalyticsContext {
   return {
-    gold: Math.floor(gameState.gold),
-    plot_count: gameState.unlockedPlotCount,
-    speed_level: gameState.upgrades.speed,
-    profit_level: gameState.upgrades.profit,
-    unlocked_area_count: gameState.unlockedAreas.length,
-    harvested_crop_count: gameState.harvestedCropKeys.length,
-    session_elapsed_sec: Math.max(0, Math.floor((now - sessionStartedAt) / 1000)),
-    prestige_level: gameState.prestige.level,
-    prestige_stars: gameState.prestige.stars,
-    research_points: Math.floor(gameState.research.points),
-    lifetime_harvests: gameState.lifetimeStats.totalHarvests,
+    gold: toSafeAnalyticsInteger(gameState.gold),
+    plot_count: toSafeAnalyticsInteger(gameState.unlockedPlotCount),
+    speed_level: toSafeAnalyticsInteger(gameState.upgrades.speed),
+    profit_level: toSafeAnalyticsInteger(gameState.upgrades.profit),
+    unlocked_area_count: toSafeAnalyticsInteger(gameState.unlockedAreas.length),
+    harvested_crop_count: toSafeAnalyticsInteger(gameState.harvestedCropKeys.length),
+    session_elapsed_sec: Math.max(0, toSafeAnalyticsInteger((now - sessionStartedAt) / 1000)),
+    prestige_level: toSafeAnalyticsInteger(gameState.prestige.level),
+    prestige_stars: toSafeAnalyticsInteger(gameState.prestige.stars),
+    research_points: toSafeAnalyticsInteger(gameState.research.points),
+    lifetime_harvests: toSafeAnalyticsInteger(gameState.lifetimeStats.totalHarvests),
   };
 }
 
@@ -103,6 +117,29 @@ const noopTrackGameEvent: TrackGameEvent = (_name, _params = {}) => {
 };
 
 export function createFarmAnalytics(track: TrackGameEvent = noopTrackGameEvent) {
+  const trackFirstMeaningfulHarvest = (params: {
+    cropKey: CropKey;
+    areaKey: AreaKey;
+    cropTier: number;
+    goldGained: number;
+    researchPointsGained: number;
+    donated: boolean;
+    harvestSource: HarvestSource;
+    context: GameAnalyticsContext;
+  }) => {
+    const rewardType: HarvestRewardType = params.donated ? 'research_points' : 'gold';
+    track('first_meaningful_harvest', {
+      crop: params.cropKey,
+      area: params.areaKey,
+      crop_tier: params.cropTier,
+      revenue: Math.max(0, toSafeAnalyticsNumber(params.goldGained)),
+      research_points_gained: Math.max(0, toSafeAnalyticsNumber(params.researchPointsGained)),
+      reward_type: rewardType,
+      harvest_source: params.harvestSource,
+      ...params.context,
+    });
+  };
+
   return {
     trackFarmScreen: (context: GameAnalyticsContext) => {
       track('farm_main_screen', context);
@@ -179,12 +216,14 @@ export function createFarmAnalytics(track: TrackGameEvent = noopTrackGameEvent) 
       // Donation mode intentionally credits RP instead, so its zero revenue is
       // explicitly distinguishable rather than looking like a logging defect.
       const rewardType: HarvestRewardType = params.donated ? 'research_points' : 'gold';
+      const revenue = Math.max(0, toSafeAnalyticsNumber(params.goldGained));
+      const researchPointsGained = Math.max(0, toSafeAnalyticsNumber(params.researchPointsGained));
       track('crop_harvested', {
         crop: params.cropKey,
         area: params.areaKey,
         crop_tier: params.cropTier,
-        revenue: params.goldGained,
-        research_points_gained: params.researchPointsGained,
+        revenue,
+        research_points_gained: researchPointsGained,
         reward_type: rewardType,
         harvest_source: params.harvestSource,
         is_first_meaningful_harvest: params.isFirstMeaningfulHarvest,
@@ -194,18 +233,20 @@ export function createFarmAnalytics(track: TrackGameEvent = noopTrackGameEvent) 
       });
 
       if (params.isFirstMeaningfulHarvest) {
-        track('first_meaningful_harvest', {
-          crop: params.cropKey,
-          area: params.areaKey,
-          crop_tier: params.cropTier,
-          revenue: params.goldGained,
-          research_points_gained: params.researchPointsGained,
-          reward_type: rewardType,
-          harvest_source: params.harvestSource,
-          ...params.context,
+        trackFirstMeaningfulHarvest({
+          cropKey: params.cropKey,
+          areaKey: params.areaKey,
+          cropTier: params.cropTier,
+          goldGained: revenue,
+          researchPointsGained,
+          donated: params.donated,
+          harvestSource: params.harvestSource,
+          context: params.context,
         });
       }
     },
+
+    trackFirstMeaningfulHarvest,
 
     trackPlotUnlocked: (params: {
       method: 'gold' | 'ad';
@@ -574,13 +615,26 @@ export function createFarmAnalytics(track: TrackGameEvent = noopTrackGameEvent) 
     // Aggregated automation report; callers throttle it (e.g. once a minute)
     // instead of emitting one event per auto-harvested crop.
     trackAutoHarvestSummary: (params: {
+      cropKey: CropKey;
+      areaKey: AreaKey;
+      cropTier: number;
       harvestedCount: number;
       replantedCount: number;
+      totalGold: number;
+      totalResearchPoints: number;
+      windowSeconds: number;
       context: GameAnalyticsContext;
     }) => {
       track('auto_harvest_summary', {
-        harvested_count: params.harvestedCount,
-        replanted_count: params.replantedCount,
+        crop: params.cropKey,
+        area: params.areaKey,
+        crop_tier: toSafeAnalyticsInteger(params.cropTier),
+        harvested_count: Math.max(0, toSafeAnalyticsInteger(params.harvestedCount)),
+        replanted_count: Math.max(0, toSafeAnalyticsInteger(params.replantedCount)),
+        total_gold: Math.max(0, toSafeAnalyticsNumber(params.totalGold)),
+        total_research_points: Math.max(0, toSafeAnalyticsNumber(params.totalResearchPoints)),
+        window_seconds: Math.max(1, toSafeAnalyticsInteger(params.windowSeconds)),
+        schema_version: 2,
         ...params.context,
       });
     },
@@ -593,9 +647,9 @@ export function createFarmAnalytics(track: TrackGameEvent = noopTrackGameEvent) 
       context: GameAnalyticsContext;
     }) => {
       track('harvest_all', {
-        harvested_count: params.harvestedCount,
-        total_gold: params.totalGold,
-        special_count: params.specialCount,
+        harvested_count: Math.max(0, toSafeAnalyticsInteger(params.harvestedCount)),
+        total_gold: Math.max(0, toSafeAnalyticsNumber(params.totalGold)),
+        special_count: Math.max(0, toSafeAnalyticsInteger(params.specialCount)),
         ...params.context,
       });
     },

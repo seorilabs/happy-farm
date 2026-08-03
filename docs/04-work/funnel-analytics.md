@@ -47,6 +47,7 @@ happy-farm 활성화·리텐션 퍼널 측정의 단일 기준 문서. 이벤트
 | 수확 안내 | `onboarding_step_view` (`step` = `harvest`, `step_index` = 3) | `step`, `step_index`, context |
 | 수확 준비 집계 | `crop_ready_summary` | `crop`, `area`, `crop_tier`, `ready_count`, `window_seconds`, `schema_version`, context |
 | 수확 | `crop_harvested` | `crop`, `area`, `crop_tier`, `revenue`, `research_points_gained`, `reward_type`, `harvest_source`, `is_first_crop_harvest`, `is_first_meaningful_harvest`, `schema_version`, context |
+| 자동수확 집계 | `auto_harvest_summary` | `crop`, `area`, `crop_tier`, `harvested_count`, `replanted_count`, `total_gold`, `total_research_points`, `window_seconds`, `schema_version`, context |
 | **첫 유의미 수확** | `first_meaningful_harvest` | `crop`, `area`, `crop_tier`, `revenue`, `research_points_gained`, `reward_type`, `harvest_source`, context |
 | 첫 수확 보상 확인 | `onboarding_step_view` (`step` = `reward`, `step_index` = 4) | `step`, `step_index`, context |
 | 온보딩 완료 | `onboarding_complete` | context |

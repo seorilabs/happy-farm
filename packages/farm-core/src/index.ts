@@ -3,6 +3,7 @@ export * from './adLimits';
 export * from './animals';
 export * from './areaEnvironment';
 export * from './analytics';
+export * from './autoHarvestSummary';
 export * from './ads';
 export * from './commands';
 export * from './constants';
