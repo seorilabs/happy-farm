@@ -20,6 +20,7 @@ import {
   PLOT_DISCOUNT_AD_DAILY_LIMIT,
   REWARDED_GOLD_MAX_USES_PER_WINDOW,
   REWARDED_GOLD_WINDOW_MS,
+  RESEARCH_BATCH_STEP,
   PRESTIGE_STARS_BASE,
   PRODUCTION_RECIPES,
   REGION_ARCHETYPES,
@@ -48,6 +49,8 @@ import {
   getAchievementThreshold,
   getPrestigeCost,
   getRegionArchetypeLabel,
+  getResearchNodeBatchPurchase,
+  getResearchNodeLabel,
   getResetDayIndex,
   getResetDayStart,
   getSeasonalAmbience,
@@ -5291,6 +5294,7 @@ describe('FarmGame UI flow', () => {
 
     test('unlocking a research node plays the unlock effect', async () => {
       const playEffect = jest.fn();
+      const track = jest.fn();
       const base = createInitialState();
       const state: GameState = {
         ...base,
@@ -5299,7 +5303,7 @@ describe('FarmGame UI flow', () => {
       };
       const screen = await renderGame(
         state,
-        { audio: createEffectAudio(playEffect) },
+        { analytics: createFarmAnalytics(track), audio: createEffectAudio(playEffect) },
         { soundEffectsEnabled: true }
       );
       await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
@@ -5310,10 +5314,108 @@ describe('FarmGame UI flow', () => {
       // 설명 문구로 특정해 누른다(press는 상위 Pressable로 전파된다).
       const nodeDesc = '다 자란 작물을 자동으로 수확해요.';
       await waitFor(() => expect(screen.getByText(nodeDesc)).toBeTruthy());
-      fireEvent.press(screen.getByText(nodeDesc));
+      act(() => {
+        fireEvent.press(screen.getByText(nodeDesc));
+        fireEvent.press(screen.getByText(nodeDesc));
+      });
 
       await waitFor(() => expect(playEffect).toHaveBeenCalledWith('unlock'));
       expect(playEffect).toHaveBeenCalledTimes(1);
+      expect(track.mock.calls.filter(([name]) => name === 'research_node_unlocked')).toEqual([
+        [
+          'research_node_unlocked',
+          expect.objectContaining({ node_key: 'auto_harvest', next_level: 1 }),
+        ],
+      ]);
+      expect(screen.queryByTestId('research-batch-ten-auto_harvest')).toBeNull();
+      expect(screen.queryByTestId('research-batch-max-auto_harvest')).toBeNull();
+    });
+
+    test('반복 연구 +10은 한 상태 전이와 batch 이벤트 1건으로 처리하고 중복 탭을 막는다 (#438)', async () => {
+      const base = createInitialState();
+      const prerequisiteState: GameState = {
+        ...base,
+        onboardingCompleted: true,
+        research: {
+          ...base.research,
+          points: Number.MAX_VALUE,
+          nodeLevels: { donation_amplifier: 1 },
+          unlockedNodes: ['donation_amplifier'],
+        },
+      };
+      const preview = getResearchNodeBatchPurchase(
+        prerequisiteState,
+        'market_studies',
+        Number.POSITIVE_INFINITY,
+        RESEARCH_BATCH_STEP,
+      );
+      const state: GameState = {
+        ...prerequisiteState,
+        research: { ...prerequisiteState.research, points: preview.totalCost },
+      };
+      const track = jest.fn();
+      const screen = await renderGame(state, { analytics: createFarmAnalytics(track) });
+
+      fireEvent.press(screen.getByTestId('more-nav-button'));
+      fireEvent.press(screen.getByLabelText(messages.labButtonAccessibilityLabel));
+      const tenButton = await screen.findByTestId('research-batch-ten-market_studies');
+      expect(screen.getByTestId('research-batch-max-market_studies')).toBeTruthy();
+      act(() => {
+        fireEvent.press(tenButton);
+        fireEvent.press(tenButton);
+      });
+
+      const label = getResearchNodeLabel('market_studies', DEFAULT_LOCALE).name;
+      await waitFor(() =>
+        expect(
+          screen.getByText(`${label} · ${messages.researchNodeLevelLabel(RESEARCH_BATCH_STEP)}`),
+        ).toBeTruthy(),
+      );
+      expect(screen.getByText(messages.rpBalanceLabel('0'))).toBeTruthy();
+      expect(track.mock.calls.filter(([name]) => name === 'research_node_batch_unlocked')).toEqual([
+        [
+          'research_node_batch_unlocked',
+          expect.objectContaining({
+            node_key: 'market_studies',
+            levels_purchased: RESEARCH_BATCH_STEP,
+            total_cost: preview.totalCost,
+            from_level: 0,
+            to_level: RESEARCH_BATCH_STEP,
+          }),
+        ],
+      ]);
+      expect(track.mock.calls.filter(([name]) => name === 'research_node_unlocked')).toHaveLength(0);
+    });
+
+    test('반복 연구도 현재 RP로 1레벨만 살 수 있으면 기존 단일 구매만 노출한다 (#438)', async () => {
+      const base = createInitialState();
+      const prerequisiteState: GameState = {
+        ...base,
+        onboardingCompleted: true,
+        research: {
+          ...base.research,
+          points: Number.MAX_VALUE,
+          nodeLevels: { donation_amplifier: 1 },
+          unlockedNodes: ['donation_amplifier'],
+        },
+      };
+      const oneLevel = getResearchNodeBatchPurchase(
+        prerequisiteState,
+        'market_studies',
+        Number.POSITIVE_INFINITY,
+        1,
+      );
+      const state: GameState = {
+        ...prerequisiteState,
+        research: { ...prerequisiteState.research, points: oneLevel.totalCost },
+      };
+      const screen = await renderGame(state);
+
+      fireEvent.press(screen.getByTestId('more-nav-button'));
+      fireEvent.press(screen.getByLabelText(messages.labButtonAccessibilityLabel));
+      expect(screen.getByText(getResearchNodeLabel('market_studies', DEFAULT_LOCALE).description)).toBeTruthy();
+      expect(screen.queryByTestId('research-batch-ten-market_studies')).toBeNull();
+      expect(screen.queryByTestId('research-batch-max-market_studies')).toBeNull();
     });
   });
 

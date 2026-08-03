@@ -357,6 +357,33 @@ describe('farm analytics adapter contract', () => {
     );
   });
 
+  test('research_node_batch_unlocked를 node·levels·비용·from/to_level과 함께 emit한다 (#438)', () => {
+    const track = jest.fn();
+    const analytics = createFarmAnalytics(track);
+    const context = getGameAnalyticsContext(createInitialState(), 0, 5_000);
+
+    analytics.trackResearchNodeBatchUnlocked({
+      nodeKey: 'market_studies',
+      levelsPurchased: 10,
+      totalCost: 123_456,
+      fromLevel: 3,
+      toLevel: 13,
+      context,
+    });
+
+    expect(track).toHaveBeenCalledWith(
+      'research_node_batch_unlocked',
+      expect.objectContaining({
+        node_key: 'market_studies',
+        levels_purchased: 10,
+        total_cost: 123_456,
+        from_level: 3,
+        to_level: 13,
+        research_points: context.research_points,
+      }),
+    );
+  });
+
   test('첫 데일리 클레임은 daily_bonus_claimed(is_first_claim=true)와 전용 first_daily_bonus_claimed를 함께 emit한다 (#107)', () => {
     const track = jest.fn();
     const analytics = createFarmAnalytics(track);

@@ -30,6 +30,19 @@ export const RESEARCH_NODES = balance.research.nodes as ResearchNode[];
 export const BREEDING_RECIPES = balance.breeding.recipes as BreedingRecipe[];
 export const DONATION_RP_RATE = balance.research.donationRpRate;
 export const DONATION_AMPLIFIER_BONUS = balance.research.donationAmplifierBonus;
+export const RESEARCH_BATCH_STEP = 10;
+export const RESEARCH_BATCH_MAX_LEVELS = Number.MAX_SAFE_INTEGER;
+
+export type ResearchNodeBatchPurchase = {
+  levels: number;
+  totalCost: number;
+  fromLevel: number;
+  toLevel: number;
+};
+
+export type ResearchNodeBatchResult = ResearchNodeBatchPurchase & {
+  state: GameState;
+};
 
 // balance.json is the only dependency here (not constants.ts) so constants'
 // migration/unlock helpers can import this module without a cycle.
@@ -68,14 +81,84 @@ export function getResearchNodeLevel(gameState: GameState, nodeKey: ResearchNode
   return gameState.research.unlockedNodes.includes(nodeKey) ? 1 : 0;
 }
 
+function getResearchNodeCostAtLevel(node: ResearchNode, level: number): number {
+  const rawCost = node.cost * Math.pow(node.costGrowth, level);
+  return Math.min(Number.MAX_SAFE_INTEGER, Math.max(1, Math.floor(rawCost)));
+}
+
 export function getResearchNodeCost(gameState: GameState, nodeKey: ResearchNodeKey): number | null {
   const node = getKnownNode(nodeKey);
   const level = getResearchNodeLevel(gameState, nodeKey);
   if (node.maxLevel != null && level >= node.maxLevel) {
     return null;
   }
-  const rawCost = node.cost * Math.pow(node.costGrowth, level);
-  return Math.min(Number.MAX_SAFE_INTEGER, Math.max(1, Math.floor(rawCost)));
+  return getResearchNodeCostAtLevel(node, level);
+}
+
+/**
+ * 반복 연구 노드의 배치 구매 미리보기. 비용이 MAX_SAFE_INTEGER에 도달한 뒤에는 동일 비용이
+ * 반복되므로 남은 구매량을 산술 계산해 후반 레벨에서도 `최대`가 선형 루프가 되지 않게 한다.
+ */
+export function getResearchNodeBatchPurchase(
+  gameState: GameState,
+  nodeKey: ResearchNodeKey,
+  availablePoints: number,
+  maxLevels: number,
+): ResearchNodeBatchPurchase {
+  const node = getKnownNode(nodeKey);
+  const fromLevel = getResearchNodeLevel(gameState, nodeKey);
+  const empty = { levels: 0, totalCost: 0, fromLevel, toLevel: fromLevel };
+  if (node.maxLevel != null || (node.requires != null && !isNodeUnlocked(gameState, node.requires))) {
+    return empty;
+  }
+
+  const budget =
+    availablePoints === Number.POSITIVE_INFINITY
+      ? Number.MAX_VALUE
+      : Number.isFinite(availablePoints) && availablePoints > 0
+        ? availablePoints
+        : 0;
+  const remainingSafeLevels = Math.max(0, Number.MAX_SAFE_INTEGER - fromLevel);
+  const requestedCap =
+    maxLevels === Number.POSITIVE_INFINITY
+      ? remainingSafeLevels
+      : Number.isFinite(maxLevels)
+        ? Math.max(0, Math.floor(maxLevels))
+        : 0;
+  const cap = Math.min(remainingSafeLevels, requestedCap);
+  if (budget <= 0 || cap <= 0) {
+    return empty;
+  }
+
+  if (node.costGrowth <= 1) {
+    const cost = getResearchNodeCostAtLevel(node, fromLevel);
+    const levels = Math.min(cap, Math.floor(budget / cost));
+    return {
+      levels,
+      totalCost: Math.min(budget, levels * cost),
+      fromLevel,
+      toLevel: fromLevel + levels,
+    };
+  }
+
+  let levels = 0;
+  let totalCost = 0;
+  while (levels < cap) {
+    const nextCost = getResearchNodeCostAtLevel(node, fromLevel + levels);
+    const remainingPoints = budget - totalCost;
+    if (remainingPoints < nextCost) {
+      break;
+    }
+    if (nextCost === Number.MAX_SAFE_INTEGER) {
+      const saturatedLevels = Math.min(cap - levels, Math.floor(remainingPoints / nextCost));
+      levels += saturatedLevels;
+      totalCost += Math.min(remainingPoints, saturatedLevels * nextCost);
+      break;
+    }
+    totalCost += nextCost;
+    levels += 1;
+  }
+  return { levels, totalCost, fromLevel, toLevel: fromLevel + levels };
 }
 
 export function getResearchEffectValue(gameState: GameState, effect: ResearchNodeEffect): number {
@@ -114,6 +197,36 @@ export function unlockNode(gameState: GameState, nodeKey: ResearchNodeKey): Game
         currentLevel > 0 ? gameState.research.unlockedNodes : [...gameState.research.unlockedNodes, node.key],
     },
   };
+}
+
+/** 반복 연구의 RP 차감·레벨 증가·unlockedNodes 유지를 한 상태 전이로 적용한다. */
+export function unlockNodeBatch(
+  gameState: GameState,
+  nodeKey: ResearchNodeKey,
+  maxLevels: number,
+): ResearchNodeBatchResult | null {
+  const purchase = getResearchNodeBatchPurchase(
+    gameState,
+    nodeKey,
+    gameState.research.points,
+    maxLevels,
+  );
+  if (purchase.levels <= 0) {
+    return null;
+  }
+  const state: GameState = {
+    ...gameState,
+    research: {
+      ...gameState.research,
+      points: Math.max(0, gameState.research.points - purchase.totalCost),
+      nodeLevels: { ...gameState.research.nodeLevels, [nodeKey]: purchase.toLevel },
+      unlockedNodes:
+        purchase.fromLevel > 0
+          ? gameState.research.unlockedNodes
+          : [...gameState.research.unlockedNodes, nodeKey],
+    },
+  };
+  return { ...purchase, state };
 }
 
 // RP granted when a harvest is donated instead of sold.
