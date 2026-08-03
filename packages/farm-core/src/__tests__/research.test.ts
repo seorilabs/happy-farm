@@ -5,18 +5,22 @@ import {
   DONATION_AMPLIFIER_BONUS,
   DONATION_RP_RATE,
   RESEARCH_NODES,
+  RESEARCH_BATCH_MAX_LEVELS,
+  RESEARCH_BATCH_STEP,
   breedCrop,
   canUnlockNode,
   getBreedingRecipeStatus,
   getDonationRp,
   getResearchEffectValue,
   getResearchNodeCost,
+  getResearchNodeBatchPurchase,
   getResearchNodeLevel,
   isCropPlantable,
   isHybridCrop,
   normalizeAutomationSettings,
   normalizeResearchState,
   unlockNode,
+  unlockNodeBatch,
   getResearchOpportunityKeys,
   hasUnseenResearchOpportunity,
   acknowledgeResearchOpportunities,
@@ -134,6 +138,79 @@ describe('research nodes', () => {
     expect(getResearchEffectValue(second, 'profit_multiplier')).toBeCloseTo(market.effectPerLevel * 2);
     expect(getResearchNodeCost(second, market.key)).toBeGreaterThan(getResearchNodeCost(first, market.key)!);
     expect(canUnlockNode(second, market.key)).toBe(true);
+  });
+
+  test('반복 연구 +10 배치는 RP 차감과 레벨·해금 상태를 한 번에 적용한다 (#438)', () => {
+    const base = createInitialState();
+    const prerequisiteState: GameState = {
+      ...base,
+      research: {
+        ...base.research,
+        points: Number.MAX_VALUE,
+        nodeLevels: { donation_amplifier: 1 },
+        unlockedNodes: ['donation_amplifier'],
+      },
+    };
+    const exactTen = getResearchNodeBatchPurchase(
+      prerequisiteState,
+      'market_studies',
+      Number.POSITIVE_INFINITY,
+      RESEARCH_BATCH_STEP,
+    );
+    expect(exactTen).toEqual(
+      expect.objectContaining({ levels: 10, fromLevel: 0, toLevel: 10 }),
+    );
+
+    const ready: GameState = {
+      ...prerequisiteState,
+      research: { ...prerequisiteState.research, points: exactTen.totalCost },
+    };
+    const result = unlockNodeBatch(ready, 'market_studies', RESEARCH_BATCH_STEP);
+    expect(result).not.toBeNull();
+    expect(result).toEqual(expect.objectContaining(exactTen));
+    expect(result!.state.research.points).toBe(0);
+    expect(getResearchNodeLevel(result!.state, 'market_studies')).toBe(10);
+    expect(result!.state.research.unlockedNodes).toEqual([
+      'donation_amplifier',
+      'market_studies',
+    ]);
+  });
+
+  test('최대 배치는 현재 RP로 감당 가능한 레벨까지만 사고 고레벨 포화 비용도 계산한다 (#438)', () => {
+    const base = createInitialState();
+    const scaling: GameState = {
+      ...base,
+      research: {
+        ...base.research,
+        points: Number.MAX_SAFE_INTEGER * 3,
+        nodeLevels: { donation_amplifier: 1, market_studies: 13_261 },
+        unlockedNodes: ['donation_amplifier', 'market_studies'],
+      },
+    };
+    const preview = getResearchNodeBatchPurchase(
+      scaling,
+      'market_studies',
+      scaling.research.points,
+      RESEARCH_BATCH_MAX_LEVELS,
+    );
+    expect(preview).toEqual({
+      levels: 3,
+      totalCost: Number.MAX_SAFE_INTEGER * 3,
+      fromLevel: 13_261,
+      toLevel: 13_264,
+    });
+    expect(unlockNodeBatch(scaling, 'market_studies', RESEARCH_BATCH_MAX_LEVELS)!.state.research.points).toBe(0);
+  });
+
+  test('일회성 연구와 선행 조건 미충족 노드는 배치 구매 대상이 아니다 (#438)', () => {
+    const rich = stateWithRp(Number.MAX_SAFE_INTEGER);
+    expect(
+      getResearchNodeBatchPurchase(rich, 'auto_harvest', rich.research.points, RESEARCH_BATCH_STEP).levels,
+    ).toBe(0);
+    expect(
+      getResearchNodeBatchPurchase(rich, 'market_studies', rich.research.points, RESEARCH_BATCH_STEP).levels,
+    ).toBe(0);
+    expect(unlockNodeBatch(rich, 'auto_harvest', RESEARCH_BATCH_STEP)).toBeNull();
   });
 
   test('donation RP follows the rate and the amplifier node', () => {

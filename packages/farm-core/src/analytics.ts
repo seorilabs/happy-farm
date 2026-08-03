@@ -392,6 +392,24 @@ export function createFarmAnalytics(track: TrackGameEvent = noopTrackGameEvent) 
       });
     },
 
+    trackResearchNodeBatchUnlocked: (params: {
+      nodeKey: ResearchNodeKey;
+      levelsPurchased: number;
+      totalCost: number;
+      fromLevel: number;
+      toLevel: number;
+      context: GameAnalyticsContext;
+    }) => {
+      track('research_node_batch_unlocked', {
+        node_key: params.nodeKey,
+        levels_purchased: params.levelsPurchased,
+        total_cost: params.totalCost,
+        from_level: params.fromLevel,
+        to_level: params.toLevel,
+        ...params.context,
+      });
+    },
+
     trackBreedUnlocked: (params: { cropKey: CropKey; context: GameAnalyticsContext }) => {
       track('breed_unlocked', {
         crop: params.cropKey,

@@ -1,15 +1,18 @@
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import {
   BREEDING_RECIPES,
   CROPS,
+  RESEARCH_BATCH_MAX_LEVELS,
+  RESEARCH_BATCH_STEP,
   RESEARCH_NODES,
   canUnlockNode,
   formatMoney,
   getBreedingRecipeStatus,
   getCropLabel,
   getResearchNodeCost,
+  getResearchNodeBatchPurchase,
   getResearchNodeLabel,
   getResearchNodeLevel,
   isNodeUnlocked,
@@ -36,6 +39,7 @@ export function LabSheet({
   messages,
   onToggleAutomation,
   onUnlockNode,
+  onUnlockNodeBatch,
   onBreed,
 }: {
   gameState: GameState;
@@ -43,6 +47,7 @@ export function LabSheet({
   messages: FarmMessages;
   onToggleAutomation: (key: keyof GameState['automationSettings']) => void;
   onUnlockNode: (nodeKey: ResearchNodeKey) => void;
+  onUnlockNodeBatch: (nodeKey: ResearchNodeKey, maxLevels: number) => void;
   onBreed: (cropKey: CropKey) => void;
 }) {
   const autoHarvestUnlocked = isNodeUnlocked(gameState, 'auto_harvest');
@@ -53,19 +58,60 @@ export function LabSheet({
       const label = getResearchNodeLabel(node.key, locale);
       const level = getResearchNodeLevel(gameState, node.key);
       const cost = getResearchNodeCost(gameState, node.key);
+      const batchTen = getResearchNodeBatchPurchase(
+        gameState,
+        node.key,
+        Number.POSITIVE_INFINITY,
+        RESEARCH_BATCH_STEP,
+      );
+      const batchMax = getResearchNodeBatchPurchase(
+        gameState,
+        node.key,
+        gameState.research.points,
+        RESEARCH_BATCH_MAX_LEVELS,
+      );
+      const canBuyTen = batchTen.levels === RESEARCH_BATCH_STEP && gameState.research.points >= batchTen.totalCost;
+      const showBatchActions = node.maxLevel == null && batchMax.levels >= 2;
       const requirementText =
         node.requires != null && !isNodeUnlocked(gameState, node.requires)
           ? messages.nodeRequiresLabel(getResearchNodeLabel(node.requires, locale).name)
           : null;
       return (
-        <ShopCard
-          key={node.key}
-          title={node.maxLevel === 1 ? label.name : `${label.name} · ${messages.researchNodeLevelLabel(level)}`}
-          desc={requirementText == null ? label.description : `${label.description} · ${requirementText}`}
-          price={cost == null ? messages.completePrice : messages.rpPrice(formatMoney(cost, locale))}
-          disabled={!canUnlockNode(gameState, node.key)}
-          onPress={() => onUnlockNode(node.key)}
-        />
+        <View key={node.key} style={styles.nodeCardHost}>
+          <ShopCard
+            title={node.maxLevel === 1 ? label.name : `${label.name} · ${messages.researchNodeLevelLabel(level)}`}
+            desc={requirementText == null ? label.description : `${label.description} · ${requirementText}`}
+            price={cost == null ? messages.completePrice : messages.rpPrice(formatMoney(cost, locale))}
+            disabled={!canUnlockNode(gameState, node.key)}
+            onPress={() => onUnlockNode(node.key)}
+          />
+          {showBatchActions ? (
+            <View style={styles.batchRow}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityState={{ disabled: !canBuyTen }}
+                accessibilityLabel={`${label.name} +${RESEARCH_BATCH_STEP}, ${messages.rpPrice(formatMoney(batchTen.totalCost, locale))}`}
+                disabled={!canBuyTen}
+                style={[styles.batchButton, !canBuyTen && styles.batchButtonDisabled]}
+                testID={`research-batch-ten-${node.key}`}
+                onPress={() => onUnlockNodeBatch(node.key, RESEARCH_BATCH_STEP)}
+              >
+                <Text style={styles.batchLabel}>{`+${RESEARCH_BATCH_STEP}`}</Text>
+                <Text style={styles.batchSub}>{messages.rpPrice(formatMoney(batchTen.totalCost, locale))}</Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`${label.name} ${messages.upgradeBuyMax} +${batchMax.levels}, ${messages.rpPrice(formatMoney(batchMax.totalCost, locale))}`}
+                style={styles.batchButton}
+                testID={`research-batch-max-${node.key}`}
+                onPress={() => onUnlockNodeBatch(node.key, RESEARCH_BATCH_MAX_LEVELS)}
+              >
+                <Text style={styles.batchLabel}>{`${messages.upgradeBuyMax} +${batchMax.levels}`}</Text>
+                <Text style={styles.batchSub}>{messages.rpPrice(formatMoney(batchMax.totalCost, locale))}</Text>
+              </Pressable>
+            </View>
+          ) : null}
+        </View>
       );
     });
   }
@@ -167,5 +213,40 @@ const styles = StyleSheet.create({
     color: '#344054',
     fontSize: 14,
     fontWeight: '900',
+  },
+  nodeCardHost: {
+    marginBottom: 2,
+  },
+  batchRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: -6,
+    marginBottom: 10,
+  },
+  batchButton: {
+    flex: 1,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#bca8ed',
+    borderRadius: 8,
+    backgroundColor: '#eee7ff',
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+  },
+  batchButtonDisabled: {
+    opacity: 0.4,
+  },
+  batchLabel: {
+    color: '#5138aa',
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  batchSub: {
+    marginTop: 2,
+    color: '#6c5a9a',
+    fontSize: 11,
+    fontWeight: '700',
   },
 });

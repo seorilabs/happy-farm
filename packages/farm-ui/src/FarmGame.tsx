@@ -55,11 +55,13 @@ import {
   getRegionArchetypeLabel,
   getResearchNodeLabel,
   getResearchNodeLevel,
+  getResearchNodeBatchPurchase,
   getTitleLabel,
   prestigeFarm,
   runAutomationTick,
   setActiveTitle,
   unlockNode,
+  unlockNodeBatch,
   type AchievementTrackKey,
   type ClaimedAchievementTier,
   type MasteryRankKey,
@@ -1079,6 +1081,10 @@ function FarmGameBody({
   // Double-tap guard for confirmPrestige: the state updater is idempotent,
   // but the toast/analytics must fire exactly once per graduated level.
   const prestigedLevelsRef = useRef<Set<number>>(new Set());
+  const researchPurchaseGuardRef = useRef<{
+    nodeKey: ResearchNodeKey;
+    fromLevel: number;
+  } | null>(null);
   const autoHarvestSummaryRef = useRef({ harvestedCount: 0, replantedCount: 0, windowStartedAt: 0 });
   const cropReadySummaryRef = useRef(createCropReadySummaryState());
   const rewardedAd = useRewardedAd(adGroupIds.rewarded);
@@ -1097,6 +1103,13 @@ function FarmGameBody({
   // 콜백 의존성을 늘리지 않고 최신 gameState를 읽기 위한 ref(매 렌더 동기화).
   const gameStateRef = useRef(gameState);
   gameStateRef.current = gameState;
+  const guardedResearchPurchase = researchPurchaseGuardRef.current;
+  if (
+    guardedResearchPurchase != null &&
+    getResearchNodeLevel(gameState, guardedResearchPurchase.nodeKey) !== guardedResearchPurchase.fromLevel
+  ) {
+    researchPurchaseGuardRef.current = null;
+  }
   const [selectedTool, setSelectedTool] = useState<ToolKey>('harvest');
   const [selectedArea, setSelectedArea] = useState<AreaKey>(FIRST_AREA.key);
   // Seed-strip display order. Session-only UI state (no need to persist); the
@@ -3352,11 +3365,50 @@ function FarmGameBody({
       toast(messages.insufficientRpToast);
       return;
     }
-    const nextLevel = getResearchNodeLevel(gameState, nodeKey) + 1;
+    const currentLevel = getResearchNodeLevel(gameState, nodeKey);
+    const guardedPurchase = researchPurchaseGuardRef.current;
+    if (guardedPurchase?.nodeKey === nodeKey && guardedPurchase.fromLevel === currentLevel) {
+      return;
+    }
+    researchPurchaseGuardRef.current = { nodeKey, fromLevel: currentLevel };
+    const nextLevel = currentLevel + 1;
     setGameState((state) => unlockNode(state, nodeKey) ?? state);
     farmAnalytics.trackResearchNodeUnlocked({ nodeKey, nextLevel, context: analyticsContext() });
     playSoundEffect('unlock');
     toast(messages.researchNodeUnlockedToast(getResearchNodeLabel(nodeKey, locale).name, nextLevel));
+  }
+
+  function unlockResearchNodeBatch(nodeKey: ResearchNodeKey, maxLevels: number) {
+    const preview = getResearchNodeBatchPurchase(
+      gameState,
+      nodeKey,
+      gameState.research.points,
+      maxLevels,
+    );
+    if (preview.levels < 2) {
+      return;
+    }
+    const guardedPurchase = researchPurchaseGuardRef.current;
+    if (guardedPurchase?.nodeKey === nodeKey && guardedPurchase.fromLevel === preview.fromLevel) {
+      return;
+    }
+    researchPurchaseGuardRef.current = { nodeKey, fromLevel: preview.fromLevel };
+    setGameState((state) => unlockNodeBatch(state, nodeKey, maxLevels)?.state ?? state);
+    farmAnalytics.trackResearchNodeBatchUnlocked({
+      nodeKey,
+      levelsPurchased: preview.levels,
+      totalCost: preview.totalCost,
+      fromLevel: preview.fromLevel,
+      toLevel: preview.toLevel,
+      context: analyticsContext(),
+    });
+    playSoundEffect('unlock');
+    toast(
+      messages.researchNodeUnlockedToast(
+        getResearchNodeLabel(nodeKey, locale).name,
+        preview.toLevel,
+      ),
+    );
   }
 
   function breedHybrid(cropKey: CropKey) {
@@ -5310,6 +5362,7 @@ function FarmGameBody({
             messages={messages}
             onToggleAutomation={toggleAutomation}
             onUnlockNode={unlockResearchNode}
+            onUnlockNodeBatch={unlockResearchNodeBatch}
             onBreed={breedHybrid}
           />
         ) : null}

@@ -290,6 +290,12 @@
           "agg": "count"
         },
         {
+          "key": "researchPurchaseCount",
+          "label": "연구 구매 액션",
+          "event": ["research_node_unlocked", "research_node_batch_unlocked"],
+          "agg": "count"
+        },
+        {
           "key": "updateGateShown",
           "label": "업데이트 게이트 노출",
           "event": "update_gate_shown",
@@ -347,7 +353,7 @@
       "distributions": [
         {
           "key": "researchNodes",
-          "label": "연구 노드 해금",
+          "label": "연구 노드 단일 구매",
           "event": "research_node_unlocked",
           "param": "node_key",
           "topN": 12
@@ -586,6 +592,40 @@
               "key": "batchCost",
               "label": "일괄 구매 비용",
               "event": "upgrade_batch_purchased",
+              "agg": "sum",
+              "param": "total_cost"
+            }
+          ]
+        },
+        {
+          "key": "research",
+          "label": "연구 노드 구매",
+          "param": "node_key",
+          "orderBy": "batchLevels",
+          "metrics": [
+            {
+              "key": "singlePurchases",
+              "label": "단일 구매",
+              "event": "research_node_unlocked",
+              "agg": "count"
+            },
+            {
+              "key": "batchPurchases",
+              "label": "배치 구매",
+              "event": "research_node_batch_unlocked",
+              "agg": "count"
+            },
+            {
+              "key": "batchLevels",
+              "label": "배치 구매 레벨",
+              "event": "research_node_batch_unlocked",
+              "agg": "sum",
+              "param": "levels_purchased"
+            },
+            {
+              "key": "batchCost",
+              "label": "배치 구매 RP",
+              "event": "research_node_batch_unlocked",
               "agg": "sum",
               "param": "total_cost"
             }
