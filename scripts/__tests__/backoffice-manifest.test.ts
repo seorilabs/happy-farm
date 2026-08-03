@@ -18,12 +18,18 @@ type TestTool = {
   runbook?: string;
   operations: TestOperation[];
 };
+type TestPredicate = { param: string; op: string; value?: string | number };
+type TestMetric = {
+  key?: string;
+  event: string | string[];
+  where?: TestPredicate[];
+};
 type TestManifest = {
   tools: TestTool[];
   analytics: {
     content: {
-      metrics: Array<{ event: string | string[] }>;
-      groups: Array<{ key: string; param: string }>;
+      metrics: TestMetric[];
+      groups: Array<{ key: string; param: string; metrics: TestMetric[] }>;
     };
   };
 };
@@ -99,6 +105,26 @@ describe('행복한 농장 전용 백오피스 manifest', () => {
       },
       (failures) => {
         expect(failures).toContain('광고 placement 누락: wheel_bonus_spin');
+      }
+    );
+  });
+
+  it('ne_or_unset은 일부 이벤트의 파라미터 누락만 허용하고 전체 오타는 거부한다', () => {
+    withManifestMutation(
+      (manifest) => {
+        const harvesters = required(
+          required(
+            manifest.analytics.content.groups.find((group) => group.key === 'crop'),
+            'crop group'
+          ).metrics.find((metric) => metric.key === 'harvesters'),
+          'harvesters metric'
+        );
+        required(harvesters.where, 'harvesters where')[0].param = 'invented_source';
+      },
+      (failures) => {
+        expect(failures).toContain(
+          'analytics.content.groups[0].metrics[4].where: 모든 이벤트에 없는 파라미터 invented_source입니다.'
+        );
       }
     );
   });

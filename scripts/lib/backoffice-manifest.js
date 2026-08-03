@@ -11,7 +11,7 @@ const IDENT = /^[a-zA-Z0-9_-]{1,64}$/;
 const ANALYTICS_IDENT = /^[a-zA-Z0-9_]{1,64}$/;
 const TOOL_SECTIONS = new Set(['operations', 'commerce', 'ads', 'content', 'flags']);
 const AGGREGATIONS = new Set(['count', 'users', 'sum', 'avg']);
-const PREDICATE_OPERATORS = new Set(['eq', 'ne', 'gt', 'gte', 'lt', 'lte', 'truthy']);
+const PREDICATE_OPERATORS = new Set(['eq', 'ne', 'ne_or_unset', 'gt', 'gte', 'lt', 'lte', 'truthy']);
 const INPUT_TYPES = new Set(['text', 'number', 'boolean', 'select', 'textarea']);
 const LEGACY_OR_RESERVED_FLAGS = new Set([
   'mobile_ads_enabled_max_build_number',
@@ -428,16 +428,24 @@ function optionValuesForInput(manifest, key) {
 }
 
 function validateAnalyticsReferences(content, catalog, failures) {
-  function validateReference(events, param, at) {
+  function validateReference(events, param, at, allowUnset = false) {
+    let knownEventCount = 0;
+    let knownParamCount = 0;
     for (const event of events) {
       const knownParams = catalog.get(event);
       if (!knownParams) {
         failures.push(`${at}: analytics.ts에 없는 이벤트 ${event}입니다.`);
         continue;
       }
-      if (param && !knownParams.has(param)) {
+      knownEventCount += 1;
+      if (param && knownParams.has(param)) {
+        knownParamCount += 1;
+      } else if (param && !allowUnset) {
         failures.push(`${at}: ${event}에 없는 파라미터 ${param}입니다.`);
       }
+    }
+    if (param && allowUnset && knownEventCount > 0 && knownParamCount === 0) {
+      failures.push(`${at}: 모든 이벤트에 없는 파라미터 ${param}입니다.`);
     }
   }
 
@@ -445,13 +453,13 @@ function validateAnalyticsReferences(content, catalog, failures) {
     const events = eventList(metric);
     validateReference(events, metric.param, `analytics.content.metrics[${index}]`);
     for (const predicate of metric.where ?? []) {
-      validateReference(events, predicate.param, `analytics.content.metrics[${index}].where`);
+      validateReference(events, predicate.param, `analytics.content.metrics[${index}].where`, predicate.op === 'ne_or_unset');
     }
   }
   for (const [index, distribution] of (content.distributions ?? []).entries()) {
     validateReference([distribution.event], distribution.param, `analytics.content.distributions[${index}]`);
     for (const predicate of distribution.where ?? []) {
-      validateReference([distribution.event], predicate.param, `analytics.content.distributions[${index}].where`);
+      validateReference([distribution.event], predicate.param, `analytics.content.distributions[${index}].where`, predicate.op === 'ne_or_unset');
     }
   }
   for (const [groupIndex, group] of (content.groups ?? []).entries()) {
@@ -461,7 +469,7 @@ function validateAnalyticsReferences(content, catalog, failures) {
       validateReference(events, group.param, `${at}.groupParam`);
       validateReference(events, metric.param, at);
       for (const predicate of metric.where ?? []) {
-        validateReference(events, predicate.param, `${at}.where`);
+        validateReference(events, predicate.param, `${at}.where`, predicate.op === 'ne_or_unset');
       }
     }
   }

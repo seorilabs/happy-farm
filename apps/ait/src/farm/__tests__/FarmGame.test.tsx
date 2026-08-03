@@ -4263,7 +4263,7 @@ describe('FarmGame UI flow', () => {
       expect(events.reduce((total, event) => total + Number(event.revenue), 0)).toBe(CROPS.carrot!.sell * 2);
     });
 
-    test('자동 수확의 per-crop revenue 합계가 실제 auto 골드 지급액과 일치한다', async () => {
+    test('자동 수확은 per-crop 이벤트 없이 1분 bucket summary로 실제 지급액을 기록한다 (#437)', async () => {
       const base = createReadyHarvestState();
       const state: GameState = {
         ...base,
@@ -4277,14 +4277,30 @@ describe('FarmGame UI flow', () => {
         jest.advanceTimersByTime(GAME_TICK_INTERVAL_MS + 50);
       });
 
-      await waitFor(() => expect(cropHarvestEvents(track)).toHaveLength(2));
       await waitFor(() => expect(screen.getByText(`${50 + CROPS.carrot!.sell * 2}G`)).toBeTruthy());
-      const events = cropHarvestEvents(track);
-      expect(events).toEqual([
-        expect.objectContaining({ harvest_source: 'auto', reward_type: 'gold' }),
-        expect.objectContaining({ harvest_source: 'auto', reward_type: 'gold' }),
+      expect(cropHarvestEvents(track)).toHaveLength(0);
+      expect(track.mock.calls.filter(([name]) => name === 'first_meaningful_harvest')).toEqual([
+        ['first_meaningful_harvest', expect.objectContaining({ harvest_source: 'auto' })],
       ]);
-      expect(events.reduce((total, event) => total + Number(event.revenue), 0)).toBe(CROPS.carrot!.sell * 2);
+
+      await act(async () => {
+        jest.advanceTimersByTime(60_000);
+      });
+      await waitFor(() => {
+        const summaries = track.mock.calls.filter(([name]) => name === 'auto_harvest_summary');
+        expect(summaries).toHaveLength(1);
+        expect(summaries[0]![1]).toEqual(
+          expect.objectContaining({
+            crop: 'carrot',
+            area: 'starter_field',
+            harvested_count: 2,
+            replanted_count: 0,
+            total_gold: CROPS.carrot!.sell * 2,
+            total_research_points: 0,
+            schema_version: 2,
+          }),
+        );
+      });
     });
   });
 
