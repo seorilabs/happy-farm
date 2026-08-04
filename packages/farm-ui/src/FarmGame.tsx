@@ -56,12 +56,14 @@ import {
   getResearchNodeLabel,
   getResearchNodeLevel,
   getResearchNodeBatchPurchase,
+  getScalingResearchBulkPurchase,
   getTitleLabel,
   prestigeFarm,
   runAutomationTick,
   setActiveTitle,
   unlockNode,
   unlockNodeBatch,
+  unlockScalingResearchBulk,
   type AchievementTrackKey,
   type ClaimedAchievementTier,
   type MasteryRankKey,
@@ -1088,6 +1090,8 @@ function FarmGameBody({
     nodeKey: ResearchNodeKey;
     fromLevel: number;
   } | null>(null);
+  // 스케일 연구 일괄 강화 더블탭 가드: 구매 시점의 RP를 기억해 상태 반영 전 재탭을 막는다.
+  const scalingBulkGuardRef = useRef<number | null>(null);
   const autoHarvestSummaryRef = useRef(createAutoHarvestSummaryState());
   const cropReadySummaryRef = useRef(createCropReadySummaryState());
   const rewardedAd = useRewardedAd(adGroupIds.rewarded);
@@ -1112,6 +1116,9 @@ function FarmGameBody({
     getResearchNodeLevel(gameState, guardedResearchPurchase.nodeKey) !== guardedResearchPurchase.fromLevel
   ) {
     researchPurchaseGuardRef.current = null;
+  }
+  if (scalingBulkGuardRef.current != null && gameState.research.points !== scalingBulkGuardRef.current) {
+    scalingBulkGuardRef.current = null;
   }
   const [selectedTool, setSelectedTool] = useState<ToolKey>('harvest');
   const [selectedArea, setSelectedArea] = useState<AreaKey>(FIRST_AREA.key);
@@ -3450,6 +3457,26 @@ function FarmGameBody({
     );
   }
 
+  function unlockScalingResearchNodesBulk() {
+    const preview = getScalingResearchBulkPurchase(gameState, gameState.research.points);
+    if (preview.totalLevels < 2) {
+      return;
+    }
+    if (scalingBulkGuardRef.current === gameState.research.points) {
+      return;
+    }
+    scalingBulkGuardRef.current = gameState.research.points;
+    setGameState((state) => unlockScalingResearchBulk(state)?.state ?? state);
+    farmAnalytics.trackResearchScalingBulkUnlocked({
+      nodeKeys: preview.purchases.map((purchase) => purchase.nodeKey),
+      levelsPurchased: preview.totalLevels,
+      totalCost: preview.totalCost,
+      context: analyticsContext(),
+    });
+    playSoundEffect('unlock');
+    toast(messages.scalingBulkUnlockedToast(preview.totalLevels));
+  }
+
   function breedHybrid(cropKey: CropKey) {
     if (breedCrop(gameState, cropKey) == null) {
       toast(messages.insufficientRpToast);
@@ -5401,6 +5428,7 @@ function FarmGameBody({
             onToggleAutomation={toggleAutomation}
             onUnlockNode={unlockResearchNode}
             onUnlockNodeBatch={unlockResearchNodeBatch}
+            onUnlockScalingBulk={unlockScalingResearchNodesBulk}
             onBreed={breedHybrid}
           />
         ) : null}

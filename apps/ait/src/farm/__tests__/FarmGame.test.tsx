@@ -50,6 +50,7 @@ import {
   getPrestigeCost,
   getRegionArchetypeLabel,
   getResearchNodeBatchPurchase,
+  getScalingResearchBulkPurchase,
   getResearchNodeLabel,
   getResetDayIndex,
   getResetDayStart,
@@ -5416,6 +5417,79 @@ describe('FarmGame UI flow', () => {
       expect(screen.getByText(getResearchNodeLabel('market_studies', DEFAULT_LOCALE).description)).toBeTruthy();
       expect(screen.queryByTestId('research-batch-ten-market_studies')).toBeNull();
       expect(screen.queryByTestId('research-batch-max-market_studies')).toBeNull();
+    });
+
+    test('스케일 연구 일괄 강화는 한 상태 전이와 bulk 이벤트 1건으로 처리하고 중복 탭을 막는다', async () => {
+      const base = createInitialState();
+      // 시장 Lv1(200만) → 성장 Lv1(300만) → 시장 Lv2(350만)까지 정확히 살 수 있는 예산.
+      const state: GameState = {
+        ...base,
+        onboardingCompleted: true,
+        research: {
+          ...base.research,
+          points: 8_500_000,
+          nodeLevels: { donation_amplifier: 1 },
+          unlockedNodes: ['donation_amplifier'],
+        },
+      };
+      const preview = getScalingResearchBulkPurchase(state, state.research.points);
+      expect(preview.totalLevels).toBe(3);
+      const track = jest.fn();
+      const screen = await renderGame(state, { analytics: createFarmAnalytics(track) });
+
+      fireEvent.press(screen.getByTestId('more-nav-button'));
+      fireEvent.press(screen.getByLabelText(messages.labButtonAccessibilityLabel));
+      const bulkButton = await screen.findByTestId('research-bulk-scaling');
+      act(() => {
+        fireEvent.press(bulkButton);
+        fireEvent.press(bulkButton);
+      });
+
+      const marketLabel = getResearchNodeLabel('market_studies', DEFAULT_LOCALE).name;
+      await waitFor(() =>
+        expect(screen.getByText(`${marketLabel} · ${messages.researchNodeLevelLabel(2)}`)).toBeTruthy(),
+      );
+      const growthLabel = getResearchNodeLabel('growth_studies', DEFAULT_LOCALE).name;
+      expect(screen.getByText(`${growthLabel} · ${messages.researchNodeLevelLabel(1)}`)).toBeTruthy();
+      expect(screen.getByText(messages.rpBalanceLabel('0'))).toBeTruthy();
+      // RP를 다 썼으니 일괄 강화 버튼은 다시 숨는다.
+      expect(screen.queryByTestId('research-bulk-scaling')).toBeNull();
+      expect(track.mock.calls.filter(([name]) => name === 'research_scaling_bulk_unlocked')).toEqual([
+        [
+          'research_scaling_bulk_unlocked',
+          expect.objectContaining({
+            node_keys: 'market_studies,growth_studies',
+            node_count: 2,
+            levels_purchased: 3,
+            total_cost: 8_500_000,
+          }),
+        ],
+      ]);
+      expect(track.mock.calls.filter(([name]) => name === 'research_node_unlocked')).toHaveLength(0);
+      expect(track.mock.calls.filter(([name]) => name === 'research_node_batch_unlocked')).toHaveLength(0);
+    });
+
+    test('스케일 연구를 2레벨 이상 강화할 수 없으면 일괄 강화 버튼을 숨긴다', async () => {
+      const base = createInitialState();
+      // 시장 Lv1(200만)만 살 수 있는 예산이면 노드별 단일 구매만 노출한다.
+      const state: GameState = {
+        ...base,
+        onboardingCompleted: true,
+        research: {
+          ...base.research,
+          points: 2_000_000,
+          nodeLevels: { donation_amplifier: 1 },
+          unlockedNodes: ['donation_amplifier'],
+        },
+      };
+      const screen = await renderGame(state);
+
+      fireEvent.press(screen.getByTestId('more-nav-button'));
+      fireEvent.press(screen.getByLabelText(messages.labButtonAccessibilityLabel));
+      expect(
+        screen.getByText(getResearchNodeLabel('market_studies', DEFAULT_LOCALE).description),
+      ).toBeTruthy();
+      expect(screen.queryByTestId('research-bulk-scaling')).toBeNull();
     });
   });
 

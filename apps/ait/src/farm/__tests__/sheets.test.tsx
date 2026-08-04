@@ -984,6 +984,7 @@ describe('LabSheet', () => {
         onToggleAutomation={jest.fn()}
         onUnlockNode={jest.fn()}
         onUnlockNodeBatch={jest.fn()}
+        onUnlockScalingBulk={jest.fn()}
         onBreed={jest.fn()}
       />
     );
@@ -1016,6 +1017,7 @@ describe('LabSheet', () => {
         onToggleAutomation={jest.fn()}
         onUnlockNode={onUnlockNode}
         onUnlockNodeBatch={jest.fn()}
+        onUnlockScalingBulk={jest.fn()}
         onBreed={jest.fn()}
       />
     );
@@ -1036,6 +1038,7 @@ describe('LabSheet', () => {
         onToggleAutomation={onToggleAutomation}
         onUnlockNode={jest.fn()}
         onUnlockNodeBatch={jest.fn()}
+        onUnlockScalingBulk={jest.fn()}
         onBreed={jest.fn()}
       />
     );

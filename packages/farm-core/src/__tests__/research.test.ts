@@ -15,6 +15,8 @@ import {
   getResearchNodeCost,
   getResearchNodeBatchPurchase,
   getResearchNodeLevel,
+  getScalingResearchBulkPurchase,
+  unlockScalingResearchBulk,
   isCropPlantable,
   isHybridCrop,
   normalizeAutomationSettings,
@@ -211,6 +213,81 @@ describe('research nodes', () => {
       getResearchNodeBatchPurchase(rich, 'market_studies', rich.research.points, RESEARCH_BATCH_STEP).levels,
     ).toBe(0);
     expect(unlockNodeBatch(rich, 'auto_harvest', RESEARCH_BATCH_STEP)).toBeNull();
+  });
+
+  test('스케일 일괄 강화는 다음 레벨이 싼 노드부터 예산 안에서 골고루 강화한다', () => {
+    const base = createInitialState();
+    // 싼 순서: 시장 Lv1(200만) → 성장 Lv1(300만) → 시장 Lv2(350만) = 총 850만.
+    const state: GameState = {
+      ...base,
+      research: {
+        ...base.research,
+        points: 8_500_000,
+        nodeLevels: { donation_amplifier: 1 },
+        unlockedNodes: ['donation_amplifier'],
+      },
+    };
+    const preview = getScalingResearchBulkPurchase(state, state.research.points);
+    expect(preview.totalLevels).toBe(3);
+    expect(preview.totalCost).toBe(8_500_000);
+    expect(preview.purchases).toEqual([
+      { nodeKey: 'market_studies', levels: 2, totalCost: 5_500_000, fromLevel: 0, toLevel: 2 },
+      { nodeKey: 'growth_studies', levels: 1, totalCost: 3_000_000, fromLevel: 0, toLevel: 1 },
+    ]);
+
+    const result = unlockScalingResearchBulk(state)!;
+    expect(result).toEqual(expect.objectContaining(preview));
+    expect(result.state.research.points).toBe(0);
+    expect(getResearchNodeLevel(result.state, 'market_studies')).toBe(2);
+    expect(getResearchNodeLevel(result.state, 'growth_studies')).toBe(1);
+    expect(result.state.research.unlockedNodes).toEqual([
+      'donation_amplifier',
+      'market_studies',
+      'growth_studies',
+    ]);
+  });
+
+  test('스케일 일괄 강화는 선행 조건을 지키고 1레벨도 못 사면 null을 돌려준다', () => {
+    const base = createInitialState();
+    const broke: GameState = {
+      ...base,
+      research: {
+        ...base.research,
+        points: 1_999_999,
+        nodeLevels: { donation_amplifier: 1 },
+        unlockedNodes: ['donation_amplifier'],
+      },
+    };
+    expect(getScalingResearchBulkPurchase(broke, broke.research.points).totalLevels).toBe(0);
+    expect(unlockScalingResearchBulk(broke)).toBeNull();
+
+    // breeding_lab 미해금이면 mutation_studies는 대상에서 빠지고, 해금하면 포함된다.
+    const withoutLab: GameState = {
+      ...base,
+      research: {
+        ...base.research,
+        points: 40_000_000,
+        nodeLevels: { donation_amplifier: 1 },
+        unlockedNodes: ['donation_amplifier'],
+      },
+    };
+    expect(
+      getScalingResearchBulkPurchase(withoutLab, withoutLab.research.points).purchases.some(
+        (purchase) => purchase.nodeKey === 'mutation_studies',
+      ),
+    ).toBe(false);
+
+    const withLab: GameState = {
+      ...withoutLab,
+      research: {
+        ...withoutLab.research,
+        nodeLevels: { donation_amplifier: 1, breeding_lab: 1 },
+        unlockedNodes: ['donation_amplifier', 'breeding_lab'],
+      },
+    };
+    const preview = getScalingResearchBulkPurchase(withLab, withLab.research.points);
+    expect(preview.purchases.some((purchase) => purchase.nodeKey === 'mutation_studies')).toBe(true);
+    expect(preview.totalCost).toBeLessThanOrEqual(withLab.research.points);
   });
 
   test('donation RP follows the rate and the amplifier node', () => {

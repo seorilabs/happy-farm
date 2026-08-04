@@ -361,6 +361,8 @@ export const koFarmMessages = {
   researchNodeLevelLabel: (level: number) => `Lv.${level}`,
   insufficientRpToast: '연구 포인트가 부족하거나 조건이 안 돼요.',
   researchNodeUnlockedToast: (nodeName: string, level: number) => `'${nodeName}' 연구가 Lv.${level}이 되었어요!`,
+  scalingBulkAction: '일괄 강화',
+  scalingBulkUnlockedToast: (levels: number) => `스케일 연구를 한 번에 ${levels}레벨 강화했어요!`,
   bredToast: (cropName: string) => `${cropName} 품종을 해금했어요!`,
   breedUnlockedDesc: '해금 완료 · 교배 온실에서 심을 수 있어요.',
   breedParentsRequiredDesc: (parents: string) => `${parents} 모두 수확해야 해요.`,
