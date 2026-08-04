@@ -351,6 +351,8 @@ export const jaFarmMessages: FarmMessages = {
   researchNodeLevelLabel: (level) => `Lv.${level}`,
   insufficientRpToast: '研究ポイントが足りないか、条件を満たしていません。',
   researchNodeUnlockedToast: (nodeName, level) => `「${nodeName}」がLv.${level}になりました！`,
+  scalingBulkAction: '一括強化',
+  scalingBulkUnlockedToast: (levels) => `規模研究をまとめて${levels}レベル強化しました！`,
   bredToast: (cropName) => `${cropName}の品種を解放しました！`,
   breedUnlockedDesc: '解放完了 · 交配温室で植えられます。',
   breedParentsRequiredDesc: (parents) => `先に${parents}を両方収穫してください。`,

@@ -351,6 +351,8 @@ export const frFarmMessages: FarmMessages = {
   researchNodeLevelLabel: (level) => `Nv.${level}`,
   insufficientRpToast: 'RP insuffisants ou conditions non remplies.',
   researchNodeUnlockedToast: (nodeName, level) => `« ${nodeName} » atteint le niv.${level} !`,
+  scalingBulkAction: 'Tout améliorer',
+  scalingBulkUnlockedToast: (levels) => `Études d'échelle améliorées de ${levels} niveaux d'un coup !`,
   bredToast: (cropName) => `Nouveau croisement débloqué : ${cropName} !`,
   breedUnlockedDesc: 'Débloqué · plante-le dans la serre hybride.',
   breedParentsRequiredDesc: (parents) => `Récolte d'abord les deux : ${parents}.`,

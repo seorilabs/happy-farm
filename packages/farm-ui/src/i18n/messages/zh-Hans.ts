@@ -350,6 +350,8 @@ export const zhHansFarmMessages: FarmMessages = {
   researchNodeLevelLabel: (level) => `Lv.${level}`,
   insufficientRpToast: 'RP 不足或条件未满足。',
   researchNodeUnlockedToast: (nodeName, level) => `「${nodeName}」已升至Lv.${level}！`,
+  scalingBulkAction: '一键强化',
+  scalingBulkUnlockedToast: (levels) => `规模研究一次性强化了${levels}级！`,
   bredToast: (cropName) => `解锁了新品种：${cropName}！`,
   breedUnlockedDesc: '已解锁 · 可在杂交温室种植。',
   breedParentsRequiredDesc: (parents) => `需先收获两者：${parents}。`,

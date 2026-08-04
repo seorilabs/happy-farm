@@ -44,6 +44,20 @@ export type ResearchNodeBatchResult = ResearchNodeBatchPurchase & {
   state: GameState;
 };
 
+export type ScalingResearchBulkNodePurchase = ResearchNodeBatchPurchase & {
+  nodeKey: ResearchNodeKey;
+};
+
+export type ScalingResearchBulkPurchase = {
+  purchases: ScalingResearchBulkNodePurchase[];
+  totalLevels: number;
+  totalCost: number;
+};
+
+export type ScalingResearchBulkResult = ScalingResearchBulkPurchase & {
+  state: GameState;
+};
+
 // balance.json is the only dependency here (not constants.ts) so constants'
 // migration/unlock helpers can import this module without a cycle.
 const CROP_AREA_BY_KEY = new Map<string, string>(balance.crops.map((crop) => [crop.key, crop.area]));
@@ -159,6 +173,108 @@ export function getResearchNodeBatchPurchase(
     levels += 1;
   }
   return { levels, totalCost, fromLevel, toLevel: fromLevel + levels };
+}
+
+/**
+ * 스케일(scaling) 반복 연구 전체의 일괄 강화 미리보기. 선행 조건을 충족한 반복 노드들 중
+ * 다음 레벨 비용이 가장 싼 노드부터 예산이 허용하는 만큼 사서, 같은 RP로 얻는 총 레벨을
+ * 최대화한다. 포화(MAX_SAFE_INTEGER)·비증가 비용은 동일 값이 반복되므로 남은 구매량을
+ * 산술 계산해 단일 노드 배치와 동일하게 선형 루프를 피한다.
+ */
+export function getScalingResearchBulkPurchase(
+  gameState: GameState,
+  availablePoints: number,
+): ScalingResearchBulkPurchase {
+  const budget =
+    availablePoints === Number.POSITIVE_INFINITY
+      ? Number.MAX_VALUE
+      : Number.isFinite(availablePoints) && availablePoints > 0
+        ? availablePoints
+        : 0;
+
+  const entries = RESEARCH_NODES.filter(
+    (node) =>
+      node.category === 'scaling' &&
+      node.maxLevel == null &&
+      (node.requires == null || isNodeUnlocked(gameState, node.requires)),
+  ).map((node) => {
+    const fromLevel = getResearchNodeLevel(gameState, node.key);
+    return { node, fromLevel, levels: 0, cost: 0, capLevels: Math.max(0, Number.MAX_SAFE_INTEGER - fromLevel) };
+  });
+
+  let totalLevels = 0;
+  let totalCost = 0;
+  for (;;) {
+    const remaining = budget - totalCost;
+    let cheapest: (typeof entries)[number] | null = null;
+    let cheapestCost = Number.POSITIVE_INFINITY;
+    for (const entry of entries) {
+      if (entry.levels >= entry.capLevels) {
+        continue;
+      }
+      const nextCost = getResearchNodeCostAtLevel(entry.node, entry.fromLevel + entry.levels);
+      if (nextCost < cheapestCost) {
+        cheapest = entry;
+        cheapestCost = nextCost;
+      }
+    }
+    if (cheapest == null || remaining < cheapestCost) {
+      break;
+    }
+    if (cheapestCost === Number.MAX_SAFE_INTEGER || cheapest.node.costGrowth <= 1) {
+      const levels = Math.min(cheapest.capLevels - cheapest.levels, Math.floor(remaining / cheapestCost));
+      const cost = Math.min(remaining, levels * cheapestCost);
+      cheapest.levels += levels;
+      cheapest.cost += cost;
+      totalLevels += levels;
+      totalCost += cost;
+      continue;
+    }
+    cheapest.levels += 1;
+    cheapest.cost += cheapestCost;
+    totalLevels += 1;
+    totalCost += cheapestCost;
+  }
+
+  return {
+    purchases: entries
+      .filter((entry) => entry.levels > 0)
+      .map((entry) => ({
+        nodeKey: entry.node.key,
+        levels: entry.levels,
+        totalCost: entry.cost,
+        fromLevel: entry.fromLevel,
+        toLevel: entry.fromLevel + entry.levels,
+      })),
+    totalLevels,
+    totalCost,
+  };
+}
+
+/** 스케일 반복 연구 전체의 RP 차감·레벨 증가·unlockedNodes 유지를 한 상태 전이로 적용한다. */
+export function unlockScalingResearchBulk(gameState: GameState): ScalingResearchBulkResult | null {
+  const purchase = getScalingResearchBulkPurchase(gameState, gameState.research.points);
+  if (purchase.totalLevels <= 0) {
+    return null;
+  }
+  const nodeLevels = { ...gameState.research.nodeLevels };
+  let unlockedNodes = gameState.research.unlockedNodes;
+  for (const nodePurchase of purchase.purchases) {
+    nodeLevels[nodePurchase.nodeKey] = nodePurchase.toLevel;
+    if (nodePurchase.fromLevel <= 0 && !unlockedNodes.includes(nodePurchase.nodeKey)) {
+      unlockedNodes = [...unlockedNodes, nodePurchase.nodeKey];
+    }
+  }
+  const state: GameState = {
+    ...gameState,
+    research: {
+      ...gameState.research,
+      points: Math.max(0, gameState.research.points - purchase.totalCost),
+      nodeLevels,
+      unlockedNodes,
+    },
+  };
+  return { ...purchase, state };
 }
 
 export function getResearchEffectValue(gameState: GameState, effect: ResearchNodeEffect): number {

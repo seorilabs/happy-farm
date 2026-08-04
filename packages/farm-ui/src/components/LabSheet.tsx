@@ -15,6 +15,7 @@ import {
   getResearchNodeBatchPurchase,
   getResearchNodeLabel,
   getResearchNodeLevel,
+  getScalingResearchBulkPurchase,
   isNodeUnlocked,
   type CropKey,
   type GameState,
@@ -40,6 +41,7 @@ export function LabSheet({
   onToggleAutomation,
   onUnlockNode,
   onUnlockNodeBatch,
+  onUnlockScalingBulk,
   onBreed,
 }: {
   gameState: GameState;
@@ -48,10 +50,15 @@ export function LabSheet({
   onToggleAutomation: (key: keyof GameState['automationSettings']) => void;
   onUnlockNode: (nodeKey: ResearchNodeKey) => void;
   onUnlockNodeBatch: (nodeKey: ResearchNodeKey, maxLevels: number) => void;
+  onUnlockScalingBulk: () => void;
   onBreed: (cropKey: CropKey) => void;
 }) {
   const autoHarvestUnlocked = isNodeUnlocked(gameState, 'auto_harvest');
   const autoReplantUnlocked = isNodeUnlocked(gameState, 'auto_replant');
+  // 스케일 연구 일괄 강화: 노드별 배치 버튼(레벨 2 이상)과 같은 기준으로,
+  // 지금 RP로 2레벨 이상 강화할 수 있을 때만 노출한다.
+  const scalingBulk = getScalingResearchBulkPurchase(gameState, gameState.research.points);
+  const showScalingBulk = scalingBulk.totalLevels >= 2;
 
   function renderResearchNodes(category: 'automation' | 'scaling' | 'breeding') {
     return RESEARCH_NODES.filter((node) => node.category === category).map((node) => {
@@ -156,6 +163,18 @@ export function LabSheet({
       <Text style={styles.nodeGroupTitle}>{messages.automationResearchSection}</Text>
       {renderResearchNodes('automation')}
       <Text style={styles.nodeGroupTitle}>{messages.scalingResearchSection}</Text>
+      {showScalingBulk ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`${messages.scalingBulkAction} +${scalingBulk.totalLevels}, ${messages.rpPrice(formatMoney(scalingBulk.totalCost, locale))}`}
+          style={styles.bulkButton}
+          testID="research-bulk-scaling"
+          onPress={onUnlockScalingBulk}
+        >
+          <Text style={styles.batchLabel}>{`${messages.scalingBulkAction} +${scalingBulk.totalLevels}`}</Text>
+          <Text style={styles.batchSub}>{messages.rpPrice(formatMoney(scalingBulk.totalCost, locale))}</Text>
+        </Pressable>
+      ) : null}
       {renderResearchNodes('scaling')}
       <Text style={styles.nodeGroupTitle}>{messages.breedingResearchSection}</Text>
       {renderResearchNodes('breeding')}
@@ -237,6 +256,18 @@ const styles = StyleSheet.create({
   },
   batchButtonDisabled: {
     opacity: 0.4,
+  },
+  bulkButton: {
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#bca8ed',
+    borderRadius: 8,
+    backgroundColor: '#eee7ff',
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    marginBottom: 10,
   },
   batchLabel: {
     color: '#5138aa',
