@@ -12,6 +12,7 @@ import type {
   ResearchNodeKey,
   TitleKey,
 } from '../../types';
+import type { CookingDishKey } from '../../cooking';
 
 export type CropLabel = {
   name: string;
@@ -43,6 +44,7 @@ export type LabelBundle = {
   decoration: Record<DecorationKey, DescribedLabel>;
   animal: Record<AnimalKey, DescribedLabel>;
   production: Record<ProductionRecipeKey, DescribedLabel>;
+  cookingDish: Record<CookingDishKey, DescribedLabel>;
   masteryRank: Record<MasteryRankKey, SimpleLabel>;
   mutation: Record<MutationKey, SimpleLabel>;
   regionArchetype: Record<RegionArchetypeKey, SimpleLabel>;

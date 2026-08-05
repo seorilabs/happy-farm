@@ -12,6 +12,7 @@ import type {
   ResearchNodeKey,
   TitleKey,
 } from '../types';
+import type { CookingDishKey } from '../cooking';
 import { deLabels } from './labels/de';
 import { enUSLabels } from './labels/en-US';
 import { esLabels } from './labels/es';
@@ -84,6 +85,17 @@ export function getProductionRecipeLabel(
   const label = bundle(locale).production[recipeKey] ?? LABEL_BUNDLES[DEFAULT_LOCALE].production[recipeKey];
   if (label == null) {
     throw new Error(`Missing production recipe label: ${recipeKey}`);
+  }
+  return label;
+}
+
+export function getCookingDishLabel(
+  dishKey: CookingDishKey,
+  locale: SupportedLocale = DEFAULT_LOCALE
+): DescribedLabel {
+  const label = bundle(locale).cookingDish[dishKey] ?? LABEL_BUNDLES[DEFAULT_LOCALE].cookingDish[dishKey];
+  if (label == null) {
+    throw new Error(`Missing cooking dish label: ${dishKey}`);
   }
   return label;
 }

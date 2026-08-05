@@ -18,6 +18,7 @@ import {
 } from './achievements';
 import { createInitialPrestigeProgress, normalizeChainFarms, normalizePrestigeProgress } from './prestige';
 import { createInitialAnimalsState, normalizeAnimalsState } from './animals';
+import { createInitialCookingState, normalizeCookingState } from './cooking';
 import { createInitialProductionState, normalizeProductionState } from './production';
 import { normalizeSeenFeatureCoachmarks, seedSeenFeatureCoachmarksForLoadedSave } from './featureCoachmarks';
 import { getResetDayIndex } from './resetBoundary';
@@ -49,7 +50,8 @@ export type RewardedAdType =
   | 'harvestBonusAd'
   | 'plotDiscountAd'
   | 'offlineBonusAd'
-  | 'wheelBonusAd';
+  | 'wheelBonusAd'
+  | 'cookingSpeedAd';
 
 export const FARM_AREAS = balance.areas as Array<{
   key: AreaKey;
@@ -544,6 +546,7 @@ export function createInitialAdUsage(now = Date.now()): GameState['adUsage'] {
     plotDiscountAd: { lastUsedAt: null, dailyCount: 0 },
     offlineBonusAd: { lastUsedAt: null, dailyCount: 0 },
     harvestBonusAd: { lastUsedAt: null, lastPromptedAt: null, boostEndsAt: null, dailyCount: 0 },
+    cookingSpeedAd: { lastUsedAt: null, dailyCount: 0 },
     returnInterstitialAt: null,
   };
 }
@@ -603,6 +606,12 @@ export function normalizeAdUsage(
         : null,
       boostEndsAt: isFiniteTimestamp(adUsage?.harvestBonusAd?.boostEndsAt) ? adUsage.harvestBonusAd.boostEndsAt : null,
       dailyCount: normalizeDailyCount(adUsage?.harvestBonusAd?.dailyCount, isSameDay),
+    },
+    cookingSpeedAd: {
+      lastUsedAt: isFinitePastTimestamp(adUsage?.cookingSpeedAd?.lastUsedAt, now)
+        ? adUsage.cookingSpeedAd.lastUsedAt
+        : null,
+      dailyCount: normalizeDailyCount(adUsage?.cookingSpeedAd?.dailyCount, isSameDay),
     },
     returnInterstitialAt: isFinitePastTimestamp(adUsage?.returnInterstitialAt, now)
       ? adUsage.returnInterstitialAt
@@ -684,7 +693,9 @@ export function getRewardedAdLimitStatus(
         ? limits.plotDiscountAdDailyLimit
         : type === 'offlineBonusAd'
           ? limits.offlineBonusAdDailyLimit
-          : limits.harvestBonusAdDailyLimit;
+          : type === 'cookingSpeedAd'
+            ? limits.cookingSpeedAdDailyLimit
+            : limits.harvestBonusAdDailyLimit;
   const cooldownMs =
     type === 'growthAd'
       ? limits.growthAdCooldownMs
@@ -692,7 +703,9 @@ export function getRewardedAdLimitStatus(
         ? limits.plotDiscountAdCooldownMs
         : type === 'offlineBonusAd'
           ? limits.offlineBonusAdCooldownMs
-          : limits.harvestBonusAdCooldownMs;
+          : type === 'cookingSpeedAd'
+            ? limits.cookingSpeedAdCooldownMs
+            : limits.harvestBonusAdCooldownMs;
   const usage =
     type === 'growthAd'
       ? adUsage.growthAd
@@ -700,7 +713,9 @@ export function getRewardedAdLimitStatus(
         ? adUsage.plotDiscountAd
         : type === 'offlineBonusAd'
           ? adUsage.offlineBonusAd
-          : adUsage.harvestBonusAd;
+          : type === 'cookingSpeedAd'
+            ? adUsage.cookingSpeedAd
+            : adUsage.harvestBonusAd;
 
   if (usage.dailyCount >= limit) {
     return { allowed: false, reason: messages.adDailyLimitReached };
@@ -861,6 +876,16 @@ export function recordRewardedAdUsage(
     return adUsage;
   }
 
+  if (type === 'cookingSpeedAd') {
+    return {
+      ...adUsage,
+      cookingSpeedAd: {
+        lastUsedAt: now,
+        dailyCount: adUsage.cookingSpeedAd.dailyCount + 1,
+      },
+    };
+  }
+
   return {
     ...adUsage,
     harvestBonusAd: {
@@ -921,6 +946,7 @@ export function createInitialState(): GameState {
     wheelState: createInitialWheelState(),
     animals: createInitialAnimalsState(),
     production: createInitialProductionState(),
+    cooking: createInitialCookingState(),
     seenFeatureCoachmarks: [],
   };
 }
@@ -1151,6 +1177,10 @@ export function migrateLoadedState(loaded: Partial<GameState>, base: GameState):
   // Workshop: drop inventory/craft entries missing from the current catalog and
   // any non-positive/non-finite values. A save without the field starts empty.
   merged.production = normalizeProductionState(loaded.production);
+
+  // 요리 도감(#442): 미지의 메뉴/재료 키와 손상 값은 버리고, 필드가 없는 세이브는
+  // 빈 도감으로 시작한다(production/animals와 동일 관례).
+  merged.cooking = normalizeCookingState(loaded.cooking);
 
   // 딥 기능 발견성 코치마크(#367): 필드가 있는 세이브는 알려진 키만 정규화해 보존한다.
   // 필드가 아예 없는 레거시 세이브는 지금 이미 가용한 기능을 전부 "확인됨"으로 선반영해,

@@ -7,6 +7,7 @@ export * from './autoHarvestSummary';
 export * from './ads';
 export * from './commands';
 export * from './constants';
+export * from './cooking';
 export * from './cropOfTheDay';
 export * from './cropReady';
 export * from './dailyBonus';
@@ -44,6 +45,7 @@ export {
   getAnimalLabel,
   getAreaLabel,
   getAreaLabels,
+  getCookingDishLabel,
   getCoreMessages,
   getCropLabel,
   getCropLabels,

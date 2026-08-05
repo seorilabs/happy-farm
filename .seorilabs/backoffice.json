@@ -93,7 +93,8 @@
                 { "value": "growth_ad_sheet", "label": "성장 스킵" },
                 { "value": "harvest_bonus_sheet", "label": "수확 보너스" },
                 { "value": "return_offline_bonus", "label": "복귀 오프라인 보너스" },
-                { "value": "wheel_bonus_spin", "label": "룰렛 보너스 스핀" }
+                { "value": "wheel_bonus_spin", "label": "룰렛 보너스 스핀" },
+                { "value": "cooking_speed_up", "label": "요리 즉시 완성" }
               ]
             }
           ]
@@ -832,7 +833,8 @@
             "growth_ad_sheet",
             "harvest_bonus_sheet",
             "return_offline_bonus",
-            "wheel_bonus_spin"
+            "wheel_bonus_spin",
+            "cooking_speed_up"
           ],
           "metrics": [
             {
