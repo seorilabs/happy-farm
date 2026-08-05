@@ -7,6 +7,7 @@ import {
   REQUIRED_AUDIO_RESOURCE_NAMES,
   validateAabEntries,
   validateAudioKeepFile,
+  validateNativeLibraryPackagingConfiguration,
   validateReleaseBuildConfiguration,
 } from '../lib/google-play-release-integrity.js';
 
@@ -20,6 +21,16 @@ android {
       minifyEnabled true
       shrinkResources true
       proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
+    }
+  }
+}
+`;
+
+const extractedNativeLibraryPackaging = `
+android {
+  packagingOptions {
+    jniLibs {
+      useLegacyPackaging = true
     }
   }
 }
@@ -52,6 +63,22 @@ describe('Google Play release 무결성 검사', () => {
       expect(
         validateReleaseBuildConfiguration(optimizedReleaseBlock.replace(enabledSetting, disabledSetting))
       ).not.toEqual([]);
+    });
+  });
+
+  describe('native library 패키징', () => {
+    it('설치 시 native library를 추출하는 설정을 통과시킨다', () => {
+      expect(validateNativeLibraryPackagingConfiguration(extractedNativeLibraryPackaging)).toEqual([]);
+    });
+
+    it.each([
+      ['', 'packaging 블록'],
+      [
+        extractedNativeLibraryPackaging.replace('useLegacyPackaging = true', 'useLegacyPackaging = false'),
+        'useLegacyPackaging true',
+      ],
+    ])('잘못된 패키징 설정을 거부한다', (contents, expectedMessage) => {
+      expect(validateNativeLibraryPackagingConfiguration(contents).join('\n')).toContain(expectedMessage);
     });
   });
 
@@ -104,6 +131,7 @@ describe('Google Play release 무결성 검사', () => {
     );
 
     expect(validateReleaseBuildConfiguration(gradle)).toEqual([]);
+    expect(validateNativeLibraryPackagingConfiguration(gradle)).toEqual([]);
     expect(validateAudioKeepFile(keepFile)).toEqual([]);
   });
 });

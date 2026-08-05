@@ -5,8 +5,13 @@ import { basename, join, relative } from 'node:path';
 
 import releaseIntegrity from './lib/google-play-release-integrity.js';
 
-const { REQUIRED_AUDIO_RESOURCE_NAMES, validateAabEntries, validateAudioKeepFile, validateReleaseBuildConfiguration } =
-  releaseIntegrity;
+const {
+  REQUIRED_AUDIO_RESOURCE_NAMES,
+  validateAabEntries,
+  validateAudioKeepFile,
+  validateNativeLibraryPackagingConfiguration,
+  validateReleaseBuildConfiguration,
+} = releaseIntegrity;
 
 const root = process.cwd();
 const jsonMode = process.argv.includes('--json');
@@ -384,6 +389,15 @@ if (!androidRootExists || appBuildPath == null) {
     pass('Android release 빌드에 R8 코드·리소스 최적화가 활성화되어 있습니다.');
   } else {
     for (const message of releaseConfigurationFailures) {
+      fail(message, appBuildPath);
+    }
+  }
+
+  const nativeLibraryPackagingFailures = validateNativeLibraryPackagingConfiguration(appBuildContents);
+  if (nativeLibraryPackagingFailures.length === 0) {
+    pass('Android native library를 설치 시 추출하도록 패키징합니다.');
+  } else {
+    for (const message of nativeLibraryPackagingFailures) {
       fail(message, appBuildPath);
     }
   }

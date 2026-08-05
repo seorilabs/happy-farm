@@ -59,6 +59,24 @@ function validateReleaseBuildConfiguration(contents) {
   return failures;
 }
 
+function validateNativeLibraryPackagingConfiguration(contents) {
+  const packagingBlock =
+    extractGradleBlock(contents, 'packagingOptions') ?? extractGradleBlock(contents, 'packaging');
+  if (packagingBlock == null) {
+    return ['Android native library packaging 블록을 찾지 못했습니다.'];
+  }
+
+  const jniLibsBlock = extractGradleBlock(packagingBlock, 'jniLibs');
+  if (jniLibsBlock == null) {
+    return ['Android native library packaging에 jniLibs 블록이 필요합니다.'];
+  }
+  if (!/\buseLegacyPackaging\s*(?:=\s*)?true\b/.test(jniLibsBlock)) {
+    return ['Android native library packaging에 useLegacyPackaging true가 필요합니다.'];
+  }
+
+  return [];
+}
+
 function parseKeptResources(contents) {
   const match = /tools:keep\s*=\s*(["'])([\s\S]*?)\1/.exec(contents);
   if (match == null) {
@@ -114,5 +132,6 @@ module.exports = {
   parseKeptResources,
   validateAabEntries,
   validateAudioKeepFile,
+  validateNativeLibraryPackagingConfiguration,
   validateReleaseBuildConfiguration,
 };

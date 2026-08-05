@@ -185,6 +185,13 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
+    packagingOptions {
+        jniLibs {
+            // Extract native libraries so Android ABI translation layers do not depend on direct APK loading.
+            useLegacyPackaging = true
+        }
+    }
+
     namespace "com.seorilabs.happyfarm"
     defaultConfig {
         applicationId "com.seorilabs.happyfarm"
