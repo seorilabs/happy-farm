@@ -11,6 +11,7 @@ import type {
   RegionArchetypeKey,
   ResearchNodeKey,
 } from './types';
+import type { CookingDishKey, CookingGradeKey, CookingPhase } from './cooking';
 import type { RewardedAdType } from './constants';
 
 export type AnalyticsValue = string | number | boolean;
@@ -640,6 +641,67 @@ export function createFarmAnalytics(track: TrackGameEvent = noopTrackGameEvent) 
       track('craft_collect_all', {
         collected_count: params.collectedCount,
         total_gold: params.totalGold,
+        schema_version: 1,
+        ...params.context,
+      });
+    },
+
+    // 요리 도감 퍼널(#442). 시트 오픈은 오픈당 1회(호출부의 시트 전이 가드), 시작/취소/
+    // 결과 확인은 core 상태 전이가 성공한 경우에만 1건씩 발화한다(공방 퍼널과 동일 관례).
+    trackCookingScreen: (params: {
+      source: AnimalsScreenSource;
+      discoveredCount: number;
+      potPhase: CookingPhase;
+      context: GameAnalyticsContext;
+    }) => {
+      track('cooking_screen', {
+        source: params.source,
+        discovered_count: params.discoveredCount,
+        pot_phase: params.potPhase,
+        schema_version: 1,
+        ...params.context,
+      });
+    },
+
+    trackCookStarted: (params: {
+      ingredientCount: number;
+      maxIngredientTier: number;
+      context: GameAnalyticsContext;
+    }) => {
+      track('cook_started', {
+        ingredient_count: params.ingredientCount,
+        max_tier: params.maxIngredientTier,
+        schema_version: 1,
+        ...params.context,
+      });
+    },
+
+    trackCookCanceled: (params: { refundedCount: number; context: GameAnalyticsContext }) => {
+      track('cook_canceled', {
+        refunded_count: params.refundedCount,
+        schema_version: 1,
+        ...params.context,
+      });
+    },
+
+    // 성공/실패를 한 이벤트로 모아 outcome 차원으로 나눈다. 성공이면 dish/grade/is_new,
+    // 실패면 refunded_count가 채워진다(미해당 필드는 안정 기본값).
+    trackCookResolved: (params: {
+      outcome: 'success' | 'fail';
+      dishKey?: CookingDishKey;
+      grade?: CookingGradeKey;
+      isNew?: boolean;
+      refundedCount?: number;
+      discoveredCount: number;
+      context: GameAnalyticsContext;
+    }) => {
+      track('cook_resolved', {
+        outcome: params.outcome,
+        dish: params.dishKey ?? '',
+        grade: params.grade ?? '',
+        is_new: params.isNew ?? false,
+        refunded_count: params.refundedCount ?? 0,
+        discovered_count: params.discoveredCount,
         schema_version: 1,
         ...params.context,
       });

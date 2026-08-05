@@ -43,6 +43,12 @@ import {
   MUTATION_KINDS,
   prestigeFarm,
   WHEEL_SLOTS,
+  COOKING_DISHES,
+  getCookingDishLabel,
+  getCookingSuccessRate,
+  getCookingTimerMs,
+  startCooking,
+  type CropKey,
   type GameState,
 } from '../../../../../packages/farm-core/src';
 import { getFarmMessages } from '../../../../../packages/farm-ui/src';
@@ -59,6 +65,7 @@ import { WheelSheet } from '../../../../../packages/farm-ui/src/components/Wheel
 import { AnimalsSheet } from '../../../../../packages/farm-ui/src/components/AnimalsSheet';
 import { ProductionSheet, type ProductionTabKey } from '../../../../../packages/farm-ui/src/components/ProductionSheet';
 import { WorkshopSheet } from '../../../../../packages/farm-ui/src/components/WorkshopSheet';
+import { CookingSheet } from '../../../../../packages/farm-ui/src/components/CookingSheet';
 import { MissionsSheet } from '../../../../../packages/farm-ui/src/components/MissionsSheet';
 
 const LOCALE = DEFAULT_LOCALE;
@@ -1471,5 +1478,123 @@ describe('WheelSheet', () => {
     const state: GameState = { ...base, wheelState: { ...base.wheelState, lastFreeSpinAt: NOW } };
     const screen = renderWheel(state, jest.fn(), jest.fn());
     expect(screen.queryByText(messages.wheelSpinAction)).toBeNull();
+  });
+});
+
+describe('cooking sheet (#442)', () => {
+  const CARROT = 'carrot' as CropKey;
+  const WHEAT = 'wheat' as CropKey;
+
+  function stateWithIngredients(inventory: Partial<Record<CropKey, number>>): GameState {
+    const base = createInitialState();
+    return { ...base, production: { ...base.production, inventory } };
+  }
+
+  function renderCooking(
+    state: GameState,
+    handlers: Partial<{
+      onStart: jest.Mock;
+      onCancel: jest.Mock;
+      onResolve: jest.Mock;
+      onRushAd: jest.Mock;
+    }> = {},
+    now = NOW
+  ) {
+    return render(
+      <CookingSheet
+        gameState={state}
+        locale={LOCALE}
+        messages={messages}
+        now={now}
+        getCropName={(cropKey) => getCropLabel(cropKey, LOCALE).name}
+        adSupported
+        onStart={handlers.onStart ?? jest.fn()}
+        onCancel={handlers.onCancel ?? jest.fn()}
+        onResolve={handlers.onResolve ?? jest.fn()}
+        onRushAd={handlers.onRushAd ?? jest.fn()}
+      />
+    );
+  }
+
+  test('selecting two stocked ingredients enables cooking and reports the GDD success band', () => {
+    const onStart = jest.fn();
+    const screen = renderCooking(stateWithIngredients({ [CARROT]: 2, [WHEAT]: 1 }), { onStart });
+
+    // 규격 미달(0종)일 때는 시작이 비활성 상태다.
+    expect(screen.getByTestId('cooking-start-action').props.accessibilityState?.disabled).toBe(true);
+
+    fireEvent.press(screen.getByTestId(`cooking-ingredient-${CARROT}`));
+    fireEvent.press(screen.getByTestId(`cooking-ingredient-${WHEAT}`));
+
+    const preview = screen.getByTestId('cooking-preview-line');
+    expect(preview.props.children.join('')).toContain(
+      messages.cookingSuccessRateLabel(`${Math.round(getCookingSuccessRate(2) * 100)}%`)
+    );
+
+    fireEvent.press(screen.getByTestId('cooking-start-action'));
+    expect(onStart).toHaveBeenCalledWith([CARROT, WHEAT]);
+  });
+
+  test('a cooking pot shows the countdown with rush-ad and cancel actions', () => {
+    const onRushAd = jest.fn();
+    const onCancel = jest.fn();
+    const started = startCooking(stateWithIngredients({ [CARROT]: 1, [WHEAT]: 1 }), [CARROT, WHEAT], NOW)!;
+    const screen = renderCooking(started, { onRushAd, onCancel }, NOW + 1000);
+
+    const statusLine = screen.getByTestId('cooking-status-line');
+    expect(statusLine.props.children.join('')).toContain(
+      messages.cookingCookingLabel(
+        formatRemainingTime(getCookingTimerMs([CARROT, WHEAT]) - 1000, LOCALE)
+      )
+    );
+    fireEvent.press(screen.getByTestId('cooking-rush-ad-action'));
+    expect(onRushAd).toHaveBeenCalledTimes(1);
+    fireEvent.press(screen.getByTestId('cooking-cancel-action'));
+    expect(onCancel).toHaveBeenCalledTimes(1);
+  });
+
+  test('a finished pot exposes only the resolve action', () => {
+    const onResolve = jest.fn();
+    const started = startCooking(stateWithIngredients({ [CARROT]: 1, [WHEAT]: 1 }), [CARROT, WHEAT], NOW)!;
+    const screen = renderCooking(started, { onResolve }, NOW + getCookingTimerMs([CARROT, WHEAT]));
+
+    expect(screen.queryByTestId('cooking-rush-ad-action')).toBeNull();
+    fireEvent.press(screen.getByTestId('cooking-resolve-action'));
+    expect(onResolve).toHaveBeenCalledTimes(1);
+  });
+
+  test('the compendium renders all 150 dishes, masks undiscovered ones, and reveals discovered details', () => {
+    const firstDish = COOKING_DISHES[0]!;
+    const base = createInitialState();
+    const state: GameState = {
+      ...base,
+      cooking: {
+        ...base.cooking,
+        discoveredDishes: { [firstDish.key]: 3 },
+        totalCookCount: 3,
+        totalSuccessCount: 3,
+      },
+    };
+    const screen = renderCooking(state);
+
+    expect(screen.getByTestId('cooking-compendium-progress').props.children).toBe(
+      messages.cookingCompendiumProgressLabel(1, COOKING_DISHES.length)
+    );
+    for (const dish of COOKING_DISHES) {
+      expect(screen.getByTestId(`cooking-dish-${dish.key}`)).toBeTruthy();
+    }
+
+    // 발견한 메뉴는 탭하면 상세(이름/설명/횟수)가, 미발견 메뉴는 잠금 문구가 보인다.
+    fireEvent.press(screen.getByTestId(`cooking-dish-${firstDish.key}`));
+    const detail = screen.getByTestId('cooking-dish-detail');
+    const label = getCookingDishLabel(firstDish.key, LOCALE);
+    expect(within(detail).getByText(label.name)).toBeTruthy();
+    expect(within(detail).getByText(messages.cookingDishCookedCountLabel(3))).toBeTruthy();
+
+    const undiscovered = COOKING_DISHES[1]!;
+    fireEvent.press(screen.getByTestId(`cooking-dish-${undiscovered.key}`));
+    expect(
+      within(screen.getByTestId('cooking-dish-detail')).getByText(messages.cookingUndiscoveredDishLabel)
+    ).toBeTruthy();
   });
 });

@@ -305,6 +305,7 @@ describe('farm save migration', () => {
         boostEndsAt: NOW + HARVEST_BONUS_BOOST_DURATION_MS,
         dailyCount: 0,
       },
+      cookingSpeedAd: { lastUsedAt: null, dailyCount: 0 },
       returnInterstitialAt: null,
     });
   });

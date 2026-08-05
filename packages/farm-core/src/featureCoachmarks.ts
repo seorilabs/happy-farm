@@ -1,5 +1,6 @@
 import balance from './balance.json';
 import { ANIMALS, canPurchaseAnimal, isAnimalOwned } from './animals';
+import { COOKING_MIN_INGREDIENTS } from './cooking';
 import { isNodeUnlocked } from './research';
 import type { CropKey, GameState } from './types';
 
@@ -7,7 +8,7 @@ import type { CropKey, GameState } from './types';
 // 식별하는 키. 각 키는 '더보기' 시트 안의 진입점 하나와 대응한다. 배열 순서는 여러
 // 기능이 동시에 가용해졌을 때(예: 진행이 앞선 세이브 로드) 노출 우선순위이며, 대략적인
 // 게임 진행 순서를 따른다.
-export const FEATURE_COACHMARK_KEYS = ['animals', 'workshop', 'lab', 'breeding', 'chain'] as const;
+export const FEATURE_COACHMARK_KEYS = ['animals', 'workshop', 'cooking', 'lab', 'breeding', 'chain'] as const;
 export type FeatureCoachmarkKey = (typeof FEATURE_COACHMARK_KEYS)[number];
 
 // 졸업(개척) 컬렉션 대상 작물. prestige.ts의 GRADUATION_CROP_KEYS와 동일한 balance
@@ -37,6 +38,19 @@ function isWorkshopAvailable(state: GameState): boolean {
   return hasInventory || Object.keys(state.production.crafting).length > 0;
 }
 
+// 요리 솥이 의미 있어지는 시점(#442): 서로 다른 재료가 최소 조합 수만큼 쌓였거나
+// 이미 조리가 진행 중일 때. 재료는 수확 부산물이라 첫 수확들 직후 자연히 열린다
+// (GDD 온보딩: 첫 수확 후 요리 솥 강조).
+function isCookingAvailable(state: GameState): boolean {
+  if (state.cooking.pot != null || Object.keys(state.cooking.discoveredDishes).length > 0) {
+    return true;
+  }
+  const distinctCrops = Object.entries(state.production.inventory).filter(
+    ([, count]) => typeof count === 'number' && count > 0
+  ).length;
+  return distinctCrops >= COOKING_MIN_INGREDIENTS;
+}
+
 // 동물이 의미 있어지는 시점: 축사를 이미 지었거나, 지금 지을 골드가 처음 생겼을 때.
 function isAnimalsAvailable(state: GameState): boolean {
   return ANIMALS.some((animal) => isAnimalOwned(state, animal.key) || canPurchaseAnimal(state, animal.key));
@@ -50,6 +64,8 @@ export function isFeatureCoachmarkAvailable(state: GameState, key: FeatureCoachm
       return isAnimalsAvailable(state);
     case 'workshop':
       return isWorkshopAvailable(state);
+    case 'cooking':
+      return isCookingAvailable(state);
     case 'lab':
       // 연구 RP를 처음 축적한 순간(연구소가 실제로 쓸모 있어지는 시점).
       return state.research.totalPointsEarned > 0;

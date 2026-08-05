@@ -518,6 +518,7 @@ const rewardedAdGates = [
   { key: 'plotDiscountAd', dailyLimit: ads.plotDiscountAdDailyLimit, cooldownMs: ads.plotDiscountAdCooldownMs },
   { key: 'offlineBonusAd', dailyLimit: ads.offlineBonusAdDailyLimit, cooldownMs: ads.offlineBonusAdCooldownMs },
   { key: 'wheelBonusAd', dailyLimit: ads.wheelBonusAdDailyLimit, cooldownMs: ads.wheelBonusAdCooldownMs },
+  { key: 'cookingSpeedAd', dailyLimit: ads.cookingSpeedAdDailyLimit, cooldownMs: ads.cookingSpeedAdCooldownMs },
 ];
 for (const gate of rewardedAdGates) {
   check(
@@ -738,6 +739,110 @@ const resetOffsetMs = balance.resetOffset?.offsetMs;
 check(
   isFiniteNumber(resetOffsetMs) && resetOffsetMs >= 0 && resetOffsetMs < DAY_MS_RESET,
   `resetOffset.offsetMs(${resetOffsetMs})는 0 이상 ${DAY_MS_RESET}(24h) 미만의 유한 값이어야 합니다.`
+);
+
+// 16) 요리 도감(#442): 150종 메뉴 카탈로그·등급 추첨·성공률·도감 버프의 불변식.
+// 요리는 직접 골드를 지급하지 않으므로 경제 지배 검사 대상은 아니지만, (a) 어떤
+// 유효 재료 조합에서도 추첨 풀이 비지 않아야 하고(등급별로 minMaxTier 이하 티어의
+// 메뉴가 최소 1개), (b) 도감 완성 버프 합계는 GDD 리스크 완화 조항(+10% 이내)을
+// 지켜 농사 루프를 지배하지 않아야 한다.
+const COOKING_DISH_TOTAL = 150;
+const COOKING_SELL_BONUS_TOTAL_MAX = 0.1;
+const cooking = balance.cooking ?? {};
+const cookingDishes = Array.isArray(cooking.dishes) ? cooking.dishes : [];
+const cookingGrades = Array.isArray(cooking.grades) ? cooking.grades : [];
+check(
+  cookingDishes.length === COOKING_DISH_TOTAL,
+  `cooking.dishes는 정확히 ${COOKING_DISH_TOTAL}종이어야 합니다(현재 ${cookingDishes.length}).`
+);
+check(
+  Number.isInteger(cooking.minIngredients) &&
+    Number.isInteger(cooking.maxIngredients) &&
+    cooking.minIngredients >= 2 &&
+    cooking.minIngredients <= cooking.maxIngredients,
+  `cooking.minIngredients/maxIngredients(${cooking.minIngredients}/${cooking.maxIngredients})는 2 이상이고 min <= max여야 합니다.`
+);
+check(
+  isFiniteNumber(cooking.timerPerTierMs) && cooking.timerPerTierMs > 0,
+  `cooking.timerPerTierMs(${cooking.timerPerTierMs})는 0보다 커야 합니다.`
+);
+check(
+  isFiniteNumber(cooking.failRefundRatio) && cooking.failRefundRatio >= 0 && cooking.failRefundRatio < 1,
+  `cooking.failRefundRatio(${cooking.failRefundRatio})는 0 이상 1 미만이어야 합니다(전액 환급이면 실패 리스크가 사라짐).`
+);
+for (let count = cooking.minIngredients ?? 0; count <= (cooking.maxIngredients ?? -1); count += 1) {
+  const rate = cooking.successRateByIngredientCount?.[String(count)];
+  check(
+    isFiniteNumber(rate) && rate > 0 && rate <= 1,
+    `cooking.successRateByIngredientCount[${count}](${rate})는 0 초과 1 이하여야 합니다.`
+  );
+}
+const cookingGradeKeys = new Set();
+for (const grade of cookingGrades) {
+  const label = grade?.key ?? '(이름 없음)';
+  check(
+    typeof grade.key === 'string' && grade.key.length > 0 && !cookingGradeKeys.has(grade.key),
+    `요리 등급 ${label}: key는 비어 있지 않은 고유 문자열이어야 합니다.`
+  );
+  cookingGradeKeys.add(grade.key);
+  check(isFiniteNumber(grade.weight) && grade.weight > 0, `요리 등급 ${label}: weight는 0보다 커야 합니다.`);
+  check(
+    Number.isInteger(grade.minMaxTier) && grade.minMaxTier >= 1 && grade.minMaxTier <= 10,
+    `요리 등급 ${label}: minMaxTier는 1~10의 정수여야 합니다.`
+  );
+  check(
+    Number.isInteger(grade.minIngredients) &&
+      grade.minIngredients >= (cooking.minIngredients ?? 2) &&
+      grade.minIngredients <= (cooking.maxIngredients ?? 3),
+    `요리 등급 ${label}: minIngredients는 재료 수 규격(${cooking.minIngredients}~${cooking.maxIngredients}) 안이어야 합니다.`
+  );
+  // 등급이 열리는 최소 조건(재료 최고 티어 = minMaxTier)에서도 추첨 풀이 비지 않아야 한다.
+  check(
+    cookingDishes.some((dish) => dish.grade === grade.key && dish.tier <= grade.minMaxTier),
+    `요리 등급 ${label}: tier <= minMaxTier(${grade.minMaxTier})인 메뉴가 최소 1개 있어야 합니다(추첨 풀 공백 방지).`
+  );
+}
+const cookingDishKeys = new Set();
+for (const dish of cookingDishes) {
+  const label = dish?.key ?? '(이름 없음)';
+  check(
+    typeof dish.key === 'string' && dish.key.length > 0 && !cookingDishKeys.has(dish.key),
+    `요리 메뉴 ${label}: key는 비어 있지 않은 고유 문자열이어야 합니다.`
+  );
+  cookingDishKeys.add(dish.key);
+  check(typeof dish.icon === 'string' && dish.icon.length > 0, `요리 메뉴 ${label}: icon은 비어 있지 않은 문자열이어야 합니다.`);
+  check(cookingGradeKeys.has(dish.grade), `요리 메뉴 ${label}: grade "${dish.grade}"가 정의된 등급이 아닙니다.`);
+  check(Number.isInteger(dish.tier) && dish.tier >= 1 && dish.tier <= 10, `요리 메뉴 ${label}: tier는 1~10의 정수여야 합니다.`);
+}
+const cookingMilestones = Array.isArray(cooking.compendiumMilestones) ? cooking.compendiumMilestones : [];
+check(cookingMilestones.length > 0, 'cooking.compendiumMilestones는 비어 있을 수 없습니다.');
+let cookingSellBonusTotal = 0;
+for (let index = 0; index < cookingMilestones.length; index += 1) {
+  const milestone = cookingMilestones[index];
+  check(
+    Number.isInteger(milestone.count) && milestone.count > 0 && milestone.count <= cookingDishes.length,
+    `도감 마일스톤[${index}]: count(${milestone.count})는 1~${cookingDishes.length}의 정수여야 합니다.`
+  );
+  check(
+    isFiniteNumber(milestone.sellBonus) && milestone.sellBonus > 0,
+    `도감 마일스톤[${index}]: sellBonus(${milestone.sellBonus})는 0보다 커야 합니다.`
+  );
+  if (index > 0) {
+    check(
+      milestone.count > cookingMilestones[index - 1].count,
+      `도감 마일스톤 count는 순증가해야 합니다(인덱스 ${index}).`
+    );
+  }
+  cookingSellBonusTotal += isFiniteNumber(milestone.sellBonus) ? milestone.sellBonus : 0;
+}
+check(
+  cookingMilestones.length === 0 ||
+    cookingMilestones[cookingMilestones.length - 1].count === cookingDishes.length,
+  '도감 마일스톤의 마지막 목표는 전체 메뉴 수(도감 완성)여야 합니다.'
+);
+check(
+  cookingSellBonusTotal > 0 && cookingSellBonusTotal <= COOKING_SELL_BONUS_TOTAL_MAX + 1e-9,
+  `도감 판매 보너스 합계(${cookingSellBonusTotal})는 0 초과 ${COOKING_SELL_BONUS_TOTAL_MAX}(+10%) 이하여야 합니다(농사 루프 보호).`
 );
 
 const result = {

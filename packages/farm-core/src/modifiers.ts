@@ -9,6 +9,7 @@ import {
   isAreaUnlocked,
   type FarmProductivityEstimate,
 } from './constants';
+import { getCookingCompendiumSellBonus } from './cooking';
 import { getMasterySellMultiplier, getMasterySpeedMultiplier } from './mastery';
 import { getResearchEffectValue, isCropPlantable } from './research';
 import { getCropOfTheDayStatus } from './cropOfTheDay';
@@ -69,6 +70,9 @@ export function getGlobalModifiers(gameState: GameState, now = Date.now()): Glob
       getProfitMultiplier(gameState.upgrades.profit) *
       (1 + getSkillEffectValue(gameState, 'global_profit')) *
       (1 + getResearchEffectValue(gameState, 'profit_multiplier')) *
+      // 요리 도감 완성도 마일스톤의 영구 전역 판매 보너스(#442). 합계는 +10% 이내로
+      // check:balance §cooking이 강제해 농사 루프를 지배하지 않는다.
+      (1 + getCookingCompendiumSellBonus(gameState)) *
       regionSellMult,
     harvestMultiplier,
     cropCostMultiplier: regionScale,

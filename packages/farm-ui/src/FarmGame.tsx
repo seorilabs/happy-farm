@@ -175,6 +175,16 @@ import {
   collectCraft,
   collectAllReadyCrafts,
   type ProductionRecipeKey,
+  startCooking,
+  cancelCooking,
+  resolveCooking,
+  finishCookingInstantly,
+  getCookingPotStatus,
+  getCookingCompendiumSellBonus,
+  getCookingDishLabel,
+  getDiscoveredDishCount,
+  getMaxIngredientTier,
+  type CookingResult,
   getCropEconomyEstimate,
   sortCropKeysForStrip,
   nextSeedSortMode,
@@ -247,6 +257,7 @@ import { getWeeklyEventPresentation } from './weeklyEventPresentation';
 import { AchievementsSheet } from './components/AchievementsSheet';
 import { ChainMapSheet, PrestigeConfirmSheet } from './components/ChainMapSheet';
 import { CollectionSheet } from './components/CollectionSheet';
+import { CookingSheet } from './components/CookingSheet';
 import { DecorationLayoutSheet } from './components/DecorationLayoutSheet';
 import { EnvironmentBackdrop } from './components/EnvironmentBackdrop';
 import { FarmOnboarding, ONBOARDING_STEPS, type OnboardingStep } from './components/FarmOnboarding';
@@ -430,6 +441,7 @@ type ActiveSheet =
   | DailyBonusSheet
   | { type: 'wheel' }
   | { type: 'production'; tab: ProductionTabKey; source: AnimalsScreenSource }
+  | { type: 'cooking' }
   | { type: 'decorationLayout' }
   | { type: 'resetConfirm' }
   | null;
@@ -647,6 +659,29 @@ type PendingFarmCommandEffect =
       recipeKey: ProductionRecipeKey;
       // 성공 시 환불된 입력 작물 총량, no-op(미진행·완료됨)이면 null.
       refundedCount: number | null;
+    }
+  | {
+      id: number;
+      type: 'cookStarted';
+      // false면 재료 규격 위반·솥 사용 중·재고 부족 등으로 시작이 성사되지 않은 no-op.
+      started: boolean;
+      ingredientCount: number;
+      maxIngredientTier: number;
+    }
+  | {
+      id: number;
+      type: 'cookCanceled';
+      // 성공 시 환불된 재료 수, no-op(미진행·이미 완료)이면 null.
+      refundedCount: number | null;
+    }
+  | {
+      id: number;
+      type: 'cookResolved';
+      // 추첨 결과, no-op(미완료·이중 수령)이면 null.
+      result: CookingResult | null;
+      discoveredCount: number;
+      // 이번 결과로 새로 도달한 도감 마일스톤 판매 보너스 합(없으면 0).
+      milestoneBonusGained: number;
     }
   | {
       id: number;
@@ -1851,6 +1886,65 @@ function FarmGameBody({
         continue;
       }
 
+      if (effect.type === 'cookStarted') {
+        if (!effect.started) {
+          toast(messages.cookingStartFailedToast);
+          continue;
+        }
+        toast(messages.cookingStartedToast);
+        farmAnalytics.trackCookStarted({
+          ingredientCount: effect.ingredientCount,
+          maxIngredientTier: effect.maxIngredientTier,
+          context: analyticsContext(),
+        });
+        continue;
+      }
+
+      if (effect.type === 'cookCanceled') {
+        if (effect.refundedCount == null) {
+          continue;
+        }
+        toast(messages.cookingCanceledToast);
+        farmAnalytics.trackCookCanceled({ refundedCount: effect.refundedCount, context: analyticsContext() });
+        continue;
+      }
+
+      if (effect.type === 'cookResolved') {
+        if (effect.result == null) {
+          continue;
+        }
+        if (effect.result.outcome === 'success') {
+          const dishName = getCookingDishLabel(effect.result.dishKey, locale).name;
+          toast(
+            effect.result.isNew
+              ? messages.cookingSuccessNewToast(dishName)
+              : messages.cookingSuccessDuplicateToast(dishName)
+          );
+          triggerHaptic(50);
+          playSoundEffect('reward');
+        } else {
+          toast(
+            effect.result.refundedCrops.length > 0
+              ? messages.cookingFailToast(effect.result.refundedCrops.length)
+              : messages.cookingFailNoRefundToast
+          );
+        }
+        // 새로 도달한 마일스톤은 영구 버프라 성공 토스트와 별도로 강조한다.
+        if (effect.milestoneBonusGained > 0) {
+          toast(messages.cookingMilestoneToast(`${Math.round(effect.milestoneBonusGained * 100)}%`));
+        }
+        farmAnalytics.trackCookResolved({
+          outcome: effect.result.outcome,
+          dishKey: effect.result.outcome === 'success' ? effect.result.dishKey : undefined,
+          grade: effect.result.outcome === 'success' ? effect.result.grade : undefined,
+          isNew: effect.result.outcome === 'success' ? effect.result.isNew : undefined,
+          refundedCount: effect.result.outcome === 'fail' ? effect.result.refundedCrops.length : undefined,
+          discoveredCount: effect.discoveredCount,
+          context: analyticsContext(),
+        });
+        continue;
+      }
+
       if (effect.type === 'achievementsClaimed') {
         achievementClaimInFlightRef.current = false;
         if (effect.claims.length === 0) {
@@ -2544,6 +2638,24 @@ function FarmGameBody({
         context: buildContext(state),
       });
     }
+    if (transitionedSheet.type === 'cooking') {
+      const state = gameStateRef.current;
+      const potStatus = getCookingPotStatus(state, Date.now());
+      farmAnalytics.trackCookingScreen({
+        source: 'more',
+        discoveredCount: getDiscoveredDishCount(state),
+        potPhase: potStatus.phase,
+        context: buildContext(state),
+      });
+      // 즉시 완성 광고 CTA는 조리 진행 중에만 노출되므로 그때만 노출 이벤트를 남긴다.
+      if (potStatus.phase === 'cooking') {
+        farmAnalytics.trackAdRewardImpression(
+          'cookingSpeedAd',
+          getRewardedAdPlacement('cookingSpeedAd'),
+          buildContext(state)
+        );
+      }
+    }
   });
 
   // 지원 여부가 시트 오픈 뒤 늦게 확정될 수 있는 welcomeBack만 capturedAt을 별도
@@ -2584,7 +2696,8 @@ function FarmGameBody({
       sheetType === 'growthAd' ||
       sheetType === 'harvestBonus' ||
       sheetType === 'welcomeBack' ||
-      sheetType === 'wheel';
+      sheetType === 'wheel' ||
+      sheetType === 'cooking';
     if (isAdBearingSheet && rewardedAd.isAdSupported && !rewardedAd.isAdReady) {
       rewardedAd.reloadAd?.();
     }
@@ -3267,6 +3380,94 @@ function FarmGameBody({
     collectAllReadyItems('workshop');
   }
 
+  // 요리 솥 시트('더보기' 뒤, #442). 시작/취소/결과 확인은 core 순수 함수에 위임하고,
+  // functional updater 안에서 재검증해 이중 차감/이중 수령을 막는다.
+  function openCooking() {
+    setActiveSheet({ type: 'cooking' });
+  }
+
+  function startCookingNow(ingredients: CropKey[]) {
+    const effectId = ++commandEffectIdRef.current;
+    setGameState((state) => {
+      const next = startCooking(state, ingredients, Date.now());
+      if (
+        !handledCommandEffectIdsRef.current.has(effectId) &&
+        !pendingCommandEffectsRef.current.some((effect) => effect.id === effectId)
+      ) {
+        pendingCommandEffectsRef.current.push({
+          id: effectId,
+          type: 'cookStarted',
+          started: next != null,
+          ingredientCount: ingredients.length,
+          maxIngredientTier: getMaxIngredientTier(ingredients),
+        });
+      }
+      return next ?? state;
+    });
+    setCommandEffectVersion((version) => version + 1);
+  }
+
+  function cancelCookingNow() {
+    const effectId = ++commandEffectIdRef.current;
+    setGameState((state) => {
+      const ingredientCount = state.cooking.pot?.ingredients.length ?? 0;
+      const next = cancelCooking(state, Date.now());
+      if (
+        !handledCommandEffectIdsRef.current.has(effectId) &&
+        !pendingCommandEffectsRef.current.some((effect) => effect.id === effectId)
+      ) {
+        pendingCommandEffectsRef.current.push({
+          id: effectId,
+          type: 'cookCanceled',
+          refundedCount: next == null ? null : ingredientCount,
+        });
+      }
+      return next ?? state;
+    });
+    setCommandEffectVersion((version) => version + 1);
+  }
+
+  // 결과 추첨은 rng를 쓰므로, StrictMode의 updater 재실행에도 같은 결과가 커밋되도록
+  // 난수 시퀀스를 미리 뽑아 주입한다(spinWheelWithAd의 고정 roll과 동일한 관례).
+  function resolveCookingNow() {
+    const effectId = ++commandEffectIdRef.current;
+    const rolls = [Math.random(), Math.random(), Math.random()];
+    setGameState((state) => {
+      let rollIndex = 0;
+      const resolution = resolveCooking(state, Date.now(), () => rolls[rollIndex++ % rolls.length]!);
+      if (
+        !handledCommandEffectIdsRef.current.has(effectId) &&
+        !pendingCommandEffectsRef.current.some((effect) => effect.id === effectId)
+      ) {
+        pendingCommandEffectsRef.current.push({
+          id: effectId,
+          type: 'cookResolved',
+          result: resolution?.result ?? null,
+          discoveredCount: resolution == null ? 0 : getDiscoveredDishCount(resolution.state),
+          milestoneBonusGained:
+            resolution == null
+              ? 0
+              : getCookingCompendiumSellBonus(resolution.state) - getCookingCompendiumSellBonus(state),
+        });
+      }
+      return resolution?.state ?? state;
+    });
+    setCommandEffectVersion((version) => version + 1);
+  }
+
+  // 요리 즉시 완성 보상형 광고(#442). 한도/기록/미션 진행은 공용 showRewardedAd 퍼널이
+  // 담당하고, 보상 적용은 진행 중인 솥의 남은 시간을 0으로 만드는 순수 전이만 한다.
+  async function rushCookingWithAd() {
+    if (getCookingPotStatus(gameStateRef.current, Date.now()).phase !== 'cooking') {
+      return;
+    }
+    await showRewardedAd('cookingSpeedAd', 1, () => undefined, {
+      keepSheetOnFailure: true,
+      keepSheetOnSuccess: true,
+      applyRewardState: (state, rewardedAt) => finishCookingInstantly(state, rewardedAt) ?? state,
+    });
+  }
+
   function claimMissionReward(slot: number) {
     const now = Date.now();
     // Functional updater keeps the claim idempotent: a concurrent second tap
@@ -3388,6 +3589,9 @@ function FarmGameBody({
         break;
       case 'workshop':
         openWorkshop();
+        break;
+      case 'cooking':
+        openCooking();
         break;
       case 'lab':
       case 'breeding':
@@ -4649,6 +4853,9 @@ function FarmGameBody({
     (status) => status.phase === 'ready'
   ).length;
 
+  // 결과 확인을 기다리는 완성된 요리 솥(#442) — '요리' 진입점(및 더보기 롤업) 배지.
+  const cookingReadyBadge = getCookingPotStatus(gameState, tickNowMsRef.current).phase === 'ready' ? 1 : 0;
+
   // '더보기' 시트로 묶은 진입점(#241, #294). 각 항목의 claimable/actionable 배지를 함께
   // 들고 다녀서, 더보기 버튼에는 롤업 합산 배지를, 시트 안에서는 항목별 배지를 보여준다.
   const moreMenuEntries: {
@@ -4698,6 +4905,13 @@ function FarmGameBody({
       onPress: openAnimals,
     },
     {
+      key: 'cooking',
+      label: messages.cookingButton,
+      accessibilityLabel: messages.cookingButtonAccessibilityLabel,
+      badge: cookingReadyBadge,
+      onPress: openCooking,
+    },
+    {
       key: 'map',
       label: messages.mapButton,
       accessibilityLabel: messages.mapButtonAccessibilityLabel,
@@ -4719,7 +4933,7 @@ function FarmGameBody({
   const moreMenuEntryByKey = new Map(moreMenuEntries.map((entry) => [entry.key, entry]));
   const moreMenuSections: { key: string; title: string; entryKeys: string[] }[] = [
     { key: 'daily', title: messages.moreSectionDaily, entryKeys: ['dailyBonus', 'wheel', 'collection'] },
-    { key: 'production', title: messages.moreSectionProduction, entryKeys: ['production'] },
+    { key: 'production', title: messages.moreSectionProduction, entryKeys: ['production', 'cooking'] },
     { key: 'growth', title: messages.moreSectionGrowth, entryKeys: ['lab', 'map', 'achievements'] },
   ];
 
@@ -5738,6 +5952,23 @@ function FarmGameBody({
           />
         ) : null}
 
+        {activeSheet?.type === 'cooking' ? (
+          <CookingSheet
+            gameState={gameState}
+            locale={locale}
+            messages={messages}
+            now={Date.now()}
+            getCropName={getLocalizedCropName}
+            adSupported={rewardedAd.isAdSupported}
+            onStart={startCookingNow}
+            onCancel={cancelCookingNow}
+            onResolve={resolveCookingNow}
+            onRushAd={() => {
+              void rushCookingWithAd();
+            }}
+          />
+        ) : null}
+
         {activeSheet?.type === 'decorationLayout' ? (
           <DecorationLayoutSheet
             gameState={gameState}
@@ -6447,6 +6678,7 @@ function PrestigeGuideOverlay({
 const FEATURE_COACHMARK_ICON: Record<FeatureCoachmarkKey, string> = {
   animals: '🐔',
   workshop: '🏭',
+  cooking: '🍲',
   lab: '🔬',
   breeding: '🧬',
   chain: '🗺️',
@@ -6461,6 +6693,8 @@ function getFeatureCoachmarkText(
       return { title: messages.featureCoachmarkAnimalsTitle, description: messages.featureCoachmarkAnimalsDesc };
     case 'workshop':
       return { title: messages.featureCoachmarkWorkshopTitle, description: messages.featureCoachmarkWorkshopDesc };
+    case 'cooking':
+      return { title: messages.featureCoachmarkCookingTitle, description: messages.featureCoachmarkCookingDesc };
     case 'lab':
       return { title: messages.featureCoachmarkLabTitle, description: messages.featureCoachmarkLabDesc };
     case 'breeding':
@@ -7624,6 +7858,9 @@ function getSheetTitle(activeSheet: ActiveSheet, messages: FarmMessages) {
   if (activeSheet?.type === 'production') {
     return messages.sheetTitleProduction;
   }
+  if (activeSheet?.type === 'cooking') {
+    return messages.sheetTitleCooking;
+  }
   if (activeSheet?.type === 'decorationLayout') {
     return messages.sheetTitleDecorationLayout;
   }
@@ -7703,6 +7940,9 @@ function getSheetDescription(
   }
   if (activeSheet?.type === 'production') {
     return messages.sheetDescriptionProduction;
+  }
+  if (activeSheet?.type === 'cooking') {
+    return messages.sheetDescriptionCooking;
   }
   if (activeSheet?.type === 'decorationLayout') {
     return messages.sheetDescriptionDecorationLayout;

@@ -1,5 +1,6 @@
 import balance from './balance.json';
 import type { AnimalsState } from './animals';
+import type { CookingState } from './cooking';
 import type { FeatureCoachmarkKey } from './featureCoachmarks';
 import type { ProductionState } from './production';
 import type { DailyBonusState } from './dailyBonus';
@@ -130,6 +131,11 @@ export type AdUsage = {
     boostEndsAt: number | null;
     dailyCount: number;
   };
+  // 요리 즉시 완성 광고(#442). growthAd와 같은 일일 한도 + 쿨다운 모델.
+  cookingSpeedAd: {
+    lastUsedAt: number | null;
+    dailyCount: number;
+  };
   // Last time the return (welcome-back) interstitial was shown; gates its
   // cooldown across app restarts. Null until the first return ad fires.
   returnInterstitialAt: number | null;
@@ -206,6 +212,9 @@ export type GameState = {
   // byproduct) plus any in-progress crafts. A meta-layer field so the inventory
   // and running crafts survive every prestige, like placedDecorations/animals.
   production: ProductionState;
+  // 요리 도감(#442): 발견한 메뉴별 성공 횟수 + 진행 중인 요리 솥. 도감과 완성도
+  // 마일스톤 버프는 장기 수집 콘텐츠라 메타 레이어로 두어 프레스티지를 넘어 유지된다.
+  cooking: CookingState;
   // 딥 기능(동물·공방·연구소·교배·개척) 최초 해금 시 1회성 발견성 코치마크(#367)를
   // 이미 확인한 기능 키 목록. 한 번 확인하면 다시는 노출되지 않는다. 메타-레이어 필드라
   // 프레스티지를 넘어 유지된다(placedDecorations/animals와 동일).
@@ -248,6 +257,7 @@ export const META_LAYER_KEYS = [
   'wheelState',
   'animals',
   'production',
+  'cooking',
   'seenFeatureCoachmarks',
 ] as const satisfies readonly (keyof GameState)[];
 
