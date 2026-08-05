@@ -1,5 +1,6 @@
 import {
   AD_FAILURE_REASON_FALLBACK,
+  normalizeAdFailureFamily,
   normalizeAdFailureReason,
   shouldRetryRewardedShow,
   type RewardedAdShowResult,
@@ -33,6 +34,26 @@ describe('normalizeAdFailureReason (#374 AC4)', () => {
     expect(normalizeAdFailureReason('line1\n  line2\t line3')).toBe('line1 line2 line3');
     const long = 'x'.repeat(500);
     expect(normalizeAdFailureReason(long).length).toBe(120);
+  });
+});
+
+describe('normalizeAdFailureFamily', () => {
+  test('show result status를 안정적인 family로 변환한다', () => {
+    expect(normalizeAdFailureFamily({ status: 'notReady' })).toBe('not_ready');
+    expect(normalizeAdFailureFamily({ status: 'unsupported' })).toBe('unsupported');
+    expect(normalizeAdFailureFamily({ status: 'dismissed' })).toBe('dismissed');
+  });
+
+  test('SDK·로케일별 reason을 공통 family로 압축한다', () => {
+    expect(normalizeAdFailureFamily('1006: 광고가 로드 중이거나 준비되지 않았습니다')).toBe('not_ready');
+    expect(normalizeAdFailureFamily('3: No ad to show')).toBe('no_fill');
+    expect(normalizeAdFailureFamily('network connection failed')).toBe('network');
+    expect(normalizeAdFailureFamily('show_timeout')).toBe('timeout');
+    expect(normalizeAdFailureFamily('arbitrary sdk error')).toBe('sdk_error');
+  });
+
+  test('failed result의 원본 error를 재귀적으로 분류한다', () => {
+    expect(normalizeAdFailureFamily({ status: 'failed', error: 'no_fill' })).toBe('no_fill');
   });
 });
 

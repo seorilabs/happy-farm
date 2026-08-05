@@ -164,6 +164,8 @@ describe('trackAppsInTossAnalyticsEvent — 큐잉/정규화/전송', () => {
       endReason: 'timeout',
       context: {
         gold: 99_999,
+        gold_mantissa: 9.9999,
+        gold_exponent: 4,
         plot_count: 12,
         speed_level: 4,
         profit_level: 5,
@@ -191,17 +193,87 @@ describe('trackAppsInTossAnalyticsEvent — 큐잉/정규화/전송', () => {
       session_id: expect.any(String),
       engagement_time_msec: 100,
     });
-    // production 22개, __DEV__에서는 debug_mode을 더해 23개다. 향후 실험 필드
-    // 2개를 추가해도 GA4 Measurement Protocol 상한(25개)을 넘지 않는다.
+    // 큰 금액 정밀도 필드를 포함해 production 24개, __DEV__에서는 debug_mode을
+    // 더해 25개다. GA4 Measurement Protocol 상한(25개)을 넘지 않는다.
     const serializedParams = comboEvent?.params ?? {};
     const parameterCount = Object.keys(serializedParams).length;
     if ('debug_mode' in serializedParams) {
-      expect(parameterCount).toBe(23);
+      expect(parameterCount).toBe(25);
     } else {
-      expect(parameterCount).toBe(22);
+      expect(parameterCount).toBe(24);
     }
     expect(parameterCount).toBeLessThanOrEqual(25);
-    expect(25 - parameterCount).toBeGreaterThanOrEqual(2);
+  });
+
+  test('보상형 광고 최대 payload도 production/dev 모두 GA4 MP 25개 제한을 지킨다', async () => {
+    const { appsInTossFarmAnalytics, initializeAppsInTossAnalytics } = loadAnalytics();
+
+    await initializeAppsInTossAnalytics();
+    jest.runOnlyPendingTimers();
+    mockFetch.mockClear();
+    const devGlobal = globalThis as typeof globalThis & { __DEV__?: boolean };
+    const hadDevGlobal = Object.prototype.hasOwnProperty.call(devGlobal, '__DEV__');
+    const originalDev = devGlobal.__DEV__;
+
+    try {
+      for (const devBuild of [false, true]) {
+        devGlobal.__DEV__ = devBuild;
+        appsInTossFarmAnalytics.trackAdRewardFailed(
+          'rewardedGold',
+          'shop_gold_reward',
+          '1006: 광고가 준비되지 않았습니다',
+          {
+            gold: 99_999,
+            gold_mantissa: 9.9999,
+            gold_exponent: 4,
+            plot_count: 12,
+            speed_level: 4,
+            profit_level: 5,
+            unlocked_area_count: 3,
+            harvested_crop_count: 8,
+            session_elapsed_sec: 60,
+            prestige_level: 2,
+            prestige_stars: 7,
+            research_points: 100,
+            lifetime_harvests: 50,
+          },
+          {
+            attemptId: 'session-1',
+            adReady: false,
+            eligible: true,
+            adSupported: true,
+            rewardKind: 'festival_delivery_points',
+            rewardKey: 'festival_delivery_point',
+            rewardValue: 1,
+            ctaPosition: 'shop_rewards_primary',
+            retryCount: 1,
+            failureFamily: 'not_ready',
+          }
+        );
+        jest.runOnlyPendingTimers();
+
+        const event = parseBody(0).events.find((candidate) => candidate.name === 'ad_reward_failed');
+        expect(event?.params).toMatchObject({
+          reward_kind: 'festival_delivery_points',
+          failure_family: 'not_ready',
+          prestige_level: 2,
+          gold_mantissa: 9.9999,
+          app_market: 'apps_in_toss',
+          session_id: expect.any(String),
+          engagement_time_msec: 100,
+        });
+        expect(event?.params).not.toHaveProperty('speed_level');
+        expect(event?.params).not.toHaveProperty('lifetime_harvests');
+        expect(Object.keys(event?.params ?? {})).toHaveLength(devBuild ? 25 : 24);
+        mockFetch.mockClear();
+      }
+    } finally {
+      if (hadDevGlobal) {
+        devGlobal.__DEV__ = originalDev;
+      } else {
+        delete devGlobal.__DEV__;
+      }
+    }
   });
 });
 

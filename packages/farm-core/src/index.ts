@@ -17,6 +17,7 @@ export * from './featureCoachmarks';
 export * from './fertilizer';
 export * from './growthStage';
 export * from './harvest';
+export * from './landmark';
 export * from './mastery';
 export * from './metricsSink';
 export * from './missionAvailability';

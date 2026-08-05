@@ -13,6 +13,7 @@ import type {
 } from './types';
 import type { CookingDishKey, CookingGradeKey, CookingPhase } from './cooking';
 import type { RewardedAdType } from './constants';
+import { normalizeAdFailureFamily, type AdFailureFamily } from './ads';
 
 export type AnalyticsValue = string | number | boolean;
 
@@ -80,6 +81,8 @@ export type AnimalProduceCollectionMode = 'single' | 'collect_all';
 
 export type GameAnalyticsContext = {
   gold: number;
+  gold_mantissa: number;
+  gold_exponent: number;
   plot_count: number;
   speed_level: number;
   profit_level: number;
@@ -92,13 +95,86 @@ export type GameAnalyticsContext = {
   lifetime_harvests: number;
 };
 
+// Rewarded-ad events carry more funnel metadata than ordinary gameplay events.
+// Keep only the six cohort dimensions needed to compare early/late-game intent,
+// leaving room for AppsInToss' market/session/debug fields under GA4 MP's
+// 25-parameter limit even on the largest failed-event payload.
+export type RewardedAdGameAnalyticsContext = Pick<
+  GameAnalyticsContext,
+  'gold' | 'gold_mantissa' | 'gold_exponent' | 'plot_count' | 'session_elapsed_sec' | 'prestige_level'
+>;
+
+export type RewardedAdAnalyticsMetadata = {
+  attemptId?: string;
+  adReady?: boolean;
+  eligible?: boolean;
+  adSupported?: boolean;
+  rewardKind?: string;
+  rewardKey?: string;
+  rewardValue?: number;
+  ctaPosition?: string;
+  retryCount?: number;
+  failureFamily?: AdFailureFamily;
+};
+
+/**
+ * Number.MAX_SAFE_INTEGER를 넘는 후반 골드도 GA4에서 크기 구간을 잃지 않게
+ * 절대값 과학적 표기의 가수/지수로 나눈다. 가수는 0이 아니면 항상 [1, 10).
+ */
+export function toAnalyticsScientificParts(value: number): { mantissa: number; exponent: number } {
+  if (!Number.isFinite(value) || value === 0) {
+    return { mantissa: 0, exponent: 0 };
+  }
+
+  const [rawMantissa, rawExponent] = Math.abs(value).toExponential().split('e');
+  const mantissa = Number(rawMantissa);
+  const exponent = Number(rawExponent);
+  if (!Number.isFinite(mantissa) || !Number.isFinite(exponent)) {
+    return { mantissa: 0, exponent: 0 };
+  }
+  return { mantissa, exponent };
+}
+
+function getRewardedAdAnalyticsParams(
+  metadata: RewardedAdAnalyticsMetadata = {}
+): Record<string, AnalyticsValue> {
+  const params: Record<string, AnalyticsValue> = {};
+  if (metadata.attemptId != null) params.attempt_id = metadata.attemptId;
+  if (metadata.adReady != null) params.ad_ready = metadata.adReady;
+  if (metadata.eligible != null) params.eligible = metadata.eligible;
+  if (metadata.adSupported != null) params.ad_supported = metadata.adSupported;
+  if (metadata.rewardKind != null) params.reward_kind = metadata.rewardKind;
+  if (metadata.rewardKey != null) params.reward_key = metadata.rewardKey;
+  if (metadata.rewardValue != null) params.reward_value = toSafeAnalyticsNumber(metadata.rewardValue);
+  if (metadata.ctaPosition != null) params.cta_position = metadata.ctaPosition;
+  if (metadata.retryCount != null) params.retry_count = Math.max(0, toSafeAnalyticsInteger(metadata.retryCount));
+  if (metadata.failureFamily != null) params.failure_family = metadata.failureFamily;
+  return params;
+}
+
+export function getRewardedAdGameAnalyticsContext(
+  context: GameAnalyticsContext
+): RewardedAdGameAnalyticsContext {
+  return {
+    gold: context.gold,
+    gold_mantissa: context.gold_mantissa,
+    gold_exponent: context.gold_exponent,
+    plot_count: context.plot_count,
+    session_elapsed_sec: context.session_elapsed_sec,
+    prestige_level: context.prestige_level,
+  };
+}
+
 export function getGameAnalyticsContext(
   gameState: GameState,
   sessionStartedAt: number,
   now = Date.now()
 ): GameAnalyticsContext {
+  const goldScientific = toAnalyticsScientificParts(gameState.gold);
   return {
     gold: toSafeAnalyticsInteger(gameState.gold),
+    gold_mantissa: goldScientific.mantissa,
+    gold_exponent: goldScientific.exponent,
     plot_count: toSafeAnalyticsInteger(gameState.unlockedPlotCount),
     speed_level: toSafeAnalyticsInteger(gameState.upgrades.speed),
     profit_level: toSafeAnalyticsInteger(gameState.upgrades.profit),
@@ -313,23 +389,111 @@ export function createFarmAnalytics(track: TrackGameEvent = noopTrackGameEvent) 
       });
     },
 
+    trackLandmarkProjectViewed: (params: {
+      tier: number;
+      stageKey: string;
+      completedStages: number;
+      context: GameAnalyticsContext;
+    }) => {
+      track('landmark_project_viewed', {
+        tier: Math.max(0, toSafeAnalyticsInteger(params.tier)),
+        stage_key: params.stageKey,
+        completed_stages: Math.max(0, toSafeAnalyticsInteger(params.completedStages)),
+        ...params.context,
+      });
+    },
+
+    trackLandmarkStageFunded: (params: {
+      tier: number;
+      stageKey: string;
+      stageIndex: number;
+      goldCost: number;
+      cropUnits: number;
+      animalProducts: number;
+      festivalPoints: number;
+      tierCompleted: boolean;
+      context: GameAnalyticsContext;
+    }) => {
+      const goldCostScientific = toAnalyticsScientificParts(params.goldCost);
+      track('landmark_stage_funded', {
+        tier: Math.max(0, toSafeAnalyticsInteger(params.tier)),
+        stage_key: params.stageKey,
+        stage_index: Math.max(0, toSafeAnalyticsInteger(params.stageIndex)),
+        gold_cost: Math.max(0, toSafeAnalyticsNumber(params.goldCost)),
+        gold_cost_mantissa: goldCostScientific.mantissa,
+        gold_cost_exponent: goldCostScientific.exponent,
+        crop_units: Math.max(0, toSafeAnalyticsInteger(params.cropUnits)),
+        animal_products: Math.max(0, toSafeAnalyticsInteger(params.animalProducts)),
+        festival_points: Math.max(0, toSafeAnalyticsInteger(params.festivalPoints)),
+        tier_completed: params.tierCompleted,
+        ...params.context,
+      });
+    },
+
+    trackEconomyTransaction: (params: {
+      flow: 'source' | 'sink';
+      currency: 'gold' | 'festival_delivery_point' | 'animal_product' | 'crop_inventory';
+      reason: string;
+      amount: number;
+      balanceBefore: number;
+      balanceAfter: number;
+      prestigeLevel: number;
+      landmarkTier?: number;
+      landmarkStage?: string;
+    }) => {
+      const amount = toAnalyticsScientificParts(params.amount);
+      const balanceBefore = toAnalyticsScientificParts(params.balanceBefore);
+      const balanceAfter = toAnalyticsScientificParts(params.balanceAfter);
+      const dimensions: Record<string, AnalyticsValue> = {
+        flow: params.flow,
+        currency: params.currency,
+        reason: params.reason,
+        amount_mantissa: amount.mantissa,
+        amount_exponent: amount.exponent,
+        balance_before_mantissa: balanceBefore.mantissa,
+        balance_before_exponent: balanceBefore.exponent,
+        balance_after_mantissa: balanceAfter.mantissa,
+        balance_after_exponent: balanceAfter.exponent,
+        prestige_level: Math.max(0, toSafeAnalyticsInteger(params.prestigeLevel)),
+      };
+      if (params.landmarkTier != null) {
+        dimensions.landmark_tier = Math.max(0, toSafeAnalyticsInteger(params.landmarkTier));
+      }
+      if (params.landmarkStage != null) {
+        dimensions.landmark_stage = params.landmarkStage;
+      }
+      track('economy_transaction', dimensions);
+    },
+
     // Every rewarded-ad funnel stage carries both ad_type and placement, so a
     // placement can be tracked end to end (impression → click → completed/failed,
     // plus blocked) and per-placement fill/completion rates and ARPDAU break down
     // cleanly. See docs/04-work/ad-analytics.md for the metric definitions.
-    trackAdRewardClick: (type: RewardedAdType, placement: string, context: GameAnalyticsContext) => {
+    trackAdRewardClick: (
+      type: RewardedAdType,
+      placement: string,
+      context: GameAnalyticsContext,
+      metadata: RewardedAdAnalyticsMetadata = {}
+    ) => {
       track('ad_reward_click', {
         ad_type: type,
         placement,
-        ...context,
+        ...getRewardedAdAnalyticsParams(metadata),
+        ...getRewardedAdGameAnalyticsContext(context),
       });
     },
 
-    trackAdRewardImpression: (type: RewardedAdType, placement: string, context: GameAnalyticsContext) => {
+    trackAdRewardImpression: (
+      type: RewardedAdType,
+      placement: string,
+      context: GameAnalyticsContext,
+      metadata: RewardedAdAnalyticsMetadata = {}
+    ) => {
       track('ad_reward_impression', {
         ad_type: type,
         placement,
-        ...context,
+        ...getRewardedAdAnalyticsParams(metadata),
+        ...getRewardedAdGameAnalyticsContext(context),
       });
     },
 
@@ -338,30 +502,51 @@ export function createFarmAnalytics(track: TrackGameEvent = noopTrackGameEvent) 
       placement: string;
       rewardValue: number;
       context: GameAnalyticsContext;
+      metadata?: RewardedAdAnalyticsMetadata;
     }) => {
       track('ad_reward_completed', {
         ad_type: params.type,
         placement: params.placement,
-        reward_value: params.rewardValue,
-        ...params.context,
+        ...getRewardedAdAnalyticsParams(params.metadata),
+        // completed의 권위 값은 실제 적립된 top-level rewardValue다.
+        // preview metadata가 잘못 넘어와도 이 값을 덮어쓰지 못하게 마지막에 둔다.
+        reward_value: toSafeAnalyticsNumber(params.rewardValue),
+        ...getRewardedAdGameAnalyticsContext(params.context),
       });
     },
 
-    trackAdRewardFailed: (type: RewardedAdType, placement: string, reason: string, context: GameAnalyticsContext) => {
+    trackAdRewardFailed: (
+      type: RewardedAdType,
+      placement: string,
+      reason: string,
+      context: GameAnalyticsContext,
+      metadata: RewardedAdAnalyticsMetadata = {}
+    ) => {
       track('ad_reward_failed', {
         ad_type: type,
         placement,
         reason,
-        ...context,
+        ...getRewardedAdAnalyticsParams({
+          ...metadata,
+          failureFamily: metadata.failureFamily ?? normalizeAdFailureFamily(reason),
+        }),
+        ...getRewardedAdGameAnalyticsContext(context),
       });
     },
 
-    trackAdLimitBlocked: (type: RewardedAdType, placement: string, reason: string, context: GameAnalyticsContext) => {
+    trackAdLimitBlocked: (
+      type: RewardedAdType,
+      placement: string,
+      reason: string,
+      context: GameAnalyticsContext,
+      metadata: RewardedAdAnalyticsMetadata = {}
+    ) => {
       track('ad_limit_blocked', {
         ad_type: type,
         placement,
         blocked_reason: reason,
-        ...context,
+        ...getRewardedAdAnalyticsParams(metadata),
+        ...getRewardedAdGameAnalyticsContext(context),
       });
     },
 

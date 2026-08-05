@@ -1067,11 +1067,13 @@ describe('ChainMapSheet', () => {
         onCollectChain={jest.fn()}
         onOpenPrestigeConfirm={jest.fn()}
         onBuySkill={jest.fn()}
+        onFundLandmark={jest.fn()}
       />
     );
 
     expect(screen.getByText(messages.currentFarmSection)).toBeTruthy();
     expect(screen.getByText(messages.skillsSection)).toBeTruthy();
+    expect(screen.queryByTestId('landmark-project-section')).toBeNull();
   });
 
   test('buys a prestige skill when enough stars are banked', () => {
@@ -1088,12 +1090,186 @@ describe('ChainMapSheet', () => {
         onCollectChain={jest.fn()}
         onOpenPrestigeConfirm={jest.fn()}
         onBuySkill={onBuySkill}
+        onFundLandmark={jest.fn()}
       />
     );
 
     const skillTitle = `${skill.icon} ${getPrestigeSkillLabel(skill.key, LOCALE).name} · Lv.${getSkillLevel(state, skill.key)}`;
     fireEvent.press(screen.getByText(skillTitle));
     expect(onBuySkill).toHaveBeenCalledWith(skill.key);
+  });
+
+  test('프레스티지 이후 5단계 랜드마크와 네 종류의 보유량/필요량을 노출하고 부족 시 비활성화한다', () => {
+    const base = createInitialState();
+    const state: GameState = {
+      ...base,
+      prestige: { ...base.prestige, level: 1 },
+    };
+    const screen = render(
+      <ChainMapSheet
+        gameState={state}
+        locale={LOCALE}
+        messages={messages}
+        now={NOW}
+        onCollectChain={jest.fn()}
+        onOpenPrestigeConfirm={jest.fn()}
+        onBuySkill={jest.fn()}
+        onFundLandmark={jest.fn()}
+      />
+    );
+
+    expect(screen.getByTestId('landmark-project-section')).toBeTruthy();
+    for (const stageKey of ['foundation', 'frame', 'equipment', 'festival_prep', 'complete']) {
+      expect(screen.getByTestId(`landmark-stage-${stageKey}`)).toBeTruthy();
+    }
+    expect(screen.getByTestId('landmark-requirement-gold')).toBeTruthy();
+    expect(screen.getByTestId('landmark-requirement-crops')).toBeTruthy();
+    expect(screen.getByTestId('landmark-requirement-animal-products')).toBeTruthy();
+    expect(screen.getByTestId('landmark-requirement-festival-points')).toBeTruthy();
+    expect(screen.getByTestId('landmark-blocked-reason')).toBeTruthy();
+    expect(screen.getByTestId('landmark-fund-action').props.accessibilityState).toEqual({ disabled: true });
+  });
+
+  test('랜드마크 대량 소비는 4초 안에 두 번 눌러야 하며 정확한 tier와 stage를 전달한다', () => {
+    jest.useFakeTimers();
+    try {
+      const base = createInitialState();
+      const state: GameState = {
+        ...base,
+        gold: Number.MAX_SAFE_INTEGER,
+        prestige: { ...base.prestige, level: 1 },
+        production: {
+          ...base.production,
+          inventory: { ...base.production.inventory, carrot: 10 },
+        },
+      };
+      const onFundLandmark = jest.fn();
+      const screen = render(
+        <ChainMapSheet
+          gameState={state}
+          locale={LOCALE}
+          messages={messages}
+          now={NOW}
+          onCollectChain={jest.fn()}
+          onOpenPrestigeConfirm={jest.fn()}
+          onBuySkill={jest.fn()}
+          onFundLandmark={onFundLandmark}
+        />
+      );
+      const action = screen.getByTestId('landmark-fund-action');
+
+      expect(action.props.accessibilityState).toEqual({ disabled: false });
+      expect(action.props.accessibilityHint).toBe(messages.landmarkFundAccessibilityHint);
+      fireEvent.press(action);
+      expect(onFundLandmark).not.toHaveBeenCalled();
+      expect(screen.getByText(messages.landmarkFundConfirmAction(messages.landmarkStageFoundation))).toBeTruthy();
+      expect(screen.getByTestId('landmark-fund-action').props.accessibilityHint).toBe(
+        messages.landmarkFundConfirmHint
+      );
+      expect(screen.getByTestId('landmark-fund-confirm-hint').props.accessibilityLiveRegion).toBe('assertive');
+
+      fireEvent.press(screen.getByTestId('landmark-fund-action'));
+      expect(onFundLandmark).toHaveBeenCalledTimes(1);
+      expect(onFundLandmark).toHaveBeenCalledWith(1, 'foundation');
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  test('랜드마크 건설 확인은 4초가 지나면 자동으로 해제된다', () => {
+    jest.useFakeTimers();
+    try {
+      const base = createInitialState();
+      const state: GameState = {
+        ...base,
+        gold: Number.MAX_SAFE_INTEGER,
+        prestige: { ...base.prestige, level: 1 },
+        production: {
+          ...base.production,
+          inventory: { ...base.production.inventory, carrot: 10 },
+        },
+      };
+      const onFundLandmark = jest.fn();
+      const screen = render(
+        <ChainMapSheet
+          gameState={state}
+          locale={LOCALE}
+          messages={messages}
+          now={NOW}
+          onCollectChain={jest.fn()}
+          onOpenPrestigeConfirm={jest.fn()}
+          onBuySkill={jest.fn()}
+          onFundLandmark={onFundLandmark}
+        />
+      );
+
+      fireEvent.press(screen.getByTestId('landmark-fund-action'));
+      act(() => {
+        jest.advanceTimersByTime(4000);
+      });
+      expect(screen.getByText(messages.landmarkFundAction(messages.landmarkStageFoundation))).toBeTruthy();
+
+      fireEvent.press(screen.getByTestId('landmark-fund-action'));
+      expect(onFundLandmark).not.toHaveBeenCalled();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  test('현재 프레스티지 랜드마크를 완공하면 완료 tier와 트로피를 표시한다', () => {
+    const base = createInitialState();
+    const state: GameState = {
+      ...base,
+      prestige: { ...base.prestige, level: 1 },
+      landmark: { ...base.landmark, completedTier: 1 },
+    };
+    const screen = render(
+      <ChainMapSheet
+        gameState={state}
+        locale={LOCALE}
+        messages={messages}
+        now={NOW}
+        onCollectChain={jest.fn()}
+        onOpenPrestigeConfirm={jest.fn()}
+        onBuySkill={jest.fn()}
+        onFundLandmark={jest.fn()}
+      />
+    );
+
+    expect(screen.getByTestId('landmark-tier-complete')).toBeTruthy();
+    expect(screen.getByText(messages.landmarkCompletedLabel(1))).toBeTruthy();
+    expect(screen.getByTestId('landmark-stage-progress').props.children).toBe(
+      messages.landmarkStageProgressLabel(5, 5)
+    );
+    expect(screen.queryByTestId('landmark-fund-action')).toBeNull();
+  });
+
+  test('다음 프레스티지 프로젝트가 시작돼도 이전 완공 트로피를 영구 기록으로 표시한다', () => {
+    const base = createInitialState();
+    const state: GameState = {
+      ...base,
+      prestige: { ...base.prestige, level: 2 },
+      landmark: { ...base.landmark, completedTier: 1, completedStages: [] },
+    };
+    const screen = render(
+      <ChainMapSheet
+        gameState={state}
+        locale={LOCALE}
+        messages={messages}
+        now={NOW}
+        onCollectChain={jest.fn()}
+        onOpenPrestigeConfirm={jest.fn()}
+        onBuySkill={jest.fn()}
+        onFundLandmark={jest.fn()}
+      />
+    );
+
+    expect(screen.getByTestId('landmark-tier-complete')).toBeTruthy();
+    expect(screen.getByText(messages.landmarkCompletedLabel(1))).toBeTruthy();
+    expect(screen.getByTestId('landmark-stage-progress').props.children).toBe(
+      messages.landmarkStageProgressLabel(0, 5)
+    );
+    expect(screen.getByTestId('landmark-fund-action')).toBeTruthy();
   });
 });
 

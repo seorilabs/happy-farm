@@ -54,7 +54,20 @@ export type RewardedAdController = {
   // 시트 오픈 시 프리로드·show 실패 후 1회 재시도에 사용한다. 로드가 끝나면
   // isAdReady가 다시 true로 뒤집힌다. 미지원 컨트롤러는 생략할 수 있어 optional.
   reloadAd?(): void | Promise<void>;
+  // 상태 플래그만 확인하지 않고 SDK의 실제 loaded/error/timeout 결과를 기다린다.
+  // 로드 경쟁 직후 즉시 재시도하는 문제를 막기 위한 optional 계약으로,
+  // 구형 호스트/테스트 목은 그대로 동작한다.
+  ensureAdReady?(timeoutMs?: number): Promise<boolean>;
 };
+
+export type AdFailureFamily =
+  | 'not_ready'
+  | 'unsupported'
+  | 'dismissed'
+  | 'timeout'
+  | 'no_fill'
+  | 'network'
+  | 'sdk_error';
 
 // getAdFailureReason·계측이 실제 SDK 에러를 못 얻었을 때만 남기는 최후 fallback.
 // 이 값이 ad_reward_failed.reason의 81%를 차지하던 게 #374의 문제였다.
@@ -102,6 +115,68 @@ export function normalizeAdFailureReason(error: unknown): string {
     }
   }
   return AD_FAILURE_REASON_FALLBACK;
+}
+
+/**
+ * SDK·마켓·로케일별 문구가 다른 실패 reason을 BigQuery에서 안정적으로
+ * 집계할 수 있는 소수의 family로 압축한다. 원본 reason은 디버깅용으로 유지하고,
+ * 대시보드/알림은 failure_family를 기준으로 삼는다.
+ */
+export function normalizeAdFailureFamily(
+  value: RewardedAdShowResult | string | unknown
+): AdFailureFamily {
+  if (typeof value === 'object' && value != null && 'status' in value) {
+    const result = value as RewardedAdShowResult;
+    if (result.status === 'notReady') {
+      return 'not_ready';
+    }
+    if (result.status === 'unsupported') {
+      return 'unsupported';
+    }
+    if (result.status === 'dismissed') {
+      return 'dismissed';
+    }
+    if (result.status === 'failed') {
+      return normalizeAdFailureFamily(result.error);
+    }
+    return 'sdk_error';
+  }
+
+  const reason = normalizeAdFailureReason(value).toLowerCase();
+  if (
+    reason === 'not_ready' ||
+    reason.includes('not ready') ||
+    reason.includes('notready') ||
+    reason.includes('1006')
+  ) {
+    return 'not_ready';
+  }
+  if (reason.includes('unsupported') || reason.includes('not supported')) {
+    return 'unsupported';
+  }
+  if (reason.includes('dismissed') || reason.includes('cancelled') || reason.includes('canceled')) {
+    return 'dismissed';
+  }
+  if (reason.includes('timeout') || reason.includes('timed out')) {
+    return 'timeout';
+  }
+  if (
+    reason.includes('no_fill') ||
+    reason.includes('no fill') ||
+    reason.includes('no-fill') ||
+    /^3\s*:/.test(reason) ||
+    reason.includes('error_code_no_fill')
+  ) {
+    return 'no_fill';
+  }
+  if (
+    reason.includes('network') ||
+    reason.includes('offline') ||
+    reason.includes('connection')
+  ) {
+    return 'network';
+  }
+  return 'sdk_error';
 }
 
 // show 결과가 자동 재로드·재시도(1회) 대상인지 판정한다. 준비 안 됨(notReady)·

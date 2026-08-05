@@ -1,11 +1,12 @@
 import React, { memo } from 'react';
-import { StyleSheet, View, type ViewStyle } from 'react-native';
+import { StyleSheet, Text, View, type ViewStyle } from 'react-native';
 
 import {
   DEFAULT_AREA_ENVIRONMENT_THEME,
   type AreaEnvironmentMotif,
   type AreaEnvironmentTheme,
   type EnvironmentPhase,
+  type LandmarkVisualState,
   type SeasonalAmbienceParticle,
   type WeatherKey,
 } from '../../../farm-core/src';
@@ -19,6 +20,11 @@ type EnvironmentBackdropProps = {
   weatherEffectsEnabled?: boolean;
   // 계절 앰비언트(#353): 월 기반 낙하 파티클(봄=꽃잎/가을=낙엽/겨울=눈, 여름='none').
   seasonalParticle?: SeasonalAmbienceParticle;
+  // 프레스티지 메타 진행을 농장 배경에 남기는 비상호작용 랜드마크 상태.
+  // 생략 시 기존 화면과 동일하게 아무것도 그리지 않는다.
+  landmarkVisualState?: LandmarkVisualState;
+  // 새 프로젝트가 시작돼도 이전 기수의 완공 기념물은 반대편 배경에 유지한다.
+  completedLandmarkTier?: number;
 };
 
 type PhasePalette = {
@@ -257,6 +263,49 @@ function AreaMotif({ motif, color }: { motif: AreaEnvironmentMotif; color: strin
   );
 }
 
+function LandmarkBackdrop({
+  visualState,
+  archived = false,
+}: {
+  visualState: Exclude<LandmarkVisualState, 'locked'>;
+  archived?: boolean;
+}) {
+  const glyph =
+    visualState === 'foundation'
+      ? '🧱'
+      : visualState === 'scaffold'
+        ? '🏗️'
+        : visualState === 'festival'
+          ? '🎪'
+          : '🏛️';
+
+  return (
+    <View
+      testID={archived ? 'environment-landmark-archive' : `environment-landmark-${visualState}`}
+      pointerEvents="none"
+      accessible={false}
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+      style={[
+        styles.landmarkLayer,
+        visualState === 'foundation'
+          ? styles.landmarkLayerFoundation
+          : visualState === 'scaffold'
+            ? styles.landmarkLayerScaffold
+          : visualState === 'festival'
+              ? styles.landmarkLayerFestival
+              : styles.landmarkLayerComplete,
+        archived && styles.landmarkLayerArchived,
+      ]}
+    >
+      {visualState === 'complete' ? <View testID="environment-landmark-glow" style={styles.landmarkGlow} /> : null}
+      <Text testID={archived ? 'environment-landmark-archive-glyph' : 'environment-landmark-glyph'} style={styles.landmarkGlyph}>
+        {glyph}
+      </Text>
+    </View>
+  );
+}
+
 export const EnvironmentBackdrop = memo(function EnvironmentBackdrop({
   phase,
   minutesOfDay,
@@ -265,6 +314,8 @@ export const EnvironmentBackdrop = memo(function EnvironmentBackdrop({
   weatherKey = 'clear',
   weatherEffectsEnabled = true,
   seasonalParticle = 'none',
+  landmarkVisualState = 'locked',
+  completedLandmarkTier = 0,
 }: EnvironmentBackdropProps) {
   const palette = PHASE_PALETTES[phase];
   const isNight = phase === 'night';
@@ -338,6 +389,11 @@ export const EnvironmentBackdrop = memo(function EnvironmentBackdrop({
       {hasHorizonGlow ? (
         <View testID="environment-horizon-glow" style={[styles.horizonGlow, { backgroundColor: palette.glow }]} />
       ) : null}
+
+      {completedLandmarkTier > 0 && landmarkVisualState !== 'complete' ? (
+        <LandmarkBackdrop visualState="complete" archived />
+      ) : null}
+      {landmarkVisualState !== 'locked' ? <LandmarkBackdrop visualState={landmarkVisualState} /> : null}
 
       {isNight ? (
         <>
@@ -645,6 +701,57 @@ const styles = StyleSheet.create({
     height: 52,
     borderRadius: 999,
     zIndex: 3,
+  },
+  landmarkLayer: {
+    position: 'absolute',
+    right: 18,
+    top: 62,
+    width: 64,
+    height: 64,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 18,
+    zIndex: 3,
+  },
+  landmarkLayerFoundation: {
+    opacity: 0.72,
+    backgroundColor: 'rgba(133, 93, 57, 0.14)',
+    transform: [{ scale: 0.72 }],
+  },
+  landmarkLayerScaffold: {
+    opacity: 0.82,
+    backgroundColor: 'rgba(217, 148, 53, 0.16)',
+    transform: [{ scale: 0.86 }],
+  },
+  landmarkLayerFestival: {
+    opacity: 0.94,
+    backgroundColor: 'rgba(217, 74, 122, 0.16)',
+    transform: [{ scale: 0.94 }],
+  },
+  landmarkLayerComplete: {
+    backgroundColor: 'rgba(255, 226, 107, 0.18)',
+    transform: [{ scale: 1 }],
+  },
+  landmarkLayerArchived: {
+    right: undefined,
+    left: 18,
+    opacity: 0.88,
+    transform: [{ scale: 0.78 }],
+  },
+  landmarkGlow: {
+    position: 'absolute',
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    backgroundColor: 'rgba(255, 235, 140, 0.28)',
+    shadowColor: '#ffe98c',
+    shadowOpacity: 0.65,
+    shadowRadius: 12,
+  },
+  landmarkGlyph: {
+    fontSize: 38,
+    lineHeight: 46,
+    textAlign: 'center',
   },
   sunHalo: {
     position: 'absolute',

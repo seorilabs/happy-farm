@@ -19,6 +19,12 @@ import {
 import { createInitialPrestigeProgress, normalizeChainFarms, normalizePrestigeProgress } from './prestige';
 import { createInitialAnimalsState, normalizeAnimalsState } from './animals';
 import { createInitialCookingState, normalizeCookingState } from './cooking';
+import {
+  LANDMARK_REWARDED_AD_FESTIVAL_POINTS,
+  LANDMARK_UNLOCK_PRESTIGE_LEVEL,
+  createInitialLandmarkState,
+  normalizeLandmarkState,
+} from './landmark';
 import { createInitialProductionState, normalizeProductionState } from './production';
 import { normalizeSeenFeatureCoachmarks, seedSeenFeatureCoachmarksForLoadedSave } from './featureCoachmarks';
 import { getResetDayIndex } from './resetBoundary';
@@ -197,6 +203,22 @@ export function getRewardedGoldAmount(gameState: GameState): number {
       : 0.05;
   const scaled = Math.floor(nextGoalCost * ratio);
   return Number.isFinite(scaled) ? Math.max(REWARDED_GOLD_AMOUNT, scaled) : REWARDED_GOLD_AMOUNT;
+}
+
+export type ShopRewardedAdOffer =
+  | { kind: 'gold'; amount: number }
+  | { kind: 'festival_delivery_points'; amount: number };
+
+// 첫 프레스티지 전에는 기존 골드 광고를 유지하고, 랜드마크가 열린 뒤에는 해당
+// 프로젝트의 희소 재료를 제안한다. 같은 광고 슬롯이 진행 단계에 맞는 동기를 준다.
+export function getShopRewardedAdOffer(gameState: GameState): ShopRewardedAdOffer {
+  if (gameState.prestige.level >= LANDMARK_UNLOCK_PRESTIGE_LEVEL) {
+    return {
+      kind: 'festival_delivery_points',
+      amount: LANDMARK_REWARDED_AD_FESTIVAL_POINTS,
+    };
+  }
+  return { kind: 'gold', amount: getRewardedGoldAmount(gameState) };
 }
 
 export const INITIAL_AREA_KEYS = FARM_AREAS.filter(
@@ -947,6 +969,7 @@ export function createInitialState(): GameState {
     animals: createInitialAnimalsState(),
     production: createInitialProductionState(),
     cooking: createInitialCookingState(),
+    landmark: createInitialLandmarkState(),
     seenFeatureCoachmarks: [],
   };
 }
@@ -1106,6 +1129,10 @@ export function migrateLoadedState(loaded: Partial<GameState>, base: GameState):
   merged.activeTitle = normalizeActiveTitle(loaded.activeTitle, merged.claimedAchievements);
   merged.prestige = normalizePrestigeProgress(loaded.prestige);
   merged.lifetimeStats.prestigeCount = Math.max(merged.lifetimeStats.prestigeCount, merged.prestige.level);
+
+  // 레거시 세이브에는 이미 달성한 프레스티지 전체를 소급 과제로 주지 않는다.
+  // Pn이면 1..n-1 티어를 완료 처리하고 현재 n티어부터 시작한다.
+  merged.landmark = normalizeLandmarkState(loaded.landmark, merged.prestige.level, loaded.landmark === undefined);
 
   // A save without the flag predates the guide. Treat an already-graduated
   // player as having seen it (they know the chain-income concept), but let a

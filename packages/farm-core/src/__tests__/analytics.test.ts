@@ -4,6 +4,7 @@ import { getRewardedAdPlacement } from '../ads';
 import {
   createFarmAnalytics,
   getGameAnalyticsContext,
+  toAnalyticsScientificParts,
   toFirebaseAnalyticsParams,
   toFirebaseAnalyticsValue,
 } from '../analytics';
@@ -168,6 +169,9 @@ describe('farm analytics adapter contract', () => {
     });
 
     expect(context.gold).toBe(Number.MAX_SAFE_INTEGER);
+    expect(context.gold_mantissa).toBeGreaterThanOrEqual(1);
+    expect(context.gold_mantissa).toBeLessThan(10);
+    expect(context.gold_exponent).toBe(308);
     expect(context.research_points).toBe(0);
     expect(track).toHaveBeenCalledWith(
       'crop_harvested',
@@ -248,6 +252,186 @@ describe('farm analytics adapter contract', () => {
     expect(getRewardedAdPlacement('plotDiscountAd')).toBe('shop_plot_discount');
     expect(getRewardedAdPlacement('offlineBonusAd')).toBe('return_offline_bonus');
     expect(getRewardedAdPlacement('wheelBonusAd')).toBe('wheel_bonus_spin');
+  });
+
+  test('랜드마크 열람·단계 펀딩 이벤트를 계약대로 emit한다', () => {
+    const track = jest.fn();
+    const analytics = createFarmAnalytics(track);
+    const context = getGameAnalyticsContext(createInitialState(), 0, 5_000);
+
+    analytics.trackLandmarkProjectViewed({ tier: 3, stageKey: 'festival', completedStages: 2, context });
+    analytics.trackLandmarkStageFunded({
+      tier: 3,
+      stageKey: 'festival',
+      stageIndex: 2,
+      goldCost: 1e50,
+      cropUnits: 40,
+      animalProducts: 5,
+      festivalPoints: 1,
+      tierCompleted: true,
+      context,
+    });
+
+    expect(track).toHaveBeenCalledWith(
+      'landmark_project_viewed',
+      expect.objectContaining({ tier: 3, stage_key: 'festival', completed_stages: 2 })
+    );
+    expect(track).toHaveBeenCalledWith(
+      'landmark_stage_funded',
+      expect.objectContaining({
+        tier: 3,
+        stage_key: 'festival',
+        stage_index: 2,
+        gold_cost: Number.MAX_SAFE_INTEGER,
+        gold_cost_mantissa: 1,
+        gold_cost_exponent: 50,
+        crop_units: 40,
+        animal_products: 5,
+        festival_points: 1,
+        tier_completed: true,
+      })
+    );
+  });
+
+  test('economy_transaction은 큰 수의 amount·before·after를 가수·지수로 보존한다', () => {
+    const track = jest.fn();
+    const analytics = createFarmAnalytics(track);
+
+    analytics.trackEconomyTransaction({
+      flow: 'sink',
+      currency: 'gold',
+      reason: 'landmark_stage',
+      amount: 1e15,
+      balanceBefore: 1e100,
+      balanceAfter: 1e50,
+      prestigeLevel: 7,
+      landmarkTier: 8,
+      landmarkStage: 'foundation',
+    });
+
+    expect(track).toHaveBeenCalledWith('economy_transaction', {
+      flow: 'sink',
+      currency: 'gold',
+      reason: 'landmark_stage',
+      amount_mantissa: 1,
+      amount_exponent: 15,
+      balance_before_mantissa: 1,
+      balance_before_exponent: 100,
+      balance_after_mantissa: 1,
+      balance_after_exponent: 50,
+      prestige_level: 7,
+      landmark_tier: 8,
+      landmark_stage: 'foundation',
+    });
+  });
+
+  test('rewarded-ad funnel metadata는 attempt·준비·보상·실패 family를 같은 키로 emit한다', () => {
+    const track = jest.fn();
+    const analytics = createFarmAnalytics(track);
+    const context = getGameAnalyticsContext(createInitialState(), 0, 5_000);
+    const metadata = {
+      attemptId: 'session-1',
+      adReady: true,
+      eligible: true,
+      adSupported: true,
+      rewardKind: 'festival_delivery_points',
+      rewardKey: 'festival_delivery_point',
+      rewardValue: 1,
+      ctaPosition: 'shop_rewards_primary',
+      retryCount: 1,
+    } as const;
+
+    analytics.trackAdRewardImpression('rewardedGold', 'shop_gold_reward', context, metadata);
+    analytics.trackAdRewardClick('rewardedGold', 'shop_gold_reward', context, metadata);
+    analytics.trackAdRewardCompleted({
+      type: 'rewardedGold',
+      placement: 'shop_gold_reward',
+      rewardValue: 1,
+      context,
+      metadata,
+    });
+    analytics.trackAdRewardFailed(
+      'rewardedGold',
+      'shop_gold_reward',
+      '1006: 광고가 준비되지 않았습니다',
+      context,
+      metadata
+    );
+    analytics.trackAdLimitBlocked('rewardedGold', 'shop_gold_reward', 'daily_limit', context, metadata);
+
+    for (const event of [
+      'ad_reward_impression',
+      'ad_reward_click',
+      'ad_reward_completed',
+      'ad_reward_failed',
+      'ad_limit_blocked',
+    ]) {
+      expect(track).toHaveBeenCalledWith(
+        event,
+        expect.objectContaining({
+          attempt_id: 'session-1',
+          ad_ready: true,
+          eligible: true,
+          ad_supported: true,
+          reward_kind: 'festival_delivery_points',
+          reward_key: 'festival_delivery_point',
+          reward_value: 1,
+          cta_position: 'shop_rewards_primary',
+          retry_count: 1,
+        })
+      );
+    }
+    expect(track).toHaveBeenCalledWith(
+      'ad_reward_failed',
+      expect.objectContaining({ failure_family: 'not_ready' })
+    );
+
+    const failedParams = track.mock.calls.find(([event]) => event === 'ad_reward_failed')![1] as Record<
+      string,
+      unknown
+    >;
+    expect(failedParams).toEqual(
+      expect.objectContaining({
+        gold: context.gold,
+        gold_mantissa: context.gold_mantissa,
+        gold_exponent: context.gold_exponent,
+        plot_count: context.plot_count,
+        session_elapsed_sec: context.session_elapsed_sec,
+        prestige_level: context.prestige_level,
+      })
+    );
+    expect(failedParams).not.toHaveProperty('speed_level');
+    expect(failedParams).not.toHaveProperty('lifetime_harvests');
+    // AppsInToss MP adds app_market/release fields (3), session fields (2),
+    // and debug_mode only in dev (1). Both production and dev stay <= 25.
+    expect(Object.keys(failedParams)).toHaveLength(19);
+    expect(Object.keys(failedParams).length + 5).toBeLessThanOrEqual(25);
+    expect(Object.keys(failedParams).length + 6).toBeLessThanOrEqual(25);
+
+    analytics.trackAdRewardCompleted({
+      type: 'rewardedGold',
+      placement: 'shop_gold_reward',
+      rewardValue: 2,
+      context,
+      metadata: { ...metadata, rewardValue: 999 },
+    });
+    expect(track).toHaveBeenLastCalledWith(
+      'ad_reward_completed',
+      expect.objectContaining({ reward_value: 2 })
+    );
+  });
+
+  test('rewarded-ad failed는 metadata가 없어도 reason에서 failure_family를 자동 파생한다', () => {
+    const track = jest.fn();
+    const analytics = createFarmAnalytics(track);
+    const context = getGameAnalyticsContext(createInitialState(), 0, 5_000);
+
+    analytics.trackAdRewardFailed('rewardedGold', 'shop_gold_reward', 'no_fill', context);
+
+    expect(track).toHaveBeenCalledWith(
+      'ad_reward_failed',
+      expect.objectContaining({ failure_family: 'no_fill' })
+    );
   });
 
   test('리텐션 계측 이벤트를 계약대로 emit한다', () => {
@@ -714,6 +898,15 @@ describe('farm analytics adapter contract', () => {
 });
 
 describe('Firebase 애널리틱스 값 정규화(공유 어댑터 헬퍼)', () => {
+  test('후반 골드를 가수·지수로 분해하고 비유한값은 0으로 정규화한다', () => {
+    expect(toAnalyticsScientificParts(1e15)).toEqual({ mantissa: 1, exponent: 15 });
+    expect(toAnalyticsScientificParts(1e50)).toEqual({ mantissa: 1, exponent: 50 });
+    expect(toAnalyticsScientificParts(1e100)).toEqual({ mantissa: 1, exponent: 100 });
+    expect(toAnalyticsScientificParts(0)).toEqual({ mantissa: 0, exponent: 0 });
+    expect(toAnalyticsScientificParts(Number.NaN)).toEqual({ mantissa: 0, exponent: 0 });
+    expect(toAnalyticsScientificParts(Number.POSITIVE_INFINITY)).toEqual({ mantissa: 0, exponent: 0 });
+  });
+
   test('boolean은 1/0으로, 비유한 number는 0으로, 그 외는 그대로 변환한다', () => {
     expect(toFirebaseAnalyticsValue(true)).toBe(1);
     expect(toFirebaseAnalyticsValue(false)).toBe(0);

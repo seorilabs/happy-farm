@@ -1,6 +1,7 @@
 import balance from './balance.json';
 import type { AnimalKey, GameState } from './types';
 import { recordMissionProgressEvent } from './missionEvents';
+import { grantLandmarkAnimalProductStock } from './landmark';
 
 // 동물 사육/생산 루프. 작물(초 단위 성장)과는 다른 주기(수 분~수십 분)의 보조
 // 재방문 루프를 제공한다: 사료(골드)를 투입 → 결정적 타이머 경과 → 산출물 수집
@@ -271,7 +272,7 @@ export function collectProduceWithOutcome(
     },
   };
   return {
-    state: recordMissionProgressEvent(next, { type: 'collect_produce' }, safeNow),
+    state: recordMissionProgressEvent(grantLandmarkAnimalProductStock(next), { type: 'collect_produce' }, safeNow),
     outcome: {
       animalKey: key,
       baseRevenue: animal.producePrice,

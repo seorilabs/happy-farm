@@ -14,6 +14,7 @@ import {
   getOfflineCapMs,
   getPrestigeCost,
   getPrestigePreview,
+  getPrestigeRequirementStatus,
   getPrestigeStarsAward,
   getSkillCost,
   getSkillEffect,
@@ -62,6 +63,27 @@ describe('prestige requirements', () => {
 
     expect(canPrestige({ ...ready, gold: check.cost - 1 }).allowed).toBe(false);
     expect(canPrestige({ ...ready, harvestedCropKeys: [] }).allowed).toBe(false);
+  });
+
+  test('exposes the required area, crops, missing crops, and current gold for UI', () => {
+    const base = createInitialState();
+    const status = getPrestigeRequirementStatus(base);
+    const requiredCropKeys = getAreaCropKeys('legend_field');
+
+    expect(status.requiredAreaKey).toBe('legend_field');
+    expect(status.requiredCropKeys).toEqual(requiredCropKeys);
+    expect(status.missingCropKeys).toEqual(requiredCropKeys);
+    expect(status.collectionComplete).toBe(false);
+    expect(status.gold).toBe(base.gold);
+    expect(status.currentGold).toBe(base.gold);
+    expect(status.cost).toBe(getPrestigeCost(base.prestige.level));
+    expect(status.goldSufficient).toBe(false);
+    expect(status.allowed).toBe(false);
+
+    const readyStatus = getPrestigeRequirementStatus(prestigeReadyState());
+    expect(readyStatus.missingCropKeys).toEqual([]);
+    expect(readyStatus.allowed).toBe(true);
+    expect(canPrestige(prestigeReadyState())).toEqual(readyStatus);
   });
 
   test('graduation cost scales per prestige level', () => {

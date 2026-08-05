@@ -6,7 +6,11 @@ import React from 'react';
 import ReactTestRenderer from 'react-test-renderer';
 import { AdEventType, RewardedAd, RewardedAdEventType } from 'react-native-google-mobile-ads';
 import App from '../App';
-import { useAdMobRewardedAd } from '../src/ads/adMobRewardedAd';
+import {
+  MOBILE_REWARDED_AD_LOAD_TIMEOUT_MS,
+  MOBILE_REWARDED_AD_SHOW_TIMEOUT_MS,
+  useAdMobRewardedAd,
+} from '../src/ads/adMobRewardedAd';
 
 jest.mock('../src/audio/assets/harvest_coin.wav', () => 1);
 jest.mock('../src/audio/assets/farm_bgm_loop.wav', () => 2);
@@ -110,18 +114,18 @@ jest.mock('@notifee/react-native', () => ({
 }));
 
 jest.mock('react-native-google-mobile-ads', () => {
-  const rewardedAd = {
-    addAdEventsListener: jest.fn(() => jest.fn()),
-    load: jest.fn(),
-    removeAllListeners: jest.fn(),
-    show: jest.fn(() => Promise.resolve()),
-  };
-
   return {
     __esModule: true,
     default: jest.fn(() => ({ initialize: jest.fn(() => Promise.resolve()) })),
     AdEventType: { CLOSED: 'closed', ERROR: 'error' },
-    RewardedAd: { createForAdRequest: jest.fn(() => rewardedAd) },
+    RewardedAd: {
+      createForAdRequest: jest.fn(() => ({
+        addAdEventsListener: jest.fn(() => jest.fn()),
+        load: jest.fn(),
+        removeAllListeners: jest.fn(),
+        show: jest.fn(() => Promise.resolve()),
+      })),
+    },
     RewardedAdEventType: { EARNED_REWARD: 'earned_reward', LOADED: 'loaded' },
     TestIds: { REWARDED: 'test-rewarded' },
   };
@@ -159,6 +163,10 @@ function getRewardedAdEventListener(rewardedAd: MockRewardedAd) {
 
 beforeEach(() => {
   jest.clearAllMocks();
+});
+
+afterEach(() => {
+  jest.useRealTimers();
 });
 
 test('renders correctly', async () => {
@@ -232,9 +240,263 @@ test('waits for rewarded ad close before resolving an earned reward', async () =
 
   expect(settled).toBe(true);
   expect(result).toEqual({ status: 'earned', reward: { type: 'coin', amount: 1 } });
-  expect(rewardedAd.load).toHaveBeenCalledTimes(2);
+  expect(rewardedAd.load).toHaveBeenCalledTimes(1);
+  expect(RewardedAd.createForAdRequest).toHaveBeenCalledTimes(2);
+  expect(getLatestRewardedAdMock().load).toHaveBeenCalledTimes(1);
 
   await ReactTestRenderer.act(async () => {
     renderer?.unmount();
   });
+});
+
+test('ensureAdReady waits for the actual mobile loaded event', async () => {
+  let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
+  let controller: MobileRewardedAdController | undefined;
+  function Harness() {
+    controller = useAdMobRewardedAd();
+    return null;
+  }
+
+  await ReactTestRenderer.act(async () => {
+    renderer = ReactTestRenderer.create(<Harness />);
+    await Promise.resolve();
+  });
+  const rewardedAd = getLatestRewardedAdMock();
+  const emit = getRewardedAdEventListener(rewardedAd);
+  let ready: boolean | null = null;
+  if (controller == null) throw new Error('controller not provided');
+  let readyPromise!: Promise<void>;
+  ReactTestRenderer.act(() => {
+    readyPromise = controller!.ensureAdReady().then((value) => { ready = value; });
+  });
+  await Promise.resolve();
+  expect(ready).toBeNull();
+
+  await ReactTestRenderer.act(async () => {
+    emit({ type: RewardedAdEventType.LOADED });
+    await readyPromise;
+  });
+  expect(ready).toBe(true);
+  expect(controller?.isAdReady).toBe(true);
+
+  await ReactTestRenderer.act(async () => { renderer?.unmount(); });
+});
+
+test('ensureAdReady resolves false when mobile loading times out', async () => {
+  jest.useFakeTimers();
+  let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
+  let controller: MobileRewardedAdController | undefined;
+  function Harness() {
+    controller = useAdMobRewardedAd();
+    return null;
+  }
+
+  await ReactTestRenderer.act(async () => {
+    renderer = ReactTestRenderer.create(<Harness />);
+    await Promise.resolve();
+  });
+  if (controller == null) throw new Error('controller not provided');
+  let readyPromise!: Promise<boolean>;
+  ReactTestRenderer.act(() => {
+    readyPromise = controller!.ensureAdReady();
+  });
+  await ReactTestRenderer.act(async () => {
+    jest.advanceTimersByTime(MOBILE_REWARDED_AD_LOAD_TIMEOUT_MS);
+    await Promise.resolve();
+  });
+  await expect(readyPromise).resolves.toBe(false);
+
+  await ReactTestRenderer.act(async () => { renderer?.unmount(); });
+});
+
+test('ensureAdReady applies its own timeout while the default mobile load remains in flight', async () => {
+  jest.useFakeTimers();
+  let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
+  let controller: MobileRewardedAdController | undefined;
+  function Harness() {
+    controller = useAdMobRewardedAd();
+    return null;
+  }
+
+  await ReactTestRenderer.act(async () => {
+    renderer = ReactTestRenderer.create(<Harness />);
+    await Promise.resolve();
+  });
+  const rewardedAd = getLatestRewardedAdMock();
+  const emit = getRewardedAdEventListener(rewardedAd);
+  if (controller == null) throw new Error('controller not provided');
+
+  let readyPromise!: Promise<boolean>;
+  ReactTestRenderer.act(() => {
+    readyPromise = controller!.ensureAdReady(250);
+  });
+  await ReactTestRenderer.act(async () => {
+    jest.advanceTimersByTime(250);
+    await Promise.resolve();
+  });
+
+  await expect(readyPromise).resolves.toBe(false);
+  expect(rewardedAd.load).toHaveBeenCalledTimes(1);
+
+  await ReactTestRenderer.act(async () => {
+    emit({ type: RewardedAdEventType.LOADED });
+  });
+  expect(controller?.isAdReady).toBe(true);
+
+  await ReactTestRenderer.act(async () => { renderer?.unmount(); });
+});
+
+test('rejects a duplicate mobile show without replacing the in-flight request', async () => {
+  let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
+  let controller: MobileRewardedAdController | undefined;
+  function Harness() {
+    controller = useAdMobRewardedAd();
+    return null;
+  }
+
+  await ReactTestRenderer.act(async () => {
+    renderer = ReactTestRenderer.create(<Harness />);
+    await Promise.resolve();
+  });
+  const rewardedAd = getLatestRewardedAdMock();
+  const emit = getRewardedAdEventListener(rewardedAd);
+  await ReactTestRenderer.act(async () => { emit({ type: RewardedAdEventType.LOADED }); });
+
+  if (controller == null) throw new Error('controller not provided');
+  let first!: ReturnType<MobileRewardedAdController['showAd']>;
+  let second!: ReturnType<MobileRewardedAdController['showAd']>;
+  ReactTestRenderer.act(() => {
+    first = controller!.showAd();
+    second = controller!.showAd();
+  });
+  await expect(second).resolves.toEqual({ status: 'notReady' });
+  expect(rewardedAd.show).toHaveBeenCalledTimes(1);
+  await ReactTestRenderer.act(async () => { emit({ type: AdEventType.CLOSED }); });
+  await expect(first).resolves.toEqual({ status: 'dismissed' });
+
+  await ReactTestRenderer.act(async () => { renderer?.unmount(); });
+});
+
+test('preserves mobile SDK error code and message', async () => {
+  let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
+  let controller: MobileRewardedAdController | undefined;
+  function Harness() {
+    controller = useAdMobRewardedAd();
+    return null;
+  }
+
+  await ReactTestRenderer.act(async () => {
+    renderer = ReactTestRenderer.create(<Harness />);
+    await Promise.resolve();
+  });
+  const rewardedAd = getLatestRewardedAdMock();
+  const emit = getRewardedAdEventListener(rewardedAd);
+  await ReactTestRenderer.act(async () => { emit({ type: RewardedAdEventType.LOADED }); });
+  if (controller == null) throw new Error('controller not provided');
+  let resultPromise!: ReturnType<MobileRewardedAdController['showAd']>;
+  ReactTestRenderer.act(() => {
+    resultPromise = controller!.showAd();
+  });
+  await ReactTestRenderer.act(async () => {
+    emit({ type: AdEventType.ERROR, payload: { code: 3, message: 'No fill' } });
+  });
+  await expect(resultPromise).resolves.toEqual({ status: 'failed', error: '3: No fill' });
+
+  await ReactTestRenderer.act(async () => { renderer?.unmount(); });
+});
+
+test('mobile terminal timeout preserves an earned reward when close is missing', async () => {
+  jest.useFakeTimers();
+  let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
+  let controller: MobileRewardedAdController | undefined;
+  function Harness() {
+    controller = useAdMobRewardedAd();
+    return null;
+  }
+
+  await ReactTestRenderer.act(async () => {
+    renderer = ReactTestRenderer.create(<Harness />);
+    await Promise.resolve();
+  });
+  const rewardedAd = getLatestRewardedAdMock();
+  const emit = getRewardedAdEventListener(rewardedAd);
+  await ReactTestRenderer.act(async () => { emit({ type: RewardedAdEventType.LOADED }); });
+  if (controller == null) throw new Error('controller not provided');
+  let resultPromise!: ReturnType<MobileRewardedAdController['showAd']>;
+  ReactTestRenderer.act(() => {
+    resultPromise = controller!.showAd();
+  });
+  await ReactTestRenderer.act(async () => {
+    emit({ type: RewardedAdEventType.EARNED_REWARD, payload: { type: 'coin', amount: 1 } });
+    jest.advanceTimersByTime(MOBILE_REWARDED_AD_SHOW_TIMEOUT_MS);
+    await Promise.resolve();
+  });
+  await expect(resultPromise).resolves.toEqual({ status: 'earned', reward: { type: 'coin', amount: 1 } });
+
+  await ReactTestRenderer.act(async () => { renderer?.unmount(); });
+});
+
+test('ignores late events from a timed-out mobile ad after the next show starts', async () => {
+  jest.useFakeTimers();
+  let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
+  let controller: MobileRewardedAdController | undefined;
+  function Harness() {
+    controller = useAdMobRewardedAd();
+    return null;
+  }
+
+  await ReactTestRenderer.act(async () => {
+    renderer = ReactTestRenderer.create(<Harness />);
+    await Promise.resolve();
+  });
+
+  const adA = getLatestRewardedAdMock();
+  const emitA = getRewardedAdEventListener(adA);
+  await ReactTestRenderer.act(async () => {
+    emitA({ type: RewardedAdEventType.LOADED });
+  });
+  if (controller == null) throw new Error('controller not provided');
+
+  let showA!: ReturnType<MobileRewardedAdController['showAd']>;
+  ReactTestRenderer.act(() => {
+    showA = controller!.showAd();
+  });
+  await ReactTestRenderer.act(async () => {
+    jest.advanceTimersByTime(MOBILE_REWARDED_AD_SHOW_TIMEOUT_MS);
+    await Promise.resolve();
+  });
+  await expect(showA).resolves.toEqual({ status: 'failed', error: 'show_timeout' });
+  expect(adA.removeAllListeners).toHaveBeenCalledTimes(1);
+
+  const adB = getLatestRewardedAdMock();
+  expect(adB).not.toBe(adA);
+  const emitB = getRewardedAdEventListener(adB);
+  await ReactTestRenderer.act(async () => {
+    emitB({ type: RewardedAdEventType.LOADED });
+  });
+
+  let showBSettled = false;
+  let showB!: ReturnType<MobileRewardedAdController['showAd']>;
+  ReactTestRenderer.act(() => {
+    showB = controller!.showAd();
+    void showB.then(() => {
+      showBSettled = true;
+    });
+  });
+
+  await ReactTestRenderer.act(async () => {
+    emitA({ type: RewardedAdEventType.EARNED_REWARD, payload: { type: 'coin', amount: 99 } });
+    emitA({ type: AdEventType.CLOSED });
+    emitA({ type: AdEventType.ERROR, payload: { code: 3, message: 'late A error' } });
+    await Promise.resolve();
+  });
+  expect(showBSettled).toBe(false);
+
+  await ReactTestRenderer.act(async () => {
+    emitB({ type: AdEventType.CLOSED });
+    await showB;
+  });
+  await expect(showB).resolves.toEqual({ status: 'dismissed' });
+
+  await ReactTestRenderer.act(async () => { renderer?.unmount(); });
 });

@@ -40,6 +40,7 @@ import {
   getAreaCropKeys,
   getCropOfTheDayStatus,
   getFertilizerCost,
+  getLandmarkStageQuote,
   previewFertilizeAll,
   getPlotCost,
   getWeeklyEventStatus,
@@ -341,6 +342,7 @@ function createSequencedRewardedAd(results: RewardedAdShowResult[]): RewardedAdC
     isAdReady: true,
     isAdSupported: true,
     reloadAd: jest.fn(),
+    ensureAdReady: jest.fn(async () => true),
     showAd: jest.fn(
       async (): Promise<RewardedAdShowResult> => queue.shift() ?? { status: 'failed', error: 'exhausted' }
     ),
@@ -3783,6 +3785,59 @@ describe('FarmGame UI flow', () => {
     expect(screen.getByText('당근 심기 · 10G · 투자효율 +40%')).toBeTruthy();
   }, 30_000);
 
+  test('첫 졸업 이후 상점 보상 광고는 골드 대신 랜드마크 축제 포인트를 지급한다', async () => {
+    const base = createInitialState();
+    const state: GameState = {
+      ...base,
+      gold: 123_456,
+      prestige: { ...base.prestige, level: 1 },
+      unlockedAreas: FARM_AREAS.filter((area) => area.unlock.gate == null).map((area) => area.key),
+    };
+    const rewardedAd = createReadyRewardedAd();
+    const track = jest.fn();
+    const screen = await renderGame(state, {
+      analytics: createFarmAnalytics(track),
+      useRewardedAd: () => rewardedAd,
+    });
+
+    await waitFor(() => expect(screen.getByText(`${formatMoney(state.gold)}G`)).toBeTruthy());
+    fireEvent.press(screen.getByTestId('shop-nav-button'));
+    fireEvent.press(screen.getByTestId('shop-tab-rewards'));
+    expect(screen.getByText('랜드마크 축제 물자')).toBeTruthy();
+    fireEvent.press(screen.getByText('받기'));
+
+    await waitFor(() => expect(rewardedAd.showAd).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(getLatestPersistedState().landmark.festivalDeliveryPoints).toBe(1));
+    expect(getLatestPersistedState().gold).toBe(state.gold);
+    expect(track).toHaveBeenCalledWith(
+      'ad_reward_completed',
+      expect.objectContaining({
+        ad_type: 'rewardedGold',
+        reward_kind: 'festival_delivery_points',
+        reward_key: 'festival_delivery_point',
+        reward_value: 1,
+      })
+    );
+    for (const event of ['ad_reward_impression', 'ad_reward_click', 'ad_reward_completed']) {
+      expect(track).toHaveBeenCalledWith(
+        event,
+        expect.objectContaining({
+          ad_type: 'rewardedGold',
+          placement: 'shop_gold_reward',
+          reward_kind: 'festival_delivery_points',
+        })
+      );
+    }
+    expect(track).toHaveBeenCalledWith(
+      'economy_transaction',
+      expect.objectContaining({
+        flow: 'source',
+        currency: 'festival_delivery_point',
+        reason: 'rewarded_ad',
+      })
+    );
+  }, 30_000);
+
   test('buys a discounted plot after the plot-discount ad and closes the shop', async () => {
     const rewardedAd = createReadyRewardedAd();
     // Enough gold to afford the discounted plot (the ad no longer gives it free).
@@ -3864,9 +3919,10 @@ describe('FarmGame UI flow', () => {
     fireEvent.press(screen.getByTestId('shop-tab-rewards'));
     fireEvent.press(screen.getByText('받기'));
 
-    // 실패 → reloadAd → 재시도(성공)로 showAd가 정확히 2회 호출된다(무한 재시도 금지).
+    // 실패 → 실제 준비 확인 → 재시도(성공)로 showAd가 정확히 2회 호출된다.
     await waitFor(() => expect(rewardedAd.showAd).toHaveBeenCalledTimes(2));
-    expect(rewardedAd.reloadAd).toHaveBeenCalledTimes(1);
+    expect(rewardedAd.ensureAdReady).toHaveBeenCalledTimes(1);
+    expect(rewardedAd.reloadAd).not.toHaveBeenCalled();
 
     expect(track).toHaveBeenCalledWith('ad_reward_completed', expect.objectContaining({ ad_type: 'rewardedGold' }));
     expect(track).not.toHaveBeenCalledWith('ad_reward_failed', expect.anything());
@@ -3890,38 +3946,48 @@ describe('FarmGame UI flow', () => {
     fireEvent.press(screen.getByText('받기'));
 
     await waitFor(() => expect(rewardedAd.showAd).toHaveBeenCalledTimes(2));
-    expect(rewardedAd.reloadAd).toHaveBeenCalledTimes(1);
+    expect(rewardedAd.ensureAdReady).toHaveBeenCalledTimes(1);
+    expect(rewardedAd.reloadAd).not.toHaveBeenCalled();
 
     const failedCalls = track.mock.calls.filter(([event]) => event === 'ad_reward_failed');
     expect(failedCalls).toHaveLength(1);
     expect(failedCalls[0][1]).toEqual(expect.objectContaining({ ad_type: 'rewardedGold', reason: 'no_fill' }));
   }, 30_000);
 
-  test('미로드 상태로 CTA를 게이트하고 시트 오픈 시 프리로드를 킥한다 (#374 AC1·AC2)', async () => {
+  test('미로드 상태의 실제 CTA 탭을 계측하고 보상 탭 진입 시 프리로드를 킥한다', async () => {
     const rewardedAd: RewardedAdController = {
       isAdReady: false,
       isAdSupported: true,
       reloadAd: jest.fn(),
       showAd: jest.fn(async (): Promise<RewardedAdShowResult> => ({ status: 'notReady' })),
     };
-    const screen = await renderGame(null, { useRewardedAd: () => rewardedAd });
+    const track = jest.fn();
+    const screen = await renderGame(null, {
+      analytics: createFarmAnalytics(track),
+      useRewardedAd: () => rewardedAd,
+    });
 
     await waitFor(() => expect(screen.getByText('50G')).toBeTruthy());
 
     fireEvent.press(screen.getByText('🏪 상점'));
+    expect(rewardedAd.reloadAd).not.toHaveBeenCalled();
+    fireEvent.press(screen.getByTestId('shop-tab-rewards'));
 
-    // 광고 CTA 시트(상점) 오픈 시 미로드면 재로드를 정확히 한 번 킥한다(AC2).
+    // 실제 광고 카드가 보이는 보상 탭에 진입했을 때만 프리로드를 킥한다.
     await waitFor(() => expect(rewardedAd.reloadAd).toHaveBeenCalledTimes(1));
     await act(async () => {
       jest.advanceTimersByTime(GAME_TICK_INTERVAL_MS * 8);
     });
     expect(rewardedAd.reloadAd).toHaveBeenCalledTimes(1);
 
-    // 미로드 상태에서는 보상 CTA(골드·개간 할인)가 모두 대기 문구로 게이트되고
-    // show가 호출되지 않는다(AC1).
-    fireEvent.press(screen.getByTestId('shop-tab-rewards'));
-    expect(screen.getAllByText('대기').length).toBeGreaterThanOrEqual(2);
+    // CTA 탭 의도는 readiness와 무관하게 click→failed(not_ready)로 남지만,
+    // 준비되지 않은 네이티브 show는 호출하지 않고 보상도 지급하지 않는다.
+    fireEvent.press(screen.getByText('받기'));
+    fireEvent.press(screen.getByText('받기'));
     expect(rewardedAd.showAd).not.toHaveBeenCalled();
+    expect(screen.getByText(getFarmMessages(DEFAULT_LOCALE).adPreparingToast)).toBeTruthy();
+    expect(track.mock.calls.filter(([event]) => event === 'ad_reward_click')).toHaveLength(1);
+    expect(track.mock.calls.filter(([event]) => event === 'ad_reward_failed')).toHaveLength(1);
   }, 30_000);
 
   test('closes the growth ad sheet after completing crop growth', async () => {
@@ -5169,9 +5235,28 @@ describe('FarmGame UI flow', () => {
         expect.objectContaining({
           ad_type: 'wheelBonusAd',
           placement: 'wheel_bonus_spin',
+          reward_kind: 'wheel_bonus_spin',
           reward_value: 1,
         })
       );
+      expect(track).toHaveBeenCalledWith(
+        'ad_reward_impression',
+        expect.objectContaining({
+          ad_type: 'wheelBonusAd',
+          placement: 'wheel_bonus_spin',
+          reward_kind: 'wheel_bonus_spin',
+        })
+      );
+      const click = track.mock.calls.find(
+        ([event, params]) => event === 'ad_reward_click' && params?.ad_type === 'wheelBonusAd'
+      )?.[1];
+      const completed = track.mock.calls.find(
+        ([event, params]) => event === 'ad_reward_completed' && params?.ad_type === 'wheelBonusAd'
+      )?.[1];
+      expect(click?.attempt_id).toEqual(expect.any(String));
+      expect(completed?.attempt_id).toBe(click?.attempt_id);
+      expect(click?.reward_kind).toBe('wheel_bonus_spin');
+      expect(completed?.reward_kind).toBe('wheel_bonus_spin');
     });
 
     test('룰렛 광고 dismiss는 보너스 상태·보상을 바꾸지 않고 CTA를 유지한다 (#298)', async () => {
@@ -5201,6 +5286,7 @@ describe('FarmGame UI flow', () => {
         expect.objectContaining({
           ad_type: 'wheelBonusAd',
           placement: 'wheel_bonus_spin',
+          reward_kind: 'wheel_bonus_spin',
           reason: 'dismissed',
         })
       );
@@ -6157,34 +6243,63 @@ describe('FarmGame UI flow', () => {
     const collectionScreenCount = (track: jest.Mock): number =>
       track.mock.calls.filter(([eventName]) => eventName === 'collection_screen').length;
 
-    // AC-1·AC-2·AC-3·AC-5 (shop): 오픈 직후 2건(AC-2) → 열린 채 밭 개간으로 실제 gameState
-    // 변경해도 2건 유지(AC-1·AC-5, trackAdRewardImpression 불변) → 재오픈 시 다시 2건(AC-3).
-    test('AC-1·AC-2·AC-3·AC-5 (shop): 상점 시트가 열린 동안 gameState가 갱신돼도 impression이 재발화되지 않고 재오픈 시 다시 2건 발화된다', async () => {
+    // 상점 기본 탭은 광고 카드가 보이지 않으므로 0건이다. 보상 탭에 실제 진입할 때
+    // 2건이 발화하고, 열린 채 재렌더에는 중복되지 않으며 재진입은 새 노출로 센다.
+    test('shop: 실제 보상 탭 노출에만 impression을 기록하고 같은 노출 중에는 중복하지 않는다', async () => {
       const shopReadyState = createShopReadyState();
       const plotCost = getPlotCost(shopReadyState.unlockedPlotCount);
       const track = jest.fn();
-      const screen = await renderGame(shopReadyState, { analytics: createFarmAnalytics(track) });
+      const screen = await renderGame(shopReadyState, {
+        analytics: createFarmAnalytics(track),
+        useRewardedAd: () => createReadyRewardedAd(),
+      });
 
       await waitFor(() => expect(screen.getByText(`${formatMoney(shopReadyState.gold)}G`)).toBeTruthy());
 
-      // 상점 열기: impression은 rewardedGold, plotDiscountAd 정확히 2건만 발화된다.
+      // 상점 기본 확장 탭에는 광고 카드가 없으므로 false impression이 없어야 한다.
       fireEvent.press(screen.getByTestId('shop-nav-button'));
+      expect(impressionTypes(track)).toEqual([]);
+
+      // 실제 카드가 보이는 보상 탭 진입 시 정확히 두 제안만 기록한다.
+      fireEvent.press(screen.getByTestId('shop-tab-rewards'));
       expect(impressionTypes(track)).toEqual(['rewardedGold', 'plotDiscountAd']);
 
-      // 상점이 열린 채 gameState를 바꾼다(밭 개간 구매 → 골드 감소로 커밋 확인).
-      // 회귀 전에는 여기서 analyticsContext identity가 바뀌어 impression이 2건 더 발화됐다.
+      await act(async () => {
+        jest.advanceTimersByTime(GAME_TICK_INTERVAL_MS * 4);
+      });
+      expect(impressionTypes(track)).toEqual(['rewardedGold', 'plotDiscountAd']);
+
+      // 다른 탭에서 실제 상태가 바뀌어도 보이지 않는 광고 노출은 추가하지 않는다.
+      fireEvent.press(screen.getByTestId('shop-tab-expand'));
       fireEvent.press(screen.getByText('밭 개간하기'));
       expect(screen.getByText(`${formatMoney(shopReadyState.gold - plotCost)}G`)).toBeTruthy();
       expect(impressionTypes(track)).toEqual(['rewardedGold', 'plotDiscountAd']);
 
-      // 닫았다가 다시 열면 impression이 다시 1회(2건) 발화된다. 시트 닫힘은 애니메이션
-      // 완료 콜백에서 activeSheet=null로 커밋되므로, 재오픈 전에 타이머를 진행시킨다.
+      // 보상 탭 재진입은 새로운 실제 노출이다.
+      fireEvent.press(screen.getByTestId('shop-tab-rewards'));
+      expect(impressionTypes(track)).toEqual([
+        'rewardedGold',
+        'plotDiscountAd',
+        'rewardedGold',
+        'plotDiscountAd',
+      ]);
+
+      // 시트를 닫아도 다음 상점 기본 탭에는 노출이 없고, 보상 탭을 다시 열어야 추가된다.
       fireEvent.press(screen.getByLabelText(localMessages.sheetCloseAccessibilityLabel));
       await act(async () => {
         jest.advanceTimersByTime(SHEET_CLOSE_SETTLE_MS);
       });
       fireEvent.press(screen.getByTestId('shop-nav-button'));
       expect(impressionTypes(track)).toEqual([
+        'rewardedGold',
+        'plotDiscountAd',
+        'rewardedGold',
+        'plotDiscountAd',
+      ]);
+      fireEvent.press(screen.getByTestId('shop-tab-rewards'));
+      expect(impressionTypes(track)).toEqual([
+        'rewardedGold',
+        'plotDiscountAd',
         'rewardedGold',
         'plotDiscountAd',
         'rewardedGold',
@@ -6238,7 +6353,7 @@ describe('FarmGame UI flow', () => {
     // transition tracker 경로를 growthAd 타입에 대해 직접 검증한다.
     test('AC-1·AC-2·AC-3 (growthAd): 성장 가속 시트도 타입 전이당 growthAd impression 1건만 발화하고 재오픈 시 다시 1건 발화된다', async () => {
       // 성장 중인 밭(state 1) + 넉넉한 골드로 성장 가속 시트가 확실히 열리게 한다.
-      const state: GameState = { ...createGrowingCropState(), gold: 100_000 };
+      const state: GameState = { ...createGrowingLongCropState('world_tree'), gold: 100_000_000_000 };
       const rewardedAd = createReadyRewardedAd();
       const track = jest.fn();
       const screen = await renderGame(state, {
@@ -6249,7 +6364,8 @@ describe('FarmGame UI flow', () => {
 
       // 씨앗 도구를 선택해 밭 탭이 수확이 아닌 성장 가속으로 해석되게 한 뒤, 성장 중인
       // 밭을 눌러 시트를 연다: growthAd impression 1건.
-      fireEvent.press(screen.getByText('당근'));
+      fireEvent.press(screen.getByTestId('area-tab-legend_field'));
+      fireEvent.press(screen.getByTestId('seed-tool-world_tree'));
       fireEvent.press(screen.getByTestId('plot-cell-0'));
       expect(impressionTypes(track)).toEqual(['growthAd']);
 
@@ -6265,7 +6381,7 @@ describe('FarmGame UI flow', () => {
         jest.advanceTimersByTime(SHEET_CLOSE_SETTLE_MS);
       });
       fireEvent.press(screen.getByTestId('plot-cell-0'));
-      expect(impressionTypes(track)).toEqual(['growthAd', 'growthAd']);
+      await waitFor(() => expect(impressionTypes(track)).toEqual(['growthAd', 'growthAd']));
     });
 
     // AC-1·AC-2·AC-3 (harvestBonus): 수확 보너스 넛지 시트도 타입 전이당 harvestBonusAd
@@ -6473,6 +6589,47 @@ describe('getNextAreaGoal', () => {
   });
 });
 
+describe('getNextFarmGoal', () => {
+  const { getNextFarmGoal } = farmGameModule;
+  const sequentialAreaKeys = FARM_AREAS.filter((area) => area.unlock.gate == null).map((area) => area.key);
+
+  test('P0에서 모든 구역을 열면 농장 졸업 작물 목표로 이어진다', () => {
+    const state: GameState = { ...createInitialState(), unlockedAreas: sequentialAreaKeys };
+    expect(getNextFarmGoal(state)).toMatchObject({ kind: 'prestige_crops' });
+  });
+
+  test('P1 이상에서는 진행 중인 랜드마크가 졸업 목표보다 먼저 보인다', () => {
+    const base = createInitialState();
+    const state: GameState = {
+      ...base,
+      gold: getPrestigeCost(1),
+      harvestedCropKeys: getCropKeys(),
+      unlockedAreas: sequentialAreaKeys,
+      prestige: { ...base.prestige, level: 1 },
+    };
+    expect(getNextFarmGoal(state)).toMatchObject({
+      kind: 'landmark',
+      tier: 1,
+      stageKey: 'foundation',
+      completedStages: 0,
+      totalStages: 5,
+    });
+  });
+
+  test('현재 티어 랜드마크를 완공하면 다시 농장 졸업 목표가 보인다', () => {
+    const base = createInitialState();
+    const state: GameState = {
+      ...base,
+      gold: getPrestigeCost(1),
+      harvestedCropKeys: getCropKeys(),
+      unlockedAreas: sequentialAreaKeys,
+      prestige: { ...base.prestige, level: 1 },
+      landmark: { ...base.landmark, completedTier: 1 },
+    };
+    expect(getNextFarmGoal(state)).toEqual({ kind: 'prestige_ready' });
+  });
+});
+
 // ---------------------------------------------------------------------------
 // UI tests for NextGoalBar component
 // ---------------------------------------------------------------------------
@@ -6541,6 +6698,78 @@ describe('NextGoalBar', () => {
     expect(screen.queryByText('농장 관리소')).toBeNull();
     fireEvent.press(screen.getByTestId('next-goal-bar'));
     expect(screen.getByText('농장 관리소')).toBeTruthy();
+  });
+
+  test('랜드마크 목표 바를 누르면 개척 지도의 현재 프로젝트로 이동한다', async () => {
+    const base = createInitialState();
+    const state: GameState = {
+      ...base,
+      unlockedAreas: FARM_AREAS.filter((area) => area.unlock.gate == null).map((area) => area.key),
+      prestige: { ...base.prestige, level: 1 },
+    };
+    const screen = await renderGame(state);
+
+    await waitFor(() => expect(screen.getByTestId('next-goal-bar')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('next-goal-bar'));
+    expect(screen.getByText('농장 랜드마크')).toBeTruthy();
+    expect(screen.getByTestId('landmark-project-section')).toBeTruthy();
+  });
+
+  test('랜드마크 단계는 2탭 확인 후 재료를 원자적으로 소비하고 계측한다', async () => {
+    const base = createInitialState();
+    const state: GameState = {
+      ...base,
+      gold: getPrestigeCost(1),
+      unlockedAreas: FARM_AREAS.filter((area) => area.unlock.gate == null).map((area) => area.key),
+      prestige: { ...base.prestige, level: 1 },
+      production: {
+        ...base.production,
+        inventory: { ...base.production.inventory, carrot: 15 },
+      },
+    };
+    const quote = getLandmarkStageQuote(state);
+    expect(quote).not.toBeNull();
+    const track = jest.fn();
+    const screen = await renderGame(state, { analytics: createFarmAnalytics(track) });
+
+    await waitFor(() => expect(screen.getByTestId('next-goal-bar')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('next-goal-bar'));
+    const action = screen.getByTestId('landmark-fund-action');
+    fireEvent.press(action);
+    expect(getLatestPersistedState().landmark.completedStages).toEqual([]);
+    fireEvent.press(screen.getByTestId('landmark-fund-action'));
+
+    await waitFor(() =>
+      expect(getLatestPersistedState().landmark.completedStages).toEqual(['foundation'])
+    );
+    expect(getLatestPersistedState().gold).toBe(state.gold - quote!.requirements.gold);
+    expect(getLatestPersistedState().production.inventory.carrot).toBe(5);
+    expect(track).toHaveBeenCalledWith(
+      'landmark_stage_funded',
+      expect.objectContaining({
+        tier: 1,
+        stage_key: 'foundation',
+        gold_cost: quote!.requirements.gold,
+      })
+    );
+    expect(track).toHaveBeenCalledWith(
+      'economy_transaction',
+      expect.objectContaining({ flow: 'sink', currency: 'gold', reason: 'landmark_stage' })
+    );
+  });
+
+  test('졸업 준비 완료 목표 바를 누르면 개척 지도를 연다', async () => {
+    const state: GameState = {
+      ...createInitialState(),
+      gold: getPrestigeCost(0),
+      harvestedCropKeys: getCropKeys(),
+      unlockedAreas: FARM_AREAS.filter((area) => area.unlock.gate == null).map((area) => area.key),
+    };
+    const screen = await renderGame(state);
+
+    await waitFor(() => expect(screen.getByText('🌟 농장 졸업 준비 완료! 개척 지도 열기')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('next-goal-bar'));
+    expect(screen.getByText('현재 농장')).toBeTruthy();
   });
 
   describe('harvest notification permission prompt', () => {
