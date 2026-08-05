@@ -1,6 +1,7 @@
 import balance from './balance.json';
 import type { CropKey, GameState } from './types';
 import type { CropInventory } from './production';
+import { LANDMARK_DUPLICATE_DISH_FESTIVAL_POINTS, grantLandmarkFestivalDeliveryPoints } from './landmark';
 
 // 요리 도감 시스템(#442). 수확 부산물 재고(GameState.production.inventory)를 재료
 // 창고로 공유해, 작물 2~3종을 요리 솥에 넣고 결정적 타이머 후 랜덤 추첨으로 150종
@@ -423,18 +424,22 @@ export function resolveCooking(
   const pool = COOKING_DISHES.filter((dish) => dish.grade === grade.key && dish.tier <= maxTier);
   const dish = pool[Math.min(pool.length - 1, Math.floor(clamp01(rng()) * pool.length))]!;
   const previousCount = gameState.cooking.discoveredDishes[dish.key] ?? 0;
+  const resolvedState: GameState = {
+    ...gameState,
+    cooking: {
+      ...gameState.cooking,
+      pot: null,
+      discoveredDishes: { ...gameState.cooking.discoveredDishes, [dish.key]: previousCount + 1 },
+      totalCookCount: gameState.cooking.totalCookCount + 1,
+      totalSuccessCount: gameState.cooking.totalSuccessCount + 1,
+    },
+  };
 
   return {
-    state: {
-      ...gameState,
-      cooking: {
-        ...gameState.cooking,
-        pot: null,
-        discoveredDishes: { ...gameState.cooking.discoveredDishes, [dish.key]: previousCount + 1 },
-        totalCookCount: gameState.cooking.totalCookCount + 1,
-        totalSuccessCount: gameState.cooking.totalSuccessCount + 1,
-      },
-    },
+    state:
+      previousCount > 0
+        ? grantLandmarkFestivalDeliveryPoints(resolvedState, LANDMARK_DUPLICATE_DISH_FESTIVAL_POINTS)
+        : resolvedState,
     result: { outcome: 'success', dishKey: dish.key, grade: dish.grade, isNew: previousCount === 0 },
   };
 }

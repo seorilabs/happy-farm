@@ -18,12 +18,14 @@ import {
   getSkillEffect,
   getSkillLevel,
   type GameState,
+  type LandmarkStageKey,
   type PrestigeSkillKey,
   type RegionArchetypeKey,
   type SupportedLocale,
 } from '../../../farm-core/src';
 
 import type { FarmMessages } from '../i18n';
+import { LandmarkProjectSection } from './LandmarkProjectSection';
 import { SheetAction, ShopCard, sheetPartStyles } from './SheetParts';
 
 function formatMultiplier(value: number): string {
@@ -38,6 +40,7 @@ export function ChainMapSheet({
   onCollectChain,
   onOpenPrestigeConfirm,
   onBuySkill,
+  onFundLandmark,
 }: {
   gameState: GameState;
   locale: SupportedLocale;
@@ -46,6 +49,7 @@ export function ChainMapSheet({
   onCollectChain: () => void;
   onOpenPrestigeConfirm: () => void;
   onBuySkill: (skillKey: PrestigeSkillKey) => void;
+  onFundLandmark: (expectedTier: number, expectedStageKey: LandmarkStageKey) => void;
 }) {
   const archetype = getRegionArchetype(gameState.prestige.currentRegionArchetype);
   const regionName = getRegionArchetypeLabel(archetype.key, locale).name;
@@ -67,6 +71,13 @@ export function ChainMapSheet({
           {messages.regionModifiersLabel(formatMultiplier(archetype.sellMult), formatMultiplier(archetype.growTimeMult))}
         </Text>
       </View>
+
+      <LandmarkProjectSection
+        gameState={gameState}
+        locale={locale}
+        messages={messages}
+        onFundLandmark={onFundLandmark}
+      />
 
       <Text style={sheetPartStyles.sheetSectionTitle}>{messages.chainSection}</Text>
       {gameState.chainFarms.length === 0 ? (

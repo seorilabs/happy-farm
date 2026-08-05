@@ -12,7 +12,7 @@ type FullScreenAdEvent = {
 type FullScreenAdRequest = {
   options: { adGroupId: string };
   onEvent: (event: FullScreenAdEvent) => void;
-  onError: () => void;
+  onError: (error?: unknown) => void;
 };
 
 const mockUnregisterLoad = jest.fn();
@@ -45,7 +45,7 @@ jest.mock('../../firebaseWeb/remoteConfig', () => ({
   useAppsInTossAdsEnabled: () => true,
 }));
 
-const { useFullScreenAd } =
+const { FULL_SCREEN_AD_LOAD_TIMEOUT_MS, FULL_SCREEN_AD_SHOW_TIMEOUT_MS, useFullScreenAd } =
   jest.requireActual<typeof import('../platform/fullScreenAd')>('../platform/fullScreenAd');
 
 function Harness({ onController }: { onController: (controller: RewardedAdController) => void }) {
@@ -68,6 +68,7 @@ describe('useFullScreenAd', () => {
 
   afterEach(() => {
     cleanup();
+    jest.useRealTimers();
   });
 
   test('returns notReady immediately when showAd is called while another show is in flight', async () => {
@@ -246,5 +247,177 @@ describe('useFullScreenAd', () => {
 
     expect(result).toEqual({ status: 'dismissed' });
     expect(mockUnregisterShow).toHaveBeenCalledTimes(1);
+  });
+
+  test('ensureAdReady waits for the actual loaded event', async () => {
+    const controllerRef: { current?: RewardedAdController } = {};
+    render(<Harness onController={(value) => { controllerRef.current = value; }} />);
+    await waitFor(() => expect(latestLoadRequest).not.toBeNull());
+
+    const controller = controllerRef.current;
+    if (controller?.ensureAdReady == null) throw new Error('ensureAdReady not provided');
+    let ready: boolean | null = null;
+    let readyPromise!: Promise<void>;
+    act(() => {
+      readyPromise = controller.ensureAdReady!().then((value) => { ready = value; });
+    });
+    await Promise.resolve();
+    expect(ready).toBeNull();
+
+    act(() => { latestLoadRequest?.onEvent({ type: 'loaded' }); });
+    await readyPromise;
+    expect(ready).toBe(true);
+    expect(controllerRef.current?.isAdReady).toBe(true);
+  });
+
+  test('ensureAdReady resolves false on load error', async () => {
+    const controllerRef: { current?: RewardedAdController } = {};
+    render(<Harness onController={(value) => { controllerRef.current = value; }} />);
+    await waitFor(() => expect(latestLoadRequest).not.toBeNull());
+
+    const controller = controllerRef.current;
+    if (controller?.ensureAdReady == null) throw new Error('ensureAdReady not provided');
+    let readyPromise!: Promise<boolean>;
+    act(() => {
+      readyPromise = controller.ensureAdReady!();
+    });
+    act(() => { latestLoadRequest?.onError(new Error('no fill')); });
+
+    await expect(readyPromise).resolves.toBe(false);
+    expect(controllerRef.current?.isAdReady).toBe(false);
+  });
+
+  test('ensureAdReady resolves false when loading times out', async () => {
+    jest.useFakeTimers();
+    const controllerRef: { current?: RewardedAdController } = {};
+    render(<Harness onController={(value) => { controllerRef.current = value; }} />);
+    expect(latestLoadRequest).not.toBeNull();
+
+    const controller = controllerRef.current;
+    if (controller?.ensureAdReady == null) throw new Error('ensureAdReady not provided');
+    let readyPromise!: Promise<boolean>;
+    act(() => {
+      readyPromise = controller.ensureAdReady!();
+    });
+    act(() => { jest.advanceTimersByTime(FULL_SCREEN_AD_LOAD_TIMEOUT_MS); });
+
+    await expect(readyPromise).resolves.toBe(false);
+    expect(controllerRef.current?.isAdReady).toBe(false);
+  });
+
+  test('ensureAdReady applies its own timeout while the default load remains in flight', async () => {
+    jest.useFakeTimers();
+    const controllerRef: { current?: RewardedAdController } = {};
+    render(<Harness onController={(value) => { controllerRef.current = value; }} />);
+    expect(latestLoadRequest).not.toBeNull();
+
+    const controller = controllerRef.current;
+    if (controller?.ensureAdReady == null) throw new Error('ensureAdReady not provided');
+    let readyPromise!: Promise<boolean>;
+    act(() => {
+      readyPromise = controller.ensureAdReady!(250);
+    });
+    act(() => {
+      jest.advanceTimersByTime(250);
+    });
+
+    await expect(readyPromise).resolves.toBe(false);
+    expect(mockUnregisterLoad).not.toHaveBeenCalled();
+
+    act(() => {
+      latestLoadRequest?.onEvent({ type: 'loaded' });
+    });
+    await waitFor(() => {
+      expect(controllerRef.current?.isAdReady).toBe(true);
+    });
+  });
+
+  test('show timeout fails without a reward and reloads the next ad', async () => {
+    jest.useFakeTimers();
+    const controllerRef: { current?: RewardedAdController } = {};
+    render(<Harness onController={(value) => { controllerRef.current = value; }} />);
+    act(() => { latestLoadRequest?.onEvent({ type: 'loaded' }); });
+
+    const controller = controllerRef.current;
+    if (controller == null) throw new Error('controller not provided');
+    let resultPromise!: Promise<RewardedAdShowResult>;
+    act(() => {
+      resultPromise = controller.showAd();
+    });
+    act(() => { jest.advanceTimersByTime(FULL_SCREEN_AD_SHOW_TIMEOUT_MS); });
+
+    await expect(resultPromise).resolves.toEqual({ status: 'failed', error: 'show_timeout' });
+    expect(mockLoadFullScreenAd).toHaveBeenCalledTimes(2);
+  });
+
+  test('show timeout preserves an earned reward when dismissed is missing', async () => {
+    jest.useFakeTimers();
+    const controllerRef: { current?: RewardedAdController } = {};
+    render(<Harness onController={(value) => { controllerRef.current = value; }} />);
+    act(() => { latestLoadRequest?.onEvent({ type: 'loaded' }); });
+
+    const controller = controllerRef.current;
+    if (controller == null) throw new Error('controller not provided');
+    let resultPromise!: Promise<RewardedAdShowResult>;
+    act(() => {
+      resultPromise = controller.showAd();
+    });
+    act(() => {
+      latestShowRequest?.onEvent({ type: 'userEarnedReward' });
+      jest.advanceTimersByTime(FULL_SCREEN_AD_SHOW_TIMEOUT_MS);
+    });
+
+    await expect(resultPromise).resolves.toEqual({ status: 'earned' });
+  });
+
+  test('ignores late callbacks from a timed-out show after the next show starts', async () => {
+    jest.useFakeTimers();
+    const controllerRef: { current?: RewardedAdController } = {};
+    render(<Harness onController={(value) => { controllerRef.current = value; }} />);
+    act(() => {
+      latestLoadRequest?.onEvent({ type: 'loaded' });
+    });
+
+    const controller = controllerRef.current;
+    if (controller == null) throw new Error('controller not provided');
+
+    let showA!: Promise<RewardedAdShowResult>;
+    act(() => {
+      showA = controller.showAd();
+    });
+    const requestA = mockShowFullScreenAd.mock.calls[0]?.[0] as FullScreenAdRequest | undefined;
+    if (requestA == null) throw new Error('first show request not provided');
+
+    act(() => {
+      jest.advanceTimersByTime(FULL_SCREEN_AD_SHOW_TIMEOUT_MS);
+    });
+    await expect(showA).resolves.toEqual({ status: 'failed', error: 'show_timeout' });
+
+    act(() => {
+      latestLoadRequest?.onEvent({ type: 'loaded' });
+    });
+    let showBSettled = false;
+    let showB!: Promise<RewardedAdShowResult>;
+    act(() => {
+      showB = controllerRef.current!.showAd();
+      void showB.then(() => {
+        showBSettled = true;
+      });
+    });
+    const requestB = mockShowFullScreenAd.mock.calls[1]?.[0] as FullScreenAdRequest | undefined;
+    if (requestB == null) throw new Error('second show request not provided');
+
+    act(() => {
+      requestA.onEvent({ type: 'userEarnedReward' });
+      requestA.onEvent({ type: 'dismissed' });
+      requestA.onError(new Error('late A error'));
+    });
+    await Promise.resolve();
+    expect(showBSettled).toBe(false);
+
+    act(() => {
+      requestB.onEvent({ type: 'dismissed' });
+    });
+    await expect(showB).resolves.toEqual({ status: 'dismissed' });
   });
 });

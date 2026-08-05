@@ -1,6 +1,7 @@
 import balance from './balance.json';
 import type {
   ChainFarm,
+  AreaKey,
   CropKey,
   GameState,
   PrestigeProgress,
@@ -112,25 +113,40 @@ export function getPrestigeStarsAward(level: number): number {
   return PRESTIGE_STARS_BASE + level;
 }
 
-export type PrestigeCheck = {
+export type PrestigeRequirementStatus = {
+  requiredAreaKey: AreaKey;
+  requiredCropKeys: CropKey[];
+  missingCropKeys: CropKey[];
   allowed: boolean;
   collectionComplete: boolean;
+  gold: number;
+  currentGold: number;
   goldSufficient: boolean;
   cost: number;
 };
 
-export function canPrestige(gameState: GameState): PrestigeCheck {
+export type PrestigeCheck = PrestigeRequirementStatus;
+
+export function getPrestigeRequirementStatus(gameState: GameState): PrestigeRequirementStatus {
   const cost = getPrestigeCost(gameState.prestige.level);
-  const collectionComplete =
-    GRADUATION_CROP_KEYS.length > 0 &&
-    GRADUATION_CROP_KEYS.every((cropKey) => gameState.harvestedCropKeys.includes(cropKey));
+  const missingCropKeys = GRADUATION_CROP_KEYS.filter((cropKey) => !gameState.harvestedCropKeys.includes(cropKey));
+  const collectionComplete = GRADUATION_CROP_KEYS.length > 0 && missingCropKeys.length === 0;
   const goldSufficient = gameState.gold >= cost;
   return {
+    requiredAreaKey: balance.regions.graduation.requiredAreaCollection as AreaKey,
+    requiredCropKeys: [...GRADUATION_CROP_KEYS],
+    missingCropKeys,
     allowed: collectionComplete && goldSufficient,
     collectionComplete,
+    gold: gameState.gold,
+    currentGold: gameState.gold,
     goldSufficient,
     cost,
   };
+}
+
+export function canPrestige(gameState: GameState): PrestigeCheck {
+  return getPrestigeRequirementStatus(gameState);
 }
 
 export type PrestigePreview = {

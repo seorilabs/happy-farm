@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 export function SheetAction({
   label,
+  accessibilityHint,
   disabled,
   secondary,
   danger,
@@ -10,6 +11,7 @@ export function SheetAction({
   testID,
 }: {
   label: string;
+  accessibilityHint?: string;
   disabled?: boolean;
   secondary?: boolean;
   danger?: boolean;
@@ -22,6 +24,7 @@ export function SheetAction({
       disabled={disabled}
       accessibilityRole="button"
       accessibilityLabel={label}
+      accessibilityHint={accessibilityHint}
       accessibilityState={{ disabled: disabled === true }}
       style={[
         sheetPartStyles.sheetAction,

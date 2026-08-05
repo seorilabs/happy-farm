@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 4,
+  "schemaVersion": 5,
   "agentPurpose": "Canonical balance data for the farm-game runtime and simulation scripts. Agents should modify this file first, run npm run sim:balance, then update Obsidian balance notes with findings.",
   "goals": {
     "firstMinute": "Teach plant-grow-harvest with carrot/wheat.",
@@ -147,6 +147,20 @@
       "hybrid_greenhouse": 25000000000
     },
     "fullCompletionReward": 100000000000
+  },
+  "landmark": {
+    "agentPurpose": "프레스티지 이후 열리는 5단계 메타 골드 싱크. 각 프레스티지 레벨은 같은 번호의 랜드마크 프로젝트 1개를 해금하며, 단계별 골드는 해당 티어의 졸업 비용에 비례한다. 5단계 총 골드는 정확히 졸업 비용의 72%가 되도록 런타임에서 마지막 단계를 보정한다. 작물 재고·동물 산출물·축제 납품 포인트도 함께 소비하지만 외형 진행 외 골드/판매/성장 배율 보상은 제공하지 않는다.",
+    "unlockPrestigeLevel": 1,
+    "duplicateDishFestivalPoints": 1,
+    "animalProductPerCollection": 1,
+    "rewardedAdFestivalPoints": 1,
+    "stages": [
+      { "key": "foundation", "goldCostRatio": 0.03, "cropUnits": 10, "animalProducts": 0, "festivalPoints": 0 },
+      { "key": "frame", "goldCostRatio": 0.07, "cropUnits": 20, "animalProducts": 2, "festivalPoints": 0 },
+      { "key": "equipment", "goldCostRatio": 0.12, "cropUnits": 35, "animalProducts": 3, "festivalPoints": 1 },
+      { "key": "festival_prep", "goldCostRatio": 0.2, "cropUnits": 55, "animalProducts": 5, "festivalPoints": 2 },
+      { "key": "complete", "goldCostRatio": 0.3, "cropUnits": 80, "animalProducts": 8, "festivalPoints": 3 }
+    ]
   },
   "regions": {
     "agentPurpose": "Prestige (farm chain) data. Graduating requires the legend_field collection plus gold (costBase * costGrowth^level). The old farm becomes a chain farm paying incomeRatio of its snapshot productivity. Crop sell AND cost scale by scalePerLevel^level (ROI-preserving inflation); archetypes vary growth time vs sale price. chain.offlineCapMs is the base offline accrual window (24h) so a once-daily player loses no chain income next to multi-day crops; the offline_cap prestige skill extends it (+4h/level, up to 40h).",

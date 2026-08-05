@@ -33,7 +33,7 @@ function isFiniteNumber(value) {
 const balance = readJson('packages/farm-core/src/balance.json');
 
 // 1) 스키마/경제 기본값
-check(Number.isInteger(balance.schemaVersion) && balance.schemaVersion > 0, 'schemaVersion은 양의 정수여야 합니다.');
+check(balance.schemaVersion === 5, `schemaVersion은 5여야 합니다(현재 ${balance.schemaVersion}).`);
 
 const economy = balance.economy ?? {};
 check(isFiniteNumber(economy.defaultGold) && economy.defaultGold > 0, 'economy.defaultGold는 0보다 커야 합니다.');
@@ -424,6 +424,69 @@ check((balance.regions?.scalePerLevel ?? 0) > 1, 'regions.scalePerLevel은 1보�
 const chain = balance.regions?.chain ?? {};
 check(chain.incomeRatio > 0 && chain.incomeRatio <= 1, 'regions.chain.incomeRatio는 0 초과 1 이하여야 합니다.');
 check(chain.offlineCapMs > 0, 'regions.chain.offlineCapMs는 0보다 커야 합니다.');
+
+// 7-b) 랜드마크: 프레스티지별 5단계 후반 골드 싱크. 골드 비율 합은 졸업비의
+// 정확히 72%이고, 마지막 단계의 런타임 보정 외 기초 요구량은 티어와 무관하다.
+// 외형 진행 외 경제 배율/골드 보상을 넣지 않아야 기존 농사 경제를 지배하지 않는다.
+const landmark = balance.landmark ?? {};
+const landmarkStages = Array.isArray(landmark.stages) ? landmark.stages : [];
+const expectedLandmarkStageKeys = ['foundation', 'frame', 'equipment', 'festival_prep', 'complete'];
+const expectedLandmarkGoldRatios = [0.03, 0.07, 0.12, 0.2, 0.3];
+const expectedLandmarkCropUnits = [10, 20, 35, 55, 80];
+const expectedLandmarkAnimalProducts = [0, 2, 3, 5, 8];
+const expectedLandmarkFestivalPoints = [0, 0, 1, 2, 3];
+check(
+  Number.isInteger(landmark.unlockPrestigeLevel) && landmark.unlockPrestigeLevel === 1,
+  `landmark.unlockPrestigeLevel(${landmark.unlockPrestigeLevel})은 1이어야 합니다.`
+);
+check(
+  landmarkStages.length === expectedLandmarkStageKeys.length,
+  `landmark.stages는 정확히 ${expectedLandmarkStageKeys.length}단계여야 합니다(현재 ${landmarkStages.length}).`
+);
+for (let index = 0; index < expectedLandmarkStageKeys.length; index += 1) {
+  const stage = landmarkStages[index] ?? {};
+  check(
+    stage.key === expectedLandmarkStageKeys[index],
+    `landmark.stages[${index}].key(${stage.key})는 ${expectedLandmarkStageKeys[index]}여야 합니다.`
+  );
+  check(
+    stage.goldCostRatio === expectedLandmarkGoldRatios[index],
+    `랜드마크 ${stage.key ?? index}: goldCostRatio(${stage.goldCostRatio})가 설계값 ${expectedLandmarkGoldRatios[index]}와 달라졌습니다.`
+  );
+  check(
+    stage.cropUnits === expectedLandmarkCropUnits[index],
+    `랜드마크 ${stage.key ?? index}: cropUnits(${stage.cropUnits})가 설계값 ${expectedLandmarkCropUnits[index]}와 달라졌습니다.`
+  );
+  check(
+    stage.animalProducts === expectedLandmarkAnimalProducts[index],
+    `랜드마크 ${stage.key ?? index}: animalProducts(${stage.animalProducts})가 설계값 ${expectedLandmarkAnimalProducts[index]}와 달라졌습니다.`
+  );
+  check(
+    stage.festivalPoints === expectedLandmarkFestivalPoints[index],
+    `랜드마크 ${stage.key ?? index}: festivalPoints(${stage.festivalPoints})가 설계값 ${expectedLandmarkFestivalPoints[index]}와 달라졌습니다.`
+  );
+}
+const landmarkGoldRatioTotal = landmarkStages.reduce(
+  (total, stage) => total + (isFiniteNumber(stage?.goldCostRatio) ? stage.goldCostRatio : 0),
+  0
+);
+check(
+  Math.abs(landmarkGoldRatioTotal - 0.72) <= 1e-9,
+  `랜드마크 단계 골드 비율 합(${landmarkGoldRatioTotal})은 졸업비의 0.72여야 합니다.`
+);
+for (const [key, value] of [
+  ['duplicateDishFestivalPoints', landmark.duplicateDishFestivalPoints],
+  ['animalProductPerCollection', landmark.animalProductPerCollection],
+  ['rewardedAdFestivalPoints', landmark.rewardedAdFestivalPoints],
+]) {
+  check(Number.isInteger(value) && value === 1, `landmark.${key}(${value})는 1이어야 합니다.`);
+}
+for (const forbiddenKey of ['goldReward', 'sellBonus', 'profitBonus', 'speedBonus', 'growthBonus']) {
+  check(
+    landmark[forbiddenKey] == null,
+    `landmark.${forbiddenKey}는 허용되지 않습니다(랜드마크는 외형 진행 외 경제 보상을 주지 않음).`
+  );
+}
 
 // 8) 프레스티지 스킬.
 for (const skill of balance.prestigeSkills ?? []) {

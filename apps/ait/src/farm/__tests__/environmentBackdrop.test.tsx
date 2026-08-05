@@ -349,4 +349,76 @@ describe('EnvironmentBackdrop', () => {
 
     expect(screen.UNSAFE_getByProps({ testID: 'environment-seasonal-snow' })).toBeTruthy();
   });
+
+  test('keeps the landmark layer absent when the optional visual state is omitted or locked', () => {
+    const screen = render(
+      <EnvironmentBackdrop phase="day" minutesOfDay={12 * 60} backgroundColor="#eaf6e6" />
+    );
+
+    expect(screen.UNSAFE_queryByProps({ testID: 'environment-landmark-glyph' })).toBeNull();
+
+    screen.rerender(
+      <EnvironmentBackdrop
+        phase="day"
+        minutesOfDay={12 * 60}
+        backgroundColor="#eaf6e6"
+        landmarkVisualState="locked"
+      />
+    );
+    expect(screen.UNSAFE_queryByProps({ testID: 'environment-landmark-glyph' })).toBeNull();
+  });
+
+  test.each([
+    ['foundation', '🧱', 'rgba(133, 93, 57, 0.14)'],
+    ['scaffold', '🏗️', 'rgba(217, 148, 53, 0.16)'],
+    ['festival', '🎪', 'rgba(217, 74, 122, 0.16)'],
+    ['complete', '🏛️', 'rgba(255, 226, 107, 0.18)'],
+  ] as const)(
+    'renders a distinct, non-interactive %s landmark in the background',
+    (visualState, glyph, backgroundColor) => {
+      const screen = render(
+        <EnvironmentBackdrop
+          phase="day"
+          minutesOfDay={12 * 60}
+          backgroundColor="#eaf6e6"
+          landmarkVisualState={visualState}
+        />
+      );
+      const backdrop = screen.UNSAFE_getByProps({ testID: 'environment-backdrop-day' });
+      const landmark = within(backdrop).UNSAFE_getByProps({ testID: `environment-landmark-${visualState}` });
+
+      expect(landmark.props.pointerEvents).toBe('none');
+      expect(landmark.props.accessible).toBe(false);
+      expect(landmark.props.accessibilityElementsHidden).toBe(true);
+      expect(landmark.props.importantForAccessibility).toBe('no-hide-descendants');
+      expect(within(landmark).UNSAFE_getByProps({ testID: 'environment-landmark-glyph' }).props.children).toBe(glyph);
+      expect(StyleSheet.flatten(landmark.props.style).backgroundColor).toBe(backgroundColor);
+
+      if (visualState === 'complete') {
+        expect(within(landmark).UNSAFE_getByProps({ testID: 'environment-landmark-glow' })).toBeTruthy();
+      } else {
+        expect(within(landmark).UNSAFE_queryByProps({ testID: 'environment-landmark-glow' })).toBeNull();
+      }
+    }
+  );
+
+  test('keeps a completed landmark monument while the next tier is under construction', () => {
+    const screen = render(
+      <EnvironmentBackdrop
+        phase="day"
+        minutesOfDay={12 * 60}
+        backgroundColor="#eaf6e6"
+        landmarkVisualState="foundation"
+        completedLandmarkTier={1}
+      />
+    );
+
+    const archive = screen.UNSAFE_getByProps({ testID: 'environment-landmark-archive' });
+    expect(archive.props.pointerEvents).toBe('none');
+    expect(archive.props.accessible).toBe(false);
+    expect(within(archive).UNSAFE_getByProps({ testID: 'environment-landmark-archive-glyph' }).props.children).toBe(
+      '🏛️'
+    );
+    expect(screen.UNSAFE_getByProps({ testID: 'environment-landmark-foundation' })).toBeTruthy();
+  });
 });

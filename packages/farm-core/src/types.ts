@@ -2,6 +2,7 @@ import balance from './balance.json';
 import type { AnimalsState } from './animals';
 import type { CookingState } from './cooking';
 import type { FeatureCoachmarkKey } from './featureCoachmarks';
+import type { LandmarkState } from './landmark';
 import type { ProductionState } from './production';
 import type { DailyBonusState } from './dailyBonus';
 import type { DailyMissionState } from './missions';
@@ -215,6 +216,9 @@ export type GameState = {
   // 요리 도감(#442): 발견한 메뉴별 성공 횟수 + 진행 중인 요리 솥. 도감과 완성도
   // 마일스톤 버프는 장기 수집 콘텐츠라 메타 레이어로 두어 프레스티지를 넘어 유지된다.
   cooking: CookingState;
+  // 프레스티지별 랜드마크 건설 진행과 전용 재료. 후반 골드 싱크가 졸업 직후에도
+  // 끊기지 않아야 하므로 농장 초기화와 분리된 메타 레이어로 유지한다.
+  landmark: LandmarkState;
   // 딥 기능(동물·공방·연구소·교배·개척) 최초 해금 시 1회성 발견성 코치마크(#367)를
   // 이미 확인한 기능 키 목록. 한 번 확인하면 다시는 노출되지 않는다. 메타-레이어 필드라
   // 프레스티지를 넘어 유지된다(placedDecorations/animals와 동일).
@@ -258,6 +262,7 @@ export const META_LAYER_KEYS = [
   'animals',
   'production',
   'cooking',
+  'landmark',
   'seenFeatureCoachmarks',
 ] as const satisfies readonly (keyof GameState)[];
 

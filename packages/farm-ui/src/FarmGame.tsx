@@ -86,6 +86,7 @@ import {
   MAX_PLOTS,
   PLOT_DISCOUNT_AD_PERCENT,
   getRewardedGoldAmount,
+  getShopRewardedAdOffer,
   REWARDED_GOLD_MAX_USES_PER_WINDOW,
   REWARDED_GOLD_WINDOW_MS,
   type AreaKey,
@@ -99,14 +100,23 @@ import {
   type HarvestComboEndReason,
   type HarvestComboTier,
   type HarvestSource,
+  type FundLandmarkStageOutcome,
   type RewardedAdController,
   type RewardedAdShowResult,
   type RewardedAdType,
+  fundLandmarkStage,
+  getLandmarkStageQuote,
+  getLandmarkStatus,
+  getLandmarkVisualState,
+  getPrestigeRequirementStatus,
+  grantLandmarkFestivalDeliveryPoints,
+  type LandmarkStageKey,
   canShowReturnInterstitial,
   canUnlockArea,
   claimCollectionReward,
   createFarmAnalytics,
   getRewardedAdPlacement,
+  normalizeAdFailureFamily,
   shouldRetryRewardedShow,
   createInitialState,
   migrateLoadedState,
@@ -359,6 +369,21 @@ function getCrop(cropKey: CropKey) {
   return crop;
 }
 
+function getLandmarkStageName(stageKey: LandmarkStageKey, messages: FarmMessages): string {
+  switch (stageKey) {
+    case 'foundation':
+      return messages.landmarkStageFoundation;
+    case 'frame':
+      return messages.landmarkStageFrame;
+    case 'equipment':
+      return messages.landmarkStageEquipment;
+    case 'festival_prep':
+      return messages.landmarkStageFestivalPrep;
+    case 'complete':
+      return messages.landmarkStageComplete;
+  }
+}
+
 // Identifies the single most actionable next milestone for the player: the
 // first locked sequential area, and whichever of its requirements is furthest
 // from met. Returned raw so the component can format it with the active locale.
@@ -410,6 +435,57 @@ export function getNextAreaGoal(gameState: GameState): NextAreaGoal {
     current: getMinUpgradeLevel(gameState),
     total: nextArea.unlock.requiredUpgradeLevel,
   };
+}
+
+// Once every sequential area is open, keep the header goal useful: the active
+// landmark stage takes priority, followed by the requirements for graduating
+// the current farm. Area goals keep their existing shape for compatibility.
+export type NextFarmGoal =
+  | NonNullable<NextAreaGoal>
+  | {
+      kind: 'landmark';
+      tier: number;
+      stageKey: LandmarkStageKey;
+      completedStages: number;
+      totalStages: number;
+      ready: boolean;
+    }
+  | { kind: 'prestige_crops'; current: number; total: number; areaKey: AreaKey }
+  | { kind: 'prestige_gold'; current: number; total: number }
+  | { kind: 'prestige_ready' };
+
+export function getNextFarmGoal(gameState: GameState): NextFarmGoal | null {
+  const areaGoal = getNextAreaGoal(gameState);
+  if (areaGoal != null) {
+    return areaGoal;
+  }
+
+  const landmarkStatus = getLandmarkStatus(gameState);
+  const landmarkQuote = getLandmarkStageQuote(gameState);
+  if (landmarkStatus.hasActiveProject && landmarkQuote != null) {
+    return {
+      kind: 'landmark',
+      tier: landmarkQuote.tier,
+      stageKey: landmarkQuote.stageKey,
+      completedStages: landmarkStatus.currentStageIndex,
+      totalStages: landmarkStatus.totalStageCount,
+      ready: landmarkQuote.canFund,
+    };
+  }
+
+  const prestige = getPrestigeRequirementStatus(gameState);
+  if (!prestige.collectionComplete) {
+    return {
+      kind: 'prestige_crops',
+      current: prestige.requiredCropKeys.length - prestige.missingCropKeys.length,
+      total: prestige.requiredCropKeys.length,
+      areaKey: prestige.requiredAreaKey,
+    };
+  }
+  if (!prestige.goldSufficient) {
+    return { kind: 'prestige_gold', current: prestige.currentGold, total: prestige.cost };
+  }
+  return { kind: 'prestige_ready' };
 }
 
 function getCropEconomy(cropEconomyByKey: Record<CropKey, CropEconomyEstimate>, cropKey: CropKey): CropEconomyEstimate {
@@ -468,6 +544,11 @@ export type FarmGamePersistence = {
 type UseFarmAd = (adGroupId?: string) => RewardedAdController;
 type FarmAnalytics = ReturnType<typeof createFarmAnalytics>;
 type FarmGameMarket = 'appsInToss' | 'mobile';
+type PendingLandmarkFundEffect = {
+  reservationKey: string;
+  before: GameState;
+  outcome: FundLandmarkStageOutcome;
+};
 
 function trackCropHarvestedEvent(
   analytics: FarmAnalytics,
@@ -978,6 +1059,14 @@ function FarmGameBody({
   // Wheel bonus ad can outlive a render while the native SDK is open. Reserve
   // the request synchronously so rapid taps cannot open two ads or two spins.
   const wheelBonusSpinInFlightRef = useRef(false);
+  // A single native rewarded surface can be active at a time. Reserve it
+  // synchronously so rapid taps cannot replace the pending SDK promise or
+  // credit two rewards before React has committed a render.
+  const rewardedAdInFlightRef = useRef(false);
+  // Session-local, non-identifying attempt ids join one click to exactly one
+  // terminal event in the BigQuery export. They are not registered as a GA4
+  // custom dimension.
+  const rewardedAdAttemptCounterRef = useRef(0);
   const offlineBonusImpressionAtRef = useRef<number | null>(null);
   // First-session onboarding owns the foreground. A daily-bonus sheet
   // discovered during load waits here until the guide completes or the player
@@ -1121,6 +1210,11 @@ function FarmGameBody({
   // Double-tap guard for confirmPrestige: the state updater is idempotent,
   // but the toast/analytics must fire exactly once per graduated level.
   const prestigedLevelsRef = useRef<Set<number>>(new Set());
+  // Landmark stage payments are irreversible and can receive two taps before
+  // React commits. Reserve each tier/stage synchronously so spend + analytics
+  // are exactly-once while the core expected-stage contract protects state.
+  const fundedLandmarkStagesRef = useRef<Set<string>>(new Set());
+  const pendingLandmarkFundEffectsRef = useRef<Map<string, PendingLandmarkFundEffect>>(new Map());
   const researchPurchaseGuardRef = useRef<{
     nodeKey: ResearchNodeKey;
     fromLevel: number;
@@ -2603,16 +2697,63 @@ function FarmGameBody({
       return;
     }
 
-    if (transitionedSheet.type === 'shop') {
-      const context = buildContext();
-      farmAnalytics.trackAdRewardImpression('rewardedGold', getRewardedAdPlacement('rewardedGold'), context);
-      farmAnalytics.trackAdRewardImpression('plotDiscountAd', getRewardedAdPlacement('plotDiscountAd'), context);
-    }
     if (transitionedSheet.type === 'growthAd') {
-      farmAnalytics.trackAdRewardImpression('growthAd', getRewardedAdPlacement('growthAd'), buildContext());
+      const state = gameStateRef.current;
+      const limit = getRewardedAdLimitStatus(state, 'growthAd', Date.now(), locale);
+      const eligible =
+        rewardedAd.isAdSupported &&
+        transitionedSheet.remainingMs >= GROWTH_AD_MIN_REMAINING_MS &&
+        limit.allowed;
+      // The sheet can also be opened for the gold fertilizer. Count an ad
+      // impression only when the rewarded CTA itself is actually eligible.
+      if (eligible) {
+        farmAnalytics.trackAdRewardImpression(
+          'growthAd',
+          getRewardedAdPlacement('growthAd'),
+          buildContext(state),
+          {
+            adReady: rewardedAd.isAdReady,
+            eligible,
+            adSupported: rewardedAd.isAdSupported,
+            rewardKind: 'growth_skip',
+            rewardKey: 'remaining_growth_ms',
+            ctaPosition: 'growth_sheet_primary',
+          }
+        );
+      }
     }
     if (transitionedSheet.type === 'harvestBonus') {
-      farmAnalytics.trackAdRewardImpression('harvestBonusAd', getRewardedAdPlacement('harvestBonusAd'), buildContext());
+      const state = gameStateRef.current;
+      const limit = getRewardedAdLimitStatus(state, 'harvestBonusAd', Date.now(), locale);
+      if (rewardedAd.isAdSupported && limit.allowed) {
+        farmAnalytics.trackAdRewardImpression(
+          'harvestBonusAd',
+          getRewardedAdPlacement('harvestBonusAd'),
+          buildContext(state),
+          {
+            adReady: rewardedAd.isAdReady,
+            eligible: true,
+            adSupported: true,
+            rewardKind: 'harvest_boost',
+            rewardKey: 'harvest_multiplier',
+            ctaPosition: 'harvest_bonus_sheet_primary',
+          }
+        );
+      }
+    }
+    if (transitionedSheet.type === 'map') {
+      const state = gameStateRef.current;
+      const status = getLandmarkStatus(state);
+      if (status.isFeatureUnlocked) {
+        farmAnalytics.trackLandmarkProjectViewed({
+          tier: status.completedForCurrentPrestige ? status.completedTier : status.currentTier,
+          stageKey: status.currentStageKey ?? 'complete',
+          completedStages: status.completedForCurrentPrestige
+            ? status.totalStageCount
+            : status.currentStageIndex,
+          context: buildContext(state),
+        });
+      }
     }
     if (transitionedSheet.type === 'collection') {
       farmAnalytics.trackCollectionScreen(buildContext());
@@ -2648,13 +2789,73 @@ function FarmGameBody({
         context: buildContext(state),
       });
       // 즉시 완성 광고 CTA는 조리 진행 중에만 노출되므로 그때만 노출 이벤트를 남긴다.
-      if (potStatus.phase === 'cooking') {
+      const cookingLimit = getRewardedAdLimitStatus(state, 'cookingSpeedAd', Date.now(), locale);
+      if (potStatus.phase === 'cooking' && rewardedAd.isAdSupported && cookingLimit.allowed) {
         farmAnalytics.trackAdRewardImpression(
           'cookingSpeedAd',
           getRewardedAdPlacement('cookingSpeedAd'),
-          buildContext(state)
+          buildContext(state),
+          {
+            adReady: rewardedAd.isAdReady,
+            eligible: true,
+            adSupported: true,
+            rewardKind: 'cooking_speed_up',
+            rewardKey: 'cooking_timer',
+            ctaPosition: 'cooking_sheet_primary',
+          }
         );
       }
+    }
+  });
+
+  // The rewards tab lives one level behind the shop's default Expand tab.
+  // Track offers only when the cards are actually visible, not on every shop
+  // open (which previously inflated the impression denominator).
+  const shopRewardAnalyticsTransitionKey =
+    activeSheet?.type === 'shop' && shopTab === 'rewards' && rewardedAd.isAdSupported
+      ? 'shop:rewards'
+      : null;
+  useAnalyticsTransition(shopRewardAnalyticsTransitionKey, activeSheet, (transitionedSheet) => {
+    if (transitionedSheet?.type !== 'shop') return;
+    const buildContext = analyticsContextRef.current;
+    if (buildContext == null) return;
+    const state = gameStateRef.current;
+    const now = Date.now();
+    const goldLimit = getRewardedAdLimitStatus(state, 'rewardedGold', now, locale);
+    if (goldLimit.allowed) {
+      const offer = getShopRewardedAdOffer(state);
+      farmAnalytics.trackAdRewardImpression(
+        'rewardedGold',
+        getRewardedAdPlacement('rewardedGold'),
+        buildContext(state),
+        {
+          adReady: rewardedAd.isAdReady,
+          eligible: true,
+          adSupported: true,
+          rewardKind: offer.kind === 'gold' ? 'gold' : 'festival_delivery_points',
+          rewardKey: offer.kind === 'gold' ? 'gold' : 'festival_delivery_point',
+          rewardValue: offer.amount,
+          ctaPosition: 'shop_rewards_primary',
+        }
+      );
+    }
+
+    const plotLimit = getRewardedAdLimitStatus(state, 'plotDiscountAd', now, locale);
+    if (plotLimit.allowed && state.unlockedPlotCount < MAX_PLOTS) {
+      farmAnalytics.trackAdRewardImpression(
+        'plotDiscountAd',
+        getRewardedAdPlacement('plotDiscountAd'),
+        buildContext(state),
+        {
+          adReady: rewardedAd.isAdReady,
+          eligible: true,
+          adSupported: true,
+          rewardKind: 'plot_discount',
+          rewardKey: 'plot_cost',
+          rewardValue: getDiscountedPlotCost(state.unlockedPlotCount),
+          ctaPosition: 'shop_rewards_secondary',
+        }
+      );
     }
   });
 
@@ -2678,11 +2879,24 @@ function FarmGameBody({
     if (buildContext == null) {
       return;
     }
+    const state = gameStateRef.current;
+    const limit = getRewardedAdLimitStatus(state, 'offlineBonusAd', Date.now(), locale);
+    if (!limit.allowed) {
+      return;
+    }
     offlineBonusImpressionAtRef.current = transitionedSheet.summary.capturedAt;
     farmAnalytics.trackAdRewardImpression(
       'offlineBonusAd',
       getRewardedAdPlacement('offlineBonusAd'),
-      buildContext()
+      buildContext(state),
+      {
+        adReady: rewardedAd.isAdReady,
+        eligible: true,
+        adSupported: true,
+        rewardKind: 'offline_gold_multiplier',
+        rewardKey: 'offline_gold',
+        ctaPosition: 'welcome_back_secondary',
+      }
     );
   });
 
@@ -2692,7 +2906,7 @@ function FarmGameBody({
   useEffect(() => {
     const sheetType = activeSheet?.type;
     const isAdBearingSheet =
-      sheetType === 'shop' ||
+      (sheetType === 'shop' && shopTab === 'rewards') ||
       sheetType === 'growthAd' ||
       sheetType === 'harvestBonus' ||
       sheetType === 'welcomeBack' ||
@@ -2701,7 +2915,7 @@ function FarmGameBody({
     if (isAdBearingSheet && rewardedAd.isAdSupported && !rewardedAd.isAdReady) {
       rewardedAd.reloadAd?.();
     }
-  }, [activeSheet?.type, rewardedAd.isAdSupported, rewardedAd.isAdReady]);
+  }, [activeSheet?.type, shopTab, rewardedAd.isAdSupported, rewardedAd.isAdReady]);
 
   useEffect(() => {
     const id = setInterval(() => {
@@ -2949,14 +3163,17 @@ function FarmGameBody({
       }).length,
     [gameState]
   );
+  const landmarkStageQuote = useMemo(() => getLandmarkStageQuote(gameState), [gameState]);
   const mapActionableCount = useMemo(
     () =>
       (chainIncome.accruedGold > 0 ? 1 : 0) +
       (canPrestige(gameState).allowed ? 1 : 0) +
+      (landmarkStageQuote?.canFund ? 1 : 0) +
       purchasablePrestigeSkillCount,
-    [chainIncome.accruedGold, gameState, purchasablePrestigeSkillCount]
+    [chainIncome.accruedGold, gameState, landmarkStageQuote?.canFund, purchasablePrestigeSkillCount]
   );
-  const nextAreaGoal = useMemo(() => getNextAreaGoal(gameState), [gameState]);
+  const nextFarmGoal = useMemo(() => getNextFarmGoal(gameState), [gameState]);
+  const shopRewardedAdOffer = useMemo(() => getShopRewardedAdOffer(gameState), [gameState]);
 
   useEffect(() => {
     const now = Date.now();
@@ -3153,6 +3370,9 @@ function FarmGameBody({
       const earned = await showRewardedAd('wheelBonusAd', 1, () => undefined, {
         keepSheetOnFailure: true,
         keepSheetOnSuccess: true,
+        rewardKind: 'wheel_bonus_spin',
+        rewardKey: preview.reward.type,
+        ctaPosition: 'wheel_sheet_bonus',
         applyRewardState: (state, rewardedAt) => {
           const committedResult = {
             reward: preview.reward,
@@ -3464,6 +3684,9 @@ function FarmGameBody({
     await showRewardedAd('cookingSpeedAd', 1, () => undefined, {
       keepSheetOnFailure: true,
       keepSheetOnSuccess: true,
+      rewardKind: 'cooking_speed_up',
+      rewardKey: 'cooking_timer',
+      ctaPosition: 'cooking_sheet_primary',
       applyRewardState: (state, rewardedAt) => finishCookingInstantly(state, rewardedAt) ?? state,
     });
   }
@@ -3694,6 +3917,136 @@ function FarmGameBody({
   function openMap() {
     setActiveSheet({ type: 'map' });
   }
+
+  function openNextFarmGoal() {
+    const goal = getNextFarmGoal(gameStateRef.current);
+    if (goal == null) return;
+    if (goal.kind === 'gold' || goal.kind === 'harvest' || goal.kind === 'upgrade' || goal.kind === 'ready') {
+      openShop();
+      return;
+    }
+    if (goal.kind === 'prestige_crops') {
+      setSelectedArea(goal.areaKey);
+      setActiveSheet(null);
+      return;
+    }
+    openMap();
+  }
+
+  function fundCurrentLandmarkStage(expectedTier: number, expectedStageKey: LandmarkStageKey) {
+    const reservationKey = `${expectedTier}:${expectedStageKey}`;
+    if (fundedLandmarkStagesRef.current.has(reservationKey)) {
+      return;
+    }
+    fundedLandmarkStagesRef.current.add(reservationKey);
+    const fundedAt = Date.now();
+
+    setGameState((state) => {
+      const outcome = fundLandmarkStage(state, expectedTier, expectedStageKey, fundedAt);
+      if (outcome == null) {
+        // A queued state transition may have spent a required resource since
+        // the button render. Release the reservation and emit no success UI.
+        fundedLandmarkStagesRef.current.delete(reservationKey);
+        pendingLandmarkFundEffectsRef.current.delete(reservationKey);
+        return state;
+      }
+
+      // Map overwrite keeps React StrictMode updater replays idempotent. The
+      // effect is drained only after this exact state transition commits.
+      pendingLandmarkFundEffectsRef.current.set(reservationKey, {
+        reservationKey,
+        before: state,
+        outcome,
+      });
+      gameStateRef.current = outcome.state;
+      return outcome.state;
+    });
+  }
+
+  function emitLandmarkFundSuccess(effect: PendingLandmarkFundEffect) {
+    const { before, outcome } = effect;
+    const { quote } = outcome;
+    farmAnalytics.trackLandmarkStageFunded({
+      tier: quote.tier,
+      stageKey: quote.stageKey,
+      stageIndex: quote.stageIndex,
+      goldCost: quote.requirements.gold,
+      cropUnits: quote.requirements.cropUnits,
+      animalProducts: quote.requirements.animalProducts,
+      festivalPoints: quote.requirements.festivalPoints,
+      tierCompleted: outcome.tierCompleted,
+      context: analyticsContext(before),
+    });
+
+    const transactions = [
+      {
+        currency: 'gold' as const,
+        amount: quote.requirements.gold,
+        before: quote.holdings.gold,
+      },
+      {
+        currency: 'crop_inventory' as const,
+        amount: quote.requirements.cropUnits,
+        before: quote.holdings.cropUnits,
+      },
+      {
+        currency: 'animal_product' as const,
+        amount: quote.requirements.animalProducts,
+        before: quote.holdings.animalProducts,
+      },
+      {
+        currency: 'festival_delivery_point' as const,
+        amount: quote.requirements.festivalPoints,
+        before: quote.holdings.festivalPoints,
+      },
+    ];
+    for (const transaction of transactions) {
+      if (transaction.amount <= 0) continue;
+      farmAnalytics.trackEconomyTransaction({
+        flow: 'sink',
+        currency: transaction.currency,
+        reason: 'landmark_stage',
+        amount: transaction.amount,
+        balanceBefore: transaction.before,
+        balanceAfter: transaction.before - transaction.amount,
+        prestigeLevel: before.prestige.level,
+        landmarkTier: quote.tier,
+        landmarkStage: quote.stageKey,
+      });
+    }
+
+    playSoundEffect('unlock');
+    toast(
+      outcome.tierCompleted
+        ? messages.landmarkTierCompletedToast(quote.tier)
+        : messages.landmarkStageFundedToast(getLandmarkStageName(quote.stageKey, messages))
+    );
+  }
+
+  // React may evaluate a functional updater after other queued transitions.
+  // Drain irreversible UI/analytics only after the successful state is visible;
+  // a rejected latest-state payment therefore cannot produce a false success.
+  useEffect(() => {
+    if (pendingLandmarkFundEffectsRef.current.size === 0) {
+      return;
+    }
+    const committed = [...pendingLandmarkFundEffectsRef.current.values()];
+    pendingLandmarkFundEffectsRef.current.clear();
+    for (const effect of committed) {
+      const { quote } = effect.outcome;
+      const landmark = gameState.landmark;
+      const reflectedInCommittedState =
+        landmark.completedTier >= quote.tier ||
+        (landmark.completedTier === quote.tier - 1 &&
+          landmark.completedStages.length > quote.stageIndex &&
+          landmark.completedStages[quote.stageIndex] === quote.stageKey);
+      if (!reflectedInCommittedState) {
+        fundedLandmarkStagesRef.current.delete(effect.reservationKey);
+        continue;
+      }
+      emitLandmarkFundSuccess(effect);
+    }
+  });
 
   function collectChain() {
     const now = Date.now();
@@ -4003,30 +4356,68 @@ function FarmGameBody({
       keepSheetOnFailure?: boolean;
       keepSheetOnSuccess?: boolean;
       applyRewardState?: (state: GameState, rewardedAt: number) => GameState;
+      rewardKind?: string;
+      rewardKey?: string;
+      ctaPosition?: string;
     } = {}
   ) {
+    if (rewardedAdInFlightRef.current) {
+      return false;
+    }
+    // Reserve before readiness/limit checks as well as before native show. A
+    // same-frame double tap must not inflate click/failed intent metrics even
+    // when the SDK is still loading.
+    rewardedAdInFlightRef.current = true;
+
     // Tag the whole funnel with the type's canonical placement so blocked/click/
     // completed/failed all aggregate per placement (single source of truth).
     const placement = getRewardedAdPlacement(type);
-    const limit = getRewardedAdLimitStatus(gameState, type, Date.now(), locale);
+    const attemptId = `${sessionStartedAtRef.current.toString(36)}-${(
+      ++rewardedAdAttemptCounterRef.current
+    ).toString(36)}`;
+    const attemptState = gameStateRef.current;
+    const limit = getRewardedAdLimitStatus(attemptState, type, Date.now(), locale);
+    const baseMetadata = {
+      attemptId,
+      adReady: rewardedAd.isAdReady,
+      eligible: limit.allowed,
+      adSupported: rewardedAd.isAdSupported,
+      rewardKind: options.rewardKind,
+      rewardKey: options.rewardKey,
+      rewardValue,
+      ctaPosition: options.ctaPosition,
+      retryCount: 0,
+    };
     if (!limit.allowed) {
-      farmAnalytics.trackAdLimitBlocked(type, placement, limit.reason, analyticsContext());
+      farmAnalytics.trackAdLimitBlocked(type, placement, limit.reason, analyticsContext(attemptState), baseMetadata);
       toast(limit.reason);
+      void Promise.resolve().then(() => {
+        rewardedAdInFlightRef.current = false;
+      });
       return false;
     }
 
+    // Click means a real user tap, regardless of SDK readiness. Keeping it
+    // before the readiness branch lets us distinguish weak motivation from a
+    // strong intent that the ad loader failed to serve.
+    farmAnalytics.trackAdRewardClick(type, placement, analyticsContext(attemptState), baseMetadata);
+
     if (!rewardedAd.isAdReady) {
+      const reason = rewardedAd.isAdSupported ? 'not_ready' : 'unsupported';
       farmAnalytics.trackAdRewardFailed(
         type,
         placement,
-        rewardedAd.isAdSupported ? 'not_ready' : 'unsupported',
-        analyticsContext()
+        reason,
+        analyticsContext(attemptState),
+        { ...baseMetadata, failureFamily: normalizeAdFailureFamily(reason) }
       );
       toast(rewardedAd.isAdSupported ? messages.adPreparingToast : messages.adUnsupportedToast);
+      void Promise.resolve().then(() => {
+        rewardedAdInFlightRef.current = false;
+      });
       return false;
     }
 
-    farmAnalytics.trackAdRewardClick(type, placement, analyticsContext());
     const attemptShow = async (): Promise<RewardedAdShowResult> => {
       try {
         return await rewardedAd.showAd();
@@ -4037,59 +4428,88 @@ function FarmGameBody({
       }
     };
 
-    let result = await attemptShow();
-    // show 실패(notReady/failed) 시 컨트롤러 재로드 후 1회만 재시도한다(#374 AC3).
-    // reloadAd는 로드 완료를 기다렸다 resolve하므로, 그 뒤 showAd는 최신 로드 상태를
-    // 읽는다. reloadAd 미지원 컨트롤러(unsupported·일부 목)는 재시도 없이 그대로 실패.
-    if (shouldRetryRewardedShow(result) && rewardedAd.reloadAd) {
-      try {
-        await rewardedAd.reloadAd();
-      } catch {
-        // 재로드 실패는 최초 결과를 유지한 채 재시도만 진행한다(무한 재시도 금지).
+    try {
+      let result = await attemptShow();
+      let retryCount = 0;
+      // A reload kick is not proof that the SDK is ready. Retry only after the
+      // adapter's readiness promise confirms a loaded ad; legacy adapters are
+      // reloaded for the next tap but never raced immediately.
+      if (shouldRetryRewardedShow(result)) {
+        if (rewardedAd.ensureAdReady != null) {
+          let ready = false;
+          try {
+            ready = await rewardedAd.ensureAdReady(8_000);
+          } catch {
+            ready = false;
+          }
+          if (ready) {
+            retryCount = 1;
+            result = await attemptShow();
+          }
+        } else if (rewardedAd.reloadAd != null) {
+          try {
+            await rewardedAd.reloadAd();
+          } catch {
+            // The original terminal reason remains authoritative.
+          }
+        }
       }
-      result = await attemptShow();
-    }
 
-    if (result.status === 'earned') {
-      const rewardedAt = Date.now();
-      if (!options.keepSheetOnSuccess) {
+      const terminalMetadata = { ...baseMetadata, retryCount };
+      if (result.status === 'earned') {
+        const rewardedAt = Date.now();
+        if (!options.keepSheetOnSuccess) {
+          setActiveSheet(null);
+        }
+        // Reserve immutable UI-side entitlements (for example a welcome-back
+        // snapshot) before the atomic state updater reads that reservation.
+        onReward();
+        // Reward, usage cap, and mission progress commit in one functional
+        // update. A captured offer cannot be switched while the native ad is up.
+        setGameState((state) => {
+          const rewardedState = options.applyRewardState?.(state, rewardedAt) ?? state;
+          return {
+            ...rewardedState,
+            adUsage: recordRewardedAdUsage(rewardedState, type, rewardedAt),
+            dailyMissionState: recordAdWatchProgress(
+              rewardedState.dailyMissionState,
+              rewardedAt,
+              rewardedState.unlockedAreas
+            ),
+            weeklyMissionState: recordWeeklyAdWatchProgress(
+              rewardedState.weeklyMissionState,
+              rewardedAt,
+              rewardedState.unlockedAreas
+            ),
+          };
+        });
+        farmAnalytics.trackAdRewardCompleted({
+          type,
+          placement,
+          rewardValue,
+          context: analyticsContext(attemptState),
+          metadata: terminalMetadata,
+        });
+        return true;
+      }
+
+      if (!options.keepSheetOnFailure) {
         setActiveSheet(null);
       }
-      onReward();
-      farmAnalytics.trackAdRewardCompleted({
+      const reason = getAdFailureReason(result);
+      farmAnalytics.trackAdRewardFailed(
         type,
         placement,
-        rewardValue,
-        context: analyticsContext(),
-      });
-      setGameState((state) => {
-        const rewardedState = options.applyRewardState?.(state, rewardedAt) ?? state;
-        return {
-          ...rewardedState,
-          adUsage: recordRewardedAdUsage(rewardedState, type, rewardedAt),
-          // Any rewarded-ad view counts toward the "watch an ad" daily + weekly mission.
-          dailyMissionState: recordAdWatchProgress(
-            rewardedState.dailyMissionState,
-            rewardedAt,
-            rewardedState.unlockedAreas
-          ),
-          weeklyMissionState: recordWeeklyAdWatchProgress(
-            rewardedState.weeklyMissionState,
-            rewardedAt,
-            rewardedState.unlockedAreas
-          ),
-        };
-      });
-      return true;
-    }
+        reason,
+        analyticsContext(attemptState),
+        { ...terminalMetadata, failureFamily: normalizeAdFailureFamily(result) }
+      );
+      toast(result.status === 'dismissed' ? messages.adDismissedToast : messages.adFailedToast);
 
-    if (!options.keepSheetOnFailure) {
-      setActiveSheet(null);
+      return false;
+    } finally {
+      rewardedAdInFlightRef.current = false;
     }
-    farmAnalytics.trackAdRewardFailed(type, placement, getAdFailureReason(result), analyticsContext());
-    toast(result.status === 'dismissed' ? messages.adDismissedToast : messages.adFailedToast);
-
-    return false;
   }
 
   async function maybeShowMilestoneAd() {
@@ -4169,6 +4589,9 @@ function FarmGameBody({
           // A dismissed/failed ad must leave the recap and its guaranteed 1×
           // claim intact. Only an earned result closes the sheet.
           keepSheetOnFailure: true,
+          rewardKind: 'offline_gold_multiplier',
+          rewardKey: 'offline_gold',
+          ctaPosition: 'welcome_back_secondary',
           // Base payout + bonus, ad usage, and ad-mission progress are committed
           // by showRewardedAd in one functional updater on the freshest state.
           applyRewardState: (state) =>
@@ -4183,11 +4606,50 @@ function FarmGameBody({
   }
 
   async function rewardGoldFromAd() {
-    const amount = getRewardedGoldAmount(gameState);
-    await showRewardedAd('rewardedGold', amount, () => {
-      setGameState((state) => ({ ...state, gold: state.gold + amount }));
-      toast(messages.receivedGoldToast(formatMoney(amount, locale)));
-    });
+    const offerState = gameStateRef.current;
+    const offer = getShopRewardedAdOffer(offerState);
+    const landmarkStatus = getLandmarkStatus(offerState);
+    const balanceBefore =
+      offer.kind === 'gold'
+        ? offerState.gold
+        : offerState.landmark.festivalDeliveryPoints;
+    const balanceAfter =
+      offer.kind === 'gold'
+        ? balanceBefore + offer.amount
+        : grantLandmarkFestivalDeliveryPoints(offerState, offer.amount).landmark.festivalDeliveryPoints;
+
+    await showRewardedAd(
+      'rewardedGold',
+      offer.amount,
+      () => {
+        farmAnalytics.trackEconomyTransaction({
+          flow: 'source',
+          currency: offer.kind === 'gold' ? 'gold' : 'festival_delivery_point',
+          reason: 'rewarded_ad',
+          amount: Math.max(0, balanceAfter - balanceBefore),
+          balanceBefore,
+          balanceAfter,
+          prestigeLevel: offerState.prestige.level,
+          landmarkTier: landmarkStatus.isFeatureUnlocked ? landmarkStatus.currentTier : undefined,
+          landmarkStage: landmarkStatus.currentStageKey ?? undefined,
+        });
+        if (offer.kind === 'gold') {
+          pulseGold();
+          toast(messages.receivedGoldToast(formatMoney(offer.amount, locale)));
+        } else {
+          toast(messages.landmarkAdMaterialClaimedToast(offer.amount));
+        }
+      },
+      {
+        rewardKind: offer.kind === 'gold' ? 'gold' : 'festival_delivery_points',
+        rewardKey: offer.kind === 'gold' ? 'gold' : 'festival_delivery_point',
+        ctaPosition: 'shop_rewards_primary',
+        applyRewardState: (state) =>
+          offer.kind === 'gold'
+            ? { ...state, gold: state.gold + offer.amount }
+            : grantLandmarkFestivalDeliveryPoints(state, offer.amount),
+      }
+    );
   }
 
   async function rewardDiscountedPlotFromAd() {
@@ -4206,26 +4668,35 @@ function FarmGameBody({
       return;
     }
 
-    await showRewardedAd('plotDiscountAd', discountedCost, () => {
-      setGameState((state) => {
-        const cost = getDiscountedPlotCost(state.unlockedPlotCount);
-        if (state.unlockedPlotCount >= MAX_PLOTS || state.gold < cost) {
-          return state;
-        }
-        farmAnalytics.trackPlotUnlocked({
-          method: 'ad',
-          cost,
-          nextPlotCount: state.unlockedPlotCount + 1,
-          context: analyticsContext(state),
-        });
-        return recordMissionProgressEvent(
-          { ...state, gold: state.gold - cost, unlockedPlotCount: state.unlockedPlotCount + 1 },
-          { type: 'spend_gold', amount: cost },
-          Date.now()
-        );
-      });
-      toast(messages.rewardedPlotToast(formatMoney(discountedCost, locale)));
-    });
+    await showRewardedAd(
+      'plotDiscountAd',
+      discountedCost,
+      () => {
+        toast(messages.rewardedPlotToast(formatMoney(discountedCost, locale)));
+      },
+      {
+        rewardKind: 'plot_discount',
+        rewardKey: 'plot_cost',
+        ctaPosition: 'shop_rewards_secondary',
+        applyRewardState: (state) => {
+          const cost = getDiscountedPlotCost(state.unlockedPlotCount);
+          if (state.unlockedPlotCount >= MAX_PLOTS || state.gold < cost) {
+            return state;
+          }
+          farmAnalytics.trackPlotUnlocked({
+            method: 'ad',
+            cost,
+            nextPlotCount: state.unlockedPlotCount + 1,
+            context: analyticsContext(state),
+          });
+          return recordMissionProgressEvent(
+            { ...state, gold: state.gold - cost, unlockedPlotCount: state.unlockedPlotCount + 1 },
+            { type: 'spend_gold', amount: cost },
+            Date.now()
+          );
+        },
+      }
+    );
   }
 
   async function confirmReset() {
@@ -4243,6 +4714,8 @@ function FarmGameBody({
     claimedRewardKeysRef.current.clear();
     achievementClaimInFlightRef.current = false;
     prestigedLevelsRef.current.clear();
+    fundedLandmarkStagesRef.current.clear();
+    pendingLandmarkFundEffectsRef.current.clear();
     if (comboTimerRef.current != null) {
       clearTimeout(comboTimerRef.current);
       comboTimerRef.current = null;
@@ -4328,6 +4801,8 @@ function FarmGameBody({
         flushAutoHarvestSummary();
         flushCropReadySummary();
         cropReadyLogStateRef.current = {};
+        fundedLandmarkStagesRef.current.clear();
+        pendingLandmarkFundEffectsRef.current.clear();
         // The cloud payload may come from an older app version, so run it through
         // the same migration/normalization as the load path before showing it.
         const restored = migrateLoadedState(outcome.gameState, createInitialState());
@@ -4674,15 +5149,24 @@ function FarmGameBody({
     const previewRemaining = previewPlot != null ? getPlotRemainingGrowthMs(gameState, previewPlot) : 0;
     const previewSkip = getGrowthAdSkipMs(previewRemaining);
     const willComplete = previewSkip >= previewRemaining;
-    await showRewardedAd('growthAd', 1, () => {
-      setGameState((state) => applyGrowthAdSkip(state, plotIndex).state);
-      setActiveSheet(null);
-      toast(
-        willComplete
-          ? messages.growthDoneToast
-          : messages.growthSkipToast(formatDuration(previewSkip, locale))
-      );
-    });
+    await showRewardedAd(
+      'growthAd',
+      previewSkip,
+      () => {
+        setActiveSheet(null);
+        toast(
+          willComplete
+            ? messages.growthDoneToast
+            : messages.growthSkipToast(formatDuration(previewSkip, locale))
+        );
+      },
+      {
+        rewardKind: 'growth_skip',
+        rewardKey: 'remaining_growth_ms',
+        ctaPosition: 'growth_sheet_primary',
+        applyRewardState: (state) => applyGrowthAdSkip(state, plotIndex).state,
+      }
+    );
   }
 
   // 골드 비료(#227): 성장 중 플롯의 남은 성장을 골드로 즉시 완료한다.
@@ -4762,15 +5246,24 @@ function FarmGameBody({
   }
 
   async function activateHarvestBonusWithAd() {
-    await showRewardedAd('harvestBonusAd', HARVEST_BONUS_MULTIPLIER, () => {
-      setActiveSheet(null);
-      toast(
-        messages.harvestBonusActivatedToast(
-          formatRemainingTime(HARVEST_BONUS_BOOST_DURATION_MS, locale),
-          HARVEST_BONUS_MULTIPLIER
-        )
-      );
-    });
+    await showRewardedAd(
+      'harvestBonusAd',
+      HARVEST_BONUS_MULTIPLIER,
+      () => {
+        setActiveSheet(null);
+        toast(
+          messages.harvestBonusActivatedToast(
+            formatRemainingTime(HARVEST_BONUS_BOOST_DURATION_MS, locale),
+            HARVEST_BONUS_MULTIPLIER
+          )
+        );
+      },
+      {
+        rewardKind: 'harvest_boost',
+        rewardKey: 'harvest_multiplier',
+        ctaPosition: 'harvest_bonus_sheet_primary',
+      }
+    );
   }
 
   const toolHint = useMemo(() => {
@@ -5034,13 +5527,13 @@ function FarmGameBody({
           </View>
         </View>
 
-        {nextAreaGoal != null ? (
+        {nextFarmGoal != null ? (
           <NextGoalBar
-            goal={nextAreaGoal}
+            goal={nextFarmGoal}
             messages={messages}
             locale={locale}
             getAreaName={(areaKey) => getLocalizedAreaLabel(areaKey).name}
-            onPress={openShop}
+            onPress={openNextFarmGoal}
           />
         ) : null}
 
@@ -5091,6 +5584,8 @@ function FarmGameBody({
           weatherKey={weather.key}
           weatherEffectsEnabled={gameSettings.weatherEffectsEnabled}
           seasonalParticle={seasonalParticle}
+          landmarkVisualState={getLandmarkVisualState(gameState)}
+          completedLandmarkTier={getLandmarkStatus(gameState).completedTier}
         />
         <ScrollView
           testID="farm-scroll"
@@ -5515,14 +6010,23 @@ function FarmGameBody({
                   <View testID="shop-tab-panel-rewards">
                     <Text style={styles.sheetSectionTitle}>{messages.adRewardsSection}</Text>
                     <AdRewardCard
-                      title={messages.rewardedGoldTitle(formatMoney(getRewardedGoldAmount(gameState), locale))}
-                      desc={rewardedGoldLimit.allowed ? messages.rewardedGoldReadyDesc(REWARDED_GOLD_WINDOW_MS / 60000, REWARDED_GOLD_MAX_USES_PER_WINDOW) : rewardedGoldLimit.reason}
-                      cta={
-                        rewardedAd.isAdReady && rewardedGoldLimit.allowed
-                          ? messages.rewardReceiveCta
-                          : messages.rewardWaitCta
+                      title={
+                        shopRewardedAdOffer.kind === 'gold'
+                          ? messages.rewardedGoldTitle(formatMoney(shopRewardedAdOffer.amount, locale))
+                          : messages.landmarkAdMaterialTitle
                       }
-                      disabled={!rewardedAd.isAdReady || !rewardedGoldLimit.allowed}
+                      desc={
+                        rewardedGoldLimit.allowed
+                          ? shopRewardedAdOffer.kind === 'gold'
+                            ? messages.rewardedGoldReadyDesc(
+                                REWARDED_GOLD_WINDOW_MS / 60000,
+                                REWARDED_GOLD_MAX_USES_PER_WINDOW
+                              )
+                            : messages.landmarkAdMaterialDescription(shopRewardedAdOffer.amount)
+                          : rewardedGoldLimit.reason
+                      }
+                      cta={rewardedGoldLimit.allowed ? messages.rewardReceiveCta : messages.rewardWaitCta}
+                      disabled={!rewardedAd.isAdSupported || !rewardedGoldLimit.allowed}
                       onPress={() => void rewardGoldFromAd()}
                     />
                     <AdRewardCard
@@ -5536,11 +6040,11 @@ function FarmGameBody({
                             )
                           : plotDiscountLimit.reason
                       }
-                      cta={
-                        rewardedAd.isAdReady && plotDiscountLimit.allowed ? messages.rewardOpenCta : messages.rewardWaitCta
-                      }
+                      cta={plotDiscountLimit.allowed ? messages.rewardOpenCta : messages.rewardWaitCta}
                       disabled={
-                        !rewardedAd.isAdReady || !plotDiscountLimit.allowed || gameState.unlockedPlotCount >= MAX_PLOTS
+                        !rewardedAd.isAdSupported ||
+                        !plotDiscountLimit.allowed ||
+                        gameState.unlockedPlotCount >= MAX_PLOTS
                       }
                       onPress={() => void rewardDiscountedPlotFromAd()}
                     />
@@ -5656,6 +6160,7 @@ function FarmGameBody({
             onCollectChain={collectChain}
             onOpenPrestigeConfirm={openPrestigeConfirm}
             onBuySkill={purchaseSkill}
+            onFundLandmark={fundCurrentLandmarkStage}
           />
         ) : null}
 
@@ -5905,7 +6410,16 @@ function FarmGameBody({
               farmAnalytics.trackAdRewardImpression(
                 'wheelBonusAd',
                 getRewardedAdPlacement('wheelBonusAd'),
-                analyticsContext()
+                analyticsContext(),
+                {
+                  adReady: rewardedAd.isAdReady,
+                  eligible: wheelBonusAdLimit.allowed,
+                  adSupported: rewardedAd.isAdSupported,
+                  rewardKind: 'wheel_bonus_spin',
+                  rewardKey: 'bonus_spin',
+                  rewardValue: 1,
+                  ctaPosition: 'wheel_sheet_bonus',
+                }
               )
             }
             onRevealed={(reward) => {
@@ -6883,9 +7397,8 @@ function ComboDisplay({ count, messages }: { count: number; messages: FarmMessag
   );
 }
 
-// Compact progress bar shown in the header that surfaces the single most
-// actionable next milestone (next area unlock) so players have a clear target
-// during crop growth wait times. Tapping it opens the shop directly.
+// Compact progress bar shown in the header. It follows the progression chain
+// from area unlocks to the current landmark stage and finally farm graduation.
 function NextGoalBar({
   goal,
   messages,
@@ -6893,36 +7406,90 @@ function NextGoalBar({
   getAreaName,
   onPress,
 }: {
-  goal: NonNullable<NextAreaGoal>;
+  goal: NextFarmGoal;
   messages: FarmMessages;
   locale: SupportedLocale;
   getAreaName: (areaKey: AreaKey) => string;
   onPress: () => void;
 }) {
-  const areaName = getAreaName(goal.areaKey);
-
-  if (goal.kind === 'ready') {
+  if (goal.kind === 'prestige_ready') {
     return (
-      <Pressable testID="next-goal-bar" style={styles.nextGoalBar} onPress={onPress}>
+      <Pressable
+        testID="next-goal-bar"
+        accessibilityRole="button"
+        accessibilityLabel={messages.nextGoalGraduationReady}
+        style={styles.nextGoalBar}
+        onPress={onPress}
+      >
         <Text style={styles.nextGoalReadyText} numberOfLines={1}>
-          {messages.nextGoalReady(areaName)}
+          {messages.nextGoalGraduationReady}
+        </Text>
+      </Pressable>
+    );
+  }
+  if (goal.kind === 'ready') {
+    const label = messages.nextGoalReady(getAreaName(goal.areaKey));
+    return (
+      <Pressable
+        testID="next-goal-bar"
+        accessibilityRole="button"
+        accessibilityLabel={label}
+        style={styles.nextGoalBar}
+        onPress={onPress}
+      >
+        <Text style={styles.nextGoalReadyText} numberOfLines={1}>
+          {label}
         </Text>
       </Pressable>
     );
   }
 
   let label: string;
-  if (goal.kind === 'gold') {
-    label = messages.nextGoalGold(areaName, formatMoney(goal.total - goal.current, locale));
-  } else if (goal.kind === 'harvest') {
-    label = messages.nextGoalHarvest(areaName, goal.current, goal.total);
+  let current: number;
+  let total: number;
+  if (goal.kind === 'landmark') {
+    const stageName = getLandmarkStageName(goal.stageKey, messages);
+    if (goal.ready) {
+      label = messages.nextGoalLandmarkReady(stageName);
+    } else {
+      label = messages.nextGoalLandmark(stageName, goal.completedStages, goal.totalStages);
+    }
+    current = goal.completedStages;
+    total = goal.totalStages;
+  } else if (goal.kind === 'prestige_crops') {
+    label = messages.nextGoalGraduationCrops(goal.current, goal.total);
+    current = goal.current;
+    total = goal.total;
+  } else if (goal.kind === 'prestige_gold') {
+    label = messages.nextGoalGraduationGold(formatMoney(Math.max(0, goal.total - goal.current), locale));
+    current = goal.current;
+    total = goal.total;
   } else {
-    label = messages.nextGoalUpgrade(areaName, goal.current, goal.total);
+    const areaName = getAreaName(goal.areaKey);
+    if (goal.kind === 'gold') {
+      label = messages.nextGoalGold(areaName, formatMoney(goal.total - goal.current, locale));
+      current = goal.current;
+      total = goal.total;
+    } else if (goal.kind === 'harvest') {
+      label = messages.nextGoalHarvest(areaName, goal.current, goal.total);
+      current = goal.current;
+      total = goal.total;
+    } else {
+      label = messages.nextGoalUpgrade(areaName, goal.current, goal.total);
+      current = goal.current;
+      total = goal.total;
+    }
   }
-  const ratio = goal.total > 0 ? Math.max(0, Math.min(goal.current / goal.total, 1)) : 0;
+  const ratio = total > 0 ? Math.max(0, Math.min(current / total, 1)) : 0;
 
   return (
-    <Pressable testID="next-goal-bar" style={styles.nextGoalBar} onPress={onPress}>
+    <Pressable
+      testID="next-goal-bar"
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      style={styles.nextGoalBar}
+      onPress={onPress}
+    >
       <Text style={styles.nextGoalLabel} numberOfLines={1}>
         {label}
       </Text>
