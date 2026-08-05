@@ -3,7 +3,7 @@
   "private": true,
   "scripts": {
     "dev": "granite dev",
-    "build": "ait build",
+    "build": "ait build && node ../../scripts/check-ait-runtime-compat.mjs",
     "deploy": "ait deploy",
     "test": "jest --config ../../jest.config.js apps/ait --passWithNoTests",
     "typecheck": "tsc --noEmit",

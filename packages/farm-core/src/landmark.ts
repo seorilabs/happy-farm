@@ -274,7 +274,23 @@ function getExactGraduationCost(tier: number): bigint | null {
     return null;
   }
 
-  return BigInt(costBase) * BigInt(costGrowth) ** BigInt(tier);
+  // Granite의 RN 0.84/0.72 번들 변환기는 BigInt 지수 연산을
+  // Math.pow(BigInt, BigInt)로 낮춘다. Math.pow는 BigInt를 받을 수 없어 앱 첫
+  // 렌더에서 TypeError가 발생하므로, 곱셈만 사용하는 정수 거듭제곱으로 계산한다.
+  let growthPower = BigInt(1);
+  let factor = BigInt(costGrowth);
+  let exponent = tier;
+  while (exponent > 0) {
+    if (exponent % 2 === 1) {
+      growthPower *= factor;
+    }
+    exponent = Math.floor(exponent / 2);
+    if (exponent > 0) {
+      factor *= factor;
+    }
+  }
+
+  return BigInt(costBase) * growthPower;
 }
 
 function getLandmarkTargetGoldCost(tier: number): number | null {
