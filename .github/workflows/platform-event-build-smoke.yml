@@ -1,0 +1,47 @@
+name: Platform Event Build Smoke
+
+on:
+  push:
+    branches:
+      - feature/platform-event-sink
+    paths:
+      - .github/workflows/platform-event-build-smoke.yml
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  ait-build:
+    name: AIT build
+    runs-on: seorilabs-rpi-arm64
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup workspace
+        uses: ./.github/actions/setup-pnpm-workspace
+
+      - name: Build AIT
+        run: pnpm --dir apps/ait build
+
+  android-build:
+    name: Android release build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup workspace
+        uses: ./.github/actions/setup-pnpm-workspace
+
+      - name: Build Android
+        run: pnpm --dir apps/mobile build:android
