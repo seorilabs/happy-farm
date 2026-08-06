@@ -50,6 +50,7 @@ on:
 permissions:
   contents: read
   id-token: write
+  packages: read
 
 concurrency:
   group: happy-farm-google-play-${{ inputs.release_tag || github.ref_name }}
@@ -66,7 +67,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ inputs.release_tag || github.ref_name }}
 

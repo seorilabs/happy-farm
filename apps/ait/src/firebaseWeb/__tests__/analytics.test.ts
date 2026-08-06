@@ -12,6 +12,7 @@ const mockStorage = {
   setItem: jest.fn<Promise<void>, [string, string]>(),
   removeItem: jest.fn<Promise<void>, [string]>(),
 };
+const mockTrackPlatform = jest.fn();
 
 jest.mock('@apps-in-toss/framework', () => ({
   Storage: mockStorage,
@@ -19,6 +20,10 @@ jest.mock('@apps-in-toss/framework', () => ({
 
 jest.mock('../mpSecret.generated', () => ({
   GA4_MP_API_SECRET: 'test-secret',
+}));
+
+jest.mock('../../platformEvents', () => ({
+  trackAppsInTossPlatformEvent: mockTrackPlatform,
 }));
 
 function loadAnalytics() {
@@ -54,6 +59,7 @@ beforeEach(() => {
   mockStorage.setItem.mockReset().mockResolvedValue(undefined);
   mockStorage.removeItem.mockReset().mockResolvedValue(undefined);
   mockFetch.mockReset().mockResolvedValue({ ok: true } as unknown as Response);
+  mockTrackPlatform.mockReset();
   (globalThis as { fetch: typeof fetch }).fetch = mockFetch as unknown as typeof fetch;
   jest.spyOn(console, 'info').mockImplementation(() => undefined);
   jest.spyOn(console, 'warn').mockImplementation(() => undefined);
@@ -138,15 +144,18 @@ describe('trackAppsInTossAnalyticsEvent — 큐잉/정규화/전송', () => {
   });
 
   test('초기화 완료 후 발생한 이벤트도 시장 공통 파라미터가 실린다', async () => {
-    const { trackAppsInTossAnalyticsEvent, initializeAppsInTossAnalytics } = loadAnalytics();
+    const { appsInTossFarmAnalytics, initializeAppsInTossAnalytics } = loadAnalytics();
 
     await initializeAppsInTossAnalytics();
     mockFetch.mockClear();
 
-    trackAppsInTossAnalyticsEvent('game_start');
+    appsInTossFarmAnalytics.trackNotificationOpened({ kind: 'harvest' });
     jest.runOnlyPendingTimers();
 
     expect(parseBody(0).events[0]?.params).toMatchObject({ app_market: 'apps_in_toss' });
+    expect(mockTrackPlatform).toHaveBeenCalledWith('notification_opened', {
+      notification_kind: 'harvest',
+    });
   });
 
   test('harvest_combo_completed 직렬화 payload는 GA4 이벤트 파라미터 25개 예산을 지킨다 (#348)', async () => {

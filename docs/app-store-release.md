@@ -93,6 +93,11 @@ apps/mobile/ios/HappyFarmMobile/GoogleService-Info.plist
 
 광고 SDK, Firebase Analytics, Crashlytics, Remote Config 사용 여부는 App Store Connect 앱 개인정보 답변에 반영해야 합니다.
 
+Firebase Analytics는 유지하고 저빈도 핵심 이벤트만 익명 Platform BigQuery sink에도
+복제합니다. Platform에는 OS, 앱 버전, locale과 허용 이벤트 파라미터만 보내며 Firebase
+UID, GA4 client ID, token은 보내지 않습니다. 상세 경계는 `docs/firebase-mobile.md`를
+따릅니다.
+
 콘텐츠 권한 질문은 AdMob 보상형 광고가 타사 광고 콘텐츠를 표시할 수 있으므로 다음으로 답변합니다.
 
 ```text

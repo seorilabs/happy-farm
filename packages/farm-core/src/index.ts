@@ -25,6 +25,7 @@ export * from './missionEvents';
 export * from './missions';
 export * from './modifiers';
 export * from './prestige';
+export * from './platformEvents';
 export * from './production';
 export * from './research';
 export * from './resetBoundary';

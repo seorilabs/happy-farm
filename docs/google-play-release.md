@@ -15,6 +15,7 @@
 - `packages/farm-ui`는 공유 RN 게임 화면을 담고, `apps/mobile`은 모바일 storage/Firebase/AdMob/audio adapter를 주입합니다.
 - 현재 `.aab`는 `play-store/secrets/happy-farm-upload-key.jks` upload key로 서명됩니다.
 - Android release는 R8 코드 최적화와 리소스 축소를 사용하며, AAB 안의 가독화 파일·음원·작물 이미지가 업로드 전에 자동 검사됩니다.
+- Firebase Analytics는 유지하고 저빈도 핵심 이벤트만 익명 Platform BigQuery sink에도 복제합니다. 전송 경계와 중단 절차는 `docs/firebase-mobile.md`를 따릅니다.
 
 따라서 지금은 Play Console 내부 테스트 업로드에 필요한 signed AAB와 repo-local readiness 체크가 준비된 상태입니다.
 

@@ -13,7 +13,7 @@ import { APPS_IN_TOSS_GA4_MEASUREMENT_ID } from './firebaseWebConfig';
 import { createAppsInTossAnalyticsLifecycle } from './analyticsLifecycle';
 import { GA4_MP_API_SECRET } from './mpSecret.generated';
 import { createGa4MeasurementProtocolClient, type Ga4McpInitResult } from './measurementProtocol';
-import { createAppsInTossSelfServerTracker } from './metricsServer';
+import { trackAppsInTossPlatformEvent } from '../platformEvents';
 
 // AppsInToss 빌드는 Granite React Native 런타임(브라우저 DOM 없음)에서 동작한다. 브라우저
 // 전용 Firebase JS Web SDK(firebase/analytics)는 이 환경에서 초기화조차 되지 않아 이벤트가
@@ -135,8 +135,8 @@ export function setAppsInTossAnalyticsCollectionEnabled(enabled: boolean) {
 
 export const handleAppsInTossAnalyticsAppStateChange = analyticsLifecycle.handleAppStateChange;
 
-// Firebase(GA4 MP) 전송에 자체 지표 서버 전송을 fanout으로 결합한다. 자체 서버 tracker가
-// null(엔드포인트 미설정)이면 MP tracker만 남아 현 동작과 동일하다.
+// 기존 GA4 Measurement Protocol은 그대로 유지하고, 합의한 저빈도 이벤트만 Platform
+// tracker에 두 번째 sink로 전달한다. 각 sink의 실패는 combineTrackers가 격리한다.
 export const appsInTossFarmAnalytics = createFarmAnalytics(
-  combineTrackers(trackAppsInTossAnalyticsEvent, createAppsInTossSelfServerTracker()),
+  combineTrackers(trackAppsInTossAnalyticsEvent, trackAppsInTossPlatformEvent),
 );

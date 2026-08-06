@@ -136,6 +136,13 @@ jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
 }));
 
+jest.mock('../src/platformEvents', () => ({
+  flushMobilePlatformEvents: jest.fn(() => Promise.resolve()),
+  shutdownMobilePlatformEvents: jest.fn(() => Promise.resolve()),
+  startMobilePlatformEvents: jest.fn(),
+  trackMobilePlatformEvent: jest.fn(),
+}));
+
 type MockRewardedAd = {
   addAdEventsListener: jest.Mock;
   load: jest.Mock;
@@ -181,10 +188,16 @@ test('renders correctly', async () => {
   expect(createRewardedAd).toHaveBeenCalledWith('test-rewarded', {
     requestNonPersonalizedAdsOnly: true,
   });
+  const platformEvents = jest.requireMock('../src/platformEvents') as {
+    startMobilePlatformEvents: jest.Mock;
+    shutdownMobilePlatformEvents: jest.Mock;
+  };
+  expect(platformEvents.startMobilePlatformEvents).toHaveBeenCalledTimes(1);
 
   await ReactTestRenderer.act(async () => {
     renderer?.unmount();
   });
+  expect(platformEvents.shutdownMobilePlatformEvents).toHaveBeenCalledTimes(1);
 }, 30000);
 
 test('waits for rewarded ad close before resolving an earned reward', async () => {

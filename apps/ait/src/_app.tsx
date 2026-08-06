@@ -7,17 +7,32 @@ import { type InitialProps } from '@granite-js/react-native';
 import { context } from '../require.context';
 import { initializeAppsInTossFirebaseServices } from './firebaseWeb';
 import { handleAppsInTossAnalyticsAppStateChange } from './firebaseWeb/analytics';
+import {
+  flushAppsInTossPlatformEvents,
+  shutdownAppsInTossPlatformEvents,
+  startAppsInTossPlatformEvents,
+} from './platformEvents';
 
 function AppContainer({ children }: PropsWithChildren<InitialProps>) {
   useEffect(() => {
+    startAppsInTossPlatformEvents();
+
     // 초기화 실패를 조용히 삼키지 않고 관측 가능하게 남긴다. 초기화 완료 전 발생한
     // 이벤트는 analytics 레이어에서 큐잉되므로 await 없이 시작해도 유실되지 않는다.
     initializeAppsInTossFirebaseServices().catch((error: unknown) => {
       console.warn('[ait] Firebase services init failed', error);
     });
 
-    const subscription = AppState.addEventListener('change', handleAppsInTossAnalyticsAppStateChange);
-    return () => subscription.remove();
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      handleAppsInTossAnalyticsAppStateChange(nextState);
+      if (nextState !== 'active') {
+        void flushAppsInTossPlatformEvents();
+      }
+    });
+    return () => {
+      subscription.remove();
+      void shutdownAppsInTossPlatformEvents();
+    };
   }, []);
 
   return (
