@@ -30,6 +30,7 @@ on:
 permissions:
   contents: read
   id-token: write
+  packages: read
 
 concurrency:
   group: happy-farm-deploy-all-${{ inputs.release_tag || github.ref }}
@@ -43,7 +44,7 @@ jobs:
       tag: ${{ steps.tag.outputs.tag }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ inputs.release_tag || github.ref }}
           fetch-depth: 0

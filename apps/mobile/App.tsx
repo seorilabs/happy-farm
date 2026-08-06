@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { AppState } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { FarmGame, detectRuntimeLocale } from '../../packages/farm-ui/src';
@@ -15,6 +16,11 @@ import {
   registerHarvestNotificationOpenTracking,
 } from './src/notifications/harvestNotifications';
 import { mobileCloudSave, mobileFarmPersistence } from './src/storage/farmPersistence';
+import {
+  flushMobilePlatformEvents,
+  shutdownMobilePlatformEvents,
+  startMobilePlatformEvents,
+} from './src/platformEvents';
 
 function App() {
   const farmAudio = useMobileFarmAudio();
@@ -25,6 +31,19 @@ function App() {
 
   useEffect(() => {
     void initializeMobileFirebaseServices().finally(() => setRemoteConfigReady(true));
+  }, []);
+
+  useEffect(() => {
+    startMobilePlatformEvents();
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState !== 'active') {
+        void flushMobilePlatformEvents();
+      }
+    });
+    return () => {
+      subscription.remove();
+      void shutdownMobilePlatformEvents();
+    };
   }, []);
 
   // 수확 알림 탭으로 복귀한 경우를 계측한다(알림 동작 자체는 변경 없음).

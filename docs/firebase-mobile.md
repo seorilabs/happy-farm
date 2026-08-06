@@ -41,6 +41,23 @@ AIT 앱 시작 시 GA4 Measurement Protocol 클라이언트와 Remote Config RES
 
 Measurement Protocol 단독 WEB 스트림은 자동 수집 기반 표준 리포트가 일부 제한될 수 있으므로 WEB D1/D7은 `ait_first_touch`와 `session_id`를 사용한 BigQuery 쿼리를 권위 기준으로 봅니다.
 
+## Platform 이벤트 dual sink
+
+기존 Firebase Analytics와 AIT GA4 Measurement Protocol은 유지합니다. 앱 shell의
+`combineTrackers`가 합의한 저빈도 핵심 이벤트 17종만 `@seorilabs/platform-sdk`를 통해
+Platform BigQuery에 두 번째로 전송합니다. `ad_reward_impression`, 작물 생산·수확·강화 등
+고빈도 루프 이벤트는 Platform allowlist 밖이라 전송하지 않습니다.
+
+- AIT context: `platform=ait`, 릴리스 버전, 감지 locale
+- Mobile context: 실제 `android|ios`, 릴리스 버전, 감지 locale
+- 전송하지 않는 값: Firebase UID, GA4 client ID, Platform token, 저장 데이터
+- 수명주기: 앱 시작 시 SDK start, background·unmount 시 best-effort flush
+- 장애 격리: Platform 네트워크 실패는 게임과 기존 GA4 sink에 전파하지 않음
+
+Platform SDK package는 private GitHub Packages이므로 로컬과 CI 설치에 `read:packages`
+인증이 필요합니다. 토큰은 `.npmrc`, 소스, 앱 번들에 저장하지 않습니다. 긴급 중단은
+Platform registry의 `features.events=false`를 sync하며, 이 경우 GA4는 계속 동작합니다.
+
 ## 설정 파일
 
 Firebase 콘솔에서 Android/iOS 앱을 만들고 설정 파일을 배치합니다.

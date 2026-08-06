@@ -9,7 +9,7 @@ import {
 
 import { isFirebaseConfigured } from './app';
 import { recordNonFatalError } from './crashlytics';
-import { createMobileSelfServerTracker } from './metricsServer';
+import { trackMobilePlatformEvent } from '../platformEvents';
 
 type FirebaseAnalyticsParams = Record<string, string | number>;
 type FirebaseLogEvent = (
@@ -34,8 +34,8 @@ const trackFirebaseGameEvent: TrackGameEvent = (name, params = {}) => {
   }
 };
 
-// Firebase(GA4) 전송에 자체 지표 서버 전송을 fanout으로 결합한다. 자체 서버 tracker가
-// null(엔드포인트 미설정)이면 firebase tracker만 남아 현 동작과 동일하다.
+// 기존 Firebase Analytics는 그대로 유지하고, 합의한 저빈도 이벤트만 Platform tracker에
+// 두 번째 sink로 전달한다. 각 sink의 실패는 combineTrackers가 격리한다.
 export const mobileFarmAnalytics = createFarmAnalytics(
-  combineTrackers(trackFirebaseGameEvent, createMobileSelfServerTracker()),
+  combineTrackers(trackFirebaseGameEvent, trackMobilePlatformEvent),
 );
