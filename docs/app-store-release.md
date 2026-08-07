@@ -74,7 +74,10 @@ APPLE_DISTRIBUTION_CERTIFICATE_BASE64
 APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD
 APPLE_PROVISIONING_PROFILE_BASE64
 FIREBASE_IOS_GOOGLE_SERVICE_INFO_PLIST_BASE64
+GITHUB_PACKAGES_TOKEN
 ```
+
+`GITHUB_PACKAGES_TOKEN`은 Xcode Cloud 전용입니다. 저장소 `.npmrc`가 `@seorilabs` 스코프를 GitHub Packages로 보내는데, GitHub Actions는 `setup-pnpm-workspace`가 `NODE_AUTH_TOKEN`을 주입하지만 Xcode Cloud는 그 경로를 타지 않습니다. Xcode Cloud 워크플로의 환경변수(시크릿)에 `read:packages` 스코프 토큰을 넣어야 `ci_post_clone.sh`의 `pnpm install`이 통과합니다.
 
 ## 3단계: iOS Firebase와 광고 설정
 
