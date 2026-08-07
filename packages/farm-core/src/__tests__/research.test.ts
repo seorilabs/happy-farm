@@ -15,6 +15,9 @@ import {
   getResearchNodeCost,
   getResearchNodeBatchPurchase,
   getResearchNodeLevel,
+  getCraftSpeedMultiplier,
+  getCookSpeedMultiplier,
+  getSpeedAdjustedTimerMs,
   getScalingResearchBulkPurchase,
   unlockScalingResearchBulk,
   isCropPlantable,
@@ -266,7 +269,9 @@ describe('research nodes', () => {
       ...base,
       research: {
         ...base.research,
-        points: 40_000_000,
+        // mutation_studies(800만) 앞에 더 싼 스케일 노드들이 줄줄이 있어, 그 뒤 순번까지
+        // 도달하려면 예산이 이만큼 필요하다.
+        points: 60_000_000,
         nodeLevels: { donation_amplifier: 1 },
         unlockedNodes: ['donation_amplifier'],
       },
@@ -288,6 +293,45 @@ describe('research nodes', () => {
     const preview = getScalingResearchBulkPurchase(withLab, withLab.research.points);
     expect(preview.purchases.some((purchase) => purchase.nodeKey === 'mutation_studies')).toBe(true);
     expect(preview.totalCost).toBeLessThanOrEqual(withLab.research.points);
+  });
+
+  test('가공/요리 속도 연구는 레벨에 비례해 대기 타이머를 줄인다', () => {
+    const base = createInitialState();
+    const craft = RESEARCH_NODES.find((node) => node.key === 'craft_studies')!;
+    const cook = RESEARCH_NODES.find((node) => node.key === 'cooking_studies')!;
+
+    expect(getCraftSpeedMultiplier(base)).toBe(1);
+    expect(getCookSpeedMultiplier(base)).toBe(1);
+    // 배수가 1이면 타이머는 그대로다(연구 전 세이브가 값을 흔들지 않는다).
+    expect(getSpeedAdjustedTimerMs(600_000, 1)).toBe(600_000);
+
+    const studied: GameState = {
+      ...base,
+      research: {
+        ...base.research,
+        nodeLevels: { donation_amplifier: 1, craft_studies: 5, cooking_studies: 5 },
+        unlockedNodes: ['donation_amplifier', 'craft_studies', 'cooking_studies'],
+      },
+    };
+    expect(getCraftSpeedMultiplier(studied)).toBeCloseTo(1 + craft.effectPerLevel * 5);
+    expect(getCookSpeedMultiplier(studied)).toBeCloseTo(1 + cook.effectPerLevel * 5);
+    expect(getSpeedAdjustedTimerMs(600_000, getCraftSpeedMultiplier(studied))).toBe(
+      Math.ceil(600_000 / (1 + craft.effectPerLevel * 5)),
+    );
+
+    // 배수가 아무리 커져도 타이머는 1ms 아래로 내려가지 않는다(즉시 완료 붕괴 방지).
+    expect(getSpeedAdjustedTimerMs(10, 1_000_000)).toBe(1);
+    expect(getSpeedAdjustedTimerMs(0, 2)).toBe(0);
+  });
+
+  test('가공 속도 연구는 성장 연구를 레벨당 효과·비용 어느 쪽으로도 앞지르지 않는다', () => {
+    const growth = RESEARCH_NODES.find((node) => node.key === 'growth_studies')!;
+    const craft = RESEARCH_NODES.find((node) => node.key === 'craft_studies')!;
+    // 공방 net/h는 "가장 싼 작물 net/h" 바로 아래에 묶여 있어(check:balance §14) 여유가
+    // 크지 않다. 같은 RP를 넣었을 때 가공만 빨라져 서열이 뒤집히지 않게 고정한다.
+    expect(craft.effectPerLevel).toBeLessThanOrEqual(growth.effectPerLevel);
+    expect(craft.cost).toBeGreaterThanOrEqual(growth.cost);
+    expect(craft.costGrowth).toBeGreaterThanOrEqual(growth.costGrowth);
   });
 
   test('donation RP follows the rate and the amplifier node', () => {

@@ -296,6 +296,8 @@ export const koKRLabels: LabelBundle = {
     donation_amplifier: { name: '헌납 증폭', description: '헌납으로 받는 연구 포인트가 50% 늘어나요.' },
     market_studies: { name: '시장 연구', description: '모든 판매 수익이 레벨당 3% 늘어나요.' },
     growth_studies: { name: '성장 연구', description: '모든 작물의 성장 속도가 레벨당 2% 빨라져요.' },
+    craft_studies: { name: '가공 연구', description: '공방의 가공 속도가 레벨당 2% 빨라져요.' },
+    cooking_studies: { name: '요리 연구', description: '요리 솥의 조리 속도가 레벨당 3% 빨라져요.' },
     offline_studies: { name: '오프라인 연구', description: '활성 농장의 오프라인 수익 상한이 레벨당 2시간 늘어나요.' },
     mutation_studies: { name: '변이 연구', description: '해금된 변이의 출현 확률이 레벨당 5% 늘어나요.' },
   },

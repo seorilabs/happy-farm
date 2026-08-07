@@ -296,6 +296,8 @@ export const jaLabels: LabelBundle = {
     donation_amplifier: { name: '献納増幅', description: '献納で得られる研究ポイントが50%増えます。' },
     market_studies: { name: '市場研究', description: 'すべての販売利益がレベルごとに3%増えます。' },
     growth_studies: { name: '成長研究', description: 'すべての作物がレベルごとに2%速く育ちます。' },
+    craft_studies: { name: '加工研究', description: '工房の加工がレベルごとに2%速くなります。' },
+    cooking_studies: { name: '料理研究', description: '料理鍋の調理がレベルごとに3%速くなります。' },
     offline_studies: { name: 'オフライン研究', description: '稼働中農場のオフライン収益上限がレベルごとに2時間増えます。' },
     mutation_studies: { name: '変異研究', description: '解放済み変異の出現率がレベルごとに5%増えます。' },
   },

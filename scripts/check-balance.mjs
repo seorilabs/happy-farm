@@ -503,6 +503,8 @@ check(nodeKeys.size === nodes.length, '연구 노드 key는 중복될 수 없습
 const researchEffects = new Set([
   'profit_multiplier',
   'speed_multiplier',
+  'craft_speed_multiplier',
+  'cook_speed_multiplier',
   'offline_cap_ms',
   'mutation_chance_multiplier',
 ]);
@@ -539,6 +541,27 @@ check(
   scalingNodes.some((node) => node.maxLevel == null),
   '후반 RP 막다른 길 방지를 위해 무제한 반복 가능한 스케일 연구가 필요합니다.'
 );
+
+// 가공 시간 단축 연구(craft_studies)는 작물 성장 연구(growth_studies)를 앞지를 수 없다.
+// 공방 net/h는 아래 (14)에서 "가장 싼 작물 net/h" 아래로 묶여 있는데, 그 여유가 크지
+// 않아(약 9%) 가공 타이머만 일방적으로 짧아지면 서열이 뒤집힌다. 레벨당 효과는 성장
+// 연구 이하로, 레벨당 비용은 성장 연구 이상으로 두어 "같은 RP를 넣었을 때 가공이
+// 작물보다 빨라지는 일이 없게" 한다. 요리 연구는 직접 골드를 주지 않아(도감 버프만,
+// 합계 +10% 이내) 이 제약 대상이 아니다.
+const growthStudies = nodes.find((node) => node.key === 'growth_studies');
+const craftStudies = nodes.find((node) => node.key === 'craft_studies');
+if (growthStudies != null && craftStudies != null) {
+  check(
+    craftStudies.effectPerLevel <= growthStudies.effectPerLevel,
+    `craft_studies.effectPerLevel(${craftStudies.effectPerLevel})는 growth_studies(${growthStudies.effectPerLevel}) 이하여야 합니다(공방이 작물 성장을 앞지르지 않도록).`
+  );
+  check(
+    craftStudies.cost >= growthStudies.cost && craftStudies.costGrowth >= growthStudies.costGrowth,
+    `craft_studies의 cost(${craftStudies.cost})/costGrowth(${craftStudies.costGrowth})는 growth_studies(${growthStudies.cost}/${growthStudies.costGrowth}) 이상이어야 합니다(같은 RP로 가공이 더 싸게 빨라지지 않도록).`
+  );
+} else {
+  check(false, 'growth_studies와 craft_studies는 모두 정의되어야 합니다(가공/성장 속도 서열 검사 대상).');
+}
 
 function hasResearchCycle(nodeKey, visiting = new Set()) {
   if (visiting.has(nodeKey)) return true;

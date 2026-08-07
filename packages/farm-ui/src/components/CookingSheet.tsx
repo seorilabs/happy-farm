@@ -147,7 +147,7 @@ export function CookingSheet({
               <Text style={styles.infoLine} testID="cooking-preview-line">
                 {messages.cookingSuccessRateLabel(formatPercent(getCookingSuccessRate(selection.length)))}
                 {' · '}
-                {messages.cookingTimerLabel(formatRemainingTime(getCookingTimerMs(selection), locale))}
+                {messages.cookingTimerLabel(formatRemainingTime(getCookingTimerMs(gameState, selection), locale))}
               </Text>
             ) : null}
             <SheetAction

@@ -16,6 +16,8 @@ export type ResearchNode = {
 export type ResearchNodeEffect =
   | 'profit_multiplier'
   | 'speed_multiplier'
+  | 'craft_speed_multiplier'
+  | 'cook_speed_multiplier'
   | 'offline_cap_ms'
   | 'mutation_chance_multiplier';
 
@@ -282,6 +284,34 @@ export function getResearchEffectValue(gameState: GameState, effect: ResearchNod
     (total, node) => total + getResearchNodeLevel(gameState, node.key) * node.effectPerLevel,
     0
   );
+}
+
+/**
+ * 대기 타이머(공방 가공·요리 솥)에 연구 속도 배수를 적용한다. 작물 성장이 growTime을
+ * speedMultiplier로 나누는 것과 같은 규칙이라 "속도 +N%"의 의미가 시스템 간에 일치한다.
+ * 1ms 미만으로는 내려가지 않게 해, 배수가 아무리 커져도 타이머가 0이 되어 "시작 즉시
+ * 완료"로 붕괴하지 않는다.
+ */
+export function getSpeedAdjustedTimerMs(timerMs: number, speedMultiplier: number): number {
+  if (!Number.isFinite(timerMs) || timerMs <= 0) {
+    return 0;
+  }
+  if (!Number.isFinite(speedMultiplier) || speedMultiplier <= 1) {
+    return timerMs;
+  }
+  return Math.max(1, Math.ceil(timerMs / speedMultiplier));
+}
+
+// 공방 가공 시간 단축(craft_studies). 가공품 판매가에는 어떤 판매 배수도 붙지 않으므로
+// 이 배수만이 공방 net/h를 움직이며, balance.json이 성장 연구 배율 이하로 묶어 둔다.
+export function getCraftSpeedMultiplier(gameState: GameState): number {
+  return 1 + getResearchEffectValue(gameState, 'craft_speed_multiplier');
+}
+
+// 요리 솥 대기 시간 단축(cooking_studies). 요리는 직접 골드를 주지 않아(도감 버프만)
+// 경제 지배 위험이 없으므로 성장 연구보다 레벨당 폭이 크다.
+export function getCookSpeedMultiplier(gameState: GameState): number {
+  return 1 + getResearchEffectValue(gameState, 'cook_speed_multiplier');
 }
 
 export function canUnlockNode(gameState: GameState, nodeKey: ResearchNodeKey): boolean {

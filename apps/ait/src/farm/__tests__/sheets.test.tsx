@@ -1720,7 +1720,7 @@ describe('cooking sheet (#442)', () => {
     const statusLine = screen.getByTestId('cooking-status-line');
     expect(statusLine.props.children.join('')).toContain(
       messages.cookingCookingLabel(
-        formatRemainingTime(getCookingTimerMs([CARROT, WHEAT]) - 1000, LOCALE)
+        formatRemainingTime(getCookingTimerMs(started, [CARROT, WHEAT]) - 1000, LOCALE)
       )
     );
     fireEvent.press(screen.getByTestId('cooking-rush-ad-action'));
@@ -1732,7 +1732,7 @@ describe('cooking sheet (#442)', () => {
   test('a finished pot exposes only the resolve action', () => {
     const onResolve = jest.fn();
     const started = startCooking(stateWithIngredients({ [CARROT]: 1, [WHEAT]: 1 }), [CARROT, WHEAT], NOW)!;
-    const screen = renderCooking(started, { onResolve }, NOW + getCookingTimerMs([CARROT, WHEAT]));
+    const screen = renderCooking(started, { onResolve }, NOW + getCookingTimerMs(started, [CARROT, WHEAT]));
 
     expect(screen.queryByTestId('cooking-rush-ad-action')).toBeNull();
     fireEvent.press(screen.getByTestId('cooking-resolve-action'));

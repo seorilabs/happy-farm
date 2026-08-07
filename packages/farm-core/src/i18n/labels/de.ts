@@ -296,6 +296,8 @@ export const deLabels: LabelBundle = {
     donation_amplifier: { name: 'Spenden-Verstärker', description: 'Spenden geben 50 % mehr Forschungspunkte.' },
     market_studies: { name: 'Marktforschung', description: '+3 % Verkaufsgewinn pro Stufe, überall.' },
     growth_studies: { name: 'Wachstumsforschung', description: 'Alle Pflanzen wachsen pro Stufe 2 % schneller.' },
+    craft_studies: { name: 'Verarbeitungsforschung', description: 'Die Werkstatt verarbeitet pro Stufe 2 % schneller.' },
+    cooking_studies: { name: 'Kochforschung', description: 'Der Kochtopf kocht pro Stufe 3 % schneller.' },
     offline_studies: { name: 'Offline-Forschung', description: '+2 Std. Offline-Ertragsgrenze der aktiven Farm pro Stufe.' },
     mutation_studies: { name: 'Mutationsforschung', description: '+5 % Chance auf freigeschaltete Mutationen pro Stufe.' },
   },
