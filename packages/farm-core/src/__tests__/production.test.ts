@@ -77,6 +77,49 @@ describe('production catalog', () => {
     }
   });
 
+  test('가공 연구를 얼마나 태워도 공방 net/h는 같은 RP를 넣은 작물 진행을 넘지 않는다', () => {
+    const craft = RESEARCH_NODES.find((node) => node.key === 'craft_studies')!;
+    const growth = RESEARCH_NODES.find((node) => node.key === 'growth_studies')!;
+    const minCropNetPerHour = Math.min(
+      ...Object.values(CROPS).map((crop) => ((crop.sell - crop.cost) / crop.growTime) * MS_PER_HOUR)
+    );
+
+    function cumulativeRpCost(node: (typeof RESEARCH_NODES)[number], levels: number): number {
+      let total = 0;
+      for (let level = 0; level < levels; level += 1) {
+        total += Math.floor(node.cost * Math.pow(node.costGrowth, level));
+      }
+      return total;
+    }
+
+    for (let levels = 1; levels <= 40; levels += 1) {
+      // 같은 레벨까지 올리는 데 가공 연구가 더(또는 같게) 비싸므로, 동일 RP 예산에서
+      // 가공 레벨이 성장 레벨을 앞설 수 없다.
+      expect(cumulativeRpCost(craft, levels)).toBeGreaterThanOrEqual(cumulativeRpCost(growth, levels));
+
+      const craftSpeed = 1 + craft.effectPerLevel * levels;
+      const cropSpeed = 1 + growth.effectPerLevel * levels;
+      expect(craftSpeed).toBeLessThanOrEqual(cropSpeed);
+
+      // 그 결과 유효 공방 net/h는 같은 투자로 빨라진 "가장 싼 작물" net/h 아래에 머문다.
+      const base = createInitialState();
+      const studied: GameState = {
+        ...base,
+        research: {
+          ...base.research,
+          nodeLevels: { donation_amplifier: 1, craft_studies: levels },
+          unlockedNodes: ['donation_amplifier', 'craft_studies'],
+        },
+      };
+      for (const recipe of PRODUCTION_RECIPES) {
+        const timerMs = getCraftTimerMs(studied, recipe.key);
+        expect(timerMs).toBeGreaterThan(0);
+        const netPerHour = (recipe.sellPrice / timerMs) * MS_PER_HOUR;
+        expect(netPerHour).toBeLessThan(minCropNetPerHour * cropSpeed);
+      }
+    }
+  });
+
   test('tier 6~7 recipes extend the sink in ascending price with ko/en labels (#297)', () => {
     const lateTierRecipes: ProductionRecipeKey[] = [
       'coconut_bar',

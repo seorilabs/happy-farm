@@ -8,10 +8,22 @@ import {
   getAreaUnlockRequirementText,
   getCropLabel,
   getCropLabels,
+  getResearchNodeLabel,
   getRewardedAdLimitStatus,
   normalizeLocale,
+  RESEARCH_NODES,
   type CropKey,
+  type SupportedLocale,
 } from '../index';
+import { deLabels } from '../i18n/labels/de';
+import { enUSLabels } from '../i18n/labels/en-US';
+import { esLabels } from '../i18n/labels/es';
+import { frLabels } from '../i18n/labels/fr';
+import { jaLabels } from '../i18n/labels/ja';
+import { koKRLabels } from '../i18n/labels/ko-KR';
+import { zhHansLabels } from '../i18n/labels/zh-Hans';
+import { zhHantLabels } from '../i18n/labels/zh-Hant';
+import type { LabelBundle } from '../i18n/labels/types';
 
 describe('farm-core i18n', () => {
   test('normalizes supported locales', () => {
@@ -93,6 +105,48 @@ describe('farm-core i18n', () => {
   test('도감 설명이 로케일별로 다르게 현지화돼 있다 (#253)', () => {
     expect(getCropLabel('carrot', 'ko-KR').description).not.toBe(
       getCropLabel('carrot', 'en-US').description
+    );
+  });
+
+  test('모든 연구 노드에 전 로케일 이름·설명이 채워져 있다', () => {
+    // getResearchNodeLabel은 누락 시 en-US로 폴백하므로, 폴백에 가려진 누락을 잡기 위해
+    // 로케일 번들을 직접 열어 key 존재 자체를 확인한다.
+    const bundles: Record<SupportedLocale, LabelBundle> = {
+      'ko-KR': koKRLabels,
+      'en-US': enUSLabels,
+      ja: jaLabels,
+      'zh-Hans': zhHansLabels,
+      'zh-Hant': zhHantLabels,
+      de: deLabels,
+      fr: frLabels,
+      es: esLabels,
+    };
+    // 지원 로케일 8종이 모두 번들을 갖는다(로케일 추가 시 이 테스트가 함께 갱신되도록).
+    expect(Object.keys(bundles).sort()).toEqual([...SUPPORTED_LOCALES].sort());
+
+    for (const node of RESEARCH_NODES) {
+      for (const locale of SUPPORTED_LOCALES) {
+        const label = bundles[locale].researchNode[node.key];
+        expect(label).toBeDefined();
+        expect(label!.name.trim().length).toBeGreaterThan(0);
+        expect(label!.description.trim().length).toBeGreaterThan(0);
+        // 설명이 이름 복사본이면 현지화가 빠진 것으로 본다.
+        expect(label!.description).not.toBe(label!.name);
+      }
+      // 번들에 잉여(고아) 노드 라벨이 없다.
+      for (const locale of SUPPORTED_LOCALES) {
+        for (const labelKey of Object.keys(bundles[locale].researchNode)) {
+          expect(RESEARCH_NODES.some((candidate) => candidate.key === labelKey)).toBe(true);
+        }
+      }
+    }
+
+    // 신규 노드가 로케일별로 실제 번역돼 있다(영어 문구를 그대로 복사하지 않았다).
+    expect(getResearchNodeLabel('craft_studies', 'ko-KR').name).not.toBe(
+      getResearchNodeLabel('craft_studies', 'en-US').name
+    );
+    expect(getResearchNodeLabel('cooking_studies', 'ko-KR').description).not.toBe(
+      getResearchNodeLabel('cooking_studies', 'en-US').description
     );
   });
 
