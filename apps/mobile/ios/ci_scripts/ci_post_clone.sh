@@ -22,12 +22,23 @@ REPO="${CI_PRIMARY_REPOSITORY_PATH}"
 MOBILE="${REPO}/apps/mobile"
 IOS="${MOBILE}/ios"
 
+# CI_POST_CLONE_DRY_RUN=1 이면 macOS 전용 외부 명령(brew/npm/pnpm/pod)을 실행하지 않고
+# 실행했을 명령만 찍는다. 스크립트 자체 로직(인증 구성, 순서, 가드)을 다른 OS 에서도
+# 테스트할 수 있게 하기 위함이다 — ci_pre_xcodebuild.sh 의 dry-run 과 같은 관례(#364).
+run_step() {
+  if [ -n "${CI_POST_CLONE_DRY_RUN}" ]; then
+    echo "dry-run: skipped: $*"
+    return 0
+  fi
+  "$@"
+}
+
 echo "▸ Node / CocoaPods 설치 (Homebrew)"
-brew install node cocoapods
+run_step brew install node cocoapods
 
 echo "▸ pnpm 설치 (저장소 핀 버전)"
 # Homebrew node 는 최신 버전에서 corepack 을 번들하지 않으므로 npm 으로 직접 설치한다.
-npm install -g pnpm@11.3.0
+run_step npm install -g pnpm@11.3.0
 
 echo "▸ GitHub Packages 인증 (@seorilabs 비공개 패키지)"
 # 저장소 .npmrc 는 @seorilabs 스코프를 npm.pkg.github.com 으로 보내지만 토큰은 담지 않는다.
@@ -42,7 +53,7 @@ printf '//npm.pkg.github.com/:_authToken=%s\n' "${GITHUB_PACKAGES_TOKEN}" >> "${
 
 echo "▸ JS 의존성 설치 (pnpm workspace — 저장소 루트)"
 cd "${REPO}"
-pnpm install --frozen-lockfile
+run_step pnpm install --frozen-lockfile
 
 echo "▸ Firebase iOS 설정 확인 (GoogleService-Info.plist)"
 GS_PLIST="${IOS}/HappyFarmMobile/GoogleService-Info.plist"
@@ -59,6 +70,6 @@ fi
 
 echo "▸ CocoaPods 설치 (use_frameworks + RNFB 혼합 링키지)"
 cd "${IOS}"
-pod install
+run_step pod install
 
 echo "✅ ci_post_clone 완료"
