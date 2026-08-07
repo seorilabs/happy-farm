@@ -242,7 +242,7 @@ describe('landmark funding transition', () => {
 describe('landmark material sources and rewarded ad motivation', () => {
   test('only duplicate successful dishes grant one festival delivery point', () => {
     const ingredients = ['carrot', 'wheat'] as CropKey[];
-    const timerMs = getCookingTimerMs(ingredients);
+    const timerMs = getCookingTimerMs(createInitialState(), ingredients);
     const base = tierOneProject({
       production: {
         ...createInitialState().production,

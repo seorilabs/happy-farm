@@ -296,6 +296,8 @@ export const zhHantLabels: LabelBundle = {
     donation_amplifier: { name: '捐獻增幅', description: '捐獻可額外獲得 50% 研究點數。' },
     market_studies: { name: '市場研究', description: '每級使所有販售收益增加 3%。' },
     growth_studies: { name: '成長研究', description: '每級使所有作物成長速度提高 2%。' },
+    craft_studies: { name: '加工研究', description: '每級使工坊加工速度提高 2%。' },
+    cooking_studies: { name: '烹飪研究', description: '每級使烹飪鍋的烹飪速度提高 3%。' },
     offline_studies: { name: '離線研究', description: '每級使目前農場的離線收益上限增加 2 小時。' },
     mutation_studies: { name: '變異研究', description: '每級使已解鎖變異的出現機率提高 5%。' },
   },

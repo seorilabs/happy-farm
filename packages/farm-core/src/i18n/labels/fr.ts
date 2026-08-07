@@ -296,6 +296,8 @@ export const frLabels: LabelBundle = {
     donation_amplifier: { name: 'Amplificateur de dons', description: `Les dons rapportent 50 % de points de recherche en plus.` },
     market_studies: { name: 'Études de marché', description: `+3 % de gain de vente par niveau, partout.` },
     growth_studies: { name: 'Études de croissance', description: `Toutes les cultures poussent 2 % plus vite par niveau.` },
+    craft_studies: { name: 'Études de transformation', description: `L'atelier transforme 2 % plus vite par niveau.` },
+    cooking_studies: { name: 'Études culinaires', description: `La marmite cuisine 3 % plus vite par niveau.` },
     offline_studies: { name: 'Études hors ligne', description: `+2 h de plafond de revenu hors ligne de la ferme active par niveau.` },
     mutation_studies: { name: 'Études des mutations', description: `+5 % de chance pour les mutations débloquées par niveau.` },
   },

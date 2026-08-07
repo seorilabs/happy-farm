@@ -1,6 +1,7 @@
 import balance from './balance.json';
 import type { CropKey, GameState, ProductionRecipeKey } from './types';
 import { recordMissionProgressEvent } from './missionEvents';
+import { getCraftSpeedMultiplier, getSpeedAdjustedTimerMs } from './research';
 
 // 생산 가공 공방(#250). 작물을 즉시 판매만 하던 모델에 "잉여 작물 → 고부가 가공품"
 // 이라는 계획형 골드 싱크를 더한다. 수확 파이프라인(performHarvest)이 매 수확마다
@@ -14,7 +15,9 @@ import { recordMissionProgressEvent } from './missionEvents';
 // 밸런스: 각 레시피의 판매가는 입력 작물 판매가 합보다 크고(부가가치), 그 net/h
 // (sellPrice / timerMs — 재고 입력은 수확 부산물이라 실현 한계수익이 곧 판매가)는
 // 가장 싼 작물의 net/h보다 낮게 유지되어(scripts/check-balance.mjs에서 강제) 능동
-// 작물 진행을 지배하지 않는다.
+// 작물 진행을 지배하지 않는다. 가공 연구(craft_studies)가 대기 시간을 줄이지만,
+// 레벨당 배율이 작물 성장 연구 이하로 묶여 있고 가공품 판매가에는 어떤 판매 배수도
+// 붙지 않으므로 이 서열은 유지된다.
 
 export type ProductionRecipeInput = {
   crop: CropKey;
@@ -132,10 +135,22 @@ export type ProductionPhase =
   // 타이머 완료(수집 가능).
   | 'ready';
 
+// 가공 연구(craft_studies)를 반영한 실제 대기 시간. 카탈로그의 recipe.timerMs는 기준값이고,
+// 표시·판정에는 항상 이 값을 쓴다. readyAt은 startedAt + 유효 타이머로 매번 다시 계산되므로,
+// 진행 중인 가공도 연구 레벨이 오르는 즉시 짧아진 타이머를 적용받는다. 미지의 키면 0.
+export function getCraftTimerMs(state: GameState, key: ProductionRecipeKey): number {
+  const recipe = getRecipe(key);
+  if (recipe == null) {
+    return 0;
+  }
+  return getSpeedAdjustedTimerMs(recipe.timerMs, getCraftSpeedMultiplier(state));
+}
+
 export type ProductionStatus = {
   key: ProductionRecipeKey;
   icon: string;
   inputs: ProductionRecipeInput[];
+  // 가공 연구가 적용된 실제 대기 시간(카탈로그 기준값이 아님).
   timerMs: number;
   sellPrice: number;
   phase: ProductionPhase;
@@ -167,13 +182,14 @@ export function getProductionState(
   const startedAt =
     typeof startedAtRaw === 'number' && Number.isFinite(startedAtRaw) && startedAtRaw >= 0 ? startedAtRaw : null;
 
+  const timerMs = getCraftTimerMs(state, key);
   let phase: ProductionPhase;
   let readyAt: number | null = null;
   let remainingMs = 0;
   if (startedAt == null) {
     phase = 'idle';
   } else {
-    readyAt = startedAt + recipe.timerMs;
+    readyAt = startedAt + timerMs;
     remainingMs = Math.max(0, readyAt - safeNow);
     phase = remainingMs <= 0 ? 'ready' : 'crafting';
   }
@@ -182,7 +198,7 @@ export function getProductionState(
     key: recipe.key,
     icon: recipe.icon,
     inputs: recipe.inputs,
-    timerMs: recipe.timerMs,
+    timerMs,
     sellPrice: recipe.sellPrice,
     phase,
     hasIngredients: hasIngredients(state, key),

@@ -26,6 +26,7 @@ import {
 } from '../cooking';
 import { createInitialState, migrateLoadedState, getRewardedAdLimitStatus, recordRewardedAdUsage } from '../constants';
 import { getGlobalModifiers } from '../modifiers';
+import { RESEARCH_NODES } from '../research';
 import { getPendingFeatureCoachmark, isFeatureCoachmarkAvailable } from '../featureCoachmarks';
 import { getCookingDishLabel, SUPPORTED_LOCALES } from '../i18n';
 import type { CropKey, GameState } from '../types';
@@ -148,14 +149,47 @@ describe('cooking pot transitions', () => {
 
   test('timer scales with the highest ingredient tier and phases advance deterministically', () => {
     expect(getMaxIngredientTier([TIER1_A, TIER7_A])).toBe(7);
-    expect(getCookingTimerMs([TIER1_A, TIER7_A])).toBe(balance.cooking.timerPerTierMs * 7);
+    expect(getCookingTimerMs(createInitialState(), [TIER1_A, TIER7_A])).toBe(balance.cooking.timerPerTierMs * 7);
 
     const state = startCooking(stateWithInventory({ [TIER1_A]: 1, [TIER1_B]: 1 }), [TIER1_A, TIER1_B], NOW)!;
-    const timerMs = getCookingTimerMs([TIER1_A, TIER1_B]);
+    const timerMs = getCookingTimerMs(state, [TIER1_A, TIER1_B]);
     expect(getCookingPotStatus(state, NOW).phase).toBe('cooking');
     expect(getCookingPotStatus(state, NOW).remainingMs).toBe(timerMs);
     expect(getCookingPotStatus(state, NOW + timerMs - 1).phase).toBe('cooking');
     expect(getCookingPotStatus(state, NOW + timerMs).phase).toBe('ready');
+  });
+
+  test('요리 연구는 진행 중인 조리의 남은 시간까지 줄이고 광고 즉시완성과도 맞물린다', () => {
+    const cookNode = RESEARCH_NODES.find((node) => node.key === 'cooking_studies')!;
+    const state = startCooking(stateWithInventory({ [TIER1_A]: 1, [TIER7_A]: 1 }), [TIER1_A, TIER7_A], NOW)!;
+    const baseTimerMs = balance.cooking.timerPerTierMs * 7;
+    expect(getCookingTimerMs(state, [TIER1_A, TIER7_A])).toBe(baseTimerMs);
+
+    const studied: GameState = {
+      ...state,
+      research: {
+        ...state.research,
+        nodeLevels: { donation_amplifier: 1, cooking_studies: 4 },
+        unlockedNodes: ['donation_amplifier', 'cooking_studies'],
+      },
+    };
+    const shortened = Math.ceil(baseTimerMs / (1 + cookNode.effectPerLevel * 4));
+    expect(shortened).toBeLessThan(baseTimerMs);
+    expect(getCookingTimerMs(studied, [TIER1_A, TIER7_A])).toBe(shortened);
+
+    const status = getCookingPotStatus(studied, NOW);
+    expect(status.timerMs).toBe(shortened);
+    expect(status.readyAt).toBe(NOW + shortened);
+    expect(getCookingPotStatus(studied, NOW + shortened - 1).phase).toBe('cooking');
+    expect(getCookingPotStatus(studied, NOW + shortened).phase).toBe('ready');
+    // 연구가 없었다면 아직 조리 중이었을 시점에 결과를 확인할 수 있다.
+    expect(canResolveCooking(state, NOW + shortened)).toBe(false);
+    expect(canResolveCooking(studied, NOW + shortened)).toBe(true);
+    // 광고 즉시완성은 짧아진 타이머 기준으로도 남은 시간을 정확히 0으로 만든다.
+    const rushed = finishCookingInstantly(studied, NOW + 1000)!;
+    expect(getCookingPotStatus(rushed, NOW + 1000).remainingMs).toBe(0);
+    // 성공률은 재료 수만 따르므로 연구로 바뀌지 않는다.
+    expect(status.successRate).toBe(getCookingPotStatus(state, NOW).successRate);
   });
 
   test('cancelCooking refunds every ingredient but only while still cooking', () => {
@@ -165,7 +199,7 @@ describe('cooking pot transitions', () => {
     expect(canceled!.production.inventory).toEqual({ [TIER1_A]: 1, [TIER1_B]: 1 });
     expect(canceled!.cooking.pot).toBeNull();
     // 완료된 조리는 결과를 확인해야 하며 취소할 수 없다.
-    expect(cancelCooking(state, NOW + getCookingTimerMs([TIER1_A, TIER1_B]))).toBeNull();
+    expect(cancelCooking(state, NOW + getCookingTimerMs(state, [TIER1_A, TIER1_B]))).toBeNull();
     // 미진행 상태의 취소는 no-op이다.
     expect(cancelCooking(createInitialState(), NOW)).toBeNull();
   });
@@ -199,7 +233,7 @@ describe('resolveCooking', () => {
     expect(canResolveCooking(state, NOW)).toBe(false);
     expect(resolveCooking(state, NOW, () => 0)).toBeNull();
 
-    const readyAt = NOW + getCookingTimerMs([TIER1_A, TIER1_B]);
+    const readyAt = NOW + getCookingTimerMs(state, [TIER1_A, TIER1_B]);
     const resolution = resolveCooking(state, readyAt, () => 0)!;
     expect(resolution).not.toBeNull();
     expect(resolveCooking(resolution.state, readyAt, () => 0)).toBeNull();
@@ -207,7 +241,7 @@ describe('resolveCooking', () => {
 
   test('a success registers the dish in the compendium and only draws from tier-eligible pools', () => {
     const state = readyState([TIER1_A, TIER1_B]);
-    const readyAt = NOW + getCookingTimerMs([TIER1_A, TIER1_B]);
+    const readyAt = NOW + getCookingTimerMs(state, [TIER1_A, TIER1_B]);
     // rng 0: 성공 판정(0 < 0.9) → 등급 첫 후보 → 풀 첫 메뉴.
     const resolution = resolveCooking(state, readyAt, () => 0)!;
     const result = resolution.result;
@@ -228,7 +262,7 @@ describe('resolveCooking', () => {
 
   test('a failure refunds floor(count × failRefundRatio) lowest-tier ingredients', () => {
     const state = readyState([TIER7_A, TIER1_A]);
-    const readyAt = NOW + getCookingTimerMs([TIER7_A, TIER1_A]);
+    const readyAt = NOW + getCookingTimerMs(state, [TIER7_A, TIER1_A]);
     // 성공률 0.9보다 큰 roll → 실패.
     const resolution = resolveCooking(state, readyAt, () => 0.95)!;
     expect(resolution.result.outcome).toBe('fail');
@@ -293,7 +327,7 @@ describe('resolveCooking', () => {
       state = { ...state, production: { ...state.production, inventory } };
       const started = startCooking(state, ingredients, NOW + round);
       expect(started).not.toBeNull();
-      const readyAt = NOW + round + getCookingTimerMs(ingredients);
+      const readyAt = NOW + round + getCookingTimerMs(started!, ingredients);
       const resolution = resolveCooking(started!, readyAt, rng);
       expect(resolution).not.toBeNull();
       state = resolution!.state;

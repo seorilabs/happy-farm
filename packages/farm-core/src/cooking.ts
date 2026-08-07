@@ -2,6 +2,7 @@ import balance from './balance.json';
 import type { CropKey, GameState } from './types';
 import type { CropInventory } from './production';
 import { LANDMARK_DUPLICATE_DISH_FESTIVAL_POINTS, grantLandmarkFestivalDeliveryPoints } from './landmark';
+import { getCookSpeedMultiplier, getSpeedAdjustedTimerMs } from './research';
 
 // 요리 도감 시스템(#442). 수확 부산물 재고(GameState.production.inventory)를 재료
 // 창고로 공유해, 작물 2~3종을 요리 솥에 넣고 결정적 타이머 후 랜덤 추첨으로 150종
@@ -153,9 +154,14 @@ export function getMaxIngredientTier(ingredients: readonly CropKey[]): number {
   return maxTier;
 }
 
-// 조리 대기 시간(ms): timerPerTierMs × 재료 최고 티어(결정적 — rng 없음).
-export function getCookingTimerMs(ingredients: readonly CropKey[]): number {
-  return balance.cooking.timerPerTierMs * getMaxIngredientTier(ingredients);
+// 조리 대기 시간(ms): timerPerTierMs × 재료 최고 티어 ÷ 요리 연구(cooking_studies)
+// 속도 배수(결정적 — rng 없음). readyAt은 startedAt + 이 값으로 매번 다시 계산되므로,
+// 진행 중인 조리도 연구 레벨이 오르는 즉시 짧아진 타이머를 적용받는다.
+export function getCookingTimerMs(gameState: GameState, ingredients: readonly CropKey[]): number {
+  return getSpeedAdjustedTimerMs(
+    balance.cooking.timerPerTierMs * getMaxIngredientTier(ingredients),
+    getCookSpeedMultiplier(gameState)
+  );
 }
 
 // 재료 수별 성공 확률. 규격 밖 재료 수는 가장 가까운 정의 값으로 클램프한다.
@@ -236,6 +242,7 @@ export type CookingPotStatus = {
   ingredients: CropKey[];
   maxIngredientTier: number;
   successRate: number;
+  // 요리 연구가 적용된 실제 대기 시간(카탈로그 기준값이 아님).
   timerMs: number;
   startedAt: number | null;
   readyAt: number | null;
@@ -258,7 +265,7 @@ export function getCookingPotStatus(gameState: GameState, now = Date.now()): Coo
       remainingMs: 0,
     };
   }
-  const timerMs = getCookingTimerMs(pot.ingredients);
+  const timerMs = getCookingTimerMs(gameState, pot.ingredients);
   const readyAt = pot.startedAt + timerMs;
   const remainingMs = Math.max(0, readyAt - safeNow);
   return {

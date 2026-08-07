@@ -296,6 +296,8 @@ export const enUSLabels: LabelBundle = {
     donation_amplifier: { name: 'Donation Amplifier', description: 'Donations grant 50% more research points.' },
     market_studies: { name: 'Market Studies', description: '+3% sale profit per level, everywhere.' },
     growth_studies: { name: 'Growth Studies', description: 'All crops grow 2% faster per level.' },
+    craft_studies: { name: 'Crafting Studies', description: 'Workshop crafting runs 2% faster per level.' },
+    cooking_studies: { name: 'Cooking Studies', description: 'The cooking pot runs 3% faster per level.' },
     offline_studies: { name: 'Offline Studies', description: '+2h active-farm offline income cap per level.' },
     mutation_studies: { name: 'Mutation Studies', description: '+5% chance for unlocked mutations per level.' },
   },

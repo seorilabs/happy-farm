@@ -11,6 +11,7 @@ import {
   createInitialProductionState,
   getProductionState,
   getProductionStates,
+  getCraftTimerMs,
   getRecipe,
   getRecipes,
   hasIngredients,
@@ -20,6 +21,7 @@ import {
   type ProductionState,
 } from '../production';
 import { CROPS, createInitialState, migrateLoadedState } from '../constants';
+import { RESEARCH_NODES } from '../research';
 import { performHarvest } from '../harvest';
 import { createPrestigedState } from '../prestige';
 import { getProductionRecipeLabel } from '../i18n';
@@ -282,6 +284,38 @@ describe('startCraft / collectCraft cycle', () => {
     ).toBe(1);
     // 이중 수집 불가.
     expect(collectCraft(collected, FIRST.key, readyAt)).toBeNull();
+  });
+
+  test('가공 연구는 진행 중인 가공의 남은 시간까지 줄인다', () => {
+    const now = 4_000_000;
+    const craftNode = RESEARCH_NODES.find((node) => node.key === 'craft_studies')!;
+    const crafting = startCraft(stateWithIngredients(), FIRST.key, now)!;
+    expect(getCraftTimerMs(crafting, FIRST.key)).toBe(FIRST.timerMs);
+
+    // 이미 시작한 가공에 연구를 얹으면 readyAt이 앞당겨진다(타이머는 매번 재계산).
+    const studied: GameState = {
+      ...crafting,
+      research: {
+        ...crafting.research,
+        nodeLevels: { donation_amplifier: 1, craft_studies: 5 },
+        unlockedNodes: ['donation_amplifier', 'craft_studies'],
+      },
+    };
+    const shortened = Math.ceil(FIRST.timerMs / (1 + craftNode.effectPerLevel * 5));
+    expect(shortened).toBeLessThan(FIRST.timerMs);
+    expect(getCraftTimerMs(studied, FIRST.key)).toBe(shortened);
+
+    const status = getProductionState(studied, FIRST.key, now)!;
+    expect(status.timerMs).toBe(shortened);
+    expect(status.readyAt).toBe(now + shortened);
+    expect(getProductionState(studied, FIRST.key, now + shortened - 1)!.phase).toBe('crafting');
+    expect(getProductionState(studied, FIRST.key, now + shortened)!.phase).toBe('ready');
+    // 연구가 없었다면 아직 진행 중이었을 시점에도 수집할 수 있다.
+    expect(canCollectCraft(crafting, FIRST.key, now + shortened)).toBe(false);
+    expect(canCollectCraft(studied, FIRST.key, now + shortened)).toBe(true);
+    // 판매가는 그대로다(가공 연구는 시간만 줄인다).
+    expect(collectCraft(studied, FIRST.key, now + shortened)!.gold).toBe(studied.gold + FIRST.sellPrice);
+    expect(getCraftTimerMs(studied, 'nope' as ProductionRecipeKey)).toBe(0);
   });
 
   test('getProductionState returns null for unknown keys; getProductionStates keeps catalog order', () => {
