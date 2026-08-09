@@ -91,6 +91,12 @@ export const koFarmMessages = {
   resetDeleteAction: '농장 기록 삭제하고 새로 시작',
   resetKeepAction: '계속 이어서 할게요',
   cloudBackupSection: '클라우드 백업',
+  adFreeSection: '광고',
+  adFreeActiveDesc: '광고 제거 구매가 활성화되어 보상형·전면 광고를 모두 표시하지 않아요.',
+  adFreeInactiveDesc: (price: string) => `${price} 일회성 구매로 보상형·전면 광고를 모두 끌 수 있어요.`,
+  adFreePurchaseAction: (price: string) => `광고 제거 구매 · ${price}`,
+  adFreeRestoreAction: '구매 복원하기',
+  adFreeFailed: '구매 상태를 확인하지 못했어요. 잠시 후 다시 시도해 주세요.',
   cloudBackupDesc:
     '게임 기록을 클라우드에 저장해 두면 기기를 바꿔도 이어서 할 수 있어요. 복원하면 이 기기의 현재 진행이 클라우드 기록으로 바뀌어요.',
   cloudBackupAction: '지금 백업하기',

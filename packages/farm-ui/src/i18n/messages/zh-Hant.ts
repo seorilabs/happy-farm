@@ -93,6 +93,12 @@ export const zhHantFarmMessages: FarmMessages = {
   resetDeleteAction: '刪除農場存檔並重新開始',
   resetKeepAction: '繼續遊玩',
   cloudBackupSection: '雲端備份',
+  adFreeSection: '廣告',
+  adFreeActiveDesc: '去廣告購買已生效，獎勵廣告和插頁廣告均不會顯示。',
+  adFreeInactiveDesc: (price: string) => `一次性支付 ${price} 即可移除獎勵廣告和插頁廣告。`,
+  adFreePurchaseAction: (price: string) => `移除廣告 · ${price}`,
+  adFreeRestoreAction: '恢復購買',
+  adFreeFailed: '無法確認購買狀態，請稍後再試。',
   cloudBackupDesc:
     '將遊戲備份到雲端，換裝置也能繼續遊玩。還原時會用雲端備份覆蓋這台裝置目前的進度。',
   cloudBackupAction: '立即備份',

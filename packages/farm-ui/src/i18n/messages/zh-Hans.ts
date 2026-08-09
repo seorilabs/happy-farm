@@ -92,6 +92,12 @@ export const zhHansFarmMessages: FarmMessages = {
   resetDeleteAction: '删除农场存档并重新开始',
   resetKeepAction: '继续游戏',
   cloudBackupSection: '云备份',
+  adFreeSection: '广告',
+  adFreeActiveDesc: '去广告购买已生效，激励广告和插屏广告均不会显示。',
+  adFreeInactiveDesc: (price: string) => `一次性支付 ${price} 即可移除激励广告和插屏广告。`,
+  adFreePurchaseAction: (price: string) => `移除广告 · ${price}`,
+  adFreeRestoreAction: '恢复购买',
+  adFreeFailed: '无法确认购买状态，请稍后重试。',
   cloudBackupDesc:
     '将游戏备份到云端，换设备也能继续游玩。恢复会用云备份替换本设备当前的进度。',
   cloudBackupAction: '立即备份',

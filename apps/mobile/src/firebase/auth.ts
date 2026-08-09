@@ -1,4 +1,4 @@
-import { getAuth, signInAnonymously } from '@react-native-firebase/auth';
+import { getAuth, getIdToken, signInAnonymously } from '@react-native-firebase/auth';
 
 import { isFirebaseConfigured } from './app';
 import { recordNonFatalError } from './crashlytics';
@@ -58,6 +58,24 @@ export async function ensureMobileAnonymousUser(): Promise<MobileAnonymousUser |
       authFailureRecorded = true;
       recordNonFatalError(error, 'auth:anonymous_sign_in');
     }
+    return null;
+  }
+}
+
+/** Platform 세션 교환에만 쓰며 ID token 원문을 저장하거나 로그로 남기지 않는다. */
+export async function getMobileFirebaseIdToken(): Promise<string | null> {
+  const user = await ensureMobileAnonymousUser();
+  if (user == null) {
+    return null;
+  }
+  const currentUser = getAuth().currentUser;
+  if (currentUser == null || currentUser.uid !== user.uid) {
+    return null;
+  }
+  try {
+    return await getIdToken(currentUser);
+  } catch (error) {
+    recordNonFatalError(error, 'auth:id_token');
     return null;
   }
 }

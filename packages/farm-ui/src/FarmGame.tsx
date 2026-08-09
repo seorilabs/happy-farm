@@ -625,9 +625,19 @@ export type FarmCloudSave = {
   restoreFromCloud: () => Promise<FarmCloudSaveRestoreOutcome>;
 };
 
+export type FarmAdFreePurchase = {
+  isSupported: boolean;
+  active: boolean;
+  status: 'loading' | 'ready' | 'purchasing' | 'verifying' | 'restoring' | 'active' | 'failed' | 'unavailable';
+  displayPrice: string;
+  purchase: () => Promise<void>;
+  restore: () => Promise<void>;
+};
+
 export type FarmGameProps = {
   persistence?: FarmGamePersistence;
   cloudSave?: FarmCloudSave;
+  adFreePurchase?: FarmAdFreePurchase;
   analytics?: FarmAnalytics;
   useRewardedAd?: UseFarmAd;
   useInterstitialAd?: UseFarmAd;
@@ -951,6 +961,19 @@ const defaultCloudSave: FarmCloudSave = {
   backupNow: async () => ({ status: 'disabled' }),
   restoreFromCloud: async () => ({ status: 'disabled' }),
 };
+const defaultAdFreePurchase: FarmAdFreePurchase = {
+  isSupported: false,
+  active: false,
+  status: 'unavailable',
+  displayPrice: '₩3,900',
+  purchase: async () => undefined,
+  restore: async () => undefined,
+};
+const adFreeBlockedController: RewardedAdController = {
+  isAdReady: false,
+  isAdSupported: false,
+  showAd: async () => ({ status: 'unsupported' }),
+};
 const defaultPersistence: FarmGamePersistence = {
   readPersistedGameState: async () => createInitialState(),
   writePersistedGameState: async () => undefined,
@@ -1028,6 +1051,7 @@ export default function FarmGame(props: FarmGameProps = {}) {
 function FarmGameBody({
   persistence = defaultPersistence,
   cloudSave = defaultCloudSave,
+  adFreePurchase = defaultAdFreePurchase,
   analytics = defaultFarmAnalytics,
   useRewardedAd = useUnsupportedAd,
   useInterstitialAd = useUnsupportedAd,
@@ -1223,8 +1247,12 @@ function FarmGameBody({
   const scalingBulkGuardRef = useRef<number | null>(null);
   const autoHarvestSummaryRef = useRef(createAutoHarvestSummaryState());
   const cropReadySummaryRef = useRef(createCropReadySummaryState());
-  const rewardedAd = useRewardedAd(adGroupIds.rewarded);
-  const interstitialAd = useInterstitialAd(adGroupIds.interstitial);
+  const rewardedAdAdapter = useRewardedAd(adGroupIds.rewarded);
+  const interstitialAdAdapter = useInterstitialAd(adGroupIds.interstitial);
+  // 구매 projection이 활성화되면 두 광고 형식을 같은 경계에서 즉시 끊는다.
+  // adapter의 정책 재조회 시점과 무관하게 UI와 호출 경로 모두 fail-closed다.
+  const rewardedAd = adFreePurchase.active ? adFreeBlockedController : rewardedAdAdapter;
+  const interstitialAd = adFreePurchase.active ? adFreeBlockedController : interstitialAdAdapter;
   const farmAnalytics = analytics;
   const locale = normalizeLocale(gameSettings.locale);
   const messages = useMemo(() => getFarmMessages(locale), [locale]);
@@ -4372,6 +4400,7 @@ function FarmGameBody({
     // Tag the whole funnel with the type's canonical placement so blocked/click/
     // completed/failed all aggregate per placement (single source of truth).
     const placement = getRewardedAdPlacement(type);
+    const adRequest = { type, placement };
     const attemptId = `${sessionStartedAtRef.current.toString(36)}-${(
       ++rewardedAdAttemptCounterRef.current
     ).toString(36)}`;
@@ -4420,7 +4449,7 @@ function FarmGameBody({
 
     const attemptShow = async (): Promise<RewardedAdShowResult> => {
       try {
-        return await rewardedAd.showAd();
+        return await rewardedAd.showAd(adRequest);
       } catch {
         // showAd 자체가 throw하면 실패 결과로 정규화해 재시도·최종 실패 처리를
         // 한 경로로 통일한다(reason은 최후 fallback show_ad_threw).
@@ -4438,7 +4467,7 @@ function FarmGameBody({
         if (rewardedAd.ensureAdReady != null) {
           let ready = false;
           try {
-            ready = await rewardedAd.ensureAdReady(8_000);
+            ready = await rewardedAd.ensureAdReady(8_000, adRequest);
           } catch {
             ready = false;
           }
@@ -4448,7 +4477,7 @@ function FarmGameBody({
           }
         } else if (rewardedAd.reloadAd != null) {
           try {
-            await rewardedAd.reloadAd();
+            await rewardedAd.reloadAd(adRequest);
           } catch {
             // The original terminal reason remains authoritative.
           }
@@ -4466,9 +4495,9 @@ function FarmGameBody({
         onReward();
         // Reward, usage cap, and mission progress commit in one functional
         // update. A captured offer cannot be switched while the native ad is up.
-        setGameState((state) => {
+        const persistedState = await new Promise<GameState>((resolve) => setGameState((state) => {
           const rewardedState = options.applyRewardState?.(state, rewardedAt) ?? state;
-          return {
+          const next = {
             ...rewardedState,
             adUsage: recordRewardedAdUsage(rewardedState, type, rewardedAt),
             dailyMissionState: recordAdWatchProgress(
@@ -4482,7 +4511,20 @@ function FarmGameBody({
               rewardedState.unlockedAreas
             ),
           };
-        });
+          gameStateRef.current = next;
+          resolve(next);
+          return next;
+        }));
+        // Platform ack는 로컬 보상 상태가 실제 저장된 뒤에만 보낸다. ack가 실패해도
+        // 로컬 지급을 되돌리거나 같은 광고를 다시 지급하지 않는다.
+        await persistence.writePersistedGameState(persistedState);
+        if (result.claimId != null) {
+          try {
+            await rewardedAd.acknowledgeReward?.(result.claimId);
+          } catch {
+            // confirmed claim은 운영 진단에서 보이며, 지급 완료 상태가 권위다.
+          }
+        }
         farmAnalytics.trackAdRewardCompleted({
           type,
           placement,
@@ -6268,6 +6310,35 @@ function FarmGameBody({
                 onBackup={() => void backupToCloud()}
                 onRestore={() => void restoreFromCloud()}
               />
+            ) : null}
+
+            {adFreePurchase.isSupported ? (
+              <View>
+                <Text style={styles.sheetSectionTitle}>{messages.adFreeSection}</Text>
+                <Text style={sheetPartStyles.settingDesc}>
+                  {adFreePurchase.active
+                    ? messages.adFreeActiveDesc
+                    : messages.adFreeInactiveDesc(adFreePurchase.displayPrice)}
+                </Text>
+                {adFreePurchase.status === 'failed' || adFreePurchase.status === 'unavailable' ? (
+                  <Text style={sheetPartStyles.cloudSaveNotice}>{messages.adFreeFailed}</Text>
+                ) : null}
+                {!adFreePurchase.active ? (
+                  <SheetAction
+                    testID="ad-free-purchase"
+                    label={messages.adFreePurchaseAction(adFreePurchase.displayPrice)}
+                    disabled={['loading', 'purchasing', 'verifying', 'restoring'].includes(adFreePurchase.status)}
+                    onPress={() => void adFreePurchase.purchase()}
+                  />
+                ) : null}
+                <SheetAction
+                  testID="ad-free-restore"
+                  label={messages.adFreeRestoreAction}
+                  secondary
+                  disabled={['loading', 'purchasing', 'verifying', 'restoring'].includes(adFreePurchase.status)}
+                  onPress={() => void adFreePurchase.restore()}
+                />
+              </View>
             ) : null}
 
             <Text style={styles.sheetSectionTitle}>{messages.gameDataSection}</Text>

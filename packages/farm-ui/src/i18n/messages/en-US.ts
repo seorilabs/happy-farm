@@ -93,6 +93,12 @@ export const enFarmMessages: FarmMessages = {
   resetDeleteAction: 'Delete farm save and start over',
   resetKeepAction: 'Keep playing',
   cloudBackupSection: 'Cloud backup',
+  adFreeSection: 'Ads',
+  adFreeActiveDesc: 'Your ad-free purchase is active. Rewarded and interstitial ads are disabled.',
+  adFreeInactiveDesc: (price: string) => `Remove rewarded and interstitial ads with a one-time ${price} purchase.`,
+  adFreePurchaseAction: (price: string) => `Remove ads · ${price}`,
+  adFreeRestoreAction: 'Restore purchase',
+  adFreeFailed: 'We could not verify your purchase status. Please try again.',
   cloudBackupDesc:
     'Back up your game to the cloud so you can keep playing on another device. Restoring replaces this device’s current progress with the cloud backup.',
   cloudBackupAction: 'Back up now',

@@ -3584,6 +3584,30 @@ describe('FarmGame UI flow', () => {
     expect(within(screen.getByTestId('shop-nav-button')).queryByText('1')).toBeNull();
   });
 
+  test('ad_free가 활성화되면 준비된 광고 adapter도 공통 비활성화한다', async () => {
+    const rewardedAd = createReadyRewardedAd();
+    const interstitialAd = createReadyRewardedAd();
+    const screen = await renderGame(null, {
+      adFreePurchase: {
+        isSupported: true,
+        active: true,
+        status: 'active',
+        displayPrice: '₩3,900',
+        purchase: jest.fn(async () => undefined),
+        restore: jest.fn(async () => undefined),
+      },
+      useRewardedAd: () => rewardedAd,
+      useInterstitialAd: () => interstitialAd,
+    });
+
+    await waitFor(() => expect(screen.getByTestId('shop-nav-button')).toBeTruthy());
+    expect(within(screen.getByTestId('shop-nav-button')).queryByText('1')).toBeNull();
+    fireEvent.press(screen.getByTestId('shop-nav-button'));
+    expect(screen.queryByTestId('shop-tab-rewards')).toBeNull();
+    expect(rewardedAd.showAd).not.toHaveBeenCalled();
+    expect(interstitialAd.showAd).not.toHaveBeenCalled();
+  });
+
   test('hides the shop badge when the rewarded ad rate limit is exhausted', async () => {
     // The badge lights up when either shop reward is available: the gold reward
     // (gated by the rewardedGold sliding window) or the plot discount (gated by

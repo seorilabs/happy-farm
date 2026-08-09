@@ -1,17 +1,79 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Platform } from 'react-native';
 import mobileAds, { AdEventType, RewardedAd, RewardedAdEventType } from 'react-native-google-mobile-ads';
 
 import {
   normalizeAdFailureReason,
+  type RewardedAdRequest,
   type RewardedAdReward,
   type RewardedAdShowResult,
 } from '../../../../packages/farm-core/src';
 import { getRewardedAdUnitId } from './config';
 import { useMobileAdsEnabled } from './policy';
 import { recordNonFatalError } from '../firebase/crashlytics';
+import { ensureMobilePlatformSession, mobilePlatformAds } from '../platformEvents';
+import { showPlatformAdMobReward, type PlatformAdMobAdapter } from './platformRewardedAd';
 
 export const MOBILE_REWARDED_AD_LOAD_TIMEOUT_MS = 10_000;
 export const MOBILE_REWARDED_AD_SHOW_TIMEOUT_MS = 120_000;
+
+function requestId() {
+  return `hf-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+}
+
+function createPlatformAdMobAdapter(adUnitId: string): PlatformAdMobAdapter {
+  let current: RewardedAd | null = null;
+
+  return {
+    async load(ssv) {
+      await mobileAds().initialize();
+      const ad = RewardedAd.createForAdRequest(adUnitId, {
+        requestNonPersonalizedAdsOnly: true,
+        serverSideVerificationOptions: { customData: ssv.customData, userId: ssv.userId },
+      });
+      current = ad;
+      return new Promise<boolean>((resolve) => {
+        let settled = false;
+        const timeout = setTimeout(() => finish(false), MOBILE_REWARDED_AD_LOAD_TIMEOUT_MS);
+        const unsubscribe = ad.addAdEventsListener(({ type }) => {
+          if (type === RewardedAdEventType.LOADED) finish(true);
+          if (type === AdEventType.ERROR) finish(false);
+        });
+        function finish(ready: boolean) {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timeout);
+          unsubscribe();
+          resolve(ready);
+        }
+        ad.load();
+      });
+    },
+    async show() {
+      const ad = current;
+      if (ad == null) return { status: 'notReady' };
+      return new Promise<RewardedAdShowResult>((resolve) => {
+        let settled = false;
+        let reward: RewardedAdReward | undefined;
+        const timeout = setTimeout(() => finish({ status: 'failed', error: 'show_timeout' }), MOBILE_REWARDED_AD_SHOW_TIMEOUT_MS);
+        const unsubscribe = ad.addAdEventsListener(({ type, payload }) => {
+          if (type === RewardedAdEventType.EARNED_REWARD) reward = normalizeReward(payload);
+          if (type === AdEventType.CLOSED) finish(reward == null ? { status: 'dismissed' } : { status: 'earned', reward });
+          if (type === AdEventType.ERROR) finish({ status: 'failed', error: normalizeAdFailureReason(payload) });
+        });
+        function finish(result: RewardedAdShowResult) {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timeout);
+          unsubscribe();
+          current = null;
+          resolve(result);
+        }
+        void ad.show().catch((error: unknown) => finish({ status: 'failed', error: normalizeAdFailureReason(error) }));
+      });
+    },
+  };
+}
 
 type PendingLoad = {
   instanceToken: symbol;
@@ -92,7 +154,8 @@ function disposeRewardedAdInstance(instance: RewardedAdInstance | null) {
 
 export function useAdMobRewardedAd() {
   const adsEnabled = useMobileAdsEnabled();
-  const adUnitId = adsEnabled ? getRewardedAdUnitId() : null;
+  const [platformPolicyEnabled, setPlatformPolicyEnabled] = useState(__DEV__);
+  const adUnitId = adsEnabled && platformPolicyEnabled ? getRewardedAdUnitId() : null;
   const adInstanceRef = useRef<RewardedAdInstance | null>(null);
   const rotateAdInstanceRef = useRef<((expectedToken?: symbol) => void) | null>(null);
   const pendingLoadRef = useRef<PendingLoad | null>(null);
@@ -100,6 +163,25 @@ export function useAdMobRewardedAd() {
   const isAdReadyRef = useRef(false);
   const [isAdReady, setIsAdReady] = useState(false);
   const [isAdSupported, setIsAdSupported] = useState(adUnitId != null);
+
+  useEffect(() => {
+    if (__DEV__ || !adsEnabled) {
+      setPlatformPolicyEnabled(__DEV__ && adsEnabled);
+      return;
+    }
+    let cancelled = false;
+    void ensureMobilePlatformSession()
+      .then((ready) => ready ? mobilePlatformAds.policy() : Promise.reject(new Error('session unavailable')))
+      .then((policy) => {
+        if (!cancelled) setPlatformPolicyEnabled(policy.appUsesAds && policy.adsEnabled);
+      })
+      .catch(() => {
+        if (!cancelled) setPlatformPolicyEnabled(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [adsEnabled]);
 
   const updateReady = useCallback((ready: boolean) => {
     isAdReadyRef.current = ready;
@@ -216,6 +298,15 @@ export function useAdMobRewardedAd() {
       return;
     }
 
+    if (!__DEV__) {
+      // Production AdMob은 placement별 claim을 SSV custom data에 넣어야 하므로
+      // 사용자 요청 전에 익명 preload하지 않는다. 정책 통과는 준비 상태지만
+      // 실제 load와 노출 직전 정책은 showAd에서 다시 확인한다.
+      setIsAdSupported(true);
+      updateReady(true);
+      return () => updateReady(false);
+    }
+
     void mobileAds()
       .initialize()
       .catch((error: unknown) => {
@@ -323,9 +414,21 @@ export function useAdMobRewardedAd() {
     };
   }, [adUnitId, finishPendingLoad, finishPendingShow, loadAd, updateReady]);
 
-  const showAd = useCallback(() => {
+  const showAd = useCallback((request?: RewardedAdRequest) => {
     if (adUnitId == null) {
       return Promise.resolve<RewardedAdShowResult>({ status: 'unsupported' });
+    }
+    if (!__DEV__) {
+      if (request == null) {
+        return Promise.resolve<RewardedAdShowResult>({ status: 'unsupported' });
+      }
+      return showPlatformAdMobReward(request, {
+        ensureSession: ensureMobilePlatformSession,
+        ads: mobilePlatformAds,
+        adapter: createPlatformAdMobAdapter(adUnitId),
+        clientPlatform: Platform.OS === 'ios' ? 'ios' : 'android',
+        requestId,
+      });
     }
     if (pendingShowRef.current != null && !pendingShowRef.current.settled) {
       return Promise.resolve<RewardedAdShowResult>({ status: 'notReady' });
@@ -378,8 +481,13 @@ export function useAdMobRewardedAd() {
   );
 
   const reloadAd = useCallback(async () => {
+    if (!__DEV__) return;
     await loadAd();
   }, [loadAd]);
 
-  return { isAdReady, isAdSupported, showAd, reloadAd, ensureAdReady };
+  const acknowledgeReward = useCallback(async (claimId: string) => {
+    await mobilePlatformAds.ack(claimId);
+  }, []);
+
+  return { isAdReady, isAdSupported, showAd, reloadAd, ensureAdReady, acknowledgeReward };
 }

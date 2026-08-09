@@ -1,9 +1,9 @@
 type MockPlatformOptions = {
   appId: string;
   baseUrl: string;
-  ingestBaseUrl: string;
-  eventAllowlist: readonly string[];
-  eventContext: () => Record<string, string>;
+  ingestBaseUrl?: string;
+  eventAllowlist?: readonly string[];
+  eventContext?: () => Record<string, string>;
   sessionStore?: unknown;
 };
 
@@ -13,6 +13,9 @@ jest.mock('@seorilabs/platform-sdk', () => {
       track: jest.fn(),
       flush: jest.fn(() => Promise.resolve()),
     },
+    session: { token: jest.fn(() => Promise.resolve('platform-token')) },
+    iap: {},
+    signIn: jest.fn(() => Promise.resolve()),
     start: jest.fn(),
     shutdown: jest.fn(() => Promise.resolve()),
   };
@@ -21,6 +24,10 @@ jest.mock('@seorilabs/platform-sdk', () => {
     createPlatform: jest.fn(() => platform),
   };
 });
+
+jest.mock('../firebase/auth', () => ({
+  getMobileFirebaseIdToken: jest.fn(() => Promise.resolve('firebase-id-token')),
+}));
 
 import { Platform } from 'react-native';
 import { PLATFORM_EVENT_ALLOWLIST, RELEASE_INFO } from '../../../../packages/farm-core/src';
@@ -43,7 +50,7 @@ const mockPlatform = mockCreatePlatform.mock.results[0]?.value;
 
 describe('Mobile Platform events', () => {
   test('실제 OS context와 고정 allowlist로 SDK를 생성한다', () => {
-    expect(mockCreatePlatform).toHaveBeenCalledTimes(1);
+    expect(mockCreatePlatform).toHaveBeenCalledTimes(2);
     const options = mockCreatePlatform.mock.calls[0]?.[0];
     expect(options).toMatchObject({
       appId: 'happy-farm',
@@ -51,7 +58,7 @@ describe('Mobile Platform events', () => {
       ingestBaseUrl: 'https://platform-ingest-306278488979.asia-northeast3.run.app',
       eventAllowlist: PLATFORM_EVENT_ALLOWLIST,
     });
-    expect(options?.eventContext()).toEqual({
+    expect(options?.eventContext?.()).toEqual({
       platform: Platform.OS === 'ios' ? 'ios' : 'android',
       appVersion: RELEASE_INFO.versionName,
       locale: expect.any(String),

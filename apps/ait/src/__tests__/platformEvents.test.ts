@@ -7,12 +7,25 @@ type MockPlatformOptions = {
   sessionStore?: unknown;
 };
 
+const mockAppLogin = jest.fn(async () => ({
+  authorizationCode: 'transient-code',
+  referrer: 'SANDBOX' as const,
+}));
+
+jest.mock('@apps-in-toss/framework', () => ({
+  appLogin: mockAppLogin,
+}));
+
 jest.mock('@seorilabs/platform-sdk', () => {
   const platform = {
     events: {
       track: jest.fn(),
       flush: jest.fn(() => Promise.resolve()),
     },
+    session: {
+      token: jest.fn(() => Promise.resolve('platform-token')),
+    },
+    signIn: jest.fn(() => Promise.resolve()),
     start: jest.fn(),
     shutdown: jest.fn(() => Promise.resolve()),
   };
@@ -33,6 +46,8 @@ import {
 const platformSdkMock = jest.requireMock('@seorilabs/platform-sdk') as {
   createPlatform: jest.MockedFunction<(options: MockPlatformOptions) => {
     events: { track: jest.Mock; flush: jest.Mock };
+    session: { token: jest.Mock };
+    signIn: jest.Mock;
     start: jest.Mock;
     shutdown: jest.Mock;
   }>;
@@ -42,7 +57,7 @@ const mockPlatform = mockCreatePlatform.mock.results[0]?.value;
 
 describe('AppsInToss Platform events', () => {
   test('익명 AIT context와 고정 allowlist로 SDK를 생성한다', () => {
-    expect(mockCreatePlatform).toHaveBeenCalledTimes(1);
+    expect(mockCreatePlatform).toHaveBeenCalledTimes(2);
     const options = mockCreatePlatform.mock.calls[0]?.[0];
     expect(options).toMatchObject({
       appId: 'happy-farm',
@@ -56,6 +71,11 @@ describe('AppsInToss Platform events', () => {
       locale: expect.any(String),
     });
     expect(options).not.toHaveProperty('sessionStore');
+
+    expect(mockCreatePlatform.mock.calls[1]?.[0]).toMatchObject({
+      appId: 'happy-farm',
+      baseUrl: 'https://platform-ads-306278488979.asia-northeast3.run.app',
+    });
   });
 
   test('tracker와 lifecycle을 SDK에 위임한다', async () => {

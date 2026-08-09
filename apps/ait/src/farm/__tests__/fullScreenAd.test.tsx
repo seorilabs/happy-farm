@@ -17,6 +17,19 @@ type FullScreenAdRequest = {
 
 const mockUnregisterLoad = jest.fn();
 const mockUnregisterShow = jest.fn();
+const mockEnsureAppsInTossAdsSession = jest.fn(async () => true);
+const mockAdsPolicy = jest.fn(async () => ({
+  appId: 'happy-farm',
+  appUsesAds: true,
+  adsEnabled: true,
+  operatorSuppressed: false,
+  adFreeActive: false,
+  reasons: [],
+  checkedAt: '2026-08-09T00:00:00Z',
+}));
+const mockCreateClaim = jest.fn();
+const mockConfirmClaim = jest.fn();
+const mockAckClaim = jest.fn();
 let latestLoadRequest: FullScreenAdRequest | null = null;
 let latestShowRequest: FullScreenAdRequest | null = null;
 
@@ -45,6 +58,16 @@ jest.mock('../../firebaseWeb/remoteConfig', () => ({
   useAppsInTossAdsEnabled: () => true,
 }));
 
+jest.mock('../../platformEvents', () => ({
+  ensureAppsInTossAdsSession: mockEnsureAppsInTossAdsSession,
+  appsInTossPlatformAds: {
+    policy: mockAdsPolicy,
+    createClaim: mockCreateClaim,
+    confirm: mockConfirmClaim,
+    ack: mockAckClaim,
+  },
+}));
+
 const { FULL_SCREEN_AD_LOAD_TIMEOUT_MS, FULL_SCREEN_AD_SHOW_TIMEOUT_MS, useFullScreenAd } =
   jest.requireActual<typeof import('../platform/fullScreenAd')>('../platform/fullScreenAd');
 
@@ -52,6 +75,14 @@ function Harness({ onController }: { onController: (controller: RewardedAdContro
   const controller = useFullScreenAd('ait.rewarded.test');
   onController(controller);
   return null;
+}
+
+async function flushPlatformPolicy() {
+  await act(async () => {
+    for (let index = 0; index < 10; index += 1) {
+      await Promise.resolve();
+    }
+  });
 }
 
 describe('useFullScreenAd', () => {
@@ -64,6 +95,21 @@ describe('useFullScreenAd', () => {
     mockShowFullScreenAd.mockClear();
     mockLoadFullScreenAd.isSupported.mockClear();
     mockShowFullScreenAd.isSupported.mockClear();
+    mockEnsureAppsInTossAdsSession.mockClear();
+    mockEnsureAppsInTossAdsSession.mockResolvedValue(true);
+    mockAdsPolicy.mockClear();
+    mockAdsPolicy.mockResolvedValue({
+      appId: 'happy-farm',
+      appUsesAds: true,
+      adsEnabled: true,
+      operatorSuppressed: false,
+      adFreeActive: false,
+      reasons: [],
+      checkedAt: '2026-08-09T00:00:00Z',
+    });
+    mockCreateClaim.mockReset();
+    mockConfirmClaim.mockReset();
+    mockAckClaim.mockReset();
   });
 
   afterEach(() => {
@@ -281,16 +327,67 @@ describe('useFullScreenAd', () => {
     act(() => {
       readyPromise = controller.ensureAdReady!();
     });
+    await waitFor(() => expect(mockAdsPolicy).toHaveBeenCalledTimes(2));
     act(() => { latestLoadRequest?.onError(new Error('no fill')); });
 
     await expect(readyPromise).resolves.toBe(false);
     expect(controllerRef.current?.isAdReady).toBe(false);
   });
 
+  test('does not call the ad SDK when Platform policy lookup fails', async () => {
+    mockAdsPolicy.mockRejectedValue(new Error('policy unavailable'));
+    const controllerRef: { current?: RewardedAdController } = {};
+
+    render(<Harness onController={(value) => { controllerRef.current = value; }} />);
+
+    await waitFor(() => expect(mockAdsPolicy).toHaveBeenCalledTimes(1));
+    expect(mockLoadFullScreenAd).not.toHaveBeenCalled();
+    await expect(controllerRef.current?.showAd()).resolves.toEqual({
+      status: 'failed',
+      error: 'platform_ads_unavailable',
+    });
+    expect(mockShowFullScreenAd).not.toHaveBeenCalled();
+  });
+
+  test('confirms an AppsInToss rewarded claim as client_confirmed', async () => {
+    mockCreateClaim.mockImplementation(async () => ({ claimId: 'claim-ait-1' }));
+    mockConfirmClaim.mockImplementation(async () => ({
+      claimId: 'claim-ait-1',
+      state: 'confirmed',
+      assurance: 'client_confirmed',
+    }));
+    const controllerRef: { current?: RewardedAdController } = {};
+    render(<Harness onController={(value) => { controllerRef.current = value; }} />);
+    await waitFor(() => expect(latestLoadRequest).not.toBeNull());
+    act(() => { latestLoadRequest?.onEvent({ type: 'loaded' }); });
+    await waitFor(() => expect(controllerRef.current?.isAdReady).toBe(true));
+
+    let resultPromise!: Promise<RewardedAdShowResult>;
+    act(() => {
+      resultPromise = controllerRef.current!.showAd({
+        type: 'wheelBonusAd',
+        placement: 'wheel_bonus_spin',
+      });
+    });
+    await waitFor(() => expect(mockShowFullScreenAd).toHaveBeenCalledTimes(1));
+    act(() => {
+      latestShowRequest?.onEvent({ type: 'userEarnedReward' });
+      latestShowRequest?.onEvent({ type: 'dismissed' });
+    });
+
+    await expect(resultPromise).resolves.toEqual({ status: 'earned', claimId: 'claim-ait-1' });
+    expect(mockCreateClaim).toHaveBeenCalledWith(expect.objectContaining({
+      placement: 'wheel_bonus_spin',
+      provider: 'apps_in_toss',
+    }));
+    expect(mockConfirmClaim).toHaveBeenCalledWith('claim-ait-1', expect.stringMatching(/^ait-claim-ait-1-/));
+  });
+
   test('ensureAdReady resolves false when loading times out', async () => {
     jest.useFakeTimers();
     const controllerRef: { current?: RewardedAdController } = {};
     render(<Harness onController={(value) => { controllerRef.current = value; }} />);
+    await flushPlatformPolicy();
     expect(latestLoadRequest).not.toBeNull();
 
     const controller = controllerRef.current;
@@ -299,6 +396,7 @@ describe('useFullScreenAd', () => {
     act(() => {
       readyPromise = controller.ensureAdReady!();
     });
+    await flushPlatformPolicy();
     act(() => { jest.advanceTimersByTime(FULL_SCREEN_AD_LOAD_TIMEOUT_MS); });
 
     await expect(readyPromise).resolves.toBe(false);
@@ -309,6 +407,7 @@ describe('useFullScreenAd', () => {
     jest.useFakeTimers();
     const controllerRef: { current?: RewardedAdController } = {};
     render(<Harness onController={(value) => { controllerRef.current = value; }} />);
+    await flushPlatformPolicy();
     expect(latestLoadRequest).not.toBeNull();
 
     const controller = controllerRef.current;
@@ -317,6 +416,7 @@ describe('useFullScreenAd', () => {
     act(() => {
       readyPromise = controller.ensureAdReady!(250);
     });
+    await flushPlatformPolicy();
     act(() => {
       jest.advanceTimersByTime(250);
     });
@@ -336,6 +436,7 @@ describe('useFullScreenAd', () => {
     jest.useFakeTimers();
     const controllerRef: { current?: RewardedAdController } = {};
     render(<Harness onController={(value) => { controllerRef.current = value; }} />);
+    await flushPlatformPolicy();
     act(() => { latestLoadRequest?.onEvent({ type: 'loaded' }); });
 
     const controller = controllerRef.current;
@@ -344,9 +445,11 @@ describe('useFullScreenAd', () => {
     act(() => {
       resultPromise = controller.showAd();
     });
+    await flushPlatformPolicy();
     act(() => { jest.advanceTimersByTime(FULL_SCREEN_AD_SHOW_TIMEOUT_MS); });
 
     await expect(resultPromise).resolves.toEqual({ status: 'failed', error: 'show_timeout' });
+    await flushPlatformPolicy();
     expect(mockLoadFullScreenAd).toHaveBeenCalledTimes(2);
   });
 
@@ -354,6 +457,7 @@ describe('useFullScreenAd', () => {
     jest.useFakeTimers();
     const controllerRef: { current?: RewardedAdController } = {};
     render(<Harness onController={(value) => { controllerRef.current = value; }} />);
+    await flushPlatformPolicy();
     act(() => { latestLoadRequest?.onEvent({ type: 'loaded' }); });
 
     const controller = controllerRef.current;
@@ -362,6 +466,7 @@ describe('useFullScreenAd', () => {
     act(() => {
       resultPromise = controller.showAd();
     });
+    await flushPlatformPolicy();
     act(() => {
       latestShowRequest?.onEvent({ type: 'userEarnedReward' });
       jest.advanceTimersByTime(FULL_SCREEN_AD_SHOW_TIMEOUT_MS);
@@ -374,6 +479,7 @@ describe('useFullScreenAd', () => {
     jest.useFakeTimers();
     const controllerRef: { current?: RewardedAdController } = {};
     render(<Harness onController={(value) => { controllerRef.current = value; }} />);
+    await flushPlatformPolicy();
     act(() => {
       latestLoadRequest?.onEvent({ type: 'loaded' });
     });
@@ -385,6 +491,7 @@ describe('useFullScreenAd', () => {
     act(() => {
       showA = controller.showAd();
     });
+    await flushPlatformPolicy();
     const requestA = mockShowFullScreenAd.mock.calls[0]?.[0] as FullScreenAdRequest | undefined;
     if (requestA == null) throw new Error('first show request not provided');
 
@@ -392,6 +499,7 @@ describe('useFullScreenAd', () => {
       jest.advanceTimersByTime(FULL_SCREEN_AD_SHOW_TIMEOUT_MS);
     });
     await expect(showA).resolves.toEqual({ status: 'failed', error: 'show_timeout' });
+    await flushPlatformPolicy();
 
     act(() => {
       latestLoadRequest?.onEvent({ type: 'loaded' });
@@ -404,6 +512,7 @@ describe('useFullScreenAd', () => {
         showBSettled = true;
       });
     });
+    await flushPlatformPolicy();
     const requestB = mockShowFullScreenAd.mock.calls[1]?.[0] as FullScreenAdRequest | undefined;
     if (requestB == null) throw new Error('second show request not provided');
 

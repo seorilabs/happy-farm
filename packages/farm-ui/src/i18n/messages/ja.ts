@@ -93,6 +93,12 @@ export const jaFarmMessages: FarmMessages = {
   resetDeleteAction: '農場の記録を削除して新しく始める',
   resetKeepAction: 'このまま続けます',
   cloudBackupSection: 'クラウドバックアップ',
+  adFreeSection: '広告',
+  adFreeActiveDesc: '広告削除の購入が有効です。リワード広告と全画面広告は表示されません。',
+  adFreeInactiveDesc: (price: string) => `${price}の一回購入でリワード広告と全画面広告を削除できます。`,
+  adFreePurchaseAction: (price: string) => `広告を削除 · ${price}`,
+  adFreeRestoreAction: '購入を復元',
+  adFreeFailed: '購入状態を確認できませんでした。もう一度お試しください。',
   cloudBackupDesc:
     'ゲームの記録をクラウドに保存しておくと、端末を変えても続きから遊べます。復元すると、この端末の現在の進行がクラウドの記録に置き換わります。',
   cloudBackupAction: '今すぐバックアップ',
