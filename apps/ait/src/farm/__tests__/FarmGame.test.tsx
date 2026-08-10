@@ -3402,6 +3402,31 @@ describe('FarmGame UI flow', () => {
     expect(screen.queryByText('채소 밭 열기')).toBeNull();
   });
 
+  test('keeps progression interstitials off when the host enables return-only placement', async () => {
+    const shopReadyState = createShopReadyState();
+    const interstitial = {
+      isAdReady: true,
+      isAdSupported: true,
+      showAd: jest.fn(async () => ({ status: 'dismissed' as const })),
+    };
+    const screen = await renderGame(shopReadyState, {
+      interstitialPlacements: {
+        returnWelcomeBack: true,
+        progressionMilestone: false,
+      },
+      useInterstitialAd: () => interstitial,
+    });
+
+    await waitFor(() => expect(screen.getByText(`${formatMoney(shopReadyState.gold)}G`)).toBeTruthy());
+    fireEvent.press(screen.getByText('🏪 상점'));
+    fireEvent.press(screen.getByText('밭 개간하기'));
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(interstitial.showAd).not.toHaveBeenCalled();
+  });
+
   describe('배치(일괄) 업그레이드 구매 (#426)', () => {
     const openUpgradeTab = (screen: ReturnType<typeof render>) => {
       fireEvent.press(screen.getByText('🏪 상점'));
