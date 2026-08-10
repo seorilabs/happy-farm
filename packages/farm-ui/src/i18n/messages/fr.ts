@@ -93,6 +93,12 @@ export const frFarmMessages: FarmMessages = {
   resetDeleteAction: 'Supprimer la sauvegarde et recommencer',
   resetKeepAction: 'Continuer à jouer',
   cloudBackupSection: 'Sauvegarde cloud',
+  adFreeSection: 'Publicités',
+  adFreeActiveDesc: 'Votre achat sans publicité est actif. Les publicités récompensées et interstitielles sont désactivées.',
+  adFreeInactiveDesc: (price: string) => `Supprimez les publicités récompensées et interstitielles avec un achat unique de ${price}.`,
+  adFreePurchaseAction: (price: string) => `Supprimer les pubs · ${price}`,
+  adFreeRestoreAction: 'Restaurer l’achat',
+  adFreeFailed: 'Impossible de vérifier votre achat. Réessayez plus tard.',
   cloudBackupDesc:
     `Sauvegarde ta partie dans le cloud pour jouer sur un autre appareil. La restauration remplace la progression actuelle de cet appareil par la sauvegarde cloud.`,
   cloudBackupAction: 'Sauvegarder',

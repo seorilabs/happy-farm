@@ -35,7 +35,7 @@ export type RewardedAdReward = {
 };
 
 export type RewardedAdShowResult =
-  | { status: 'earned'; reward?: RewardedAdReward }
+  | { status: 'earned'; reward?: RewardedAdReward; claimId?: string }
   | { status: 'dismissed' }
   | { status: 'notReady' }
   | { status: 'unsupported' }
@@ -49,15 +49,17 @@ export type RewardedAdRequest = {
 export type RewardedAdController = {
   isAdReady: boolean;
   isAdSupported: boolean;
-  showAd(): Promise<RewardedAdShowResult>;
+  showAd(request?: RewardedAdRequest): Promise<RewardedAdShowResult>;
   // 로드 완료 확인 없이 노출돼 실패하는 배치를 줄이기 위한 재로드 킥(#374).
   // 시트 오픈 시 프리로드·show 실패 후 1회 재시도에 사용한다. 로드가 끝나면
   // isAdReady가 다시 true로 뒤집힌다. 미지원 컨트롤러는 생략할 수 있어 optional.
-  reloadAd?(): void | Promise<void>;
+  reloadAd?(request?: RewardedAdRequest): void | Promise<void>;
   // 상태 플래그만 확인하지 않고 SDK의 실제 loaded/error/timeout 결과를 기다린다.
   // 로드 경쟁 직후 즉시 재시도하는 문제를 막기 위한 optional 계약으로,
   // 구형 호스트/테스트 목은 그대로 동작한다.
-  ensureAdReady?(timeoutMs?: number): Promise<boolean>;
+  ensureAdReady?(timeoutMs?: number, request?: RewardedAdRequest): Promise<boolean>;
+  // 로컬 보상 상태를 저장한 뒤 Platform claim을 delivered로 전이한다.
+  acknowledgeReward?(claimId: string): Promise<void>;
 };
 
 export type AdFailureFamily =

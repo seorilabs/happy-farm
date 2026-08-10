@@ -8,6 +8,7 @@ allowBuilds:
   '@swc/core': true
   esbuild: true
   protobufjs: true
+  react-native-nitro-modules: true
 
 # 조직이 직접 발행하고 exact version으로 고정한 private SDK는 발행 직후 연동한다.
 # 그 외 의존성에는 pnpm의 신규 릴리스 대기 정책을 그대로 적용한다.

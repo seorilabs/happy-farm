@@ -26,6 +26,7 @@ export * from './missions';
 export * from './modifiers';
 export * from './prestige';
 export * from './platformEvents';
+export * from './platformAds';
 export * from './production';
 export * from './research';
 export * from './resetBoundary';

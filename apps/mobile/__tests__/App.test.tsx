@@ -68,7 +68,20 @@ jest.mock('@react-native-firebase/analytics', () => ({
 
 jest.mock('@react-native-firebase/auth', () => ({
   getAuth: jest.fn(() => ({ currentUser: null })),
+  getIdToken: jest.fn(() => Promise.resolve('firebase-id-token')),
   signInAnonymously: jest.fn(() => Promise.resolve({ user: { uid: 'test-user', isAnonymous: true } })),
+}));
+
+jest.mock('react-native-iap', () => ({
+  useIAP: jest.fn(() => ({
+    connected: false,
+    products: [],
+    availablePurchases: [],
+    fetchProducts: jest.fn(() => Promise.resolve()),
+    requestPurchase: jest.fn(() => Promise.resolve()),
+    finishTransaction: jest.fn(() => Promise.resolve()),
+    getAvailablePurchases: jest.fn(() => Promise.resolve()),
+  })),
 }));
 
 jest.mock('@react-native-firebase/crashlytics', () => ({
@@ -137,7 +150,10 @@ jest.mock('react-native-safe-area-context', () => ({
 }));
 
 jest.mock('../src/platformEvents', () => ({
+  ensureMobilePlatformSession: jest.fn(() => Promise.resolve(false)),
   flushMobilePlatformEvents: jest.fn(() => Promise.resolve()),
+  mobilePlatformAds: { policy: jest.fn(), createClaim: jest.fn(), claim: jest.fn(), ack: jest.fn() },
+  mobilePlatformIap: { listEntitlements: jest.fn(), verifyPurchase: jest.fn(), accountReferences: jest.fn() },
   shutdownMobilePlatformEvents: jest.fn(() => Promise.resolve()),
   startMobilePlatformEvents: jest.fn(),
   trackMobilePlatformEvent: jest.fn(),

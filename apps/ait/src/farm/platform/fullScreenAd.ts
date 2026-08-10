@@ -1,9 +1,10 @@
 import { loadFullScreenAd, showFullScreenAd } from '@apps-in-toss/framework';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import type { RewardedAdController, RewardedAdShowResult } from '../../../../../packages/farm-core/src';
+import type { RewardedAdController, RewardedAdRequest, RewardedAdShowResult } from '../../../../../packages/farm-core/src';
 import { normalizeAdFailureReason } from '../../../../../packages/farm-core/src';
 import { useAppsInTossAdsEnabled } from '../../firebaseWeb/remoteConfig';
+import { appsInTossPlatformAds, ensureAppsInTossAdsSession } from '../../platformEvents';
 
 export const FULL_SCREEN_AD_LOAD_TIMEOUT_MS = 10_000;
 export const FULL_SCREEN_AD_SHOW_TIMEOUT_MS = 120_000;
@@ -67,6 +68,16 @@ function waitForLoadWithTimeout(promise: Promise<boolean>, timeoutMs: number) {
   });
 }
 
+function platformRequestId() {
+  return `hf-ait-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+}
+
+async function platformAdsAllowed() {
+  if (!(await ensureAppsInTossAdsSession())) return false;
+  const policy = await appsInTossPlatformAds.policy();
+  return policy.appUsesAds && policy.adsEnabled;
+}
+
 export function useFullScreenAd(adGroupId?: string): RewardedAdController {
   const normalizedAdGroupId = adGroupId?.trim() ?? '';
   const adsEnabled = useAppsInTossAdsEnabled();
@@ -98,7 +109,7 @@ export function useFullScreenAd(adGroupId?: string): RewardedAdController {
   }, []);
 
   const loadAd = useCallback(
-    (timeoutMs = FULL_SCREEN_AD_LOAD_TIMEOUT_MS): Promise<boolean> => {
+    async (timeoutMs = FULL_SCREEN_AD_LOAD_TIMEOUT_MS): Promise<boolean> => {
       if (!adsEnabled || normalizedAdGroupId.length === 0 || !isFullScreenAdSupported()) {
         setIsSupported(false);
         updateLoaded(false);
@@ -107,6 +118,18 @@ export function useFullScreenAd(adGroupId?: string): RewardedAdController {
           finishPendingLoad(pendingLoad.token, false);
         }
         return Promise.resolve(false);
+      }
+
+      try {
+        if (!(await platformAdsAllowed())) {
+          setIsSupported(false);
+          updateLoaded(false);
+          return false;
+        }
+      } catch {
+        setIsSupported(false);
+        updateLoaded(false);
+        return false;
       }
 
       setIsSupported(true);
@@ -216,7 +239,7 @@ export function useFullScreenAd(adGroupId?: string): RewardedAdController {
     };
   }, [finishPendingLoad, finishPendingShow, loadAd]);
 
-  const showAd = useCallback(() => {
+  const showSdkAd = useCallback(() => {
     const supported = adsEnabled && normalizedAdGroupId.length > 0 && isFullScreenAdSupported();
     if (!supported) {
       return Promise.resolve<RewardedAdShowResult>({ status: 'unsupported' });
@@ -295,6 +318,36 @@ export function useFullScreenAd(adGroupId?: string): RewardedAdController {
     });
   }, [adsEnabled, finishPendingShow, normalizedAdGroupId, updateLoaded]);
 
+  const showAd = useCallback(async (request?: RewardedAdRequest): Promise<RewardedAdShowResult> => {
+    try {
+      if (!(await platformAdsAllowed())) {
+        updateLoaded(false);
+        return { status: 'unsupported' };
+      }
+      const claim = request == null ? null : await appsInTossPlatformAds.createClaim({
+        requestId: platformRequestId(),
+        placement: request.placement,
+        provider: 'apps_in_toss',
+        clientPlatform: 'apps_in_toss',
+      });
+      const result = await showSdkAd();
+      if (result.status !== 'earned' || claim == null) {
+        return result;
+      }
+      const confirmed = await appsInTossPlatformAds.confirm(
+        claim.claimId,
+        `ait-${claim.claimId}-${Date.now().toString(36)}`
+      );
+      if (confirmed.state !== 'confirmed' || confirmed.assurance !== 'client_confirmed') {
+        return { status: 'failed', error: 'client_confirmation_failed' };
+      }
+      return { ...result, claimId: claim.claimId };
+    } catch {
+      updateLoaded(false);
+      return { status: 'failed', error: 'platform_ads_unavailable' };
+    }
+  }, [showSdkAd, updateLoaded]);
+
   const ensureAdReady = useCallback(
     (timeoutMs?: number) => {
       if (isLoadedRef.current) {
@@ -312,11 +365,16 @@ export function useFullScreenAd(adGroupId?: string): RewardedAdController {
     await loadAd();
   }, [loadAd]);
 
+  const acknowledgeReward = useCallback(async (claimId: string) => {
+    await appsInTossPlatformAds.ack(claimId);
+  }, []);
+
   return {
     isAdReady: adsEnabled && isSupported && isLoaded,
     isAdSupported: adsEnabled && isSupported,
     showAd,
     reloadAd,
     ensureAdReady,
+    acknowledgeReward,
   };
 }

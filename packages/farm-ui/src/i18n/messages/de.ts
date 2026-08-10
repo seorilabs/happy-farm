@@ -93,6 +93,12 @@ export const deFarmMessages: FarmMessages = {
   resetDeleteAction: 'Spielstand löschen und neu starten',
   resetKeepAction: 'Weiterspielen',
   cloudBackupSection: 'Cloud-Backup',
+  adFreeSection: 'Werbung',
+  adFreeActiveDesc: 'Dein werbefreier Kauf ist aktiv. Belohnungs- und Vollbildwerbung sind deaktiviert.',
+  adFreeInactiveDesc: (price: string) => `Entferne Belohnungs- und Vollbildwerbung mit einem einmaligen Kauf für ${price}.`,
+  adFreePurchaseAction: (price: string) => `Werbung entfernen · ${price}`,
+  adFreeRestoreAction: 'Kauf wiederherstellen',
+  adFreeFailed: 'Der Kaufstatus konnte nicht geprüft werden. Bitte versuche es erneut.',
   cloudBackupDesc:
     'Sichere dein Spiel in der Cloud, um auf einem anderen Gerät weiterzuspielen. Beim Wiederherstellen wird der aktuelle Fortschritt dieses Geräts durch das Cloud-Backup ersetzt.',
   cloudBackupAction: 'Jetzt sichern',

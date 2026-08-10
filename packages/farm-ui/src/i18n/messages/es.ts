@@ -93,6 +93,12 @@ export const esFarmMessages: FarmMessages = {
   resetDeleteAction: 'Borrar partida y empezar de cero',
   resetKeepAction: 'Seguir jugando',
   cloudBackupSection: 'Copia en la nube',
+  adFreeSection: 'Anuncios',
+  adFreeActiveDesc: 'Tu compra sin anuncios está activa. Los anuncios con recompensa e intersticiales están desactivados.',
+  adFreeInactiveDesc: (price: string) => `Elimina los anuncios con recompensa e intersticiales con un pago único de ${price}.`,
+  adFreePurchaseAction: (price: string) => `Eliminar anuncios · ${price}`,
+  adFreeRestoreAction: 'Restaurar compra',
+  adFreeFailed: 'No pudimos verificar tu compra. Inténtalo de nuevo.',
   cloudBackupDesc:
     'Guarda tu partida en la nube para seguir jugando en otro dispositivo. Al restaurar se reemplaza el progreso actual de este dispositivo con la copia de la nube.',
   cloudBackupAction: 'Hacer copia ahora',
