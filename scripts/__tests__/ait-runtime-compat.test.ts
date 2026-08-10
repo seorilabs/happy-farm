@@ -52,6 +52,18 @@ describe('AppsInToss Granite 런타임 호환성 가드', () => {
     expect(findAitBundleRuntimeViolations(source)).toEqual([]);
   });
 
+  it('Android 번들에서 BGM과 효과음의 오디오 포커스 연결 누락을 차단한다', () => {
+    const filePath = 'apps/ait/dist/bundle.android.0_84_0.js';
+
+    expect(findAitBundleRuntimeViolations('disableFocus: true', filePath)).toEqual([
+      expect.objectContaining({
+        file: filePath,
+        line: 0,
+      }),
+    ]);
+    expect(findAitBundleRuntimeViolations('disableAudioFocus: true', filePath)).toEqual([]);
+  });
+
   it('실제 AIT 런타임 소스에 금지 패턴이 없다', () => {
     const rootDir = process.cwd();
     const violations = collectAitRuntimeSourceTargets(rootDir).flatMap((relativePath: string) =>

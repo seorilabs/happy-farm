@@ -59,11 +59,12 @@ const SOUND_EFFECT_PLAYERS: readonly { key: FarmSoundEffectKey; volume: number }
   { key: 'wheelSpin', volume: 0.55 },
 ];
 
-// On Android every player must opt out of audio focus: otherwise starting the
-// harvest SFX takes focus away from the BGM player and ExoPlayer pauses it, so
-// only one sound survives. iOS mixes AVPlayer instances natively and the
-// Granite wrapper pins disableFocus=false there.
-const audioFocusProps = Platform.OS === 'android' ? { disableFocus: true } : {};
+// On Android every player must opt out of audio focus: otherwise starting an
+// SFX takes focus away from the BGM player and only one sound survives. The
+// public wrapper uses disableFocus, while the AIT native player consumes
+// disableAudioFocus, so both contracts must pass through Video.
+const audioFocusProps =
+  Platform.OS === 'android' ? { disableFocus: true, disableAudioFocus: true } : {};
 
 function keepPlaybackOnAudioFocusChange() {
   // Passing a handler stops the Granite Video wrapper from pausing playback on
