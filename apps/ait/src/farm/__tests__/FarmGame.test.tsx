@@ -2457,6 +2457,63 @@ describe('FarmGame UI flow', () => {
       expect(getLatestPersistedState().adUsage.returnInterstitialAt).toBe(state.adUsage.returnInterstitialAt);
     });
 
+    test('shows the opted-in return interstitial and records cooldown only after a real display', async () => {
+      const track = jest.fn();
+      const state = withGrowingPlot('wheat' as CropKey, createInitialState());
+      mockPersistence.readLastSeenAt.mockResolvedValueOnce(NOW - TWO_HOURS_MS);
+      const offlineGold = getActiveFarmOfflineGold(state, TWO_HOURS_MS);
+      const interstitial = {
+        isAdReady: true,
+        isAdSupported: true,
+        showAd: jest.fn(async () => ({ status: 'dismissed' as const })),
+      };
+      const screen = await renderGame(state, {
+        analytics: createFarmAnalytics(track),
+        interstitialPlacements: {
+          returnWelcomeBack: true,
+          progressionMilestone: false,
+        },
+        useInterstitialAd: () => interstitial,
+      });
+
+      const collectLabel = messages.welcomeBackCollectAction(formatMoney(offlineGold, DEFAULT_LOCALE));
+      fireEvent.press(await waitFor(() => screen.getByText(collectLabel)));
+
+      await waitFor(() => expect(interstitial.showAd).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(getLatestPersistedState().adUsage.returnInterstitialAt).toBe(NOW));
+      expect(track).toHaveBeenCalledWith(
+        'interstitial_shown',
+        expect.objectContaining({ placement: 'return_welcome_back' })
+      );
+    });
+
+    test('does not consume the return cooldown when the interstitial fails to display', async () => {
+      const track = jest.fn();
+      const state = withGrowingPlot('wheat' as CropKey, createInitialState());
+      mockPersistence.readLastSeenAt.mockResolvedValueOnce(NOW - TWO_HOURS_MS);
+      const offlineGold = getActiveFarmOfflineGold(state, TWO_HOURS_MS);
+      const interstitial = {
+        isAdReady: true,
+        isAdSupported: true,
+        showAd: jest.fn(async () => ({ status: 'failed' as const, error: 'no_fill' })),
+      };
+      const screen = await renderGame(state, {
+        analytics: createFarmAnalytics(track),
+        interstitialPlacements: {
+          returnWelcomeBack: true,
+          progressionMilestone: false,
+        },
+        useInterstitialAd: () => interstitial,
+      });
+
+      const collectLabel = messages.welcomeBackCollectAction(formatMoney(offlineGold, DEFAULT_LOCALE));
+      fireEvent.press(await waitFor(() => screen.getByText(collectLabel)));
+
+      await waitFor(() => expect(interstitial.showAd).toHaveBeenCalledTimes(1));
+      expect(getLatestPersistedState().adUsage.returnInterstitialAt).toBe(state.adUsage.returnInterstitialAt);
+      expect(track).not.toHaveBeenCalledWith('interstitial_shown', expect.anything());
+    });
+
     test('close branch (collectOffline=false): pressing confirm with no offline gold grants nothing', async () => {
       // Ready crop but no growing plots → offlineGold 0, so the bottom button is
       // the plain confirm ("농장으로 가기") and settlement must not run.
@@ -3343,6 +3400,73 @@ describe('FarmGame UI flow', () => {
     fireEvent.press(screen.getByTestId('shop-tab-expand'));
     fireEvent.press(screen.getByText('채소 밭 열기'));
     expect(screen.queryByText('채소 밭 열기')).toBeNull();
+  });
+
+  test('keeps progression interstitials off when the host enables return-only placement', async () => {
+    const shopReadyState = createShopReadyState();
+    const interstitial = {
+      isAdReady: true,
+      isAdSupported: true,
+      showAd: jest.fn(async () => ({ status: 'dismissed' as const })),
+    };
+    const screen = await renderGame(shopReadyState, {
+      interstitialPlacements: {
+        returnWelcomeBack: true,
+        progressionMilestone: false,
+      },
+      useInterstitialAd: () => interstitial,
+    });
+
+    await waitFor(() => expect(screen.getByText(`${formatMoney(shopReadyState.gold)}G`)).toBeTruthy());
+    fireEvent.press(screen.getByText('🏪 상점'));
+    fireEvent.press(screen.getByText('밭 개간하기'));
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(interstitial.showAd).not.toHaveBeenCalled();
+  });
+
+  test('does not start an interstitial while the shared full-screen surface is showing a reward ad', async () => {
+    const shopReadyState = createShopReadyState();
+    let resolveRewarded!: (result: RewardedAdShowResult) => void;
+    const rewarded = {
+      isAdReady: true,
+      isAdSupported: true,
+      showAd: jest.fn(
+        () => new Promise<RewardedAdShowResult>((resolve) => {
+          resolveRewarded = resolve;
+        })
+      ),
+    };
+    const interstitial = {
+      isAdReady: true,
+      isAdSupported: true,
+      showAd: jest.fn(async () => ({ status: 'dismissed' as const })),
+    };
+    const screen = await renderGame(shopReadyState, {
+      interstitialPlacements: {
+        returnWelcomeBack: false,
+        progressionMilestone: true,
+      },
+      useInterstitialAd: () => interstitial,
+      useRewardedAd: () => rewarded,
+    });
+
+    await waitFor(() => expect(screen.getByText(`${formatMoney(shopReadyState.gold)}G`)).toBeTruthy());
+    fireEvent.press(screen.getByText('🏪 상점'));
+    fireEvent.press(screen.getByTestId('shop-tab-rewards'));
+    fireEvent.press(screen.getByText('받기'));
+    await waitFor(() => expect(rewarded.showAd).toHaveBeenCalledTimes(1));
+
+    fireEvent.press(screen.getByTestId('shop-tab-expand'));
+    fireEvent.press(screen.getByText('밭 개간하기'));
+    expect(interstitial.showAd).not.toHaveBeenCalled();
+
+    await act(async () => {
+      resolveRewarded({ status: 'dismissed' });
+      await Promise.resolve();
+    });
   });
 
   describe('배치(일괄) 업그레이드 구매 (#426)', () => {

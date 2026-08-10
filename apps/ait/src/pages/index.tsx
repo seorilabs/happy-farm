@@ -2,6 +2,7 @@ import { createRoute } from '@granite-js/react-native';
 import React, { useMemo } from 'react';
 import { FarmGame, detectRuntimeLocale, type FarmGameAdGroupIds } from '../../../../packages/farm-ui/src';
 import { appsInTossFarmAnalytics } from '../firebaseWeb';
+import { trackAppsInTossAnalyticsEvent } from '../firebaseWeb/analytics';
 import { useAppsInTossInterstitialAdGroupId } from '../firebaseWeb/remoteConfig';
 import { appsInTossFarmArt } from '../farm/platform/appsInTossArt';
 import { useAppsInTossFarmAudio } from '../farm/platform/appsInTossAudio';
@@ -18,6 +19,20 @@ import {
 } from '../farm/storage';
 
 const APPS_IN_TOSS_REWARDED_AD_GROUP_ID = 'ait.v2.live.6fc77adf3f034cd6';
+
+function useAppsInTossRewardedAd(adGroupId?: string) {
+  return useFullScreenAd(adGroupId, {
+    adFormat: 'rewarded',
+    track: trackAppsInTossAnalyticsEvent,
+  });
+}
+
+function useAppsInTossInterstitialAd(adGroupId?: string) {
+  return useFullScreenAd(adGroupId, {
+    adFormat: 'interstitial',
+    track: trackAppsInTossAnalyticsEvent,
+  });
+}
 
 export const Route = createRoute('/', {
   component: Page,
@@ -55,10 +70,14 @@ function Page() {
         adGroupIds={adGroupIds}
         art={appsInTossFarmArt}
         audio={audio}
+        interstitialPlacements={{
+          returnWelcomeBack: true,
+          progressionMilestone: false,
+        }}
         persistence={appsInTossPersistence}
         preferredLocale={detectRuntimeLocale()}
-        useInterstitialAd={useFullScreenAd}
-        useRewardedAd={useFullScreenAd}
+        useInterstitialAd={useAppsInTossInterstitialAd}
+        useRewardedAd={useAppsInTossRewardedAd}
       />
       {audioElement}
     </>

@@ -1,8 +1,17 @@
 import { loadFullScreenAd, showFullScreenAd } from '@apps-in-toss/framework';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { AppState, Platform } from 'react-native';
 
-import type { RewardedAdController, RewardedAdRequest, RewardedAdShowResult } from '../../../../../packages/farm-core/src';
-import { normalizeAdFailureReason } from '../../../../../packages/farm-core/src';
+import type {
+  RewardedAdController,
+  RewardedAdRequest,
+  RewardedAdShowResult,
+  TrackGameEvent,
+} from '../../../../../packages/farm-core/src';
+import {
+  normalizeAdFailureFamily,
+  normalizeAdFailureReason,
+} from '../../../../../packages/farm-core/src';
 import { useAppsInTossAdsEnabled } from '../../firebaseWeb/remoteConfig';
 import { appsInTossPlatformAds, ensureAppsInTossAdsSession } from '../../platformEvents';
 
@@ -12,10 +21,18 @@ export const FULL_SCREEN_AD_SHOW_TIMEOUT_MS = 120_000;
 type PendingLoad = {
   token: symbol;
   settled: boolean;
+  startedAt: number;
   promise: Promise<boolean>;
   resolve: (ready: boolean) => void;
   timeoutId: ReturnType<typeof setTimeout> | null;
   unregister: (() => void) | null;
+};
+
+export type FullScreenAdFormat = 'rewarded' | 'interstitial';
+
+export type FullScreenAdOptions = {
+  adFormat?: FullScreenAdFormat;
+  track?: TrackGameEvent;
 };
 
 type PendingShow = {
@@ -78,7 +95,10 @@ async function platformAdsAllowed() {
   return policy.appUsesAds && policy.adsEnabled;
 }
 
-export function useFullScreenAd(adGroupId?: string): RewardedAdController {
+export function useFullScreenAd(
+  adGroupId?: string,
+  { adFormat = 'rewarded', track }: FullScreenAdOptions = {}
+): RewardedAdController {
   const normalizedAdGroupId = adGroupId?.trim() ?? '';
   const adsEnabled = useAppsInTossAdsEnabled();
   const [isLoaded, setIsLoaded] = useState(false);
@@ -86,6 +106,30 @@ export function useFullScreenAd(adGroupId?: string): RewardedAdController {
   const isLoadedRef = useRef(false);
   const pendingLoadRef = useRef<PendingLoad | null>(null);
   const pendingShowRef = useRef<PendingShow | null>(null);
+
+  const trackLoadResult = useCallback(
+    (
+      result: 'loaded' | 'sdk_error' | 'timeout' | 'unsupported' | 'policy_blocked' | 'policy_error',
+      startedAt: number,
+      error?: unknown
+    ) => {
+      const params: Record<string, string | number> = {
+        ad_format: adFormat,
+        result,
+        client_os: Platform.OS,
+        load_latency_ms: Math.max(0, Date.now() - startedAt),
+      };
+      if (error != null) {
+        params.reason = normalizeAdFailureReason(error);
+        params.failure_family = normalizeAdFailureFamily(error);
+      } else if (result === 'timeout') {
+        params.reason = 'load_timeout';
+        params.failure_family = 'timeout';
+      }
+      track?.('ad_load_result', params);
+    },
+    [adFormat, track]
+  );
 
   const updateLoaded = useCallback((loaded: boolean) => {
     isLoadedRef.current = loaded;
@@ -110,7 +154,7 @@ export function useFullScreenAd(adGroupId?: string): RewardedAdController {
 
   const loadAd = useCallback(
     async (timeoutMs = FULL_SCREEN_AD_LOAD_TIMEOUT_MS): Promise<boolean> => {
-      if (!adsEnabled || normalizedAdGroupId.length === 0 || !isFullScreenAdSupported()) {
+      if (!adsEnabled || normalizedAdGroupId.length === 0) {
         setIsSupported(false);
         updateLoaded(false);
         const pendingLoad = pendingLoadRef.current;
@@ -120,19 +164,17 @@ export function useFullScreenAd(adGroupId?: string): RewardedAdController {
         return Promise.resolve(false);
       }
 
-      try {
-        if (!(await platformAdsAllowed())) {
-          setIsSupported(false);
-          updateLoaded(false);
-          return false;
-        }
-      } catch {
+      const startedAt = Date.now();
+      if (!isFullScreenAdSupported()) {
         setIsSupported(false);
         updateLoaded(false);
-        return false;
+        trackLoadResult('unsupported', startedAt);
+        const pendingLoad = pendingLoadRef.current;
+        if (pendingLoad != null) {
+          finishPendingLoad(pendingLoad.token, false);
+        }
+        return Promise.resolve(false);
       }
-
-      setIsSupported(true);
       if (isLoadedRef.current) {
         return Promise.resolve(true);
       }
@@ -140,6 +182,21 @@ export function useFullScreenAd(adGroupId?: string): RewardedAdController {
         return pendingLoadRef.current.promise;
       }
 
+      try {
+        if (!(await platformAdsAllowed())) {
+          setIsSupported(false);
+          updateLoaded(false);
+          trackLoadResult('policy_blocked', startedAt);
+          return false;
+        }
+      } catch (error) {
+        setIsSupported(false);
+        updateLoaded(false);
+        trackLoadResult('policy_error', startedAt, error);
+        return false;
+      }
+
+      setIsSupported(true);
       updateLoaded(false);
 
       let resolveLoad: (ready: boolean) => void = () => undefined;
@@ -149,6 +206,7 @@ export function useFullScreenAd(adGroupId?: string): RewardedAdController {
       const pendingLoad: PendingLoad = {
         token: Symbol('full-screen-ad-load'),
         settled: false,
+        startedAt,
         promise,
         resolve: resolveLoad,
         timeoutId: null,
@@ -160,6 +218,7 @@ export function useFullScreenAd(adGroupId?: string): RewardedAdController {
           return;
         }
         updateLoaded(false);
+        trackLoadResult('timeout', pendingLoad.startedAt);
         finishPendingLoad(pendingLoad.token, false);
       }, normalizeTimeoutMs(timeoutMs, FULL_SCREEN_AD_LOAD_TIMEOUT_MS));
 
@@ -172,14 +231,16 @@ export function useFullScreenAd(adGroupId?: string): RewardedAdController {
             }
             if (event.type === 'loaded') {
               updateLoaded(true);
+              trackLoadResult('loaded', pendingLoad.startedAt);
               finishPendingLoad(pendingLoad.token, true);
             }
           },
-          onError: () => {
+          onError: (error: unknown) => {
             if (pendingLoadRef.current?.token !== pendingLoad.token) {
               return;
             }
             updateLoaded(false);
+            trackLoadResult('sdk_error', pendingLoad.startedAt, error);
             finishPendingLoad(pendingLoad.token, false);
           },
         });
@@ -188,14 +249,15 @@ export function useFullScreenAd(adGroupId?: string): RewardedAdController {
         } else {
           safeUnregister(unregister);
         }
-      } catch {
+      } catch (error) {
         updateLoaded(false);
+        trackLoadResult('sdk_error', pendingLoad.startedAt, error);
         finishPendingLoad(pendingLoad.token, false);
       }
 
       return promise;
     },
-    [adsEnabled, finishPendingLoad, normalizedAdGroupId, updateLoaded]
+    [adsEnabled, finishPendingLoad, normalizedAdGroupId, trackLoadResult, updateLoaded]
   );
 
   const finishPendingShow = useCallback(
@@ -222,7 +284,19 @@ export function useFullScreenAd(adGroupId?: string): RewardedAdController {
 
   useEffect(() => {
     void loadAd();
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      // 오래 백그라운드에 있던 프리로드는 만료되거나 앱 전환 중 실패할 수 있다.
+      // 복귀 시 준비된 광고가 없을 때만 다시 로드해 welcome-back CTA의 준비율을 높인다.
+      if (
+        nextState === 'active' &&
+        !isLoadedRef.current &&
+        (pendingLoadRef.current == null || pendingLoadRef.current.settled)
+      ) {
+        void loadAd();
+      }
+    });
     return () => {
+      subscription?.remove();
       const pendingShow = pendingShowRef.current;
       if (pendingShow != null) {
         finishPendingShow(

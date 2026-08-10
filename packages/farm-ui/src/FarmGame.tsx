@@ -575,6 +575,16 @@ export type FarmGameAdGroupIds = {
   interstitial?: string;
 };
 
+export type FarmGameInterstitialPlacements = {
+  returnWelcomeBack: boolean;
+  progressionMilestone: boolean;
+};
+
+const DEFAULT_INTERSTITIAL_PLACEMENTS: FarmGameInterstitialPlacements = {
+  returnWelcomeBack: false,
+  progressionMilestone: false,
+};
+
 // One-shot SFX beyond the base harvest coin. Adapters map each key to a
 // bundled/streamed asset: plant(심기 팝), reward(도감/업적 보상 팡파레),
 // unlock(구역 해금/연구 완료), mutation(돌연변이 발견 반짝), wheelSpin(룰렛 틱).
@@ -649,6 +659,7 @@ export type FarmGameProps = {
   market?: FarmGameMarket;
   preferredLocale?: SupportedLocale;
   adGroupIds?: FarmGameAdGroupIds;
+  interstitialPlacements?: FarmGameInterstitialPlacements;
 };
 
 type GetAnalyticsContext = (state?: GameState) => GameAnalyticsContext;
@@ -1059,6 +1070,7 @@ function FarmGameBody({
   notifications = defaultFarmNotifications,
   preferredLocale = DEFAULT_LOCALE,
   adGroupIds = {},
+  interstitialPlacements = DEFAULT_INTERSTITIAL_PLACEMENTS,
 }: FarmGameProps = {}) {
   const insets = useFarmSafeAreaInsets();
   // AIT(Granite) 호스트는 하단 시스템 UI 인셋을 0으로 보고하는 경우가 있어, 최소
@@ -1083,10 +1095,10 @@ function FarmGameBody({
   // Wheel bonus ad can outlive a render while the native SDK is open. Reserve
   // the request synchronously so rapid taps cannot open two ads or two spins.
   const wheelBonusSpinInFlightRef = useRef(false);
-  // A single native rewarded surface can be active at a time. Reserve it
-  // synchronously so rapid taps cannot replace the pending SDK promise or
-  // credit two rewards before React has committed a render.
-  const rewardedAdInFlightRef = useRef(false);
+  // Rewarded and interstitial share one native full-screen surface. Reserve it
+  // synchronously across both formats so rapid taps or transition callbacks
+  // cannot overlap SDK show calls or replace a pending rewarded Promise.
+  const fullScreenAdInFlightRef = useRef(false);
   // Session-local, non-identifying attempt ids join one click to exactly one
   // terminal event in the BigQuery export. They are not registered as a GA4
   // custom dimension.
@@ -4389,13 +4401,13 @@ function FarmGameBody({
       ctaPosition?: string;
     } = {}
   ) {
-    if (rewardedAdInFlightRef.current) {
+    if (fullScreenAdInFlightRef.current) {
       return false;
     }
     // Reserve before readiness/limit checks as well as before native show. A
     // same-frame double tap must not inflate click/failed intent metrics even
     // when the SDK is still loading.
-    rewardedAdInFlightRef.current = true;
+    fullScreenAdInFlightRef.current = true;
 
     // Tag the whole funnel with the type's canonical placement so blocked/click/
     // completed/failed all aggregate per placement (single source of truth).
@@ -4421,7 +4433,7 @@ function FarmGameBody({
       farmAnalytics.trackAdLimitBlocked(type, placement, limit.reason, analyticsContext(attemptState), baseMetadata);
       toast(limit.reason);
       void Promise.resolve().then(() => {
-        rewardedAdInFlightRef.current = false;
+        fullScreenAdInFlightRef.current = false;
       });
       return false;
     }
@@ -4442,7 +4454,7 @@ function FarmGameBody({
       );
       toast(rewardedAd.isAdSupported ? messages.adPreparingToast : messages.adUnsupportedToast);
       void Promise.resolve().then(() => {
-        rewardedAdInFlightRef.current = false;
+        fullScreenAdInFlightRef.current = false;
       });
       return false;
     }
@@ -4550,12 +4562,16 @@ function FarmGameBody({
 
       return false;
     } finally {
-      rewardedAdInFlightRef.current = false;
+      fullScreenAdInFlightRef.current = false;
     }
   }
 
-  async function maybeShowMilestoneAd() {
-    if (!interstitialAd.isAdReady) {
+  async function maybeShowMilestoneAd(placement: string) {
+    if (
+      !interstitialPlacements.progressionMilestone ||
+      fullScreenAdInFlightRef.current ||
+      !interstitialAd.isAdReady
+    ) {
       return;
     }
 
@@ -4564,8 +4580,22 @@ function FarmGameBody({
       return;
     }
 
-    lastInterstitialShownAtRef.current = now;
-    await interstitialAd.showAd();
+    fullScreenAdInFlightRef.current = true;
+    try {
+      const result = await interstitialAd.showAd();
+      if (result.status !== 'dismissed' && result.status !== 'earned') {
+        return;
+      }
+      const shownAt = Date.now();
+      lastInterstitialShownAtRef.current = shownAt;
+      farmAnalytics.trackInterstitialShown(placement, analyticsContext());
+    } catch {
+      // Host adapters are expected to return a failed result, but a throwing
+      // adapter must never escape a fire-and-forget transition callback.
+      return;
+    } finally {
+      fullScreenAdInFlightRef.current = false;
+    }
   }
 
   // A non-intrusive interstitial on session return, shown after the player has
@@ -4573,35 +4603,48 @@ function FarmGameBody({
   // onboarding, when no ad is ready, or while the persisted return cooldown is
   // still active, so returning players see it at most once per cooldown window.
   async function maybeShowReturnAd() {
-    if (onboardingStep != null) {
+    if (
+      !interstitialPlacements.returnWelcomeBack ||
+      onboardingStep != null ||
+      fullScreenAdInFlightRef.current
+    ) {
       return;
     }
     if (!interstitialAd.isAdReady) {
       return;
     }
     const now = Date.now();
-    // Decide and record against the freshest state inside the updater: the
-    // welcome-back dismiss just queued a state change, so the closure gameState
-    // is stale. Gating + stamping atomically keeps the persisted cooldown honest
-    // (a stale snapshot can't replay the ad or reset returnInterstitialAt).
-    // willShow carries the decision out to the side effect below.
-    let willShow = false;
-    setGameState((state) => {
-      if (!state.onboardingCompleted || !canShowReturnInterstitial(state, now)) {
-        return state;
-      }
-      willShow = true;
-      return { ...state, adUsage: recordReturnInterstitial(state, now) };
-    });
-    if (!willShow) {
+    const stateBeforeShow = gameStateRef.current;
+    if (!stateBeforeShow.onboardingCompleted || !canShowReturnInterstitial(stateBeforeShow, now)) {
       return;
     }
-    farmAnalytics.trackInterstitialShown('return_welcome_back', analyticsContext());
-    await interstitialAd.showAd();
-    // Stamp the shared milestone throttle only after the ad actually played, so a
-    // milestone interstitial doesn't immediately stack on top of this one — and a
-    // return ad that never showed never suppresses the milestone slot.
-    lastInterstitialShownAtRef.current = Date.now();
+
+    fullScreenAdInFlightRef.current = true;
+    try {
+      const result = await interstitialAd.showAd();
+      if (result.status !== 'dismissed' && result.status !== 'earned') {
+        return;
+      }
+      const shownAt = Date.now();
+      setGameState((state) => {
+        const next = { ...state, adUsage: recordReturnInterstitial(state, shownAt) };
+        gameStateRef.current = next;
+        return next;
+      });
+      farmAnalytics.trackInterstitialShown(
+        'return_welcome_back',
+        analyticsContext(stateBeforeShow)
+      );
+      // Stamp the shared milestone throttle only after the ad actually played, so a
+      // milestone interstitial doesn't immediately stack on top of this one — and a
+      // failed return ad never suppresses the milestone slot.
+      lastInterstitialShownAtRef.current = shownAt;
+    } catch {
+      // Keep the cooldown available for a later return when the host throws.
+      return;
+    } finally {
+      fullScreenAdInFlightRef.current = false;
+    }
   }
 
   async function rewardReturnOfflineGoldFromAd(summary: ReturnSummary) {
@@ -5979,7 +6022,7 @@ function FarmGameBody({
                       getAnalyticsContext={analyticsContext}
                       analytics={farmAnalytics}
                       onDone={toast}
-                      onMilestone={() => void maybeShowMilestoneAd()}
+                      onMilestone={() => void maybeShowMilestoneAd('progression_plot_unlock')}
                     />
 
                     <Text style={styles.sheetSectionTitle}>{messages.areaUnlockSection}</Text>
@@ -5991,7 +6034,7 @@ function FarmGameBody({
                       getAnalyticsContext={analyticsContext}
                       analytics={farmAnalytics}
                       onDone={toast}
-                      onMilestone={() => void maybeShowMilestoneAd()}
+                      onMilestone={() => void maybeShowMilestoneAd('progression_area_unlock')}
                       onUnlocked={() => playSoundEffect('unlock')}
                     />
                   </View>
@@ -6012,7 +6055,7 @@ function FarmGameBody({
                       getAnalyticsContext={analyticsContext}
                       analytics={farmAnalytics}
                       onDone={toast}
-                      onMilestone={() => void maybeShowMilestoneAd()}
+                      onMilestone={() => void maybeShowMilestoneAd('progression_speed_upgrade')}
                     />
                     <ShopUpgradeRow
                       kind="profit"
@@ -6023,7 +6066,7 @@ function FarmGameBody({
                       getAnalyticsContext={analyticsContext}
                       analytics={farmAnalytics}
                       onDone={toast}
-                      onMilestone={() => void maybeShowMilestoneAd()}
+                      onMilestone={() => void maybeShowMilestoneAd('progression_profit_upgrade')}
                     />
                   </View>
                 ) : null}
