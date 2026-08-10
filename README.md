@@ -47,7 +47,7 @@ intoss://happy-farm/
 ## 출시 전 차단 사항
 
 - `apps/ait/granite.config.ts`의 `brand.icon`은 승인된 AppsInToss 콘솔 로고 URL로 설정했습니다.
-- 공용 게임 컴포넌트는 `packages/farm-ui/src/FarmGame.tsx`이며, AppsInToss 광고 그룹 ID는 `apps/ait/src/pages/index.tsx`에서 주입합니다. 보상형 ID는 설정 완료했고, 전면형 광고 활성화에는 Firebase Remote Config의 `appsintoss_interstitial_ad_group_id` 운영값 주입이 필요합니다.
+- 공용 게임 컴포넌트는 `packages/farm-ui/src/FarmGame.tsx`이며, AppsInToss 광고 그룹 ID는 `apps/ait/src/pages/index.tsx`와 Firebase Remote Config에서 주입합니다. 보상형 ID는 설정 완료했습니다. 전면형 그룹은 AppsInToss 콘솔에 생성했지만 아직 `REGISTERING`이라 코드용 ID가 발급되지 않았습니다. `ENABLED` 전환과 복귀 전용 클라이언트 공개를 모두 확인한 뒤 `appsintoss_interstitial_ad_group_id` 운영값으로 주입해야 합니다. 성장 구매 지면은 정책·빈도 검증 전까지 비활성입니다.
 - Google Play package name은 `com.seorilabs.happyfarm`으로 확정했습니다.
 - 고객지원 이메일은 `cs@seorilabs.com`, 개인정보 처리방침은 `https://www.seorilabs.com/privacy`로 확정했습니다.
 - Google Play 광고 포함 여부와 한국 게임 배포 선언은 `yes`로 확정했습니다.

@@ -74,7 +74,7 @@
       "defaultValue": {
         "value": ""
       },
-      "description": "AppsInToss full-screen (interstitial / welcome-back return) ad group id. Empty disables the placement; set the real AppsInToss ad inventory id to go live without a redeploy.",
+      "description": "AppsInToss interstitial ad group id. Empty disables the format. The current AIT client permits only the welcome-back return placement; progression purchase placements remain disabled.",
       "valueType": "STRING"
     },
     "ad_limits_overrides": {

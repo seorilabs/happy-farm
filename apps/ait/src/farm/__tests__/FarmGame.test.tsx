@@ -2457,6 +2457,63 @@ describe('FarmGame UI flow', () => {
       expect(getLatestPersistedState().adUsage.returnInterstitialAt).toBe(state.adUsage.returnInterstitialAt);
     });
 
+    test('shows the opted-in return interstitial and records cooldown only after a real display', async () => {
+      const track = jest.fn();
+      const state = withGrowingPlot('wheat' as CropKey, createInitialState());
+      mockPersistence.readLastSeenAt.mockResolvedValueOnce(NOW - TWO_HOURS_MS);
+      const offlineGold = getActiveFarmOfflineGold(state, TWO_HOURS_MS);
+      const interstitial = {
+        isAdReady: true,
+        isAdSupported: true,
+        showAd: jest.fn(async () => ({ status: 'dismissed' as const })),
+      };
+      const screen = await renderGame(state, {
+        analytics: createFarmAnalytics(track),
+        interstitialPlacements: {
+          returnWelcomeBack: true,
+          progressionMilestone: false,
+        },
+        useInterstitialAd: () => interstitial,
+      });
+
+      const collectLabel = messages.welcomeBackCollectAction(formatMoney(offlineGold, DEFAULT_LOCALE));
+      fireEvent.press(await waitFor(() => screen.getByText(collectLabel)));
+
+      await waitFor(() => expect(interstitial.showAd).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(getLatestPersistedState().adUsage.returnInterstitialAt).toBe(NOW));
+      expect(track).toHaveBeenCalledWith(
+        'interstitial_shown',
+        expect.objectContaining({ placement: 'return_welcome_back' })
+      );
+    });
+
+    test('does not consume the return cooldown when the interstitial fails to display', async () => {
+      const track = jest.fn();
+      const state = withGrowingPlot('wheat' as CropKey, createInitialState());
+      mockPersistence.readLastSeenAt.mockResolvedValueOnce(NOW - TWO_HOURS_MS);
+      const offlineGold = getActiveFarmOfflineGold(state, TWO_HOURS_MS);
+      const interstitial = {
+        isAdReady: true,
+        isAdSupported: true,
+        showAd: jest.fn(async () => ({ status: 'failed' as const, error: 'no_fill' })),
+      };
+      const screen = await renderGame(state, {
+        analytics: createFarmAnalytics(track),
+        interstitialPlacements: {
+          returnWelcomeBack: true,
+          progressionMilestone: false,
+        },
+        useInterstitialAd: () => interstitial,
+      });
+
+      const collectLabel = messages.welcomeBackCollectAction(formatMoney(offlineGold, DEFAULT_LOCALE));
+      fireEvent.press(await waitFor(() => screen.getByText(collectLabel)));
+
+      await waitFor(() => expect(interstitial.showAd).toHaveBeenCalledTimes(1));
+      expect(getLatestPersistedState().adUsage.returnInterstitialAt).toBe(state.adUsage.returnInterstitialAt);
+      expect(track).not.toHaveBeenCalledWith('interstitial_shown', expect.anything());
+    });
+
     test('close branch (collectOffline=false): pressing confirm with no offline gold grants nothing', async () => {
       // Ready crop but no growing plots → offlineGold 0, so the bottom button is
       // the plain confirm ("농장으로 가기") and settlement must not run.

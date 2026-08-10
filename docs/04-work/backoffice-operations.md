@@ -51,6 +51,10 @@
   복구 값을 확인하고 typed 확인 뒤에만 적용한다.
 - 광고 그룹 ID나 단가를 추측하지 않는다. `appsintoss_interstitial_ad_group_id` 변경은
   AppsInToss 콘솔의 실제 inventory ID와 별도 승인 근거가 있을 때만 전용 작업으로 다룬다.
+- AppsInToss 전면형 그룹 `행복농장 타이쿤 전면 광고`는 생성됐지만 현재 `REGISTERING`이라
+  코드용 ID가 아직 없다. 최대 약 2시간 뒤 목록을 한 번 재조회해 `ENABLED`와 실제
+  `groupId`를 확인하고, 복귀 전용 클라이언트가 공개된 뒤에만 Remote Config에 주입한다.
+  현재 클라이언트는 `return_welcome_back`만 허용하고 성장 구매 지면은 막는다.
 
 ## 런타임 플래그
 

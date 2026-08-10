@@ -28,7 +28,25 @@ happy-farm 광고 수익·노출 모니터링의 단일 기준 문서. 이벤트
 | `cookingSpeedAd` | `cooking_speed_up` | 요리 즉시 완성 CTA |
 
 전면(interstitial) 광고는 별도 트랙이다.
-- `interstitial_shown` — `placement`: `return_welcome_back`(복귀 시점), 마일스톤 등.
+- `interstitial_shown` — SDK가 실제 전면광고를 표시하고 종료된 뒤 기록한다.
+  현재 AppsInToss 활성 후보는 `return_welcome_back` 하나다. `progression_plot_unlock`,
+  `progression_area_unlock`, `progression_speed_upgrade`, `progression_profit_upgrade`는
+  구분해 계측할 수 있지만 AppsInToss에서는 정책·빈도 검증 전까지 비활성이다.
+
+AppsInToss 광고 SDK 로드는 `ad_load_result`로 별도 진단한다.
+
+| 파라미터 | 의미 |
+|---|---|
+| `ad_format` | `rewarded` 또는 `interstitial` |
+| `result` | `loaded`, `sdk_error`, `timeout`, `unsupported`, `policy_blocked`, `policy_error` |
+| `client_os` | Granite 런타임의 `ios` 또는 `android` |
+| `load_latency_ms` | 로드 또는 차단 결과까지 걸린 시간 |
+| `reason`, `failure_family` | 오류가 있을 때의 정규화된 원인과 집계 family |
+
+이 이벤트로 iOS/Android의 `loaded / SDK load attempt`를 직접 비교한다. CTA 진입 직후
+남기는 `ad_reward_impression.ad_ready`는 SDK 로드가 끝나기 전일 수 있으므로 그 값만으로
+fill 실패를 확정하지 않는다. AppsInToss 공식 안내에 따라 iOS에서 `sdk_error`가 집중되면
+실기기 Toss 앱 버전과 ATT 허용 상태를 함께 확인한다.
 
 ## 보상형 광고 퍼널 이벤트
 | 이벤트 | 발생 시점 | 주요 파라미터 |

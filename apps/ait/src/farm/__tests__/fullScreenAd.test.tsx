@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { act, cleanup, render, waitFor } from '@testing-library/react-native';
+import { AppState, type AppStateStatus } from 'react-native';
 
 import type { RewardedAdController, RewardedAdShowResult } from '../../../../../packages/farm-core/src';
 
@@ -30,6 +31,7 @@ const mockAdsPolicy = jest.fn(async () => ({
 const mockCreateClaim = jest.fn();
 const mockConfirmClaim = jest.fn();
 const mockAckClaim = jest.fn();
+const mockTrack = jest.fn();
 let latestLoadRequest: FullScreenAdRequest | null = null;
 let latestShowRequest: FullScreenAdRequest | null = null;
 
@@ -72,7 +74,10 @@ const { FULL_SCREEN_AD_LOAD_TIMEOUT_MS, FULL_SCREEN_AD_SHOW_TIMEOUT_MS, useFullS
   jest.requireActual<typeof import('../platform/fullScreenAd')>('../platform/fullScreenAd');
 
 function Harness({ onController }: { onController: (controller: RewardedAdController) => void }) {
-  const controller = useFullScreenAd('ait.rewarded.test');
+  const controller = useFullScreenAd('ait.rewarded.test', {
+    adFormat: 'rewarded',
+    track: mockTrack,
+  });
   onController(controller);
   return null;
 }
@@ -110,6 +115,7 @@ describe('useFullScreenAd', () => {
     mockCreateClaim.mockReset();
     mockConfirmClaim.mockReset();
     mockAckClaim.mockReset();
+    mockTrack.mockReset();
   });
 
   afterEach(() => {
@@ -314,6 +320,41 @@ describe('useFullScreenAd', () => {
     await readyPromise;
     expect(ready).toBe(true);
     expect(controllerRef.current?.isAdReady).toBe(true);
+    expect(mockTrack).toHaveBeenCalledWith('ad_load_result', expect.objectContaining({
+      ad_format: 'rewarded',
+      client_os: expect.any(String),
+      result: 'loaded',
+      load_latency_ms: expect.any(Number),
+    }));
+  });
+
+  test('foreground resume retries a failed preload when no ad is ready', async () => {
+    let appStateListener: ((state: AppStateStatus) => void) | null = null;
+    const remove = jest.fn();
+    const appStateSpy = jest.spyOn(AppState, 'addEventListener').mockImplementation((_type, listener) => {
+      appStateListener = listener;
+      return { remove };
+    });
+    const controllerRef: { current?: RewardedAdController } = {};
+    const rendered = render(<Harness onController={(value) => { controllerRef.current = value; }} />);
+
+    await waitFor(() => expect(latestLoadRequest).not.toBeNull());
+    act(() => { latestLoadRequest?.onError(new Error('network unavailable')); });
+    await waitFor(() => expect(controllerRef.current?.isAdReady).toBe(false));
+
+    await act(async () => {
+      appStateListener?.('active');
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(mockLoadFullScreenAd).toHaveBeenCalledTimes(2));
+    expect(mockTrack).toHaveBeenCalledWith('ad_load_result', expect.objectContaining({
+      result: 'sdk_error',
+      failure_family: 'network',
+    }));
+
+    rendered.unmount();
+    expect(remove).toHaveBeenCalledTimes(1);
+    appStateSpy.mockRestore();
   });
 
   test('ensureAdReady resolves false on load error', async () => {
@@ -327,7 +368,9 @@ describe('useFullScreenAd', () => {
     act(() => {
       readyPromise = controller.ensureAdReady!();
     });
-    await waitFor(() => expect(mockAdsPolicy).toHaveBeenCalledTimes(2));
+    // ensureAdReady joins the in-flight preload instead of repeating the
+    // Platform policy request.
+    expect(mockAdsPolicy).toHaveBeenCalledTimes(1);
     act(() => { latestLoadRequest?.onError(new Error('no fill')); });
 
     await expect(readyPromise).resolves.toBe(false);
