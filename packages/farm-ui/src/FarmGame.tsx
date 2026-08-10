@@ -1095,13 +1095,10 @@ function FarmGameBody({
   // Wheel bonus ad can outlive a render while the native SDK is open. Reserve
   // the request synchronously so rapid taps cannot open two ads or two spins.
   const wheelBonusSpinInFlightRef = useRef(false);
-  // A single native rewarded surface can be active at a time. Reserve it
-  // synchronously so rapid taps cannot replace the pending SDK promise or
-  // credit two rewards before React has committed a render.
-  const rewardedAdInFlightRef = useRef(false);
-  // Rewarded and interstitial use the same native full-screen surface. Reserve
-  // interstitial shows independently so two transition callbacks cannot stack.
-  const interstitialAdInFlightRef = useRef(false);
+  // Rewarded and interstitial share one native full-screen surface. Reserve it
+  // synchronously across both formats so rapid taps or transition callbacks
+  // cannot overlap SDK show calls or replace a pending rewarded Promise.
+  const fullScreenAdInFlightRef = useRef(false);
   // Session-local, non-identifying attempt ids join one click to exactly one
   // terminal event in the BigQuery export. They are not registered as a GA4
   // custom dimension.
@@ -4404,13 +4401,13 @@ function FarmGameBody({
       ctaPosition?: string;
     } = {}
   ) {
-    if (rewardedAdInFlightRef.current) {
+    if (fullScreenAdInFlightRef.current) {
       return false;
     }
     // Reserve before readiness/limit checks as well as before native show. A
     // same-frame double tap must not inflate click/failed intent metrics even
     // when the SDK is still loading.
-    rewardedAdInFlightRef.current = true;
+    fullScreenAdInFlightRef.current = true;
 
     // Tag the whole funnel with the type's canonical placement so blocked/click/
     // completed/failed all aggregate per placement (single source of truth).
@@ -4436,7 +4433,7 @@ function FarmGameBody({
       farmAnalytics.trackAdLimitBlocked(type, placement, limit.reason, analyticsContext(attemptState), baseMetadata);
       toast(limit.reason);
       void Promise.resolve().then(() => {
-        rewardedAdInFlightRef.current = false;
+        fullScreenAdInFlightRef.current = false;
       });
       return false;
     }
@@ -4457,7 +4454,7 @@ function FarmGameBody({
       );
       toast(rewardedAd.isAdSupported ? messages.adPreparingToast : messages.adUnsupportedToast);
       void Promise.resolve().then(() => {
-        rewardedAdInFlightRef.current = false;
+        fullScreenAdInFlightRef.current = false;
       });
       return false;
     }
@@ -4565,14 +4562,14 @@ function FarmGameBody({
 
       return false;
     } finally {
-      rewardedAdInFlightRef.current = false;
+      fullScreenAdInFlightRef.current = false;
     }
   }
 
   async function maybeShowMilestoneAd(placement: string) {
     if (
       !interstitialPlacements.progressionMilestone ||
-      interstitialAdInFlightRef.current ||
+      fullScreenAdInFlightRef.current ||
       !interstitialAd.isAdReady
     ) {
       return;
@@ -4583,7 +4580,7 @@ function FarmGameBody({
       return;
     }
 
-    interstitialAdInFlightRef.current = true;
+    fullScreenAdInFlightRef.current = true;
     try {
       const result = await interstitialAd.showAd();
       if (result.status !== 'dismissed' && result.status !== 'earned') {
@@ -4597,7 +4594,7 @@ function FarmGameBody({
       // adapter must never escape a fire-and-forget transition callback.
       return;
     } finally {
-      interstitialAdInFlightRef.current = false;
+      fullScreenAdInFlightRef.current = false;
     }
   }
 
@@ -4609,7 +4606,7 @@ function FarmGameBody({
     if (
       !interstitialPlacements.returnWelcomeBack ||
       onboardingStep != null ||
-      interstitialAdInFlightRef.current
+      fullScreenAdInFlightRef.current
     ) {
       return;
     }
@@ -4622,7 +4619,7 @@ function FarmGameBody({
       return;
     }
 
-    interstitialAdInFlightRef.current = true;
+    fullScreenAdInFlightRef.current = true;
     try {
       const result = await interstitialAd.showAd();
       if (result.status !== 'dismissed' && result.status !== 'earned') {
@@ -4646,7 +4643,7 @@ function FarmGameBody({
       // Keep the cooldown available for a later return when the host throws.
       return;
     } finally {
-      interstitialAdInFlightRef.current = false;
+      fullScreenAdInFlightRef.current = false;
     }
   }
 

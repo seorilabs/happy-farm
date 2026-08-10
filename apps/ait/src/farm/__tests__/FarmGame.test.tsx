@@ -3427,6 +3427,48 @@ describe('FarmGame UI flow', () => {
     expect(interstitial.showAd).not.toHaveBeenCalled();
   });
 
+  test('does not start an interstitial while the shared full-screen surface is showing a reward ad', async () => {
+    const shopReadyState = createShopReadyState();
+    let resolveRewarded!: (result: RewardedAdShowResult) => void;
+    const rewarded = {
+      isAdReady: true,
+      isAdSupported: true,
+      showAd: jest.fn(
+        () => new Promise<RewardedAdShowResult>((resolve) => {
+          resolveRewarded = resolve;
+        })
+      ),
+    };
+    const interstitial = {
+      isAdReady: true,
+      isAdSupported: true,
+      showAd: jest.fn(async () => ({ status: 'dismissed' as const })),
+    };
+    const screen = await renderGame(shopReadyState, {
+      interstitialPlacements: {
+        returnWelcomeBack: false,
+        progressionMilestone: true,
+      },
+      useInterstitialAd: () => interstitial,
+      useRewardedAd: () => rewarded,
+    });
+
+    await waitFor(() => expect(screen.getByText(`${formatMoney(shopReadyState.gold)}G`)).toBeTruthy());
+    fireEvent.press(screen.getByText('🏪 상점'));
+    fireEvent.press(screen.getByTestId('shop-tab-rewards'));
+    fireEvent.press(screen.getByText('받기'));
+    await waitFor(() => expect(rewarded.showAd).toHaveBeenCalledTimes(1));
+
+    fireEvent.press(screen.getByTestId('shop-tab-expand'));
+    fireEvent.press(screen.getByText('밭 개간하기'));
+    expect(interstitial.showAd).not.toHaveBeenCalled();
+
+    await act(async () => {
+      resolveRewarded({ status: 'dismissed' });
+      await Promise.resolve();
+    });
+  });
+
   describe('배치(일괄) 업그레이드 구매 (#426)', () => {
     const openUpgradeTab = (screen: ReturnType<typeof render>) => {
       fireEvent.press(screen.getByText('🏪 상점'));
