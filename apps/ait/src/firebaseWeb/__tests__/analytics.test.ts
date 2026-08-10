@@ -175,6 +175,7 @@ describe('trackAppsInTossAnalyticsEvent — 큐잉/정규화/전송', () => {
         gold: 99_999,
         gold_mantissa: 9.9999,
         gold_exponent: 4,
+        gold_is_saturated: 0,
         plot_count: 12,
         speed_level: 4,
         profit_level: 5,
@@ -184,6 +185,9 @@ describe('trackAppsInTossAnalyticsEvent — 큐잉/정규화/전송', () => {
         prestige_level: 2,
         prestige_stars: 7,
         research_points: 100,
+        research_points_mantissa: 1,
+        research_points_exponent: 2,
+        research_points_is_saturated: 0,
         lifetime_harvests: 50,
       },
     });
@@ -235,6 +239,7 @@ describe('trackAppsInTossAnalyticsEvent — 큐잉/정규화/전송', () => {
             gold: 99_999,
             gold_mantissa: 9.9999,
             gold_exponent: 4,
+            gold_is_saturated: 0,
             plot_count: 12,
             speed_level: 4,
             profit_level: 5,
@@ -244,6 +249,9 @@ describe('trackAppsInTossAnalyticsEvent — 큐잉/정규화/전송', () => {
             prestige_level: 2,
             prestige_stars: 7,
             research_points: 100,
+            research_points_mantissa: 1,
+            research_points_exponent: 2,
+            research_points_is_saturated: 0,
             lifetime_harvests: 50,
           },
           {
@@ -267,13 +275,17 @@ describe('trackAppsInTossAnalyticsEvent — 큐잉/정규화/전송', () => {
           failure_family: 'not_ready',
           prestige_level: 2,
           gold_mantissa: 9.9999,
+          economy_stage_bucket: 'standard',
           app_market: 'apps_in_toss',
           session_id: expect.any(String),
           engagement_time_msec: 100,
         });
         expect(event?.params).not.toHaveProperty('speed_level');
         expect(event?.params).not.toHaveProperty('lifetime_harvests');
-        expect(Object.keys(event?.params ?? {})).toHaveLength(devBuild ? 25 : 24);
+        expect(Object.keys(event?.params ?? {})).toHaveLength(25);
+        if (devBuild) {
+          expect(event?.params).not.toHaveProperty('debug_mode');
+        }
         mockFetch.mockClear();
       }
     } finally {

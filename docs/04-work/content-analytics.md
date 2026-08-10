@@ -66,6 +66,22 @@ summary이므로 별도 `harvest_source`가 아니다. schema v2 전 `crop_harve
 `harvest_source=auto` raw 이벤트는 자동화 처리량과 초대형 경제값으로 지표를 왜곡하므로
 현재 집계에서 제외하고 summary만 합산한다. 숫자 파라미터는 JS 안전 범위로 clamp한다.
 
+### 후반 경제 숫자 해상도
+
+`GameAnalyticsContext`는 기존 raw clamp 값(`gold`, `research_points`)을 유지하면서
+`gold_mantissa`/`gold_exponent`, `research_points_mantissa`/`research_points_exponent`,
+`gold_is_saturated`/`research_points_is_saturated`를 제공한다. 포화 플래그는 원본이 유한하고
+절대값이 `Number.MAX_SAFE_INTEGER`를 넘을 때 `1`, 그 외에는 `0`이다. 따라서 raw 값이
+`9007199254740991`로 같아도 지수 차원으로 실제 크기 구간을 나눌 수 있다. `NaN`/`Infinity`는
+기존 안전 규칙대로 raw `0`, 가수·지수 `0`, 포화 플래그 `0`으로 기록해 후반 경제값과 섞지 않는다.
+
+AIT의 이벤트당 25개 파라미터 제한 때문에 네 보조 필드를 모든 이벤트에 무조건 복제하지 않는다.
+`game_start`/`farm_main_screen`에는 전체 보조 필드가 실리고, 단건
+`research_node_unlocked`에는 `research_points_exponent`와
+`research_points_is_saturated`가 실린다. 파라미터가 조밀한 작물 이벤트는 기존
+`gold_mantissa`/`gold_exponent`를 유지한다. 광고 이벤트는 아래 광고 문서의
+`economy_stage_bucket`으로 두 포화 상태를 한 차원에 압축한다.
+
 `crop_ready_summary`는 같은 window 안에서 `(crop, area, crop_tier)`가 같은 익음을
 `ready_count`로 합친다. 정상 active window는 60초 뒤 flush하며, 앱 background/inactive,
 unmount, prestige/reset/cloud restore에서는 유실을 줄이고 새 농장 context 혼합을 막기 위해
@@ -102,7 +118,7 @@ baseline을 잡는다. 수동 행동 전환을 볼 때는 `harvest_source=manual
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- |
 | `onboarding`   | `onboarding_step_view`(step), `onboarding_skip`(skipped_step), `onboarding_stall`(step), `onboarding_complete`(step=`complete`) | 단계별 view/skip/stall + 완료 |
 | `prestige`     | `prestige`(step=`prestige`)                                                                                                     | 발생 수                       |
-| `research`     | `research_node_unlocked` / `research_node_batch_unlocked` (`node_key`, `levels_purchased`, `from_level`, `to_level`, `total_cost`) / `research_scaling_bulk_unlocked` (`node_keys`, `node_count`, `levels_purchased`, `total_cost`) | 노드별 단일·배치 연구 구매와 스케일 연구 일괄 강화 |
+| `research`     | `research_node_unlocked` (`node_key`, `next_level`, `next_level_exponent`, `next_level_is_saturated`) / `research_node_batch_unlocked` (`node_key`, `levels_purchased`, `from_level`, `to_level`, `total_cost`, `total_cost_exponent`, `total_cost_is_saturated`) / `research_scaling_bulk_unlocked` (`node_keys`, `node_count`, `levels_purchased`, `total_cost`, `total_cost_exponent`, `total_cost_is_saturated`) | 노드별 단일·배치 연구 구매와 스케일 연구 일괄 강화 |
 | `collection`   | `collection_reward_claimed`(step=reward_key)                                                                                    | 리워드별 수령 수              |
 
 퍼널×단계×일자 집계 지표:

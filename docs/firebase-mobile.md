@@ -30,7 +30,7 @@ measurementId = G-LQQQQZHG1V
 
 Firebase Web API key는 service credential이 아니며, AIT 실기기 smoke test를 위해 client config를 `apps/ait/src/firebaseWeb/app.ts`에 고정했습니다. 서비스 계정 JSON, Admin SDK credential, private key는 앱에 넣지 않습니다.
 
-AIT 앱 시작 시 GA4 Measurement Protocol 클라이언트와 Remote Config REST 클라이언트를 초기화합니다. Measurement Protocol 설정이 주입된 경우 `ait_firebase_initialized` smoke event와 FarmGame 이벤트를 전송하고, dev bundle에서는 DebugView 확인을 위해 `debug_mode=1`을 함께 붙입니다. 설정이 없거나 초기화가 실패하면 게임은 계속 no-op analytics로 동작합니다.
+AIT 앱 시작 시 GA4 Measurement Protocol 클라이언트와 Remote Config REST 클라이언트를 초기화합니다. Measurement Protocol 설정이 주입된 경우 `ait_firebase_initialized` smoke event와 FarmGame 이벤트를 전송하고, dev bundle에서는 DebugView 확인을 위해 `debug_mode=1`을 함께 붙입니다. 단, 이벤트 계약과 시장·세션 필드만으로 25개 상한을 채운 최대 광고 진단 payload는 `debug_mode`를 생략합니다. 설정이 없거나 초기화가 실패하면 게임은 계속 no-op analytics로 동작합니다.
 
 현재 AIT는 Granite React Native 런타임 제약 때문에 Firebase Web SDK 대신 GA4 Measurement Protocol을 사용합니다. Measurement Protocol 예약 이름인 `first_open`, `first_visit`, `session_start`, `user_engagement`는 직접 전송할 수 없으므로 다음 계약을 사용합니다.
 
