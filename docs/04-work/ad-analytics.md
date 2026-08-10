@@ -82,9 +82,14 @@ impression/click/completed/failed의 `reward_kind`는 모두 `wheel_bonus_spin`�
 리포트 SQL은 `1006: ...준비되지...` 같은 구버전 현지화 reason도 보정한다.
 퍼널 이벤트에는 광고 동기 코호트에 필요한 컨텍스트 subset(`gold`,
 `gold_mantissa`, `gold_exponent`, `plot_count`, `session_elapsed_sec`,
-`prestige_level`)만 싣는다. AppsInToss 시장·세션·개발 필드까지 포함해 GA4
+`prestige_level`, `economy_stage_bucket`)만 싣는다. `economy_stage_bucket`은
+`standard | gold_saturated | research_saturated | gold_and_research_saturated` stable key로,
+골드·연구 포인트의 `Number.MAX_SAFE_INTEGER` 초과 여부를 한 차원에 압축한다. AppsInToss
+시장·세션 필드까지 포함해 GA4
 Measurement Protocol의 이벤트당 25개 파라미터 제한을 지키기 위함이다. 안전 정수를
-넘는 후반 골드는 `gold_mantissa`/`gold_exponent`로 실제 크기 구간을 보존한다.
+넘는 후반 골드는 `gold_mantissa`/`gold_exponent`로 실제 크기 구간을 보존한다. optional
+metadata가 모두 실린 최대 `ad_reward_failed` payload는 production에서 정확히 25개이므로,
+dev에서도 이 경우에만 `debug_mode`를 생략하고 이벤트 계약 필드를 우선한다.
 
 리포트 SQL은 구버전 `reward_kind` 별칭도 canonical 값으로 합친다. 예를 들어
 `landmark_material`/`festival_delivery_point`는 `festival_delivery_points`,

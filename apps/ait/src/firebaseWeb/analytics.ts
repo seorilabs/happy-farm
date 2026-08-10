@@ -66,16 +66,17 @@ function normalizeAnalyticsParams(params: Record<string, AnalyticsValue> = {}) {
     app_market: 'apps_in_toss',
     release_version: RELEASE_INFO.versionName,
     release_build_number: RELEASE_INFO.buildNumber,
+    ...toFirebaseAnalyticsParams(params),
   };
 
-  if (isDevBuild()) {
+  // MP client가 session_id/engagement_time_msec 2개를 추가한다. 최대 광고 payload는
+  // production에서 이미 25개를 모두 쓰므로 그 경우에만 debug_mode를 생략한다.
+  if (isDevBuild() && Object.keys(normalizedParams).length < 23) {
     // debug_mode=1이면 GA4 DebugView에 실시간 노출되어 온디바이스 검증이 쉽다.
     normalizedParams.debug_mode = 1;
   }
 
-  // 호출부가 넘긴 파라미터는 공유 정규화 헬퍼로 변환하되, 시장 공통 필드는
-  // 호출부 값으로 덮어쓸 수 있도록 뒤에 합친다(기존 동작 유지).
-  return { ...normalizedParams, ...toFirebaseAnalyticsParams(params) };
+  return normalizedParams;
 }
 
 function mapInitResult(result: Ga4McpInitResult): AppsInTossAnalyticsInitResult {

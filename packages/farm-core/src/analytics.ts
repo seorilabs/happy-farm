@@ -83,6 +83,7 @@ export type GameAnalyticsContext = {
   gold: number;
   gold_mantissa: number;
   gold_exponent: number;
+  gold_is_saturated: number;
   plot_count: number;
   speed_level: number;
   profit_level: number;
@@ -92,17 +93,26 @@ export type GameAnalyticsContext = {
   prestige_level: number;
   prestige_stars: number;
   research_points: number;
+  research_points_mantissa: number;
+  research_points_exponent: number;
+  research_points_is_saturated: number;
   lifetime_harvests: number;
 };
 
 // Rewarded-ad events carry more funnel metadata than ordinary gameplay events.
-// Keep only the six cohort dimensions needed to compare early/late-game intent,
+// Keep only the six existing cohort dimensions plus one compressed economy bucket,
 // leaving room for AppsInToss' market/session/debug fields under GA4 MP's
 // 25-parameter limit even on the largest failed-event payload.
 export type RewardedAdGameAnalyticsContext = Pick<
   GameAnalyticsContext,
   'gold' | 'gold_mantissa' | 'gold_exponent' | 'plot_count' | 'session_elapsed_sec' | 'prestige_level'
->;
+> & { economy_stage_bucket: EconomyStageBucket };
+
+export type EconomyStageBucket =
+  | 'standard'
+  | 'gold_saturated'
+  | 'research_saturated'
+  | 'gold_and_research_saturated';
 
 export type RewardedAdAnalyticsMetadata = {
   attemptId?: string;
@@ -135,6 +145,23 @@ export function toAnalyticsScientificParts(value: number): { mantissa: number; e
   return { mantissa, exponent };
 }
 
+function toAnalyticsSaturationFlag(value: number): number {
+  return Number.isFinite(value) && Math.abs(value) > MAX_SAFE_ANALYTICS_NUMBER ? 1 : 0;
+}
+
+function getEconomyStageBucket(context: GameAnalyticsContext): EconomyStageBucket {
+  if (context.gold_is_saturated === 1 && context.research_points_is_saturated === 1) {
+    return 'gold_and_research_saturated';
+  }
+  if (context.gold_is_saturated === 1) {
+    return 'gold_saturated';
+  }
+  if (context.research_points_is_saturated === 1) {
+    return 'research_saturated';
+  }
+  return 'standard';
+}
+
 function getRewardedAdAnalyticsParams(
   metadata: RewardedAdAnalyticsMetadata = {}
 ): Record<string, AnalyticsValue> {
@@ -162,6 +189,7 @@ export function getRewardedAdGameAnalyticsContext(
     plot_count: context.plot_count,
     session_elapsed_sec: context.session_elapsed_sec,
     prestige_level: context.prestige_level,
+    economy_stage_bucket: getEconomyStageBucket(context),
   };
 }
 
@@ -171,10 +199,12 @@ export function getGameAnalyticsContext(
   now = Date.now()
 ): GameAnalyticsContext {
   const goldScientific = toAnalyticsScientificParts(gameState.gold);
+  const researchPointsScientific = toAnalyticsScientificParts(gameState.research.points);
   return {
     gold: toSafeAnalyticsInteger(gameState.gold),
     gold_mantissa: goldScientific.mantissa,
     gold_exponent: goldScientific.exponent,
+    gold_is_saturated: toAnalyticsSaturationFlag(gameState.gold),
     plot_count: toSafeAnalyticsInteger(gameState.unlockedPlotCount),
     speed_level: toSafeAnalyticsInteger(gameState.upgrades.speed),
     profit_level: toSafeAnalyticsInteger(gameState.upgrades.profit),
@@ -184,8 +214,45 @@ export function getGameAnalyticsContext(
     prestige_level: toSafeAnalyticsInteger(gameState.prestige.level),
     prestige_stars: toSafeAnalyticsInteger(gameState.prestige.stars),
     research_points: toSafeAnalyticsInteger(gameState.research.points),
+    research_points_mantissa: researchPointsScientific.mantissa,
+    research_points_exponent: researchPointsScientific.exponent,
+    research_points_is_saturated: toAnalyticsSaturationFlag(gameState.research.points),
     lifetime_harvests: toSafeAnalyticsInteger(gameState.lifetimeStats.totalHarvests),
   };
+}
+
+const EXTENDED_CONTEXT_PARAMETER_KEYS = [
+  'gold_is_saturated',
+  'research_points_mantissa',
+  'research_points_exponent',
+  'research_points_is_saturated',
+] as const;
+
+const EXTENDED_CONTEXT_PARAMETERS_BY_EVENT: Partial<Record<string, ReadonlySet<string>>> = {
+  game_start: new Set(EXTENDED_CONTEXT_PARAMETER_KEYS),
+  farm_main_screen: new Set(EXTENDED_CONTEXT_PARAMETER_KEYS),
+  research_node_unlocked: new Set(['research_points_exponent', 'research_points_is_saturated']),
+};
+
+// GameAnalyticsContext exposes high-magnitude detail to callers, but blindly spreading all
+// four new fields onto every event would push dense AIT payloads over GA4 MP's 25-parameter
+// limit. Keep the legacy context on every event and allow only the event-specific detail that
+// fits the budget; rewarded-ad events use economy_stage_bucket instead.
+function applyEventContextParameterBudget(
+  name: string,
+  params: Record<string, AnalyticsValue> = {}
+): Record<string, AnalyticsValue> {
+  const allowed = EXTENDED_CONTEXT_PARAMETERS_BY_EVENT[name];
+  let bounded = params;
+  for (const key of EXTENDED_CONTEXT_PARAMETER_KEYS) {
+    if (!allowed?.has(key) && Object.prototype.hasOwnProperty.call(bounded, key)) {
+      if (bounded === params) {
+        bounded = { ...params };
+      }
+      delete bounded[key];
+    }
+  }
+  return bounded;
 }
 
 const noopTrackGameEvent: TrackGameEvent = (_name, _params = {}) => {
@@ -193,7 +260,11 @@ const noopTrackGameEvent: TrackGameEvent = (_name, _params = {}) => {
   void _params;
 };
 
-export function createFarmAnalytics(track: TrackGameEvent = noopTrackGameEvent) {
+export function createFarmAnalytics(emit: TrackGameEvent = noopTrackGameEvent) {
+  const track: TrackGameEvent = (name, params = {}) => {
+    emit(name, applyEventContextParameterBudget(name, params));
+  };
+
   const trackFirstMeaningfulHarvest = (params: {
     cropKey: CropKey;
     areaKey: AreaKey;
@@ -612,9 +683,12 @@ export function createFarmAnalytics(track: TrackGameEvent = noopTrackGameEvent) 
       nextLevel: number;
       context: GameAnalyticsContext;
     }) => {
+      const nextLevelScientific = toAnalyticsScientificParts(params.nextLevel);
       track('research_node_unlocked', {
         node_key: params.nodeKey,
-        next_level: params.nextLevel,
+        next_level: toSafeAnalyticsInteger(params.nextLevel),
+        next_level_exponent: nextLevelScientific.exponent,
+        next_level_is_saturated: toAnalyticsSaturationFlag(params.nextLevel),
         ...params.context,
       });
     },
@@ -627,10 +701,13 @@ export function createFarmAnalytics(track: TrackGameEvent = noopTrackGameEvent) 
       toLevel: number;
       context: GameAnalyticsContext;
     }) => {
+      const totalCostScientific = toAnalyticsScientificParts(params.totalCost);
       track('research_node_batch_unlocked', {
         node_key: params.nodeKey,
         levels_purchased: params.levelsPurchased,
-        total_cost: params.totalCost,
+        total_cost: Math.max(0, toSafeAnalyticsNumber(params.totalCost)),
+        total_cost_exponent: totalCostScientific.exponent,
+        total_cost_is_saturated: toAnalyticsSaturationFlag(params.totalCost),
         from_level: params.fromLevel,
         to_level: params.toLevel,
         ...params.context,
@@ -643,11 +720,14 @@ export function createFarmAnalytics(track: TrackGameEvent = noopTrackGameEvent) 
       totalCost: number;
       context: GameAnalyticsContext;
     }) => {
+      const totalCostScientific = toAnalyticsScientificParts(params.totalCost);
       track('research_scaling_bulk_unlocked', {
         node_keys: params.nodeKeys.join(','),
         node_count: params.nodeKeys.length,
         levels_purchased: params.levelsPurchased,
-        total_cost: params.totalCost,
+        total_cost: Math.max(0, toSafeAnalyticsNumber(params.totalCost)),
+        total_cost_exponent: totalCostScientific.exponent,
+        total_cost_is_saturated: toAnalyticsSaturationFlag(params.totalCost),
         ...params.context,
       });
     },

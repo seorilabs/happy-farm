@@ -10,6 +10,15 @@ import {
 } from '../analytics';
 import { createInitialState } from '../constants';
 
+function getLegacyEventContext(context: ReturnType<typeof getGameAnalyticsContext>) {
+  const legacy = { ...context } as Record<string, number>;
+  delete legacy.gold_is_saturated;
+  delete legacy.research_points_mantissa;
+  delete legacy.research_points_exponent;
+  delete legacy.research_points_is_saturated;
+  return legacy;
+}
+
 describe('farm analytics adapter contract', () => {
   test('emits platform-neutral event names and payloads through an injected tracker', () => {
     const track = jest.fn();
@@ -108,7 +117,7 @@ describe('farm analytics adapter contract', () => {
           is_first_meaningful_harvest: false,
           is_first_crop_harvest: false,
           schema_version: 2,
-          ...context,
+          ...getLegacyEventContext(context),
         },
       ],
       [
@@ -124,7 +133,7 @@ describe('farm analytics adapter contract', () => {
           is_first_meaningful_harvest: false,
           is_first_crop_harvest: false,
           schema_version: 2,
-          ...context,
+          ...getLegacyEventContext(context),
         },
       ],
     ]);
@@ -172,7 +181,11 @@ describe('farm analytics adapter contract', () => {
     expect(context.gold_mantissa).toBeGreaterThanOrEqual(1);
     expect(context.gold_mantissa).toBeLessThan(10);
     expect(context.gold_exponent).toBe(308);
+    expect(context.gold_is_saturated).toBe(1);
     expect(context.research_points).toBe(0);
+    expect(context.research_points_mantissa).toBe(0);
+    expect(context.research_points_exponent).toBe(0);
+    expect(context.research_points_is_saturated).toBe(0);
     expect(track).toHaveBeenCalledWith(
       'crop_harvested',
       expect.objectContaining({
@@ -192,6 +205,104 @@ describe('farm analytics adapter contract', () => {
         total_research_points: 0,
       }),
     );
+  });
+
+  test('후반 경제 값은 raw clamp와 지수·포화 차원으로 함께 기록한다 (#455)', () => {
+    const track = jest.fn();
+    const analytics = createFarmAnalytics(track);
+    const state = createInitialState();
+    state.gold = 3.5e100;
+    state.research.points = 7.25e80;
+    const context = getGameAnalyticsContext(state, 0, 5_000);
+
+    expect(context).toEqual(
+      expect.objectContaining({
+        gold: Number.MAX_SAFE_INTEGER,
+        gold_mantissa: 3.5,
+        gold_exponent: 100,
+        gold_is_saturated: 1,
+        research_points: Number.MAX_SAFE_INTEGER,
+        research_points_mantissa: 7.25,
+        research_points_exponent: 80,
+        research_points_is_saturated: 1,
+      })
+    );
+
+    analytics.trackResearchNodeUnlocked({
+      nodeKey: 'market_studies',
+      nextLevel: 1e20,
+      context,
+    });
+    analytics.trackResearchNodeBatchUnlocked({
+      nodeKey: 'market_studies',
+      levelsPurchased: 10,
+      totalCost: 2.5e70,
+      fromLevel: 10,
+      toLevel: 20,
+      context,
+    });
+    analytics.trackResearchScalingBulkUnlocked({
+      nodeKeys: ['market_studies', 'growth_studies'],
+      levelsPurchased: 20,
+      totalCost: 4e75,
+      context,
+    });
+    analytics.trackAdRewardFailed(
+      'rewardedGold',
+      'shop_gold_reward',
+      'no_fill',
+      context,
+      {
+        attemptId: 'late-game-attempt',
+        adReady: false,
+        eligible: true,
+        adSupported: true,
+        rewardKind: 'gold',
+        rewardKey: 'rewarded_gold',
+        rewardValue: 1,
+        ctaPosition: 'shop_rewards_primary',
+        retryCount: 1,
+        failureFamily: 'no_fill',
+      }
+    );
+
+    expect(track).toHaveBeenCalledWith(
+      'research_node_unlocked',
+      expect.objectContaining({
+        next_level: Number.MAX_SAFE_INTEGER,
+        next_level_exponent: 20,
+        next_level_is_saturated: 1,
+        research_points_exponent: 80,
+        research_points_is_saturated: 1,
+      })
+    );
+    expect(track).toHaveBeenCalledWith(
+      'research_node_batch_unlocked',
+      expect.objectContaining({
+        total_cost: Number.MAX_SAFE_INTEGER,
+        total_cost_exponent: 70,
+        total_cost_is_saturated: 1,
+      })
+    );
+    expect(track).toHaveBeenCalledWith(
+      'research_scaling_bulk_unlocked',
+      expect.objectContaining({
+        total_cost: Number.MAX_SAFE_INTEGER,
+        total_cost_exponent: 75,
+        total_cost_is_saturated: 1,
+      })
+    );
+    expect(track).toHaveBeenCalledWith(
+      'ad_reward_failed',
+      expect.objectContaining({ economy_stage_bucket: 'gold_and_research_saturated' })
+    );
+
+    const adParams = track.mock.calls.find(([event]) => event === 'ad_reward_failed')![1] as Record<
+      string,
+      unknown
+    >;
+    expect(Object.keys(adParams)).toHaveLength(20);
+    expect(Object.keys(adParams).length + 5).toBeLessThanOrEqual(25);
   });
 
   test('harvest_combo_completed는 수동 콤보 종료 계약을 exact payload로 emit한다 (#348)', () => {
@@ -220,7 +331,7 @@ describe('farm analytics adapter contract', () => {
       base_revenue_total: 1234,
       end_reason: 'background',
       schema_version: 1,
-      ...context,
+      ...getLegacyEventContext(context),
     });
   });
 
@@ -395,6 +506,7 @@ describe('farm analytics adapter contract', () => {
         gold: context.gold,
         gold_mantissa: context.gold_mantissa,
         gold_exponent: context.gold_exponent,
+        economy_stage_bucket: 'standard',
         plot_count: context.plot_count,
         session_elapsed_sec: context.session_elapsed_sec,
         prestige_level: context.prestige_level,
@@ -402,11 +514,10 @@ describe('farm analytics adapter contract', () => {
     );
     expect(failedParams).not.toHaveProperty('speed_level');
     expect(failedParams).not.toHaveProperty('lifetime_harvests');
-    // AppsInToss MP adds app_market/release fields (3), session fields (2),
-    // and debug_mode only in dev (1). Both production and dev stay <= 25.
-    expect(Object.keys(failedParams)).toHaveLength(19);
+    // AppsInToss MP의 시장·세션 필드 5개를 더하면 정확히 25개다.
+    // 최대 payload의 dev build는 이벤트 계약을 보존하고 debug_mode만 생략한다.
+    expect(Object.keys(failedParams)).toHaveLength(20);
     expect(Object.keys(failedParams).length + 5).toBeLessThanOrEqual(25);
-    expect(Object.keys(failedParams).length + 6).toBeLessThanOrEqual(25);
 
     analytics.trackAdRewardCompleted({
       type: 'rewardedGold',
@@ -653,7 +764,7 @@ describe('farm analytics adapter contract', () => {
     });
     analytics.trackReturnSummaryShown({ awayMs: 3600000, offlineGold: 1200, readyCropCount: 4, context });
 
-    const contextKeys = Object.keys(context);
+    const baseContextKeys = Object.keys(getLegacyEventContext(context));
     const funnelEvents = [
       'game_start',
       'onboarding_step_view',
@@ -672,10 +783,23 @@ describe('farm analytics adapter contract', () => {
       const call = track.mock.calls.find(([name]) => name === eventName);
       expect(call).toBeDefined();
       const params = call![1] as Record<string, unknown>;
-      for (const key of contextKeys) {
+      for (const key of baseContextKeys) {
         expect(params).toHaveProperty(key);
       }
     }
+
+    const gameStartParams = track.mock.calls.find(([name]) => name === 'game_start')![1] as Record<
+      string,
+      unknown
+    >;
+    expect(gameStartParams).toEqual(
+      expect.objectContaining({
+        gold_is_saturated: context.gold_is_saturated,
+        research_points_mantissa: context.research_points_mantissa,
+        research_points_exponent: context.research_points_exponent,
+        research_points_is_saturated: context.research_points_is_saturated,
+      })
+    );
   });
 
   test('notification_scheduled는 context/leadTime 없이도 emit된다', () => {
@@ -756,14 +880,14 @@ describe('farm analytics adapter contract', () => {
         feeding_count: 2,
         ready_count: 1,
         schema_version: 1,
-        ...context,
+        ...getLegacyEventContext(context),
       }],
       ['animal_purchased', {
         animal: 'chicken',
         purchase_cost: 600,
         owned_count_after: 4,
         schema_version: 1,
-        ...context,
+        ...getLegacyEventContext(context),
       }],
       ['animal_fed', {
         animal: 'chicken',
@@ -771,7 +895,7 @@ describe('farm analytics adapter contract', () => {
         produce_timer_ms: 60_000,
         owned_count: 4,
         schema_version: 1,
-        ...context,
+        ...getLegacyEventContext(context),
       }],
       ['animal_produce_collected', {
         animal: 'chicken',
@@ -782,7 +906,7 @@ describe('farm analytics adapter contract', () => {
         rare_multiplier: 1,
         ready_wait_ms: 321,
         schema_version: 1,
-        ...context,
+        ...getLegacyEventContext(context),
       }],
       ['animal_produce_collect_all', {
         collected_count: 2,
@@ -790,7 +914,7 @@ describe('farm analytics adapter contract', () => {
         final_revenue_total: 100,
         rare_count: 0,
         schema_version: 1,
-        ...context,
+        ...getLegacyEventContext(context),
       }],
     ]);
 
@@ -819,30 +943,30 @@ describe('farm analytics adapter contract', () => {
         crafting_count: 2,
         ready_count: 1,
         schema_version: 1,
-        ...context,
+        ...getLegacyEventContext(context),
       }],
       ['craft_started', {
         recipe: 'bread',
         schema_version: 1,
-        ...context,
+        ...getLegacyEventContext(context),
       }],
       ['craft_collected', {
         recipe: 'bread',
         revenue: 300,
         schema_version: 1,
-        ...context,
+        ...getLegacyEventContext(context),
       }],
       ['craft_canceled', {
         recipe: 'bread',
         refunded_count: 3,
         schema_version: 1,
-        ...context,
+        ...getLegacyEventContext(context),
       }],
       ['craft_collect_all', {
         collected_count: 4,
         total_gold: 1200,
         schema_version: 1,
-        ...context,
+        ...getLegacyEventContext(context),
       }],
     ]);
 
@@ -859,7 +983,7 @@ describe('farm analytics adapter contract', () => {
     const track = jest.fn();
     const analytics = createFarmAnalytics(track);
     const context = getGameAnalyticsContext(createInitialState(), 0, 5_000);
-    const contextKeys = Object.keys(context);
+    const contextKeys = Object.keys(getLegacyEventContext(context));
 
     // 다섯 트래커가 analytics.ts에 실제로 추가돼 함수로 존재한다.
     expect(typeof analytics.trackProductionScreen).toBe('function');
@@ -888,7 +1012,7 @@ describe('farm analytics adapter contract', () => {
     expect(byName.craft_collect_all).toEqual(expect.objectContaining({ collected_count: 4, total_gold: 1200 }));
     expect(byName.production_screen).toEqual(expect.objectContaining({ crafting_count: 2, ready_count: 1 }));
 
-    // 모든 공방 이벤트가 GameAnalyticsContext 전체 키를 포함한다.
+    // 모든 공방 이벤트가 파라미터 예산 내의 기존 GameAnalyticsContext 키를 포함한다.
     for (const name of ['production_screen', 'craft_started', 'craft_collected', 'craft_canceled', 'craft_collect_all']) {
       for (const key of contextKeys) {
         expect(byName[name]).toHaveProperty(key);
