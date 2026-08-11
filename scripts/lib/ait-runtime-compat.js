@@ -74,12 +74,26 @@ function collectPatternViolations(source, filePath, patterns, message) {
 }
 
 function findAitSourceRuntimeViolations(source, filePath = '(source)') {
-  return collectPatternViolations(
+  const violations = collectPatternViolations(
     source,
     filePath,
     [/(?:\bBigInt\s*\([^)]*\)\s*\*\*|\*\*\s*\bBigInt\s*\()/g],
     'BigInt 지수 연산은 Granite 번들에서 Math.pow로 변환되어 AIT 런타임에서 실패합니다.'
   );
+
+  const nativeVideoViewOffset = source.indexOf('GraniteVideoView');
+  const requireNativeComponentOffset = source.indexOf('requireNativeComponent');
+  if (nativeVideoViewOffset >= 0 && requireNativeComponentOffset >= 0) {
+    violations.push({
+      file: filePath,
+      line: lineNumberAt(source, requireNativeComponentOffset),
+      message:
+        'AIT 앱에서 GraniteVideoView를 requireNativeComponent로 직접 등록하면 호스트 시작 단계에서 실패할 수 있습니다.',
+      snippet: 'requireNativeComponent(...GraniteVideoView...)',
+    });
+  }
+
+  return violations;
 }
 
 function findAitBundleRuntimeViolations(source, filePath = '(bundle)') {
@@ -90,26 +104,24 @@ function findAitBundleRuntimeViolations(source, filePath = '(bundle)') {
     '번들에 Math.pow와 BigInt 조합이 포함되어 AIT 시작 시 TypeError가 발생합니다.'
   );
 
-  const nativeVideoViewOffset = source.indexOf('"GraniteVideoView"');
-  const nativeAudioBridge =
-    nativeVideoViewOffset >= 0
-      ? source.slice(Math.max(0, nativeVideoViewOffset - 300), nativeVideoViewOffset + 4000)
-      : '';
-  const hasNativeAudioFocusBridge =
-    nativeAudioBridge.includes('requireNativeComponent') &&
-    nativeAudioBridge.includes('disableAudioFocus: true');
-
-  if (
-    /^apps\/ait\/dist\/bundle\.android(?:\.[^.]+)*\.js$/.test(filePath) &&
-    !hasNativeAudioFocusBridge
-  ) {
-    violations.push({
-      file: filePath,
-      line: 0,
-      message:
-        'Android AIT 번들에 GraniteVideoView까지 이어지는 disableAudioFocus 연결이 없습니다.',
-      snippet: '',
-    });
+  if (/^apps\/ait\/dist\/bundle\.android(?:\.[^.]+)*\.js$/.test(filePath)) {
+    let nativeVideoViewOffset = source.indexOf('"GraniteVideoView"');
+    while (nativeVideoViewOffset >= 0) {
+      const nativeVideoViewBridge = source.slice(
+        Math.max(0, nativeVideoViewOffset - 300),
+        nativeVideoViewOffset + 1_000
+      );
+      if (nativeVideoViewBridge.includes('requireNativeComponent')) {
+        violations.push({
+          file: filePath,
+          line: lineNumberAt(source, nativeVideoViewOffset),
+          message:
+            'Android AIT 번들에서 GraniteVideoView 직접 등록이 발견되었습니다. 공개 Video API를 사용해야 합니다.',
+          snippet: 'requireNativeComponent(...GraniteVideoView...)',
+        });
+      }
+      nativeVideoViewOffset = source.indexOf('"GraniteVideoView"', nativeVideoViewOffset + 1);
+    }
   }
 
   return violations;

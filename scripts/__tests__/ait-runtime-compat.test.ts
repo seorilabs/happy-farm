@@ -52,36 +52,32 @@ describe('AppsInToss Granite 런타임 호환성 가드', () => {
     expect(findAitBundleRuntimeViolations(source)).toEqual([]);
   });
 
-  it('Android 번들에서 BGM과 효과음의 오디오 포커스 연결 누락을 차단한다', () => {
+  it('AIT 소스에서 GraniteVideoView 직접 등록을 차단한다', () => {
+    const source = `
+      const GRANITE_VIDEO_VIEW_NAME = 'GraniteVideoView';
+      requireNativeComponent(GRANITE_VIDEO_VIEW_NAME);
+    `;
+
+    expect(findAitSourceRuntimeViolations(source, 'apps/ait/src/audio.tsx')).toEqual([
+      expect.objectContaining({
+        file: 'apps/ait/src/audio.tsx',
+        line: 3,
+      }),
+    ]);
+  });
+
+  it('Android 번들에서 GraniteVideoView 직접 등록을 차단한다', () => {
     const filePath = 'apps/ait/dist/bundle.android.0_84_0.js';
 
-    expect(findAitBundleRuntimeViolations('disableFocus: true', filePath)).toEqual([
-      expect.objectContaining({
-        file: filePath,
-        line: 0,
-      }),
-    ]);
-    expect(findAitBundleRuntimeViolations('disableAudioFocus: true', filePath)).toEqual([
-      expect.objectContaining({
-        file: filePath,
-        line: 0,
-      }),
-    ]);
     expect(
-      findAitBundleRuntimeViolations(
-        'requireNativeComponent("GraniteVideoView"); disableAudioFocus: true',
-        filePath
-      )
+      findAitBundleRuntimeViolations('codegenNativeComponent("GraniteVideoView"); disableFocus: true', filePath)
     ).toEqual([]);
     expect(
-      findAitBundleRuntimeViolations(
-        `"GraniteVideoView"; requireNativeComponent(); ${'x'.repeat(4_100)} disableAudioFocus: true`,
-        filePath
-      )
+      findAitBundleRuntimeViolations('requireNativeComponent("GraniteVideoView"); disableAudioFocus: true', filePath)
     ).toEqual([
       expect.objectContaining({
         file: filePath,
-        line: 0,
+        line: 1,
       }),
     ]);
   });
