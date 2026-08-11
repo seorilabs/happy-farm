@@ -61,7 +61,29 @@ describe('AppsInToss Granite 런타임 호환성 가드', () => {
         line: 0,
       }),
     ]);
-    expect(findAitBundleRuntimeViolations('disableAudioFocus: true', filePath)).toEqual([]);
+    expect(findAitBundleRuntimeViolations('disableAudioFocus: true', filePath)).toEqual([
+      expect.objectContaining({
+        file: filePath,
+        line: 0,
+      }),
+    ]);
+    expect(
+      findAitBundleRuntimeViolations(
+        'requireNativeComponent("GraniteVideoView"); disableAudioFocus: true',
+        filePath
+      )
+    ).toEqual([]);
+    expect(
+      findAitBundleRuntimeViolations(
+        `"GraniteVideoView"; requireNativeComponent(); ${'x'.repeat(4_100)} disableAudioFocus: true`,
+        filePath
+      )
+    ).toEqual([
+      expect.objectContaining({
+        file: filePath,
+        line: 0,
+      }),
+    ]);
   });
 
   it('실제 AIT 런타임 소스에 금지 패턴이 없다', () => {

@@ -90,14 +90,24 @@ function findAitBundleRuntimeViolations(source, filePath = '(bundle)') {
     '번들에 Math.pow와 BigInt 조합이 포함되어 AIT 시작 시 TypeError가 발생합니다.'
   );
 
+  const nativeVideoViewOffset = source.indexOf('"GraniteVideoView"');
+  const nativeAudioBridge =
+    nativeVideoViewOffset >= 0
+      ? source.slice(Math.max(0, nativeVideoViewOffset - 300), nativeVideoViewOffset + 4000)
+      : '';
+  const hasNativeAudioFocusBridge =
+    nativeAudioBridge.includes('requireNativeComponent') &&
+    nativeAudioBridge.includes('disableAudioFocus: true');
+
   if (
     /^apps\/ait\/dist\/bundle\.android(?:\.[^.]+)*\.js$/.test(filePath) &&
-    !source.includes('disableAudioFocus')
+    !hasNativeAudioFocusBridge
   ) {
     violations.push({
       file: filePath,
       line: 0,
-      message: 'Android AIT 번들에 동시 BGM/SFX 재생용 disableAudioFocus 연결이 없습니다.',
+      message:
+        'Android AIT 번들에 GraniteVideoView까지 이어지는 disableAudioFocus 연결이 없습니다.',
       snippet: '',
     });
   }
