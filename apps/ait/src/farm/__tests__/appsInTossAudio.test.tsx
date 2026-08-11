@@ -7,22 +7,25 @@ import type { FarmGameAudio } from '../../../../../packages/farm-ui/src';
 
 type RecordedVideoProps = {
   source?: { uri?: string; shouldCache?: boolean };
+  disableFocus?: boolean;
   paused?: boolean;
   repeat?: boolean;
   style?: { left?: number; top?: number; width?: number; height?: number; opacity?: number };
   volume?: number;
   onEnd?: () => void;
+  onError?: (error: unknown) => void;
   onAudioFocusChanged?: (event: { hasAudioFocus: boolean }) => void;
 };
 
 const mockVideoRenders: RecordedVideoProps[] = [];
 const mockSeek = jest.fn();
+const mockResume = jest.fn();
 
 jest.mock('@granite-js/react-native', () => {
   const ReactActual = jest.requireActual('react') as typeof import('react');
 
   const Video = ReactActual.forwardRef<unknown, RecordedVideoProps>((props, ref) => {
-    ReactActual.useImperativeHandle(ref, () => ({ seek: mockSeek }));
+    ReactActual.useImperativeHandle(ref, () => ({ seek: mockSeek, resume: mockResume }));
     mockVideoRenders.push(props);
     return null;
   });
@@ -67,6 +70,7 @@ describe('useAppsInTossFarmAudio', () => {
   beforeEach(() => {
     mockVideoRenders.length = 0;
     mockSeek.mockClear();
+    mockResume.mockClear();
   });
 
   afterEach(() => {
@@ -144,6 +148,55 @@ describe('useAppsInTossFarmAudio', () => {
     expect(latestPropsFor(FARM_AUDIO_SOURCES.harvestCoin).paused).toBe(false);
   });
 
+  test('resumes enabled background music when a harvest sound settles', () => {
+    const audio = renderFarmAudio();
+
+    act(() => {
+      void audio.setBackgroundMusicEnabled(true);
+      void audio.playHarvest();
+    });
+    mockResume.mockClear();
+
+    act(() => {
+      latestPropsFor(FARM_AUDIO_SOURCES.harvestCoin).onEnd?.();
+    });
+
+    expect(mockResume).toHaveBeenCalledTimes(1);
+  });
+
+  test('does not resume background music after a sound when music is disabled', () => {
+    const audio = renderFarmAudio();
+
+    act(() => {
+      void audio.playHarvest();
+      latestPropsFor(FARM_AUDIO_SOURCES.harvestCoin).onEnd?.();
+    });
+
+    expect(mockResume).not.toHaveBeenCalled();
+  });
+
+  test('resumes enabled background music when Android returns audio focus', () => {
+    const audio = renderFarmAudio();
+    act(() => {
+      void audio.setBackgroundMusicEnabled(true);
+    });
+    mockResume.mockClear();
+
+    act(() => {
+      latestPropsFor(FARM_AUDIO_SOURCES.backgroundMusic).onAudioFocusChanged?.({
+        hasAudioFocus: false,
+      });
+    });
+    expect(mockResume).not.toHaveBeenCalled();
+
+    act(() => {
+      latestPropsFor(FARM_AUDIO_SOURCES.backgroundMusic).onAudioFocusChanged?.({
+        hasAudioFocus: true,
+      });
+    });
+    expect(mockResume).toHaveBeenCalledTimes(1);
+  });
+
   const EFFECT_URIS = {
     plant: FARM_AUDIO_SOURCES.plant,
     reward: FARM_AUDIO_SOURCES.reward,
@@ -211,6 +264,32 @@ describe('useAppsInTossFarmAudio', () => {
       latestPropsFor(FARM_AUDIO_SOURCES.reward).onEnd?.();
     });
     expect(latestPropsFor(FARM_AUDIO_SOURCES.reward).paused).toBe(true);
+  });
+
+  test('resumes enabled background music after an effect ends or fails', () => {
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const audio = renderFarmAudio();
+    act(() => {
+      void audio.setBackgroundMusicEnabled(true);
+      audio.playEffect('reward');
+    });
+    mockResume.mockClear();
+
+    act(() => {
+      latestPropsFor(FARM_AUDIO_SOURCES.reward).onEnd?.();
+    });
+    expect(mockResume).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      audio.playEffect('reward');
+    });
+    mockResume.mockClear();
+    act(() => {
+      latestPropsFor(FARM_AUDIO_SOURCES.reward).onError?.(new Error('playback failed'));
+    });
+    expect(mockResume).toHaveBeenCalledTimes(1);
+    expect(latestPropsFor(FARM_AUDIO_SOURCES.reward).paused).toBe(true);
+    warnSpy.mockRestore();
   });
 
   test('rapid same-batch retriggers collapse into a single restart with no ghost replay', () => {
