@@ -1,4 +1,3 @@
-import { Video, type VideoRef } from '@granite-js/react-native';
 import React, {
   useCallback,
   useEffect,
@@ -7,10 +6,15 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import { Platform, StyleSheet } from 'react-native';
+import { StyleSheet } from 'react-native';
 
 import { logDevWarning } from '../../../../../packages/farm-core/src';
 import type { FarmGameAudio, FarmSoundEffectKey } from '../../../../../packages/farm-ui/src';
+import {
+  AppsInTossAudioPlayer,
+  type AppsInTossAudioPlayerRef,
+  isAppsInTossAudioAvailable,
+} from './appsInTossAudioPlayer';
 
 // The Granite runtime cannot load require()-based local assets (its asset
 // registry is a warning stub), so apps-in-toss audio must stream from remote
@@ -59,18 +63,6 @@ const SOUND_EFFECT_PLAYERS: readonly { key: FarmSoundEffectKey; volume: number }
   { key: 'wheelSpin', volume: 0.55 },
 ];
 
-// On Android every player must opt out of audio focus: otherwise starting an
-// SFX takes focus away from the BGM player and only one sound survives. The
-// public wrapper uses disableFocus, while the AIT native player consumes
-// disableAudioFocus, so both contracts must pass through Video.
-const audioFocusProps =
-  Platform.OS === 'android' ? { disableFocus: true, disableAudioFocus: true } : {};
-
-function keepPlaybackOnAudioFocusChange() {
-  // Passing a handler stops the Granite Video wrapper from pausing playback on
-  // focus changes; pause/resume is driven only by props and app visibility.
-}
-
 // Multiple players share this hook, so failure logs must name the URI to make
 // on-device diagnosis (404, blocked host, codec) possible.
 function createPlaybackFailureWarning(uri: string) {
@@ -93,7 +85,7 @@ type OneShotHandle = { play: () => void };
 // remote source stays buffered, restarts from 0 on every play() call.
 const OneShotEffectPlayer = React.forwardRef<OneShotHandle, { uri: string; volume: number }>(
   function OneShotEffectPlayer({ uri, volume }, ref) {
-    const videoRef = useRef<VideoRef | null>(null);
+    const videoRef = useRef<AppsInTossAudioPlayerRef | null>(null);
     // Three-state machine instead of a boolean: every play() request enters a
     // 'restarting' frame whose committed paused=true state guarantees the
     // player is not running when the seek is issued — the mobile adapter's
@@ -125,11 +117,8 @@ const OneShotEffectPlayer = React.forwardRef<OneShotHandle, { uri: string; volum
     );
 
     return (
-      <Video
-        {...audioFocusProps}
+      <AppsInTossAudioPlayer
         ref={videoRef}
-        ignoreSilentSwitch="ignore"
-        onAudioFocusChanged={keepPlaybackOnAudioFocusChange}
         onEnd={stopPlayback}
         onError={warnFailure}
         paused={playState !== 'playing'}
@@ -142,9 +131,9 @@ const OneShotEffectPlayer = React.forwardRef<OneShotHandle, { uri: string; volum
 );
 
 export function useAppsInTossFarmAudio(): { audio: FarmGameAudio; audioElement: React.ReactNode } {
-  const harvestPlayerRef = useRef<VideoRef | null>(null);
-  const comboBonusOneRef = useRef<VideoRef | null>(null);
-  const comboBonusTwoRef = useRef<VideoRef | null>(null);
+  const harvestPlayerRef = useRef<AppsInTossAudioPlayerRef | null>(null);
+  const comboBonusOneRef = useRef<AppsInTossAudioPlayerRef | null>(null);
+  const comboBonusTwoRef = useRef<AppsInTossAudioPlayerRef | null>(null);
   const comboMilestoneTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const effectHandlesRef = useRef<Partial<Record<FarmSoundEffectKey, OneShotHandle | null>>>({});
   const [backgroundMusicEnabled, setBackgroundMusicEnabled] = useState(false);
@@ -170,7 +159,7 @@ export function useAppsInTossFarmAudio(): { audio: FarmGameAudio; audioElement: 
 
   const audio = useMemo<FarmGameAudio>(
     () => ({
-      isSupported: Video.isAvailable,
+      isSupported: isAppsInTossAudioAvailable(),
       playHarvest: () => {
         harvestPlayerRef.current?.seek(0);
         setHarvestPlaying(true);
@@ -200,10 +189,7 @@ export function useAppsInTossFarmAudio(): { audio: FarmGameAudio; audioElement: 
 
   const audioElement = (
     <>
-      <Video
-        {...audioFocusProps}
-        ignoreSilentSwitch="ignore"
-        onAudioFocusChanged={keepPlaybackOnAudioFocusChange}
+      <AppsInTossAudioPlayer
         onError={warnBackgroundMusicFailure}
         paused={!backgroundMusicEnabled}
         repeat
@@ -211,11 +197,8 @@ export function useAppsInTossFarmAudio(): { audio: FarmGameAudio; audioElement: 
         style={styles.hiddenPlayer}
         volume={BACKGROUND_MUSIC_VOLUME}
       />
-      <Video
-        {...audioFocusProps}
+      <AppsInTossAudioPlayer
         ref={comboBonusOneRef}
-        ignoreSilentSwitch="ignore"
-        onAudioFocusChanged={keepPlaybackOnAudioFocusChange}
         onEnd={stopComboBonusOnePlayback}
         onError={warnHarvestCoinFailure}
         paused={!comboBonusOnePlaying}
@@ -223,11 +206,8 @@ export function useAppsInTossFarmAudio(): { audio: FarmGameAudio; audioElement: 
         style={styles.hiddenPlayer}
         volume={HARVEST_VOLUME}
       />
-      <Video
-        {...audioFocusProps}
+      <AppsInTossAudioPlayer
         ref={comboBonusTwoRef}
-        ignoreSilentSwitch="ignore"
-        onAudioFocusChanged={keepPlaybackOnAudioFocusChange}
         onEnd={stopComboBonusTwoPlayback}
         onError={warnHarvestCoinFailure}
         paused={!comboBonusTwoPlaying}
@@ -235,11 +215,8 @@ export function useAppsInTossFarmAudio(): { audio: FarmGameAudio; audioElement: 
         style={styles.hiddenPlayer}
         volume={HARVEST_VOLUME}
       />
-      <Video
-        {...audioFocusProps}
+      <AppsInTossAudioPlayer
         ref={harvestPlayerRef}
-        ignoreSilentSwitch="ignore"
-        onAudioFocusChanged={keepPlaybackOnAudioFocusChange}
         onEnd={stopHarvestPlayback}
         onError={warnHarvestCoinFailure}
         paused={!harvestPlaying}
