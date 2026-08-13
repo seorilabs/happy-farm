@@ -2075,6 +2075,7 @@ function FarmGameBody({
           isNew: effect.result.outcome === 'success' ? effect.result.isNew : undefined,
           refundedCount: effect.result.outcome === 'fail' ? effect.result.refundedCrops.length : undefined,
           discoveredCount: effect.discoveredCount,
+          rewardedAdBoosted: effect.result.rewardedAdBoosted,
           context: analyticsContext(),
         });
         continue;
@@ -2842,6 +2843,7 @@ function FarmGameBody({
             adSupported: true,
             rewardKind: 'cooking_speed_up',
             rewardKey: 'cooking_timer',
+            rewardValue: Math.ceil(potStatus.remainingMs / 1000),
             ctaPosition: 'cooking_sheet_primary',
           }
         );
@@ -3716,13 +3718,15 @@ function FarmGameBody({
     setCommandEffectVersion((version) => version + 1);
   }
 
-  // 요리 즉시 완성 보상형 광고(#442). 한도/기록/미션 진행은 공용 showRewardedAd 퍼널이
-  // 담당하고, 보상 적용은 진행 중인 솥의 남은 시간을 0으로 만드는 순수 전이만 한다.
+  // 요리 즉시 완성 보상형 광고(#442, #462). 한도/기록/미션 진행은 공용
+  // showRewardedAd 퍼널이 담당하고, 보상은 남은 시간을 0으로 만들며 결과 성공 보장
+  // 플래그를 솥에 저장한다. 특정 등급이나 신규 메뉴는 보장하지 않는다.
   async function rushCookingWithAd() {
-    if (getCookingPotStatus(gameStateRef.current, Date.now()).phase !== 'cooking') {
+    const potStatus = getCookingPotStatus(gameStateRef.current, Date.now());
+    if (potStatus.phase !== 'cooking') {
       return;
     }
-    await showRewardedAd('cookingSpeedAd', 1, () => undefined, {
+    await showRewardedAd('cookingSpeedAd', Math.ceil(potStatus.remainingMs / 1000), () => undefined, {
       keepSheetOnFailure: true,
       keepSheetOnSuccess: true,
       rewardKind: 'cooking_speed_up',

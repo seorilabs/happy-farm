@@ -61,6 +61,9 @@ export function getCookingDish(key: CookingDishKey): CookingDish | undefined {
 export type CookingPot = {
   ingredients: CropKey[];
   startedAt: number;
+  // 보상형 광고로 즉시 완성한 조리는 결과 확인 시 성공을 보장한다. 솥에 저장해
+  // 광고 직후 앱이 종료되어도 보상이 사라지지 않고, resolve 시 pot과 함께 소비된다.
+  rewardedAdBoosted: boolean;
 };
 
 export type CookingState = {
@@ -122,7 +125,7 @@ export function normalizeCookingState(value: unknown): CookingState {
       Number.isFinite(startedAt) &&
       startedAt >= 0
     ) {
-      pot = { ingredients, startedAt };
+      pot = { ingredients, startedAt, rewardedAdBoosted: rawPot.rewardedAdBoosted === true };
     }
   }
 
@@ -224,7 +227,7 @@ export function startCooking(gameState: GameState, ingredients: readonly CropKey
     production: { ...gameState.production, inventory },
     cooking: {
       ...gameState.cooking,
-      pot: { ingredients: sanitized, startedAt: safeNow },
+      pot: { ingredients: sanitized, startedAt: safeNow, rewardedAdBoosted: false },
     },
   };
 }
@@ -247,6 +250,7 @@ export type CookingPotStatus = {
   startedAt: number | null;
   readyAt: number | null;
   remainingMs: number;
+  rewardedAdBoosted: boolean;
 };
 
 // 솥의 파생 상태(순수 계산). UI 렌더와 전이 가드가 같은 판정을 공유한다.
@@ -263,6 +267,7 @@ export function getCookingPotStatus(gameState: GameState, now = Date.now()): Coo
       startedAt: null,
       readyAt: null,
       remainingMs: 0,
+      rewardedAdBoosted: false,
     };
   }
   const timerMs = getCookingTimerMs(gameState, pot.ingredients);
@@ -277,6 +282,7 @@ export function getCookingPotStatus(gameState: GameState, now = Date.now()): Coo
     startedAt: pot.startedAt,
     readyAt,
     remainingMs,
+    rewardedAdBoosted: pot.rewardedAdBoosted,
   };
 }
 
@@ -298,9 +304,9 @@ export function cancelCooking(gameState: GameState, now = Date.now()): GameState
   };
 }
 
-// 보상형 광고(즉시 완성): 진행 중인 조리의 남은 시간을 0으로 만든다(startedAt을
-// 타이머 길이만큼 과거로 이동). 진행 중이 아니면 null. 광고 한도/기록은 호출부
-// (FarmGame의 showRewardedAd 퍼널)가 담당한다.
+// 보상형 광고(즉시 완성 + 성공 보장): 진행 중인 조리의 남은 시간을 0으로 만들고
+// rewardedAdBoosted를 저장한다. 진행 중이 아니면 null. 광고 한도/기록은 호출부
+// (FarmGame의 showRewardedAd 퍼널)가 담당하며 boost는 resolve 시 pot과 함께 소비된다.
 export function finishCookingInstantly(gameState: GameState, now = Date.now()): GameState | null {
   const status = getCookingPotStatus(gameState, now);
   if (status.phase !== 'cooking' || gameState.cooking.pot == null) {
@@ -311,7 +317,11 @@ export function finishCookingInstantly(gameState: GameState, now = Date.now()): 
     ...gameState,
     cooking: {
       ...gameState.cooking,
-      pot: { ...gameState.cooking.pot, startedAt: safeNow - status.timerMs },
+      pot: {
+        ...gameState.cooking.pot,
+        startedAt: safeNow - status.timerMs,
+        rewardedAdBoosted: true,
+      },
     },
   };
 }
@@ -344,11 +354,13 @@ export type CookingResult =
       grade: CookingGradeKey;
       // 이번 성공으로 처음 발견한 메뉴인지(도감 신규 등록).
       isNew: boolean;
+      rewardedAdBoosted: boolean;
     }
   | {
       outcome: 'fail';
       // 환급된 재료(저티어 우선, floor(재료 수 × failRefundRatio)개).
       refundedCrops: CropKey[];
+      rewardedAdBoosted: false;
     };
 
 export type CookingResolution = {
@@ -397,7 +409,10 @@ export function resolveCooking(
   const ingredients = pot.ingredients;
   const successRate = getCookingSuccessRate(ingredients.length);
   const eligibleGrades = getEligibleCookingGrades(ingredients);
-  const succeeded = eligibleGrades.length > 0 && clamp01(rng()) < successRate;
+  // 광고 보상 여부와 무관하게 성공 roll 한 번을 소비해 이후 등급/메뉴 roll 순서를
+  // 동일하게 유지한다. boost는 성공만 보장하고 등급·신규 메뉴는 보장하지 않는다.
+  const successRoll = clamp01(rng());
+  const succeeded = eligibleGrades.length > 0 && (pot.rewardedAdBoosted || successRoll < successRate);
 
   if (!succeeded) {
     const refundCount = Math.max(
@@ -422,7 +437,7 @@ export function resolveCooking(
           totalCookCount: gameState.cooking.totalCookCount + 1,
         },
       },
-      result: { outcome: 'fail', refundedCrops },
+      result: { outcome: 'fail', refundedCrops, rewardedAdBoosted: false },
     };
   }
 
@@ -447,7 +462,13 @@ export function resolveCooking(
       previousCount > 0
         ? grantLandmarkFestivalDeliveryPoints(resolvedState, LANDMARK_DUPLICATE_DISH_FESTIVAL_POINTS)
         : resolvedState,
-    result: { outcome: 'success', dishKey: dish.key, grade: dish.grade, isNew: previousCount === 0 },
+    result: {
+      outcome: 'success',
+      dishKey: dish.key,
+      grade: dish.grade,
+      isNew: previousCount === 0,
+      rewardedAdBoosted: pot.rewardedAdBoosted,
+    },
   };
 }
 

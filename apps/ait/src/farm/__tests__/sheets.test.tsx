@@ -44,6 +44,9 @@ import {
   prestigeFarm,
   WHEEL_SLOTS,
   COOKING_DISHES,
+  COOKING_GRADES,
+  COOKING_MAX_INGREDIENTS,
+  finishCookingInstantly,
   getCookingDishLabel,
   getCookingSuccessRate,
   getCookingTimerMs,
@@ -1698,6 +1701,8 @@ describe('cooking sheet (#442)', () => {
 
     // 규격 미달(0종)일 때는 시작이 비활성 상태다.
     expect(screen.getByTestId('cooking-start-action').props.accessibilityState?.disabled).toBe(true);
+    expect(within(screen.getByTestId('cooking-rules-card')).getByText(messages.cookingRulesTitle)).toBeTruthy();
+    expect(within(screen.getByTestId('cooking-rules-card')).getByText(messages.cookingRulesDescription)).toBeTruthy();
 
     fireEvent.press(screen.getByTestId(`cooking-ingredient-${CARROT}`));
     fireEvent.press(screen.getByTestId(`cooking-ingredient-${WHEAT}`));
@@ -1705,6 +1710,9 @@ describe('cooking sheet (#442)', () => {
     const preview = screen.getByTestId('cooking-preview-line');
     expect(preview.props.children.join('')).toContain(
       messages.cookingSuccessRateLabel(`${Math.round(getCookingSuccessRate(2) * 100)}%`)
+    );
+    expect(screen.getByTestId('cooking-eligible-grades-line').props.children).toBe(
+      messages.cookingEligibleGradesLabel(messages.cookingGradeCommon)
     );
 
     fireEvent.press(screen.getByTestId('cooking-start-action'));
@@ -1723,6 +1731,11 @@ describe('cooking sheet (#442)', () => {
         formatRemainingTime(getCookingTimerMs(started, [CARROT, WHEAT]) - 1000, LOCALE)
       )
     );
+    expect(screen.getByTestId('cooking-rush-ad-action').props.accessibilityLabel).toBe(
+      messages.cookingRushAdAction(
+        formatRemainingTime(getCookingTimerMs(started, [CARROT, WHEAT]) - 1000, LOCALE)
+      )
+    );
     fireEvent.press(screen.getByTestId('cooking-rush-ad-action'));
     expect(onRushAd).toHaveBeenCalledTimes(1);
     fireEvent.press(screen.getByTestId('cooking-cancel-action'));
@@ -1737,6 +1750,15 @@ describe('cooking sheet (#442)', () => {
     expect(screen.queryByTestId('cooking-rush-ad-action')).toBeNull();
     fireEvent.press(screen.getByTestId('cooking-resolve-action'));
     expect(onResolve).toHaveBeenCalledTimes(1);
+  });
+
+  test('an ad-finished pot explains that the result is guaranteed to succeed', () => {
+    const started = startCooking(stateWithIngredients({ [CARROT]: 1, [WHEAT]: 1 }), [CARROT, WHEAT], NOW)!;
+    const rushed = finishCookingInstantly(started, NOW + 1000)!;
+    const screen = renderCooking(rushed, {}, NOW + 1000);
+
+    expect(screen.getByTestId('cooking-status-line').props.children).toContain(messages.cookingAdBoostReadyLabel);
+    expect(screen.queryByTestId('cooking-rush-ad-action')).toBeNull();
   });
 
   test('the compendium renders all 150 dishes, masks undiscovered ones, and reveals discovered details', () => {
@@ -1768,9 +1790,18 @@ describe('cooking sheet (#442)', () => {
     expect(within(detail).getByText(messages.cookingDishCookedCountLabel(3))).toBeTruthy();
 
     const undiscovered = COOKING_DISHES[1]!;
+    const undiscoveredGrade = COOKING_GRADES.find((grade) => grade.key === undiscovered.grade)!;
     fireEvent.press(screen.getByTestId(`cooking-dish-${undiscovered.key}`));
+    const undiscoveredDetail = within(screen.getByTestId('cooking-dish-detail'));
+    expect(undiscoveredDetail.getByText(messages.cookingUndiscoveredDishLabel)).toBeTruthy();
     expect(
-      within(screen.getByTestId('cooking-dish-detail')).getByText(messages.cookingUndiscoveredDishLabel)
+      undiscoveredDetail.getByText(
+        messages.cookingUndiscoveredDishHint(
+          undiscovered.tier,
+          undiscoveredGrade.minIngredients,
+          COOKING_MAX_INGREDIENTS
+        )
+      )
     ).toBeTruthy();
   });
 });

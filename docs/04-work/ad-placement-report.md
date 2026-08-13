@@ -24,7 +24,7 @@ happy-farm 보상형 광고를 **placement × reward_kind 단위로 정기 모�
 | `harvest_bonus_sheet` | 수확 2배 부스트 시트 | `harvestBonusAd` |
 | `return_offline_bonus` | 복귀 오프라인 골드 2배 CTA | `offlineBonusAd` |
 | `wheel_bonus_spin` | 무료 룰렛 이후 보너스 스핀 CTA | `wheelBonusAd` |
-| `cooking_speed_up` | 요리 즉시 완성 CTA | `cookingSpeedAd` |
+| `cooking_speed_up` | 남은 조리 즉시 완료 + 결과 성공 보장 CTA | `cookingSpeedAd` |
 
 `shop_gold_reward`는 placement 시계열 호환을 위해 이름을 유지한다. 실제 보상은
 `reward_kind=gold` / `reward_kind=festival_delivery_points`로 나눠 비교한다.
