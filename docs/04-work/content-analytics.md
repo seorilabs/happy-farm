@@ -32,6 +32,7 @@ happy-farm **개별 콘텐츠(작물·구역·기능 퍼널)** 세부 지표의 
 | `crop_ready`                            | `crop`, `area`, `crop_tier`                                                                                                                  | 배칭 전 버전의 legacy 성장 완료 이벤트             |
 | `crop_harvested`                        | `crop`, `area`, `crop_tier`, `revenue`, `research_points_gained`, `reward_type`, `harvest_source`, `is_first_crop_harvest`, `schema_version` | 수동·명시적 일괄 수확과 실지급 보상                |
 | `auto_harvest_summary`                  | `crop`, `area`, `crop_tier`, `harvested_count`, `replanted_count`, `total_gold`, `total_research_points`, `window_seconds`, `schema_version` | 60초 rolling window의 자동수확 집계                 |
+| `mutation_discovered`                   | `crop`, `area`, `crop_tier`, `mutation`, `harvest_source`, `pity_triggered`, `schema_version`                                             | 돌연변이 최초 발견과 천장 발동 여부                 |
 | `crop_of_the_day_harvested`             | `crop`, `multiplier`                                                                                                                         | 오늘의 작물 수확                                   |
 | `breed_unlocked`                        | `crop`                                                                                                                                       | 교배 해금                                          |
 
@@ -45,6 +46,8 @@ happy-farm **개별 콘텐츠(작물·구역·기능 퍼널)** 세부 지표의 
 - **ready** = `sum(crop_ready_summary.ready_count) + count(legacy crop_ready)`
 - **first_harvests** = `count(crop_harvested where is_first_crop_harvest)`
 - **cotd_harvests** = `count(crop_of_the_day_harvested)`
+- **mutation_discoveries** = `count(mutation_discovered)`
+- **mutation_pity_share** = `countif(mutation_discovered.pity_triggered=1) / mutation_discoveries`
 
 파생 지표:
 
@@ -65,6 +68,9 @@ summary이므로 별도 `harvest_source`가 아니다. schema v2 전 `crop_harve
 프레스티지, 초기화, 클라우드 복원 경계에서는 부분 window를 먼저 flush한다. 1.8.7 이하의
 `harvest_source=auto` raw 이벤트는 자동화 처리량과 초대형 경제값으로 지표를 왜곡하므로
 현재 집계에서 제외하고 summary만 합산한다. 숫자 파라미터는 JS 안전 범위로 clamp한다.
+돌연변이 최초 발견은 희소한 사용자 성과이므로 자동수확에서도 `mutation_discovered`를
+별도 1건 기록한다. `pity_triggered=1`은 프리즘 최초 발견 천장이 결과를 보장한 경우이며,
+발견 후 반복 프리즘 수확에는 이벤트와 천장 모두 적용하지 않는다.
 
 ### 후반 경제 숫자 해상도
 

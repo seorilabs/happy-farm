@@ -16,6 +16,9 @@ export type MutationKind = {
   baseChance: number;
   chancePerRankAboveMin: number;
   minRank: MasteryRankKey;
+  // Optional first-discovery ceiling. It counts eligible harvests completed
+  // after the minimum rank unlock and never changes repeat-drop probability.
+  firstDiscoveryPityHarvests?: number;
 };
 
 export const MASTERY_RANKS = balance.mastery.ranks as MasteryRank[];
@@ -123,6 +126,47 @@ export function getMutationChance(
   );
 }
 
+export type MutationDiscoveryPityStatus = {
+  mutationKey: MutationKey;
+  targetHarvests: number;
+  eligibleHarvests: number;
+  remainingHarvests: number;
+};
+
+// Returns progress only while this crop is rank-eligible and the configured
+// mutation remains undiscovered. Existing saves reuse harvestCounts, so a crop
+// already beyond the ceiling is guaranteed on its next eligible harvest.
+export function getMutationDiscoveryPityStatus(
+  gameState: GameState,
+  cropKey: CropKey,
+  kind: MutationKind
+): MutationDiscoveryPityStatus | null {
+  const targetHarvests = kind.firstDiscoveryPityHarvests;
+  if (typeof targetHarvests !== 'number' || !Number.isInteger(targetHarvests) || targetHarvests <= 0) {
+    return null;
+  }
+  if (isMutationDiscovered(gameState, cropKey, kind.key)) {
+    return null;
+  }
+
+  const minRankIndex = MASTERY_RANKS.findIndex((rank) => rank.key === kind.minRank);
+  const unlockThreshold = minRankIndex < 0 ? undefined : getMasteryThresholds(cropKey)[minRankIndex];
+  const mastery = getMasteryStatus(gameState, cropKey);
+  if (minRankIndex < 0 || unlockThreshold == null || mastery.rankIndex < minRankIndex) {
+    return null;
+  }
+
+  const eligibleHarvests = Math.max(0, mastery.harvestCount - unlockThreshold);
+  return {
+    mutationKey: kind.key,
+    targetHarvests,
+    eligibleHarvests,
+    // At one remaining, the current/next harvest is the guaranteed attempt.
+    // Clamp legacy saves above the new ceiling to one instead of showing zero.
+    remainingHarvests: Math.max(1, targetHarvests - eligibleHarvests),
+  };
+}
+
 // Consumes exactly one roll in [0, 1) so callers can replay the same roll
 // inside a React state updater and reach the same outcome.
 export function rollMutation(
@@ -133,6 +177,16 @@ export function rollMutation(
 ): MutationKind | null {
   if (!Number.isFinite(roll) || roll < 0) {
     return null;
+  }
+
+  // First-discovery protection is evaluated before the ordinary rarity roll.
+  // The caller has already consumed exactly one RNG value, so replay/order
+  // determinism stays unchanged even when the ceiling forces the result.
+  for (const kind of MUTATION_KINDS_BY_RARITY) {
+    const pity = getMutationDiscoveryPityStatus(gameState, cropKey, kind);
+    if (pity?.remainingHarvests === 1) {
+      return kind;
+    }
   }
 
   let cumulative = 0;

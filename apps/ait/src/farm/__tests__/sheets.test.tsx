@@ -27,6 +27,7 @@ import {
   getMasteryRankLabel,
   getMasteryThresholds,
   getMutationCollectionSummary,
+  getMutationDiscoveryPityStatus,
   getMutationLabel,
   getCropLabel,
   getChainIncome,
@@ -330,6 +331,40 @@ describe('CollectionSheet', () => {
         )
       );
     }
+  );
+
+  test.each(['ko-KR', 'en-US'] as const)(
+    '미발견 프리즘 행에 별빛열매 최초 발견 보장 진행도와 접근성 레이블을 표시한다 (%s) (#464)',
+    (locale) => {
+      const localeMessages = getFarmMessages(locale);
+      const prism = MUTATION_KINDS.find((kind) => kind.key === 'prism')!;
+      const prismRankIndex = MASTERY_RANKS.findIndex((rank) => rank.key === 'prism');
+      const unlockThreshold = getMasteryThresholds('starfruit')[prismRankIndex]!;
+      const harvestCount = unlockThreshold + 40;
+      const base = createInitialState();
+      const state: GameState = {
+        ...base,
+        harvestedCropKeys: ['starfruit'],
+        harvestCounts: { starfruit: harvestCount },
+      };
+      const pity = getMutationDiscoveryPityStatus(state, 'starfruit', prism)!;
+      const screen = render(
+        <CollectionSheet
+          gameState={state}
+          locale={locale}
+          messages={localeMessages}
+          collectionSummary={getCollectionSummary(state)}
+          onClaimReward={jest.fn()}
+        />
+      );
+
+      fireEvent.press(screen.getByTestId('collection-cell-starfruit'));
+
+      const row = screen.getByTestId('collection-mutation-kind-prism');
+      const expected = localeMessages.collectionMutationPityProgress(pity.remainingHarvests);
+      expect(within(row).getByText(expected)).toBeTruthy();
+      expect(row.props.accessibilityLabel).toContain(expected);
+    },
   );
 
   test('mutation badge row fits inside the crop card and the card clips overflow (UI 깨짐 회귀 방지)', () => {

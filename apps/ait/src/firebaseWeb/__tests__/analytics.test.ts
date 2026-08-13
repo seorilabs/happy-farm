@@ -218,6 +218,56 @@ describe('trackAppsInTossAnalyticsEvent — 큐잉/정규화/전송', () => {
     expect(parameterCount).toBeLessThanOrEqual(25);
   });
 
+  test('mutation_discovered는 AIT 공통 필드를 포함해 GA4 MP 25개 예산을 지킨다 (#464)', async () => {
+    const { appsInTossFarmAnalytics, initializeAppsInTossAnalytics } = loadAnalytics();
+
+    await initializeAppsInTossAnalytics();
+    jest.runOnlyPendingTimers();
+    mockFetch.mockClear();
+
+    appsInTossFarmAnalytics.trackMutationDiscovered({
+      cropKey: 'starfruit',
+      areaKey: 'legend_field',
+      cropTier: 8,
+      mutationKey: 'prism',
+      harvestSource: 'auto',
+      pityTriggered: true,
+      context: {
+        gold: 99_999,
+        gold_mantissa: 9.9999,
+        gold_exponent: 4,
+        gold_is_saturated: 0,
+        plot_count: 24,
+        speed_level: 4,
+        profit_level: 5,
+        unlocked_area_count: 7,
+        harvested_crop_count: 48,
+        session_elapsed_sec: 60,
+        prestige_level: 2,
+        prestige_stars: 7,
+        research_points: 100,
+        research_points_mantissa: 1,
+        research_points_exponent: 2,
+        research_points_is_saturated: 0,
+        lifetime_harvests: 5_000,
+      },
+    });
+    jest.runOnlyPendingTimers();
+
+    const event = parseBody(0).events.find((candidate) => candidate.name === 'mutation_discovered');
+    expect(event?.params).toMatchObject({
+      crop: 'starfruit',
+      mutation: 'prism',
+      harvest_source: 'auto',
+      pity_triggered: 1,
+      app_market: 'apps_in_toss',
+      session_id: expect.any(String),
+      engagement_time_msec: 100,
+    });
+    expect(event?.params).not.toHaveProperty('debug_mode');
+    expect(Object.keys(event?.params ?? {})).toHaveLength(25);
+  });
+
   test('보상형 광고 최대 payload도 production/dev 모두 GA4 MP 25개 제한을 지킨다', async () => {
     const { appsInTossFarmAnalytics, initializeAppsInTossAnalytics } = loadAnalytics();
 

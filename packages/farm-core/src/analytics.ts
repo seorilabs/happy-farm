@@ -5,6 +5,7 @@ import type {
   CollectionRewardKey,
   CropKey,
   GameState,
+  MutationKey,
   OnboardingStep,
   PrestigeSkillKey,
   ProductionRecipeKey,
@@ -404,6 +405,27 @@ export function createFarmAnalytics(emit: TrackGameEvent = noopTrackGameEvent) {
           context: params.context,
         });
       }
+    },
+
+    trackMutationDiscovered: (params: {
+      cropKey: CropKey;
+      areaKey: AreaKey;
+      cropTier: number;
+      mutationKey: MutationKey;
+      harvestSource: HarvestSource;
+      pityTriggered: boolean;
+      context: GameAnalyticsContext;
+    }) => {
+      track('mutation_discovered', {
+        crop: params.cropKey,
+        area: params.areaKey,
+        crop_tier: params.cropTier,
+        mutation: params.mutationKey,
+        harvest_source: params.harvestSource,
+        pity_triggered: params.pityTriggered,
+        schema_version: 1,
+        ...params.context,
+      });
     },
 
     trackFirstMeaningfulHarvest,
