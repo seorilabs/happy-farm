@@ -122,7 +122,11 @@ describe('normalizeCookingState', () => {
       totalCookCount: 1,
       totalSuccessCount: 0,
     });
-    expect(normalized.pot).toEqual({ ingredients: [TIER1_A, TIER1_B], startedAt: NOW });
+    expect(normalized.pot).toEqual({
+      ingredients: [TIER1_A, TIER1_B],
+      startedAt: NOW,
+      rewardedAdBoosted: false,
+    });
   });
 });
 
@@ -142,7 +146,11 @@ describe('cooking pot transitions', () => {
     const started = startCooking(state, [TIER1_A, TIER1_B], NOW);
     expect(started).not.toBeNull();
     expect(started!.production.inventory).toEqual({ [TIER1_A]: 1 });
-    expect(started!.cooking.pot).toEqual({ ingredients: [TIER1_A, TIER1_B], startedAt: NOW });
+    expect(started!.cooking.pot).toEqual({
+      ingredients: [TIER1_A, TIER1_B],
+      startedAt: NOW,
+      rewardedAdBoosted: false,
+    });
     // 진행 중에는 새 조리를 시작할 수 없다.
     expect(startCooking({ ...started!, production: { ...started!.production, inventory: { [TIER1_A]: 1, [TIER1_B]: 1 } } }, [TIER1_A, TIER1_B], NOW)).toBeNull();
   });
@@ -204,11 +212,13 @@ describe('cooking pot transitions', () => {
     expect(cancelCooking(createInitialState(), NOW)).toBeNull();
   });
 
-  test('finishCookingInstantly zeroes the remaining time (rewarded-ad reward path)', () => {
+  test('finishCookingInstantly zeroes the remaining time and persists a success guarantee', () => {
     const state = startCooking(stateWithInventory({ [TIER1_A]: 1, [TIER7_A]: 1 }), [TIER1_A, TIER7_A], NOW)!;
     const rushed = finishCookingInstantly(state, NOW + 1000);
     expect(rushed).not.toBeNull();
     expect(getCookingPotStatus(rushed!, NOW + 1000).phase).toBe('ready');
+    expect(getCookingPotStatus(rushed!, NOW + 1000).rewardedAdBoosted).toBe(true);
+    expect(normalizeCookingState(JSON.parse(JSON.stringify(rushed!.cooking)))).toEqual(rushed!.cooking);
     // 진행 중이 아니면 no-op.
     expect(finishCookingInstantly(createInitialState(), NOW)).toBeNull();
     expect(finishCookingInstantly(rushed!, NOW + 1001)).toBeNull();
@@ -274,6 +284,35 @@ describe('resolveCooking', () => {
     expect(resolution.state.production.inventory).toEqual({ [TIER1_A]: 1 });
     expect(resolution.state.cooking.totalCookCount).toBe(1);
     expect(resolution.state.cooking.totalSuccessCount).toBe(0);
+    expect(resolution.state.cooking.pot).toBeNull();
+  });
+
+  test('rewarded-ad boost guarantees success once without guaranteeing a new dish', () => {
+    const discoveredDish = COOKING_DISHES.find((dish) => dish.grade === 'common' && dish.tier <= 1)!;
+    const base = readyState([TIER1_A, TIER1_B]);
+    const alreadyDiscovered: GameState = {
+      ...base,
+      cooking: {
+        ...base.cooking,
+        discoveredDishes: { [discoveredDish.key]: 1 },
+        totalCookCount: 1,
+        totalSuccessCount: 1,
+      },
+    };
+    const rushed = finishCookingInstantly(alreadyDiscovered, NOW + 1000)!;
+    // 첫 roll 0.99는 일반 2재료 성공률 90%를 넘지만 광고 boost가 성공시킨다.
+    // 이후 roll 0은 common 첫 메뉴를 다시 뽑아 신규 메뉴는 보장하지 않음을 확인한다.
+    const rolls = [0.99, 0, 0];
+    let index = 0;
+    const resolution = resolveCooking(rushed, NOW + 1000, () => rolls[index++]!)!;
+
+    expect(resolution.result).toEqual({
+      outcome: 'success',
+      dishKey: discoveredDish.key,
+      grade: 'common',
+      isNew: false,
+      rewardedAdBoosted: true,
+    });
     expect(resolution.state.cooking.pot).toBeNull();
   });
 

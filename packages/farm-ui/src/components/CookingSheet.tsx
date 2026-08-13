@@ -10,7 +10,9 @@ import {
   canStartCooking,
   formatRemainingTime,
   getCookingCompendiumProgress,
+  getCookingDish,
   getCookingDishLabel,
+  getEligibleCookingGrades,
   getCookingPotStatus,
   getCookingSuccessRate,
   getCookingTimerMs,
@@ -107,6 +109,7 @@ export function CookingSheet({
   }
 
   const canCook = canStartCooking(gameState, selection);
+  const eligibleGrades = getEligibleCookingGrades(selection);
 
   return (
     <View testID="cooking-sheet">
@@ -114,6 +117,10 @@ export function CookingSheet({
         <Text style={styles.sectionTitle}>{messages.cookingPotSectionTitle}</Text>
         {potStatus.phase === 'idle' ? (
           <>
+            <View style={styles.rulesCard} testID="cooking-rules-card">
+              <Text style={styles.rulesTitle}>{messages.cookingRulesTitle}</Text>
+              <Text style={styles.rulesDescription}>{messages.cookingRulesDescription}</Text>
+            </View>
             <Text style={styles.subTitle}>
               {messages.cookingIngredientsTitle(COOKING_MIN_INGREDIENTS, COOKING_MAX_INGREDIENTS)}
             </Text>
@@ -144,11 +151,18 @@ export function CookingSheet({
               </View>
             )}
             {selection.length >= COOKING_MIN_INGREDIENTS ? (
-              <Text style={styles.infoLine} testID="cooking-preview-line">
-                {messages.cookingSuccessRateLabel(formatPercent(getCookingSuccessRate(selection.length)))}
-                {' · '}
-                {messages.cookingTimerLabel(formatRemainingTime(getCookingTimerMs(gameState, selection), locale))}
-              </Text>
+              <View style={styles.previewGroup}>
+                <Text style={styles.infoLine} testID="cooking-preview-line">
+                  {messages.cookingSuccessRateLabel(formatPercent(getCookingSuccessRate(selection.length)))}
+                  {' · '}
+                  {messages.cookingTimerLabel(formatRemainingTime(getCookingTimerMs(gameState, selection), locale))}
+                </Text>
+                <Text style={styles.eligibleGradesLine} testID="cooking-eligible-grades-line">
+                  {messages.cookingEligibleGradesLabel(
+                    eligibleGrades.map((grade) => getGradeLabel(grade.key, messages)).join(' · ')
+                  )}
+                </Text>
+              </View>
             ) : null}
             <SheetAction
               testID="cooking-start-action"
@@ -172,7 +186,11 @@ export function CookingSheet({
               {messages.cookingSuccessRateLabel(formatPercent(potStatus.successRate))}
             </Text>
             {adSupported ? (
-              <SheetAction testID="cooking-rush-ad-action" label={messages.cookingRushAdAction} onPress={onRushAd} />
+              <SheetAction
+                testID="cooking-rush-ad-action"
+                label={messages.cookingRushAdAction(formatRemainingTime(potStatus.remainingMs, locale))}
+                onPress={onRushAd}
+              />
             ) : null}
             <SheetAction
               testID="cooking-cancel-action"
@@ -188,7 +206,7 @@ export function CookingSheet({
               {potStatus.ingredients.map((cropKey) => CROPS[cropKey]?.icon ?? '').join(' ')}
             </Text>
             <Text style={styles.infoLine} testID="cooking-status-line">
-              {messages.cookingReadyLabel}
+              {potStatus.rewardedAdBoosted ? messages.cookingAdBoostReadyLabel : messages.cookingReadyLabel}
             </Text>
             <SheetAction testID="cooking-resolve-action" label={messages.cookingOpenAction} onPress={onResolve} />
           </>
@@ -271,6 +289,8 @@ function DishDetail({
 }) {
   const discovered = cookedCount > 0;
   const label = discovered ? getCookingDishLabel(dishKey, locale) : null;
+  const dish = getCookingDish(dishKey);
+  const grade = dish == null ? null : COOKING_GRADES.find((candidate) => candidate.key === dish.grade) ?? null;
   return (
     <View style={styles.dishDetail} testID="cooking-dish-detail">
       {label != null ? (
@@ -280,7 +300,18 @@ function DishDetail({
           <Text style={styles.dishDetailCount}>{messages.cookingDishCookedCountLabel(cookedCount)}</Text>
         </>
       ) : (
-        <Text style={styles.dishDetailDesc}>{messages.cookingUndiscoveredDishLabel}</Text>
+        <>
+          <Text style={styles.dishDetailName}>{messages.cookingUndiscoveredDishLabel}</Text>
+          {dish != null && grade != null ? (
+            <Text style={styles.dishDetailDesc} testID="cooking-undiscovered-dish-hint">
+              {messages.cookingUndiscoveredDishHint(
+                dish.tier,
+                grade.minIngredients,
+                COOKING_MAX_INGREDIENTS
+              )}
+            </Text>
+          ) : null}
+        </>
       )}
     </View>
   );
@@ -305,6 +336,22 @@ const styles = StyleSheet.create({
     color: '#475467',
     fontSize: 12,
     fontWeight: '700',
+  },
+  rulesCard: {
+    padding: 10,
+    borderRadius: 10,
+    backgroundColor: '#f2f8f3',
+    gap: 3,
+  },
+  rulesTitle: {
+    color: '#2f8747',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  rulesDescription: {
+    color: '#475467',
+    fontSize: 12,
+    lineHeight: 17,
   },
   emptyLabel: {
     color: '#667085',
@@ -341,6 +388,14 @@ const styles = StyleSheet.create({
     color: '#475467',
     fontSize: 13,
     fontWeight: '600',
+  },
+  previewGroup: {
+    gap: 3,
+  },
+  eligibleGradesLine: {
+    color: '#2f8747',
+    fontSize: 12,
+    fontWeight: '700',
   },
   potIngredientsLine: {
     fontSize: 24,

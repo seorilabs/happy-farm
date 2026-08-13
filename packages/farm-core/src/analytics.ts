@@ -999,6 +999,7 @@ export function createFarmAnalytics(emit: TrackGameEvent = noopTrackGameEvent) {
       isNew?: boolean;
       refundedCount?: number;
       discoveredCount: number;
+      rewardedAdBoosted: boolean;
       context: GameAnalyticsContext;
     }) => {
       track('cook_resolved', {
@@ -1008,7 +1009,8 @@ export function createFarmAnalytics(emit: TrackGameEvent = noopTrackGameEvent) {
         is_new: params.isNew ?? false,
         refunded_count: params.refundedCount ?? 0,
         discovered_count: params.discoveredCount,
-        schema_version: 1,
+        rewarded_ad_boosted: params.rewardedAdBoosted,
+        schema_version: 2,
         ...params.context,
       });
     },

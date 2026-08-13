@@ -65,6 +65,7 @@ import {
   recordAdWatchProgress,
   recordWeeklyAdWatchProgress,
   sortCropKeysForStrip,
+  startCooking,
   startCraft,
   type AreaKey,
   type CropKey,
@@ -1583,6 +1584,41 @@ describe('FarmGame UI flow', () => {
 
       expect(within(screen.getByTestId('production-tab-animals-badge')).getByText('1')).toBeTruthy();
       expect(within(screen.getByTestId('production-tab-workshop-badge')).getByText('1')).toBeTruthy();
+    });
+
+    test('요리 광고 완료는 남은 시간을 기록하고 성공 보장 상태를 저장한다 (#462)', async () => {
+      const base = completedState();
+      const stocked: GameState = {
+        ...base,
+        production: {
+          ...base.production,
+          inventory: { carrot: 1, wheat: 1 },
+        },
+      };
+      const cooking = startCooking(stocked, ['carrot', 'wheat'], NOW)!;
+      const rewardedAd = createReadyRewardedAd();
+      const track = jest.fn();
+      const screen = await renderGame(cooking, {
+        analytics: createFarmAnalytics(track),
+        useRewardedAd: () => rewardedAd,
+      });
+
+      fireEvent.press(screen.getByTestId('more-nav-button'));
+      fireEvent.press(screen.getByLabelText(messages.cookingButtonAccessibilityLabel));
+      fireEvent.press(screen.getByTestId('cooking-rush-ad-action'));
+
+      await waitFor(() => expect(rewardedAd.showAd).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(getLatestPersistedState().cooking.pot?.rewardedAdBoosted).toBe(true));
+      expect(screen.getByText(messages.cookingAdBoostReadyLabel)).toBeTruthy();
+      expect(track).toHaveBeenCalledWith(
+        'ad_reward_completed',
+        expect.objectContaining({
+          ad_type: 'cookingSpeedAd',
+          placement: 'cooking_speed_up',
+          reward_kind: 'cooking_speed_up',
+          reward_value: 180,
+        })
+      );
     });
 
     test('더보기 시트가 성격별 섹션 헤더로 그룹화되고 생산 통합 후 7개 진입점이 유지된다 (#270, #294, #369)', async () => {

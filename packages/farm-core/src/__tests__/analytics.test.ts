@@ -738,6 +738,34 @@ describe('farm analytics adapter contract', () => {
     }
   });
 
+  test('cook_resolved에 광고 성공 보장 적용 여부를 기록한다 (#462)', () => {
+    const track = jest.fn();
+    const analytics = createFarmAnalytics(track);
+    const context = getGameAnalyticsContext(createInitialState(), 0, 5_000);
+
+    analytics.trackCookResolved({
+      outcome: 'success',
+      dishKey: 'carrot_soup',
+      grade: 'common',
+      isNew: true,
+      discoveredCount: 1,
+      rewardedAdBoosted: true,
+      context,
+    });
+
+    expect(track).toHaveBeenCalledWith(
+      'cook_resolved',
+      expect.objectContaining({
+        outcome: 'success',
+        dish: 'carrot_soup',
+        grade: 'common',
+        is_new: true,
+        rewarded_ad_boosted: true,
+        schema_version: 2,
+      })
+    );
+  });
+
   test('research_node_batch_unlocked를 node·levels·비용·from/to_level과 함께 emit한다 (#438)', () => {
     const track = jest.fn();
     const analytics = createFarmAnalytics(track);

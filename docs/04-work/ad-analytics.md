@@ -25,7 +25,7 @@ happy-farm 광고 수익·노출 모니터링의 단일 기준 문서. 이벤트
 | `harvestBonusAd` | `harvest_bonus_sheet` | 수확 2배 부스트 시트 |
 | `offlineBonusAd` | `return_offline_bonus` | 복귀 오프라인 골드 2배 CTA |
 | `wheelBonusAd` | `wheel_bonus_spin` | 무료 룰렛 이후 보너스 스핀 CTA |
-| `cookingSpeedAd` | `cooking_speed_up` | 요리 즉시 완성 CTA |
+| `cookingSpeedAd` | `cooking_speed_up` | 남은 조리 즉시 완료 + 결과 성공 보장 CTA |
 
 전면(interstitial) 광고는 별도 트랙이다.
 - `interstitial_shown` — SDK가 실제 전면광고를 표시하고 종료된 뒤 기록한다.
@@ -71,6 +71,11 @@ fill 실패를 확정하지 않는다. AppsInToss 공식 안내에 따라 iOS에
 `wheelBonusAd`의 `reward_value`는 골드/RP/부스트 당첨량이 아니라 광고가 해금한
 보너스 스핀 수 `1`이다. 실제 당첨은 무료 스핀과 동일한 슬롯·보상 계산을 사용한다.
 impression/click/completed/failed의 `reward_kind`는 모두 `wheel_bonus_spin`으로 고정한다.
+
+`cookingSpeedAd`의 `reward_value`는 CTA를 누른 시점에 절약하는 남은 조리시간(초)이다.
+광고 완료 시 조리를 즉시 끝내고 해당 솥의 결과 성공을 보장한다. 특정 등급이나 신규
+메뉴는 보장하지 않는다. 결과의 광고 보장 적용 여부는 `cook_resolved.schema_version=2`의
+`rewarded_ad_boosted`로 분리한다.
 
 `shop_gold_reward`는 placement 시계열을 보존하기 위해 기존 이름을 유지한다.
 `reward_kind=gold`은 P0 골드, `reward_kind=festival_delivery_points`는 P1+
