@@ -514,6 +514,8 @@ export const esFarmMessages: FarmMessages = {
   collectionMasteryAchievedBadge: 'Alcanzado',
   collectionMutationCatalogTitle: 'Catálogo de Mutaciones',
   collectionMutationBenefit: (multiplier, rankName) => `Venta ×${multiplier} · Desbloqueo: ${rankName}`,
+  collectionMutationPityProgress: (remaining) =>
+    `Faltan ${remaining} cosecha${remaining === 1 ? '' : 's'} para el primer hallazgo garantizado`,
   collectionMutationDiscoveredBadge: 'Encontrada',
   collectionMutationUndiscoveredBadge: 'No encontrada',
   collectionFullTitle: 'Colección Completa',

@@ -60,6 +60,8 @@ import {
   getTitleLabel,
   getUpgradeBatchPurchase,
   getUpgradeCost,
+  MASTERY_RANKS,
+  MUTATION_KINDS,
   UPGRADE_BATCH_MAX_SCAN,
   UPGRADE_BATCH_STEP,
   recordAdWatchProgress,
@@ -165,6 +167,24 @@ function createReadyHarvestState(): GameState {
             startTime: NOW - 10_000,
             state: 2 as const,
           }
+        : plot
+    ),
+  };
+}
+
+function createPrismPityHarvestState(readyPlotCount = 1): GameState {
+  const base = createInitialState();
+  const prism = MUTATION_KINDS.find((kind) => kind.key === 'prism')!;
+  const prismRankIndex = MASTERY_RANKS.findIndex((rank) => rank.key === 'prism');
+  const unlockThreshold = getMasteryThresholds('starfruit')[prismRankIndex]!;
+  return {
+    ...base,
+    onboardingCompleted: true,
+    harvestedCropKeys: ['starfruit'],
+    harvestCounts: { starfruit: unlockThreshold + prism.firstDiscoveryPityHarvests! - 1 },
+    plots: base.plots.map((plot, index) =>
+      index < readyPlotCount
+        ? { ...plot, cropType: 'starfruit' as const, startTime: NOW - 100_000, state: 2 as const }
         : plot
     ),
   };
@@ -5562,6 +5582,90 @@ describe('FarmGame UI flow', () => {
       expect(onMutationFlash).toHaveBeenCalledWith(mutationKey);
       expect(screen.getByText(new RegExp(`${label} 변이 수확`))).toBeTruthy();
       expect(screen.getByTestId(`harvest-pop-${mutationKey}`)).toBeTruthy();
+    });
+
+    test('수동 수확의 프리즘 천장 발견을 저빈도 분석 이벤트로 기록한다 (#464)', async () => {
+      const track = jest.fn();
+      const randomSpy = jest.spyOn(Math, 'random').mockReturnValue(0.999);
+      try {
+        const screen = await renderGame(createPrismPityHarvestState(), {
+          analytics: createFarmAnalytics(track),
+        });
+        fireEvent.press(within(screen.getByTestId('plot-cell-0')).getByText('GET'));
+
+        await waitFor(() =>
+          expect(track).toHaveBeenCalledWith(
+            'mutation_discovered',
+            expect.objectContaining({
+              crop: 'starfruit',
+              mutation: 'prism',
+              harvest_source: 'manual',
+              pity_triggered: true,
+            })
+          )
+        );
+        expect(getLatestPersistedState().mutationsDiscovered.starfruit).toEqual(['prism']);
+      } finally {
+        randomSpy.mockRestore();
+      }
+    });
+
+    test('일괄 수확은 프리즘 천장 발견 이벤트를 한 번만 기록한다 (#464)', async () => {
+      const track = jest.fn();
+      const randomSpy = jest.spyOn(Math, 'random').mockReturnValue(0.999);
+      try {
+        const screen = await renderGame(createPrismPityHarvestState(2), {
+          analytics: createFarmAnalytics(track),
+        });
+        fireEvent.press(screen.getByLabelText('🧺 모두 수확 2'));
+
+        await waitFor(() => {
+          const events = track.mock.calls.filter(([name]) => name === 'mutation_discovered');
+          expect(events).toHaveLength(1);
+          expect(events[0]![1]).toEqual(
+            expect.objectContaining({
+              crop: 'starfruit',
+              mutation: 'prism',
+              harvest_source: 'batch',
+              pity_triggered: true,
+            })
+          );
+        });
+      } finally {
+        randomSpy.mockRestore();
+      }
+    });
+
+    test('자동 수확도 프리즘 천장 신규 발견만 개별 기록한다 (#464)', async () => {
+      const track = jest.fn();
+      const base = createPrismPityHarvestState();
+      const state: GameState = {
+        ...base,
+        research: { ...base.research, unlockedNodes: ['auto_harvest'] },
+        automationSettings: { autoHarvestEnabled: true, autoReplantEnabled: false, donationModeEnabled: false },
+      };
+      const randomSpy = jest.spyOn(Math, 'random').mockReturnValue(0.999);
+      try {
+        await renderGame(state, { analytics: createFarmAnalytics(track) });
+        await act(async () => {
+          jest.advanceTimersByTime(GAME_TICK_INTERVAL_MS + 50);
+        });
+
+        await waitFor(() =>
+          expect(track).toHaveBeenCalledWith(
+            'mutation_discovered',
+            expect.objectContaining({
+              crop: 'starfruit',
+              mutation: 'prism',
+              harvest_source: 'auto',
+              pity_triggered: true,
+            })
+          )
+        );
+        expect(track.mock.calls.filter(([name]) => name === 'crop_harvested')).toHaveLength(0);
+      } finally {
+        randomSpy.mockRestore();
+      }
     });
 
     test('unlocking a research node plays the unlock effect', async () => {

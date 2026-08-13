@@ -514,6 +514,7 @@ export const jaFarmMessages: FarmMessages = {
   collectionMasteryAchievedBadge: '達成',
   collectionMutationCatalogTitle: '突然変異図鑑',
   collectionMutationBenefit: (multiplier, rankName) => `販売 ×${multiplier} · 解放: ${rankName}`,
+  collectionMutationPityProgress: (remaining) => `初発見保証まであと${remaining}回収穫`,
   collectionMutationDiscoveredBadge: '発見',
   collectionMutationUndiscoveredBadge: '未発見',
   collectionFullTitle: '全図鑑',

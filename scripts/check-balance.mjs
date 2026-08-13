@@ -333,6 +333,12 @@ const kinds = balance.mutations?.kinds ?? [];
 for (const kind of kinds) {
   check(kind.sellMultiplier > 1, `변이 ${kind.key}: sellMultiplier는 1보다 커야 합니다.`);
   check(kind.baseChance > 0 && kind.baseChance < 1, `변이 ${kind.key}: baseChance는 0 초과 1 미만이어야 합니다.`);
+  if (kind.firstDiscoveryPityHarvests != null) {
+    check(
+      Number.isInteger(kind.firstDiscoveryPityHarvests) && kind.firstDiscoveryPityHarvests > 0,
+      `변이 ${kind.key}: firstDiscoveryPityHarvests는 양의 정수여야 합니다.`
+    );
+  }
 }
 // 배열 순서에 의존하지 않고 모든 쌍에 대해 "배수↑ ⟺ 확률↓" 관계만 강제한다.
 // 이렇게 하면 같은 단계의 변이가 공존하거나 변이가 추가/재정렬되어도, 더 큰

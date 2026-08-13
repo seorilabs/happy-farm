@@ -512,6 +512,7 @@ export const zhHansFarmMessages: FarmMessages = {
   collectionMasteryAchievedBadge: '已达成',
   collectionMutationCatalogTitle: '变异图鉴',
   collectionMutationBenefit: (multiplier, rankName) => `销售 ×${multiplier} · 解锁：${rankName}`,
+  collectionMutationPityProgress: (remaining) => `距首次发现保底还需收获${remaining}次`,
   collectionMutationDiscoveredBadge: '已发现',
   collectionMutationUndiscoveredBadge: '未发现',
   collectionFullTitle: '完整图鉴',

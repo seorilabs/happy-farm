@@ -139,6 +139,35 @@ describe('farm analytics adapter contract', () => {
     ]);
   });
 
+  test('mutation_discovered는 최초 발견 경로와 천장 발동 여부를 기록한다 (#464)', () => {
+    const track = jest.fn();
+    const analytics = createFarmAnalytics(track);
+    const context = getGameAnalyticsContext(createInitialState(), 0, 5_000);
+
+    analytics.trackMutationDiscovered({
+      cropKey: 'starfruit',
+      areaKey: 'legend_field',
+      cropTier: 8,
+      mutationKey: 'prism',
+      harvestSource: 'auto',
+      pityTriggered: true,
+      context,
+    });
+
+    expect(track).toHaveBeenCalledWith(
+      'mutation_discovered',
+      expect.objectContaining({
+        crop: 'starfruit',
+        area: 'legend_field',
+        crop_tier: 8,
+        mutation: 'prism',
+        harvest_source: 'auto',
+        pity_triggered: true,
+        schema_version: 1,
+      })
+    );
+  });
+
   test('경제·컨텍스트 숫자는 GA4 집계를 오염시키지 않도록 안전 범위로 제한한다 (#437)', () => {
     const track = jest.fn();
     const analytics = createFarmAnalytics(track);

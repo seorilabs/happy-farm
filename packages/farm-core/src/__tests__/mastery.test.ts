@@ -2,7 +2,7 @@
 
 import balance from '../balance.json';
 import { CROPS, createInitialState, migrateLoadedState } from '../constants';
-import { performHarvest } from '../harvest';
+import { performHarvest, performHarvestAll } from '../harvest';
 import {
   MASTERY_RANKS,
   MUTATION_KINDS,
@@ -13,6 +13,7 @@ import {
   getMasteryThresholds,
   getMutationChance,
   getMutationCollectionSummary,
+  getMutationDiscoveryPityStatus,
   normalizeHarvestCounts,
   normalizeMutationsDiscovered,
   rollMutation,
@@ -56,6 +57,12 @@ describe('mastery balance invariants', () => {
   test('rank bonuses grow with rank', () => {
     const sellBonuses = MASTERY_RANKS.map((rank) => rank.sellBonus);
     expect([...sellBonuses].sort((a, b) => a - b)).toEqual(sellBonuses);
+  });
+
+  test('configured first-discovery ceilings are positive whole harvest counts', () => {
+    const configured = MUTATION_KINDS.filter((kind) => kind.firstDiscoveryPityHarvests != null);
+    expect(configured.map((kind) => kind.key)).toEqual(['prism']);
+    expect(configured[0]!.firstDiscoveryPityHarvests).toBe(240);
   });
 });
 
@@ -173,6 +180,43 @@ describe('mutations', () => {
     // 프리즘 랭크에서 baseChance로 열린다(위 랭크가 없어 가산은 항상 0).
     expect(getMutationChance(prismState, 'carrot', prism)).toBeCloseTo(prism.baseChance);
   });
+
+  test('prism first-discovery protection exposes progress and guarantees the final eligible harvest (#464)', () => {
+    const prism = getMutationKind('prism');
+    const prismRankIndex = MASTERY_RANKS.findIndex((rank) => rank.key === 'prism');
+    const unlockThreshold = getMasteryThresholds('starfruit')[prismRankIndex]!;
+    const target = prism.firstDiscoveryPityHarvests!;
+
+    const locked = stateWithCounts({ starfruit: unlockThreshold - 1 });
+    expect(getMutationDiscoveryPityStatus(locked, 'starfruit', prism)).toBeNull();
+
+    const justUnlocked = stateWithCounts({ starfruit: unlockThreshold });
+    expect(getMutationDiscoveryPityStatus(justUnlocked, 'starfruit', prism)).toEqual({
+      mutationKey: 'prism',
+      targetHarvests: target,
+      eligibleHarvests: 0,
+      remainingHarvests: target,
+    });
+
+    const beforeCeiling = stateWithCounts({ starfruit: unlockThreshold + target - 2 });
+    expect(getMutationDiscoveryPityStatus(beforeCeiling, 'starfruit', prism)?.remainingHarvests).toBe(2);
+    expect(rollMutation(beforeCeiling, 'starfruit', 0.999)).toBeNull();
+
+    const atCeiling = stateWithCounts({ starfruit: unlockThreshold + target - 1 });
+    expect(getMutationDiscoveryPityStatus(atCeiling, 'starfruit', prism)?.remainingHarvests).toBe(1);
+    expect(rollMutation(atCeiling, 'starfruit', 0.999)?.key).toBe('prism');
+
+    const legacyPastCeiling = stateWithCounts({ starfruit: unlockThreshold + target + 500 });
+    expect(getMutationDiscoveryPityStatus(legacyPastCeiling, 'starfruit', prism)?.remainingHarvests).toBe(1);
+    expect(rollMutation(legacyPastCeiling, 'starfruit', 0.999)?.key).toBe('prism');
+
+    const discovered: GameState = {
+      ...legacyPastCeiling,
+      mutationsDiscovered: { starfruit: ['prism'] },
+    };
+    expect(getMutationDiscoveryPityStatus(discovered, 'starfruit', prism)).toBeNull();
+    expect(rollMutation(discovered, 'starfruit', 0.999)).toBeNull();
+  });
 });
 
 describe('performHarvest with mastery and mutations', () => {
@@ -230,6 +274,31 @@ describe('performHarvest with mastery and mutations', () => {
     const repeat = performHarvest({ ...outcome!.state, plots: state.plots }, 0, { now: 2000, rng: () => 0 });
     expect(repeat!.mutation?.key).toBe('golden');
     expect(repeat!.isNewMutationDiscovery).toBe(false);
+  });
+
+  test('a batch consumes prism first-discovery protection once and preserves plot order (#464)', () => {
+    const prism = getMutationKind('prism');
+    const prismRankIndex = MASTERY_RANKS.findIndex((rank) => rank.key === 'prism');
+    const unlockThreshold = getMasteryThresholds('starfruit')[prismRankIndex]!;
+    const base = createInitialState();
+    const state: GameState = {
+      ...base,
+      harvestedCropKeys: ['starfruit'],
+      harvestCounts: { starfruit: unlockThreshold + prism.firstDiscoveryPityHarvests! - 1 },
+      plots: base.plots.map((plot, index) =>
+        index < 2 ? { ...plot, cropType: 'starfruit' as const, startTime: 0, state: 2 as const } : plot
+      ),
+    };
+
+    const result = performHarvestAll(state, { now: 1000, rng: () => 0.999 });
+
+    expect(result.harvests).toHaveLength(2);
+    expect(result.harvests[0]!.outcome.mutation?.key).toBe('prism');
+    expect(result.harvests[0]!.outcome.mutationPityTriggered).toBe(true);
+    expect(result.harvests[0]!.outcome.isNewMutationDiscovery).toBe(true);
+    expect(result.harvests[1]!.outcome.mutation).toBeNull();
+    expect(result.harvests[1]!.outcome.mutationPityTriggered).toBe(false);
+    expect(result.state.mutationsDiscovered.starfruit).toEqual(['prism']);
   });
 
   test('the same roll replays to the same outcome (updater determinism)', () => {

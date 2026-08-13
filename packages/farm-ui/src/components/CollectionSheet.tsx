@@ -15,6 +15,7 @@ import {
   getMasteryRankLabel,
   getMasteryStatus,
   getMutationCollectionSummary,
+  getMutationDiscoveryPityStatus,
   getMutationLabel,
   isAreaUnlocked,
   isCropDiscovered,
@@ -151,6 +152,10 @@ function MutationDetails({
             kind.sellMultiplier.toLocaleString(locale),
             getMasteryRankLabel(kind.minRank, locale).name,
           );
+          const pity = getMutationDiscoveryPityStatus(gameState, cropKey, kind);
+          const pityLabel = pity == null
+            ? null
+            : messages.collectionMutationPityProgress(pity.remainingHarvests);
           const discoveryLabel = discovered
             ? messages.collectionMutationDiscoveredBadge
             : messages.collectionMutationUndiscoveredBadge;
@@ -160,7 +165,7 @@ function MutationDetails({
               testID={`collection-mutation-kind-${kind.key}`}
               style={[styles.detailRow, !discovered && styles.detailRowUndiscovered]}
               accessible
-              accessibilityLabel={`${mutationName}, ${benefit}, ${discoveryLabel}`}
+              accessibilityLabel={[mutationName, benefit, pityLabel, discoveryLabel].filter(Boolean).join(', ')}
             >
               <Text style={styles.detailRowIcon}>{kind.icon}</Text>
               <View style={styles.detailRowTextGroup}>
@@ -168,6 +173,11 @@ function MutationDetails({
                 <Text style={styles.detailRowDescription} numberOfLines={2}>
                   {benefit}
                 </Text>
+                {pityLabel != null ? (
+                  <Text style={styles.detailRowPity} testID={`collection-mutation-pity-${kind.key}`}>
+                    {pityLabel}
+                  </Text>
+                ) : null}
               </View>
               <Text style={[styles.detailBadge, discovered && styles.detailBadgeDiscovered]}>
                 {discoveryLabel}
@@ -463,6 +473,13 @@ export const styles = StyleSheet.create({
     fontSize: 10,
     lineHeight: 14,
     fontWeight: '700',
+  },
+  detailRowPity: {
+    marginTop: 2,
+    color: '#6f57d9',
+    fontSize: 10,
+    lineHeight: 14,
+    fontWeight: '800',
   },
   detailBadge: {
     flexShrink: 0,

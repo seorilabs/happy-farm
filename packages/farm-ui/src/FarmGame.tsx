@@ -569,6 +569,27 @@ function trackCropHarvestedEvent(
     isFirstCropHarvest: event.isNewCropDiscovery,
     context,
   });
+  trackMutationDiscoveredEvent(analytics, event, harvestSource, context);
+}
+
+function trackMutationDiscoveredEvent(
+  analytics: FarmAnalytics,
+  event: CropHarvestedGameEvent,
+  harvestSource: HarvestSource,
+  context: GameAnalyticsContext
+) {
+  if (!event.isNewMutationDiscovery || event.mutation == null) {
+    return;
+  }
+  analytics.trackMutationDiscovered({
+    cropKey: event.cropKey,
+    areaKey: event.areaKey,
+    cropTier: event.cropTier,
+    mutationKey: event.mutation.key,
+    harvestSource,
+    pityTriggered: event.mutationPityTriggered,
+    context,
+  });
 }
 
 export type FarmGameAdGroupIds = {
@@ -3259,6 +3280,8 @@ function FarmGameBody({
       const context = analyticsContext(automation.state);
       const summaryEntries = automation.harvests.map(({ plotIndex, outcome }) => {
         const crop = getCrop(outcome.cropKey);
+        const event = createCropHarvestedGameEvent(outcome, plotIndex);
+        trackMutationDiscoveredEvent(farmAnalytics, event, 'auto', context);
         const finalPlot = automation.state.plots[plotIndex];
         const replanted = finalPlot?.state === 1 && finalPlot.cropType === outcome.cropKey;
         if (outcome.isFirstMeaningfulHarvest) {

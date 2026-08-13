@@ -4,6 +4,7 @@ import { getCropModifiers, getCropPurchaseCost } from './modifiers';
 import {
   getCropHarvestCount,
   getMasteryStatus,
+  getMutationDiscoveryPityStatus,
   isMutationDiscovered,
   rollMutation,
   type MasteryRank,
@@ -32,6 +33,7 @@ export type HarvestOutcome = {
   isFirstMeaningfulHarvest: boolean;
   mutation: MutationKind | null;
   isNewMutationDiscovery: boolean;
+  mutationPityTriggered: boolean;
   newMasteryRank: MasteryRank | null;
 };
 
@@ -213,6 +215,9 @@ export function performHarvest(gameState: GameState, plotIndex: number, options:
   const crop = getKnownCrop(cropKey);
   const modifiers = getCropModifiers(gameState, cropKey, now);
   const mutation = rollMutation(gameState, cropKey, rng(), modifiers.mutationChanceMultiplier);
+  const mutationPityTriggered =
+    mutation != null &&
+    getMutationDiscoveryPityStatus(gameState, cropKey, mutation)?.remainingHarvests === 1;
   const mutationMultiplier = mutation?.sellMultiplier ?? 1;
   const saleValue = Math.floor(crop.sell * modifiers.profitMultiplier * modifiers.harvestMultiplier * mutationMultiplier);
 
@@ -297,6 +302,7 @@ export function performHarvest(gameState: GameState, plotIndex: number, options:
     isFirstMeaningfulHarvest,
     mutation,
     isNewMutationDiscovery,
+    mutationPityTriggered,
     newMasteryRank,
   };
 }

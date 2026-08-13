@@ -513,6 +513,7 @@ export const zhHantFarmMessages: FarmMessages = {
   collectionMasteryAchievedBadge: '已達成',
   collectionMutationCatalogTitle: '變異圖鑑',
   collectionMutationBenefit: (multiplier, rankName) => `販售 ×${multiplier} · 解鎖：${rankName}`,
+  collectionMutationPityProgress: (remaining) => `距首次發現保底還需收穫${remaining}次`,
   collectionMutationDiscoveredBadge: '已發現',
   collectionMutationUndiscoveredBadge: '未發現',
   collectionFullTitle: '完整圖鑑',

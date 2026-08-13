@@ -529,6 +529,7 @@ export const koFarmMessages = {
   collectionMutationCatalogTitle: '돌연변이 도감',
   collectionMutationBenefit: (multiplier: string, rankName: string) =>
     `판매 ×${multiplier} · 해금: ${rankName}`,
+  collectionMutationPityProgress: (remaining: number) => `첫 발견 보장까지 수확 ${remaining}회`,
   collectionMutationDiscoveredBadge: '발견',
   collectionMutationUndiscoveredBadge: '미발견',
   collectionFullTitle: '전체 도감',

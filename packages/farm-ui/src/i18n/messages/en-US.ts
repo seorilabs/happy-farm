@@ -514,6 +514,8 @@ export const enFarmMessages: FarmMessages = {
   collectionMasteryAchievedBadge: 'Reached',
   collectionMutationCatalogTitle: 'Mutation Catalog',
   collectionMutationBenefit: (multiplier, rankName) => `Sell ×${multiplier} · Unlock: ${rankName}`,
+  collectionMutationPityProgress: (remaining) =>
+    `${remaining} eligible harvest${remaining === 1 ? '' : 's'} until guaranteed first find`,
   collectionMutationDiscoveredBadge: 'Found',
   collectionMutationUndiscoveredBadge: 'Not found',
   collectionFullTitle: 'Full Collection',
