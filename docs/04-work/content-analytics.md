@@ -140,6 +140,27 @@ baseline을 잡는다. 수동 행동 전환을 볼 때는 `harvest_source=manual
 있으므로 도달률에는 이벤트 수가 아닌 고유 사용자를 쓴다. 제거 전 `selectSeed`와
 이전 배포의 `unlock`은 역사 데이터로만 보존하고 배포일/앱 버전으로 분리한다.
 
+#### GA4 권장 게임 이벤트 mirror
+
+제품 세부 분석의 진실원본은 기존 custom event이다. 다만 GA4 표준 게임 리포트와
+Seorilabs 게임 간 공통 축에서 가상 재화 소비·업적 해금을 비교할 수 있게, 상태 변경이
+성공한 행동만 다음 권장 이벤트를 함께 1건 발화한다.
+
+| custom event | recommended mirror | 주요 파라미터 |
+| --- | --- | --- |
+| `upgrade_purchased` | `spend_virtual_currency` | `virtual_currency_name=gold`, `value=cost`, `item_name=upgrade:{kind}` |
+| `upgrade_batch_purchased` | `spend_virtual_currency` | `virtual_currency_name=gold`, `value=total_cost`, `item_name=upgrade_batch:{kind}` |
+| `research_node_unlocked` | `spend_virtual_currency` | `virtual_currency_name=research_points`, `value=cost`, `item_name=research:{node_key}` |
+| `research_node_batch_unlocked` | `spend_virtual_currency` | `virtual_currency_name=research_points`, `value=total_cost`, `item_name=research:{node_key}` |
+| `research_scaling_bulk_unlocked` | `spend_virtual_currency` | `virtual_currency_name=research_points`, `value=total_cost`, `item_name=research_scaling_bulk` |
+| `achievement_claimed` | `unlock_achievement` | `achievement_id={track_key}:{tier}` |
+
+mirror는 GA4 권장 파라미터만 싣고 `GameAnalyticsContext`를 복제하지 않는다. AIT의
+`app_market`·버전·세션 envelope는 기존 Measurement Protocol adapter가 추가하므로
+이벤트당 25개 파라미터 예산을 지킨다. Platform dual sink에서는 기존 allowlist
+밖 이벤트를 드롭하므로 이 mirror는 GA4/Firebase 표준화 범위다. 집계 시 custom과
+mirror를 합산하지 않고, 앱 세부 분석은 custom event를 권위 기준으로 삼는다.
+
 ### 4) 수동 수확 콤보 baseline
 
 `harvest_combo_completed`는 **수동 단일 수확 streak가 끝날 때 1건** 발생한다. 단일

@@ -50,6 +50,7 @@ import {
   getAchievementThreshold,
   getPrestigeCost,
   getRegionArchetypeLabel,
+  getResearchNodeCost,
   getResearchNodeBatchPurchase,
   getScalingResearchBulkPurchase,
   getResearchNodeLabel,
@@ -5560,6 +5561,16 @@ describe('FarmGame UI flow', () => {
         [
           'research_node_unlocked',
           expect.objectContaining({ node_key: 'auto_harvest', next_level: 1 }),
+        ],
+      ]);
+      expect(track.mock.calls.filter(([name]) => name === 'spend_virtual_currency')).toEqual([
+        [
+          'spend_virtual_currency',
+          {
+            value: getResearchNodeCost(state, 'auto_harvest'),
+            virtual_currency_name: 'research_points',
+            item_name: 'research:auto_harvest',
+          },
         ],
       ]);
       expect(screen.queryByTestId('research-batch-ten-auto_harvest')).toBeNull();

@@ -54,6 +54,7 @@ import {
   getSkillCost,
   getRegionArchetypeLabel,
   getResearchNodeLabel,
+  getResearchNodeCost,
   getResearchNodeLevel,
   getResearchNodeBatchPurchase,
   getScalingResearchBulkPurchase,
@@ -3874,7 +3875,8 @@ function FarmGameBody({
   }
 
   function unlockResearchNode(nodeKey: ResearchNodeKey) {
-    if (!canUnlockNode(gameState, nodeKey)) {
+    const cost = getResearchNodeCost(gameState, nodeKey);
+    if (cost == null || !canUnlockNode(gameState, nodeKey)) {
       toast(messages.insufficientRpToast);
       return;
     }
@@ -3886,7 +3888,7 @@ function FarmGameBody({
     researchPurchaseGuardRef.current = { nodeKey, fromLevel: currentLevel };
     const nextLevel = currentLevel + 1;
     setGameState((state) => unlockNode(state, nodeKey) ?? state);
-    farmAnalytics.trackResearchNodeUnlocked({ nodeKey, nextLevel, context: analyticsContext() });
+    farmAnalytics.trackResearchNodeUnlocked({ nodeKey, cost, nextLevel, context: analyticsContext() });
     playSoundEffect('unlock');
     toast(messages.researchNodeUnlockedToast(getResearchNodeLabel(nodeKey, locale).name, nextLevel));
   }

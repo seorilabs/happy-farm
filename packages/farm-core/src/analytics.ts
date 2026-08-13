@@ -265,6 +265,18 @@ export function createFarmAnalytics(emit: TrackGameEvent = noopTrackGameEvent) {
     emit(name, applyEventContextParameterBudget(name, params));
   };
 
+  const trackVirtualCurrencySpend = (params: {
+    value: number;
+    currencyName: 'gold' | 'research_points';
+    itemName: string;
+  }) => {
+    track('spend_virtual_currency', {
+      value: Math.max(0, toSafeAnalyticsNumber(params.value)),
+      virtual_currency_name: params.currencyName,
+      item_name: params.itemName,
+    });
+  };
+
   const trackFirstMeaningfulHarvest = (params: {
     cropKey: CropKey;
     areaKey: AreaKey;
@@ -422,6 +434,11 @@ export function createFarmAnalytics(emit: TrackGameEvent = noopTrackGameEvent) {
         next_level: params.nextLevel,
         ...params.context,
       });
+      trackVirtualCurrencySpend({
+        value: params.cost,
+        currencyName: 'gold',
+        itemName: `upgrade:${params.kind}`,
+      });
     },
 
     // #426: 배치(일괄) 업그레이드 구매. 단일 구매(upgrade_purchased)와 구분되는 별도
@@ -442,6 +459,11 @@ export function createFarmAnalytics(emit: TrackGameEvent = noopTrackGameEvent) {
         from_level: params.fromLevel,
         to_level: params.toLevel,
         ...params.context,
+      });
+      trackVirtualCurrencySpend({
+        value: params.totalCost,
+        currencyName: 'gold',
+        itemName: `upgrade_batch:${params.kind}`,
       });
     },
 
@@ -680,6 +702,7 @@ export function createFarmAnalytics(emit: TrackGameEvent = noopTrackGameEvent) {
 
     trackResearchNodeUnlocked: (params: {
       nodeKey: ResearchNodeKey;
+      cost: number;
       nextLevel: number;
       context: GameAnalyticsContext;
     }) => {
@@ -690,6 +713,11 @@ export function createFarmAnalytics(emit: TrackGameEvent = noopTrackGameEvent) {
         next_level_exponent: nextLevelScientific.exponent,
         next_level_is_saturated: toAnalyticsSaturationFlag(params.nextLevel),
         ...params.context,
+      });
+      trackVirtualCurrencySpend({
+        value: params.cost,
+        currencyName: 'research_points',
+        itemName: `research:${params.nodeKey}`,
       });
     },
 
@@ -712,6 +740,11 @@ export function createFarmAnalytics(emit: TrackGameEvent = noopTrackGameEvent) {
         to_level: params.toLevel,
         ...params.context,
       });
+      trackVirtualCurrencySpend({
+        value: params.totalCost,
+        currencyName: 'research_points',
+        itemName: `research:${params.nodeKey}`,
+      });
     },
 
     trackResearchScalingBulkUnlocked: (params: {
@@ -729,6 +762,11 @@ export function createFarmAnalytics(emit: TrackGameEvent = noopTrackGameEvent) {
         total_cost_exponent: totalCostScientific.exponent,
         total_cost_is_saturated: toAnalyticsSaturationFlag(params.totalCost),
         ...params.context,
+      });
+      trackVirtualCurrencySpend({
+        value: params.totalCost,
+        currencyName: 'research_points',
+        itemName: 'research_scaling_bulk',
       });
     },
 
@@ -750,6 +788,9 @@ export function createFarmAnalytics(emit: TrackGameEvent = noopTrackGameEvent) {
         tier: params.tier,
         stars_awarded: params.starsAwarded,
         ...params.context,
+      });
+      track('unlock_achievement', {
+        achievement_id: `${params.trackKey}:${params.tier}`,
       });
     },
 

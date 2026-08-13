@@ -230,6 +230,7 @@ describe('farm analytics adapter contract', () => {
 
     analytics.trackResearchNodeUnlocked({
       nodeKey: 'market_studies',
+      cost: 1e50,
       nextLevel: 1e20,
       context,
     });
@@ -650,6 +651,91 @@ describe('farm analytics adapter contract', () => {
         gold: context.gold,
       })
     );
+  });
+
+  test('경제·업적 custom event와 GA4 권장 game event mirror를 행동당 1회 emit한다 (#453)', () => {
+    const track = jest.fn();
+    const analytics = createFarmAnalytics(track);
+    const context = getGameAnalyticsContext(createInitialState(), 0, 5_000);
+
+    analytics.trackUpgradePurchased({ kind: 'speed', cost: 100, nextLevel: 2, context });
+    analytics.trackUpgradeBatchPurchased({
+      kind: 'profit',
+      levelsPurchased: 10,
+      totalCost: 250,
+      fromLevel: 3,
+      toLevel: 13,
+      context,
+    });
+    analytics.trackResearchNodeUnlocked({
+      nodeKey: 'market_studies',
+      cost: 300,
+      nextLevel: 1,
+      context,
+    });
+    analytics.trackResearchNodeBatchUnlocked({
+      nodeKey: 'market_studies',
+      levelsPurchased: 10,
+      totalCost: 450,
+      fromLevel: 1,
+      toLevel: 11,
+      context,
+    });
+    analytics.trackResearchScalingBulkUnlocked({
+      nodeKeys: ['market_studies', 'growth_studies'],
+      levelsPurchased: 3,
+      totalCost: 500,
+      context,
+    });
+    analytics.trackAchievementClaimed({
+      trackKey: 'harvest_total',
+      tier: 3,
+      starsAwarded: 1,
+      context,
+    });
+
+    expect(track.mock.calls.filter(([name]) => name === 'spend_virtual_currency')).toEqual([
+      ['spend_virtual_currency', {
+        value: 100,
+        virtual_currency_name: 'gold',
+        item_name: 'upgrade:speed',
+      }],
+      ['spend_virtual_currency', {
+        value: 250,
+        virtual_currency_name: 'gold',
+        item_name: 'upgrade_batch:profit',
+      }],
+      ['spend_virtual_currency', {
+        value: 300,
+        virtual_currency_name: 'research_points',
+        item_name: 'research:market_studies',
+      }],
+      ['spend_virtual_currency', {
+        value: 450,
+        virtual_currency_name: 'research_points',
+        item_name: 'research:market_studies',
+      }],
+      ['spend_virtual_currency', {
+        value: 500,
+        virtual_currency_name: 'research_points',
+        item_name: 'research_scaling_bulk',
+      }],
+    ]);
+    expect(track.mock.calls.filter(([name]) => name === 'unlock_achievement')).toEqual([
+      ['unlock_achievement', { achievement_id: 'harvest_total:3' }],
+    ]);
+    expect(track.mock.calls).toHaveLength(12);
+
+    for (const customEvent of [
+      'upgrade_purchased',
+      'upgrade_batch_purchased',
+      'research_node_unlocked',
+      'research_node_batch_unlocked',
+      'research_scaling_bulk_unlocked',
+      'achievement_claimed',
+    ]) {
+      expect(track.mock.calls.filter(([name]) => name === customEvent)).toHaveLength(1);
+    }
   });
 
   test('research_node_batch_unlocked를 node·levels·비용·from/to_level과 함께 emit한다 (#438)', () => {
