@@ -21,6 +21,8 @@ const MAX_EVENTS_PER_REQUEST = 25;
 const MAX_PENDING_EVENTS = 200;
 // track 후 배치 전송까지의 debounce(ms). 연속 이벤트를 한 요청으로 묶어 네트워크를 아낀다.
 const DEFAULT_FLUSH_DELAY_MS = 1000;
+// GA4가 timestamp_micros를 받아주는 상한(72시간). 이보다 오래된 이벤트는 전송해도 버려진다.
+const MAX_EVENT_AGE_MS = 72 * 60 * 60 * 1000;
 
 export type Ga4McpInitResult =
   | { status: 'ready'; isNewClient: boolean }
@@ -61,7 +63,11 @@ export type Ga4MeasurementProtocolClient = {
   setCollectionEnabled: (enabled: boolean) => void;
 };
 
-type QueuedEvent = { name: string; params: Record<string, AnalyticsValue> };
+// occurredAtMs는 track이 불린 시각이다. MP는 이벤트에 timestamp_micros가 없으면 요청이
+// 도착한 시각을 전부에 찍는데, 이 클라이언트는 이벤트를 최대 1초 debounce로 묶어 보내므로
+// 한 배치의 이벤트가 GA4에서 전부 같은 시각이 된다. 그러면 이벤트 순서도, 화면 진입부터
+// 첫 조작까지의 간격도 GA4·BigQuery에서 복원할 수 없다. 발생 시각을 여기서 붙잡는다.
+type QueuedEvent = { name: string; params: Record<string, AnalyticsValue>; occurredAtMs: number };
 
 function defaultGenerateClientId(): string {
   const globalCrypto = (globalThis as { crypto?: { randomUUID?: () => string } }).crypto;
@@ -126,7 +132,18 @@ export function createGa4MeasurementProtocolClient(
         for (const [key, value] of Object.entries(event.params)) {
           params[key] = toScalar(value);
         }
-        return { name: event.name, params };
+        // GA4는 72시간보다 오래된 timestamp_micros를 가진 이벤트를 버린다. 큐가 오래
+        // 밀렸거나 기기 시계가 과거로 틀어진 경우까지 통째로 유실시키지 않도록, 한계에
+        // 걸리는 이벤트는 시각을 붙이지 않고 보낸다(서버 도착 시각으로 기록됨).
+        const ageMs = now() - event.occurredAtMs;
+        if (ageMs < 0 || ageMs >= MAX_EVENT_AGE_MS) {
+          return { name: event.name, params };
+        }
+        return {
+          name: event.name,
+          timestamp_micros: event.occurredAtMs * 1000,
+          params,
+        };
       }),
     });
   }
@@ -179,7 +196,7 @@ export function createGa4MeasurementProtocolClient(
       // 큐 상한 초과 시 가장 오래된 이벤트부터 폐기해 메모리 무한 증가를 막는다.
       pending.shift();
     }
-    pending.push({ name, params });
+    pending.push({ name, params, occurredAtMs: now() });
 
     if (!ready) {
       return;
