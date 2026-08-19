@@ -55,7 +55,8 @@ export function ensureAppsInTossPlatformSession(): Promise<boolean> {
     }
     const anonymousKey = await getAnonymousKey();
     if (anonymousKey == null || anonymousKey === 'ERROR') {
-      throw new Error(`getAnonymousKey가 키를 주지 않았다: ${String(anonymousKey)}`);
+      // 진단 문자열이라 locale catalog를 쓰지 않는다. 사용자에게 노출되지 않는다.
+      throw new Error(`getAnonymousKey returned no key: ${String(anonymousKey)}`);
     }
     const credential: Credential = { kind: 'anonymous', value: anonymousKey.hash };
     await appsInTossPlatform.signIn(credential);
