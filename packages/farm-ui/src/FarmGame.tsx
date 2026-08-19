@@ -1476,9 +1476,11 @@ function FarmGameBody({
     }
     finishOnboarding();
   }, [farmAnalytics, finishOnboarding]);
-  // Natural completion happens only after the first-harvest reward is
-  // explicitly confirmed. Distinct from skip so the funnel separates
-  // "finished" from "gave up".
+  // Completion happens at the first-harvest reward step, either because the
+  // player confirmed it or because the guide auto-dismissed after they left it
+  // idle. completionSource keeps those two apart so the funnel can still tell
+  // how many actually responded. Distinct from skip, which means "gave up"
+  // before finishing the loop.
   const completeOnboarding = useCallback(
     (completionSource: OnboardingCompletionSource = 'confirmed') => {
       if (onboardingStepRef.current !== 'reward' || onboardingFinishCommittedRef.current) {
