@@ -45,6 +45,7 @@ jest.mock('@seorilabs/platform-sdk', () => {
 
 import { PLATFORM_EVENT_ALLOWLIST, RELEASE_INFO } from '../../../../packages/farm-core/src';
 import {
+  ensureAppsInTossAdsSession,
   ensureAppsInTossPlatformSession,
   flushAppsInTossPlatformEvents,
   shutdownAppsInTossPlatformEvents,
@@ -112,6 +113,8 @@ describe('Platform 세션 부트스트랩', () => {
     mockPlatform?.signIn.mockResolvedValue(undefined);
     mockGetAnonymousKey.mockReset();
     mockGetAnonymousKey.mockResolvedValue({ hash: 'anonymous-hash', type: 'HASH' });
+    mockAppLogin.mockReset();
+    mockAppLogin.mockResolvedValue({ authorizationCode: 'transient-code', referrer: 'SANDBOX' });
     warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
   });
 
@@ -150,5 +153,29 @@ describe('Platform 세션 부트스트랩', () => {
 
     expect(mockPlatform?.signIn).not.toHaveBeenCalled();
     expect(warnSpy).toHaveBeenCalled();
+  });
+
+  test('세션 교환이 거절되면 false를 돌려주고 실패를 남긴다', async () => {
+    mockPlatform?.session.token.mockRejectedValue(new Error('no session'));
+    mockPlatform?.signIn.mockRejectedValue(new Error('platform rejected credential'));
+
+    await expect(ensureAppsInTossPlatformSession()).resolves.toBe(false);
+
+    expect(warnSpy).toHaveBeenCalled();
+  });
+
+  // 부팅 세션은 광고·결제가 쓰는 ait-login 경로를 건드리면 안 된다.
+  test('광고 세션은 그대로 ait-login 자격증명을 쓴다', async () => {
+    mockPlatform?.session.token.mockRejectedValue(new Error('no session'));
+
+    await expect(ensureAppsInTossAdsSession()).resolves.toBe(true);
+
+    expect(mockAppLogin).toHaveBeenCalledTimes(1);
+    expect(mockPlatform?.signIn).toHaveBeenCalledWith({
+      kind: 'ait-login',
+      value: 'transient-code',
+      referrer: 'SANDBOX',
+    });
+    expect(mockGetAnonymousKey).not.toHaveBeenCalled();
   });
 });
