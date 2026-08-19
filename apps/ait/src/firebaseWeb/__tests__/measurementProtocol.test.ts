@@ -20,7 +20,10 @@ function createMemoryStorage(initial: Record<string, string> = {}) {
   };
 }
 
-type SentBody = { client_id: string; events: Array<{ name: string; params: Record<string, unknown> }> };
+type SentBody = {
+  client_id: string;
+  events: Array<{ name: string; params: Record<string, unknown>; timestamp_micros?: number }>;
+};
 type Posted = { url: string; body: SentBody };
 
 function at<T>(items: T[], index: number): T {
@@ -196,5 +199,49 @@ describe('createGa4MeasurementProtocolClient — 큐잉/전송', () => {
     const params = at(at(posted, 0).body.events, 0).params;
     expect(params.is_first).toBe(1);
     expect(params.revenue).toBe(0);
+  });
+});
+
+describe('createGa4MeasurementProtocolClient — 이벤트 발생 시각', () => {
+  // 같은 배치로 묶여도 GA4에서 이벤트 순서와 간격을 복원할 수 있어야 한다.
+  test('배치로 묶인 이벤트도 각자의 발생 시각을 유지한다', async () => {
+    let clock = 1_700_000_000_000;
+    const { client, posted } = createHarness({ now: () => clock });
+    await client.initialize();
+
+    client.track('farm_main_screen');
+    clock += 2_500;
+    client.track('crop_harvested', { crop: 'carrot' });
+    client.flush();
+
+    const events = at(posted, 0).body.events;
+    expect(events).toHaveLength(2);
+    expect(at(events, 0).timestamp_micros).toBe(1_700_000_000_000 * 1000);
+    expect(at(events, 1).timestamp_micros).toBe(1_700_000_002_500 * 1000);
+  });
+
+  test('72시간을 넘긴 이벤트는 시각 없이 보내 유실을 막는다', async () => {
+    let clock = 1_700_000_000_000;
+    const { client, posted } = createHarness({ now: () => clock });
+    await client.initialize();
+
+    client.track('crop_planted', { crop: 'wheat' });
+    // GA4가 timestamp_micros를 거부하는 구간까지 큐가 밀린 상황.
+    clock += 73 * 60 * 60 * 1000;
+    client.flush();
+
+    expect(at(at(posted, 0).body.events, 0).timestamp_micros).toBeUndefined();
+  });
+
+  test('기기 시계가 미래로 틀어져도 시각 없이 보낸다', async () => {
+    let clock = 1_700_000_000_000;
+    const { client, posted } = createHarness({ now: () => clock });
+    await client.initialize();
+
+    client.track('crop_planted', { crop: 'wheat' });
+    clock -= 60_000;
+    client.flush();
+
+    expect(at(at(posted, 0).body.events, 0).timestamp_micros).toBeUndefined();
   });
 });
