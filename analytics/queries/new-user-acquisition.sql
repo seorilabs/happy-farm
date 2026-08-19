@@ -64,33 +64,53 @@ END;
 -- ----------------------------------------------------------------------------
 -- [B] Android 신규의 로보 테스트 허수 분리
 -- ----------------------------------------------------------------------------
--- unattributed_users가 릴리스일에 3의 배수로 튀면 사전 출시 보고서 실행이다.
+-- prelaunch_robo_users가 릴리스일에 3의 배수로 튀면 사전 출시 보고서 실행이다.
 -- 실제 유기적 설치만 보려면 real_users 열을 쓴다.
+--
+-- 신규 판정은 [A]와 같이 first_open으로 고정한다. 관측 첫날(MIN(event_date))로 잡으면
+-- 창 시작 이전에 설치한 기존 사용자가 창 첫날에 신규로 접히는 left-censoring이 생긴다.
+-- geo 판정은 first_open 행이 아니라 그 사용자의 창 내 전체 이벤트로 본다. 어느 이벤트에도
+-- 국가가 없어야 로보로 보므로, first_open에만 국가가 비어 있는 실사용자를 오분류하지 않는다.
 BEGIN
   DECLARE window_days INT64 DEFAULT 28;
 
   WITH
-  first_seen AS (
+  android_events AS (
     SELECT
       user_pseudo_id,
-      MIN(event_date) AS first_date,
-      MAX(IF(geo.country IS NULL OR geo.country = '', 1, 0)) AS unattributed,
-      ANY_VALUE(app_info.version) AS app_version
+      event_name,
+      event_date,
+      geo.country AS country,
+      app_info.version AS app_version
     FROM `happy-farm-tycoon.analytics_539626577.events_*`
     WHERE _TABLE_SUFFIX
         BETWEEN FORMAT_DATE('%Y%m%d', DATE_SUB(CURRENT_DATE(), INTERVAL window_days DAY))
             AND FORMAT_DATE('%Y%m%d', DATE_SUB(CURRENT_DATE(), INTERVAL 1 DAY))
       AND platform = 'ANDROID'
+  ),
+  installs AS (
+    SELECT user_pseudo_id, MIN(event_date) AS first_date
+    FROM android_events
+    WHERE event_name = 'first_open'
+    GROUP BY user_pseudo_id
+  ),
+  attribution AS (
+    SELECT
+      user_pseudo_id,
+      MAX(IF(country IS NOT NULL AND country != '', 1, 0)) AS has_geo,
+      ANY_VALUE(app_version) AS app_version
+    FROM android_events
     GROUP BY user_pseudo_id
   )
   SELECT
-    first_date,
-    SUM(1 - unattributed) AS real_users,
-    SUM(unattributed) AS prelaunch_robo_users,
-    STRING_AGG(DISTINCT app_version ORDER BY app_version) AS app_versions
-  FROM first_seen
-  GROUP BY first_date
-  ORDER BY first_date DESC;
+    i.first_date,
+    SUM(a.has_geo) AS real_users,
+    SUM(1 - a.has_geo) AS prelaunch_robo_users,
+    STRING_AGG(DISTINCT a.app_version ORDER BY a.app_version) AS app_versions
+  FROM installs i
+  JOIN attribution a USING (user_pseudo_id)
+  GROUP BY i.first_date
+  ORDER BY i.first_date DESC;
 END;
 
 
