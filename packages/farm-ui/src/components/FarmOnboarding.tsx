@@ -51,8 +51,8 @@ export function FarmOnboarding({
   const stepIndex = ONBOARDING_STEPS.indexOf(step);
   const [skipConfirmationStep, setSkipConfirmationStep] = useState<OnboardingStep | null>(null);
   const isSkipConfirmationOpen = skipConfirmationStep === step;
-  // Skip is limited to the action stage. Once the first harvest is complete,
-  // the explicit reward confirmation is the only way to finish the guide.
+  // Skip is limited to the action stage. The reward guide can finish through
+  // its main action, elapsed time, or the player's next real interaction.
   const canSkip = step === 'harvest';
   // "바로 시작"은 직접 파종을 안내하는 plant 단계에서만 제공한다(#274/#427).
   const canQuickStart = step === 'plant' && onQuickStart != null;
@@ -116,17 +116,6 @@ export function FarmOnboarding({
                 <Text style={styles.primaryButtonText}>{messages.onboardingQuickStart}</Text>
               </Pressable>
             ) : null}
-            {canConfirmReward ? (
-              <Pressable
-                testID="onboarding-reward-confirm"
-                accessibilityLabel={messages.onboardingRewardContinue}
-                hitSlop={8}
-                style={styles.primaryButton}
-                onPress={onRewardConfirm}
-              >
-                <Text style={styles.primaryButtonText}>{messages.onboardingRewardContinue}</Text>
-              </Pressable>
-            ) : null}
             {canSkip ? (
               <Pressable
                 testID="onboarding-skip"
@@ -140,6 +129,17 @@ export function FarmOnboarding({
             ) : null}
           </View>
         </View>
+        {canConfirmReward ? (
+          <Pressable
+            testID="onboarding-reward-confirm"
+            accessibilityLabel={messages.onboardingRewardContinue}
+            hitSlop={8}
+            style={[styles.primaryButton, styles.rewardPrimaryButton]}
+            onPress={onRewardConfirm}
+          >
+            <Text style={styles.primaryButtonText}>{messages.onboardingRewardContinue}</Text>
+          </Pressable>
+        ) : null}
         {isSkipConfirmationOpen ? (
           <View testID="onboarding-skip-confirm" style={styles.skipConfirmation}>
             <Text style={styles.skipConfirmationTitle}>{messages.onboardingSkipConfirmTitle}</Text>
@@ -230,6 +230,12 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
     borderRadius: 999,
     backgroundColor: '#2e9e52',
+  },
+  rewardPrimaryButton: {
+    alignSelf: 'stretch',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
   },
   primaryButtonText: {
     color: '#ffffff',

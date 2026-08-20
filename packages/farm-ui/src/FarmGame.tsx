@@ -347,12 +347,10 @@ export const UPGRADE_BURST_DURATION_MS = 720;
 // 온보딩 단계 진입 후 이만큼 무행동으로 머물면 onboarding_stall을 1회 발화해
 // 단계별 정체 구간을 계측한다(#274). selectSeed 69% 정체 진단용.
 export const ONBOARDING_STALL_MS = 15_000;
-// reward 단계는 첫 수확이 이미 끝난 뒤의 확인용 안내이고 탭이 보상을 주지도 않는다.
-// 그런데 계속하기를 누르는 것 말고는 빠져나갈 길이 없어, 안내가 화면에 계속 남고
-// onboarding_complete도 발생하지 않는 막다른 골목이 생겼다(AIT 신규 기준 reward 노출
-// 19명 중 10명이 15초 이상 무행동, 12명만 완료). 정체가 stall로 기록된 뒤 안내를
-// 자동으로 걷어 이 골목을 없앤다. ONBOARDING_STALL_MS보다 길어야 stall 신호가 남는다.
-export const ONBOARDING_REWARD_AUTO_DISMISS_MS = 20_000;
+// reward 단계는 첫 수확 보상이 이미 지급된 확인용 안내다. 확인 탭만 기다리면 카드가
+// 남아 실제 활성화를 완료로 기록하지 못하므로, 다음 조작이 없더라도 8초 뒤 걷는다.
+// reward 정체는 이 종료 시점보다 긴 15초 stall 대신 completion_source로 구분한다.
+export const ONBOARDING_REWARD_AUTO_DISMISS_MS = 8_000;
 const SHEET_DISMISS_DRAG_DISTANCE = 96;
 const SHEET_DISMISS_VELOCITY = 1.1;
 const SHEET_DISMISS_TRANSLATE_Y = 520;
@@ -1108,6 +1106,8 @@ function FarmGameBody({
   const bottomSafeInset = resolveBottomSafeInset(insets.bottom);
   const { width: windowWidth } = useWindowDimensions();
   const [activeSheet, setActiveSheet] = useState<ActiveSheet>(null);
+  const previousActiveSheetRef = useRef<ActiveSheet>(null);
+  const revealDeferredSheetAfterCloseRef = useRef(false);
   // #372 상점 시트 내부 활성 탭. 상점 진입 시 항상 첫 탭(확장)부터 보도록 초기화한다.
   const [shopTab, setShopTab] = useState<ShopTabKey>('expand');
   // #376 데일리 보너스는 열람 즉시 자동 수령되므로, 방금 지급된 streak·골드를
@@ -1455,14 +1455,16 @@ function FarmGameBody({
   // Finishes onboarding (shared by reward confirmation/skip). The persisted
   // step is cleared atomically with the completion flag, then any sheet that
   // waited behind the guide is surfaced.
-  const finishOnboarding = useCallback(() => {
+  const finishOnboarding = useCallback((shouldRevealDeferredSheet = true) => {
     setOnboardingStep(null);
     setGameState((state) =>
       state.onboardingCompleted && state.onboardingStep == null
         ? state
         : { ...state, onboardingCompleted: true, onboardingStep: null }
     );
-    revealDeferredOnboardingSheet();
+    if (shouldRevealDeferredSheet) {
+      revealDeferredOnboardingSheet();
+    }
   }, [revealDeferredOnboardingSheet]);
   // User-initiated skip: log which step they bailed on, then finish. Kept stable
   // by reading the step from a ref so the coachmark's onSkip prop is steady.
@@ -1482,13 +1484,11 @@ function FarmGameBody({
     }
     finishOnboarding();
   }, [farmAnalytics, finishOnboarding]);
-  // Completion happens at the first-harvest reward step, either because the
-  // player confirmed it or because the guide auto-dismissed after they left it
-  // idle. completionSource keeps those two apart so the funnel can still tell
-  // how many actually responded. Distinct from skip, which means "gave up"
-  // before finishing the loop.
+  // Completion happens at the first-harvest reward step through its main CTA,
+  // elapsed time, or the next successful interaction. Distinct from skip, which
+  // means "gave up" before finishing the loop.
   const completeOnboarding = useCallback(
-    (completionSource: OnboardingCompletionSource = 'confirmed') => {
+    (completionSource: OnboardingCompletionSource, shouldRevealDeferredSheet = true) => {
       if (onboardingStepRef.current !== 'reward' || onboardingFinishCommittedRef.current) {
         return;
       }
@@ -1497,7 +1497,7 @@ function FarmGameBody({
       if (buildContext != null) {
         farmAnalytics.trackOnboardingComplete({ completionSource, context: buildContext() });
       }
-      finishOnboarding();
+      finishOnboarding(shouldRevealDeferredSheet);
     },
     [farmAnalytics, finishOnboarding]
   );
@@ -1505,7 +1505,7 @@ function FarmGameBody({
   // Pressable의 onPress는 제스처 이벤트를 인자로 넘기므로 completionSource를 직접 고정한다.
   // 그냥 completeOnboarding을 넘기면 이벤트 객체가 completionSource 자리에 들어간다.
   const confirmOnboardingReward = useCallback(() => {
-    completeOnboarding('confirmed');
+    completeOnboarding('confirm');
   }, [completeOnboarding]);
 
   // reward 단계에 무행동으로 머무르면 안내를 자동으로 걷는다. 상세 근거는
@@ -1520,9 +1520,29 @@ function FarmGameBody({
     }, ONBOARDING_REWARD_AUTO_DISMISS_MS);
     return () => clearTimeout(timer);
   }, [onboardingStep, completeOnboarding]);
+  // Opening a real sheet means the player has moved on. Keep the sheet they
+  // chose in front; any deferred onboarding-time auto popup can surface after
+  // that sheet closes or a later onboarding completion.
+  useEffect(() => {
+    const previous = previousActiveSheetRef.current;
+    previousActiveSheetRef.current = activeSheet;
+    if (previous == null && activeSheet != null) {
+      completeOnboarding('interaction', false);
+    }
+  }, [activeSheet, completeOnboarding]);
   const closeSheet = useCallback(() => {
+    revealDeferredSheetAfterCloseRef.current =
+      onboardingStepRef.current == null && deferredOnboardingSheetRef.current != null;
     setActiveSheet(null);
   }, []);
+  useEffect(() => {
+    if (activeSheet != null || !revealDeferredSheetAfterCloseRef.current) {
+      return;
+    }
+    revealDeferredSheetAfterCloseRef.current = false;
+    const timer = setTimeout(revealDeferredOnboardingSheet, 0);
+    return () => clearTimeout(timer);
+  }, [activeSheet, revealDeferredOnboardingSheet]);
   const clearPlantPulse = useCallback((index: number) => {
     setPlantPulses((prev) => {
       if (prev[index] == null) {
@@ -1840,6 +1860,7 @@ function FarmGameBody({
 
       if (effect.type === 'cropPlanted') {
         const { event } = effect;
+        completeOnboarding('interaction');
         // Pop the fresh sprout in and give a light tap so planting feels as
         // tactile as harvesting. Manual path only, so auto-replant stays silent.
         plantPulseTokenRef.current += 1;
@@ -1856,6 +1877,7 @@ function FarmGameBody({
         // and on a no-op (drift cleared the plots) — the button can never stick.
         harvestAllInFlightRef.current = false;
         if (effect.harvestedCount > 0) {
+          completeOnboarding('interaction');
           // One floating "+gold" per harvested plot keeps the spatial reward;
           // the overlay self-caps concurrent pops, so a full grid stays cheap.
           // The HUD pulse, toast, sound, and haptic fire once for the whole
@@ -2165,6 +2187,7 @@ function FarmGameBody({
         continue;
       }
 
+      completeOnboarding('interaction');
       const { event } = effect;
       const context = analyticsContext();
       recordManualHarvestCombo(effect.now, event.goldGained, context);
@@ -2271,6 +2294,7 @@ function FarmGameBody({
     analyticsContext,
     audio,
     commandEffectVersion,
+    completeOnboarding,
     farmAnalytics,
     gameSettings.soundEffectsEnabled,
     getLocalizedCropName,

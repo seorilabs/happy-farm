@@ -122,7 +122,7 @@ baseline을 잡는다. 수동 행동 전환을 볼 때는 `harvest_source=manual
 
 | 퍼널(`funnel`) | 소스 이벤트 → step                                                                                                              | 지표                          |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- |
-| `onboarding`   | `onboarding_step_view`(step), `onboarding_skip`(skipped_step), `onboarding_stall`(step, nudge_fired), `onboarding_complete`(step=`complete`) | 단계별 view/skip/stall + 넛지 발화 + 완료 |
+| `onboarding`   | `onboarding_step_view`(step), `onboarding_skip`(skipped_step), `onboarding_stall`(step, nudge_fired), `onboarding_complete`(step=`complete`, completion_source) | 단계별 view/skip/stall + 넛지 발화 + 종료 원인별 완료 |
 | `prestige`     | `prestige`(step=`prestige`)                                                                                                     | 발생 수                       |
 | `research`     | `research_node_unlocked` (`node_key`, `next_level`, `next_level_exponent`, `next_level_is_saturated`) / `research_node_batch_unlocked` (`node_key`, `levels_purchased`, `from_level`, `to_level`, `total_cost`, `total_cost_exponent`, `total_cost_is_saturated`) / `research_scaling_bulk_unlocked` (`node_keys`, `node_count`, `levels_purchased`, `total_cost`, `total_cost_exponent`, `total_cost_is_saturated`) | 노드별 단일·배치 연구 구매와 스케일 연구 일괄 강화 |
 | `collection`   | `collection_reward_claimed`(step=reward_key)                                                                                    | 리워드별 수령 수              |
@@ -145,6 +145,8 @@ baseline을 잡는다. 수동 행동 전환을 볼 때는 `harvest_source=manual
 아닌 `onboarding_complete`로 집계한다. 재진입 시 저장된 단계가 다시 노출될 수
 있으므로 도달률에는 이벤트 수가 아닌 고유 사용자를 쓴다. 제거 전 `selectSeed`와
 이전 배포의 `unlock`은 역사 데이터로만 보존하고 배포일/앱 버전으로 분리한다.
+`onboarding_complete.completion_source`는 `confirm`, `auto`, `interaction` 중 하나이며,
+명시 확인과 시간 경과·후속 조작 종료를 분리해 완료율 해석에 사용한다.
 
 #### GA4 권장 게임 이벤트 mirror
 

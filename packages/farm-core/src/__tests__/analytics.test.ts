@@ -882,7 +882,7 @@ describe('farm analytics adapter contract', () => {
 
     analytics.trackGameStart(context);
     analytics.trackOnboardingStepView({ step: 'plant', stepIndex: 1, context });
-    analytics.trackOnboardingComplete({ completionSource: 'confirmed', context });
+    analytics.trackOnboardingComplete({ completionSource: 'confirm', context });
     analytics.trackSeedSelected('carrot', 'starter_field', true, context);
     analytics.trackCropPlanted('carrot', 'starter_field', 1, 10, context);
     analytics.trackCropHarvested({
@@ -972,7 +972,7 @@ describe('farm analytics adapter contract', () => {
       nudgeFired: true,
       context,
     });
-    analytics.trackOnboardingComplete({ completionSource: 'confirmed', context });
+    analytics.trackOnboardingComplete({ completionSource: 'interaction', context });
 
     expect(track).toHaveBeenCalledWith(
       'onboarding_step_view',
@@ -991,7 +991,10 @@ describe('farm analytics adapter contract', () => {
         nudge_fired: true,
       })
     );
-    expect(track).toHaveBeenCalledWith('onboarding_complete', expect.objectContaining({ gold: context.gold }));
+    expect(track).toHaveBeenCalledWith(
+      'onboarding_complete',
+      expect.objectContaining({ completion_source: 'interaction', gold: context.gold })
+    );
   });
 
   test('동물 퍼널 5개 이벤트를 exact payload로 emit하고 AIT 파라미터 예산을 지킨다 (#349)', () => {
