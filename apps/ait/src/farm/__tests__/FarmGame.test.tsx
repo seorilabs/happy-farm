@@ -3052,6 +3052,15 @@ describe('FarmGame UI flow', () => {
         'onboarding_complete',
         expect.objectContaining({ completion_source: 'interaction' })
       );
+
+      // SheetAction처럼 closeSheet를 거치지 않는 직접 닫기 경로도 온보딩 중 유예한
+      // 데일리 보너스를 잃지 않는다.
+      fireEvent.press(screen.getByText(messages.resetFarmAction));
+      fireEvent.press(screen.getByText(messages.resetKeepAction));
+      await act(async () => {
+        jest.advanceTimersByTime(0);
+      });
+      await waitFor(() => expect(screen.getByText(messages.sheetTitleDailyBonus)).toBeTruthy());
     });
 
     test('resets local and persisted onboarding progress together', async () => {

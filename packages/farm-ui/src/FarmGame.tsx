@@ -1107,7 +1107,6 @@ function FarmGameBody({
   const { width: windowWidth } = useWindowDimensions();
   const [activeSheet, setActiveSheet] = useState<ActiveSheet>(null);
   const previousActiveSheetRef = useRef<ActiveSheet>(null);
-  const revealDeferredSheetAfterCloseRef = useRef(false);
   // #372 상점 시트 내부 활성 탭. 상점 진입 시 항상 첫 탭(확장)부터 보도록 초기화한다.
   const [shopTab, setShopTab] = useState<ShopTabKey>('expand');
   // #376 데일리 보너스는 열람 즉시 자동 수령되므로, 방금 지급된 streak·골드를
@@ -1521,28 +1520,28 @@ function FarmGameBody({
     return () => clearTimeout(timer);
   }, [onboardingStep, completeOnboarding]);
   // Opening a real sheet means the player has moved on. Keep the sheet they
-  // chose in front; any deferred onboarding-time auto popup can surface after
-  // that sheet closes or a later onboarding completion.
+  // chose in front, then surface any deferred onboarding-time auto popup after
+  // every non-null → null close transition (including direct SheetAction paths).
   useEffect(() => {
     const previous = previousActiveSheetRef.current;
     previousActiveSheetRef.current = activeSheet;
     if (previous == null && activeSheet != null) {
       completeOnboarding('interaction', false);
     }
-  }, [activeSheet, completeOnboarding]);
+    if (
+      previous != null &&
+      activeSheet == null &&
+      onboardingStepRef.current == null &&
+      deferredOnboardingSheetRef.current != null
+    ) {
+      const timer = setTimeout(revealDeferredOnboardingSheet, 0);
+      return () => clearTimeout(timer);
+    }
+    return undefined;
+  }, [activeSheet, completeOnboarding, revealDeferredOnboardingSheet]);
   const closeSheet = useCallback(() => {
-    revealDeferredSheetAfterCloseRef.current =
-      onboardingStepRef.current == null && deferredOnboardingSheetRef.current != null;
     setActiveSheet(null);
   }, []);
-  useEffect(() => {
-    if (activeSheet != null || !revealDeferredSheetAfterCloseRef.current) {
-      return;
-    }
-    revealDeferredSheetAfterCloseRef.current = false;
-    const timer = setTimeout(revealDeferredOnboardingSheet, 0);
-    return () => clearTimeout(timer);
-  }, [activeSheet, revealDeferredOnboardingSheet]);
   const clearPlantPulse = useCallback((index: number) => {
     setPlantPulses((prev) => {
       if (prev[index] == null) {
