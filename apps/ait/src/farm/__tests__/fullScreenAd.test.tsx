@@ -4,7 +4,11 @@ import React from 'react';
 import { act, cleanup, render, waitFor } from '@testing-library/react-native';
 import { AppState, type AppStateStatus } from 'react-native';
 
-import type { RewardedAdController, RewardedAdShowResult } from '../../../../../packages/farm-core/src';
+import type {
+  PlatformAdsPolicy,
+  RewardedAdController,
+  RewardedAdShowResult,
+} from '../../../../../packages/farm-core/src';
 
 type FullScreenAdEvent = {
   type: 'loaded' | 'userEarnedReward' | 'dismissed' | 'failedToShow';
@@ -19,13 +23,10 @@ type FullScreenAdRequest = {
 const mockUnregisterLoad = jest.fn();
 const mockUnregisterShow = jest.fn();
 const mockEnsureAppsInTossAdsSession = jest.fn(async () => true);
-const mockAdsPolicy = jest.fn(async () => ({
-  appId: 'happy-farm',
+const mockAdsPolicy = jest.fn(async (): Promise<PlatformAdsPolicy> => ({
   appUsesAds: true,
   adsEnabled: true,
-  operatorSuppressed: false,
-  adFreeActive: false,
-  reasons: [],
+  disabledBy: [],
   checkedAt: '2026-08-09T00:00:00Z',
 }));
 const mockCreateClaim = jest.fn();
@@ -104,12 +105,9 @@ describe('useFullScreenAd', () => {
     mockEnsureAppsInTossAdsSession.mockResolvedValue(true);
     mockAdsPolicy.mockClear();
     mockAdsPolicy.mockResolvedValue({
-      appId: 'happy-farm',
       appUsesAds: true,
       adsEnabled: true,
-      operatorSuppressed: false,
-      adFreeActive: false,
-      reasons: [],
+      disabledBy: [],
       checkedAt: '2026-08-09T00:00:00Z',
     });
     mockCreateClaim.mockReset();
@@ -390,6 +388,110 @@ describe('useFullScreenAd', () => {
       error: 'platform_ads_unavailable',
     });
     expect(mockShowFullScreenAd).not.toHaveBeenCalled();
+  });
+
+  test('tracks a retryable Ads session failure separately and retries the next load', async () => {
+    mockEnsureAppsInTossAdsSession.mockResolvedValue(false);
+    const controllerRef: { current?: RewardedAdController } = {};
+
+    render(<Harness onController={(value) => { controllerRef.current = value; }} />);
+
+    await waitFor(() => expect(mockEnsureAppsInTossAdsSession).toHaveBeenCalledTimes(1));
+    expect(mockAdsPolicy).not.toHaveBeenCalled();
+    expect(mockLoadFullScreenAd).not.toHaveBeenCalled();
+    expect(mockTrack).toHaveBeenCalledWith('ad_load_result', expect.objectContaining({
+      attempt_stage: 'load',
+      result: 'session_blocked',
+      block_reason: 'ads_session_failed',
+      disabled_by: '',
+    }));
+
+    mockEnsureAppsInTossAdsSession.mockResolvedValue(true);
+    const reloadAd = controllerRef.current?.reloadAd;
+    if (reloadAd == null) throw new Error('reloadAd not provided');
+    let reloadPromise!: Promise<void>;
+    await act(async () => {
+      reloadPromise = Promise.resolve(reloadAd());
+      for (let index = 0; index < 10; index += 1) {
+        await Promise.resolve();
+      }
+    });
+    await waitFor(() => expect(latestLoadRequest).not.toBeNull());
+    await act(async () => {
+      latestLoadRequest?.onEvent({ type: 'loaded' });
+      await reloadPromise;
+    });
+    expect(mockAdsPolicy).toHaveBeenCalledTimes(1);
+    expect(mockLoadFullScreenAd).toHaveBeenCalledTimes(1);
+    expect(controllerRef.current?.isAdSupported).toBe(true);
+  });
+
+  test('tracks appUsesAds=false as a policy block', async () => {
+    mockAdsPolicy.mockResolvedValue({
+      appUsesAds: false,
+      adsEnabled: false,
+      disabledBy: [],
+      checkedAt: '2026-08-20T00:00:00Z',
+    });
+    const controllerRef: { current?: RewardedAdController } = {};
+
+    render(<Harness onController={(value) => { controllerRef.current = value; }} />);
+
+    await waitFor(() => expect(mockAdsPolicy).toHaveBeenCalledTimes(1));
+    expect(mockLoadFullScreenAd).not.toHaveBeenCalled();
+    expect(mockTrack).toHaveBeenCalledWith('ad_load_result', expect.objectContaining({
+      attempt_stage: 'load',
+      result: 'policy_blocked',
+      block_reason: 'app_uses_ads_false',
+      disabled_by: '',
+    }));
+    expect(controllerRef.current?.isAdSupported).toBe(false);
+  });
+
+  test('tracks adsEnabled=false with the original disabledBy policy values', async () => {
+    mockAdsPolicy.mockResolvedValue({
+      appUsesAds: true,
+      adsEnabled: false,
+      disabledBy: ['operator', 'ad_free'],
+      checkedAt: '2026-08-20T00:00:00Z',
+    });
+    const controllerRef: { current?: RewardedAdController } = {};
+
+    render(<Harness onController={(value) => { controllerRef.current = value; }} />);
+
+    await waitFor(() => expect(mockAdsPolicy).toHaveBeenCalledTimes(1));
+    expect(mockLoadFullScreenAd).not.toHaveBeenCalled();
+    expect(mockTrack).toHaveBeenCalledWith('ad_load_result', expect.objectContaining({
+      attempt_stage: 'load',
+      result: 'policy_blocked',
+      block_reason: 'ads_disabled',
+      disabled_by: 'operator,ad_free',
+    }));
+    expect(controllerRef.current?.isAdSupported).toBe(false);
+  });
+
+  test('tracks an Ads session block that occurs immediately before show', async () => {
+    const controllerRef: { current?: RewardedAdController } = {};
+    render(<Harness onController={(value) => { controllerRef.current = value; }} />);
+    await waitFor(() => expect(latestLoadRequest).not.toBeNull());
+    act(() => { latestLoadRequest?.onEvent({ type: 'loaded' }); });
+    await waitFor(() => expect(controllerRef.current?.isAdReady).toBe(true));
+    mockEnsureAppsInTossAdsSession.mockResolvedValue(false);
+
+    let result: RewardedAdShowResult | null = null;
+    await act(async () => {
+      result = await controllerRef.current!.showAd();
+    });
+
+    expect(result).toEqual({ status: 'unsupported' });
+
+    expect(mockShowFullScreenAd).not.toHaveBeenCalled();
+    expect(mockTrack).toHaveBeenCalledWith('ad_load_result', expect.objectContaining({
+      attempt_stage: 'show',
+      result: 'session_blocked',
+      block_reason: 'ads_session_failed',
+      disabled_by: '',
+    }));
   });
 
   test('confirms an AppsInToss rewarded claim as client_confirmed', async () => {
