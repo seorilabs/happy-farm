@@ -27,17 +27,21 @@ const untouchedPlantState = () => ({
   plots: createInitialState().plots.map((plot) => ({ ...plot, cropType: null, startTime: null, state: 0 as const })),
 });
 
-describe('shouldFireStallNudge — AC-3 (세션당 1회, plant 한정)', () => {
+describe('shouldFireStallNudge — AC-3 (단계별 세션당 1회, plant/harvest)', () => {
   it('plant에서 아직 발화 전이면 넛지를 발화한다', () => {
     expect(shouldFireStallNudge('plant', false)).toBe(true);
   });
 
-  it('이미 세션 내에서 발화했으면 다시 발화하지 않는다(1회 가드)', () => {
-    expect(shouldFireStallNudge('plant', true)).toBe(false);
+  it('harvest에서도 아직 발화 전이면 넛지를 발화한다', () => {
+    expect(shouldFireStallNudge('harvest', false)).toBe(true);
   });
 
-  it('plant가 아닌 단계에서는 발화하지 않는다', () => {
-    expect(shouldFireStallNudge('harvest', false)).toBe(false);
+  it('각 단계에서 이미 발화했으면 다시 발화하지 않는다(1회 가드)', () => {
+    expect(shouldFireStallNudge('plant', true)).toBe(false);
+    expect(shouldFireStallNudge('harvest', true)).toBe(false);
+  });
+
+  it('실제 조작 대상이 없는 단계에서는 발화하지 않는다', () => {
     expect(shouldFireStallNudge('reward', false)).toBe(false);
     expect(shouldFireStallNudge(null, false)).toBe(false);
   });
@@ -126,8 +130,8 @@ describe('AC-5 (온보딩 계약: 자동 파종 신규 상태 + plant 재개 케
     expect(state.onboardingCompleted).toBe(false);
     // 첫 밭이 자동 파종되어 온보딩은 harvest부터 시작한다.
     expect(resolveOnboardingStep(state, state.onboardingStep)).toBe('harvest');
-    // harvest 단계에서는 씨앗 stall 넛지가 발화하지 않는다.
-    expect(shouldFireStallNudge(resolveOnboardingStep(state, state.onboardingStep), false)).toBe(false);
+    // 신규 병목인 harvest에서도 밭 대상 stall 넛지가 발화한다.
+    expect(shouldFireStallNudge(resolveOnboardingStep(state, state.onboardingStep), false)).toBe(true);
   });
 
   it('아무것도 심지 않은 미완료 상태는 plant로 재개하고, 거기서 씨앗 유도가 성립한다', () => {

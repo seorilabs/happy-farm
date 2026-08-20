@@ -1232,10 +1232,16 @@ function FarmGameBody({
     seedNudgeBurstRef.current = new Animated.Value(0);
   }
   const seedNudgeBurst = seedNudgeBurstRef.current;
-  // Guards the stall-triggered nudge to at most once per session so a lingering
-  // new player isn't pulsed repeatedly (#362). Tap-triggered nudges are exempt —
-  // those are immediate feedback to an explicit action.
-  const stallNudgePlayedRef = useRef(false);
+  // One-shot emphasis burst over the ready plot grid when a new player stalls at
+  // harvest. The static onboarding plot ring stays visible underneath.
+  const plotNudgeBurstRef = useRef<Animated.Value | null>(null);
+  if (plotNudgeBurstRef.current == null) {
+    plotNudgeBurstRef.current = new Animated.Value(0);
+  }
+  const plotNudgeBurst = plotNudgeBurstRef.current;
+  // Guards each stall-triggered nudge to at most once per step and session. A
+  // resumed plant step and the following harvest step may each guide once.
+  const stallNudgePlayedStepsRef = useRef<Set<OnboardingStep>>(new Set());
   // Per-plot "just planted" tokens. Bumped only on a manual plant so the fresh
   // sprout bounces in (auto-replant and save-load stay silent). Keyed by index.
   const [plantPulses, setPlantPulses] = useState<Record<number, number>>({});
@@ -2490,6 +2496,25 @@ function FarmGameBody({
     ]).start();
   }, [seedNudgeBurst]);
 
+  const playPlotNudgeBurst = useCallback(() => {
+    plotNudgeBurst.stopAnimation();
+    plotNudgeBurst.setValue(0);
+    Animated.sequence([
+      Animated.timing(plotNudgeBurst, {
+        toValue: 1,
+        duration: 260,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
+      Animated.timing(plotNudgeBurst, {
+        toValue: 0,
+        duration: 620,
+        easing: Easing.inOut(Easing.quad),
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [plotNudgeBurst]);
+
   // Fire onboarding_stall once per step entry if the player lingers without
   // acting for ONBOARDING_STALL_MS (#274). The step changes the instant the
   // player acts, so this effect's cleanup clears the timer before it fires —
@@ -2506,21 +2531,40 @@ function FarmGameBody({
       if (buildContext == null) {
         return;
       }
+      const nudgeFired = shouldFireStallNudge(
+        step,
+        stallNudgePlayedStepsRef.current.has(step)
+      );
       farmAnalytics.trackOnboardingStall({
         step,
         stepIndex: ONBOARDING_STEPS.indexOf(step) + 1,
         dwellSeconds: Math.round(ONBOARDING_STALL_MS / 1000),
+        nudgeFired,
         context: buildContext(),
       });
-      // #362/#427: plant(직접 파종) 단계에서 정체가 감지되면(15초 무행동) 씨앗을 어디서
-      // 고르는지 능동적으로 한 번 짚어준다. 세션당 1회 가드는 shouldFireStallNudge로 판정.
-      if (shouldFireStallNudge(step, stallNudgePlayedRef.current)) {
-        stallNudgePlayedRef.current = true;
+      if (nudgeFired) {
+        stallNudgePlayedStepsRef.current.add(step);
+      }
+      // plant는 씨앗 스트립을, harvest는 이미 다 자란 밭을 직접 가리킨다. harvest는
+      // 같은 내용을 기존 locale catalog의 안내 토스트로도 한 번 더 읽힌다.
+      if (nudgeFired && step === 'plant') {
         playSeedNudgeBurst();
+      }
+      if (nudgeFired && step === 'harvest') {
+        playPlotNudgeBurst();
+        toast(messages.harvestHint);
       }
     }, ONBOARDING_STALL_MS);
     return () => clearTimeout(timer);
-  }, [onboardingStep, farmAnalytics, playSeedNudgeBurst]);
+  }, [onboardingStep, farmAnalytics, messages.harvestHint, playPlotNudgeBurst, playSeedNudgeBurst, toast]);
+
+  useEffect(() => {
+    if (onboardingStep === 'harvest') {
+      return;
+    }
+    plotNudgeBurst.stopAnimation();
+    plotNudgeBurst.setValue(0);
+  }, [onboardingStep, plotNudgeBurst]);
 
   // Loop a gentle pulse on the seed-strip emphasis ring while the plant step
   // is active so the place to tap reads louder for brand-new players; stop and
@@ -5780,6 +5824,21 @@ function FarmGameBody({
                 testID="onboarding-plot-highlight"
                 pointerEvents="none"
                 style={styles.onboardingPlotHighlight}
+              />
+            ) : null}
+            {onboardingStep === 'harvest' ? (
+              <Animated.View
+                testID="onboarding-plot-nudge-burst"
+                pointerEvents="none"
+                style={[
+                  styles.onboardingPlotNudgeRing,
+                  {
+                    opacity: plotNudgeBurst,
+                    transform: [
+                      { scale: plotNudgeBurst.interpolate({ inputRange: [0, 1], outputRange: [1, 1.04] }) },
+                    ],
+                  },
+                ]}
               />
             ) : null}
           </View>
