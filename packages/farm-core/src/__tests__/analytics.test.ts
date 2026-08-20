@@ -954,7 +954,7 @@ describe('farm analytics adapter contract', () => {
     expect(track).toHaveBeenCalledWith('notification_scheduled', { notification_kind: 'daily_bonus' });
   });
 
-  test('온보딩 퍼널 이벤트(step_view·skip·complete)를 계약대로 emit한다 (#159)', () => {
+  test('온보딩 퍼널 이벤트(step_view·skip·stall·complete)를 계약대로 emit한다 (#159/#466)', () => {
     const track = jest.fn();
     const analytics = createFarmAnalytics(track);
     const context = getGameAnalyticsContext(
@@ -965,6 +965,13 @@ describe('farm analytics adapter contract', () => {
 
     analytics.trackOnboardingStepView({ step: 'plant', stepIndex: 1, context });
     analytics.trackOnboardingSkip({ skippedStep: 'harvest', stepIndex: 3, context });
+    analytics.trackOnboardingStall({
+      step: 'harvest',
+      stepIndex: 2,
+      dwellSeconds: 15,
+      nudgeFired: true,
+      context,
+    });
     analytics.trackOnboardingComplete({ completionSource: 'confirmed', context });
 
     expect(track).toHaveBeenCalledWith(
@@ -974,6 +981,15 @@ describe('farm analytics adapter contract', () => {
     expect(track).toHaveBeenCalledWith(
       'onboarding_skip',
       expect.objectContaining({ skipped_step: 'harvest', step_index: 3, gold: context.gold })
+    );
+    expect(track).toHaveBeenCalledWith(
+      'onboarding_stall',
+      expect.objectContaining({
+        step: 'harvest',
+        step_index: 2,
+        dwell_seconds: 15,
+        nudge_fired: true,
+      })
     );
     expect(track).toHaveBeenCalledWith('onboarding_complete', expect.objectContaining({ gold: context.gold }));
   });

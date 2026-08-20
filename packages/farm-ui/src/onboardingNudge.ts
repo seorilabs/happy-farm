@@ -6,10 +6,10 @@ import { getCropPurchaseCost, getOnboardingCropKey } from '../../farm-core/src';
 // 렌더는 FarmGame이 담당하고, "언제/어디로 유도할지"의 판정만 여기서 분리해 헤드리스
 // 단위 테스트로 검증한다.
 
-// AC-3: stall 시각 넛지는 plant(직접 파종) 단계에서만, 그리고 세션당 1회만 발화한다.
-// alreadyFired는 세션 스코프의 1회 가드 상태.
+// AC-3: stall 시각 넛지는 실제 조작 대상이 있는 plant/harvest 단계에서, 각 단계마다
+// 세션당 1회만 발화한다. alreadyFired는 현재 단계의 세션 스코프 1회 가드 상태다.
 export function shouldFireStallNudge(step: OnboardingStep | null, alreadyFired: boolean): boolean {
-  return step === 'plant' && !alreadyFired;
+  return (step === 'plant' || step === 'harvest') && !alreadyFired;
 }
 
 // AC-2: 바로 시작 CTA는 대표 씨앗(quickStartCropKey)이 존재할 때 렌더된다.

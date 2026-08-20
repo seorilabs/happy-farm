@@ -3206,11 +3206,48 @@ describe('FarmGame UI flow', () => {
       await waitFor(() =>
         expect(track).toHaveBeenCalledWith(
           'onboarding_stall',
-          expect.objectContaining({ step: 'plant', step_index: 1, dwell_seconds: 15 })
+          expect.objectContaining({
+            step: 'plant',
+            step_index: 1,
+            dwell_seconds: 15,
+            nudge_fired: true,
+          })
         )
       );
       const stallCalls = track.mock.calls.filter(([event]) => event === 'onboarding_stall');
       expect(stallCalls).toHaveLength(1);
+    });
+
+    test('harvest 정체 시 밭을 강조하고 안내한 뒤 수확하면 즉시 정리한다 (#466)', async () => {
+      const track = jest.fn();
+      const screen = await renderOnboardingGame(null, { analytics: createFarmAnalytics(track) });
+
+      await waitFor(() => expect(screen.getByText(messages.onboardingHarvestTitle)).toBeTruthy());
+      expect(screen.getByTestId('onboarding-plot-nudge-burst')).toBeTruthy();
+      expect(screen.queryByTestId('onboarding-seed-nudge-burst')).toBeNull();
+      const hintCountBeforeStall = screen.queryAllByText(messages.harvestHint).length;
+
+      await act(async () => {
+        jest.advanceTimersByTime(ONBOARDING_STALL_MS);
+      });
+
+      await waitFor(() =>
+        expect(track).toHaveBeenCalledWith(
+          'onboarding_stall',
+          expect.objectContaining({
+            step: 'harvest',
+            step_index: 2,
+            dwell_seconds: 15,
+            nudge_fired: true,
+          })
+        )
+      );
+      expect(screen.queryAllByText(messages.harvestHint)).toHaveLength(hintCountBeforeStall + 1);
+      expect(track.mock.calls.filter(([event]) => event === 'onboarding_stall')).toHaveLength(1);
+
+      fireEvent.press(await screen.findByText('GET'));
+      await waitFor(() => expect(screen.getByText(messages.onboardingRewardTitle)).toBeTruthy());
+      expect(screen.queryByTestId('onboarding-plot-nudge-burst')).toBeNull();
     });
 
     test('does not stall the resumed plant step the player acts on before the threshold (#274)', async () => {

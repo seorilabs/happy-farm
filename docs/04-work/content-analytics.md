@@ -122,7 +122,7 @@ baseline을 잡는다. 수동 행동 전환을 볼 때는 `harvest_source=manual
 
 | 퍼널(`funnel`) | 소스 이벤트 → step                                                                                                              | 지표                          |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- |
-| `onboarding`   | `onboarding_step_view`(step), `onboarding_skip`(skipped_step), `onboarding_stall`(step), `onboarding_complete`(step=`complete`) | 단계별 view/skip/stall + 완료 |
+| `onboarding`   | `onboarding_step_view`(step), `onboarding_skip`(skipped_step), `onboarding_stall`(step, nudge_fired), `onboarding_complete`(step=`complete`) | 단계별 view/skip/stall + 넛지 발화 + 완료 |
 | `prestige`     | `prestige`(step=`prestige`)                                                                                                     | 발생 수                       |
 | `research`     | `research_node_unlocked` (`node_key`, `next_level`, `next_level_exponent`, `next_level_is_saturated`) / `research_node_batch_unlocked` (`node_key`, `levels_purchased`, `from_level`, `to_level`, `total_cost`, `total_cost_exponent`, `total_cost_is_saturated`) / `research_scaling_bulk_unlocked` (`node_keys`, `node_count`, `levels_purchased`, `total_cost`, `total_cost_exponent`, `total_cost_is_saturated`) | 노드별 단일·배치 연구 구매와 스케일 연구 일괄 강화 |
 | `collection`   | `collection_reward_claimed`(step=reward_key)                                                                                    | 리워드별 수령 수              |

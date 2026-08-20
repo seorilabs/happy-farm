@@ -1226,6 +1226,16 @@ export const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: '#a6dcb8',
   },
+  onboardingPlotNudgeRing: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    borderRadius: 14,
+    borderWidth: 3,
+    borderColor: '#ffb300',
+  },
   // Pulsing overlay ring stacked on the seed strip during the selectSeed step.
   // A louder green than the static highlight; its opacity is animated so it
   // breathes to catch a new player's eye. pointerEvents none keeps taps flowing

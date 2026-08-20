@@ -1287,12 +1287,14 @@ export function createFarmAnalytics(emit: TrackGameEvent = noopTrackGameEvent) {
       step: OnboardingStep;
       stepIndex: number;
       dwellSeconds: number;
+      nudgeFired: boolean;
       context: GameAnalyticsContext;
     }) => {
       track('onboarding_stall', {
         step: params.step,
         step_index: params.stepIndex,
         dwell_seconds: params.dwellSeconds,
+        nudge_fired: params.nudgeFired,
         ...params.context,
       });
     },
