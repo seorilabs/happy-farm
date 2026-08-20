@@ -107,6 +107,7 @@ const {
   FIRST_HARVEST_CELEBRATION_DURATION_MS,
   MUTATION_CELEBRATION_KEYS,
   ONBOARDING_STALL_MS,
+  ONBOARDING_REWARD_AUTO_DISMISS_MS,
   COMBO_GREAT_THRESHOLD,
   COMBO_LEGENDARY_THRESHOLD,
   UPGRADE_BURST_DURATION_MS,
@@ -2736,6 +2737,10 @@ describe('FarmGame UI flow', () => {
         );
       });
       expect(track.mock.calls.filter(([event]) => event === 'onboarding_complete')).toHaveLength(1);
+      expect(track).toHaveBeenCalledWith(
+        'onboarding_complete',
+        expect.objectContaining({ completion_source: 'confirmed' })
+      );
       // The deferred daily bonus becomes visible only after onboarding closes,
       // and the notification permission prompt waits behind that sheet.
       await waitFor(() => expect(screen.getByText(messages.sheetTitleDailyBonus)).toBeTruthy());
@@ -2925,6 +2930,71 @@ describe('FarmGame UI flow', () => {
       fireEvent.press(resumed.getByTestId('onboarding-reward-confirm'));
       await waitFor(() => expect(resumed.queryByTestId('onboarding-coachmark')).toBeNull());
       expect(getLatestPersistedState().gold).toBe(creditedGold);
+    });
+
+    // reward 단계는 계속하기 탭 말고는 빠져나갈 길이 없어 안내가 화면에 남고
+    // onboarding_complete도 발생하지 않는 막다른 골목이었다.
+    test('reward 단계를 방치하면 안내를 자동으로 걷고 자동 종료로 기록한다', async () => {
+      const track = jest.fn();
+      const screen = await renderOnboardingGame(createRewardStepState(), {
+        analytics: createFarmAnalytics(track),
+      });
+      await waitFor(() => expect(screen.getByText(messages.onboardingRewardTitle)).toBeTruthy());
+
+      await act(async () => {
+        jest.advanceTimersByTime(ONBOARDING_REWARD_AUTO_DISMISS_MS);
+      });
+
+      await waitFor(() => expect(screen.queryByTestId('onboarding-coachmark')).toBeNull());
+      expect(track).toHaveBeenCalledWith(
+        'onboarding_complete',
+        expect.objectContaining({ completion_source: 'auto' })
+      );
+      await waitFor(() => {
+        expect(getLatestPersistedState()).toEqual(
+          expect.objectContaining({ onboardingCompleted: true, onboardingStep: null })
+        );
+      });
+    });
+
+    // 자동 종료가 stall 신호를 지우면 정체 구간을 더 이상 진단할 수 없다.
+    test('자동 종료 전에 stall이 먼저 기록된다', async () => {
+      const track = jest.fn();
+      const screen = await renderOnboardingGame(createRewardStepState(), {
+        analytics: createFarmAnalytics(track),
+      });
+      await waitFor(() => expect(screen.getByText(messages.onboardingRewardTitle)).toBeTruthy());
+
+      await act(async () => {
+        jest.advanceTimersByTime(ONBOARDING_STALL_MS);
+      });
+
+      expect(track).toHaveBeenCalledWith(
+        'onboarding_stall',
+        expect.objectContaining({ step: 'reward' })
+      );
+      expect(track).not.toHaveBeenCalledWith('onboarding_complete', expect.anything());
+      expect(screen.getByTestId('onboarding-coachmark')).toBeTruthy();
+    });
+
+    test('계속하기를 누르면 자동 종료 타이머가 중복 발화하지 않는다', async () => {
+      const track = jest.fn();
+      const screen = await renderOnboardingGame(createRewardStepState(), {
+        analytics: createFarmAnalytics(track),
+      });
+      await waitFor(() => expect(screen.getByText(messages.onboardingRewardTitle)).toBeTruthy());
+
+      fireEvent.press(screen.getByTestId('onboarding-reward-confirm'));
+      await waitFor(() => expect(screen.queryByTestId('onboarding-coachmark')).toBeNull());
+      await act(async () => {
+        jest.advanceTimersByTime(ONBOARDING_REWARD_AUTO_DISMISS_MS * 2);
+      });
+
+      expect(track.mock.calls.filter(([event]) => event === 'onboarding_complete')).toHaveLength(1);
+      expect(track).toHaveBeenCalledWith(
+        'onboarding_complete',
+        expect.objectContaining({ completion_source: 'confirmed' })
+      );
     });
 
     test('resets local and persisted onboarding progress together', async () => {

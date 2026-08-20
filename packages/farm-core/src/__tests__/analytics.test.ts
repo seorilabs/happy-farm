@@ -882,7 +882,7 @@ describe('farm analytics adapter contract', () => {
 
     analytics.trackGameStart(context);
     analytics.trackOnboardingStepView({ step: 'plant', stepIndex: 1, context });
-    analytics.trackOnboardingComplete({ context });
+    analytics.trackOnboardingComplete({ completionSource: 'confirmed', context });
     analytics.trackSeedSelected('carrot', 'starter_field', true, context);
     analytics.trackCropPlanted('carrot', 'starter_field', 1, 10, context);
     analytics.trackCropHarvested({
@@ -965,7 +965,7 @@ describe('farm analytics adapter contract', () => {
 
     analytics.trackOnboardingStepView({ step: 'plant', stepIndex: 1, context });
     analytics.trackOnboardingSkip({ skippedStep: 'harvest', stepIndex: 3, context });
-    analytics.trackOnboardingComplete({ context });
+    analytics.trackOnboardingComplete({ completionSource: 'confirmed', context });
 
     expect(track).toHaveBeenCalledWith(
       'onboarding_step_view',
