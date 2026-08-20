@@ -50,7 +50,7 @@ happy-farm 활성화·리텐션 퍼널 측정의 단일 기준 문서. 이벤트
 | 자동수확 집계 | `auto_harvest_summary` | `crop`, `area`, `crop_tier`, `harvested_count`, `replanted_count`, `total_gold`, `total_research_points`, `window_seconds`, `schema_version`, context |
 | **첫 유의미 수확** | `first_meaningful_harvest` | `crop`, `area`, `crop_tier`, `revenue`, `research_points_gained`, `reward_type`, `harvest_source`, context |
 | 첫 수확 보상 확인 | `onboarding_step_view` (`step` = `reward`, `step_index` = 4) | `step`, `step_index`, context |
-| 온보딩 완료 | `onboarding_complete` | context |
+| 온보딩 완료 | `onboarding_complete` | `completion_source` (`confirm` / `auto` / `interaction`), context |
 | 데일리 보너스 노출 | `daily_bonus_opened` | `source` (`auto_popup` / `more` / `welcome_back`), context |
 | 데일리 보너스 수령 | `daily_bonus_claimed` | `streak`, `reward_value`, `is_first_claim`, `source`, context |
 | **첫 데일리 클레임** | `first_daily_bonus_claimed` | `streak`, `reward_value`, `source`, context |

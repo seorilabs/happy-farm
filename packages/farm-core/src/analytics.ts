@@ -77,8 +77,8 @@ export type HarvestComboEndReason = 'timeout' | 'background' | 'prestige' | 'res
 // harvests, so neither is a separate harvest source.
 export type HarvestSource = 'manual' | 'batch' | 'auto';
 export type HarvestRewardType = 'gold' | 'research_points';
-// 온보딩이 끝난 방식. confirmed=계속하기를 눌렀다, auto=무행동으로 안내가 자동으로 걷혔다.
-export type OnboardingCompletionSource = 'confirmed' | 'auto';
+// 온보딩이 끝난 방식. confirm=계속하기, auto=시간 경과, interaction=후속 실제 조작.
+export type OnboardingCompletionSource = 'confirm' | 'auto' | 'interaction';
 export type AnimalsScreenSource = 'more' | 'welcome_back';
 export type AnimalProduceCollectionMode = 'single' | 'collect_all';
 
@@ -1267,9 +1267,9 @@ export function createFarmAnalytics(emit: TrackGameEvent = noopTrackGameEvent) {
     // 온보딩 완료(첫 수확 뒤 reward 단계 종료).
     // 건너뛰기로 끝난 경우는 trackOnboardingSkip만 발생하고 이 이벤트는 발생하지 않는다.
     //
-    // completionSource로 '계속하기를 눌러 끝냈다'와 '안내만 자동으로 걷혔다'를 나눈다.
-    // reward 단계는 보상을 주지 않는 확인용 안내라 무행동이면 자동으로 닫는데, 이걸
-    // 구분하지 않으면 자동 종료가 완료율을 부풀려 실제 반응률이 보이지 않는다.
+    // completionSource로 명시 확인, 시간 경과, 후속 실제 조작을 나눈다. reward 단계는
+    // 보상을 주지 않는 확인용 안내라 자동으로 닫힐 수 있는데, 종료 원인을 구분하지 않으면
+    // 완료율이 실제 반응률처럼 보이는 계측 왜곡이 생긴다.
     trackOnboardingComplete: (params: {
       completionSource: OnboardingCompletionSource;
       context: GameAnalyticsContext;

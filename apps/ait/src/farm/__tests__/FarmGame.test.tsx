@@ -2728,6 +2728,9 @@ describe('FarmGame UI flow', () => {
 
       fireEvent.press(screen.getByTestId('first-harvest-overlay'));
       const rewardConfirm = screen.getByTestId('onboarding-reward-confirm');
+      expect(StyleSheet.flatten(rewardConfirm.props.style)).toEqual(
+        expect.objectContaining({ alignSelf: 'stretch', alignItems: 'center' })
+      );
       fireEvent.press(rewardConfirm);
       fireEvent.press(rewardConfirm);
       await waitFor(() => expect(screen.queryByTestId('onboarding-coachmark')).toBeNull());
@@ -2739,7 +2742,7 @@ describe('FarmGame UI flow', () => {
       expect(track.mock.calls.filter(([event]) => event === 'onboarding_complete')).toHaveLength(1);
       expect(track).toHaveBeenCalledWith(
         'onboarding_complete',
-        expect.objectContaining({ completion_source: 'confirmed' })
+        expect.objectContaining({ completion_source: 'confirm' })
       );
       // The deferred daily bonus becomes visible only after onboarding closes,
       // and the notification permission prompt waits behind that sheet.
@@ -2950,6 +2953,7 @@ describe('FarmGame UI flow', () => {
         'onboarding_complete',
         expect.objectContaining({ completion_source: 'auto' })
       );
+      expect(track.mock.calls.filter(([event]) => event === 'onboarding_complete')).toHaveLength(1);
       await waitFor(() => {
         expect(getLatestPersistedState()).toEqual(
           expect.objectContaining({ onboardingCompleted: true, onboardingStep: null })
@@ -2957,8 +2961,7 @@ describe('FarmGame UI flow', () => {
       });
     });
 
-    // 자동 종료가 stall 신호를 지우면 정체 구간을 더 이상 진단할 수 없다.
-    test('자동 종료 전에 stall이 먼저 기록된다', async () => {
+    test('reward 자동 종료는 15초 정체보다 먼저 끝나 잘못된 stall을 남기지 않는다', async () => {
       const track = jest.fn();
       const screen = await renderOnboardingGame(createRewardStepState(), {
         analytics: createFarmAnalytics(track),
@@ -2966,15 +2969,17 @@ describe('FarmGame UI flow', () => {
       await waitFor(() => expect(screen.getByText(messages.onboardingRewardTitle)).toBeTruthy());
 
       await act(async () => {
-        jest.advanceTimersByTime(ONBOARDING_STALL_MS);
+        jest.advanceTimersByTime(ONBOARDING_REWARD_AUTO_DISMISS_MS);
       });
 
-      expect(track).toHaveBeenCalledWith(
+      await waitFor(() => expect(screen.queryByTestId('onboarding-coachmark')).toBeNull());
+      await act(async () => {
+        jest.advanceTimersByTime(ONBOARDING_STALL_MS);
+      });
+      expect(track).not.toHaveBeenCalledWith(
         'onboarding_stall',
         expect.objectContaining({ step: 'reward' })
       );
-      expect(track).not.toHaveBeenCalledWith('onboarding_complete', expect.anything());
-      expect(screen.getByTestId('onboarding-coachmark')).toBeTruthy();
     });
 
     test('계속하기를 누르면 자동 종료 타이머가 중복 발화하지 않는다', async () => {
@@ -2993,8 +2998,69 @@ describe('FarmGame UI flow', () => {
       expect(track.mock.calls.filter(([event]) => event === 'onboarding_complete')).toHaveLength(1);
       expect(track).toHaveBeenCalledWith(
         'onboarding_complete',
-        expect.objectContaining({ completion_source: 'confirmed' })
+        expect.objectContaining({ completion_source: 'confirm' })
       );
+    });
+
+    test('reward 단계에서 실제 파종을 하면 interaction으로 즉시 한 번만 완료한다', async () => {
+      const track = jest.fn();
+      const rewardState = { ...createRewardStepState(), plots: createEmptyPlots() };
+      const screen = await renderOnboardingGame(rewardState, { analytics: createFarmAnalytics(track) });
+      await waitFor(() => expect(screen.getByText(messages.onboardingRewardTitle)).toBeTruthy());
+
+      fireEvent.press(screen.getByTestId('seed-tool-carrot'));
+      fireEvent.press(screen.getAllByText('빈 밭')[0]!);
+
+      await waitFor(() => expect(screen.queryByTestId('onboarding-coachmark')).toBeNull());
+      expect(track.mock.calls.filter(([event]) => event === 'onboarding_complete')).toHaveLength(1);
+      expect(track).toHaveBeenCalledWith(
+        'onboarding_complete',
+        expect.objectContaining({ completion_source: 'interaction' })
+      );
+    });
+
+    test('reward 단계에서 실제 수확을 하면 interaction으로 즉시 한 번만 완료한다', async () => {
+      const track = jest.fn();
+      const screen = await renderOnboardingGame(createRewardStepState(), {
+        analytics: createFarmAnalytics(track),
+      });
+      await waitFor(() => expect(screen.getByText(messages.onboardingRewardTitle)).toBeTruthy());
+
+      fireEvent.press(await screen.findByText('GET'));
+
+      await waitFor(() => expect(screen.queryByTestId('onboarding-coachmark')).toBeNull());
+      expect(track.mock.calls.filter(([event]) => event === 'onboarding_complete')).toHaveLength(1);
+      expect(track).toHaveBeenCalledWith(
+        'onboarding_complete',
+        expect.objectContaining({ completion_source: 'interaction' })
+      );
+    });
+
+    test('reward 단계에서 시트를 열면 선택한 시트를 유지하며 interaction으로 완료한다', async () => {
+      const track = jest.fn();
+      const screen = await renderOnboardingGame(createRewardStepState(), {
+        analytics: createFarmAnalytics(track),
+      });
+      await waitFor(() => expect(screen.getByText(messages.onboardingRewardTitle)).toBeTruthy());
+
+      fireEvent.press(screen.getByLabelText('설정'));
+
+      await waitFor(() => expect(screen.queryByTestId('onboarding-coachmark')).toBeNull());
+      expect(screen.getByText(messages.sheetTitleSettings)).toBeTruthy();
+      expect(track.mock.calls.filter(([event]) => event === 'onboarding_complete')).toHaveLength(1);
+      expect(track).toHaveBeenCalledWith(
+        'onboarding_complete',
+        expect.objectContaining({ completion_source: 'interaction' })
+      );
+
+      // SheetAction처럼 closeSheet를 거치지 않는 직접 닫기 경로도 온보딩 중 유예한
+      // 데일리 보너스를 잃지 않는다.
+      fireEvent.press(screen.getByText(messages.resetFarmAction));
+      fireEvent.press(screen.getByText(messages.resetKeepAction));
+      await act(async () => {
+        jest.advanceTimersByTime(0);
+      });
+      await waitFor(() => expect(screen.getByText(messages.sheetTitleDailyBonus)).toBeTruthy());
     });
 
     test('resets local and persisted onboarding progress together', async () => {
