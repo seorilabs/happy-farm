@@ -383,6 +383,8 @@ describe('useFullScreenAd', () => {
 
     await waitFor(() => expect(mockAdsPolicy).toHaveBeenCalledTimes(1));
     expect(mockLoadFullScreenAd).not.toHaveBeenCalled();
+    expect(controllerRef.current?.isAdSupported).toBe(true);
+    expect(controllerRef.current?.isAdReady).toBe(false);
     await expect(controllerRef.current?.showAd()).resolves.toEqual({
       status: 'failed',
       error: 'platform_ads_unavailable',

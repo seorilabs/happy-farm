@@ -247,6 +247,9 @@ export function useFullScreenAd(
           return false;
         }
       } catch (error) {
+        // A policy lookup error is transient, unlike an explicit policy denial.
+        // Keep reload kicks available while recording the failed attempt.
+        setIsSupported(true);
         updateLoaded(false);
         trackLoadResult('policy_error', startedAt, { error });
         return false;
