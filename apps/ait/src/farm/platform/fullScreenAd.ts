@@ -231,7 +231,11 @@ export function useFullScreenAd(
       try {
         const decision = await platformAdsAllowed();
         if (!decision.allowed) {
-          if (decision.blockReason !== 'ads_session_failed') {
+          if (decision.blockReason === 'ads_session_failed') {
+            // The SDK is supported and the failed Ads session is retryable. Keep
+            // the surface available so upper layers can issue their reload kick.
+            setIsSupported(true);
+          } else {
             setIsSupported(false);
           }
           updateLoaded(false);

@@ -405,6 +405,8 @@ describe('useFullScreenAd', () => {
       block_reason: 'ads_session_failed',
       disabled_by: '',
     }));
+    expect(controllerRef.current?.isAdSupported).toBe(true);
+    expect(controllerRef.current?.isAdReady).toBe(false);
 
     mockEnsureAppsInTossAdsSession.mockResolvedValue(true);
     const reloadAd = controllerRef.current?.reloadAd;
