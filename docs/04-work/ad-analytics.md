@@ -38,7 +38,10 @@ AppsInToss 광고 SDK 로드는 `ad_load_result`로 별도 진단한다.
 | 파라미터 | 의미 |
 |---|---|
 | `ad_format` | `rewarded` 또는 `interstitial` |
-| `result` | `loaded`, `sdk_error`, `timeout`, `unsupported`, `policy_blocked`, `policy_error` |
+| `result` | `loaded`, `sdk_error`, `timeout`, `unsupported`, `session_blocked`, `policy_blocked`, `policy_error` |
+| `attempt_stage` | 정책/세션 판정이 발생한 `load` 또는 `show` 단계 |
+| `block_reason` | `ads_session_failed`, `app_uses_ads_false`, `ads_disabled` 중 차단 원인 |
+| `disabled_by` | 정책이 반환한 비활성 주체 목록. 여러 값은 쉼표로 연결한다. |
 | `client_os` | Granite 런타임의 `ios` 또는 `android` |
 | `load_latency_ms` | 로드 또는 차단 결과까지 걸린 시간 |
 | `reason`, `failure_family` | 오류가 있을 때의 정규화된 원인과 집계 family |
@@ -47,6 +50,44 @@ AppsInToss 광고 SDK 로드는 `ad_load_result`로 별도 진단한다.
 남기는 `ad_reward_impression.ad_ready`는 SDK 로드가 끝나기 전일 수 있으므로 그 값만으로
 fill 실패를 확정하지 않는다. AppsInToss 공식 안내에 따라 iOS에서 `sdk_error`가 집중되면
 실기기 Toss 앱 버전과 ATT 허용 상태를 함께 확인한다.
+
+명시적 정책 거부(`app_uses_ads_false`, `ads_disabled`)는 AIT 앱 세션 동안 캐시한다.
+rewarded/interstitial 컨트롤러가 같은 결정을 공유하므로 차단 중에는 SDK load/show를 호출하지
+않고 `ad_load_result`도 세션당 최초 1건만 남긴다. `ads_session_failed`와 `policy_error`는
+일시 장애일 수 있어 캐시하지 않는다. background→active 복귀에서는 캐시를 비우고 정책을
+다시 평가한다.
+
+### 라이브 번들 진단 파라미터 도달 확인
+
+다음 쿼리에서 `policy_blocked_with_reason`이 0보다 크면 해당 `release_version`에
+`block_reason` 진단 계약이 도달한 것이다. `_TABLE_SUFFIX` 범위와 프로젝트·데이터셋은
+확인할 릴리스에 맞게 바꾼다. intraday 테이블은 완결일 비교에서 제외한다.
+
+```sql
+WITH load_results AS (
+  SELECT
+    COALESCE(
+      (SELECT value.string_value FROM UNNEST(event_params) WHERE key = 'release_version'),
+      app_info.version,
+      'unknown'
+    ) AS release_version,
+    (SELECT value.string_value FROM UNNEST(event_params) WHERE key = 'result') AS result,
+    (SELECT value.string_value FROM UNNEST(event_params) WHERE key = 'block_reason') AS block_reason
+  FROM `PROJECT.DATASET.events_*`
+  WHERE _TABLE_SUFFIX BETWEEN 'YYYYMMDD' AND 'YYYYMMDD'
+    AND platform = 'WEB'
+    AND event_name = 'ad_load_result'
+)
+SELECT
+  release_version,
+  COUNT(*) AS load_result_count,
+  COUNTIF(result = 'policy_blocked') AS policy_blocked_count,
+  COUNTIF(result = 'policy_blocked' AND block_reason IS NOT NULL)
+    AS policy_blocked_with_reason
+FROM load_results
+GROUP BY release_version
+ORDER BY release_version DESC;
+```
 
 ## 보상형 광고 퍼널 이벤트
 | 이벤트 | 발생 시점 | 주요 파라미터 |
