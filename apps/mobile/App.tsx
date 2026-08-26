@@ -18,8 +18,8 @@ import {
 } from './src/notifications/harvestNotifications';
 import { mobileCloudSave, mobileFarmPersistence } from './src/storage/farmPersistence';
 import {
-  flushMobilePlatformEvents,
   ensureMobilePlatformSession,
+  handleMobilePlatformAppStateChange,
   shutdownMobilePlatformEvents,
   startMobilePlatformEvents,
 } from './src/platformEvents';
@@ -40,9 +40,7 @@ function App() {
     void ensureMobilePlatformSession();
     startMobilePlatformEvents();
     const subscription = AppState.addEventListener('change', (nextState) => {
-      if (nextState !== 'active') {
-        void flushMobilePlatformEvents();
-      }
+      handleMobilePlatformAppStateChange(nextState);
     });
     return () => {
       subscription.remove();

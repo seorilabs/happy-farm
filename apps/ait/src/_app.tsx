@@ -9,7 +9,7 @@ import { initializeAppsInTossFirebaseServices } from './firebaseWeb';
 import { handleAppsInTossAnalyticsAppStateChange } from './firebaseWeb/analytics';
 import {
   ensureAppsInTossPlatformSession,
-  flushAppsInTossPlatformEvents,
+  handleAppsInTossPlatformAppStateChange,
   shutdownAppsInTossPlatformEvents,
   startAppsInTossPlatformEvents,
 } from './platformEvents';
@@ -30,9 +30,7 @@ function AppContainer({ children }: PropsWithChildren<InitialProps>) {
 
     const subscription = AppState.addEventListener('change', (nextState) => {
       handleAppsInTossAnalyticsAppStateChange(nextState);
-      if (nextState !== 'active') {
-        void flushAppsInTossPlatformEvents();
-      }
+      handleAppsInTossPlatformAppStateChange(nextState);
     });
     return () => {
       subscription.remove();

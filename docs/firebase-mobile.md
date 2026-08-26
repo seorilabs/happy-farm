@@ -51,8 +51,20 @@ Platform BigQuery에 두 번째로 전송합니다. `ad_reward_impression`, 작�
 - AIT context: `platform=ait`, 릴리스 버전, 감지 locale
 - Mobile context: 실제 `android|ios`, 릴리스 버전, 감지 locale
 - 전송하지 않는 값: Firebase UID, GA4 client ID, Platform token, 저장 데이터
-- 수명주기: 앱 시작 시 SDK start, background·unmount 시 best-effort flush
+- 수명주기: 앱 시작 시 SDK start, background 시 Presence stop과 best-effort flush,
+  foreground 시 Presence start/resume, unmount 시 SDK shutdown
 - 장애 격리: Platform 네트워크 실패는 게임과 기존 GA4 sink에 전파하지 않음
+
+SDK `0.4.0`부터 제공하는 Presence heartbeat는 AIT와 Mobile 조합 지점에
+`presenceEnabled=false`로 고정해 두었습니다. 비활성 상태에서는 token과 Edge 요청을
+모두 0건으로 유지합니다. context는 stable `appId=happy-farm`, 실제 platform, 릴리스 버전만
+사용하며 사용자 ID, 광고 ID, 원시 session ID, locale을 포함하지 않습니다. 이후 opt-in할 때도
+SDK의 token/heartbeat 경로만 사용하고, Edge 요청은 2초 timeout과 fail-open 동작을 유지합니다.
+앱에는 heartbeat retry queue, outbox, 별도 HTTP·UDP·BigQuery fallback을 두지 않습니다.
+
+Presence 활성화는 Platform #78의 Edge health·TLS 확인, Backoffice #148의 registry/regsync,
+대상 앱 `features.presence=true`, 릴리스 후보 검증과 live readback이 끝난 뒤 별도 변경으로
+진행합니다. SDK 탑재만으로 운영 동접 수집이 시작되거나 배포된 것으로 보지 않습니다.
 
 Platform SDK package는 private GitHub Packages이므로 로컬과 CI 설치에 `read:packages`
 인증이 필요합니다. 토큰은 `.npmrc`, 소스, 앱 번들에 저장하지 않습니다. 긴급 중단은

@@ -151,7 +151,7 @@ jest.mock('react-native-safe-area-context', () => ({
 
 jest.mock('../src/platformEvents', () => ({
   ensureMobilePlatformSession: jest.fn(() => Promise.resolve(false)),
-  flushMobilePlatformEvents: jest.fn(() => Promise.resolve()),
+  handleMobilePlatformAppStateChange: jest.fn(),
   mobilePlatformAds: { policy: jest.fn(), createClaim: jest.fn(), claim: jest.fn(), ack: jest.fn() },
   mobilePlatformIap: { listEntitlements: jest.fn(), verifyPurchase: jest.fn(), accountReferences: jest.fn() },
   shutdownMobilePlatformEvents: jest.fn(() => Promise.resolve()),
