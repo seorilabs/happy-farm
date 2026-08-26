@@ -1157,6 +1157,43 @@ describe('FarmGame UI flow', () => {
       expect(screen.queryByTestId('fertilize-all-button')).toBeNull();
     });
 
+    test('수확·재심기·비료 일괄 액션 3개를 하나의 행에 유지한다', async () => {
+      const base = createInitialState();
+      const state: GameState = {
+        ...base,
+        onboardingCompleted: true,
+        gold: 100_000,
+        plots: base.plots.map((plot, index) => {
+          if (index < 2) {
+            return { ...plot, cropType: 'carrot' as const, startTime: NOW, state: 2 as const };
+          }
+          if (index < 4) {
+            return { ...plot, cropType: 'carrot' as const, startTime: NOW, state: 1 as const };
+          }
+          return plot;
+        }),
+      };
+
+      const screen = await renderGame(state);
+      await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+
+      const actionRow = screen.getByTestId('farm-batch-action-row');
+      const actions = within(actionRow);
+      const harvestButton = actions.getByLabelText(getFarmMessages(DEFAULT_LOCALE).harvestAllButton(2));
+      const replantButton = actions.getByTestId('harvest-replant-button');
+      const fertilizerButton = actions.getByTestId('fertilize-all-button');
+
+      expect(screen.getAllByTestId('farm-batch-action-row')).toHaveLength(1);
+      expect(StyleSheet.flatten(actionRow.props.style)).toEqual(
+        expect.objectContaining({ flexDirection: 'row', flexWrap: 'nowrap' })
+      );
+      for (const button of [harvestButton, replantButton, fertilizerButton]) {
+        expect(StyleSheet.flatten(button.props.style)).toEqual(
+          expect.objectContaining({ flex: 1, minWidth: 0 })
+        );
+      }
+    });
+
     test('한 번 탭만으로는 실행되지 않는다(확인 게이트)', async () => {
       const state = createMultiGrowingState(100_000, 3);
       const screen = await renderGame(state);

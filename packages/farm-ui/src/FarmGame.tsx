@@ -3299,6 +3299,18 @@ function FarmGameBody({
     () => previewFertilizeAll(gameState, tickNowMsRef.current),
     [gameState, tick]
   );
+  const showHarvestBatchActions = readyPlotCount >= HARVEST_ALL_MIN_COUNT;
+  const showPlantAllAction =
+    !showHarvestBatchActions &&
+    selectedTool !== 'harvest' &&
+    onboardingStep == null &&
+    plantAllPreview.plantableCount > 0 &&
+    plantAllPreview.emptyPlotCount >= PLANT_ALL_MIN_COUNT;
+  const showFertilizeAllAction = fertilizeAllPreview.affordableCount >= FERTILIZE_ALL_MIN_COUNT;
+  const batchActionCount =
+    (showHarvestBatchActions ? 2 : showPlantAllAction ? 1 : 0) +
+    (showFertilizeAllAction ? 1 : 0);
+  const useCompactBatchActions = batchActionCount >= 3;
   // 2탭 확인의 "확인 대기" 상태. 핸들러 분기는 ref(동기, 더블탭 경쟁 방지)로 판정하고,
   // state는 버튼 라벨 재렌더용으로만 미러링한다.
   const fertilizeAllArmedRef = useRef(false);
@@ -5876,51 +5888,55 @@ function FarmGameBody({
       </View>
 
       <View testID="tool-strip" style={[styles.toolStrip, { paddingBottom: bottomSafeInset + 10 }]}>
-        {readyPlotCount >= HARVEST_ALL_MIN_COUNT ? (
-          // 익은 밭이 다수면 '전체 수확'과 '수확 후 재심기'(#252)를 나란히 제공한다.
-          // 배치는 필요할 때만 나타나는 전용 행으로 두어 평상시 세로 공간을 절약한다.
-          <View style={styles.toolActionRow}>
-            <HarvestAllButton label={messages.harvestAllButton(readyPlotCount)} onPress={harvestAllCrops} />
-            <HarvestAllButton
-              testID="harvest-replant-button"
-              label={messages.harvestReplantButton}
-              onPress={harvestAllAndReplant}
-            />
-          </View>
-        ) : selectedTool !== 'harvest' &&
-          onboardingStep == null &&
-          plantAllPreview.plantableCount > 0 &&
-          plantAllPreview.emptyPlotCount >= PLANT_ALL_MIN_COUNT ? (
-          <View style={styles.toolActionRow}>
-            <HarvestAllButton
-              label={messages.plantAllButton(
-                plantAllPreview.plantableCount,
-                formatMoney(plantAllPreview.totalCost, locale)
-              )}
-              onPress={plantAllCrops}
-            />
-          </View>
-        ) : null}
+        {batchActionCount > 0 ? (
+          // 밭 일괄 액션은 종류가 동시에 늘어나도 하나의 행만 사용한다. 3개일 때는 각
+          // 버튼을 같은 폭으로 축소해 하단 도구 영역이 두 행으로 커지지 않게 한다.
+          <View testID="farm-batch-action-row" style={styles.toolActionRow}>
+            {showHarvestBatchActions ? (
+              <>
+                <HarvestAllButton
+                  compact={useCompactBatchActions}
+                  label={messages.harvestAllButton(readyPlotCount)}
+                  onPress={harvestAllCrops}
+                />
+                <HarvestAllButton
+                  compact={useCompactBatchActions}
+                  testID="harvest-replant-button"
+                  label={messages.harvestReplantButton}
+                  onPress={harvestAllAndReplant}
+                />
+              </>
+            ) : showPlantAllAction ? (
+              <HarvestAllButton
+                compact={useCompactBatchActions}
+                label={messages.plantAllButton(
+                  plantAllPreview.plantableCount,
+                  formatMoney(plantAllPreview.totalCost, locale)
+                )}
+                onPress={plantAllCrops}
+              />
+            ) : null}
 
-        {/* 전체 비료(#359): 성장 중이면서 지금 감당 가능한 밭이 임계 이상일 때만 나타나는
-            조건부 행(상시 요소 아님). 1탭 확인 → 2탭 실행으로 큰 골드 지출을 방어한다. */}
-        {fertilizeAllPreview.affordableCount >= FERTILIZE_ALL_MIN_COUNT ? (
-          <View style={styles.toolActionRow}>
-            <HarvestAllButton
-              testID="fertilize-all-button"
-              label={
-                fertilizeAllArmed
-                  ? messages.fertilizeAllConfirmButton(
-                      fertilizeAllPreview.affordableCount,
-                      formatMoney(fertilizeAllPreview.totalCost, locale)
-                    )
-                  : messages.fertilizeAllButton(
-                      fertilizeAllPreview.affordableCount,
-                      formatMoney(fertilizeAllPreview.totalCost, locale)
-                    )
-              }
-              onPress={onFertilizeAllPress}
-            />
+            {/* 전체 비료(#359): 성장 중이면서 지금 감당 가능한 밭이 임계 이상일 때만
+                나타난다. 1탭 확인 → 2탭 실행으로 큰 골드 지출을 방어한다. */}
+            {showFertilizeAllAction ? (
+              <HarvestAllButton
+                compact={useCompactBatchActions}
+                testID="fertilize-all-button"
+                label={
+                  fertilizeAllArmed
+                    ? messages.fertilizeAllConfirmButton(
+                        fertilizeAllPreview.affordableCount,
+                        formatMoney(fertilizeAllPreview.totalCost, locale)
+                      )
+                    : messages.fertilizeAllButton(
+                        fertilizeAllPreview.affordableCount,
+                        formatMoney(fertilizeAllPreview.totalCost, locale)
+                      )
+                }
+                onPress={onFertilizeAllPress}
+              />
+            ) : null}
           </View>
         ) : null}
 
@@ -7024,7 +7040,17 @@ function MoreMenuButton({
 // Swaps in for the tool hint the moment a couple of plots ripen, turning a
 // row of individual taps into one satisfying batch harvest. It pops in and
 // breathes gently so the eye catches the call-to-action without nagging.
-function HarvestAllButton({ label, onPress, testID }: { label: string; onPress: () => void; testID?: string }) {
+function HarvestAllButton({
+  compact = false,
+  label,
+  onPress,
+  testID,
+}: {
+  compact?: boolean;
+  label: string;
+  onPress: () => void;
+  testID?: string;
+}) {
   const entranceRef = useRef<Animated.Value | null>(null);
   if (entranceRef.current == null) {
     entranceRef.current = new Animated.Value(0);
@@ -7075,11 +7101,25 @@ function HarvestAllButton({ label, onPress, testID }: { label: string; onPress: 
       testID={testID}
       accessibilityLabel={label}
       hitSlop={6}
-      style={({ pressed }) => [pressed && styles.harvestAllButtonPressed]}
+      style={({ pressed }) => [
+        compact && styles.batchActionButtonCompact,
+        pressed && styles.harvestAllButtonPressed,
+      ]}
       onPress={onPress}
     >
-      <Animated.View style={[styles.harvestAllButton, { opacity: entrance, transform: [{ scale }] }]}>
-        <Text style={styles.harvestAllButtonText} numberOfLines={1}>
+      <Animated.View
+        style={[
+          styles.harvestAllButton,
+          compact && styles.harvestAllButtonCompact,
+          { opacity: entrance, transform: [{ scale }] },
+        ]}
+      >
+        <Text
+          adjustsFontSizeToFit={compact}
+          minimumFontScale={compact ? 0.8 : undefined}
+          style={[styles.harvestAllButtonText, compact && styles.harvestAllButtonTextCompact]}
+          numberOfLines={1}
+        >
           {label}
         </Text>
       </Animated.View>

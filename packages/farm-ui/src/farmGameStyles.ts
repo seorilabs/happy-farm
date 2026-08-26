@@ -588,9 +588,14 @@ export const styles = StyleSheet.create({
   },
   toolActionRow: {
     flexDirection: 'row',
+    flexWrap: 'nowrap',
     alignItems: 'center',
     justifyContent: 'flex-end',
     gap: 8,
+  },
+  batchActionButtonCompact: {
+    flex: 1,
+    minWidth: 0,
   },
   toolHint: {
     minWidth: 0,
@@ -622,6 +627,11 @@ export const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     elevation: 3,
   },
+  harvestAllButtonCompact: {
+    width: '100%',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+  },
   harvestAllButtonPressed: {
     opacity: 0.85,
   },
@@ -629,6 +639,9 @@ export const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 13,
     fontWeight: '900',
+  },
+  harvestAllButtonTextCompact: {
+    fontSize: 11,
   },
   // Upgrade purchase delight (#289): card-local only, so frequent purchases
   // get tactile progress feedback without occupying the full screen.
