@@ -4,6 +4,8 @@ type MockPlatformOptions = {
   ingestBaseUrl?: string;
   eventAllowlist?: readonly string[];
   eventContext?: () => Record<string, string>;
+  presenceEnabled?: boolean;
+  presenceContext?: () => Record<string, string>;
   sessionStore?: unknown;
 };
 
@@ -12,6 +14,11 @@ jest.mock('@seorilabs/platform-sdk', () => {
     events: {
       track: jest.fn(),
       flush: jest.fn(() => Promise.resolve()),
+    },
+    presence: {
+      start: jest.fn(),
+      stop: jest.fn(),
+      resume: jest.fn(),
     },
     session: { token: jest.fn(() => Promise.resolve('platform-token')) },
     iap: {},
@@ -33,6 +40,7 @@ import { Platform } from 'react-native';
 import { PLATFORM_EVENT_ALLOWLIST, RELEASE_INFO } from '../../../../packages/farm-core/src';
 import {
   flushMobilePlatformEvents,
+  handleMobilePlatformAppStateChange,
   shutdownMobilePlatformEvents,
   startMobilePlatformEvents,
   trackMobilePlatformEvent,
@@ -41,6 +49,7 @@ import {
 const platformSdkMock = jest.requireMock('@seorilabs/platform-sdk') as {
   createPlatform: jest.MockedFunction<(options: MockPlatformOptions) => {
     events: { track: jest.Mock; flush: jest.Mock };
+    presence: { start: jest.Mock; stop: jest.Mock; resume: jest.Mock };
     start: jest.Mock;
     shutdown: jest.Mock;
   }>;
@@ -57,11 +66,16 @@ describe('Mobile Platform events', () => {
       baseUrl: 'https://platform-api-306278488979.asia-northeast3.run.app',
       ingestBaseUrl: 'https://platform-ingest-306278488979.asia-northeast3.run.app',
       eventAllowlist: PLATFORM_EVENT_ALLOWLIST,
+      presenceEnabled: false,
     });
     expect(options?.eventContext?.()).toEqual({
       platform: Platform.OS === 'ios' ? 'ios' : 'android',
       appVersion: RELEASE_INFO.versionName,
       locale: expect.any(String),
+    });
+    expect(options?.presenceContext?.()).toEqual({
+      platform: Platform.OS === 'ios' ? 'ios' : 'android',
+      appVersion: RELEASE_INFO.versionName,
     });
     expect(options).not.toHaveProperty('sessionStore');
   });
@@ -79,5 +93,20 @@ describe('Mobile Platform events', () => {
     expect(mockPlatform?.start).toHaveBeenCalledTimes(1);
     expect(mockPlatform?.events.flush).toHaveBeenCalledTimes(1);
     expect(mockPlatform?.shutdown).toHaveBeenCalledTimes(1);
+  });
+
+  test('background에서 Presence를 멈추고 foreground에서 비차단 재개한다', () => {
+    mockPlatform?.events.flush.mockClear();
+    mockPlatform?.presence.start.mockClear();
+    mockPlatform?.presence.stop.mockClear();
+    mockPlatform?.presence.resume.mockClear();
+
+    handleMobilePlatformAppStateChange('background');
+    handleMobilePlatformAppStateChange('active');
+
+    expect(mockPlatform?.presence.stop).toHaveBeenCalledTimes(1);
+    expect(mockPlatform?.events.flush).toHaveBeenCalledTimes(1);
+    expect(mockPlatform?.presence.start).toHaveBeenCalledTimes(1);
+    expect(mockPlatform?.presence.resume).toHaveBeenCalledTimes(1);
   });
 });

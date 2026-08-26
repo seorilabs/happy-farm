@@ -1,5 +1,6 @@
 import { appLogin, getAnonymousKey } from '@apps-in-toss/framework';
 import { createPlatform, type Credential } from '@seorilabs/platform-sdk';
+import type { AppStateStatus } from 'react-native';
 
 import {
   PLATFORM_EVENT_ALLOWLIST,
@@ -22,6 +23,13 @@ const appsInTossPlatform = createPlatform({
     platform: 'ait',
     appVersion: RELEASE_INFO.versionName,
     locale: detectRuntimeLocale(),
+  }),
+  // Presence는 Platform/Backoffice 운영 gate가 끝난 릴리스에서만 opt-in한다.
+  // 기본값을 조합 지점에 명시해 SDK 업그레이드만으로 네트워크가 열리지 않게 한다.
+  presenceEnabled: false,
+  presenceContext: () => ({
+    platform: 'ait',
+    appVersion: RELEASE_INFO.versionName,
   }),
 });
 
@@ -82,8 +90,8 @@ export function ensureAppsInTossAdsSession(): Promise<boolean> {
       // 세션이 없거나 갱신할 수 없을 때만 새 authorization code를 요청한다.
     }
     const { authorizationCode, referrer } = await appLogin();
-    // SDK 0.1의 런타임은 credential 객체를 그대로 전달한다. referrer는 Platform
-    // Ads 계약에 새로 추가된 필드이며 원문 authorization code는 세션 교환 뒤 버린다.
+    // SDK 런타임은 credential 객체를 그대로 전달한다. referrer는 Platform Ads
+    // 계약 필드이며 원문 authorization code는 세션 교환 뒤 버린다.
     const credential: Credential & { referrer: 'DEFAULT' | 'SANDBOX' } = {
       kind: 'ait-login',
       value: authorizationCode,
@@ -107,6 +115,18 @@ export function startAppsInTossPlatformEvents(): void {
 
 export async function flushAppsInTossPlatformEvents(): Promise<void> {
   await appsInTossPlatform.events.flush();
+}
+
+export function handleAppsInTossPlatformAppStateChange(nextState: AppStateStatus): void {
+  if (nextState === 'active') {
+    // start와 resume 모두 즉시 반환한다. foreground 전환은 제품 흐름을 기다리게 하지 않는다.
+    appsInTossPlatform.presence.start();
+    appsInTossPlatform.presence.resume();
+    return;
+  }
+
+  appsInTossPlatform.presence.stop();
+  void appsInTossPlatform.events.flush();
 }
 
 export async function shutdownAppsInTossPlatformEvents(): Promise<void> {

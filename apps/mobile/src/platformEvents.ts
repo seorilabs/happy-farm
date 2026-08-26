@@ -1,5 +1,5 @@
 import { createPlatform } from '@seorilabs/platform-sdk';
-import { Platform } from 'react-native';
+import { Platform, type AppStateStatus } from 'react-native';
 
 import {
   PLATFORM_EVENT_ALLOWLIST,
@@ -23,6 +23,13 @@ const mobilePlatform = createPlatform({
     platform: Platform.OS === 'ios' ? 'ios' : 'android',
     appVersion: RELEASE_INFO.versionName,
     locale: detectRuntimeLocale(),
+  }),
+  // Presence는 Platform/Backoffice 운영 gate가 끝난 릴리스에서만 opt-in한다.
+  // 기본값을 조합 지점에 명시해 SDK 업그레이드만으로 네트워크가 열리지 않게 한다.
+  presenceEnabled: false,
+  presenceContext: () => ({
+    platform: Platform.OS === 'ios' ? 'ios' : 'android',
+    appVersion: RELEASE_INFO.versionName,
   }),
 });
 
@@ -67,6 +74,18 @@ export function startMobilePlatformEvents(): void {
 
 export async function flushMobilePlatformEvents(): Promise<void> {
   await mobilePlatform.events.flush();
+}
+
+export function handleMobilePlatformAppStateChange(nextState: AppStateStatus): void {
+  if (nextState === 'active') {
+    // start와 resume 모두 즉시 반환한다. foreground 전환은 제품 흐름을 기다리게 하지 않는다.
+    mobilePlatform.presence.start();
+    mobilePlatform.presence.resume();
+    return;
+  }
+
+  mobilePlatform.presence.stop();
+  void mobilePlatform.events.flush();
 }
 
 export async function shutdownMobilePlatformEvents(): Promise<void> {

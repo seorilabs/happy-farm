@@ -5,7 +5,7 @@ import { cleanup, render } from '@testing-library/react-native';
 
 const mockEnsurePlatformSession = jest.fn(() => Promise.resolve(true));
 const mockStartPlatformEvents = jest.fn();
-const mockFlushPlatformEvents = jest.fn(() => Promise.resolve());
+const mockHandlePlatformAppState = jest.fn();
 const mockShutdownPlatformEvents = jest.fn(() => Promise.resolve());
 const mockInitializeFirebase = jest.fn(() => Promise.resolve());
 const mockHandleAnalyticsAppState = jest.fn();
@@ -19,7 +19,7 @@ jest.mock('@apps-in-toss/framework', () => ({
 jest.mock('../platformEvents', () => ({
   ensureAppsInTossPlatformSession: () => mockEnsurePlatformSession(),
   startAppsInTossPlatformEvents: () => mockStartPlatformEvents(),
-  flushAppsInTossPlatformEvents: () => mockFlushPlatformEvents(),
+  handleAppsInTossPlatformAppStateChange: (state: string) => mockHandlePlatformAppState(state),
   shutdownAppsInTossPlatformEvents: () => mockShutdownPlatformEvents(),
 }));
 
