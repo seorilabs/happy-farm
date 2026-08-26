@@ -54,186 +54,244 @@ permissions:
 
 concurrency:
   group: happy-farm-google-play-${{ inputs.release_tag || github.ref_name }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   build-aab:
-    name: Signed Android App Bundle
-    runs-on: ubuntu-latest
-    timeout-minutes: 35
+    name: Cloud Build signed Android App Bundle
+    runs-on: seorilabs-rpi-arm64
+    timeout-minutes: 75
     environment: google-play
-    env:
-      SHOULD_UPLOAD_TO_GOOGLE_PLAY: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.send_to_google_play) }}
+    defaults:
+      run:
+        working-directory: release-source
+    outputs:
+      artifact_name: ${{ steps.meta.outputs.artifact_name }}
+      release_tag: ${{ steps.release-version.outputs.release_tag }}
+      source_sha: ${{ steps.meta.outputs.source_sha }}
+      tooling_sha: ${{ steps.meta.outputs.tooling_sha }}
+      version_code: ${{ steps.release-version.outputs.google_play_version_code }}
+      version_name: ${{ steps.release-version.outputs.version_name }}
 
     steps:
-      - name: Checkout
+      - name: Checkout workflow tooling
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          path: ci-tooling
+
+      - name: Checkout release source
         uses: actions/checkout@v7
         with:
           ref: ${{ inputs.release_tag || github.ref_name }}
+          fetch-depth: 0
+          fetch-tags: true
+          path: release-source
 
-      - name: Setup pnpm workspace
-        uses: ./.github/actions/setup-pnpm-workspace
+      - name: Overlay current Cloud Build tooling
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp ../ci-tooling/build.env build.env
+          cp ../ci-tooling/cloudbuild-android.yaml cloudbuild-android.yaml
+          cp ../ci-tooling/.gcloudignore .gcloudignore
+          install -m 755 ../ci-tooling/scripts/build-android.sh scripts/build-android.sh
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 11.3.0
+          run_install: false
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24.16.0
+          check-latest: false
+          cache: pnpm
+          cache-dependency-path: release-source/pnpm-lock.yaml
+          registry-url: https://npm.pkg.github.com
+          scope: '@seorilabs'
 
       - name: Resolve release version
         id: release-version
         env:
           RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
-        run: node scripts/resolve-release-version.mjs --github-output --github-step-summary --write-release-info --quiet
+        run: GITHUB_SHA="$(git rev-parse HEAD)" node scripts/resolve-release-version.mjs --github-output --github-step-summary --write-release-info --quiet
 
-      - name: Setup Android build
-        uses: ./.github/actions/setup-android-build
-
-      - name: Typecheck mobile app
-        run: pnpm --dir apps/mobile typecheck
-
-      - name: Test mobile app
-        run: pnpm --dir apps/mobile test --watchAll=false
-
-      - name: Validate signing secrets
+      - name: Resolve build contract
+        id: meta
         shell: bash
-        env:
-          GOOGLE_PLAY_UPLOAD_KEYSTORE_BASE64: ${{ secrets.GOOGLE_PLAY_UPLOAD_KEYSTORE_BASE64 }}
-          GOOGLE_PLAY_UPLOAD_KEYSTORE_PASSWORD: ${{ secrets.GOOGLE_PLAY_UPLOAD_KEYSTORE_PASSWORD }}
         run: |
           set -euo pipefail
-
-          if [ -z "$GOOGLE_PLAY_UPLOAD_KEYSTORE_BASE64" ]; then
-            echo "GOOGLE_PLAY_UPLOAD_KEYSTORE_BASE64 secret is required." >&2
-            exit 1
-          fi
-
-          if [ -z "$GOOGLE_PLAY_UPLOAD_KEYSTORE_PASSWORD" ]; then
-            echo "GOOGLE_PLAY_UPLOAD_KEYSTORE_PASSWORD secret is required." >&2
-            exit 1
-          fi
-
-      - name: Restore Google Play upload keystore
-        shell: bash
-        env:
-          GOOGLE_PLAY_UPLOAD_KEYSTORE_BASE64: ${{ secrets.GOOGLE_PLAY_UPLOAD_KEYSTORE_BASE64 }}
-          GOOGLE_PLAY_UPLOAD_KEYSTORE_PASSWORD: ${{ secrets.GOOGLE_PLAY_UPLOAD_KEYSTORE_PASSWORD }}
-          GOOGLE_PLAY_UPLOAD_KEY_PASSWORD: ${{ secrets.GOOGLE_PLAY_UPLOAD_KEY_PASSWORD }}
-          GOOGLE_PLAY_UPLOAD_KEY_ALIAS: ${{ vars.GOOGLE_PLAY_UPLOAD_KEY_ALIAS }}
-        run: |
-          set -euo pipefail
-
-          signing_dir="$RUNNER_TEMP/happy-farm-signing"
-          keystore_path="$signing_dir/happy-farm-upload-key.jks"
-          key_alias="${GOOGLE_PLAY_UPLOAD_KEY_ALIAS:-happy-farm-upload}"
-          key_password="${GOOGLE_PLAY_UPLOAD_KEY_PASSWORD:-$GOOGLE_PLAY_UPLOAD_KEYSTORE_PASSWORD}"
-
-          mkdir -p "$signing_dir"
-          printf '%s' "$GOOGLE_PLAY_UPLOAD_KEYSTORE_BASE64" | base64 --decode > "$keystore_path"
-          chmod 600 "$keystore_path"
-
+          # shellcheck disable=SC1091
+          source build.env
+          source_sha="$(git rev-parse HEAD)"
+          tooling_sha="$(git -C ../ci-tooling rev-parse HEAD)"
+          artifact_name="happy-farm-google-play-v${{ steps.release-version.outputs.version_name }}-code${{ steps.release-version.outputs.google_play_version_code }}-$source_sha"
+          artifact_bucket="gs://seorilabs-ci-build-artifacts/${{ github.repository_owner }}/${{ github.event.repository.name }}/${{ github.run_id }}-${{ github.run_attempt }}"
           {
-            printf 'storeFile=%s\n' "$keystore_path"
-            printf 'storePassword=%s\n' "$GOOGLE_PLAY_UPLOAD_KEYSTORE_PASSWORD"
-            printf 'keyAlias=%s\n' "$key_alias"
-            printf 'keyPassword=%s\n' "$key_password"
-          } > apps/mobile/android/key.properties
-          chmod 600 apps/mobile/android/key.properties
+            echo "source_sha=$source_sha"
+            echo "tooling_sha=$tooling_sha"
+            echo "artifact_name=$artifact_name"
+            echo "artifact_bucket=$artifact_bucket"
+            echo "aab_path=$AAB_PATH"
+            echo "aab_name=$(basename "$AAB_PATH")"
+            echo "builder=$ANDROID_BUILDER_IMAGE:$ANDROID_BUILDER_TAG"
+            echo "pnpm_store=$CLOUD_BUILD_PNPM_STORE"
+          } >> "$GITHUB_OUTPUT"
 
-      - name: Restore Firebase Android config
+      - name: Validate Workload Identity configuration
         shell: bash
         env:
-          FIREBASE_ANDROID_GOOGLE_SERVICES_JSON_BASE64: ${{ secrets.FIREBASE_ANDROID_GOOGLE_SERVICES_JSON_BASE64 }}
+          WIF_PROVIDER: ${{ vars.GOOGLE_WORKLOAD_IDENTITY_PROVIDER }}
+          SERVICE_ACCOUNT: ${{ vars.GOOGLE_PLAY_SERVICE_ACCOUNT_EMAIL }}
+          UPLOAD_ALIAS: ${{ vars.GOOGLE_PLAY_UPLOAD_KEY_ALIAS }}
         run: |
           set -euo pipefail
+          [ -n "$WIF_PROVIDER" ] || { echo "GOOGLE_WORKLOAD_IDENTITY_PROVIDER var가 없습니다." >&2; exit 1; }
+          [ -n "$SERVICE_ACCOUNT" ] || { echo "GOOGLE_PLAY_SERVICE_ACCOUNT_EMAIL var가 없습니다." >&2; exit 1; }
+          [ -n "$UPLOAD_ALIAS" ] || { echo "GOOGLE_PLAY_UPLOAD_KEY_ALIAS var가 없습니다." >&2; exit 1; }
 
-          if [ -z "$FIREBASE_ANDROID_GOOGLE_SERVICES_JSON_BASE64" ]; then
-            echo "FIREBASE_ANDROID_GOOGLE_SERVICES_JSON_BASE64 is not set; building without Firebase Android config."
-            exit 0
-          fi
-
-          printf '%s' "$FIREBASE_ANDROID_GOOGLE_SERVICES_JSON_BASE64" | base64 --decode > apps/mobile/android/app/google-services.json
-          node scripts/check-firebase-android-config.mjs
-
-      - name: Validate Google Play WIF config
-        if: env.SHOULD_UPLOAD_TO_GOOGLE_PLAY == 'true'
+      - name: Prepare private package seed store
         shell: bash
         env:
-          GOOGLE_WORKLOAD_IDENTITY_PROVIDER: ${{ vars.GOOGLE_WORKLOAD_IDENTITY_PROVIDER }}
-          GOOGLE_PLAY_SERVICE_ACCOUNT_EMAIL: ${{ vars.GOOGLE_PLAY_SERVICE_ACCOUNT_EMAIL }}
+          NODE_AUTH_TOKEN: ${{ github.token }}
+          PNPM_STORE_PATH: ${{ steps.meta.outputs.pnpm_store }}
         run: |
           set -euo pipefail
-
-          if [ -z "$GOOGLE_WORKLOAD_IDENTITY_PROVIDER" ]; then
-            echo "GOOGLE_WORKLOAD_IDENTITY_PROVIDER repository variable is required to upload to Google Play." >&2
-            exit 1
-          fi
-
-          if [ -z "$GOOGLE_PLAY_SERVICE_ACCOUNT_EMAIL" ]; then
-            echo "GOOGLE_PLAY_SERVICE_ACCOUNT_EMAIL repository variable is required to upload to Google Play." >&2
-            exit 1
-          fi
+          private_package='@seorilabs/platform-sdk'
+          private_version="$(node -e 'const p=require("./apps/mobile/package.json"); process.stdout.write(p.dependencies[process.argv[1]] ?? "")' "$private_package")"
+          [ -n "$private_version" ] || { echo "$private_package dependency가 없습니다." >&2; exit 1; }
+          pnpm store add "$private_package@$private_version" --store-dir "$PNPM_STORE_PATH"
+          test -n "$(find "$PNPM_STORE_PATH" -mindepth 1 -maxdepth 1 -print -quit)"
 
       - name: Authenticate to Google Cloud
-        if: env.SHOULD_UPLOAD_TO_GOOGLE_PLAY == 'true'
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.GOOGLE_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GOOGLE_PLAY_SERVICE_ACCOUNT_EMAIL }}
+          token_format: access_token
+          create_credentials_file: true
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v3
+        with:
+          project_id: seorilabs-ci
+
+      - name: Set quota project
+        run: gcloud config set billing/quota_project seorilabs-ci
+
+      - name: Build signed AAB on Cloud Build
+        shell: bash
+        env:
+          ARTIFACT_BUCKET: ${{ steps.meta.outputs.artifact_bucket }}
+          UPLOAD_ALIAS: ${{ vars.GOOGLE_PLAY_UPLOAD_KEY_ALIAS }}
+          VERSION_CODE: ${{ steps.release-version.outputs.google_play_version_code }}
+          VERSION_NAME: ${{ steps.release-version.outputs.version_name }}
+        run: |
+          set -euo pipefail
+          gcloud builds submit . \
+            --project=seorilabs-ci \
+            --region=global \
+            --config=cloudbuild-android.yaml \
+            --ignore-file=.gcloudignore \
+            --substitutions="_ANDROID_VERSION_NAME=$VERSION_NAME,_ANDROID_VERSION_CODE=$VERSION_CODE,_GOOGLE_PLAY_UPLOAD_KEY_ALIAS=$UPLOAD_ALIAS,_ARTIFACT_BUCKET=$ARTIFACT_BUCKET"
+
+      - name: Fetch signed AAB
+        shell: bash
+        env:
+          AAB_NAME: ${{ steps.meta.outputs.aab_name }}
+          AAB_PATH: ${{ steps.meta.outputs.aab_path }}
+          ARTIFACT_BUCKET: ${{ steps.meta.outputs.artifact_bucket }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$(dirname "$AAB_PATH")"
+          gcloud storage cp "$ARTIFACT_BUCKET/$AAB_NAME" "$AAB_PATH"
+          test -s "$AAB_PATH"
+
+      - name: Upload signed AAB artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.meta.outputs.artifact_name }}
+          path: release-source/${{ steps.meta.outputs.aab_path }}
+          if-no-files-found: error
+          retention-days: 3
+
+      - name: Build summary
+        shell: bash
+        env:
+          AAB_PATH: ${{ steps.meta.outputs.aab_path }}
+        run: |
+          {
+            echo "### Happy Farm Android Cloud Build 후보"
+            echo "- source: \`${{ steps.meta.outputs.source_sha }}\`"
+            echo "- tooling: \`${{ steps.meta.outputs.tooling_sha }}\`"
+            echo "- release: \`${{ steps.release-version.outputs.release_tag }}\`"
+            echo "- versionCode: \`${{ steps.release-version.outputs.google_play_version_code }}\`"
+            echo "- builder: \`${{ steps.meta.outputs.builder }}\`"
+            echo "- bytes: \`$(wc -c < "$AAB_PATH" | tr -d ' ')\`"
+            echo "- Google Play upload: \`${{ inputs.send_to_google_play }}\`"
+            echo "- production promotion: \`false\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  upload:
+    name: Upload AAB to Google Play internal track
+    if: ${{ inputs.send_to_google_play }}
+    needs: build-aab
+    runs-on: seorilabs-rpi-arm64
+    timeout-minutes: 25
+    environment: google-play
+
+    steps:
+      - name: Checkout release tooling
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.build-aab.outputs.release_tag }}
+
+      - name: Download signed AAB
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ needs.build-aab.outputs.artifact_name }}
+          path: artifacts/android
+
+      - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v3
         with:
           workload_identity_provider: ${{ vars.GOOGLE_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ vars.GOOGLE_PLAY_SERVICE_ACCOUNT_EMAIL }}
           create_credentials_file: true
 
+      - name: Setup Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+          architecture: arm64
+
       - name: Install Google Play API client
-        if: env.SHOULD_UPLOAD_TO_GOOGLE_PLAY == 'true'
-        run: |
-          python3 -m pip install --upgrade pip
-          python3 -m pip install google-api-python-client google-auth
+        run: >-
+          python3 -m pip install --disable-pip-version-check
+          google-api-python-client google-auth google-auth-httplib2 httplib2
 
       - name: Validate Google Play version code
-        id: play-version
         shell: bash
         env:
-          GOOGLE_PLAY_VERSION_CODE: ${{ steps.release-version.outputs.google_play_version_code }}
+          VERSION_CODE: ${{ needs.build-aab.outputs.version_code }}
         run: |
           set -euo pipefail
-
-          version_code="$GOOGLE_PLAY_VERSION_CODE"
-          if [ "$SHOULD_UPLOAD_TO_GOOGLE_PLAY" = "true" ]; then
-            next_play_version_code="$(python3 scripts/upload-google-play-internal.py --print-next-version-code)"
-            if [ "$version_code" -lt "$next_play_version_code" ]; then
-              echo "Release tag versionCode $version_code is lower than the next available Google Play versionCode $next_play_version_code." >&2
-              exit 1
-            fi
-          fi
-
-          if ! [[ "$version_code" =~ ^[0-9]+$ ]]; then
-            echo "Resolved versionCode must be a positive integer, got: $version_code" >&2
+          next_play_version_code="$(python3 scripts/upload-google-play-internal.py --print-next-version-code)"
+          if [ "$VERSION_CODE" -lt "$next_play_version_code" ]; then
+            echo "Release tag versionCode $VERSION_CODE is lower than the next available Google Play versionCode $next_play_version_code." >&2
             exit 1
           fi
 
-          echo "version_code=$version_code" >> "$GITHUB_OUTPUT"
-          echo "versionCode=$version_code" >> "$GITHUB_STEP_SUMMARY"
-          echo "versionCodeSource=Release tag buildNumber" >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Build signed Android AAB
-        working-directory: apps/mobile/android
-        env:
-          GOOGLE_PLAY_VERSION_CODE: ${{ steps.play-version.outputs.version_code }}
-          GOOGLE_PLAY_VERSION_NAME: ${{ steps.release-version.outputs.version_name }}
-        run: ./gradlew :app:bundleRelease --no-daemon -PversionCodeOverride="$GOOGLE_PLAY_VERSION_CODE" -PversionNameOverride="$GOOGLE_PLAY_VERSION_NAME"
-
-      - name: Verify Android release bundle
-        run: pnpm check:play:release -- --json
-
-      - name: Upload AAB artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: happy-farm-google-play-v${{ steps.release-version.outputs.version_name }}-code${{ steps.play-version.outputs.version_code }}-${{ github.sha }}
-          if-no-files-found: error
-          retention-days: 5
-          path: apps/mobile/android/app/build/outputs/bundle/release/app-release.aab
-
       - name: Upload AAB to Google Play internal track
-        if: env.SHOULD_UPLOAD_TO_GOOGLE_PLAY == 'true'
         shell: bash
         env:
-          AFTER_UPLOAD: ${{ github.event_name == 'push' && '초안만 만들기' || inputs.after_upload }}
-          REVIEW_LATER_IN_CONSOLE: ${{ github.event_name == 'workflow_dispatch' && inputs.review_later_in_console || false }}
+          AFTER_UPLOAD: ${{ inputs.after_upload }}
+          REVIEW_LATER_IN_CONSOLE: ${{ inputs.review_later_in_console }}
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ inputs.release_tag || github.ref_name }}
+          TAG: ${{ needs.build-aab.outputs.release_tag }}
         run: |
           set -euo pipefail
 
@@ -250,12 +308,17 @@ jobs:
               ;;
           esac
 
-          args=(--release-status "$release_status")
+          mapfile -t aabs < <(find artifacts/android -type f -name '*.aab' -print)
+          [ "${#aabs[@]}" -eq 1 ] || {
+            echo "정확히 하나의 AAB가 필요합니다: ${#aabs[@]}" >&2
+            exit 1
+          }
+
+          args=(--aab-path "${aabs[0]}" --release-status "$release_status")
           if [ "$REVIEW_LATER_IN_CONSOLE" = "true" ]; then
             args+=(--changes-not-sent-for-review)
           fi
 
-          # Backoffice 가 Release 에 첨부한 정형 출시노트(전체 언어)를 받아 언어별로 반영.
           notes="$RUNNER_TEMP/release-notes.json"
           if [ -n "$TAG" ] && gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern release-notes.json --output "$notes" --clobber 2>/dev/null \
             && [ "$(jq -r '(.notes // {}) | length' "$notes")" -gt 0 ]; then
@@ -264,3 +327,16 @@ jobs:
           fi
 
           python3 scripts/upload-google-play-internal.py "${args[@]}"
+
+      - name: Upload summary
+        shell: bash
+        run: |
+          {
+            echo "### Google Play internal 업로드"
+            echo "- source: \`${{ needs.build-aab.outputs.source_sha }}\`"
+            echo "- tooling: \`${{ needs.build-aab.outputs.tooling_sha }}\`"
+            echo "- release: \`${{ needs.build-aab.outputs.release_tag }}\`"
+            echo "- versionCode: \`${{ needs.build-aab.outputs.version_code }}\`"
+            echo "- track: \`internal\`"
+            echo "- production promotion: \`false\`"
+          } >> "$GITHUB_STEP_SUMMARY"
