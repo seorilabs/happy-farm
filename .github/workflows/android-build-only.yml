@@ -1,0 +1,25 @@
+# WorkflowBundle candidate canary generator가 관리합니다. 수동 편집하지 마십시오.
+name: Android Build-only
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/android-build-only.yml
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  id-token: write
+  packages: read
+
+concurrency:
+  group: android-build-${{ github.repository_id }}-66cdc4b1336d78aaa4333e5659cc34ebbc9857a7
+  cancel-in-progress: false
+
+jobs:
+  android-build:
+    name: Android Build-only
+    uses: seorilabs/.github/.github/workflows/rn-build-android-cloud-v1.yml@ec98cde3945944a2292f061bc54f70905d355426
+    with:
+      source_sha: 66cdc4b1336d78aaa4333e5659cc34ebbc9857a7
+      working_directory: .

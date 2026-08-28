@@ -1,0 +1,25 @@
+# WorkflowBundle candidate canary generator가 관리합니다. 수동 편집하지 마십시오.
+name: Org Contract
+
+on:
+  pull_request: {}
+  push:
+    branches:
+      - main
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: org-contract-${{ github.repository_id }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  org-contract:
+    name: Org Contract
+    uses: seorilabs/.github/.github/workflows/rn-static-checks-v2.yml@ec98cde3945944a2292f061bc54f70905d355426
+    with:
+      package_manager: pnpm
+      working_directory: .
