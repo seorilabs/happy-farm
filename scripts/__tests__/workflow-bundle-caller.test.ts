@@ -7,6 +7,14 @@ const androidBuildOnly = fs.readFileSync(
   path.join(root, '.github/workflows/android-build-only.yml'),
   'utf8',
 );
+const workflowDirectory = path.join(root, '.github/workflows');
+const workflowSources = fs
+  .readdirSync(workflowDirectory)
+  .filter(file => /\.ya?ml$/u.test(file))
+  .map(file => ({
+    file,
+    source: fs.readFileSync(path.join(workflowDirectory, file), 'utf8'),
+  }));
 
 describe('WorkflowBundle v4 caller 계약', () => {
   it('정적 검사와 Android build-only가 같은 중앙 full SHA를 사용한다', () => {
@@ -32,5 +40,15 @@ describe('WorkflowBundle v4 caller 계약', () => {
     );
     expect(sourceSha).toHaveLength(40);
     expect(androidBuildOnly).toContain(`android-build-${'${{ github.repository_id }}'}-${sourceSha}`);
+  });
+
+  it('모든 workflow가 조직 secret 상속과 floating 중앙 ref를 거부한다', () => {
+    for (const { file, source } of workflowSources) {
+      expect(source).not.toMatch(/secrets:\s*inherit/u);
+
+      for (const match of source.matchAll(/uses:\s*seorilabs\/\.github\/.+?@([^\s]+)/gu)) {
+        expect(`${file}: ${match[1]}`).toMatch(/: [0-9a-f]{40}$/u);
+      }
+    }
   });
 });

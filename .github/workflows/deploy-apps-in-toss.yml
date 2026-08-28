@@ -21,6 +21,11 @@ on:
         description: '앱인토스 배포 메모 (선택, 최대 1000자)'
         required: false
         type: string
+    secrets:
+      APPS_IN_TOSS_API_KEY:
+        required: true
+      GA4_MP_API_SECRET:
+        required: false
 
 permissions:
   contents: read

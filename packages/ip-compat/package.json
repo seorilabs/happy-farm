@@ -1,0 +1,9 @@
+{
+  "name": "@happy-farm/ip-compat",
+  "version": "3.0.0-seorilabs.1",
+  "private": true,
+  "main": "index.cjs",
+  "dependencies": {
+    "@bybrave/ip2": "3.0.0"
+  }
+}

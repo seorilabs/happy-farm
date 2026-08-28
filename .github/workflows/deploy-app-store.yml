@@ -23,6 +23,25 @@ on:
         required: false
         default: true
         type: boolean
+    secrets:
+      FIREBASE_IOS_GOOGLE_SERVICE_INFO_PLIST_BASE64:
+        required: true
+      APPLE_DISTRIBUTION_CERTIFICATE_BASE64:
+        required: true
+      APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD:
+        required: true
+      APPLE_PROVISIONING_PROFILE_BASE64:
+        required: true
+      APPLE_KEYCHAIN_PASSWORD:
+        required: true
+      APPLE_TEAM_ID:
+        required: false
+      APP_STORE_CONNECT_API_KEY_ID:
+        required: false
+      APP_STORE_CONNECT_ISSUER_ID:
+        required: false
+      APP_STORE_CONNECT_PRIVATE_KEY_BASE64:
+        required: false
 
 permissions:
   contents: read
@@ -291,9 +310,11 @@ jobs:
           mkdir -p "$profiles_dir"
           cp "$profile_path" "$profiles_dir/$profile_uuid.mobileprovision"
 
-          echo "keychain_path=$keychain_path" >> "$GITHUB_OUTPUT"
-          echo "profile_uuid=$profile_uuid" >> "$GITHUB_OUTPUT"
-          echo "profile_name=$profile_name" >> "$GITHUB_OUTPUT"
+          {
+            echo "keychain_path=$keychain_path"
+            echo "profile_uuid=$profile_uuid"
+            echo "profile_name=$profile_name"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Install CocoaPods
         working-directory: apps/mobile/ios
