@@ -6,7 +6,7 @@ describe('Jest ARC resource contract', () => {
       workerIdleMemoryLimit?: string;
     };
 
-    expect(jestConfig.maxWorkers).toBe(2);
-    expect(jestConfig.workerIdleMemoryLimit).toBe('768MB');
+    expect(jestConfig.maxWorkers).toBe(1);
+    expect(jestConfig.workerIdleMemoryLimit).toBe('512MB');
   });
 });
