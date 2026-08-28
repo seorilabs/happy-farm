@@ -11,4 +11,10 @@ const config = require('@granite-js/react-native/jest').config({
 
 config.testPathIgnorePatterns = [...(config.testPathIgnorePatterns ?? []), '<rootDir>/apps/mobile/'];
 
+// The private ARC runner is capped at 4 GiB. Granite/jsdom transforms retain
+// memory between suites, so recycle large workers and bound parallelism rather
+// than increasing the runner limit or skipping coverage.
+config.maxWorkers = 2;
+config.workerIdleMemoryLimit = '768MB';
+
 module.exports = config;
