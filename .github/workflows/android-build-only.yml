@@ -19,7 +19,7 @@ concurrency:
 jobs:
   android-build:
     name: Android Build-only
-    uses: seorilabs/.github/.github/workflows/rn-build-android-cloud-v1.yml@ec98cde3945944a2292f061bc54f70905d355426
+    uses: seorilabs/.github/.github/workflows/rn-build-android-cloud-v1.yml@02d748c646a848f99889cda00e7a5812dfe880fb
     with:
       source_sha: 66cdc4b1336d78aaa4333e5659cc34ebbc9857a7
       working_directory: .

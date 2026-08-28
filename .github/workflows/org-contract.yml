@@ -19,7 +19,7 @@ concurrency:
 jobs:
   org-contract:
     name: Org Contract
-    uses: seorilabs/.github/.github/workflows/rn-static-checks-v2.yml@ec98cde3945944a2292f061bc54f70905d355426
+    uses: seorilabs/.github/.github/workflows/rn-static-checks-v2.yml@02d748c646a848f99889cda00e7a5812dfe880fb
     with:
       package_manager: pnpm
       working_directory: .
