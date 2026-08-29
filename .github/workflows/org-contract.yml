@@ -1,0 +1,16 @@
+# WorkflowBundle v5 generator가 관리합니다. 수동 편집하지 마십시오.
+name: Org Contract
+on:
+  pull_request:
+    paths:
+      - .github/workflows/org-contract.yml
+permissions:
+  contents: read
+  id-token: write
+  packages: read
+concurrency:
+  group: org-contract-${{ github.repository_id }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  org-contract:
+    uses: seorilabs/.github/.github/workflows/js-static-checks-v1.yml@e86018971183031fa36f06415d94375e3359084f
