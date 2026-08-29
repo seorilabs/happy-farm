@@ -38,7 +38,7 @@ artifacts:
       - dist/android/happy-farm.aab
 
 options:
-  machineType: N1_HIGHCPU_32
+  machineType: E2_STANDARD_2
   logging: CLOUD_LOGGING_ONLY
 
-timeout: 3600s
+timeout: 7200s
