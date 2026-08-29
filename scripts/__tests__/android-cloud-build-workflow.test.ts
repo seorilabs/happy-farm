@@ -42,7 +42,7 @@ describe('Android Cloud Build 배포 계약', () => {
     expect(cloudBuild).toContain('happy-farm-firebase-google-services');
     expect(cloudBuild).toContain('happy-farm-play-keystore');
     expect(cloudBuild).toContain('logging: CLOUD_LOGGING_ONLY');
-    expect(cloudBuild).toContain('machineType: N1_HIGHCPU_32');
+    expect(cloudBuild).toContain('machineType: E2_STANDARD_2');
     expect(buildEnv).toContain('ANDROID_PLATFORM=36');
     expect(buildEnv).toContain('ANDROID_BUILD_TOOLS=36.0.0');
     expect(buildEnv).toContain('EXPECTED_ANDROID_PACKAGE=com.seorilabs.happyfarm');
