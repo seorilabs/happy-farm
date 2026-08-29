@@ -1,6 +1,7 @@
 {
   "name": "happy-farm",
   "private": true,
+  "packageManager": "pnpm@11.3.0",
   "scripts": {
     "dev": "pnpm --dir apps/ait dev",
     "dev:ait": "pnpm --dir apps/ait dev",
