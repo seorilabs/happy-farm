@@ -137,6 +137,7 @@ run_build_only() {
   local name
   for name in \
     ANDROID_VERSION_NAME ANDROID_VERSION_CODE \
+    SEORI_RELEASE_TAG SEORI_RELEASE_VERSION SEORI_RELEASE_VERSION_CODE SEORI_RELEASE_SOURCE_SHA \
     FIREBASE_ANDROID_GOOGLE_SERVICES_JSON_BASE64 \
     GOOGLE_PLAY_UPLOAD_KEYSTORE_BASE64 \
     GOOGLE_PLAY_UPLOAD_KEYSTORE_PASSWORD \
@@ -218,6 +219,7 @@ run_market_upload() {
   local name
   for name in \
     ANDROID_VERSION_NAME ANDROID_VERSION_CODE \
+    SEORI_RELEASE_TAG SEORI_RELEASE_VERSION SEORI_RELEASE_VERSION_CODE SEORI_RELEASE_SOURCE_SHA \
     FIREBASE_ANDROID_GOOGLE_SERVICES_JSON_BASE64 \
     GOOGLE_PLAY_UPLOAD_KEYSTORE_BASE64 \
     GOOGLE_PLAY_UPLOAD_KEYSTORE_PASSWORD \
@@ -233,19 +235,22 @@ run_market_upload() {
     fail "Google Play upload key alias가 다릅니다."
   }
 
-  local version_json
-  local resolved_version_name
-  local resolved_version_code
-  version_json="$(node scripts/resolve-release-version.mjs --tag "v$ANDROID_VERSION_NAME")"
-  resolved_version_name="$(node -e 'process.stdout.write(JSON.parse(process.argv[1]).version_name)' "$version_json")"
-  resolved_version_code="$(node -e 'process.stdout.write(JSON.parse(process.argv[1]).google_play_version_code)' "$version_json")"
-  [ "$resolved_version_name" = "$ANDROID_VERSION_NAME" ] || {
-    fail "Android versionName이 release tag 파생값과 다릅니다."
+  [ "$SEORI_RELEASE_TAG" = "v$ANDROID_VERSION_NAME" ] || {
+    fail "Android versionName이 중앙 release binding과 다릅니다."
   }
-  [ "$resolved_version_code" = "$ANDROID_VERSION_CODE" ] || {
-    fail "Android versionCode가 release tag 파생값과 다릅니다."
+  [ "$SEORI_RELEASE_VERSION" = "$ANDROID_VERSION_NAME" ] || {
+    fail "Android versionName이 중앙 release binding 값과 다릅니다."
   }
-  echo "릴리즈 버전 계약 확인 완료"
+  [ "$SEORI_RELEASE_VERSION_CODE" = "$ANDROID_VERSION_CODE" ] || {
+    fail "Android versionCode가 중앙 release binding 값과 다릅니다."
+  }
+  [[ "$SEORI_RELEASE_SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || {
+    fail "중앙 release source SHA가 올바르지 않습니다."
+  }
+  [ "$SEORI_RELEASE_SOURCE_SHA" != "0000000000000000000000000000000000000000" ] || {
+    fail "중앙 release source SHA placeholder는 배포에 사용할 수 없습니다."
+  }
+  echo "중앙 릴리즈 binding 확인 완료"
 
   local firebase_config_base64="$FIREBASE_ANDROID_GOOGLE_SERVICES_JSON_BASE64"
   local upload_keystore_base64="$GOOGLE_PLAY_UPLOAD_KEYSTORE_BASE64"

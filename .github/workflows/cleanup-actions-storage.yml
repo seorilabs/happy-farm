@@ -29,7 +29,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Delete artifacts
-        uses: actions/github-script@v9
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         env:
           OLDER_THAN_DAYS: ${{ inputs.older_than_days }}
           DRY_RUN: ${{ inputs.dry_run }}

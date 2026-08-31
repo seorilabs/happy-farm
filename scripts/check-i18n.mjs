@@ -63,7 +63,7 @@ const playConfig = readJson('play-store/google-play.config.json');
 requireLocaleMap('play-store', 'storeListing.appName', playConfig.storeListing?.appName);
 requireLocaleMap('play-store', 'storeListing.shortDescription', playConfig.storeListing?.shortDescription);
 requireLocaleMap('play-store', 'storeListing.fullDescription', playConfig.storeListing?.fullDescription);
-requireLocaleMap('play-store', 'release.notes', playConfig.release?.notes);
+requireLocaleMap('play-store', 'releaseNotes', playConfig.releaseNotes);
 assertStoreTextLimits('play-store', playConfig, PLAY_STORE_TEXT_LIMITS);
 
 const appStoreConfig = readJson('app-store/app-store.config.json');
@@ -72,7 +72,7 @@ requireLocaleMap('app-store', 'storeListing.subtitle', appStoreConfig.storeListi
 requireLocaleMap('app-store', 'storeListing.promotionalText', appStoreConfig.storeListing?.promotionalText);
 requireLocaleMap('app-store', 'storeListing.description', appStoreConfig.storeListing?.description);
 requireLocaleMap('app-store', 'storeListing.keywords', appStoreConfig.storeListing?.keywords);
-requireLocaleMap('app-store', 'version.releaseNotes', appStoreConfig.version?.releaseNotes);
+requireLocaleMap('app-store', 'releaseNotes', appStoreConfig.releaseNotes);
 assertStoreTextLimits('app-store', appStoreConfig, APP_STORE_TEXT_LIMITS);
 
 // 한글 하드코딩 스캔은 고정 파일 목록 대신 소스 루트 재귀 탐색으로 대상을 수집한다.

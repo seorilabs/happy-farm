@@ -11,23 +11,18 @@
   "supportUrl": "https://www.seorilabs.com/support",
   "marketingUrl": "https://happy-farm-tycoon.web.app",
   "copyright": "2026 Seorilabs",
-  "version": {
-    "versionNumber": "1.1.4",
-    "buildNumber": "1001004",
-    "releaseSetting": "release_tag",
-    "releaseNotes": {
-      "ko-KR": "새 구역을 여는 표현을 더 쉬운 용어로 바꾸고, 현재 농장의 예상 생산성을 시간당 골드로 볼 수 있게 했습니다. 작물 선택 화면에는 작물별 투자효율을 추가해 어떤 작물을 심을지 더 쉽게 판단할 수 있습니다.",
-      "en-US": "Updated area-opening copy to simpler wording, added an estimated gold-per-hour productivity readout, and added crop efficiency indicators to help players choose what to plant.",
-      "ja": "区域を開くときの文言をよりわかりやすい表現に更新し、1時間あたりのおおよそのゴールド生産性の表示と、何を植えるか選びやすくする作物の効率インジケーターを追加しました。",
-      "zh-Hans": "将开启区域的文案改得更通俗易懂，新增了每小时预估金币的产能显示，并加入作物效率指示，帮助玩家挑选该种什么。",
-      "zh-Hant": "將開啟區域的文案改為更簡潔的說法，新增每小時金幣產能的預估顯示，並加入作物效率指標，協助玩家選擇要種什麼。",
-      "de": "Texte zum Öffnen von Gebieten vereinfacht, eine geschätzte Anzeige für Gold pro Stunde hinzugefügt und Effizienz-Anzeigen für Pflanzen ergänzt, damit du leichter entscheidest, was du anbaust.",
-      "fr": "Textes d'ouverture de zone simplifiés, ajout d'un estimatif de productivité en or par heure, et ajout d'indicateurs d'efficacité des cultures pour aider à choisir quoi planter.",
-      "es": "Actualizamos el texto de apertura de áreas a un lenguaje más sencillo, añadimos una lectura estimada de productividad de oro por hora y añadimos indicadores de eficiencia de cultivos para ayudar a los jugadores a elegir qué plantar."
-    }
+  "releaseNotes": {
+    "ko-KR": "새 구역을 여는 표현을 더 쉬운 용어로 바꾸고, 현재 농장의 예상 생산성을 시간당 골드로 볼 수 있게 했습니다. 작물 선택 화면에는 작물별 투자효율을 추가해 어떤 작물을 심을지 더 쉽게 판단할 수 있습니다.",
+    "en-US": "Updated area-opening copy to simpler wording, added an estimated gold-per-hour productivity readout, and added crop efficiency indicators to help players choose what to plant.",
+    "ja": "区域を開くときの文言をよりわかりやすい表現に更新し、1時間あたりのおおよそのゴールド生産性の表示と、何を植えるか選びやすくする作物の効率インジケーターを追加しました。",
+    "zh-Hans": "将开启区域的文案改得更通俗易懂，新增了每小时预估金币的产能显示，并加入作物效率指示，帮助玩家挑选该种什么。",
+    "zh-Hant": "將開啟區域的文案改為更簡潔的說法，新增每小時金幣產能的預估顯示，並加入作物效率指標，協助玩家選擇要種什麼。",
+    "de": "Texte zum Öffnen von Gebieten vereinfacht, eine geschätzte Anzeige für Gold pro Stunde hinzugefügt und Effizienz-Anzeigen für Pflanzen ergänzt, damit du leichter entscheidest, was du anbaust.",
+    "fr": "Textes d'ouverture de zone simplifiés, ajout d'un estimatif de productivité en or par heure, et ajout d'indicateurs d'efficacité des cultures pour aider à choisir quoi planter.",
+    "es": "Actualizamos el texto de apertura de áreas a un lenguaje más sencillo, añadimos una lectura estimada de productividad de oro por hora y añadimos indicadores de eficiencia de cultivos para ayudar a los jugadores a elegir qué plantar."
   },
   "versioning": {
-    "source": "release_tag",
+    "source": "github_release_tag",
     "marketingVersionField": "CFBundleShortVersionString",
     "buildNumberField": "CFBundleVersion"
   },

@@ -43,17 +43,16 @@ describe('deploy-drift-check 워크플로우 (#420)', () => {
     expect(fs.existsSync(path.join(ROOT, 'scripts/deploy-drift-run.js'))).toBe(true);
   });
 
-  test('AC-5: 모든 action은 stable major 태그로 고정(@latest·branch 참조 금지)', () => {
+  test('AC-5: 모든 action은 확인된 stable release의 full commit SHA로 고정한다', () => {
     const usesRefs = [...WORKFLOW.matchAll(/uses:\s*(\S+)/g)].map((m) => m[1]);
     expect(usesRefs.length).toBeGreaterThan(0);
     for (const ref of usesRefs) {
-      // owner/repo@vN 형태만 허용
-      expect(ref).toMatch(/^[\w.-]+\/[\w.-]+@v\d+$/);
+      expect(ref).toMatch(/^[\w.-]+\/[\w.-]+@[0-9a-f]{40}$/);
       expect(ref).not.toMatch(/@latest$/);
       expect(ref).not.toMatch(/@(main|master)$/);
+      expect(ref).not.toMatch(/@v\d+$/);
     }
-    // 저장소에서 사용 확인된 버전
-    expect(usesRefs).toContain('actions/checkout@v6');
-    expect(usesRefs).toContain('actions/github-script@v9');
+    expect(usesRefs).toContain('actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803');
+    expect(usesRefs).toContain('actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3');
   });
 });

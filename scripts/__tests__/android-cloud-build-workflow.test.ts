@@ -5,6 +5,7 @@ const root = process.cwd();
 const workflow = fs.readFileSync(path.join(root, '.github/workflows/deploy-google-play.yml'), 'utf8');
 const cloudBuild = fs.readFileSync(path.join(root, 'cloudbuild-android.yaml'), 'utf8');
 const buildScript = fs.readFileSync(path.join(root, 'scripts/build-android.sh'), 'utf8');
+const uploadScript = fs.readFileSync(path.join(root, 'scripts/upload-google-play-internal.py'), 'utf8');
 const buildEnv = fs.readFileSync(path.join(root, 'build.env'), 'utf8');
 
 describe('Android Cloud Build 배포 계약', () => {
@@ -19,11 +20,12 @@ describe('Android Cloud Build 배포 계약', () => {
     expect(workflow).not.toContain('./gradlew');
   });
 
-  it('현재 workflow tooling으로 기존 release tag 소스를 재현 가능하게 빌드한다', () => {
-    expect(workflow).toContain('path: ci-tooling');
+  it('exact release tag의 source와 build tooling만 사용한다', () => {
     expect(workflow).toContain('path: release-source');
-    expect(workflow).toContain('Overlay current Cloud Build tooling');
-    expect(workflow).toContain('tooling_sha');
+    expect(workflow).toContain('ref: ${{ needs.resolve.outputs.tag }}');
+    expect(workflow).not.toContain('path: ci-tooling');
+    expect(workflow).not.toContain('Overlay current Cloud Build tooling');
+    expect(workflow).not.toContain('tooling_sha');
     expect(workflow).toContain('source_sha');
   });
 
@@ -51,9 +53,18 @@ describe('Android Cloud Build 배포 계약', () => {
   it('빌드와 Google Play internal 업로드를 분리한다', () => {
     expect(workflow).toContain('upload:');
     expect(workflow).toContain('if: ${{ inputs.send_to_google_play }}');
-    expect(workflow).toContain('actions/download-artifact@v8');
+    expect(workflow).toContain('actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c');
     expect(workflow).toContain('--aab-path "${aabs[0]}"');
     expect(workflow).toContain('retention-days: 3');
+  });
+
+  it('버전은 exact 중앙 workflow SHA의 release binding에서만 받는다', () => {
+    expect(workflow).toContain(
+      'seorilabs/.github/.github/workflows/resolve-release-version.yml@8a11a145fed35479a4a89ebc7ca97edd0a0f05fd'
+    );
+    expect(workflow).toContain('SEORI_RELEASE_VERSION_CODE: ${{ needs.resolve.outputs.android_version_code }}');
+    expect(workflow).not.toContain('scripts/resolve-release-version.mjs');
+    expect(buildScript).not.toContain('scripts/resolve-release-version.mjs');
   });
 
   it('서명·Firebase·AAB 무결성을 Cloud Build 안에서 검증한다', () => {
@@ -62,5 +73,19 @@ describe('Android Cloud Build 배포 계약', () => {
     expect(buildScript).toContain('node scripts/check-firebase-android-config.mjs');
     expect(buildScript).toContain('pnpm check:play:release -- --json');
     expect(buildScript).toContain('jarsigner -verify -strict');
+  });
+
+  it('검증한 AAB digest와 exact tag versionCode만 업로드·승격한다', () => {
+    expect(workflow).toContain('Verify AAB against the central release binding');
+    expect(workflow).toContain('SEORI_EXPECTED_AAB_SHA256');
+    expect(workflow).toContain('SEORI_EXPECTED_ANDROID_VERSION_CODE');
+    expect(workflow).toContain('VERIFIED_PACKAGE_NAME: ${{ needs.build-aab.outputs.package_name }}');
+    expect(workflow).toContain('--package-name "$VERIFIED_PACKAGE_NAME"');
+    expect(workflow).toContain('.seorilabs-release-authority/scripts/release/upload-google-play-aab.py');
+    expect(workflow).not.toContain('python3 scripts/upload-google-play-internal.py "${args[@]}"');
+    expect(uploadScript).not.toContain('bundles().upload');
+    expect(uploadScript).toContain('--promote-version-code');
+    expect(uploadScript).toContain('args.promote_version_code not in version_codes');
+    expect(uploadScript).not.toContain('latest = str(max(version_codes))');
   });
 });

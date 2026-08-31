@@ -11,13 +11,10 @@ import google_auth_httplib2
 import httplib2
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
-from googleapiclient.errors import HttpError
-from googleapiclient.http import MediaFileUpload
 
 
 ROOT = Path(__file__).resolve().parents[1]
 CONFIG_PATH = ROOT / "play-store" / "google-play.config.json"
-DEFAULT_AAB_PATH = ROOT / "apps/mobile/android/app/build/outputs/bundle/release/app-release.aab"
 ANDROID_PUBLISHER_SCOPE = "https://www.googleapis.com/auth/androidpublisher"
 DEFAULT_API_TIMEOUT_SECONDS = 300
 DEFAULT_API_RETRIES = 5
@@ -124,19 +121,7 @@ def collect_track_version_codes(tracks):
     return version_codes
 
 
-def is_changes_not_sent_for_review_rejected(error):
-    if not isinstance(error, HttpError):
-        return False
-
-    try:
-        reason = error.error_details[0].get("message", "")
-    except Exception:
-        reason = str(error)
-    return "changesNotSentForReview must not be set" in reason
-
-
-def default_release_notes(release_config, language):
-    notes = release_config.get("notes", {})
+def default_release_notes(notes, language):
     if isinstance(notes, dict):
         if notes.get(language):
             return notes[language]
@@ -260,106 +245,10 @@ def resolve_next_version_code(args):
             print(f"Warning: failed to delete Google Play edit {edit_id}: {cleanup_error}", file=sys.stderr)
 
 
-def upload_internal_release(args):
-    package_name = args.package_name
-    aab_path = Path(args.aab_path).resolve()
-
-    if not aab_path.exists():
-        raise FileNotFoundError(f"AAB file does not exist: {aab_path}")
-
-    publisher = make_android_publisher(args.api_timeout_seconds)
-    edit = execute_request(
-        publisher.edits().insert(packageName=package_name, body={}),
-        args.api_retries,
-    )
-    edit_id = edit["id"]
-    track = resolve_track(publisher, package_name, edit_id, args.track, args.api_retries)
-
-    try:
-        release_notes = build_release_notes(publisher, package_name, edit_id, args, args.api_retries)
-        if not release_notes:
-            raise RuntimeError("Release notes are required.")
-
-        media = MediaFileUpload(
-            str(aab_path),
-            mimetype="application/octet-stream",
-            chunksize=16 * 1024 * 1024,
-            resumable=True,
-        )
-        bundle = execute_request(
-            publisher.edits().bundles().upload(
-                packageName=package_name,
-                editId=edit_id,
-                media_body=media,
-            ),
-            args.api_retries,
-        )
-        version_code = int(bundle["versionCode"])
-
-        release = {
-            "name": args.release_name,
-            "versionCodes": [str(version_code)],
-            "status": args.release_status,
-            "releaseNotes": release_notes,
-        }
-        track_body = {
-            "track": track,
-            "releases": [release],
-        }
-
-        execute_request(
-            publisher.edits().tracks().update(
-                packageName=package_name,
-                editId=edit_id,
-                track=track,
-                body=track_body,
-            ),
-            args.api_retries,
-        )
-
-        commit_kwargs = {
-            "packageName": package_name,
-            "editId": edit_id,
-        }
-        if args.changes_not_sent_for_review:
-            commit_kwargs["changesNotSentForReview"] = True
-
-        try:
-            committed_edit = execute_request(
-                publisher.edits().commit(**commit_kwargs),
-                args.api_retries,
-            )
-        except Exception as commit_error:
-            if not args.changes_not_sent_for_review or not is_changes_not_sent_for_review_rejected(commit_error):
-                raise
-
-            commit_kwargs.pop("changesNotSentForReview", None)
-            committed_edit = execute_request(
-                publisher.edits().commit(**commit_kwargs),
-                args.api_retries,
-            )
-        return {
-            "packageName": package_name,
-            "requestedTrack": args.track,
-            "track": track,
-            "releaseStatus": args.release_status,
-            "versionCode": version_code,
-            "editId": committed_edit["id"],
-        }
-    except Exception:
-        try:
-            execute_request(
-                publisher.edits().delete(packageName=package_name, editId=edit_id),
-                args.api_retries,
-            )
-        except Exception as cleanup_error:
-            print(f"Warning: failed to delete Google Play edit {edit_id}: {cleanup_error}", file=sys.stderr)
-        raise
-
-
 def promote_release(args):
-    """이미 from-track(internal)에 올라간 최신 versionCode 를 재빌드 없이 to-track(production)
-    으로 승격 + 언어별 노트 반영 + commit(=심사 제출). rollout 지정 시 단계적 출시."""
+    """중앙 tag binding이 지정한 exact versionCode만 재빌드 없이 승격한다."""
+    if not args.release_name:
+        raise RuntimeError("--release-name is required for promotion.")
     package_name = args.package_name
     publisher = make_android_publisher(args.api_timeout_seconds)
     edit = execute_request(
@@ -383,18 +272,20 @@ def promote_release(args):
         version_codes = []
         for release in source.get("releases", []):
             version_codes.extend(int(v) for v in release.get("versionCodes", []) or [])
-        if not version_codes:
+        if args.promote_version_code is None:
+            raise RuntimeError("--promote-version-code is required for promotion.")
+        if args.promote_version_code not in version_codes:
             raise RuntimeError(
-                f"No versionCode found on '{from_track}' track to promote."
+                f"versionCode {args.promote_version_code} was not found on '{from_track}'."
             )
-        latest = str(max(version_codes))
+        target_version_code = str(args.promote_version_code)
 
         release_notes = build_release_notes(
             publisher, package_name, edit_id, args, args.api_retries
         )
         release = {
             "name": args.release_name,
-            "versionCodes": [latest],
+            "versionCodes": [target_version_code],
             "status": args.release_status,
         }
         if release_notes:
@@ -421,7 +312,7 @@ def promote_release(args):
             "packageName": package_name,
             "fromTrack": from_track,
             "toTrack": to_track,
-            "versionCode": int(latest),
+            "versionCode": int(target_version_code),
             "releaseStatus": release["status"],
             "editId": committed_edit["id"],
         }
@@ -438,27 +329,22 @@ def promote_release(args):
 
 def main():
     config = load_config()
-    release_config = config.get("release", {})
     default_language = config.get("defaultLanguage", "ko-KR")
-    default_aab_path = ROOT / release_config.get("aabPath", str(DEFAULT_AAB_PATH.relative_to(ROOT)))
-
     parser = argparse.ArgumentParser(
-        description="Upload a signed AAB to Google Play internal testing via Android Publisher API."
+        description="Read Google Play version state or promote one exact centrally bound build."
     )
     parser.add_argument("--package-name", default=config.get("packageName"))
-    parser.add_argument("--aab-path", default=str(default_aab_path))
-    parser.add_argument("--track", default=release_config.get("track", config.get("targetTrack", "internal")))
     parser.add_argument(
         "--release-status",
         choices=["draft", "completed"],
         default="draft",
         help="Use draft for first automation runs; completed makes it available to internal testers.",
     )
-    parser.add_argument("--release-name", default=release_config.get("name", "0.1.0-internal"))
+    parser.add_argument("--release-name", default=None)
     parser.add_argument("--release-notes-language", default=default_language)
     parser.add_argument(
         "--release-notes",
-        default=default_release_notes(release_config, default_language),
+        default=default_release_notes(config.get("releaseNotes", {}), default_language),
     )
     parser.add_argument(
         "--release-notes-json",
@@ -473,15 +359,16 @@ def main():
     parser.add_argument("--promote-from-track", default="internal")
     parser.add_argument("--promote-to-track", default="production")
     parser.add_argument(
+        "--promote-version-code",
+        type=positive_int,
+        default=None,
+        help="Exact central tag-derived versionCode to promote.",
+    )
+    parser.add_argument(
         "--rollout",
         type=unit_fraction,
         default=None,
         help="Staged rollout fraction (0,1] for promotion. Omit for full release.",
-    )
-    parser.add_argument(
-        "--changes-not-sent-for-review",
-        action="store_true",
-        help="Commit the edit with changesNotSentForReview=true.",
     )
     parser.add_argument(
         "--api-timeout-seconds",
@@ -523,14 +410,10 @@ def main():
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return 0
 
-    try:
-        result = upload_internal_release(args)
-    except Exception as error:
-        print(f"Google Play internal upload failed: {error}", file=sys.stderr)
-        return 1
-
-    print(json.dumps(result, ensure_ascii=False, indent=2))
-    return 0
+    parser.error(
+        "AAB upload moved to the exact central upload-google-play-aab.py; "
+        "use --print-next-version-code or --promote."
+    )
 
 
 if __name__ == "__main__":

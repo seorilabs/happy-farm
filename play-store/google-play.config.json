@@ -6,19 +6,19 @@
   "contactEmail": "cs@seorilabs.com",
   "privacyPolicyUrl": "https://www.seorilabs.com/privacy",
   "targetTrack": "internal",
-  "release": {
-    "name": "1.3.2",
+  "artifact": {
     "aabPath": "apps/mobile/android/app/build/outputs/bundle/release/app-release.aab",
-    "notes": {
-      "ko-KR": "Android 내부 테스트 빌드를 다시 만들고, 무한 엔드게임 시스템(마스터리, 변이 도감, 연구소, 교배/자동화, 농장 체인 개척, 업적/칭호)이 Android bundle에 포함되도록 수정했습니다.",
-      "en-US": "Rebuilt the Android internal test build so the endless endgame systems, including mastery, mutation collection, Research Lab, breeding, automation, farm-chain pioneering, achievements, and titles, are included in the Android bundle.",
-      "ja": "マスタリー、変異コレクション、研究所、交配、自動化、農場チェーン開拓、実績、称号など、終わりのないエンドゲーム要素をAndroidバンドルに収録するため、Android内部テストビルドを再構築しました。",
-      "zh-Hans": "重新构建了 Android 内测版本，将熟练度、变异收集、研究所、杂交、自动化、连锁农场开拓、成就和称号等无尽终局系统全部纳入 Android 安装包。",
-      "zh-Hant": "重新建置了 Android 內部測試版本，讓無盡的終局系統，包括熟練度、變異收集、研究室、育種、自動化、連鎖農場開拓、成就與稱號，都納入 Android 安裝包中。",
-      "de": "Android-Testversion neu erstellt, damit die endlosen Endgame-Systeme im Android-Paket enthalten sind: Meisterschaft, Mutationssammlung, Forschungslabor, Zucht, Automatisierung, Kettenfarm-Erschließung, Erfolge und Titel.",
-      "fr": "Build de test interne Android reconstruit : les systèmes de fin de jeu sans fin (maîtrise, collection de mutations, Labo de recherche, croisement, automatisation, exploration en chaîne, succès et titres) sont désormais inclus dans le bundle Android.",
-      "es": "Reconstruimos la versión de prueba interna de Android para que los sistemas infinitos de final de partida, incluidas la maestría, la colección de mutaciones, el Laboratorio de Investigación, el cruce, la automatización, la colonización de granjas en cadena, los logros y los títulos, se incluyan en el paquete de Android."
-    }
+    "authority": "exact-central-workflow-artifact"
+  },
+  "releaseNotes": {
+    "ko-KR": "Android 내부 테스트 빌드를 다시 만들고, 무한 엔드게임 시스템(마스터리, 변이 도감, 연구소, 교배/자동화, 농장 체인 개척, 업적/칭호)이 Android bundle에 포함되도록 수정했습니다.",
+    "en-US": "Rebuilt the Android internal test build so the endless endgame systems, including mastery, mutation collection, Research Lab, breeding, automation, farm-chain pioneering, achievements, and titles, are included in the Android bundle.",
+    "ja": "マスタリー、変異コレクション、研究所、交配、自動化、農場チェーン開拓、実績、称号など、終わりのないエンドゲーム要素をAndroidバンドルに収録するため、Android内部テストビルドを再構築しました。",
+    "zh-Hans": "重新构建了 Android 内测版本，将熟练度、变异收集、研究所、杂交、自动化、连锁农场开拓、成就和称号等无尽终局系统全部纳入 Android 安装包。",
+    "zh-Hant": "重新建置了 Android 內部測試版本，讓無盡的終局系統，包括熟練度、變異收集、研究室、育種、自動化、連鎖農場開拓、成就與稱號，都納入 Android 安裝包中。",
+    "de": "Android-Testversion neu erstellt, damit die endlosen Endgame-Systeme im Android-Paket enthalten sind: Meisterschaft, Mutationssammlung, Forschungslabor, Zucht, Automatisierung, Kettenfarm-Erschließung, Erfolge und Titel.",
+    "fr": "Build de test interne Android reconstruit : les systèmes de fin de jeu sans fin (maîtrise, collection de mutations, Labo de recherche, croisement, automatisation, exploration en chaîne, succès et titres) sont désormais inclus dans le bundle Android.",
+    "es": "Reconstruimos la versión de prueba interna de Android para que los sistemas infinitos de final de partida, incluidas la maestría, la colección de mutaciones, el Laboratorio de Investigación, el cruce, la automatización, la colonización de granjas en cadena, los logros y los títulos, se incluyan en el paquete de Android."
   },
   "storeListing": {
     "appName": {
@@ -139,8 +139,8 @@
   },
   "automation": {
     "developerApiAuth": "GitHub Actions OIDC + Google Cloud Workload Identity Federation",
-    "workflow": ".github/workflows/build-google-play.yml",
-    "uploadScript": "scripts/upload-google-play-internal.py",
+    "workflow": ".github/workflows/deploy-google-play.yml",
+    "uploadAuthority": "seorilabs/.github@8a11a145fed35479a4a89ebc7ca97edd0a0f05fd:scripts/release/upload-google-play-aab.py",
     "workloadIdentityProviderVariable": "GOOGLE_WORKLOAD_IDENTITY_PROVIDER",
     "serviceAccountEmailVariable": "GOOGLE_PLAY_SERVICE_ACCOUNT_EMAIL",
     "firstTarget": "signed AAB uploaded to internal testing as draft"

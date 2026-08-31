@@ -21,33 +21,47 @@ on:
         description: '앱인토스 배포 메모 (선택, 최대 1000자)'
         required: false
         type: string
+    secrets:
+      APPS_IN_TOSS_API_KEY:
+        required: true
+      GA4_MP_API_SECRET:
+        required: true
 
 permissions:
   contents: read
   packages: read
 
 concurrency:
-  group: happy-farm-apps-in-toss-deploy-${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
+  group: happy-farm-apps-in-toss-deploy-${{ inputs.release_tag || github.ref_name }}
   cancel-in-progress: false
 
 jobs:
+  resolve:
+    name: Bind exact release tag
+    uses: seorilabs/.github/.github/workflows/resolve-release-version.yml@8a11a145fed35479a4a89ebc7ca97edd0a0f05fd
+    with:
+      release_tag: ${{ inputs.release_tag }}
+
   deploy:
     name: AIT artifact deploy
+    needs: resolve
     runs-on: seorilabs-rpi-arm64
     timeout-minutes: 25
     environment: apps-in-toss
 
     env:
       APPS_IN_TOSS_API_KEY: ${{ secrets.APPS_IN_TOSS_API_KEY }}
-      APPS_IN_TOSS_INPUT_MEMO: ${{ github.event_name == 'workflow_dispatch' && inputs.memo || '' }}
-      APPS_IN_TOSS_RELEASE_REF: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
+      APPS_IN_TOSS_INPUT_MEMO: ${{ inputs.memo || '' }}
+      APPS_IN_TOSS_RELEASE_REF: ${{ needs.resolve.outputs.tag }}
       GA4_MP_API_SECRET: ${{ secrets.GA4_MP_API_SECRET }}
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
+          ref: ${{ needs.resolve.outputs.tag }}
+          fetch-depth: 0
+          fetch-tags: true
 
       - name: Check required config
         shell: bash
@@ -69,11 +83,15 @@ jobs:
         with:
           install-command: pnpm --filter . --filter @happy-farm/ait... install --frozen-lockfile
 
-      - name: Resolve release version
-        id: release-version
+      - name: Project central release binding into runtime metadata
         env:
-          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
-        run: node scripts/resolve-release-version.mjs --github-output --github-step-summary --write-release-info --quiet
+          SEORI_RELEASE_TAG: ${{ needs.resolve.outputs.tag }}
+          SEORI_RELEASE_VERSION: ${{ needs.resolve.outputs.version_name }}
+          SEORI_RELEASE_VERSION_CODE: ${{ needs.resolve.outputs.android_version_code }}
+          SEORI_RELEASE_SOURCE_SHA: ${{ needs.resolve.outputs.source_sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$SEORI_RELEASE_SOURCE_SHA"
+          node scripts/write-release-info.mjs
 
       - name: Lint
         run: pnpm --dir apps/ait lint
@@ -94,9 +112,9 @@ jobs:
         run: pnpm --dir apps/ait build
 
       - name: Upload build artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: happy-farm-ait-v${{ steps.release-version.outputs.version_name }}-${{ github.sha }}
+          name: happy-farm-ait-v${{ needs.resolve.outputs.version_name }}-${{ needs.resolve.outputs.source_sha }}
           if-no-files-found: error
           retention-days: 7
           path: 'apps/ait/*.ait'
@@ -104,7 +122,7 @@ jobs:
       - name: Deploy to Apps in Toss
         shell: bash
         env:
-          RELEASE_VERSION_NAME: ${{ steps.release-version.outputs.version_name }}
+          RELEASE_VERSION_NAME: ${{ needs.resolve.outputs.version_name }}
         run: |
           set -euo pipefail
 

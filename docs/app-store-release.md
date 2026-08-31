@@ -190,7 +190,9 @@ Apple 공식 도움말 기준으로 build upload에는 Account Holder, Admin, Ap
 
 ## 7단계: GitHub Actions archive/upload
 
-App Store archive/upload는 `.github/workflows/deploy-app-store.yml`에서 처리합니다. workflow는 `vX.Y.Z` 릴리즈 태그를 source of truth로 사용하고, `scripts/resolve-release-version.mjs --write-release-info`로 런타임 `RELEASE_INFO`를 먼저 쓴 뒤 archive합니다.
+App Store archive/upload는 `.github/workflows/deploy-app-store.yml`에서 처리합니다. workflow는 exact
+`vX.Y.Z` 태그를 중앙 `release-version-authority-v1`에 결합하고,
+`scripts/write-release-info.mjs`로 확정값만 런타임 `RELEASE_INFO`에 기록한 뒤 archive합니다.
 
 ```bash
 gh workflow run deploy-app-store.yml --ref develop -f release_tag=v1.1.1 -f upload_to_app_store=true
@@ -205,7 +207,7 @@ gh workflow run deploy-app-store.yml --ref develop -f release_tag=v1.1.1 -f uplo
 workflow가 자동으로 주입하는 값:
 
 - `CFBundleShortVersionString`: 릴리즈 태그의 SemVer core, 예: `v1.1.1` -> `1.1.1`
-- `CFBundleVersion`: 공통 buildNumber, 예: `v1.1.1` -> `1001001`
+- `CFBundleVersion`: Apple build number, 예: `v1.1.1` -> `1001001`
 - 런타임 `RELEASE_INFO`: 같은 태그와 buildNumber
 
 GitHub-hosted macOS runner에서 실행되므로 public repository는 표준 runner 무료 사용 범위에 들어갑니다. private repository에서는 GitHub plan의 included minutes를 사용하며, quota를 넘기면 billing 설정에 따라 차단 또는 과금됩니다.

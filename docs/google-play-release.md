@@ -167,8 +167,8 @@ workflow:
 - `after_upload=초안만 만들기`: 첫 자동화 검증용 초안 릴리스 생성
 - `after_upload=내부 테스터에게 배포하기`: 내부 테스터에게 배포 가능한 릴리스 생성
 - `versionName`: `docs/release-versioning.md` 기준의 태그 SemVer numeric core, 예: `v1.27.0` -> `1.27.0`
-- `versionCode`: 릴리즈 태그에서 계산한 `buildNumber`, 예: `v1.27.0` -> `1027000`
-- 업로드 실행 시 Play API에서 기존 max `versionCode + 1`보다 작은 태그 buildNumber는 실패 처리합니다.
+- `versionCode`: 중앙 migration epoch를 포함한 태그 파생값, 예: `v1.27.0` -> `1001027000`
+- 업로드 실행 시 Play API에서 기존 max `versionCode + 1`보다 작은 중앙 파생값은 실패 처리합니다.
 - 광고 활성화는 빌드 채널이나 버전 번호가 아니라 Remote Config의 `mobile_ads_global_enabled` 하나로 제어합니다.
 
 필수 GitHub Actions secrets:
@@ -225,29 +225,23 @@ gh workflow run deploy-google-play.yml --ref v1.27.0 -f send_to_google_play=fals
 gh workflow run deploy-google-play.yml --ref v1.27.0 -f send_to_google_play=true -f after_upload='초안만 만들기'
 ```
 
-`review_later_in_console`은 기본값 `false`입니다. 이 값을 켜면 검토 제출을 자동으로 하지 않고 Play Console에서 나중에 처리하도록 요청합니다. 현재 이 앱은 내부 API 값인 `changesNotSentForReview=true`를 API commit에서 거부하므로, 필요한 경우에만 명시적으로 켭니다. 업로드 스크립트는 이 거부 응답을 받으면 해당 플래그 없이 commit을 재시도합니다.
+`review_later_in_console`은 기본값 `false`입니다. 이 값을 켜면 검토 제출을 자동으로 하지 않고 Play Console에서 나중에 처리하도록 요청합니다. 업로드에는 해당 태그의 GitHub Release에 첨부된 비어 있지 않은 `release-notes.json`이 반드시 필요합니다.
 
-업로드 스크립트는 `play-store/google-play.config.json`의 `packageName`, `targetTrack`, `release.name`, `release.notes`, `release.aabPath`를 기본값으로 사용합니다.
+검증된 AAB 업로드는 exact 중앙 workflow SHA에 포함된 `scripts/release/upload-google-play-aab.py`만 수행합니다. 저장소의 `scripts/upload-google-play-internal.py`는 다음 versionCode 조회와 exact versionCode 승격만 담당하며 AAB 업로드 기능은 없습니다.
 
 참고: Google Play Developer API 문서 일부는 internal testing track 식별자를 `qa`로 설명하지만, Play API 예제와 기존 자동화에서는 `internal`도 사용됩니다. 업로드 스크립트는 `tracks.list` 결과를 확인해 `internal`/`qa`를 자동 보정합니다.
 
-### 로컬 AAB 업로드
+### 로컬 릴리즈 업로드 금지
 
-GitHub Actions를 사용할 수 없어 로컬에서 Google Play 내부 테스트용 AAB를 만들 때는 `pnpm build:android`만 직접 실행하지 않습니다. 릴리즈 태그 기반 런타임 정보가 빠지거나, `packages/farm-core`/`packages/farm-ui`의 shared JS 변경을 Gradle incremental build가 놓치면 `versionCode`만 새 값이고 실제 앱 UI는 오래된 bundle이 들어갈 수 있습니다.
+로컬 `pnpm build:android`는 개발용 build-only 검증입니다. 중앙 release binding, artifact digest readback, WIF 업로드 경계를 거치지 않으므로 마켓 릴리즈에 사용할 수 없습니다.
 
-로컬 빌드는 반드시 릴리즈 태그를 지정한 전용 명령을 사용합니다.
-
-```bash
-RELEASE_TAG=v1.27.0 pnpm release:android:aab
-python3 scripts/upload-google-play-internal.py --release-status completed
-```
-
-생성된 AAB가 최신 shared UI를 포함하는지 빠르게 확인합니다.
+릴리즈 후보 생성과 내부 트랙 업로드는 태그를 지정한 중앙 workflow만 사용합니다.
 
 ```bash
-unzip -p apps/mobile/android/app/build/outputs/bundle/release/app-release.aab base/assets/index.android.bundle \
-  | strings \
-  | rg 'Collection|Research Lab|Pioneer|Achievements|v1\.27\.0'
+gh workflow run deploy-google-play.yml --ref main \
+  -f release_tag=v1.27.0 \
+  -f send_to_google_play=true \
+  -f after_upload='초안만 만들기'
 ```
 
 ## 자동화 범위

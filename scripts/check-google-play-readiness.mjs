@@ -200,7 +200,7 @@ function listingValue(config, key, locale) {
 }
 
 function releaseNote(config, locale) {
-  const notes = config.release?.notes ?? config.release?.releaseNotes ?? {};
+  const notes = config.releaseNotes ?? {};
   if (typeof notes !== 'object' || notes == null) {
     return null;
   }
@@ -260,7 +260,11 @@ if (config == null) {
   assertField(config, 'freeOrPaid', (value) => value === 'free' || value === 'paid');
   assertField(config, 'contactEmail', (value) => typeof value === 'string' && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(value));
   assertField(config, 'privacyPolicyUrl', (value) => typeof value === 'string' && /^https:\/\//.test(value));
-  assertField(config, 'release.name');
+  if (Object.prototype.hasOwnProperty.call(config, 'release')) {
+    fail('Google Play config에 로컬 release version authority가 남아 있습니다.', 'GitHub vX.Y.Z tag만 사용');
+  } else {
+    pass('Google Play config에 로컬 release version authority가 없습니다.');
+  }
 
   const defaultLanguage = typeof config.defaultLanguage === 'string' ? config.defaultLanguage : 'ko-KR';
   assertValue(`storeListing.appName.${defaultLanguage}`, listingValue(config, 'title', defaultLanguage));
@@ -274,7 +278,7 @@ if (config == null) {
     listingValue(config, 'fullDescription', defaultLanguage),
     (value) => typeof value === 'string' && value.length > 0 && value.length <= 4000
   );
-  assertValue(`release.notes.${defaultLanguage}`, releaseNote(config, defaultLanguage));
+  assertValue(`releaseNotes.${defaultLanguage}`, releaseNote(config, defaultLanguage));
 
   for (const declaration of ['contentRating', 'targetAudience', 'dataSafety', 'ads']) {
     assertField(config, `contentDeclarations.${declaration}`);
@@ -417,9 +421,9 @@ if (!androidRootExists || appBuildPath == null) {
   }
 }
 
-const configuredAabPath = config?.release?.aabPath;
+const configuredAabPath = config?.artifact?.aabPath;
 if (typeof configuredAabPath !== 'string' || !isConcrete(configuredAabPath)) {
-  fail('release.aabPath 값이 확정되지 않았습니다.', configuredAabPath == null ? 'missing' : String(configuredAabPath));
+  fail('artifact.aabPath 값이 확정되지 않았습니다.', configuredAabPath == null ? 'missing' : String(configuredAabPath));
 } else if (!existsSync(repoPath(configuredAabPath))) {
   const detail = `${configuredAabPath}${requireAab ? '' : ' (릴리스 빌드에서는 --require-aab 사용)'}`;
   if (requireAab) {

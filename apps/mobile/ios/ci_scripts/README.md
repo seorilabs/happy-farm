@@ -12,23 +12,17 @@ App Store에 **구버전 표기(예: `app_version=1.0`) 빌드가 나가는 것�
 train과 충돌해 TestFlight 업로드가 거부되거나, 심사에 구버전으로 나가 신규 유저가 온보딩·
 리텐션 수정이 빠진 빌드를 받게 된다(해당 코호트 잔존 측정도 오염).
 
-`ci_pre_xcodebuild.sh`가 버전을 결정하는 순서:
+`ci_pre_xcodebuild.sh`는 `CI_TAG=vX.Y.Z`가 있는 exact tag archive만 허용한다. 브랜치 빌드에서
+최신 태그를 추측하지 않으며 `CI_TAG`가 없으면 비-제로 종료한다. 버전 계산기는 앱 저장소에 두지
+않는다. 불변 중앙 commit `8a11a145fed35479a4a89ebc7ca97edd0a0f05fd`의
+`xcode-cloud-apply-tag-version.mjs`와 `tag-version-authority.mjs`를 내려받아 각각 SHA-256 checksum을
+검증한 뒤 `CFBundleShortVersionString`, `CFBundleVersion`과 런타임 `RELEASE_INFO`에 확정값만 투영한다.
 
-1. **`CI_TAG`(vX.Y.Z) 트리거 빌드** → 그 태그로 `scripts/resolve-release-version.mjs`가
-   `CFBundleShortVersionString`(marketing) / `CFBundleVersion`(build number)을 산출해 주입.
-2. **`CI_TAG` 부재(브랜치/검증 빌드)** → `git describe --tags --abbrev=0`로 찾은 **가장 최근
-   릴리즈 태그**로 폴백 주입.
-3. **태그를 전혀 결정할 수 없음** → **비-제로 종료**로 archive를 실패시킨다. 어떤 경우에도
-   `MARKETING_VERSION` 기본값이 그대로 아카이브되지 않는다.
+`project.pbxproj`의 값은 개발 기본값일 뿐 release authority가 아니다. 위 스크립트가 실행되지
+않거나 exact tag binding을 검증하지 못하면 archive 자체를 실패시킨다.
 
-방어선 2중화: `project.pbxproj`의 `MARKETING_VERSION` 기본값도 `1.0`이 아닌 현행 릴리즈
-버전(`app-store/app-store.config.json`의 `version.versionNumber`와 일치)으로 유지한다.
-단, **최종 아카이브 버전의 authoritative 소스는 항상 릴리즈 태그**이며 위 스크립트가 빌드
-시점에 주입한다. pbxproj 기본값은 스크립트가 없거나 우회된 경우의 보조 방어선일 뿐이다.
-
-GitHub Actions 배포 경로(`.github/workflows/deploy-app-store.yml`)는 이미
-`MARKETING_VERSION`을 명시 주입 + 아카이브 검증(태그 없으면 실패)으로 안전하다. 이
-스크립트는 Xcode Cloud 경로에 동일한 안전장치를 맞춘다.
+GitHub Actions 배포 경로(`.github/workflows/deploy-app-store.yml`)도 같은 중앙 reusable resolver의
+exact tag binding을 사용한다. 이 스크립트는 Xcode Cloud 경로에 같은 정본을 적용한다.
 
 ### 로컬/CI 검증 (dry-run)
 
@@ -37,8 +31,9 @@ GitHub Actions 배포 경로(`.github/workflows/deploy-app-store.yml`)는 이미
 ```sh
 # CI_TAG 경로
 CI_TAG=v1.7.0 CI_PRE_XCODEBUILD_DRY_RUN=1 sh apps/mobile/ios/ci_scripts/ci_pre_xcodebuild.sh
-# 폴백/실패 경로 (CI_TAG 없음)
+# 실패 경로 (CI_TAG 없음)
 CI_PRE_XCODEBUILD_DRY_RUN=1 sh apps/mobile/ios/ci_scripts/ci_pre_xcodebuild.sh
 ```
 
-두 경로(태그 유/무)는 `scripts/__tests__/ci-pre-xcodebuild.test.ts`에서 자동 검증한다.
+테스트는 네트워크 대신 dry-run 전용 중앙 helper fixture를 사용하며, production 경로의 exact SHA와
+두 checksum 고정을 함께 검증한다.
