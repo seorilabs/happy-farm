@@ -6,8 +6,8 @@
 
 set -eu
 
-AUTHORITY_SHA="8a11a145fed35479a4a89ebc7ca97edd0a0f05fd"
-APPLIER_SHA256="a8436ec24933dfdb3dde38211e70e05df4f085d1f8d8fe0809d32c093de1a11e"
+AUTHORITY_SHA="ab9305632698fcb949d4c9df58cf18dbce73bef8"
+APPLIER_SHA256="b399afde0016e23947e173437e266aa83071079d1345b41ff580ebfe63357d6f"
 AUTHORITY_SHA256="ca9ef5b4fe326323840b171f9e6ed069cb182d2aee8e88b72e352c57514d466b"
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 REPO_ROOT="$(CDPATH= cd -- "${SCRIPT_DIR}/../../../.." && pwd)"
@@ -63,15 +63,16 @@ fi
 
 marketing="$(node -e 'process.stdout.write(String(JSON.parse(process.argv[1]).appleMarketingVersion ?? ""))' "$result")"
 build="$(node -e 'process.stdout.write(String(JSON.parse(process.argv[1]).appleBuildNumber ?? ""))' "$result")"
+runtime_code="$(node -e 'process.stdout.write(String(JSON.parse(process.argv[1]).runtimeVersionCode ?? ""))' "$result")"
 source_sha="$(node -e 'process.stdout.write(String(JSON.parse(process.argv[1]).sourceSha ?? ""))' "$result")"
 
-if [ -z "$marketing" ] || [ -z "$build" ] || [ -z "$source_sha" ]; then
+if [ -z "$marketing" ] || [ -z "$build" ] || [ -z "$runtime_code" ] || [ -z "$source_sha" ]; then
   echo "중앙 Xcode Cloud release binding 결과가 불완전합니다." >&2
   exit 1
 fi
 
 if [ "$DRY_RUN" = "1" ]; then
-  echo "DRY_RUN resolved marketing=${marketing} build=${build} tag=${RELEASE_TAG}"
+  echo "DRY_RUN resolved marketing=${marketing} build=${build} runtime=${runtime_code} tag=${RELEASE_TAG}"
   exit 0
 fi
 
@@ -79,9 +80,9 @@ fi
   cd "$REPO"
   SEORI_RELEASE_TAG="$RELEASE_TAG" \
   SEORI_RELEASE_VERSION="$marketing" \
-  SEORI_RELEASE_VERSION_CODE="$build" \
+  SEORI_RELEASE_VERSION_CODE="$runtime_code" \
   SEORI_RELEASE_SOURCE_SHA="$source_sha" \
     node scripts/write-release-info.mjs
 )
 
-echo "중앙 태그 버전 적용 완료: ${marketing} (${build})"
+echo "중앙 태그 버전 적용 완료: ${marketing} (Apple ${build}, runtime ${runtime_code})"

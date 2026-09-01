@@ -36,7 +36,8 @@ function createFixture(tag = 'v1.8.1') {
       'const tag = args.get("--tag");',
       'const match = /^v(\\d+)\\.(\\d+)\\.(\\d+)$/.exec(tag);',
       'if (!match) process.exit(1);',
-      `process.stdout.write(JSON.stringify({ tag, sourceSha: ${JSON.stringify(sourceSha)}, appleMarketingVersion: tag.slice(1), appleBuildNumber: Number(match[1]) * 1000000 + Number(match[2]) * 1000 + Number(match[3]) }));`,
+      'const appleBuildNumber = Number(match[1]) * 1000000 + Number(match[2]) * 1000 + Number(match[3]);',
+      `process.stdout.write(JSON.stringify({ tag, sourceSha: ${JSON.stringify(sourceSha)}, runtimeVersionCode: 1000000000 + appleBuildNumber, appleMarketingVersion: tag.slice(1), appleBuildNumber }));`,
       '',
     ].join('\n')
   );
@@ -67,6 +68,7 @@ describe('Xcode Cloud 중앙 태그 버전 주입', () => {
     expect(result.status).toBe(0);
     expect(result.stdout).toContain('marketing=1.8.1');
     expect(result.stdout).toContain('build=1008001');
+    expect(result.stdout).toContain('runtime=1001008001');
   });
 
   test('CI_TAG가 없으면 최신 태그를 추측하지 않고 archive를 차단한다', () => {
@@ -83,9 +85,22 @@ describe('Xcode Cloud 중앙 태그 버전 주입', () => {
 
   test('production 경로는 불변 중앙 SHA와 두 checksum을 고정한다', () => {
     const script = fs.readFileSync(SCRIPT, 'utf8');
-    expect(script).toContain('8a11a145fed35479a4a89ebc7ca97edd0a0f05fd');
-    expect(script).toContain('a8436ec24933dfdb3dde38211e70e05df4f085d1f8d8fe0809d32c093de1a11e');
+    expect(script).toContain('ab9305632698fcb949d4c9df58cf18dbce73bef8');
+    expect(script).toContain('b399afde0016e23947e173437e266aa83071079d1345b41ff580ebfe63357d6f');
     expect(script).toContain('ca9ef5b4fe326323840b171f9e6ed069cb182d2aee8e88b72e352c57514d466b');
     expect(script).toContain('raw.githubusercontent.com/seorilabs/.github');
+  });
+
+  test('GitHub와 Xcode Cloud 모두 공통 runtime versionCode를 투영한다', () => {
+    const workflow = fs.readFileSync(
+      path.resolve(__dirname, '../../.github/workflows/deploy-app-store.yml'),
+      'utf8'
+    );
+    const script = fs.readFileSync(SCRIPT, 'utf8');
+    expect(workflow).toContain(
+      'SEORI_RELEASE_VERSION_CODE: ${{ needs.resolve.outputs.android_version_code }}'
+    );
+    expect(script).toContain('JSON.parse(process.argv[1]).runtimeVersionCode');
+    expect(script).toContain('SEORI_RELEASE_VERSION_CODE="$runtime_code"');
   });
 });
