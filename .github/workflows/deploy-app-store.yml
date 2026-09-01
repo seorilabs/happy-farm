@@ -23,25 +23,51 @@ on:
         required: false
         default: true
         type: boolean
+    secrets:
+      FIREBASE_IOS_GOOGLE_SERVICE_INFO_PLIST_BASE64:
+        required: true
+      APPLE_DISTRIBUTION_CERTIFICATE_BASE64:
+        required: true
+      APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD:
+        required: true
+      APPLE_PROVISIONING_PROFILE_BASE64:
+        required: true
+      APPLE_KEYCHAIN_PASSWORD:
+        required: true
+      APPLE_TEAM_ID:
+        required: false
+      APP_STORE_CONNECT_API_KEY_ID:
+        required: false
+      APP_STORE_CONNECT_ISSUER_ID:
+        required: false
+      APP_STORE_CONNECT_PRIVATE_KEY_BASE64:
+        required: false
 
 permissions:
   contents: read
   packages: read
 
 concurrency:
-  group: happy-farm-app-store-${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
+  group: happy-farm-app-store-${{ inputs.release_tag || github.ref_name }}
   cancel-in-progress: false
 
 jobs:
+  resolve:
+    name: Bind exact release tag
+    uses: seorilabs/.github/.github/workflows/resolve-release-version.yml@8a11a145fed35479a4a89ebc7ca97edd0a0f05fd
+    with:
+      release_tag: ${{ inputs.release_tag }}
+
   archive-upload:
     name: iOS archive and upload
+    needs: resolve
     runs-on: macos-26
     timeout-minutes: 60
     environment: app-store
 
     env:
-      APP_STORE_RELEASE_REF: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
-      SHOULD_UPLOAD_TO_APP_STORE: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.upload_to_app_store) }}
+      APP_STORE_RELEASE_REF: ${{ needs.resolve.outputs.tag }}
+      SHOULD_UPLOAD_TO_APP_STORE: ${{ inputs.upload_to_app_store }}
       IOS_SCHEME: HappyFarmMobile
       IOS_WORKSPACE: apps/mobile/ios/HappyFarmMobile.xcworkspace
       IOS_BUNDLE_ID: com.seorilabs.happyfarm
@@ -50,9 +76,11 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
+          ref: ${{ needs.resolve.outputs.tag }}
+          fetch-depth: 0
+          fetch-tags: true
 
       - name: Check release ref
         shell: bash
@@ -87,17 +115,21 @@ jobs:
           fi
 
       - name: Setup Ruby and CocoaPods
-        uses: ruby/setup-ruby@v1
+        uses: ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b # v1
         with:
           ruby-version: '3.2'
           bundler-cache: true
           working-directory: apps/mobile
 
-      - name: Resolve release version
-        id: release-version
+      - name: Project central release binding into runtime metadata
         env:
-          RELEASE_TAG: ${{ env.APP_STORE_RELEASE_REF }}
-        run: node scripts/resolve-release-version.mjs --github-output --github-step-summary --write-release-info --quiet
+          SEORI_RELEASE_TAG: ${{ needs.resolve.outputs.tag }}
+          SEORI_RELEASE_VERSION: ${{ needs.resolve.outputs.version_name }}
+          SEORI_RELEASE_VERSION_CODE: ${{ needs.resolve.outputs.android_version_code }}
+          SEORI_RELEASE_SOURCE_SHA: ${{ needs.resolve.outputs.source_sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$SEORI_RELEASE_SOURCE_SHA"
+          node scripts/write-release-info.mjs
 
       - name: Typecheck mobile app
         run: pnpm --dir apps/mobile typecheck
@@ -291,9 +323,11 @@ jobs:
           mkdir -p "$profiles_dir"
           cp "$profile_path" "$profiles_dir/$profile_uuid.mobileprovision"
 
-          echo "keychain_path=$keychain_path" >> "$GITHUB_OUTPUT"
-          echo "profile_uuid=$profile_uuid" >> "$GITHUB_OUTPUT"
-          echo "profile_name=$profile_name" >> "$GITHUB_OUTPUT"
+          {
+            echo "keychain_path=$keychain_path"
+            echo "profile_uuid=$profile_uuid"
+            echo "profile_name=$profile_name"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Install CocoaPods
         working-directory: apps/mobile/ios
@@ -308,8 +342,8 @@ jobs:
       - name: Show resolved iOS signing settings
         shell: bash
         env:
-          APPLE_MARKETING_VERSION: ${{ steps.release-version.outputs.apple_marketing_version }}
-          APPLE_BUILD_NUMBER: ${{ steps.release-version.outputs.apple_build_number }}
+          APPLE_MARKETING_VERSION: ${{ needs.resolve.outputs.version_name }}
+          APPLE_BUILD_NUMBER: ${{ needs.resolve.outputs.apple_build_number }}
           KEYCHAIN_PATH: ${{ steps.signing.outputs.keychain_path }}
           RESOLVED_IOS_PROFILE_NAME: ${{ steps.signing.outputs.profile_name }}
         run: |
@@ -337,8 +371,8 @@ jobs:
         id: archive
         shell: bash
         env:
-          APPLE_MARKETING_VERSION: ${{ steps.release-version.outputs.apple_marketing_version }}
-          APPLE_BUILD_NUMBER: ${{ steps.release-version.outputs.apple_build_number }}
+          APPLE_MARKETING_VERSION: ${{ needs.resolve.outputs.version_name }}
+          APPLE_BUILD_NUMBER: ${{ needs.resolve.outputs.apple_build_number }}
           KEYCHAIN_PATH: ${{ steps.signing.outputs.keychain_path }}
           RESOLVED_IOS_PROFILE_NAME: ${{ steps.signing.outputs.profile_name }}
         run: |

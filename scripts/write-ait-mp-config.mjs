@@ -3,7 +3,7 @@
 //
 // apps/ait/src/firebaseWeb/mpSecret.generated.ts 는 빈 placeholder로 커밋되어 있고,
 // 배포 워크플로가 이 스크립트를 실행해 환경변수 GA4_MP_API_SECRET 값으로 덮어쓴다.
-// (scripts/resolve-release-version.mjs 가 releaseInfo.ts 를 덮어쓰는 것과 동일한 패턴)
+// (중앙 binding projection이 releaseInfo.ts를 덮어쓰는 것과 동일한 패턴)
 //
 // 값이 비어 있으면 아무것도 하지 않는다(로컬/개발 빌드는 전송 no-op 상태를 유지).
 import { writeFileSync } from 'node:fs';

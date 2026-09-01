@@ -210,7 +210,7 @@ pnpm check:app-store -- --json
 ## 다국어 리스팅 업로드(repo-local)
 
 `app-store.config.json`의 `storeListing`(App 정보 name/subtitle, 버전
-description/keywords/promotionalText)과 `version.releaseNotes`(whatsNew),
+description/keywords/promotionalText)과 `releaseNotes`(whatsNew),
 `localizedScreenshots`(iPhone 6.5=`APP_IPHONE_65`, iPad 13=`APP_IPAD_PRO_3GEN_129`)를
 App Store Connect API로 편집 가능한(PREPARE_FOR_SUBMISSION) 버전에 반영한다.
 config 로케일 키는 ASC 로케일(`de`→`de-DE`, `fr`→`fr-FR`, `es`→`es-ES` 등)로 매핑된다.

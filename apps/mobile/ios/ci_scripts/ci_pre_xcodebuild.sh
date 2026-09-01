@@ -1,65 +1,88 @@
 #!/bin/sh
 
-# Xcode Cloud — archive 직전 iOS 마케팅/빌드 버전 주입.
-#
-# 정책(#364): 어떤 트리거로 만든 빌드든 프로젝트 기본값(project.pbxproj의
-# MARKETING_VERSION)이 그대로 아카이브·업로드되지 않도록 한다. 기본값이 스토어의
-# 기존 버전 train보다 낮으면(예: 1.0) TestFlight 업로드가 거부되거나, 더 나쁘게는
-# 구버전 표기(app_version=1.0)로 심사에 나가 신규 유저가 구버전 빌드를 받게 된다.
-#
-# 버전 소스:
-#   1) CI_TAG(vX.Y.Z) 트리거 빌드 → 그 태그로 산출.
-#   2) CI_TAG 부재(브랜치/검증 빌드) → 저장소의 "가장 최근 릴리즈 태그"로 폴백 주입.
-#   3) 태그를 전혀 결정할 수 없으면 → 비-제로 종료(archive 차단). 기본값 아카이브 금지.
-# 산출은 scripts/resolve-release-version.mjs 로 marketing/build number를 계산한다
-# (GitHub Actions 배포 경로와 동일 로직 재사용). node 는 ci_post_clone 에서 설치됨.
-#
-# 검증: CI_PRE_XCODEBUILD_DRY_RUN=1 로 실행하면 agvtool 없이 산출 버전만 출력한다
-# (CI_TAG 유/무 두 경로를 로컬/CI에서 안전하게 확인 — scripts/__tests__ 에서 사용).
+# Xcode Cloud archive 직전 exact GitHub tag의 중앙 version binding을 적용한다.
+# 앱 저장소는 version을 계산하지 않는다. 아래 두 파일을 같은 불변 중앙 commit에서 내려받고
+# checksum을 검증한 뒤 Info.plist와 런타임 releaseInfo에 확정값만 투영한다.
 
-set -e
+set -eu
 
-# resolver 스크립트는 이 스크립트 위치 기준으로 찾는다(ci_scripts 는 항상
-# <repo>/apps/mobile/ios/ci_scripts 에 있으므로 4단계 상위가 저장소 루트).
+AUTHORITY_SHA="ab9305632698fcb949d4c9df58cf18dbce73bef8"
+APPLIER_SHA256="b399afde0016e23947e173437e266aa83071079d1345b41ff580ebfe63357d6f"
+AUTHORITY_SHA256="ca9ef5b4fe326323840b171f9e6ed069cb182d2aee8e88b72e352c57514d466b"
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 REPO_ROOT="$(CDPATH= cd -- "${SCRIPT_DIR}/../../../.." && pwd)"
-RESOLVER="${REPO_ROOT}/scripts/resolve-release-version.mjs"
-# agvtool 대상·git 폴백 대상은 Xcode Cloud 체크아웃 루트. 로컬/테스트에서는 저장소 루트.
 REPO="${CI_PRIMARY_REPOSITORY_PATH:-${REPO_ROOT}}"
+RELEASE_TAG="${CI_TAG:-}"
+INFO_PLIST="${REPO}/apps/mobile/ios/HappyFarmMobile/Info.plist"
+DRY_RUN="${CI_PRE_XCODEBUILD_DRY_RUN:-0}"
 
-RELEASE_TAG="${CI_TAG}"
-if [ -z "${RELEASE_TAG}" ]; then
-  echo "▸ CI_TAG 없음 — 최신 릴리즈 태그로 폴백 버전 주입 시도(기본값 아카이브 차단)"
-  RELEASE_TAG="$(git -C "${REPO}" describe --tags --abbrev=0 --match 'v[0-9]*.[0-9]*.[0-9]*' 2>/dev/null || true)"
-  if [ -z "${RELEASE_TAG}" ]; then
-    echo "  최신 릴리즈 태그를 결정할 수 없어 버전 주입 불가 — 기본값 아카이브를 막기 위해 실패 처리" >&2
-    exit 1
-  fi
-  echo "  폴백 태그=${RELEASE_TAG}"
-fi
-
-echo "▸ 릴리즈 버전 산출 (tag=${RELEASE_TAG})"
-OUTFILE="$(mktemp)"
-GITHUB_OUTPUT="${OUTFILE}" RELEASE_TAG="${RELEASE_TAG}" \
-  node "${RESOLVER}" --github-output --quiet
-
-MARKETING="$(grep '^apple_marketing_version=' "${OUTFILE}" | cut -d= -f2)"
-BUILD="$(grep '^apple_build_number=' "${OUTFILE}" | cut -d= -f2)"
-
-if [ -z "${MARKETING}" ] || [ -z "${BUILD}" ]; then
-  echo "  릴리즈 버전 산출 실패 (tag=${RELEASE_TAG})" >&2
+if [ -z "$RELEASE_TAG" ]; then
+  echo "CI_TAG가 없습니다. Xcode Cloud release archive는 exact vX.Y.Z tag에서만 허용됩니다." >&2
   exit 1
 fi
 
-echo "  marketing=${MARKETING} build=${BUILD}"
+authority_dir=""
+cleanup_authority="false"
+cleanup() {
+  if [ "$cleanup_authority" = "true" ] && [ -n "$authority_dir" ]; then
+    rm -rf "$authority_dir"
+  fi
+}
+trap cleanup EXIT INT TERM
 
-if [ "${CI_PRE_XCODEBUILD_DRY_RUN}" = "1" ]; then
-  # 검증용: 실제 프로젝트를 수정하지 않고 산출 결과만 남긴다.
-  echo "DRY_RUN resolved marketing=${MARKETING} build=${BUILD} tag=${RELEASE_TAG}"
+if [ "$DRY_RUN" = "1" ] && [ -n "${SEORI_RELEASE_AUTHORITY_DIR:-}" ]; then
+  authority_dir="$SEORI_RELEASE_AUTHORITY_DIR"
+  cleanup_authority="false"
+else
+  authority_dir="$(mktemp -d)"
+  cleanup_authority="true"
+  base_url="https://raw.githubusercontent.com/seorilabs/.github/${AUTHORITY_SHA}/scripts/release"
+  curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
+    "${base_url}/xcode-cloud-apply-tag-version.mjs" \
+    --output "${authority_dir}/xcode-cloud-apply-tag-version.mjs"
+  curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
+    "${base_url}/tag-version-authority.mjs" \
+    --output "${authority_dir}/tag-version-authority.mjs"
+  (
+    cd "$authority_dir"
+    printf '%s  %s\n' "$APPLIER_SHA256" xcode-cloud-apply-tag-version.mjs \
+      | shasum -a 256 -c
+    printf '%s  %s\n' "$AUTHORITY_SHA256" tag-version-authority.mjs \
+      | shasum -a 256 -c
+  )
+fi
+
+# 경로에는 공백이 없다는 전제 대신 positional argument를 정확히 전달한다.
+if [ "$DRY_RUN" = "1" ]; then
+  result="$(node "${authority_dir}/xcode-cloud-apply-tag-version.mjs" \
+    --tag "$RELEASE_TAG" --repository "$REPO" --info-plist "$INFO_PLIST" --dry-run)"
+else
+  result="$(node "${authority_dir}/xcode-cloud-apply-tag-version.mjs" \
+    --tag "$RELEASE_TAG" --repository "$REPO" --info-plist "$INFO_PLIST")"
+fi
+
+marketing="$(node -e 'process.stdout.write(String(JSON.parse(process.argv[1]).appleMarketingVersion ?? ""))' "$result")"
+build="$(node -e 'process.stdout.write(String(JSON.parse(process.argv[1]).appleBuildNumber ?? ""))' "$result")"
+runtime_code="$(node -e 'process.stdout.write(String(JSON.parse(process.argv[1]).runtimeVersionCode ?? ""))' "$result")"
+source_sha="$(node -e 'process.stdout.write(String(JSON.parse(process.argv[1]).sourceSha ?? ""))' "$result")"
+
+if [ -z "$marketing" ] || [ -z "$build" ] || [ -z "$runtime_code" ] || [ -z "$source_sha" ]; then
+  echo "중앙 Xcode Cloud release binding 결과가 불완전합니다." >&2
+  exit 1
+fi
+
+if [ "$DRY_RUN" = "1" ]; then
+  echo "DRY_RUN resolved marketing=${marketing} build=${build} runtime=${runtime_code} tag=${RELEASE_TAG}"
   exit 0
 fi
 
-cd "${REPO}/apps/mobile/ios"
-agvtool new-marketing-version "${MARKETING}"
-agvtool new-version -all "${BUILD}"
-echo "✅ 버전 설정 완료: ${MARKETING} (${BUILD})"
+(
+  cd "$REPO"
+  SEORI_RELEASE_TAG="$RELEASE_TAG" \
+  SEORI_RELEASE_VERSION="$marketing" \
+  SEORI_RELEASE_VERSION_CODE="$runtime_code" \
+  SEORI_RELEASE_SOURCE_SHA="$source_sha" \
+    node scripts/write-release-info.mjs
+)
+
+echo "중앙 태그 버전 적용 완료: ${marketing} (Apple ${build}, runtime ${runtime_code})"

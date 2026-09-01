@@ -15,7 +15,7 @@ const PLAY_STORE_TEXT_LIMITS = [
   { path: 'storeListing.appName', limit: 30 },
   { path: 'storeListing.shortDescription', limit: 80 },
   { path: 'storeListing.fullDescription', limit: 4000 },
-  { path: 'release.notes', limit: 500 },
+  { path: 'releaseNotes', limit: 500 },
 ];
 
 // App Store Connect 필드별 최대 글자수.
@@ -25,7 +25,7 @@ const APP_STORE_TEXT_LIMITS = [
   { path: 'storeListing.promotionalText', limit: 170 },
   { path: 'storeListing.description', limit: 4000 },
   { path: 'storeListing.keywords', limit: 100 },
-  { path: 'version.releaseNotes', limit: 4000 },
+  { path: 'releaseNotes', limit: 4000 },
 ];
 
 /**

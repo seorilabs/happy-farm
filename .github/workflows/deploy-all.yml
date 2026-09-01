@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: "배포할 릴리즈 태그입니다. 비우면 각 배포가 최신 vX.Y.Z 태그를 사용합니다. 예: v1.1.0"
+        description: "모든 마켓에 공통으로 고정할 릴리즈 태그입니다. 비우면 중앙 resolver가 최신 stable vX.Y.Z 하나를 고릅니다."
         required: false
         type: string
       deploy_ait:
@@ -38,42 +38,19 @@ concurrency:
 
 jobs:
   resolve:
-    name: Resolve release tag
-    runs-on: seorilabs-rpi-arm64
-    outputs:
-      tag: ${{ steps.tag.outputs.tag }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-        with:
-          ref: ${{ inputs.release_tag || github.ref }}
-          fetch-depth: 0
-          fetch-tags: true
-
-      - name: Resolve release tag
-        id: tag
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          tag="${{ inputs.release_tag }}"
-          if [ -z "$tag" ]; then
-            tag="$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n 1)"
-            if [ -z "$tag" ]; then
-              echo "release_tag가 비어 있고 vX.Y.Z 태그도 없습니다." >&2
-              exit 1
-            fi
-            echo "release_tag가 비어 있어 최신 태그 $tag 를 사용합니다."
-          fi
-
-          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+    name: Bind exact release tag
+    uses: seorilabs/.github/.github/workflows/resolve-release-version.yml@8a11a145fed35479a4a89ebc7ca97edd0a0f05fd
+    with:
+      release_tag: ${{ inputs.release_tag }}
 
   ait:
     name: Deploy AIT
     needs: resolve
     if: ${{ inputs.deploy_ait }}
     uses: ./.github/workflows/deploy-apps-in-toss.yml
-    secrets: inherit
+    secrets:
+      APPS_IN_TOSS_API_KEY: ${{ secrets.APPS_IN_TOSS_API_KEY }}
+      GA4_MP_API_SECRET: ${{ secrets.GA4_MP_API_SECRET }}
     with:
       release_tag: ${{ needs.resolve.outputs.tag }}
       memo: ${{ inputs.memo }}
@@ -83,7 +60,6 @@ jobs:
     needs: resolve
     if: ${{ inputs.deploy_google_play }}
     uses: ./.github/workflows/deploy-google-play.yml
-    secrets: inherit
     with:
       release_tag: ${{ needs.resolve.outputs.tag }}
       send_to_google_play: true
@@ -94,7 +70,16 @@ jobs:
     needs: resolve
     if: ${{ inputs.deploy_app_store }}
     uses: ./.github/workflows/deploy-app-store.yml
-    secrets: inherit
+    secrets:
+      FIREBASE_IOS_GOOGLE_SERVICE_INFO_PLIST_BASE64: ${{ secrets.FIREBASE_IOS_GOOGLE_SERVICE_INFO_PLIST_BASE64 }}
+      APPLE_DISTRIBUTION_CERTIFICATE_BASE64: ${{ secrets.APPLE_DISTRIBUTION_CERTIFICATE_BASE64 }}
+      APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD }}
+      APPLE_PROVISIONING_PROFILE_BASE64: ${{ secrets.APPLE_PROVISIONING_PROFILE_BASE64 }}
+      APPLE_KEYCHAIN_PASSWORD: ${{ secrets.APPLE_KEYCHAIN_PASSWORD }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+      APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+      APP_STORE_CONNECT_PRIVATE_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY_BASE64 }}
     with:
       release_tag: ${{ needs.resolve.outputs.tag }}
       upload_to_app_store: true

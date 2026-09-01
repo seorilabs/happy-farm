@@ -5,11 +5,44 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-// iOS Xcode Cloud 버전 주입 스크립트(#364)의 CI_TAG 유/무 두 경로를 dry-run으로 검증한다.
-// agvtool(macOS 전용)은 dry-run 모드에서 건너뛰고, 산출된 marketing/build 버전만 확인한다.
-// 목적: 어떤 경로로도 project.pbxproj 기본값(구버전, 예: 1.0)이 그대로 아카이브되지 않음을
-// 고정한다.
 const SCRIPT = path.resolve(__dirname, '../../apps/mobile/ios/ci_scripts/ci_pre_xcodebuild.sh');
+const tempDirs: string[] = [];
+
+function createFixture(tag = 'v1.8.1') {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ci-xcode-authority-'));
+  tempDirs.push(root);
+  const repo = path.join(root, 'repo');
+  const authority = path.join(root, 'authority');
+  const plist = path.join(repo, 'apps/mobile/ios/HappyFarmMobile/Info.plist');
+  fs.mkdirSync(path.dirname(plist), { recursive: true });
+  fs.mkdirSync(authority, { recursive: true });
+  fs.writeFileSync(plist, '<?xml version="1.0"?><plist><dict/></plist>');
+
+  spawnSync('git', ['init', '-q', repo]);
+  spawnSync('git', ['-C', repo, '-c', 'user.email=t@t', '-c', 'user.name=t', 'add', '.']);
+  spawnSync('git', ['-C', repo, '-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-qm', 'init']);
+  spawnSync('git', ['-C', repo, 'tag', tag]);
+  const sourceSha = spawnSync('git', ['-C', repo, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).stdout.trim();
+
+  fs.writeFileSync(path.join(authority, 'tag-version-authority.mjs'), 'export {};\n');
+  fs.writeFileSync(
+    path.join(authority, 'xcode-cloud-apply-tag-version.mjs'),
+    [
+      'const args = new Map();',
+      'for (let i = 2; i < process.argv.length; i += 2) {',
+      '  if (process.argv[i] === "--dry-run") break;',
+      '  args.set(process.argv[i], process.argv[i + 1]);',
+      '}',
+      'const tag = args.get("--tag");',
+      'const match = /^v(\\d+)\\.(\\d+)\\.(\\d+)$/.exec(tag);',
+      'if (!match) process.exit(1);',
+      'const appleBuildNumber = Number(match[1]) * 1000000 + Number(match[2]) * 1000 + Number(match[3]);',
+      `process.stdout.write(JSON.stringify({ tag, sourceSha: ${JSON.stringify(sourceSha)}, runtimeVersionCode: 1000000000 + appleBuildNumber, appleMarketingVersion: tag.slice(1), appleBuildNumber }));`,
+      '',
+    ].join('\n')
+  );
+  return { repo, authority };
+}
 
 function runScript(env: Record<string, string>) {
   return spawnSync('sh', [SCRIPT], {
@@ -18,65 +51,56 @@ function runScript(env: Record<string, string>) {
   });
 }
 
-// 태그를 (선택적으로) 하나 단 임시 git 저장소를 만든다. git describe 폴백 대상으로 쓴다.
-function makeTempRepo(tag?: string): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ci-xcode-'));
-  const git = (args: string[]) =>
-    spawnSync('git', ['-C', dir, ...args], { encoding: 'utf8' });
-  git(['init', '-q']);
-  git(['-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-q', '--allow-empty', '-m', 'init']);
-  if (tag != null) {
-    git(['tag', tag]);
+afterAll(() => {
+  for (const dir of tempDirs) {
+    fs.rmSync(dir, { recursive: true, force: true });
   }
-  return dir;
-}
+});
 
-describe('ci_pre_xcodebuild.sh 버전 주입 (#364)', () => {
-  const tempDirs: string[] = [];
-  afterAll(() => {
-    for (const dir of tempDirs) {
-      fs.rmSync(dir, { recursive: true, force: true });
-    }
-  });
-
-  test('dry-run으로 CI_TAG 유/무 두 경로를 모두 검증한다(유→태그 버전, 무→최신 태그 폴백)', () => {
-    // 유(태그) 경로: CI_TAG를 그대로 사용해 그 버전을 산출한다.
-    const withTag = runScript({ CI_TAG: 'v1.6.2' });
-    expect(withTag.status).toBe(0);
-    expect(withTag.stdout).toContain('marketing=1.6.2');
-
-    // 무(폴백) 경로: CI_TAG가 없으면 저장소의 최신 릴리즈 태그로 폴백 주입한다.
-    const repo = makeTempRepo('v1.4.3');
-    tempDirs.push(repo);
-    const withoutTag = runScript({ CI_TAG: '', CI_PRIMARY_REPOSITORY_PATH: repo });
-    expect(withoutTag.status).toBe(0);
-    expect(withoutTag.stdout).toContain('marketing=1.4.3');
-  });
-
-  test('CI_TAG(vX.Y.Z)가 있으면 그 태그로 marketing/build를 산출한다', () => {
-    const result = runScript({ CI_TAG: 'v1.8.1' });
+describe('Xcode Cloud 중앙 태그 버전 주입', () => {
+  test('exact CI_TAG를 중앙 helper에 전달한다', () => {
+    const fixture = createFixture();
+    const result = runScript({
+      CI_TAG: 'v1.8.1',
+      CI_PRIMARY_REPOSITORY_PATH: fixture.repo,
+      SEORI_RELEASE_AUTHORITY_DIR: fixture.authority,
+    });
     expect(result.status).toBe(0);
     expect(result.stdout).toContain('marketing=1.8.1');
-    // build number = major*1_000_000 + minor*1_000 + patch (resolve-release-version.mjs와 동일).
     expect(result.stdout).toContain('build=1008001');
+    expect(result.stdout).toContain('runtime=1001008001');
   });
 
-  test('CI_TAG가 없으면 저장소의 최신 릴리즈 태그로 폴백 주입한다', () => {
-    const repo = makeTempRepo('v1.5.0');
-    tempDirs.push(repo);
-    const result = runScript({ CI_TAG: '', CI_PRIMARY_REPOSITORY_PATH: repo });
-    expect(result.status).toBe(0);
-    expect(result.stdout).toContain('폴백 태그=v1.5.0');
-    expect(result.stdout).toContain('marketing=1.5.0');
-    expect(result.stdout).toContain('build=1005000');
-  });
-
-  test('CI_TAG도 없고 태그도 하나도 없으면 비-제로 종료로 기본값 아카이브를 차단한다', () => {
-    const repo = makeTempRepo();
-    tempDirs.push(repo);
-    const result = runScript({ CI_TAG: '', CI_PRIMARY_REPOSITORY_PATH: repo });
+  test('CI_TAG가 없으면 최신 태그를 추측하지 않고 archive를 차단한다', () => {
+    const fixture = createFixture('v1.5.0');
+    const result = runScript({
+      CI_TAG: '',
+      CI_PRIMARY_REPOSITORY_PATH: fixture.repo,
+      SEORI_RELEASE_AUTHORITY_DIR: fixture.authority,
+    });
     expect(result.status).not.toBe(0);
-    // 버전 산출/agvtool 단계에 도달하지 않는다(기본값 1.0 아카이브 불가).
+    expect(result.stderr).toContain('exact vX.Y.Z tag');
     expect(result.stdout).not.toContain('marketing=');
+  });
+
+  test('production 경로는 불변 중앙 SHA와 두 checksum을 고정한다', () => {
+    const script = fs.readFileSync(SCRIPT, 'utf8');
+    expect(script).toContain('ab9305632698fcb949d4c9df58cf18dbce73bef8');
+    expect(script).toContain('b399afde0016e23947e173437e266aa83071079d1345b41ff580ebfe63357d6f');
+    expect(script).toContain('ca9ef5b4fe326323840b171f9e6ed069cb182d2aee8e88b72e352c57514d466b');
+    expect(script).toContain('raw.githubusercontent.com/seorilabs/.github');
+  });
+
+  test('GitHub와 Xcode Cloud 모두 공통 runtime versionCode를 투영한다', () => {
+    const workflow = fs.readFileSync(
+      path.resolve(__dirname, '../../.github/workflows/deploy-app-store.yml'),
+      'utf8'
+    );
+    const script = fs.readFileSync(SCRIPT, 'utf8');
+    expect(workflow).toContain(
+      'SEORI_RELEASE_VERSION_CODE: ${{ needs.resolve.outputs.android_version_code }}'
+    );
+    expect(script).toContain('JSON.parse(process.argv[1]).runtimeVersionCode');
+    expect(script).toContain('SEORI_RELEASE_VERSION_CODE="$runtime_code"');
   });
 });

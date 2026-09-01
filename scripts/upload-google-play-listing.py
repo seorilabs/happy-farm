@@ -2,8 +2,8 @@
 """Google Play 스토어 등록정보(리스팅) 텍스트와 로컬라이즈 이미지를 Android Publisher
 API로 라이브 콘솔에 반영한다.
 
-`upload-google-play-internal.py`가 AAB(릴리스 트랙)를 담당한다면, 이 스크립트는
-"메인 스토어 등록정보" 페이지 즉 언어별 제목/간단한 설명/자세한 설명과
+exact 중앙 workflow의 `upload-google-play-aab.py`가 AAB 릴리스 트랙을 담당하고,
+이 스크립트는 "메인 스토어 등록정보" 페이지 즉 언어별 제목/간단한 설명/자세한 설명과
 스크린샷·피처 그래픽을 담당한다.
 
 - 소스 오브 트루스: play-store/google-play.config.json

@@ -57,8 +57,15 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  resolve:
+    name: Bind exact release tag
+    uses: seorilabs/.github/.github/workflows/resolve-release-version.yml@8a11a145fed35479a4a89ebc7ca97edd0a0f05fd
+    with:
+      release_tag: ${{ inputs.release_tag }}
+
   build-aab:
     name: Cloud Build signed Android App Bundle
+    needs: resolve
     runs-on: seorilabs-rpi-arm64
     timeout-minutes: 75
     environment: google-play
@@ -67,44 +74,38 @@ jobs:
         working-directory: release-source
     outputs:
       artifact_name: ${{ steps.meta.outputs.artifact_name }}
-      release_tag: ${{ steps.release-version.outputs.release_tag }}
+      artifact_digest: ${{ steps.provenance.outputs.artifact_digest }}
+      package_name: ${{ steps.provenance.outputs.package_name }}
+      release_tag: ${{ needs.resolve.outputs.tag }}
       source_sha: ${{ steps.meta.outputs.source_sha }}
-      tooling_sha: ${{ steps.meta.outputs.tooling_sha }}
-      version_code: ${{ steps.release-version.outputs.google_play_version_code }}
-      version_name: ${{ steps.release-version.outputs.version_name }}
+      version_code: ${{ needs.resolve.outputs.android_version_code }}
+      version_name: ${{ needs.resolve.outputs.version_name }}
 
     steps:
-      - name: Checkout workflow tooling
-        uses: actions/checkout@v7
-        with:
-          ref: ${{ github.sha }}
-          path: ci-tooling
-
       - name: Checkout release source
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ inputs.release_tag || github.ref_name }}
+          ref: ${{ needs.resolve.outputs.tag }}
           fetch-depth: 0
           fetch-tags: true
           path: release-source
 
-      - name: Overlay current Cloud Build tooling
-        shell: bash
-        run: |
-          set -euo pipefail
-          cp ../ci-tooling/build.env build.env
-          cp ../ci-tooling/cloudbuild-android.yaml cloudbuild-android.yaml
-          cp ../ci-tooling/.gcloudignore .gcloudignore
-          install -m 755 ../ci-tooling/scripts/build-android.sh scripts/build-android.sh
+      - name: Checkout exact release authority
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: seorilabs/.github
+          ref: 8a11a145fed35479a4a89ebc7ca97edd0a0f05fd
+          path: .seorilabs-release-authority
+          persist-credentials: false
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v6
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
         with:
           version: 11.3.0
           run_install: false
 
       - name: Setup Node
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24.16.0
           check-latest: false
@@ -113,11 +114,15 @@ jobs:
           registry-url: https://npm.pkg.github.com
           scope: '@seorilabs'
 
-      - name: Resolve release version
-        id: release-version
+      - name: Project central release binding into runtime metadata
         env:
-          RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
-        run: GITHUB_SHA="$(git rev-parse HEAD)" node scripts/resolve-release-version.mjs --github-output --github-step-summary --write-release-info --quiet
+          SEORI_RELEASE_TAG: ${{ needs.resolve.outputs.tag }}
+          SEORI_RELEASE_VERSION: ${{ needs.resolve.outputs.version_name }}
+          SEORI_RELEASE_VERSION_CODE: ${{ needs.resolve.outputs.android_version_code }}
+          SEORI_RELEASE_SOURCE_SHA: ${{ needs.resolve.outputs.source_sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$SEORI_RELEASE_SOURCE_SHA"
+          node scripts/write-release-info.mjs
 
       - name: Resolve build contract
         id: meta
@@ -127,12 +132,10 @@ jobs:
           # shellcheck disable=SC1091
           source build.env
           source_sha="$(git rev-parse HEAD)"
-          tooling_sha="$(git -C ../ci-tooling rev-parse HEAD)"
-          artifact_name="happy-farm-google-play-v${{ steps.release-version.outputs.version_name }}-code${{ steps.release-version.outputs.google_play_version_code }}-$source_sha"
+          artifact_name="happy-farm-google-play-v${{ needs.resolve.outputs.version_name }}-code${{ needs.resolve.outputs.android_version_code }}-$source_sha"
           artifact_bucket="gs://seorilabs-ci-build-artifacts/${{ github.repository_owner }}/${{ github.event.repository.name }}/${{ github.run_id }}-${{ github.run_attempt }}"
           {
             echo "source_sha=$source_sha"
-            echo "tooling_sha=$tooling_sha"
             echo "artifact_name=$artifact_name"
             echo "artifact_bucket=$artifact_bucket"
             echo "aab_path=$AAB_PATH"
@@ -167,7 +170,7 @@ jobs:
           test -n "$(find "$PNPM_STORE_PATH" -mindepth 1 -maxdepth 1 -print -quit)"
 
       - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v3
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
         with:
           workload_identity_provider: ${{ vars.GOOGLE_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ vars.GOOGLE_PLAY_SERVICE_ACCOUNT_EMAIL }}
@@ -175,7 +178,7 @@ jobs:
           create_credentials_file: true
 
       - name: Setup gcloud
-        uses: google-github-actions/setup-gcloud@v3
+        uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3
         with:
           project_id: seorilabs-ci
 
@@ -187,8 +190,10 @@ jobs:
         env:
           ARTIFACT_BUCKET: ${{ steps.meta.outputs.artifact_bucket }}
           UPLOAD_ALIAS: ${{ vars.GOOGLE_PLAY_UPLOAD_KEY_ALIAS }}
-          VERSION_CODE: ${{ steps.release-version.outputs.google_play_version_code }}
-          VERSION_NAME: ${{ steps.release-version.outputs.version_name }}
+          RELEASE_TAG: ${{ needs.resolve.outputs.tag }}
+          SOURCE_SHA: ${{ needs.resolve.outputs.source_sha }}
+          VERSION_CODE: ${{ needs.resolve.outputs.android_version_code }}
+          VERSION_NAME: ${{ needs.resolve.outputs.version_name }}
         run: |
           set -euo pipefail
           gcloud builds submit . \
@@ -196,7 +201,7 @@ jobs:
             --region=global \
             --config=cloudbuild-android.yaml \
             --ignore-file=.gcloudignore \
-            --substitutions="_ANDROID_VERSION_NAME=$VERSION_NAME,_ANDROID_VERSION_CODE=$VERSION_CODE,_GOOGLE_PLAY_UPLOAD_KEY_ALIAS=$UPLOAD_ALIAS,_ARTIFACT_BUCKET=$ARTIFACT_BUCKET"
+            --substitutions="_SEORI_RELEASE_TAG=$RELEASE_TAG,_SEORI_RELEASE_SOURCE_SHA=$SOURCE_SHA,_ANDROID_VERSION_NAME=$VERSION_NAME,_ANDROID_VERSION_CODE=$VERSION_CODE,_GOOGLE_PLAY_UPLOAD_KEY_ALIAS=$UPLOAD_ALIAS,_ARTIFACT_BUCKET=$ARTIFACT_BUCKET"
 
       - name: Fetch signed AAB
         shell: bash
@@ -210,8 +215,28 @@ jobs:
           gcloud storage cp "$ARTIFACT_BUCKET/$AAB_NAME" "$AAB_PATH"
           test -s "$AAB_PATH"
 
+      - name: Verify AAB against the central release binding
+        id: provenance
+        shell: bash
+        env:
+          AAB_PATH: ${{ steps.meta.outputs.aab_path }}
+          RELEASE_BINDING_BASE64: ${{ needs.resolve.outputs.binding_base64 }}
+        run: |
+          set -euo pipefail
+          binding="$RUNNER_TEMP/release-binding.json"
+          printf '%s' "$RELEASE_BINDING_BASE64" | base64 --decode > "$binding"
+          unzip -p "$AAB_PATH" base/manifest/AndroidManifest.xml > "$RUNNER_TEMP/aab-manifest.pb"
+          test -s "$RUNNER_TEMP/aab-manifest.pb"
+          RELEASE_BINDING_PATH="$binding" \
+            node ../.seorilabs-release-authority/scripts/release/verify-release-artifact.mjs \
+              --kind android-app-bundle \
+              --artifact "$AAB_PATH" \
+              --metadata "$RUNNER_TEMP/aab-manifest.pb" \
+              --receipt "$RUNNER_TEMP/release-artifact-receipt.txt" \
+              --github-output
+
       - name: Upload signed AAB artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ${{ steps.meta.outputs.artifact_name }}
           path: release-source/${{ steps.meta.outputs.aab_path }}
@@ -226,9 +251,8 @@ jobs:
           {
             echo "### Happy Farm Android Cloud Build 후보"
             echo "- source: \`${{ steps.meta.outputs.source_sha }}\`"
-            echo "- tooling: \`${{ steps.meta.outputs.tooling_sha }}\`"
-            echo "- release: \`${{ steps.release-version.outputs.release_tag }}\`"
-            echo "- versionCode: \`${{ steps.release-version.outputs.google_play_version_code }}\`"
+            echo "- release: \`${{ needs.resolve.outputs.tag }}\`"
+            echo "- versionCode: \`${{ needs.resolve.outputs.android_version_code }}\`"
             echo "- builder: \`${{ steps.meta.outputs.builder }}\`"
             echo "- bytes: \`$(wc -c < "$AAB_PATH" | tr -d ' ')\`"
             echo "- Google Play upload: \`${{ inputs.send_to_google_play }}\`"
@@ -245,25 +269,33 @@ jobs:
 
     steps:
       - name: Checkout release tooling
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.build-aab.outputs.release_tag }}
 
+      - name: Checkout exact release authority
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: seorilabs/.github
+          ref: 8a11a145fed35479a4a89ebc7ca97edd0a0f05fd
+          path: .seorilabs-release-authority
+          persist-credentials: false
+
       - name: Download signed AAB
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: ${{ needs.build-aab.outputs.artifact_name }}
           path: artifacts/android
 
       - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v3
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
         with:
           workload_identity_provider: ${{ vars.GOOGLE_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ vars.GOOGLE_PLAY_SERVICE_ACCOUNT_EMAIL }}
           create_credentials_file: true
 
       - name: Setup Python
-        uses: actions/setup-python@v7
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
         with:
           python-version: '3.13'
           architecture: arm64
@@ -292,6 +324,10 @@ jobs:
           REVIEW_LATER_IN_CONSOLE: ${{ inputs.review_later_in_console }}
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.build-aab.outputs.release_tag }}
+          VERSION_NAME: ${{ needs.build-aab.outputs.version_name }}
+          VERIFIED_PACKAGE_NAME: ${{ needs.build-aab.outputs.package_name }}
+          SEORI_EXPECTED_AAB_SHA256: ${{ needs.build-aab.outputs.artifact_digest }}
+          SEORI_EXPECTED_ANDROID_VERSION_CODE: ${{ needs.build-aab.outputs.version_code }}
         run: |
           set -euo pipefail
 
@@ -313,20 +349,34 @@ jobs:
             echo "정확히 하나의 AAB가 필요합니다: ${#aabs[@]}" >&2
             exit 1
           }
+          [ "$VERIFIED_PACKAGE_NAME" = "com.seorilabs.happyfarm" ] || {
+            echo "검증된 AAB package identity가 Backoffice BuildTarget과 다릅니다." >&2
+            exit 1
+          }
 
-          args=(--aab-path "${aabs[0]}" --release-status "$release_status")
+          args=(
+            --package-name "$VERIFIED_PACKAGE_NAME"
+            --aab-path "${aabs[0]}"
+            --expected-aab-sha256 "$SEORI_EXPECTED_AAB_SHA256"
+            --expected-version-code "$SEORI_EXPECTED_ANDROID_VERSION_CODE"
+            --track internal
+            --release-name "$VERSION_NAME"
+            --release-status "$release_status"
+          )
           if [ "$REVIEW_LATER_IN_CONSOLE" = "true" ]; then
             args+=(--changes-not-sent-for-review)
           fi
 
           notes="$RUNNER_TEMP/release-notes.json"
-          if [ -n "$TAG" ] && gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern release-notes.json --output "$notes" --clobber 2>/dev/null \
-            && [ "$(jq -r '(.notes // {}) | length' "$notes")" -gt 0 ]; then
-            args+=(--release-notes-json "$notes")
-            echo "release-notes.json 로드: $(jq -r '.notes | keys_unsorted | join(", ")' "$notes")"
-          fi
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern release-notes.json --output "$notes" --clobber
+          [ "$(jq -r '(.notes // {}) | length' "$notes")" -gt 0 ] || {
+            echo "release-notes.json이 없거나 비어 있습니다: $TAG" >&2
+            exit 1
+          }
+          args+=(--release-notes-json "$notes")
+          echo "release-notes.json 로드: $(jq -r '.notes | keys_unsorted | join(", ")' "$notes")"
 
-          python3 scripts/upload-google-play-internal.py "${args[@]}"
+          python3 .seorilabs-release-authority/scripts/release/upload-google-play-aab.py "${args[@]}"
 
       - name: Upload summary
         shell: bash
@@ -334,7 +384,6 @@ jobs:
           {
             echo "### Google Play internal 업로드"
             echo "- source: \`${{ needs.build-aab.outputs.source_sha }}\`"
-            echo "- tooling: \`${{ needs.build-aab.outputs.tooling_sha }}\`"
             echo "- release: \`${{ needs.build-aab.outputs.release_tag }}\`"
             echo "- versionCode: \`${{ needs.build-aab.outputs.version_code }}\`"
             echo "- track: \`internal\`"

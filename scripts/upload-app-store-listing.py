@@ -11,7 +11,7 @@ App Store 는 리스팅 필드가 두 리소스에 나뉜다:
 따라서 텍스트 편집에는 "편집 가능한(미출시) 버전"과 편집 가능한 App 정보가
 필요하다. query 서브커맨드로 현재 상태를 먼저 확인한다.
 
-소스 오브 트루스: app-store/app-store.config.json (storeListing.*, version.releaseNotes)
+소스 오브 트루스: app-store/app-store.config.json (storeListing.*, releaseNotes)
 config 로케일 키 -> ASC 로케일 코드 매핑은 CONFIG_TO_ASC_LOCALE 참고.
 
 인증: ~/.config/seorilabs/app-store-connect.env
@@ -211,7 +211,7 @@ def upload_text(args):
     config = load_config()
     bundle_id = args.bundle_id or config.get("bundleId")
     sl = config["storeListing"]
-    notes = config.get("version", {}).get("releaseNotes", {})
+    notes = config.get("releaseNotes", {})
     support_url = config.get("supportUrl")
     marketing_url = config.get("marketingUrl")
 

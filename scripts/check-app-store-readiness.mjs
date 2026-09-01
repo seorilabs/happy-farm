@@ -353,12 +353,12 @@ if (config == null) {
     warn('marketingUrl 값이 확정되지 않았습니다.', '선택 항목이지만 App Store Connect 입력 화면에 보입니다.');
   }
   assertField(config, 'copyright');
-  assertValue('version.versionNumber', valueAt(config, 'version.versionNumber'), (value) => {
-    return typeof value === 'string' && /^\d+\.\d+(\.\d+)?$/.test(value);
-  });
-  assertValue('version.buildNumber', valueAt(config, 'version.buildNumber'), (value) => {
-    return typeof value === 'string' && /^\d+$/.test(value);
-  });
+  assertField(config, 'versioning.source', (value) => value === 'github_release_tag');
+  if (Object.prototype.hasOwnProperty.call(config, 'version')) {
+    fail('app-store config에 로컬 version authority가 남아 있습니다.', 'GitHub vX.Y.Z tag만 사용');
+  } else {
+    pass('app-store config에 로컬 version authority가 없습니다.');
+  }
   assertField(config, 'categories.primary');
   assertField(config, 'contentDeclarations.ageRating');
   assertField(config, 'contentDeclarations.koreaGameRating');
