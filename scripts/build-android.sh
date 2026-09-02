@@ -133,11 +133,41 @@ require_source_aab() {
   printf '%s' "$source_aab"
 }
 
+# 중앙 WorkflowBundle v2 build-only 계약은 SEORI_RELEASE_TAG, SEORI_RELEASE_VERSION_NAME,
+# SEORI_RELEASE_VERSION_CODE 세 값을 항상 export한다. stable tag 실행이면 세 값이 모두 채워지고
+# 중앙 workflow가 build 뒤 AAB manifest를 같은 값으로 readback한다. tag 실행이 아니면 세 값이
+# 모두 빈 값이고 compile-only 버전(0.0.0, source SHA 파생 versionCode)을 쓴다.
+resolve_build_only_version() {
+  local release_tag="${SEORI_RELEASE_TAG:-}"
+  local release_version_name="${SEORI_RELEASE_VERSION_NAME:-}"
+  local release_version_code="${SEORI_RELEASE_VERSION_CODE:-}"
+
+  if [ -z "$release_tag" ] && [ -z "$release_version_name" ] && [ -z "$release_version_code" ]; then
+    build_only_version_name="0.0.0"
+    build_only_version_code=$((16#${SEORI_SOURCE_SHA:0:7} + 1))
+    return
+  fi
+  [ -n "$release_tag" ] && [ -n "$release_version_name" ] && [ -n "$release_version_code" ] || {
+    fail "build-only tag 실행은 SEORI_RELEASE_TAG, SEORI_RELEASE_VERSION_NAME, SEORI_RELEASE_VERSION_CODE를 모두 요구합니다."
+  }
+  [[ "$release_tag" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]] || {
+    fail "SEORI_RELEASE_TAG는 stable SemVer 태그여야 합니다."
+  }
+  [ "$release_tag" = "v$release_version_name" ] || {
+    fail "SEORI_RELEASE_VERSION_NAME이 SEORI_RELEASE_TAG와 다릅니다."
+  }
+  [[ "$release_version_code" =~ ^[1-9][0-9]*$ ]] || {
+    fail "SEORI_RELEASE_VERSION_CODE는 양의 정수여야 합니다."
+  }
+  build_only_version_name="$release_version_name"
+  build_only_version_code="$release_version_code"
+}
+
 run_build_only() {
   local name
   for name in \
     ANDROID_VERSION_NAME ANDROID_VERSION_CODE \
-    SEORI_RELEASE_TAG SEORI_RELEASE_VERSION SEORI_RELEASE_VERSION_CODE SEORI_RELEASE_SOURCE_SHA \
+    SEORI_RELEASE_VERSION SEORI_RELEASE_SOURCE_SHA \
     FIREBASE_ANDROID_GOOGLE_SERVICES_JSON_BASE64 \
     GOOGLE_PLAY_UPLOAD_KEYSTORE_BASE64 \
     GOOGLE_PLAY_UPLOAD_KEYSTORE_PASSWORD \
@@ -176,8 +206,9 @@ run_build_only() {
   local ephemeral_alias="seori-build-only-$source_prefix"
   local ephemeral_password="seori-build-only"
   local ephemeral_keystore="$secret_dir/build-only.p12"
-  local build_only_version_name="0.0.0"
-  local build_only_version_code=$((16#${SEORI_SOURCE_SHA:0:7} + 1))
+  local build_only_version_name
+  local build_only_version_code
+  resolve_build_only_version
 
   keytool -genkeypair -noprompt \
     -keystore "$ephemeral_keystore" \
