@@ -84,6 +84,7 @@ function createFixture(): {
     path.join(root, 'apps/mobile/android/gradlew'),
     [
       '#!/usr/bin/env bash',
+      'printf \'gradlew %s\\n\' "$*" >> "$SEORI_TEST_COMMAND_LOG"',
       'mkdir -p app/build/outputs/bundle/release',
       'printf compile-only-aab > app/build/outputs/bundle/release/app-release.aab',
       '',
@@ -144,6 +145,75 @@ describe('Android build-only 실행 계약', () => {
     expect(fs.readFileSync(fixture.commandLog, 'utf8')).not.toContain('--store-dir');
     expect(fs.existsSync(path.join(fixture.root, 'apps/mobile/android/key.properties'))).toBe(false);
     expect(fs.existsSync(path.join(fixture.root, 'apps/mobile/android/app/google-services.json'))).toBe(false);
+  });
+
+  it('중앙 v2 계약이 빈 release 값을 export해도 compile-only 버전으로 빌드한다', () => {
+    const fixture = createFixture();
+    const sourceSha = 'a'.repeat(40);
+    const result = execute(fixture, {
+      SEORI_BUILD_MODE: 'build-only',
+      SEORI_SOURCE_SHA: sourceSha,
+      SEORI_ANDROID_AAB_OUTPUT: fixture.output,
+      SEORI_RELEASE_TAG: '',
+      SEORI_RELEASE_VERSION_NAME: '',
+      SEORI_RELEASE_VERSION_CODE: '',
+    });
+
+    expect(result.status).toBe(0);
+    const commandLog = fs.readFileSync(fixture.commandLog, 'utf8');
+    expect(commandLog).toContain('-PversionNameOverride=0.0.0');
+    expect(commandLog).toContain(`-PversionCodeOverride=${Number.parseInt('aaaaaaa', 16) + 1}`);
+    expect(fs.readFileSync(fixture.output, 'utf8')).toBe('compile-only-aab');
+  });
+
+  it('stable tag 실행은 중앙이 주입한 release 버전으로 빌드한다', () => {
+    const fixture = createFixture();
+    const result = execute(fixture, {
+      SEORI_BUILD_MODE: 'build-only',
+      SEORI_SOURCE_SHA: 'd'.repeat(40),
+      SEORI_ANDROID_AAB_OUTPUT: fixture.output,
+      SEORI_RELEASE_TAG: 'v1.2.3',
+      SEORI_RELEASE_VERSION_NAME: '1.2.3',
+      SEORI_RELEASE_VERSION_CODE: '42',
+    });
+
+    expect(result.status).toBe(0);
+    const commandLog = fs.readFileSync(fixture.commandLog, 'utf8');
+    expect(commandLog).toContain('-PversionNameOverride=1.2.3');
+    expect(commandLog).toContain('-PversionCodeOverride=42');
+  });
+
+  it('release 값이 일부만 있거나 tag와 어긋나면 빌드 전에 중단한다', () => {
+    const fixture = createFixture();
+    const base = {
+      SEORI_BUILD_MODE: 'build-only',
+      SEORI_SOURCE_SHA: 'e'.repeat(40),
+      SEORI_ANDROID_AAB_OUTPUT: fixture.output,
+    };
+    const partial = execute(fixture, { ...base, SEORI_RELEASE_TAG: 'v1.2.3' });
+    const mismatch = execute(fixture, {
+      ...base,
+      SEORI_RELEASE_TAG: 'v1.2.3',
+      SEORI_RELEASE_VERSION_NAME: '1.2.4',
+      SEORI_RELEASE_VERSION_CODE: '42',
+    });
+    const prerelease = execute(fixture, {
+      ...base,
+      SEORI_RELEASE_TAG: 'v1.2.3-rc.1',
+      SEORI_RELEASE_VERSION_NAME: '1.2.3-rc.1',
+      SEORI_RELEASE_VERSION_CODE: '42',
+    });
+    const legacyName = execute(fixture, { ...base, SEORI_RELEASE_VERSION: '1.2.3' });
+
+    expect(partial.status).not.toBe(0);
+    expect(partial.stderr).toContain('모두 요구합니다');
+    expect(mismatch.status).not.toBe(0);
+    expect(mismatch.stderr).toContain('SEORI_RELEASE_TAG와 다릅니다');
+    expect(prerelease.status).not.toBe(0);
+    expect(prerelease.stderr).toContain('stable SemVer');
+    expect(legacyName.status).not.toBe(0);
+    expect(legacyName.stderr).toContain('SEORI_RELEASE_VERSION');
+    expect(fs.existsSync(fixture.output)).toBe(false);
   });
 
   it('build-only에 production secret이 섞이면 값 노출 없이 중단한다', () => {
