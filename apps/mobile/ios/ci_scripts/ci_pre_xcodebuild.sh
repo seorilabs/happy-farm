@@ -6,13 +6,17 @@
 
 set -eu
 
-AUTHORITY_SHA="ab9305632698fcb949d4c9df58cf18dbce73bef8"
-APPLIER_SHA256="b399afde0016e23947e173437e266aa83071079d1345b41ff580ebfe63357d6f"
+# Apple build number 정본을 Xcode Cloud의 CI_BUILD_NUMBER로 옮기고, 심볼릭 링크 경로에서
+# 조용히 exit 0 하던 fail-open을 고친 중앙 commit이다. 계약은 seorilabs/.github
+# contracts/release-version-authority.yaml schemaVersion 2의 appleBuildNumberExceptions다.
+AUTHORITY_SHA="6db01149a7700c0557bbeaf2e045aac7df0e78f2"
+APPLIER_SHA256="1da1dce81a5194a37f7a31475c29d899d95eb6da9ae1460927fe439aa329752c"
 AUTHORITY_SHA256="ca9ef5b4fe326323840b171f9e6ed069cb182d2aee8e88b72e352c57514d466b"
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 REPO_ROOT="$(CDPATH= cd -- "${SCRIPT_DIR}/../../../.." && pwd)"
 REPO="${CI_PRIMARY_REPOSITORY_PATH:-${REPO_ROOT}}"
 RELEASE_TAG="${CI_TAG:-}"
+CLOUD_BUILD_NUMBER="${CI_BUILD_NUMBER:-}"
 INFO_PLIST="${REPO}/apps/mobile/ios/HappyFarmMobile/Info.plist"
 DRY_RUN="${CI_PRE_XCODEBUILD_DRY_RUN:-0}"
 
@@ -20,6 +24,15 @@ if [ -z "$RELEASE_TAG" ]; then
   echo "CI_TAG가 없습니다. Xcode Cloud release archive는 exact vX.Y.Z tag에서만 허용됩니다." >&2
   exit 1
 fi
+
+# Apple build number의 정본은 Xcode Cloud가 발급한 CI_BUILD_NUMBER다. 빈 값, 0, leading zero,
+# 비정수는 archive를 시작하기 전에 끊는다.
+case "$CLOUD_BUILD_NUMBER" in
+  ''|*[!0-9]*|0*)
+    echo "Xcode Cloud CI_BUILD_NUMBER는 1 이상의 정수여야 합니다: ${CLOUD_BUILD_NUMBER:-missing}" >&2
+    exit 1
+    ;;
+esac
 
 authority_dir=""
 cleanup_authority="false"
@@ -68,6 +81,13 @@ source_sha="$(node -e 'process.stdout.write(String(JSON.parse(process.argv[1]).s
 
 if [ -z "$marketing" ] || [ -z "$build" ] || [ -z "$runtime_code" ] || [ -z "$source_sha" ]; then
   echo "중앙 Xcode Cloud release binding 결과가 불완전합니다." >&2
+  exit 1
+fi
+
+# 중앙 binding이 태그 파생 encodedVersion을 돌려주면 pin이 낡은 것이다. 그대로 archive하면
+# App Store-signed 앱의 CFBundleVersion과 어긋나므로 여기서 끊는다.
+if [ "$build" != "$CLOUD_BUILD_NUMBER" ]; then
+  echo "중앙 release binding이 Xcode Cloud build number를 반영하지 않았습니다: binding=${build} CI_BUILD_NUMBER=${CLOUD_BUILD_NUMBER}. pin된 AUTHORITY_SHA와 APPLIER_SHA256을 갱신하세요." >&2
   exit 1
 fi
 
