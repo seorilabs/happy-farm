@@ -52,3 +52,38 @@ describe('WorkflowBundle v5 정적 preflight 계약', () => {
     expect(result.status).toBe(0);
   }, 30_000);
 });
+
+// 중앙 caller 회귀 테스트.
+//
+// 배경: caller가 branch 참조로 되돌아가거나 앱 코드 변경에도 중앙 워크플로가 도는 형태로
+// 바뀌면 승인 번들 결합이 조용히 깨진다. 파일은 WorkflowBundle v5 generator 산출물이며
+// 사람이 편집하지 않는다.
+describe('중앙 워크플로 caller', () => {
+  const callerPath = '.github/workflows/org-contract.yml';
+  const caller = fs.readFileSync(path.join(repositoryRoot, callerPath), 'utf8');
+
+  it('승인 번들의 중앙 워크플로를 40자리 commit SHA로 고정한다', () => {
+    expect(caller).toMatch(
+      /uses: seorilabs\/\.github\/\.github\/workflows\/js-static-checks-v1\.yml@[0-9a-f]{40}\n/,
+    );
+  });
+
+  it('branch·tag 참조나 secrets 상속을 쓰지 않는다', () => {
+    expect(caller).not.toMatch(/@main\b/);
+    expect(caller).not.toMatch(/@v[0-9]/);
+    expect(caller).not.toMatch(/secrets:\s*inherit/);
+  });
+
+  it('자기 파일 경로 변경에만 반응한다', () => {
+    expect(caller).toMatch(/on:\n {2}pull_request:\n {4}paths:\n {6}- \.github\/workflows\/org-contract\.yml\n/);
+    expect(caller).not.toMatch(/\n {2}push:/);
+  });
+
+  it('WorkflowBundle generator가 관리하는 caller는 이 파일 하나뿐이다', () => {
+    const workflows = fs.readdirSync(path.join(repositoryRoot, '.github/workflows'));
+    const generated = workflows.filter((name) => fs
+      .readFileSync(path.join(repositoryRoot, '.github/workflows', name), 'utf8')
+      .startsWith('# WorkflowBundle v5 generator가 관리합니다.'));
+    expect(generated).toEqual(['org-contract.yml']);
+  });
+});
