@@ -52,8 +52,6 @@ jobs:
       package_manager: pnpm
       pnpm_version: 11.3.0
       node_version: 24.16.0
-      npm_registry_url: https://npm.pkg.github.com
-      npm_scope: '@seorilabs'
       timeout_minutes: 35
       install_command: pnpm install --frozen-lockfile
       check_command: |

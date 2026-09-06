@@ -1,8 +1,16 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import test from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
 
 import { Presence, SDK_VERSION } from '@seorilabs/platform-sdk';
+
+// 선언한 exact 버전이 실제로 설치돼 있어야 이 테스트가 그 버전의 동작을 본 것이 된다.
+// 버전 숫자를 여기 박아 두면 SDK를 올릴 때마다 무관한 파일을 고쳐야 한다.
+const DECLARED_SDK_VERSION = JSON.parse(
+  readFileSync(join(import.meta.dirname, '..', 'package.json'), 'utf8'),
+).dependencies['@seorilabs/platform-sdk'];
 
 const CONTEXT = { platform: 'ait', appVersion: '1.0.0' };
 const BOOTSTRAP = {
@@ -28,8 +36,9 @@ function createTimerHarness() {
   };
 }
 
-test('설치된 SDK 0.4.0에서 기본 비활성 Presence는 네트워크를 열지 않는다', async () => {
-  assert.equal(SDK_VERSION, '0.4.0');
+test('선언한 exact SDK에서 기본 비활성 Presence는 네트워크를 열지 않는다', async () => {
+  assert.match(DECLARED_SDK_VERSION, /^\d+\.\d+\.\d+$/);
+  assert.equal(SDK_VERSION, DECLARED_SDK_VERSION);
 
   let tokenRequests = 0;
   let edgeRequests = 0;

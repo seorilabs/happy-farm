@@ -25,7 +25,8 @@
     "sim:balance": "node scripts/check-balance.mjs",
     "check:markets": "pnpm typecheck && pnpm check:architecture && pnpm check:core && pnpm check:i18n && pnpm check:balance && pnpm check:backoffice && pnpm check:play && pnpm check:app-store && pnpm check:firebase:android && pnpm check:ait-mp-secret",
     "check:markets:build": "pnpm check:markets && pnpm --dir apps/ait build && pnpm --dir apps/mobile build:android",
-    "test": "jest --passWithNoTests && pnpm check:platform-presence",
+    "test": "pnpm check:platform-sdk-lock && jest --passWithNoTests && pnpm check:platform-presence",
+    "check:platform-sdk-lock": "node scripts/check-platform-sdk-lock.mjs && node --test scripts/check-platform-sdk-lock.test.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "deploy": "pnpm --dir apps/ait run deploy"

@@ -111,8 +111,6 @@ jobs:
           check-latest: false
           cache: pnpm
           cache-dependency-path: release-source/pnpm-lock.yaml
-          registry-url: https://npm.pkg.github.com
-          scope: '@seorilabs'
 
       - name: Project central release binding into runtime metadata
         env:
@@ -159,7 +157,6 @@ jobs:
       - name: Prepare private package seed store
         shell: bash
         env:
-          NODE_AUTH_TOKEN: ${{ github.token }}
           PNPM_STORE_PATH: ${{ steps.meta.outputs.pnpm_store }}
         run: |
           set -euo pipefail
