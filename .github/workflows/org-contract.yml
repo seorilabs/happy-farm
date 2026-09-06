@@ -13,4 +13,4 @@ concurrency:
   cancel-in-progress: true
 jobs:
   org-contract:
-    uses: seorilabs/.github/.github/workflows/js-static-checks-v1.yml@3e9b2d9029b03224aa71f9cea9d253a5bdc404a5
+    uses: seorilabs/.github/.github/workflows/js-static-checks-v1.yml@755bbf0527d3fdf0f7837a2bc1b236a8ed8b24e6
