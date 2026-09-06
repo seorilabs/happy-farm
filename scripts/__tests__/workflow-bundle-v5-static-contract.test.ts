@@ -74,9 +74,14 @@ describe('중앙 워크플로 caller', () => {
     expect(caller).not.toMatch(/secrets:\s*inherit/);
   });
 
-  it('자기 파일 경로 변경에만 반응한다', () => {
-    expect(caller).toMatch(/on:\n {2}pull_request:\n {4}paths:\n {6}- \.github\/workflows\/org-contract\.yml\n/);
-    expect(caller).not.toMatch(/\n {2}push:/);
+  it('main 대상 PR·push와 수동 실행에만 반응한다', () => {
+    // 승인 번들 caller는 main의 PR과 push를 모두 검사한다. 후보 caller처럼 자기 파일
+    // 변경에만 반응하면 main에 들어간 뒤의 회귀를 잡지 못한다.
+    expect(caller).toMatch(
+      /on:\n {2}pull_request:\n {4}branches:\n {6}- main\n {2}push:\n {4}branches:\n {6}- main\n {2}workflow_dispatch: \{\}\n/,
+    );
+    expect(caller).not.toMatch(/pull_request_target/);
+    expect(caller).not.toMatch(/\n {2}schedule:/);
   });
 
   it('WorkflowBundle generator가 관리하는 caller는 이 파일 하나뿐이다', () => {
