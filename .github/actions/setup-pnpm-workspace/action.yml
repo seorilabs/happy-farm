@@ -22,11 +22,7 @@ runs:
         node-version: 24.16.0
         check-latest: false
         cache: pnpm
-        registry-url: https://npm.pkg.github.com
-        scope: '@seorilabs'
 
     - name: Install dependencies
       shell: bash
-      env:
-        NODE_AUTH_TOKEN: ${{ github.token }}
       run: ${{ inputs.install-command }}

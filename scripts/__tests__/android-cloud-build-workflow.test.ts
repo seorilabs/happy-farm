@@ -29,14 +29,17 @@ describe('Android Cloud Build 배포 계약', () => {
     expect(workflow).toContain('source_sha');
   });
 
-  it('private package token을 Cloud Build에 전달하지 않고 seed store만 사용한다', () => {
+  it('레지스트리 토큰 없이 seed store만으로 Cloud Build에 의존성을 넘긴다', () => {
     expect(workflow).toContain('pnpm store add "$private_package@$private_version"');
     expect(workflow).toContain("private_package='@seorilabs/platform-sdk'");
-    expect(workflow).toContain('NODE_AUTH_TOKEN: ${{ github.token }}');
-    expect(cloudBuild).not.toContain('NODE_AUTH_TOKEN');
     expect(buildScript).toContain('pnpm install');
     expect(buildScript).not.toContain('--offline');
     expect(buildEnv).toContain('CLOUD_BUILD_PNPM_STORE=.cloudbuild-private-pnpm-store');
+
+    // Platform #113 이후 @seorilabs/platform-sdk 는 공개 npm 패키지다. 어느 단계에서도
+    // 레지스트리 토큰이 필요 없고, 넘기면 Cloud Build 로그에 남을 위험만 생긴다.
+    expect(workflow).not.toContain('NODE_AUTH_TOKEN');
+    expect(cloudBuild).not.toContain('NODE_AUTH_TOKEN');
   });
 
   it('x64 builder와 Happy Farm 전용 Secret Manager 복제본을 사용한다', () => {
