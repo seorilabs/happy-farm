@@ -55,8 +55,8 @@ describe('WorkflowBundle v5 정적 preflight 계약', () => {
 
 // 중앙 caller 회귀 테스트.
 //
-// 배경: caller가 branch 참조로 되돌아가거나 앱 코드 변경에도 중앙 워크플로가 도는 형태로
-// 바뀌면 승인 번들 결합이 조용히 깨진다. 파일은 WorkflowBundle v5 generator 산출물이며
+// 배경: caller가 branch 참조로 되돌아가거나 정적 검사가 main 변경을 놓치면
+// 승인 번들 결합이 조용히 깨진다. 파일은 WorkflowBundle v5 generator 산출물이며
 // 사람이 편집하지 않는다.
 describe('중앙 워크플로 caller', () => {
   const callerPath = '.github/workflows/org-contract.yml';
@@ -84,11 +84,21 @@ describe('중앙 워크플로 caller', () => {
     expect(caller).not.toMatch(/\n {2}schedule:/);
   });
 
-  it('WorkflowBundle generator가 관리하는 caller는 이 파일 하나뿐이다', () => {
+  it('WorkflowBundle generator가 정적 검사와 수동 Android 빌드를 관리한다', () => {
     const workflows = fs.readdirSync(path.join(repositoryRoot, '.github/workflows'));
     const generated = workflows.filter((name) => fs
       .readFileSync(path.join(repositoryRoot, '.github/workflows', name), 'utf8')
       .startsWith('# WorkflowBundle v5 generator가 관리합니다.'));
-    expect(generated).toEqual(['org-contract.yml']);
+    expect(generated.sort()).toEqual(['android-build-only.yml', 'org-contract.yml']);
+  });
+
+  it('Android 검증 빌드는 수동 실행으로만 같은 중앙 승인 SHA를 사용한다', () => {
+    const androidCaller = fs.readFileSync(path.join(repositoryRoot, '.github/workflows/android-build-only.yml'), 'utf8');
+    const workflowSha = caller.match(/js-static-checks-v1\.yml@([0-9a-f]{40})\n/)?.[1];
+    expect(workflowSha).toBeDefined();
+    expect(androidCaller).toContain(`rn-build-android-cloud-v2.yml@${workflowSha}\n`);
+    expect(androidCaller).toMatch(/on:\n {2}workflow_dispatch: \{\}\npermissions:/);
+    expect(androidCaller).not.toMatch(/pull_request|\n {2}push:|\n {2}schedule:|secrets:|\n {4}(with|steps|runs-on):/);
+    expect(androidCaller).not.toMatch(/deploy-|upload:|@main\b|@v[0-9]/);
   });
 });
