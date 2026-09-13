@@ -32,7 +32,7 @@ permissions:
 
 jobs:
   create-release-tag:
-    uses: seorilabs/.github/.github/workflows/release-tag.yml@8a11a145fed35479a4a89ebc7ca97edd0a0f05fd
+    uses: seorilabs/.github/.github/workflows/release-tag.yml@565fba53aa5053785c63c9b732b93a3fbd7be847
     with:
       target_ref: ${{ inputs.target_ref }}
       tag: ${{ inputs.release_tag }}
