@@ -17,11 +17,6 @@ on:
         required: false
         default: true
         type: boolean
-      deploy_app_store:
-        description: "App Store 배포 포함"
-        required: false
-        default: true
-        type: boolean
       memo:
         description: "AIT 배포 메모입니다. 비우면 릴리즈 태그와 커밋이 자동으로 들어갑니다."
         required: false
@@ -65,14 +60,3 @@ jobs:
       send_to_google_play: true
       after_upload: "내부 테스터에게 배포하기"
 
-  app-store:
-    name: Deploy App Store
-    needs: resolve
-    if: ${{ inputs.deploy_app_store }}
-    uses: ./.github/workflows/deploy-app-store.yml
-    secrets:
-      APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
-      APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
-      APP_STORE_CONNECT_PRIVATE_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY_BASE64 }}
-    with:
-      release_tag: ${{ needs.resolve.outputs.tag }}
