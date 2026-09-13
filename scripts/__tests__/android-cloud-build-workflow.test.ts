@@ -62,8 +62,10 @@ describe('Android Cloud Build 배포 계약', () => {
   });
 
   it('버전은 exact 중앙 workflow SHA의 release binding에서만 받는다', () => {
-    expect(workflow).toContain(
-      'seorilabs/.github/.github/workflows/resolve-release-version.yml@8a11a145fed35479a4a89ebc7ca97edd0a0f05fd'
+    // 중앙 판본은 올라간다. 특정 SHA 를 박아 두면 판본을 올릴 때마다 이 테스트까지
+    // 고쳐야 하고, 빠뜨리면 CI 가 빨간불로 남는다. immutable commit SHA 인지만 본다.
+    expect(workflow).toMatch(
+      /seorilabs\/\.github\/\.github\/workflows\/resolve-release-version\.yml@[0-9a-f]{40}/
     );
     expect(workflow).toContain('SEORI_RELEASE_VERSION_CODE: ${{ needs.resolve.outputs.android_version_code }}');
     expect(workflow).not.toContain('scripts/resolve-release-version.mjs');
