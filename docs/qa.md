@@ -63,7 +63,7 @@ pnpm check:app-store
 App Store GitHub Actions archive/upload smoke:
 
 ```bash
-gh workflow run deploy-app-store.yml --ref develop -f release_tag=v1.0.0 -f upload_to_app_store=true
+Backoffice에서 해당 태그로 App Store 배포를 실행한다.
 ```
 
 - iPhone portrait에서 앱 진입, 작물 심기, 수확, 상점, 저장 복원이 동작한다.

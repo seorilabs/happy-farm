@@ -187,12 +187,12 @@ Apple 공식 도움말 기준으로 build upload에는 Account Holder, Admin, Ap
 
 ## 7단계: GitHub Actions archive/upload
 
-App Store archive/upload는 `.github/workflows/deploy-app-store.yml`에서 처리합니다. workflow는 exact
+App Store archive/upload는 Xcode Cloud가 처리합니다. 태그를 대상으로 한 빌드 트리거는 Backoffice가 App Store Connect API(`ciBuildRuns`)로 직접 하며, GitHub Actions에는 App Store 경로를 두지 않습니다. 빌드는 exact
 `vX.Y.Z` 태그를 중앙 `release-version-authority-v1`에 결합하고,
 `scripts/write-release-info.mjs`로 확정값만 런타임 `RELEASE_INFO`에 기록한 뒤 archive합니다.
 
 ```bash
-gh workflow run deploy-app-store.yml --ref develop -f release_tag=v1.1.1 -f upload_to_app_store=true
+Backoffice에서 해당 태그로 App Store 배포를 실행한다. Backoffice가 멈추면 App Store Connect의 Xcode Cloud에서 그 태그에 직접 Start Build 한다.
 ```
 
 운영 기준:

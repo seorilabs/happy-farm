@@ -148,15 +148,10 @@ describe('Xcode Cloud 중앙 태그 버전 주입', () => {
     expect(result.stdout).not.toContain('marketing=');
   });
 
-  test('GitHub와 Xcode Cloud 모두 공통 runtime versionCode를 투영한다', () => {
-    const workflow = fs.readFileSync(
-      path.resolve(__dirname, '../../.github/workflows/deploy-app-store.yml'),
-      'utf8'
-    );
+  // App Store 트리거는 Backoffice 가 ASC ciBuildRuns 로 직접 한다. 저장소에 App Store
+  // 워크플로를 두지 않으므로 Xcode Cloud 훅 쪽 투영만 확인한다.
+  test('Xcode Cloud 훅이 공통 runtime versionCode를 투영한다', () => {
     const script = fs.readFileSync(SCRIPT, 'utf8');
-    expect(workflow).toContain(
-      'SEORI_RELEASE_VERSION_CODE: ${{ needs.resolve.outputs.android_version_code }}'
-    );
     expect(script).toContain('JSON.parse(process.argv[1]).runtimeVersionCode');
     expect(script).toContain('SEORI_RELEASE_VERSION_CODE="$runtime_code"');
   });

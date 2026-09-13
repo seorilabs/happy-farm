@@ -298,7 +298,7 @@
     }
   },
   "automation": {
-    "workflow": ".github/workflows/deploy-app-store.yml",
+    "workflow": "backoffice-asc-ci-build-runs",
     "appStoreConnectApiKeyIdSecret": "APP_STORE_CONNECT_API_KEY_ID",
     "appStoreConnectIssuerIdSecret": "APP_STORE_CONNECT_ISSUER_ID",
     "appStoreConnectPrivateKeyBase64Secret": "APP_STORE_CONNECT_PRIVATE_KEY_BASE64",

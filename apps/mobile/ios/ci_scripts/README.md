@@ -21,7 +21,7 @@ train과 충돌해 TestFlight 업로드가 거부되거나, 심사에 구버전�
 `project.pbxproj`의 값은 개발 기본값일 뿐 release authority가 아니다. 위 스크립트가 실행되지
 않거나 exact tag binding을 검증하지 못하면 archive 자체를 실패시킨다.
 
-GitHub Actions 배포 경로(`.github/workflows/deploy-app-store.yml`)도 같은 중앙 reusable resolver의
+Backoffice 의 ASC 트리거 경로도 같은 중앙 reusable resolver의
 exact tag binding을 사용한다. 이 스크립트는 Xcode Cloud 경로에 같은 정본을 적용한다.
 
 ### 로컬/CI 검증 (dry-run)
