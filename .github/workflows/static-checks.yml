@@ -60,6 +60,6 @@ jobs:
         pnpm test
         pnpm check:i18n
         pnpm check:balance
-        pnpm check:ait-mp-secret
+        pnpm check:admob-analytics
         pnpm --dir apps/mobile typecheck
         pnpm --dir apps/mobile test --watchAll=false
