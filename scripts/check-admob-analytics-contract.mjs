@@ -3,13 +3,18 @@ import { join } from 'node:path';
 
 const root = process.cwd();
 const failures = [];
+const fileContents = new Map();
 const read = (path) => {
+  if (fileContents.has(path)) return fileContents.get(path);
   const absolutePath = join(root, path);
   if (!existsSync(absolutePath)) {
     failures.push(`필수 계약 파일이 없습니다: ${path}`);
+    fileContents.set(path, '');
     return '';
   }
-  return readFileSync(absolutePath, 'utf8');
+  const contents = readFileSync(absolutePath, 'utf8');
+  fileContents.set(path, contents);
+  return contents;
 };
 const expectText = (path, expected, message) => {
   if (!read(path).includes(expected)) failures.push(`${message}: ${path}`);
