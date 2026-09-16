@@ -9,18 +9,20 @@ const read = (path) => {
   const absolutePath = join(root, path);
   if (!existsSync(absolutePath)) {
     failures.push(`필수 계약 파일이 없습니다: ${path}`);
-    fileContents.set(path, '');
-    return '';
+    fileContents.set(path, null);
+    return null;
   }
   const contents = readFileSync(absolutePath, 'utf8');
   fileContents.set(path, contents);
   return contents;
 };
 const expectText = (path, expected, message) => {
-  if (!read(path).includes(expected)) failures.push(`${message}: ${path}`);
+  const contents = read(path);
+  if (contents !== null && !contents.includes(expected)) failures.push(`${message}: ${path}`);
 };
 const rejectText = (path, rejected, message) => {
-  if (read(path).includes(rejected)) failures.push(`${message}: ${path}`);
+  const contents = read(path);
+  if (contents !== null && contents.includes(rejected)) failures.push(`${message}: ${path}`);
 };
 
 const publisher = '9932778305312246';
