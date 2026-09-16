@@ -7,6 +7,7 @@ import {
   toAnalyticsScientificParts,
   toFirebaseAnalyticsParams,
   toFirebaseAnalyticsValue,
+  withStandardAnalyticsParams,
 } from '../analytics';
 import { createInitialState } from '../constants';
 
@@ -20,6 +21,85 @@ function getLegacyEventContext(context: ReturnType<typeof getGameAnalyticsContex
 }
 
 describe('farm analytics adapter contract', () => {
+  test('표준 시장·런타임·릴리스 차원을 caller 값보다 우선해 보존한다', () => {
+    expect(
+      withStandardAnalyticsParams(
+        {
+          appMarket: 'apps_in_toss',
+          runtimePlatform: 'web',
+          releaseVersion: '1.2.3',
+        },
+        {
+          app_market: 'spoofed',
+          runtime_platform: 'spoofed',
+          release_version: '0.0.0',
+          enabled: true,
+        },
+        {
+          app_market: 'spoofed-again',
+          runtime_platform: 'spoofed-again',
+          release_version: '0.0.1',
+          session_id: 1_700_000_000_000,
+          engagement_time_msec: 1,
+        },
+      ),
+    ).toEqual({
+      app_market: 'apps_in_toss',
+      runtime_platform: 'web',
+      release_version: '1.2.3',
+      session_id: 1_700_000_000_000,
+      engagement_time_msec: 1,
+      enabled: 1,
+    });
+  });
+
+  test('GA4 25개 상한에서도 표준·세션 필드를 먼저 남긴다', () => {
+    const params = Object.fromEntries(
+      Array.from({ length: 30 }, (_, index) => [`field_${index}`, index]),
+    );
+    const normalized = withStandardAnalyticsParams(
+      {
+        appMarket: 'apps_in_toss',
+        runtimePlatform: 'web',
+        releaseVersion: '1.2.3',
+      },
+      params,
+      { session_id: 1_700_000_000_000, engagement_time_msec: 1 },
+    );
+
+    expect(Object.keys(normalized)).toHaveLength(25);
+    expect(normalized).toMatchObject({
+      app_market: 'apps_in_toss',
+      runtime_platform: 'web',
+      release_version: '1.2.3',
+      session_id: 1_700_000_000_000,
+      engagement_time_msec: 1,
+    });
+  });
+
+  test('추가 파라미터만 25개를 넘어도 표준 차원과 전체 상한을 보존한다', () => {
+    const additionalParams = Object.fromEntries(
+      Array.from({ length: 30 }, (_, index) => [`reserved_${index}`, index]),
+    );
+    const normalized = withStandardAnalyticsParams(
+      {
+        appMarket: 'apps_in_toss',
+        runtimePlatform: 'web',
+        releaseVersion: '1.2.3',
+      },
+      { caller_field: 1 },
+      additionalParams,
+    );
+
+    expect(Object.keys(normalized)).toHaveLength(25);
+    expect(normalized).toMatchObject({
+      app_market: 'apps_in_toss',
+      runtime_platform: 'web',
+      release_version: '1.2.3',
+    });
+    expect(normalized).not.toHaveProperty('caller_field');
+  });
+
   test('emits platform-neutral event names and payloads through an injected tracker', () => {
     const track = jest.fn();
     const analytics = createFarmAnalytics(track);

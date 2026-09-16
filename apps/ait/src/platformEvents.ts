@@ -3,12 +3,13 @@ import { createPlatform, type Credential } from '@seorilabs/platform-sdk';
 import type { AppStateStatus } from 'react-native';
 
 import {
-  PLATFORM_EVENT_ALLOWLIST,
   RELEASE_INFO,
+  withStandardAnalyticsParams,
   type TrackGameEvent,
 } from '../../../packages/farm-core/src';
 import { detectRuntimeLocale } from '../../../packages/farm-ui/src';
 import { PlatformAdsClient } from '../../../packages/farm-core/src';
+import { getAppsInTossGa4ClientId } from './firebaseWeb/analyticsIdentity';
 
 const PLATFORM_API_URL = 'https://platform-api-306278488979.asia-northeast3.run.app';
 const PLATFORM_INGEST_URL = 'https://platform-ingest-306278488979.asia-northeast3.run.app';
@@ -18,11 +19,13 @@ const appsInTossPlatform = createPlatform({
   appId: 'happy-farm',
   baseUrl: PLATFORM_API_URL,
   ingestBaseUrl: PLATFORM_INGEST_URL,
-  eventAllowlist: PLATFORM_EVENT_ALLOWLIST,
   eventContext: () => ({
     platform: 'ait',
     appVersion: RELEASE_INFO.versionName,
     locale: detectRuntimeLocale(),
+    ga4ClientId: getAppsInTossGa4ClientId(),
+    // 위치 파생용 원 요청 IP는 제품 분석 동의를 별도로 받기 전까지 전달하지 않는다.
+    analyticsConsent: false,
   }),
   // Presence는 Platform/Backoffice 운영 gate가 끝난 릴리스에서만 opt-in한다.
   // 기본값을 조합 지점에 명시해 SDK 업그레이드만으로 네트워크가 열리지 않게 한다.
@@ -43,6 +46,7 @@ export const appsInTossPlatformAds = new PlatformAdsClient({
 
 let platformSessionPromise: Promise<boolean> | null = null;
 let adsSessionPromise: Promise<boolean> | null = null;
+let analyticsSessionId = Date.now();
 
 // 신규 사용자마다 Platform 계정을 연다. Platform은 identity를 처음 만들 때만
 // identity.created 운영 이벤트를 내보내고, 그게 Backoffice의 신규가입 알림을
@@ -106,8 +110,26 @@ export function ensureAppsInTossAdsSession(): Promise<boolean> {
 }
 
 export const trackAppsInTossPlatformEvent: TrackGameEvent = (name, params = {}) => {
-  appsInTossPlatform.events.track({ name, params });
+  appsInTossPlatform.events.track({
+    name,
+    params: withStandardAnalyticsParams(
+      {
+        appMarket: 'apps_in_toss',
+        runtimePlatform: 'web',
+        releaseVersion: RELEASE_INFO.versionName,
+      },
+      params,
+      {
+        session_id: analyticsSessionId,
+        engagement_time_msec: 1,
+      },
+    ),
+  });
 };
+
+export function startNewAppsInTossAnalyticsSession(): void {
+  analyticsSessionId = Date.now();
+}
 
 export function startAppsInTossPlatformEvents(): void {
   appsInTossPlatform.start();

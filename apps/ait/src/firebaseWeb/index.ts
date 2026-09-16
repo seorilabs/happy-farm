@@ -6,8 +6,8 @@ import {
 import { getAppsInTossRemoteBoolean, initializeAppsInTossRemoteConfig } from './remoteConfig';
 
 export async function initializeAppsInTossFirebaseServices() {
-  // analytics(GA4 Measurement Protocol)·remoteConfig(REST) 모두 fetch로 직접 호출하므로
-  // 브라우저 전용 Firebase JS SDK나 FirebaseApp 인스턴스가 필요 없다.
+  // Analytics는 Platform relay용 client ID/lifecycle을 준비하고, Remote Config만 REST로
+  // 직접 호출한다. 브라우저 전용 Firebase JS SDK나 FirebaseApp 인스턴스는 필요 없다.
   const analytics = await initializeAppsInTossAnalytics();
   const remoteConfig = await initializeAppsInTossRemoteConfig();
 

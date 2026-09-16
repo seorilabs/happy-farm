@@ -2,8 +2,8 @@
   "name": "HappyFarmMobile",
   "displayName": "행복 농장 타이쿤",
   "react-native-google-mobile-ads": {
-    "android_app_id": "ca-app-pub-2444587584524186~8839811958",
-    "ios_app_id": "ca-app-pub-2444587584524186~5266256811",
+    "android_app_id": "ca-app-pub-9932778305312246~5744460813",
+    "ios_app_id": "ca-app-pub-9932778305312246~1809085234",
     "delay_app_measurement_init": true,
     "optimize_initialization": true,
     "optimize_ad_loading": true

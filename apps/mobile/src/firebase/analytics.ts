@@ -1,9 +1,11 @@
 import { getAnalytics, logEvent } from '@react-native-firebase/analytics';
+import { Platform } from 'react-native';
 
 import {
   combineTrackers,
   createFarmAnalytics,
-  toFirebaseAnalyticsParams,
+  RELEASE_INFO,
+  withStandardAnalyticsParams,
   type TrackGameEvent,
 } from '../../../../packages/farm-core/src';
 
@@ -26,7 +28,16 @@ const trackFirebaseGameEvent: TrackGameEvent = (name, params = {}) => {
   }
 
   try {
-    void logFirebaseEvent(getAnalytics(), name, toFirebaseAnalyticsParams(params)).catch((error: unknown) => {
+    const isIos = Platform.OS === 'ios';
+    const normalizedParams = withStandardAnalyticsParams(
+      {
+        appMarket: isIos ? 'app_store' : 'google_play',
+        runtimePlatform: isIos ? 'ios' : 'android',
+        releaseVersion: RELEASE_INFO.versionName,
+      },
+      params,
+    );
+    void logFirebaseEvent(getAnalytics(), name, normalizedParams).catch((error: unknown) => {
       recordNonFatalError(error, `analytics:${name}`);
     });
   } catch (error) {
