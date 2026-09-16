@@ -2,8 +2,15 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const root = process.cwd();
-const read = (path) => readFileSync(join(root, path), 'utf8');
 const failures = [];
+const read = (path) => {
+  const absolutePath = join(root, path);
+  if (!existsSync(absolutePath)) {
+    failures.push(`필수 계약 파일이 없습니다: ${path}`);
+    return '';
+  }
+  return readFileSync(absolutePath, 'utf8');
+};
 const expectText = (path, expected, message) => {
   if (!read(path).includes(expected)) failures.push(`${message}: ${path}`);
 };

@@ -46,23 +46,27 @@ export function withStandardAnalyticsParams(
   params: Record<string, AnalyticsValue> = {},
   additionalParams: Record<string, AnalyticsValue> = {},
 ): Record<string, string | number> {
-  const normalizedAdditional = toFirebaseAnalyticsParams(additionalParams);
-  const reservedKeys = new Set([
-    ...STANDARD_ANALYTICS_PARAM_KEYS,
-    ...Object.keys(normalizedAdditional),
-  ]);
-  const maxCallerParams = Math.max(0, 25 - reservedKeys.size);
+  const standardParams = {
+    app_market: context.appMarket,
+    runtime_platform: context.runtimePlatform,
+    release_version: context.releaseVersion,
+  };
+  const normalizedAdditional = Object.fromEntries(
+    Object.entries(toFirebaseAnalyticsParams(additionalParams))
+      .filter(([key]) => !STANDARD_ANALYTICS_PARAM_KEYS.has(key))
+      .slice(0, 25 - STANDARD_ANALYTICS_PARAM_KEYS.size),
+  );
+  const protectedParams = { ...standardParams, ...normalizedAdditional };
+  const protectedKeys = new Set(Object.keys(protectedParams));
+  const maxCallerParams = 25 - protectedKeys.size;
   const callerParams = Object.fromEntries(
     Object.entries(toFirebaseAnalyticsParams(params))
-      .filter(([key]) => !reservedKeys.has(key))
+      .filter(([key]) => !protectedKeys.has(key))
       .slice(0, maxCallerParams),
   );
 
   return {
-    app_market: context.appMarket,
-    runtime_platform: context.runtimePlatform,
-    release_version: context.releaseVersion,
-    ...normalizedAdditional,
+    ...protectedParams,
     ...callerParams,
   };
 }

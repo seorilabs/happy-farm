@@ -35,7 +35,13 @@ describe('farm analytics adapter contract', () => {
           release_version: '0.0.0',
           enabled: true,
         },
-        { session_id: 1_700_000_000_000, engagement_time_msec: 1 },
+        {
+          app_market: 'spoofed-again',
+          runtime_platform: 'spoofed-again',
+          release_version: '0.0.1',
+          session_id: 1_700_000_000_000,
+          engagement_time_msec: 1,
+        },
       ),
     ).toEqual({
       app_market: 'apps_in_toss',
@@ -69,6 +75,29 @@ describe('farm analytics adapter contract', () => {
       session_id: 1_700_000_000_000,
       engagement_time_msec: 1,
     });
+  });
+
+  test('추가 파라미터만 25개를 넘어도 표준 차원과 전체 상한을 보존한다', () => {
+    const additionalParams = Object.fromEntries(
+      Array.from({ length: 30 }, (_, index) => [`reserved_${index}`, index]),
+    );
+    const normalized = withStandardAnalyticsParams(
+      {
+        appMarket: 'apps_in_toss',
+        runtimePlatform: 'web',
+        releaseVersion: '1.2.3',
+      },
+      { caller_field: 1 },
+      additionalParams,
+    );
+
+    expect(Object.keys(normalized)).toHaveLength(25);
+    expect(normalized).toMatchObject({
+      app_market: 'apps_in_toss',
+      runtime_platform: 'web',
+      release_version: '1.2.3',
+    });
+    expect(normalized).not.toHaveProperty('caller_field');
   });
 
   test('emits platform-neutral event names and payloads through an injected tracker', () => {
