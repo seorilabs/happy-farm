@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "release": {
+    "lastTag": null,
+    "lastSourceSha": null,
+    "marketingVersion": null
+  },
+  "android": {
+    "authority": "github-ledger",
+    "lastVersionCode": 1010003,
+    "legacyFallbackSealed": false
+  },
+  "ios": {
+    "authority": "xcode-cloud",
+    "lastObservedBuildNumber": null,
+    "lastObservedTag": null
+  },
+  "provenance": {
+    "initializedAt": "2026-09-16T14:40:06Z",
+    "initializedBy": "release-version-ledger-init-v1",
+    "initializedFromWorkflowSha": "53c0819ec0976a48c7e8302234bcfc408f0a1e0b",
+    "authorityRevision": "4fc4d51809da6e41e645919b7e2b89b0849d511613469617984815eb09e95cec",
+    "baseline": {
+      "androidVersionCode": 1010003,
+      "rule": "max-of-verified-sources",
+      "sources": [
+        {
+          "kind": "google-play-bundles-list",
+          "androidVersionCode": 1010003,
+          "packageName": "com.seorilabs.happyfarm",
+          "observedAt": "2026-09-16T12:55:12Z",
+          "evidenceDigest": "sha256:cc2e3fd77d394ed277a8f0dd1ed016ea1e8c10a3769aef03782a37ff58ee441b"
+        }
+      ]
+    }
+  }
+}
