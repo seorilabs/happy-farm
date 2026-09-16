@@ -122,6 +122,9 @@ jobs:
           test "$(git rev-parse HEAD)" = "$SEORI_RELEASE_SOURCE_SHA"
           node scripts/write-release-info.mjs
 
+      - name: Check AdMob and Analytics contract
+        run: node scripts/check-admob-analytics-contract.mjs
+
       - name: Resolve build contract
         id: meta
         shell: bash

@@ -45,7 +45,6 @@ jobs:
     uses: ./.github/workflows/deploy-apps-in-toss.yml
     secrets:
       APPS_IN_TOSS_API_KEY: ${{ secrets.APPS_IN_TOSS_API_KEY }}
-      GA4_MP_API_SECRET: ${{ secrets.GA4_MP_API_SECRET }}
     with:
       release_tag: ${{ needs.resolve.outputs.tag }}
       memo: ${{ inputs.memo }}
@@ -59,4 +58,3 @@ jobs:
       release_tag: ${{ needs.resolve.outputs.tag }}
       send_to_google_play: true
       after_upload: "내부 테스터에게 배포하기"
-

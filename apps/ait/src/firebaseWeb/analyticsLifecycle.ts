@@ -24,9 +24,8 @@ export type AppsInTossAnalyticsLifecycleInitResult =
   | { status: 'ready'; firstTouch: 'storage_error'; reason: string };
 
 /**
- * AppsInToss의 MP-only WEB 스트림에 first-touch와 30분 세션 경계를 보강한다.
- * GA4 예약 이름(first_open/session_start)은 Measurement Protocol로 전송할 수 없으므로
- * 커스텀 이벤트를 함께 남기고 실제 세션 집계는 새 session_id로 시작한다.
+ * AppsInToss Platform GA4 relay에 first-touch와 30분 세션 경계를 보강한다.
+ * 자동 이벤트를 위조하지 않고 커스텀 이벤트와 숫자형 session_id로 세션을 구분한다.
  */
 export function createAppsInTossAnalyticsLifecycle(options: AppsInTossAnalyticsLifecycleOptions) {
   const {

@@ -7,9 +7,9 @@
 --
 -- 왜 GA4 표준 "새 사용자" 지표를 쓰지 않는가
 -- ----------------------------------------------------------------------------
--- AppsInToss(WEB 스트림)는 Granite RN 런타임이라 Firebase Web SDK가 동작하지 않고
--- Measurement Protocol로만 전송한다. GA4는 `first_visit`/`first_open`/`session_start`를
--- 예약 이름으로 막아 MP 요청을 거부하므로(2026-08-19 /debug/mp/collect 실측),
+-- AppsInToss(WEB 스트림)는 Granite RN 런타임이라 Firebase Web SDK가 동작하지 않는다.
+-- 과거 direct MP와 현재 Platform relay 모두 GA4에는 Measurement Protocol로 도착한다.
+-- GA4는 `first_visit`/`first_open`/`session_start`를 예약 이름으로 막아 직접 생성할 수 없으므로,
 -- AIT 스트림은 `user_first_touch_timestamp`가 항상 NULL이고 GA4의 "새 사용자"는
 -- 구조적으로 0으로 나온다. AIT 신규 유입은 아래 [A]의 `ait_first_touch`로 센다.
 --

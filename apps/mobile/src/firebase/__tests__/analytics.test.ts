@@ -8,6 +8,8 @@ jest.mock('../crashlytics', () => ({ recordNonFatalError: jest.fn() }));
 jest.mock('../../platformEvents', () => ({ trackMobilePlatformEvent: jest.fn() }));
 
 import { mobileFarmAnalytics } from '../analytics';
+import { Platform } from 'react-native';
+import { RELEASE_INFO } from '../../../../../packages/farm-core/src';
 
 const mockLogEvent = (
   jest.requireMock('@react-native-firebase/analytics') as { logEvent: jest.Mock }
@@ -25,6 +27,9 @@ describe('mobile analytics dual sink', () => {
     mobileFarmAnalytics.trackNotificationOpened({ kind: 'harvest' });
 
     expect(mockLogEvent).toHaveBeenCalledWith(expect.anything(), 'notification_opened', {
+      app_market: Platform.OS === 'ios' ? 'app_store' : 'google_play',
+      runtime_platform: Platform.OS === 'ios' ? 'ios' : 'android',
+      release_version: RELEASE_INFO.versionName,
       notification_kind: 'harvest',
     });
     expect(mockTrackPlatform).toHaveBeenCalledWith('notification_opened', {

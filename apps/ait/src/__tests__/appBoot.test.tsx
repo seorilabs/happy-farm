@@ -1,7 +1,7 @@
 /// <reference types="jest" />
 
 import React from 'react';
-import { cleanup, render } from '@testing-library/react-native';
+import { cleanup, render, waitFor } from '@testing-library/react-native';
 
 const mockEnsurePlatformSession = jest.fn(() => Promise.resolve(true));
 const mockStartPlatformEvents = jest.fn();
@@ -53,12 +53,12 @@ describe('AIT 부팅', () => {
     cleanup();
   });
 
-  test('첫 실행에 Platform 세션을 연다', () => {
+  test('첫 실행에 Platform 세션을 열고 Analytics identity 준비 뒤 이벤트 flush를 시작한다', async () => {
     render(React.createElement(AppContainer as React.ComponentType));
 
     // 이 호출이 신규 사용자의 Platform 계정을 만들고 identity.created를 발화시킨다.
     expect(mockEnsurePlatformSession).toHaveBeenCalledTimes(1);
-    expect(mockStartPlatformEvents).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(mockStartPlatformEvents).toHaveBeenCalledTimes(1));
   });
 
   test('세션 열기가 실패해도 렌더를 막지 않는다', () => {

@@ -88,7 +88,12 @@ describe('Mobile Platform events', () => {
 
     expect(mockPlatform?.events.track).toHaveBeenCalledWith({
       name: 'game_start',
-      params: { source: 'test' },
+      params: {
+        app_market: Platform.OS === 'ios' ? 'app_store' : 'google_play',
+        runtime_platform: Platform.OS === 'ios' ? 'ios' : 'android',
+        release_version: RELEASE_INFO.versionName,
+        source: 'test',
+      },
     });
     expect(mockPlatform?.start).toHaveBeenCalledTimes(1);
     expect(mockPlatform?.events.flush).toHaveBeenCalledTimes(1);

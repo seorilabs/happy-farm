@@ -13,7 +13,7 @@
 - Firebase Web App: `행복한 농장 타이쿤 (AppsInToss)` / `1:1874344437:web:a34abb444eae2baa6c48bc`
 - Firebase Web SDK: `apps/ait/src/firebaseWeb/*`에서 `firebase/app`, `firebase/analytics` import
 - 보상형 광고 그룹 ID: `ait.v2.live.6fc77adf3f034cd6`
-- Analytics: 기존 GA4 Measurement Protocol을 유지하고 저빈도 핵심 이벤트만 익명 Platform BigQuery sink에 복제합니다. Firebase UID, GA4 client ID, token은 전송하지 않습니다.
+- Analytics: 커스텀 이벤트는 Platform `/v1/events` 단일 경로로 보내고 GA4 relay와 Platform 원장을 함께 사용합니다. Firebase UID, 광고 ID, token은 전송하지 않으며 위치 파생 동의는 기본 `false`입니다.
 
 ## 사운드 리소스 호스팅
 

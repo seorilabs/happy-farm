@@ -164,9 +164,8 @@ Seorilabs 게임 간 공통 축에서 가상 재화 소비·업적 해금을 비
 | `achievement_claimed` | `unlock_achievement` | `achievement_id={track_key}:{tier}` |
 
 mirror는 GA4 권장 파라미터만 싣고 `GameAnalyticsContext`를 복제하지 않는다. AIT의
-`app_market`·버전·세션 envelope는 기존 Measurement Protocol adapter가 추가하므로
-이벤트당 25개 파라미터 예산을 지킨다. Platform dual sink에서는 기존 allowlist
-밖 이벤트를 드롭하므로 이 mirror는 GA4/Firebase 표준화 범위다. 집계 시 custom과
+`app_market`·`runtime_platform`·버전·세션 envelope는 Platform relay adapter가
+우선 추가하므로 이벤트당 25개 파라미터 예산을 지킨다. 집계 시 custom과
 mirror를 합산하지 않고, 앱 세부 분석은 custom event를 권위 기준으로 삼는다.
 
 ### 4) 수동 수확 콤보 baseline

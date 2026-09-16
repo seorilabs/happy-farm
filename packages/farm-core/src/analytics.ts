@@ -20,6 +20,53 @@ export type AnalyticsValue = string | number | boolean;
 
 export type TrackGameEvent = (name: string, params?: Record<string, AnalyticsValue>) => void;
 
+export type AnalyticsAppMarket = 'google_play' | 'app_store' | 'apps_in_toss';
+export type AnalyticsRuntimePlatform = 'android' | 'ios' | 'web';
+
+export type StandardAnalyticsContext = {
+  appMarket: AnalyticsAppMarket;
+  runtimePlatform: AnalyticsRuntimePlatform;
+  releaseVersion: string;
+};
+
+const STANDARD_ANALYTICS_PARAM_KEYS = new Set([
+  'app_market',
+  'runtime_platform',
+  'release_version',
+]);
+
+/**
+ * 모든 커스텀 이벤트에 조직 표준 차원을 붙인다.
+ *
+ * 표준/추가 필드는 호출자가 같은 이름을 보내도 덮어쓸 수 없고, GA4의 이벤트당
+ * 파라미터 25개 상한 안에서 우선 보존된다. Firebase 자동 이벤트에는 적용하지 않는다.
+ */
+export function withStandardAnalyticsParams(
+  context: StandardAnalyticsContext,
+  params: Record<string, AnalyticsValue> = {},
+  additionalParams: Record<string, AnalyticsValue> = {},
+): Record<string, string | number> {
+  const normalizedAdditional = toFirebaseAnalyticsParams(additionalParams);
+  const reservedKeys = new Set([
+    ...STANDARD_ANALYTICS_PARAM_KEYS,
+    ...Object.keys(normalizedAdditional),
+  ]);
+  const maxCallerParams = Math.max(0, 25 - reservedKeys.size);
+  const callerParams = Object.fromEntries(
+    Object.entries(toFirebaseAnalyticsParams(params))
+      .filter(([key]) => !reservedKeys.has(key))
+      .slice(0, maxCallerParams),
+  );
+
+  return {
+    app_market: context.appMarket,
+    runtime_platform: context.runtimePlatform,
+    release_version: context.releaseVersion,
+    ...normalizedAdditional,
+    ...callerParams,
+  };
+}
+
 export const MAX_SAFE_ANALYTICS_NUMBER = Number.MAX_SAFE_INTEGER;
 
 /** GA4 숫자 파라미터가 NaN/Infinity 또는 JS 안전 정수 범위를 넘어 집계를 오염시키지 않게 한다. */

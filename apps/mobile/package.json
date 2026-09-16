@@ -16,7 +16,7 @@
     "test:core": "pnpm --dir ../.. check:core",
     "typecheck": "tsc --noEmit",
     "check:architecture": "pnpm --dir ../.. check:architecture",
-    "check:release": "pnpm --dir ../.. check:play && pnpm --dir ../.. check:app-store",
+    "check:release": "pnpm --dir ../.. check:admob-analytics && pnpm --dir ../.. check:play && pnpm --dir ../.. check:app-store",
     "build:android": "sh -c 'if command -v /usr/libexec/java_home >/dev/null 2>&1 && [ -z \"$JAVA_HOME\" ]; then export JAVA_HOME=$(/usr/libexec/java_home -v 17); fi; react-native build-android --mode=release'"
   },
   "dependencies": {

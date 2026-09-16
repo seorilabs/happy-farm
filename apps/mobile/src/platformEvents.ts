@@ -4,6 +4,7 @@ import { Platform, type AppStateStatus } from 'react-native';
 import {
   PLATFORM_EVENT_ALLOWLIST,
   RELEASE_INFO,
+  withStandardAnalyticsParams,
   type TrackGameEvent,
 } from '../../../packages/farm-core/src';
 import { detectRuntimeLocale } from '../../../packages/farm-ui/src';
@@ -65,7 +66,18 @@ export function ensureMobilePlatformSession(): Promise<boolean> {
 export const mobilePlatformIap = mobilePlatform.iap;
 
 export const trackMobilePlatformEvent: TrackGameEvent = (name, params = {}) => {
-  mobilePlatform.events.track({ name, params });
+  const isIos = Platform.OS === 'ios';
+  mobilePlatform.events.track({
+    name,
+    params: withStandardAnalyticsParams(
+      {
+        appMarket: isIos ? 'app_store' : 'google_play',
+        runtimePlatform: isIos ? 'ios' : 'android',
+        releaseVersion: RELEASE_INFO.versionName,
+      },
+      params,
+    ),
+  });
 };
 
 export function startMobilePlatformEvents(): void {

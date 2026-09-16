@@ -2,8 +2,8 @@ type MockPlatformOptions = {
   appId: string;
   baseUrl: string;
   ingestBaseUrl: string;
-  eventAllowlist: readonly string[];
-  eventContext: () => Record<string, string>;
+  eventAllowlist?: readonly string[];
+  eventContext: () => Record<string, string | boolean | undefined>;
   presenceEnabled?: boolean;
   presenceContext?: () => Record<string, string>;
   sessionStore?: unknown;
@@ -24,6 +24,10 @@ const mockGetAnonymousKey = jest.fn<
 jest.mock('@apps-in-toss/framework', () => ({
   appLogin: () => mockAppLogin(),
   getAnonymousKey: () => mockGetAnonymousKey(),
+}));
+
+jest.mock('../firebaseWeb/analyticsIdentity', () => ({
+  getAppsInTossGa4ClientId: () => 'stable-ga4-client-id',
 }));
 
 jest.mock('@seorilabs/platform-sdk', () => {
@@ -50,7 +54,7 @@ jest.mock('@seorilabs/platform-sdk', () => {
   };
 });
 
-import { PLATFORM_EVENT_ALLOWLIST, RELEASE_INFO } from '../../../../packages/farm-core/src';
+import { RELEASE_INFO } from '../../../../packages/farm-core/src';
 import {
   ensureAppsInTossAdsSession,
   ensureAppsInTossPlatformSession,
@@ -75,20 +79,22 @@ const mockCreatePlatform = platformSdkMock.createPlatform;
 const mockPlatform = mockCreatePlatform.mock.results[0]?.value;
 
 describe('AppsInToss Platform events', () => {
-  test('익명 AIT context와 고정 allowlist로 SDK를 생성한다', () => {
+  test('익명 AIT context와 GA4 relay client ID로 SDK를 생성한다', () => {
     expect(mockCreatePlatform).toHaveBeenCalledTimes(2);
     const options = mockCreatePlatform.mock.calls[0]?.[0];
     expect(options).toMatchObject({
       appId: 'happy-farm',
       baseUrl: 'https://platform-api-306278488979.asia-northeast3.run.app',
       ingestBaseUrl: 'https://platform-ingest-306278488979.asia-northeast3.run.app',
-      eventAllowlist: PLATFORM_EVENT_ALLOWLIST,
       presenceEnabled: false,
     });
+    expect(options).not.toHaveProperty('eventAllowlist');
     expect(options?.eventContext()).toEqual({
       platform: 'ait',
       appVersion: RELEASE_INFO.versionName,
       locale: expect.any(String),
+      ga4ClientId: 'stable-ga4-client-id',
+      analyticsConsent: false,
     });
     expect(options?.presenceContext?.()).toEqual({
       platform: 'ait',
@@ -110,11 +116,39 @@ describe('AppsInToss Platform events', () => {
 
     expect(mockPlatform?.events.track).toHaveBeenCalledWith({
       name: 'game_start',
-      params: { source: 'test' },
+      params: {
+        app_market: 'apps_in_toss',
+        runtime_platform: 'web',
+        release_version: RELEASE_INFO.versionName,
+        session_id: expect.any(Number),
+        engagement_time_msec: 1,
+        source: 'test',
+      },
     });
     expect(mockPlatform?.start).toHaveBeenCalledTimes(1);
     expect(mockPlatform?.events.flush).toHaveBeenCalledTimes(1);
     expect(mockPlatform?.shutdown).toHaveBeenCalledTimes(1);
+  });
+
+  test('caller가 표준 차원과 세션 필드를 덮어쓸 수 없다', () => {
+    trackAppsInTossPlatformEvent('game_start', {
+      app_market: 'google_play',
+      runtime_platform: 'android',
+      release_version: 'spoofed',
+      session_id: 'spoofed',
+      engagement_time_msec: 0,
+    });
+
+    expect(mockPlatform?.events.track).toHaveBeenLastCalledWith({
+      name: 'game_start',
+      params: expect.objectContaining({
+        app_market: 'apps_in_toss',
+        runtime_platform: 'web',
+        release_version: RELEASE_INFO.versionName,
+        session_id: expect.any(Number),
+        engagement_time_msec: 1,
+      }),
+    });
   });
 
   test('background에서 Presence를 멈추고 foreground에서 비차단 재개한다', () => {
