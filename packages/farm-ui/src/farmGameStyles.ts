@@ -19,9 +19,9 @@ export const styles = StyleSheet.create({
   header: {
     paddingHorizontal: 16,
     paddingBottom: 8,
-    backgroundColor: '#ffffff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#d9e7ce',
+    backgroundColor: '#f7ecd4',
+    borderBottomWidth: 3,
+    borderBottomColor: '#d8bd8c',
   },
   headerTop: {
     flexDirection: 'row',
@@ -45,7 +45,7 @@ export const styles = StyleSheet.create({
     flex: 1,
   },
   title: {
-    color: '#253126',
+    color: '#6b4a22',
     fontSize: 20,
     fontWeight: '800',
   },
@@ -56,8 +56,8 @@ export const styles = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: 8,
     overflow: 'hidden',
-    color: '#247241',
-    backgroundColor: '#dff1df',
+    color: '#8a6a34',
+    backgroundColor: '#e9dcb8',
     fontSize: 11,
     fontWeight: '800',
   },
@@ -97,22 +97,34 @@ export const styles = StyleSheet.create({
   navButton: {
     minHeight: 34,
     justifyContent: 'center',
-    borderRadius: 8,
+    borderRadius: 12,
     paddingHorizontal: 12,
-    backgroundColor: '#edf2f7',
+    backgroundColor: '#fffdf5',
     // A transparent border is always reserved so the onboarding highlight can
     // recolor it without nudging the neighboring buttons.
     borderWidth: 2,
-    borderColor: 'transparent',
+    borderColor: '#dcc189',
+    // 입체감은 그림자가 아니라 두꺼운 아래 테두리로 낸다. iOS의 오프셋 그림자
+    // (shadowRadius: 0)는 Android에서 elevation의 블러 그림자로 대체되어
+    // 방향성이 사라지므로, 실기기 확인 후 양 플랫폼이 같게 보이는 쪽으로 맞췄다.
+    borderBottomWidth: 5,
+    borderBottomColor: '#cbae72',
+  },
+  // 눌림은 그림자 높이를 0으로 내리고 요소를 같은 양만큼 내려 표현한다.
+  // 색만 바꾸지 않으므로 색각 이상에서도 상태가 전달된다.
+  navButtonPressed: {
+    transform: [{ translateY: 3 }],
+    borderBottomWidth: 2,
+    marginBottom: 3,
   },
   // Onboarding highlight tuned for the small shop button: recolors the reserved
   // border and tints the fill instead of adding extra box that clashes.
   navButtonHighlight: {
-    borderColor: '#4caf6a',
-    backgroundColor: '#e3f3e8',
+    borderColor: '#3f7220',
+    backgroundColor: '#8fd158',
   },
   navButtonText: {
-    color: '#344054',
+    color: '#6b4a22',
     fontSize: 13,
     fontWeight: '800',
   },
@@ -121,11 +133,17 @@ export const styles = StyleSheet.create({
     height: 34,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 8,
-    backgroundColor: '#edf2f7',
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#d8bd8c',
+    backgroundColor: '#fff8e6',
+  },
+  settingsButtonPressed: {
+    transform: [{ translateY: 2 }],
+    backgroundColor: '#f2e4c6',
   },
   settingsButtonText: {
-    color: '#4a5568',
+    color: '#8a6a34',
     fontSize: 17,
     fontWeight: '800',
   },
@@ -133,10 +151,12 @@ export const styles = StyleSheet.create({
     marginTop: 8,
     paddingHorizontal: 10,
     paddingVertical: 9,
-    borderWidth: 1,
-    borderColor: '#f1d98a',
-    borderRadius: 8,
-    backgroundColor: '#fff8d8',
+    borderWidth: 3,
+    borderColor: '#e8c976',
+    borderBottomWidth: 6,
+    borderBottomColor: '#dcb75c',
+    borderRadius: 16,
+    backgroundColor: '#fff9e8',
     flexDirection: 'row',
     alignItems: 'stretch',
     justifyContent: 'space-between',
@@ -162,6 +182,8 @@ export const styles = StyleSheet.create({
     height: 30,
     borderRadius: 15,
     overflow: 'hidden',
+    borderWidth: 2,
+    borderColor: '#a9720f',
     backgroundColor: '#f6c343',
     textAlign: 'center',
     lineHeight: 30,
@@ -172,12 +194,12 @@ export const styles = StyleSheet.create({
     flex: 1,
   },
   label: {
-    color: '#667085',
+    color: '#a98a4e',
     fontSize: 11,
     fontWeight: '700',
   },
   money: {
-    color: '#7a4b00',
+    color: '#6b4a22',
     fontSize: 24,
     fontWeight: '900',
   },
@@ -189,7 +211,7 @@ export const styles = StyleSheet.create({
   },
   productivityText: {
     marginTop: 3,
-    color: '#247241',
+    color: '#2f8a4a',
     fontSize: 12,
     fontWeight: '900',
     textAlign: 'right',
@@ -582,9 +604,9 @@ export const styles = StyleSheet.create({
   toolStrip: {
     paddingTop: 10,
     paddingHorizontal: 16,
-    borderTopWidth: 1,
-    borderTopColor: '#d9e7ce',
-    backgroundColor: '#ffffff',
+    borderTopWidth: 3,
+    borderTopColor: '#d8bd8c',
+    backgroundColor: '#f3e6c9',
   },
   toolActionRow: {
     flexDirection: 'row',
@@ -600,7 +622,7 @@ export const styles = StyleSheet.create({
   toolHint: {
     minWidth: 0,
     flex: 1,
-    color: '#247241',
+    color: '#8a6a34',
     fontSize: 13,
     fontWeight: '900',
     textAlign: 'left',
@@ -620,11 +642,11 @@ export const styles = StyleSheet.create({
     justifyContent: 'center',
     borderRadius: 999,
     paddingHorizontal: 16,
-    backgroundColor: '#2e9e57',
-    shadowColor: '#1c5f37',
-    shadowOpacity: 0.3,
+    backgroundColor: '#68b035',
+    shadowColor: '#2c6b1a',
+    shadowOpacity: 0.32,
     shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 3 },
     elevation: 3,
   },
   harvestAllButtonCompact: {
@@ -744,29 +766,33 @@ export const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 5,
-    borderWidth: 1,
-    borderColor: '#d0d5dd',
-    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: '#dcc189',
+    borderRadius: 12,
     paddingHorizontal: 12,
-    backgroundColor: '#f7fafc',
+    backgroundColor: '#fffdf5',
   },
   activeAreaTab: {
-    borderColor: '#4d9d56',
-    backgroundColor: '#edf8ed',
+    borderColor: '#7fb844',
+    backgroundColor: '#d8f2b8',
+  },
+  areaTabPressed: {
+    transform: [{ translateY: 2 }],
+    backgroundColor: '#f2e4c6',
   },
   lockedAreaTab: {
-    backgroundColor: '#edf2f7',
+    backgroundColor: '#ece3cd',
   },
   areaTabName: {
-    color: '#344054',
+    color: '#6b4a22',
     fontSize: 13,
     fontWeight: '900',
   },
   activeAreaTabName: {
-    color: '#247241',
+    color: '#33660f',
   },
   areaTabCount: {
-    color: '#7b8794',
+    color: '#a98a4e',
     fontSize: 11,
     fontWeight: '800',
   },
@@ -800,10 +826,14 @@ export const styles = StyleSheet.create({
   toolButton: {
     width: 84,
     height: 94,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#d0d5dd',
-    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: '#dcc189',
+    // overflow:'hidden'이라 그림자가 잘리므로, 두꺼운 아래 테두리로 같은
+    // 입체감을 낸다. 상단 버튼들의 오프셋 그림자와 방향을 맞춘다.
+    borderBottomWidth: 5,
+    borderBottomColor: '#cbae72',
+    backgroundColor: '#fff9e8',
     alignItems: 'center',
     justifyContent: 'center',
     // 아이콘/이름/가격 주변 여백 확보 + 작물 이모지가 박스 밖으로 튀어나오지
@@ -814,8 +844,16 @@ export const styles = StyleSheet.create({
     gap: 2,
   },
   activeToolButton: {
-    borderColor: '#4d9d56',
-    backgroundColor: '#edf8ed',
+    borderColor: '#7fb844',
+    borderBottomColor: '#6ba036',
+    backgroundColor: '#d8f2b8',
+  },
+  // toolButton은 그림자 대신 두꺼운 아래 테두리로 입체감을 내므로, 눌림도
+  // 테두리를 얇게 만들고 그만큼 내려 높이를 유지한다.
+  toolButtonPressed: {
+    transform: [{ translateY: 3 }],
+    borderBottomWidth: 2,
+    marginBottom: 3,
   },
   toolIcon: {
     // lineHeight를 fontSize에 맞춰 명시해 이모지 글리프가 세로로 넘쳐 박스
@@ -826,12 +864,12 @@ export const styles = StyleSheet.create({
   },
   toolName: {
     maxWidth: '100%',
-    color: '#253126',
+    color: '#6b4a22',
     fontSize: 12,
     fontWeight: '900',
   },
   toolCost: {
-    color: '#8f5c00',
+    color: '#c07a12',
     fontSize: 10,
     fontWeight: '900',
   },
@@ -839,7 +877,7 @@ export const styles = StyleSheet.create({
     color: '#b42318',
   },
   toolRoi: {
-    color: '#247241',
+    color: '#2f8a4a',
     fontSize: 10,
     fontWeight: '900',
   },
@@ -894,20 +932,20 @@ export const styles = StyleSheet.create({
     minHeight: 76,
     justifyContent: 'center',
     gap: 4,
-    borderWidth: 1,
-    borderColor: '#c7d0d9',
+    borderWidth: 2,
+    borderColor: '#dcc189',
     borderStyle: 'dashed',
-    borderRadius: 8,
+    borderRadius: 14,
     paddingHorizontal: 12,
-    backgroundColor: '#f7fafc',
+    backgroundColor: '#fffdf5',
   },
   lockedNoticeTitle: {
-    color: '#253126',
+    color: '#6b4a22',
     fontSize: 13,
     fontWeight: '900',
   },
   lockedNoticeDesc: {
-    color: '#667085',
+    color: '#a98a4e',
     fontSize: 11,
     fontWeight: '700',
   },
@@ -920,11 +958,13 @@ export const styles = StyleSheet.create({
   },
   sheet: {
     maxHeight: '86%',
-    borderTopLeftRadius: 8,
-    borderTopRightRadius: 8,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    borderTopWidth: 3,
+    borderTopColor: '#d8bd8c',
     paddingTop: 0,
     paddingHorizontal: 20,
-    backgroundColor: '#ffffff',
+    backgroundColor: '#fffdf5',
   },
   sheetDragArea: {
     marginHorizontal: -20,
@@ -937,16 +977,16 @@ export const styles = StyleSheet.create({
     width: 36,
     height: 4,
     borderRadius: 2,
-    backgroundColor: '#d0d5dd',
+    backgroundColor: '#d8bd8c',
   },
   sheetTitle: {
-    color: '#253126',
+    color: '#6b4a22',
     fontSize: 21,
     fontWeight: '900',
   },
   sheetDescription: {
     marginTop: 4,
-    color: '#667085',
+    color: '#a98a4e',
     fontSize: 14,
     lineHeight: 20,
     fontWeight: '600',
@@ -959,7 +999,7 @@ export const styles = StyleSheet.create({
   sheetSectionTitle: {
     marginTop: 12,
     marginBottom: 8,
-    color: '#667085',
+    color: '#a98a4e',
     fontSize: 13,
     fontWeight: '900',
   },
@@ -970,8 +1010,8 @@ export const styles = StyleSheet.create({
     gap: 6,
     marginBottom: 4,
     padding: 4,
-    borderRadius: 12,
-    backgroundColor: '#eef4ef',
+    borderRadius: 14,
+    backgroundColor: '#f0e4c4',
   },
   shopTabButton: {
     flex: 1,
@@ -985,17 +1025,17 @@ export const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   shopTabButtonActive: {
-    backgroundColor: '#ffffff',
-    borderWidth: 1,
-    borderColor: '#4caf6a',
+    backgroundColor: '#fffdf5',
+    borderWidth: 2,
+    borderColor: '#7fb844',
   },
   shopTabButtonText: {
-    color: '#5b6b5f',
+    color: '#8a6a34',
     fontSize: 12,
     fontWeight: '800',
   },
   shopTabButtonTextActive: {
-    color: '#1c7538',
+    color: '#33660f',
   },
   shopTabBadge: {
     minWidth: 16,

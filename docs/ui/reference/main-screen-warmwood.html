@@ -1,0 +1,98 @@
+<!doctype html><html><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;800&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:660px;height:1434px;overflow:hidden;background:#f1f8e9}
+.screen{position:relative;width:660px;height:1434px;background:#f1f8e9;
+  display:flex;flex-direction:column;font-family:'Baloo 2',system-ui,sans-serif}
+.notch{height:52px;display:flex;align-items:center;justify-content:space-between;
+  padding:0 28px;font:600 17px/1 -apple-system,sans-serif;color:#6b4a22;flex:none}
+.field{flex:1;overflow:hidden;position:relative;background:#f1f8e9}
+.field .clip{position:absolute;top:0;left:0;width:660px;height:779px;overflow:hidden}
+.field .clip img{position:absolute;top:-329px;left:0;width:660px;display:block}
+
+.top{flex:none;padding:10px 16px 14px;background:linear-gradient(180deg,#fbf3e0,#f3e6c9);
+  border-bottom:4px solid #d8bd8c;box-shadow:0 3px 8px rgba(120,85,40,.13)}
+.brand{display:flex;align-items:center;gap:9px;margin-bottom:10px}
+.brand .nm{font-weight:800;font-size:26px;color:#6b4a22;letter-spacing:.2px}
+.brand .bdg{background:#e9dcb8;color:#8a6a34;font-weight:600;font-size:15px;
+  padding:3px 11px;border-radius:12px}
+.brand .sp{margin-left:auto;display:flex;gap:8px}
+.ibtn{width:46px;height:46px;border-radius:15px;background:#fff8e6;border:2px solid #d8bd8c;
+  display:grid;place-items:center;font-size:22px;box-shadow:0 3px 0 #d8bd8c}
+.shop{background:linear-gradient(180deg,#8fd158,#68b035);border:2px solid #4d8a22;border-radius:15px;
+  box-shadow:0 3px 0 #4d8a22;padding:0 18px;height:46px;display:flex;align-items:center;gap:7px;
+  font-weight:800;font-size:21px;color:#fff;text-shadow:0 1px 0 #4d8a22}
+.gcard{background:linear-gradient(180deg,#fffdf5,#fdf2d6);border:3px solid #e8c976;border-radius:20px;
+  box-shadow:0 4px 0 #dcb75c;padding:12px 16px;display:flex;align-items:center;gap:13px}
+.gcoin{width:54px;height:54px;border-radius:50%;background:radial-gradient(circle at 34% 28%,#ffe89a,#f2b33a 68%,#cf8a14);
+  border:3px solid #a9720f;box-shadow:inset 0 -3px 0 rgba(0,0,0,.14);display:grid;place-items:center;font-size:26px}
+.glab{font-weight:600;font-size:16px;color:#a98a4e;line-height:1.1}
+.gval{font-weight:800;font-size:36px;color:#6b4a22;line-height:1.05}
+.gright{margin-left:auto;text-align:right}
+.rate{font-weight:800;font-size:21px;color:#2f8a4a;line-height:1.15}
+.mults{display:flex;gap:7px;justify-content:flex-end;margin-top:4px}
+.mult{background:#f0e4c4;border-radius:10px;padding:2px 9px;font-weight:600;font-size:15px;color:#8a6a34}
+.mult b{font-weight:800;color:#c07a12}
+.rbdg{display:inline-block;background:linear-gradient(180deg,#b98cf0,#9a63e0);color:#fff;font-weight:800;
+  font-size:15px;padding:3px 12px;border-radius:12px;box-shadow:0 2px 0 #7a49bd;margin-bottom:5px}
+.bot{flex:none;padding:12px 14px 30px;background:linear-gradient(180deg,#f3e6c9,#e8d5ac);
+  border-top:4px solid #d8bd8c}
+.hint{text-align:center;font-weight:600;font-size:18px;color:#8a6a34;margin-bottom:11px}
+.hint b{color:#2f8a4a;font-weight:800}
+.fieldtabs{display:flex;gap:8px;margin-bottom:11px;overflow:hidden}
+.ft{background:#fffdf5;border:2px solid #dcc189;border-radius:14px;padding:7px 13px;
+  font-weight:800;font-size:17px;color:#6b4a22;white-space:nowrap;flex:none}
+.ft span{font-weight:600;font-size:15px;color:#a98a4e;margin-left:4px}
+.ft.on{background:#d8f2b8;border-color:#7fb844;color:#33660f}
+.ft.on span{color:#5c8f33}
+.ft.half{opacity:.55;flex:1;overflow:hidden}
+.tools{display:flex;gap:9px}
+.t{flex:1;background:linear-gradient(180deg,#fffdf5,#fdf2d6);border:3px solid #dcc189;border-radius:19px;
+  box-shadow:0 4px 0 #cbae72;padding:8px 4px 9px;text-align:center}
+.t.on{background:linear-gradient(180deg,#d8f2b8,#b6e086);border-color:#7fb844;box-shadow:0 4px 0 #6ba036}
+.t .ic{width:62px;height:62px;margin:0 auto;display:block;object-fit:contain}
+.t .em{font-size:44px;line-height:62px}
+.t .nm{font-weight:800;font-size:18px;color:#6b4a22;margin-top:1px}
+.t.on .nm{color:#33660f}
+.t .pr{font-weight:800;font-size:16px;color:#c07a12}
+
+</style></head><body><div class="screen">
+<div class="notch"><span>9:41</span><span>&#9679;&#9679;&#9679; &#9670; &#9632;</span></div>
+
+<div class="top">
+  <div class="brand"><span style="font-size:26px">&#127969;</span>
+    <span class="nm">Happy Farm</span><span class="bdg">Tycoon</span>
+    <span class="sp"><div class="shop">&#127970; Shop</div><div class="ibtn">&#9881;&#65039;</div></span>
+  </div>
+  <div class="gcard">
+    <div class="gcoin">&#128176;</div>
+    <div><div class="glab">Gold</div><div class="gval">1,250G</div></div>
+    <div class="gright">
+      <div class="rbdg">Research Lv.3</div>
+      <div class="rate">About 147KG/hr</div>
+      <div class="mults"><div class="mult">Profit <b>&#215;1.4</b></div><div class="mult">Growth <b>&#215;1.2</b></div></div>
+    </div>
+  </div>
+</div>
+
+
+<div class="field"><div class="clip"><img src="../../../app-store/screenshots/iphone-6.9/iphone-1.png"></div></div>
+
+
+<div class="bot">
+  <div class="hint">Tap a plot to harvest</div>
+  <div class="fieldtabs">
+    <div class="ft on">Starter Field <span>5 crops</span></div>
+    <div class="ft">&#128274; Vegetable Field <span>5 crops</span></div>
+    <div class="ft half">&#128274; Fruit</div>
+  </div>
+  <div class="tools">
+    <div class="t on"><div class="em">&#9995;&#65039;</div><div class="nm">Harvest</div></div>
+    <div class="t"><img class="ic" src="../../../assets/art/crop_carrot.png"><div class="nm">Carrot</div><div class="pr">10G</div></div>
+    <div class="t"><img class="ic" src="../../../assets/art/crop_wheat.png"><div class="nm">Wheat</div><div class="pr">25G</div></div>
+    <div class="t"><img class="ic" src="../../../assets/art/crop_potato.png"><div class="nm">Potato</div><div class="pr">55G</div></div>
+  </div>
+</div>
+
+</div></body></html>

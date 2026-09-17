@@ -5721,7 +5721,7 @@ function FarmGameBody({
             <Pressable
               accessibilityLabel={messages.settingsAccessibilityLabel}
               hitSlop={8}
-              style={styles.settingsButton}
+              style={({ pressed }) => [styles.settingsButton, pressed && styles.settingsButtonPressed]}
               onPress={openSettings}
             >
               <Text style={styles.settingsButtonText}>⚙</Text>
@@ -5949,7 +5949,12 @@ function FarmGameBody({
               <Pressable
                 key={area.key}
                 testID={`area-tab-${area.key}`}
-                style={[styles.areaTab, !unlocked && styles.lockedAreaTab, active && styles.activeAreaTab]}
+                style={({ pressed }) => [
+                  styles.areaTab,
+                  !unlocked && styles.lockedAreaTab,
+                  active && styles.activeAreaTab,
+                  pressed && styles.areaTabPressed,
+                ]}
                 onPress={() => selectArea(area.key)}
               >
                 <Text style={[styles.areaTabName, active && styles.activeAreaTabName]}>
@@ -6995,7 +7000,11 @@ function NavButton({
       testID={testID}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
-      style={[styles.navButton, highlight && styles.navButtonHighlight]}
+      style={({ pressed }) => [
+        styles.navButton,
+        highlight && styles.navButtonHighlight,
+        pressed && styles.navButtonPressed,
+      ]}
       onPress={onPress}
     >
       <Text style={styles.navButtonText}>{label}</Text>
@@ -8872,7 +8881,11 @@ const ToolButton = React.memo(function ToolButton({
       accessibilityRole="button"
       accessibilityLabel={bonusA11yLabel != null ? `${baseA11yLabel}, ${bonusA11yLabel}` : baseA11yLabel}
       accessibilityState={{ selected: active }}
-      style={[styles.toolButton, active && styles.activeToolButton]}
+      style={({ pressed }) => [
+        styles.toolButton,
+        active && styles.activeToolButton,
+        pressed && styles.toolButtonPressed,
+      ]}
       onPress={() => onSelect(toolKey)}
     >
       <CropGlyph cropKey={cropKey} emoji={icon} size={24} textStyle={styles.toolIcon} />
