@@ -100,8 +100,6 @@ export const styles = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 12,
     backgroundColor: '#fffdf5',
-    // A transparent border is always reserved so the onboarding highlight can
-    // recolor it without nudging the neighboring buttons.
     borderWidth: 2,
     borderColor: '#dcc189',
     // 입체감은 그림자가 아니라 두꺼운 아래 테두리로 낸다. iOS의 오프셋 그림자
@@ -116,12 +114,6 @@ export const styles = StyleSheet.create({
     transform: [{ translateY: 3 }],
     borderBottomWidth: 2,
     marginBottom: 3,
-  },
-  // Onboarding highlight tuned for the small shop button: recolors the reserved
-  // border and tints the fill instead of adding extra box that clashes.
-  navButtonHighlight: {
-    borderColor: '#3f7220',
-    backgroundColor: '#8fd158',
   },
   navButtonText: {
     color: '#6b4a22',

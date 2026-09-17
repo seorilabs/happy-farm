@@ -6985,14 +6985,12 @@ function NavButton({
   badge,
   accessibilityLabel,
   testID,
-  highlight = false,
   onPress,
 }: {
   label: string;
   badge?: number;
   accessibilityLabel?: string;
   testID?: string;
-  highlight?: boolean;
   onPress: () => void;
 }) {
   return (
@@ -7000,11 +6998,7 @@ function NavButton({
       testID={testID}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
-      style={({ pressed }) => [
-        styles.navButton,
-        highlight && styles.navButtonHighlight,
-        pressed && styles.navButtonPressed,
-      ]}
+      style={({ pressed }) => [styles.navButton, pressed && styles.navButtonPressed]}
       onPress={onPress}
     >
       <Text style={styles.navButtonText}>{label}</Text>

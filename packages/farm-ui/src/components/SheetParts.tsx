@@ -238,8 +238,8 @@ export const sheetPartStyles = StyleSheet.create({
     borderColor: '#aad8b1',
     backgroundColor: '#f0fbf0',
   },
-  // 구매 불가는 투명도만으로 알리지 않는다. 카드를 회색조 배경으로 내리고
-  // 가격 배지도 함께 무채색이 되도록 shopPriceDisabled와 같이 쓴다.
+  // 구매 불가를 투명도만으로 알리지 않는다. 배경과 테두리를 무채색으로 내려
+  // 형태로도 전달한다. 가격 배지는 카드에 걸린 opacity를 함께 받는다.
   disabledCard: {
     opacity: 0.7,
     backgroundColor: '#f0ece2',
