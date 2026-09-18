@@ -14,12 +14,13 @@ const WORKFLOW = fs.readFileSync(
 );
 
 describe('deploy-drift-check 워크플로우 (#420)', () => {
-  test('AC-1: .github/workflows/deploy-drift-check.yml 신설 — schedule(daily) + workflow_dispatch, runs-on: seorilabs-rpi-arm64', () => {
+  test('AC-1: .github/workflows/deploy-drift-check.yml 신설 — schedule(daily) + workflow_dispatch, runs-on: ubuntu-latest', () => {
     expect(WORKFLOW).toMatch(/^on:/m);
     expect(WORKFLOW).toMatch(/\n {2}schedule:/);
     expect(WORKFLOW).toMatch(/\n {2}workflow_dispatch:/);
-    // 잡은 지정 러너에서 돈다.
-    expect(WORKFLOW).toMatch(/runs-on: seorilabs-rpi-arm64/);
+    // 저장소가 public 이라 self-hosted 로는 job 이 영원히 queued 로 남는다.
+    expect(WORKFLOW).toMatch(/runs-on: ubuntu-latest/);
+    expect(WORKFLOW).not.toMatch(/runs-on: seorilabs-/);
     // 이슈 발행·run 조회 권한.
     expect(WORKFLOW).toMatch(/issues: write/);
     expect(WORKFLOW).toMatch(/actions: read/);
