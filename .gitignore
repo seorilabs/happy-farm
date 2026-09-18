@@ -35,8 +35,10 @@ app-store/secrets/
 
 # Android Firebase client config is restored from CI secrets (Google Play builds).
 google-services.json
-# iOS GoogleService-Info.plist 은 저장소(private)에 커밋한다 — 클라이언트 config 라
-# 앱 바이너리에 어차피 포함되고, Xcode Cloud/로컬 빌드가 시크릿 설정 없이 쓰게 한다.
+# iOS GoogleService-Info.plist 은 커밋한다 — Firebase 클라이언트 config 는 설계상
+# 공개되는 값이고(앱 바이너리에 어차피 포함된다) 보안 경계는 파일의 비밀성이 아니라
+# API key 제한과 보안 규칙이다. Xcode Cloud/로컬 빌드가 시크릿 설정 없이 쓰게 한다.
+# 저장소가 public 이므로 key 남용 방어는 GCP 의 API key 제한에 의존한다.
 
 # game-asset-pipeline raw generations & QA sheet (regenerate via assets/art/asset-manifest.json)
 assets/art/raw/
