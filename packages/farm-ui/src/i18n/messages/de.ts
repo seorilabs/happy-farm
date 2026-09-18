@@ -215,7 +215,7 @@ export const deFarmMessages: FarmMessages = {
   harvestHint: 'Tippe ein Feld an, um zu ernten.',
   harvestHintEmpty: 'Wähle unten ein Saatgut und pflanze es auf ein leeres Feld.',
   harvestHintGrowing: 'Deine Pflanzen wachsen noch. Tippe sie an, sobald sie reif sind.',
-  sheetGoldLabel: (amount) => `🪙 ${amount}G`,
+  sheetGoldLabel: (amount) => `🪙 ${amount} G`,
   harvestAllButton: (count) => `🧺 Alle ${count} ernten`,
   harvestReplantButton: '🔁 Ernten & Nachpflanzen',
   harvestReplantToast: (amount, harvested, planted) =>

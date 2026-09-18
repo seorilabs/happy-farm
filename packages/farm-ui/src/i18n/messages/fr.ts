@@ -215,7 +215,7 @@ export const frFarmMessages: FarmMessages = {
   harvestHint: 'Touche une parcelle pour récolter.',
   harvestHintEmpty: 'Choisis une graine ci-dessous et plante-la sur une parcelle vide.',
   harvestHintGrowing: 'Tes cultures poussent encore. Touche-les une fois prêtes.',
-  sheetGoldLabel: (amount) => `🪙 ${amount}G`,
+  sheetGoldLabel: (amount) => `🪙 ${amount} G`,
   harvestAllButton: (count) => `🧺 Tout récolter ${count}`,
   harvestReplantButton: '🔁 Récolter et replanter',
   harvestReplantToast: (amount, harvested, planted) =>

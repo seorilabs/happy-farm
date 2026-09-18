@@ -215,7 +215,7 @@ export const esFarmMessages: FarmMessages = {
   harvestHint: 'Toca una parcela para cosechar.',
   harvestHintEmpty: 'Elige una semilla abajo y plántala en una parcela vacía.',
   harvestHintGrowing: 'Tus cultivos aún están creciendo. Tócalos cuando estén listos.',
-  sheetGoldLabel: (amount) => `🪙 ${amount}G`,
+  sheetGoldLabel: (amount) => `🪙 ${amount} G`,
   harvestAllButton: (count) => `🧺 Cosechar todo ${count}`,
   harvestReplantButton: '🔁 Cosechar y Replantar',
   harvestReplantToast: (amount, harvested, planted) =>
