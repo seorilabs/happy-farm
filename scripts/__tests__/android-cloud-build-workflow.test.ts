@@ -64,8 +64,9 @@ describe('Android Cloud Build 배포 계약', () => {
   it('버전은 중앙 정본 release binding에서만 받는다', () => {
     // #526에서 caller가 중앙 정본 main을 보도록 바뀌었다. 판본을 올릴 때마다 SHA를
     // 따라 고치지 않으려는 의도이므로, 참조가 중앙 workflow를 가리키는지만 본다.
+    // ref 뒤 경계를 막지 않으면 @main-foo 같은 다른 브랜치도 부분 일치로 통과한다.
     expect(workflow).toMatch(
-      /seorilabs\/\.github\/\.github\/workflows\/resolve-release-version\.yml@(main|[0-9a-f]{40})/
+      /seorilabs\/\.github\/\.github\/workflows\/resolve-release-version\.yml@(main|[0-9a-f]{40})(?![\w.-])/
     );
     expect(workflow).toContain('SEORI_RELEASE_VERSION_CODE: ${{ needs.resolve.outputs.android_version_code }}');
     expect(workflow).not.toContain('scripts/resolve-release-version.mjs');
