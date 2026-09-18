@@ -19,13 +19,15 @@ describe('전면광고 연결 계약', () => {
     expect(app).toMatch(/interstitialPlacements=\{\{[^}]*progressionMilestone:\s*true/);
   });
 
-  test('AppsInToss 앱도 두 지면을 모두 켠다', () => {
+  test('AppsInToss는 콘솔에 공개된 복귀 지면만 켠다', () => {
+    // AIT 콘솔이 복귀 지면만 승인해 둔 상태다. 진행 마일스톤을 켜려면 해당 지면의
+    // 정책·빈도 승인이 먼저 필요하므로, 승인 없이 열리는 것을 막는다.
     const page = readSource('apps/ait/src/pages/index.tsx');
     expect(page).toContain('interstitialPlacements={{');
     const placements = page.slice(page.indexOf('interstitialPlacements={{'));
 
     expect(placements).toMatch(/returnWelcomeBack:\s*true/);
-    expect(placements).toMatch(/progressionMilestone:\s*true/);
+    expect(placements).toMatch(/progressionMilestone:\s*false/);
   });
 
   test('FarmGame 기본값은 두 지면 모두 꺼진 상태를 유지한다', () => {

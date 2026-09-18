@@ -1,24 +1,14 @@
 import {
   appsInTossFarmAnalytics,
   initializeAppsInTossAnalytics,
-  setAppsInTossAnalyticsCollectionEnabled,
 } from './analytics';
-import { getAppsInTossRemoteBoolean, initializeAppsInTossRemoteConfig } from './remoteConfig';
 
 export async function initializeAppsInTossFirebaseServices() {
-  // Analytics는 Platform relay용 client ID/lifecycle을 준비하고, Remote Config만 REST로
-  // 직접 호출한다. 브라우저 전용 Firebase JS SDK나 FirebaseApp 인스턴스는 필요 없다.
+  // Analytics는 Platform relay용 client ID/lifecycle을 준비한다. 브라우저 전용
+  // Firebase JS SDK나 FirebaseApp 인스턴스는 필요 없다.
   const analytics = await initializeAppsInTossAnalytics();
-  const remoteConfig = await initializeAppsInTossRemoteConfig();
 
-  // 원격값(analytics_collection_enabled)을 실제 수집 토글에 반영하되, 원격 설정이
-  // 실제로 활성화(ready)된 경우에만 적용한다. 미지원/오류로 원격값이 비권위적인
-  // 기본값 폴백일 때는 토글을 강제로 덮어쓰지 않고 플랫폼 기본 동작을 유지한다.
-  if (remoteConfig.status === 'ready') {
-    setAppsInTossAnalyticsCollectionEnabled(getAppsInTossRemoteBoolean('analytics_collection_enabled'));
-  }
-
-  return { status: 'ready' as const, analytics, remoteConfig };
+  return { status: 'ready' as const, analytics };
 }
 
 export { appsInTossFarmAnalytics };

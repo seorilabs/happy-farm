@@ -11,10 +11,10 @@ happy-farm은 현재 **광고 only** 수익화다(보상형 5지면 + 전면 2�
 ## 1. 현황 요약 (코드 기준)
 - **광고 지면**: `REWARDED_AD_PLACEMENTS`(shop_gold_reward, shop_plot_discount, growth_ad_sheet,
   harvest_bonus_sheet, return_offline_bonus, wheel_bonus_spin) + 전면(milestone, return_welcome_back).
-- **전역 토글**: 광고 on/off는 Remote Config `mobile_ads_global_enabled`로 이미 제어된다
-  (mobile: `apps/mobile/src/ads/policy.ts`, AIT: `apps/ait/src/firebaseWeb/remoteConfig.ts`).
-  → **광고 제거 entitlement가 생기면 이 토글 경로를 그대로 재사용**해 유저 단위로 광고를 끌 수 있다.
-- **빈도/cap**: `ad_limits_overrides`(farm-core `adLimits.ts`)로 원격 조정 가능.
+- **전역 토글**: 없다. Remote Config를 걷어내면서 `mobile_ads_global_enabled` 경로도 함께
+  사라졌다. → 광고 제거 entitlement는 재사용할 토글 경로가 없으므로 **광고 컨트롤러가
+  읽는 로컬 entitlement를 새로 설계**해야 한다(어댑터의 `isAdSupported` 게이트가 접점).
+- **빈도/cap**: `balance.json`이 정본이며 런타임 조정 수단은 없다.
 - **IAP 인프라**: **없음**. `react-native-iap`/Play Billing/StoreKit/영수증 검증/구매 복원/
   entitlement 영속화 모두 미구현. 분석에도 구매 이벤트(`purchase`/`iap_*`) 없음.
 - **세이브/복원**: 로컬 세이브 + (mobile) `cloudBackupCore` 존재 → entitlement 영속화의 토대로 활용 가능.
@@ -61,7 +61,8 @@ happy-farm은 현재 **광고 only** 수익화다(보상형 5지면 + 전면 2�
 ## 4. 권고안
 1. **A(광고 제거, 영구 1회성)를 1차로 추진한다.** 가장 낮은 구현 비용/낮은 순잠식으로
    ad-rejector를 흡수하고, 이후 모든 IAP의 **공통 결제 토대**(빌링·영수증·복원·entitlement)를 먼저 검증한다.
-   광고 비활성은 기존 Remote Config 토글 경로를 재사용하므로 게임 로직 변경이 최소다.
+   광고 비활성은 광고 컨트롤러의 `isAdSupported` 게이트 한 곳에 entitlement를 물리면 되므로
+   게임 로직 변경이 작다.
 2. **B(보상 패스)는 2차로 보류한다.** LTV 상단 확장 잠재력은 크지만 상태머신·UI·라이브옵스 비용이
    L급이고, 무료 트랙 광고 시너지와 A의 광고 제거가 부분 상충한다. A의 결제 토대가 안정된 뒤 재평가한다.
 3. **AIT 결제는 별도 조사 이슈로 분리**(Toss 결제 API 가용성). 미지원 확정 시 AIT는 광고 only 유지.
@@ -70,10 +71,10 @@ happy-farm은 현재 **광고 only** 수익화다(보상형 5지면 + 전면 2�
 ## 5. 후속 구현 범위 (Phase 정의)
 도입 결정 시 아래 단위로 이슈를 분할한다(본 스파이크의 산출물).
 - **P0 공통 결제 토대**: `react-native-iap` 통합, 상품 조회, 구매/복원, 영수증 검증(서버 또는 스토어
-  단), `entitlements`(예: `adsRemoved: boolean`) 게임 상태/세이브·클라우드 동기화, Remote Config로
-  IAP 노출 토글. (`apps/mobile`, `packages/farm-core/src/types.ts` 정규화, 클라우드 백업)
+  단), `entitlements`(예: `adsRemoved: boolean`) 게임 상태/세이브·클라우드 동기화.
+  (`apps/mobile`, `packages/farm-core/src/types.ts` 정규화, 클라우드 백업)
 - **P1 광고 제거 상품(A)**: 스토어 상품 1개, 구매 플로우 UI(상점/설정), 구매 시 광고 전역 off
-  (`mobile_ads_global_enabled` 경로 재사용한 per-user entitlement), 복원 진입점.
+  (광고 컨트롤러의 `isAdSupported`에 물리는 로컬 entitlement), 복원 진입점.
 - **P2 분석**: `iap_impression`/`purchase`/`purchase_restored`/`purchase_failed`(상품ID·가격·placement),
   세그먼트별 광고 잠식 리포트 기준.
 - **P3 AIT 결제 조사**: Toss 결제 API 가용성 스파이크 → 가능 시 A 이식, 불가 시 광고 only 유지 명시.

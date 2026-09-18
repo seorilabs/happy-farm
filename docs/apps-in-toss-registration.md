@@ -11,7 +11,7 @@
 - 브랜드 컬러: `#2F8747`
 - 아이콘 URL: `https://static.toss.im/appsintoss/38345/7cb5596a-ee72-43c3-b899-7d3a494b0602.png`
 - Firebase Web App: `행복한 농장 타이쿤 (AppsInToss)` / `1:1874344437:web:a34abb444eae2baa6c48bc`
-- Firebase Web 설정: `apps/ait/src/firebaseWeb/firebaseWebConfig.ts`의 공개 설정과 REST Remote Config를 사용하며, Analytics는 Firebase Web SDK를 직접 초기화하지 않습니다.
+- Firebase Web 설정: `apps/ait/src/firebaseWeb/firebaseWebConfig.ts`의 공개 설정을 사용하며, Analytics는 Firebase Web SDK를 직접 초기화하지 않습니다.
 - 보상형 광고 그룹 ID: `ait.v2.live.6fc77adf3f034cd6`
 - Analytics: 커스텀 이벤트는 Platform `/v1/events` 단일 경로로 보내고 GA4 relay와 Platform 원장을 함께 사용합니다. Firebase UID, 광고 ID, token은 전송하지 않으며 위치 파생 동의는 기본 `false`입니다.
 

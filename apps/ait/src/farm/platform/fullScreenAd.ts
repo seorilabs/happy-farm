@@ -13,7 +13,6 @@ import {
   normalizeAdFailureFamily,
   normalizeAdFailureReason,
 } from '../../../../../packages/farm-core/src';
-import { useAppsInTossAdsEnabled } from '../../firebaseWeb/remoteConfig';
 import { appsInTossPlatformAds, ensureAppsInTossAdsSession } from '../../platformEvents';
 
 export const FULL_SCREEN_AD_LOAD_TIMEOUT_MS = 10_000;
@@ -220,7 +219,6 @@ export function useFullScreenAd(
   { adFormat = 'rewarded', track }: FullScreenAdOptions = {}
 ): RewardedAdController {
   const normalizedAdGroupId = adGroupId?.trim() ?? '';
-  const adsEnabled = useAppsInTossAdsEnabled();
   const [isLoaded, setIsLoaded] = useState(false);
   const [isSupported, setIsSupported] = useState(false);
   const isLoadedRef = useRef(false);
@@ -283,7 +281,7 @@ export function useFullScreenAd(
 
   const loadAd = useCallback(
     async (timeoutMs = FULL_SCREEN_AD_LOAD_TIMEOUT_MS): Promise<boolean> => {
-      if (!adsEnabled || normalizedAdGroupId.length === 0) {
+      if (normalizedAdGroupId.length === 0) {
         setIsSupported(false);
         updateLoaded(false);
         const pendingLoad = pendingLoadRef.current;
@@ -401,7 +399,7 @@ export function useFullScreenAd(
 
       return promise;
     },
-    [adsEnabled, finishPendingLoad, normalizedAdGroupId, trackLoadResult, updateLoaded]
+    [finishPendingLoad, normalizedAdGroupId, trackLoadResult, updateLoaded]
   );
 
   const finishPendingShow = useCallback(
@@ -459,7 +457,7 @@ export function useFullScreenAd(
   }, [finishPendingLoad, finishPendingShow, loadAd]);
 
   const showSdkAd = useCallback(() => {
-    const supported = adsEnabled && normalizedAdGroupId.length > 0 && isFullScreenAdSupported();
+    const supported = normalizedAdGroupId.length > 0 && isFullScreenAdSupported();
     if (!supported) {
       return Promise.resolve<RewardedAdShowResult>({ status: 'unsupported' });
     }
@@ -535,7 +533,7 @@ export function useFullScreenAd(
         });
       }
     });
-  }, [adsEnabled, finishPendingShow, normalizedAdGroupId, updateLoaded]);
+  }, [finishPendingShow, normalizedAdGroupId, updateLoaded]);
 
   const showAd = useCallback(async (request?: RewardedAdRequest): Promise<RewardedAdShowResult> => {
     const startedAt = Date.now();
@@ -602,8 +600,8 @@ export function useFullScreenAd(
   }, []);
 
   return {
-    isAdReady: adsEnabled && isSupported && isLoaded,
-    isAdSupported: adsEnabled && isSupported,
+    isAdReady: isSupported && isLoaded,
+    isAdSupported: isSupported,
     showAd,
     reloadAd,
     ensureAdReady,

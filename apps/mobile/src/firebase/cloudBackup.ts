@@ -18,9 +18,7 @@ import {
   type CloudSaveStore,
 } from './cloudBackupCore';
 import { runWithNetworkPolicy } from './network';
-import { getRemoteBoolean } from './remoteConfig';
 
-const CLOUD_SAVE_ENABLED_KEY = 'cloud_save_backup_enabled';
 
 // Firestore 호출은 게임 로딩(클라우드 복원)을 막을 수 있으므로 타임아웃·재시도를
 // 건다. 모든 경로는 고정 문서('current')에 대한 멱등 연산이라 재시도가 안전하다.
@@ -65,7 +63,7 @@ const firestoreCloudSaveStore: CloudSaveStore = {
 export function createDefaultMobileCloudSaveBackup(storage: Parameters<typeof createMobileCloudSaveBackup>[0]['storage']) {
   return createMobileCloudSaveBackup({
     storage,
-    isEnabled: () => isFirebaseConfigured() && getRemoteBoolean(CLOUD_SAVE_ENABLED_KEY),
+    isEnabled: () => isFirebaseConfigured(),
     canDelete: isFirebaseConfigured,
     ensureUser: ensureMobileAnonymousUser,
     store: firestoreCloudSaveStore,

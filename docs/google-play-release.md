@@ -75,7 +75,7 @@ release 최적화 기준:
 - `pnpm check:play:release -- --json`은 AAB를 필수로 요구하고 `proguard.map`, WAV 7개, 작물·밭 이미지 전체를 검사합니다. Google Play workflow는 이 검사를 업로드 전에 실행합니다.
 - 로컬 mapping 원본은 `apps/mobile/android/app/build/outputs/mapping/release/mapping.txt`, AAB 내 사본은 `BUNDLE-METADATA/com.android.tools.build.obfuscation/proguard.map`입니다. Android Gradle Plugin 4.1+로 만든 AAB는 Play가 이 파일을 자동으로 가져가므로 별도 수동 업로드가 필요하지 않습니다.
 
-R8 적용 릴리스는 내부 테스트에서 익명 로그인·Firestore 저장, Remote Config, Crashlytics, 광고, 알림, 앱 재시작 후 저장 복원과 WAV 7개 재생을 smoke test합니다. 라이브러리 전체를 보존하는 광범위 `-keep` 규칙은 최적화 효과를 없앨 수 있으므로 실제 런타임 문제가 확인된 경우에만 추가합니다.
+R8 적용 릴리스는 내부 테스트에서 익명 로그인·Firestore 저장, Crashlytics, 광고, 알림, 앱 재시작 후 저장 복원과 WAV 7개 재생을 smoke test합니다. 라이브러리 전체를 보존하는 광범위 `-keep` 규칙은 최적화 효과를 없앨 수 있으므로 실제 런타임 문제가 확인된 경우에만 추가합니다.
 
 2026-05-29 공식 Play Console Help 확인 기준 Google Play 신규 앱/업데이트 제출은 Android 15, API level 35 이상을 요구합니다. 현재 `apps/mobile`의 `targetSdkVersion`은 36이라 이 기준은 충족합니다.
 
@@ -169,7 +169,7 @@ workflow:
 - `versionName`: `docs/release-versioning.md` 기준의 태그 SemVer numeric core, 예: `v1.27.0` -> `1.27.0`
 - `versionCode`: 중앙 migration epoch를 포함한 태그 파생값, 예: `v1.27.0` -> `1001027000`
 - 업로드 실행 시 Play API에서 기존 max `versionCode + 1`보다 작은 중앙 파생값은 실패 처리합니다.
-- 광고 활성화는 빌드 채널이나 버전 번호가 아니라 Remote Config의 `mobile_ads_global_enabled` 하나로 제어합니다.
+- 광고 활성화는 빌드에 고정됩니다. 원격 kill switch가 없으므로 광고를 멈추려면 새 빌드를 올려야 합니다.
 
 필수 GitHub Actions secrets:
 

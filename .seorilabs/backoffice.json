@@ -37,41 +37,6 @@
       ]
     },
     {
-      "id": "update-gate",
-      "section": "operations",
-      "title": "최소 지원 버전",
-      "description": "모바일 강제 업데이트 게이트의 현재 값과 노출·스토어 이동 전환을 확인합니다.",
-      "runbook": "docs/04-work/backoffice-operations.md",
-      "operations": [
-        {
-          "id": "inspect",
-          "label": "게이트 상태 조회",
-          "intent": "read"
-        },
-        {
-          "id": "set-minimum-version",
-          "label": "최소 지원 버전 변경",
-          "description": "스토어 배포 완료를 확인한 뒤 최소 versionCode와 이동 URL을 함께 변경합니다.",
-          "intent": "mutate",
-          "risk": "high",
-          "confirmation": "typed",
-          "inputs": [
-            {
-              "key": "rc_minimum_supported_version_code",
-              "label": "최소 versionCode",
-              "type": "number"
-            },
-            {
-              "key": "rc_force_update_url",
-              "label": "업데이트 URL",
-              "type": "text",
-              "placeholder": "https://..."
-            }
-          ]
-        }
-      ]
-    },
-    {
       "id": "rewarded-ad-health",
       "section": "ads",
       "title": "보상형 광고 상태",
@@ -105,46 +70,13 @@
       "id": "ad-controls",
       "section": "ads",
       "title": "광고 운영 제어",
-      "description": "공통 한도 override와 전 마켓 광고 kill switch의 안전한 변경 계약을 제공합니다.",
+      "description": "balance.json에 고정된 광고 한도와 placement별 유효 설정을 조회합니다.",
       "runbook": "docs/04-work/backoffice-operations.md",
       "operations": [
         {
           "id": "inspect",
           "label": "유효 광고 설정 조회",
           "intent": "read"
-        },
-        {
-          "id": "set-limits",
-          "label": "광고 한도 변경",
-          "description": "허용된 비음수 정수 필드만 담은 JSON override를 적용합니다.",
-          "intent": "mutate",
-          "risk": "medium",
-          "confirmation": "reason",
-          "inputs": [
-            {
-              "key": "rc_ad_limits_overrides",
-              "label": "광고 한도 JSON",
-              "type": "textarea",
-              "placeholder": "{\"rewardedGoldDailyLimit\":6,\"growthAdCooldownMs\":300000}",
-              "help": "빈 문자열은 balance.json 기본값으로 되돌립니다."
-            }
-          ]
-        },
-        {
-          "id": "emergency-disable",
-          "label": "전체 광고 긴급 중지",
-          "description": "모든 마켓의 광고를 비활성화하는 kill switch를 false로 변경합니다.",
-          "intent": "mutate",
-          "risk": "high",
-          "confirmation": "typed",
-          "inputs": [
-            {
-              "key": "rc_mobile_ads_global_enabled",
-              "label": "mobile_ads_global_enabled",
-              "type": "select",
-              "options": [{ "value": "false", "label": "false - 전체 광고 중지" }]
-            }
-          ]
         }
       ]
     },
@@ -170,49 +102,6 @@
                 { "value": "upgrade", "label": "업그레이드" },
                 { "value": "animal", "label": "동물" },
                 { "value": "workshop", "label": "공방" }
-              ]
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "id": "runtime-flags",
-      "section": "flags",
-      "title": "런타임 플래그",
-      "description": "활성 계측·Crashlytics·클라우드 백업 플래그를 조회하고 승인된 값만 변경합니다.",
-      "runbook": "docs/04-work/backoffice-operations.md",
-      "operations": [
-        {
-          "id": "inspect",
-          "label": "플래그 조회",
-          "intent": "read"
-        },
-        {
-          "id": "set",
-          "label": "플래그 변경",
-          "description": "legacy 및 예약 키를 제외한 활성 boolean 플래그만 변경합니다.",
-          "intent": "mutate",
-          "risk": "high",
-          "confirmation": "typed",
-          "inputs": [
-            {
-              "key": "flag_key",
-              "label": "플래그 키",
-              "type": "select",
-              "options": [
-                { "value": "analytics_collection_enabled", "label": "Analytics 수집" },
-                { "value": "crashlytics_collection_enabled", "label": "Crashlytics 수집" },
-                { "value": "cloud_save_backup_enabled", "label": "클라우드 백업" }
-              ]
-            },
-            {
-              "key": "target_value",
-              "label": "목표 값",
-              "type": "select",
-              "options": [
-                { "value": "true", "label": "true" },
-                { "value": "false", "label": "false" }
               ]
             }
           ]

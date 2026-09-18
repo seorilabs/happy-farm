@@ -4,10 +4,8 @@ import { getCrashlytics, setCrashlyticsCollectionEnabled } from '@react-native-f
 import { isFirebaseConfigured } from './app';
 import { mobileFarmAnalytics } from './analytics';
 import { recordNonFatalError } from './crashlytics';
-import { getRemoteBoolean, initializeMobileRemoteConfig } from './remoteConfig';
 
 export { mobileFarmAnalytics };
-export { getRemoteBoolean, getRemoteNumber, getRemoteString, MOBILE_REMOTE_CONFIG_DEFAULTS } from './remoteConfig';
 export { ensureMobileAnonymousUser } from './auth';
 
 export async function initializeMobileFirebaseServices() {
@@ -15,19 +13,19 @@ export async function initializeMobileFirebaseServices() {
     return { status: 'skipped' as const };
   }
 
-  const remoteConfigResult = await initializeMobileRemoteConfig();
-
+  // 수집 여부는 빌드에 고정한다. 원격 토글을 두면 앱이 어떤 상태로 동작하는지
+  // 저장소만 봐서는 알 수 없고, 실제로는 계속 켜 둔 채 운영해 왔다.
   try {
-    await setAnalyticsCollectionEnabled(getAnalytics(), getRemoteBoolean('analytics_collection_enabled'));
+    await setAnalyticsCollectionEnabled(getAnalytics(), true);
   } catch (error) {
     recordNonFatalError(error, 'analytics:set_collection_enabled');
   }
 
   try {
-    await setCrashlyticsCollectionEnabled(getCrashlytics(), getRemoteBoolean('crashlytics_collection_enabled'));
+    await setCrashlyticsCollectionEnabled(getCrashlytics(), true);
   } catch (error) {
     recordNonFatalError(error, 'crashlytics:set_collection_enabled');
   }
 
-  return { status: 'ready' as const, remoteConfig: remoteConfigResult };
+  return { status: 'ready' as const };
 }
