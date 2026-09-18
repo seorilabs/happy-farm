@@ -46,7 +46,6 @@ function withManifestMutation(mutate: (manifest: TestManifest) => void, assertio
       '.seorilabs/backoffice.json',
       'packages/farm-core/src/analytics.ts',
       'packages/farm-core/src/ads.ts',
-      'remoteconfig.template.json',
       'docs/04-work/backoffice-operations.md',
     ]) {
       const source = path.join(root, relativePath);
@@ -65,7 +64,7 @@ function withManifestMutation(mutate: (manifest: TestManifest) => void, assertio
 }
 
 describe('행복한 농장 전용 백오피스 manifest', () => {
-  it('현재 manifest가 게임의 이벤트·placement·Remote Config 계약과 일치한다', () => {
+  it('현재 manifest가 게임의 이벤트·placement 계약과 일치한다', () => {
     expect(validateBackofficeManifest(root).failures).toEqual([]);
   });
 
@@ -129,25 +128,22 @@ describe('행복한 농장 전용 백오피스 manifest', () => {
     );
   });
 
-  it('변경 오퍼레이션의 확인 누락과 미등록 Remote Config 키를 거부한다', () => {
+  it('확인 절차가 없는 변경 오퍼레이션을 거부한다', () => {
+    // 원격 설정을 걷어낸 뒤 현재 manifest에는 변경 오퍼레이션이 없다. 앞으로 다시
+    // 생겼을 때 확인 절차 없이 통과하지 않도록 규칙 자체는 유지한다.
     withManifestMutation(
       (manifest) => {
-        const operation = required(
-          manifest.tools.flatMap((tool) => tool.operations).find((candidate) => candidate.id === 'set'),
-          'runtime flag set operation'
-        );
-        operation.confirmation = 'none';
-        required(required(operation.inputs, 'runtime flag inputs')[0].options, 'flag options').push({
-          value: 'invented_flag',
-          label: '잘못된 키',
+        const tool = required(manifest.tools[0], 'first tool');
+        tool.operations.push({
+          id: 'unsafe-mutate',
+          label: '확인 없는 변경',
+          intent: 'mutate',
+          risk: 'high',
         });
       },
       (failures) => {
         expect(failures).toEqual(
-          expect.arrayContaining([
-            expect.stringContaining('변경에는 reason 또는 typed 확인이 필요합니다'),
-            'Remote Config에 없는 flag_key: invented_flag',
-          ])
+          expect.arrayContaining([expect.stringContaining('변경에는 reason 또는 typed 확인이 필요합니다')])
         );
       }
     );
@@ -170,7 +166,7 @@ describe('행복한 농장 전용 백오피스 manifest', () => {
     const runbook = fs.readFileSync(path.join(root, 'docs/04-work/backoffice-operations.md'), 'utf8');
 
     expect(runbook).toContain('로컬 세이브가 항상 권위 원본이다');
-    expect(runbook).toContain('Firebase, Firestore, Remote Config를 직접 변경하지 않는다');
+    expect(runbook).toContain('Firebase와 Firestore를 직접 변경하지 않는다');
     expect(runbook).toContain('일별 export의 확정 구간(D-1)');
     expect(runbook).toContain('실제 변경 실행기는 아직 연결되지 않았다');
   });

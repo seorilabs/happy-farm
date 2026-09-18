@@ -9,7 +9,6 @@ import {
   type RewardedAdShowResult,
 } from '../../../../packages/farm-core/src';
 import { getRewardedAdUnitId } from './config';
-import { useMobileAdsEnabled } from './policy';
 import { recordNonFatalError } from '../firebase/crashlytics';
 import { ensureMobilePlatformSession, mobilePlatformAds } from '../platformEvents';
 import { showPlatformAdMobReward, type PlatformAdMobAdapter } from './platformRewardedAd';
@@ -153,9 +152,8 @@ function disposeRewardedAdInstance(instance: RewardedAdInstance | null) {
 }
 
 export function useAdMobRewardedAd() {
-  const adsEnabled = useMobileAdsEnabled();
   const [platformPolicyEnabled, setPlatformPolicyEnabled] = useState(__DEV__);
-  const adUnitId = adsEnabled && platformPolicyEnabled ? getRewardedAdUnitId() : null;
+  const adUnitId = platformPolicyEnabled ? getRewardedAdUnitId() : null;
   const adInstanceRef = useRef<RewardedAdInstance | null>(null);
   const rotateAdInstanceRef = useRef<((expectedToken?: symbol) => void) | null>(null);
   const pendingLoadRef = useRef<PendingLoad | null>(null);
@@ -165,8 +163,8 @@ export function useAdMobRewardedAd() {
   const [isAdSupported, setIsAdSupported] = useState(adUnitId != null);
 
   useEffect(() => {
-    if (__DEV__ || !adsEnabled) {
-      setPlatformPolicyEnabled(__DEV__ && adsEnabled);
+    if (__DEV__) {
+      setPlatformPolicyEnabled(true);
       return;
     }
     let cancelled = false;
@@ -181,7 +179,7 @@ export function useAdMobRewardedAd() {
     return () => {
       cancelled = true;
     };
-  }, [adsEnabled]);
+  }, []);
 
   const updateReady = useCallback((ready: boolean) => {
     isAdReadyRef.current = ready;

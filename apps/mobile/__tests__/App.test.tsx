@@ -100,16 +100,6 @@ jest.mock('@react-native-firebase/firestore', () => ({
   setDoc: jest.fn(() => Promise.resolve()),
 }));
 
-jest.mock('@react-native-firebase/remote-config', () => ({
-  fetchAndActivate: jest.fn(() => Promise.resolve(false)),
-  getBoolean: jest.fn((_remoteConfig, key: string) => key !== 'cloud_save_backup_enabled'),
-  getNumber: jest.fn(() => 1),
-  getRemoteConfig: jest.fn(() => ({})),
-  getString: jest.fn(() => ''),
-  setConfigSettings: jest.fn(() => Promise.resolve()),
-  setDefaults: jest.fn(() => Promise.resolve()),
-}));
-
 jest.mock('@notifee/react-native', () => ({
   __esModule: true,
   default: {

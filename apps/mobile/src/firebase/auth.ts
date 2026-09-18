@@ -22,7 +22,9 @@ function normalizeUser(user: { uid: string; isAnonymous: boolean } | null | unde
   };
 }
 
-export async function ensureMobileAnonymousUser(): Promise<MobileAnonymousUser | null> {
+export async function ensureMobileAnonymousUser(
+  budget?: { timeoutMs?: number; retries?: number }
+): Promise<MobileAnonymousUser | null> {
   if (!isFirebaseConfigured()) {
     return null;
   }
@@ -38,7 +40,9 @@ export async function ensureMobileAnonymousUser(): Promise<MobileAnonymousUser |
     // 디바이스의 익명 로그인은 멱등하므로 타임아웃 후 제한적 재시도가 안전하다.
     signInPromise ??= runWithNetworkPolicy(() => signInAnonymously(auth), {
       label: 'auth:anonymous_sign_in',
-      retries: 1,
+      // 앱 로딩을 막는 첫 실행 복원은 더 짧은 예산을 넘겨 온다.
+      retries: budget?.retries ?? 1,
+      timeoutMs: budget?.timeoutMs,
     })
       .then((credential) => normalizeUser(credential.user))
       .catch((error: unknown) => {

@@ -5,7 +5,6 @@ const ts = require('typescript');
 const MANIFEST_PATH = '.seorilabs/backoffice.json';
 const ANALYTICS_PATH = 'packages/farm-core/src/analytics.ts';
 const ADS_PATH = 'packages/farm-core/src/ads.ts';
-const REMOTE_CONFIG_PATH = 'remoteconfig.template.json';
 
 const IDENT = /^[a-zA-Z0-9_-]{1,64}$/;
 const ANALYTICS_IDENT = /^[a-zA-Z0-9_]{1,64}$/;
@@ -13,13 +12,6 @@ const TOOL_SECTIONS = new Set(['operations', 'commerce', 'ads', 'content', 'flag
 const AGGREGATIONS = new Set(['count', 'users', 'sum', 'avg']);
 const PREDICATE_OPERATORS = new Set(['eq', 'ne', 'ne_or_unset', 'gt', 'gte', 'lt', 'lte', 'truthy']);
 const INPUT_TYPES = new Set(['text', 'number', 'boolean', 'select', 'textarea']);
-const LEGACY_OR_RESERVED_FLAGS = new Set([
-  'mobile_ads_enabled_max_build_number',
-  'rewarded_ads_enabled',
-  'interstitial_ads_enabled',
-  'remote_balance_enabled',
-]);
-
 function isObject(value) {
   return value != null && typeof value === 'object' && !Array.isArray(value);
 }
@@ -496,27 +488,6 @@ function validateBackofficeManifest(rootDir = process.cwd()) {
   for (const placement of manifestPlacements) {
     if (!sourcePlacements.has(placement)) {
       failures.push(`게임에 없는 광고 placement: ${placement}`);
-    }
-  }
-
-  const remoteConfig = JSON.parse(fs.readFileSync(path.join(rootDir, REMOTE_CONFIG_PATH), 'utf8'));
-  const remoteConfigKeys = new Set(Object.keys(remoteConfig.parameters ?? {}));
-  for (const flag of optionValuesForInput(manifest, 'flag_key')) {
-    if (!remoteConfigKeys.has(flag)) failures.push(`Remote Config에 없는 flag_key: ${flag}`);
-    if (LEGACY_OR_RESERVED_FLAGS.has(flag)) failures.push(`변경 금지 Remote Config flag_key: ${flag}`);
-  }
-  for (const tool of manifest.tools ?? []) {
-    for (const operation of tool.operations ?? []) {
-      for (const input of operation.inputs ?? []) {
-        if (!input.key?.startsWith('rc_')) continue;
-        const remoteConfigKey = input.key.slice(3);
-        if (!remoteConfigKeys.has(remoteConfigKey)) {
-          failures.push(`Remote Config에 없는 입력 키: ${remoteConfigKey}`);
-        }
-        if (LEGACY_OR_RESERVED_FLAGS.has(remoteConfigKey)) {
-          failures.push(`변경 금지 Remote Config 입력 키: ${remoteConfigKey}`);
-        }
-      }
     }
   }
 

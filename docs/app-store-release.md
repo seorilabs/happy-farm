@@ -97,7 +97,7 @@ apps/mobile/ios/HappyFarmMobile/GoogleService-Info.plist
 `apps/mobile/src/ads/config.ts`의 전면 unit은 빈 값으로 두고, 컨트롤러가
 미지원으로 동작해 노출되지 않습니다.
 
-광고 SDK, Firebase Analytics, Crashlytics, Remote Config 사용 여부는 App Store Connect 앱 개인정보 답변에 반영해야 합니다.
+광고 SDK, Firebase Analytics, Crashlytics 사용 여부는 App Store Connect 앱 개인정보 답변에 반영해야 합니다.
 
 Firebase Analytics는 유지하고 저빈도 핵심 이벤트만 익명 Platform BigQuery sink에도
 복제합니다. Platform에는 OS, 앱 버전, locale과 허용 이벤트 파라미터만 보내며 Firebase

@@ -2,7 +2,7 @@
 
 Firebase project는 `.firebaserc`의 `happy-farm-tycoon`을 기본값으로 사용합니다.
 
-- Mobile: Analytics, Crashlytics, Remote Config, Anonymous Auth, Firestore cloud-save backup
+- Mobile: Analytics, Crashlytics, Anonymous Auth, Firestore cloud-save backup
 - AppsInToss: Firebase Web App 등록 완료. AIT target은 Firebase Web SDK를 `apps/ait/src/firebaseWeb/*`에서만 import합니다.
 - 미사용: Cloud Functions, Cloud Messaging
 - Mobile local notifications: Notifee 기반 기기 로컬 농장 알림(수확·데일리 보너스·오늘의 작물). FCM token이나 서버 푸시는 사용하지 않습니다.
@@ -30,7 +30,7 @@ measurementId = G-LQQQQZHG1V
 
 Firebase Web API key는 service credential이 아니며, AIT 실기기 smoke test를 위해 client config를 `apps/ait/src/firebaseWeb/app.ts`에 고정했습니다. 서비스 계정 JSON, Admin SDK credential, private key는 앱에 넣지 않습니다.
 
-AIT 앱 시작 시 기존 `ait_ga4_client_id`를 불러오거나 생성하고 Remote Config REST 클라이언트를 초기화합니다. 커스텀 이벤트는 클라이언트에서 GA4 Measurement Protocol을 직접 호출하지 않고 Platform `/v1/events` 한 경로로만 보냅니다. Platform relay는 등록된 GA4 Web stream으로 전달하며, 실패해도 게임 흐름에는 오류를 전파하지 않습니다.
+AIT 앱 시작 시 기존 `ait_ga4_client_id`를 불러오거나 생성합니다. 커스텀 이벤트는 클라이언트에서 GA4 Measurement Protocol을 직접 호출하지 않고 Platform `/v1/events` 한 경로로만 보냅니다. Platform relay는 등록된 GA4 Web stream으로 전달하며, 실패해도 게임 흐름에는 오류를 전파하지 않습니다.
 
 AIT는 Granite React Native 런타임 제약 때문에 Firebase Web Analytics SDK를 사용하지 않습니다. 신규 버전은 Platform relay를 사용하고, 기존 설치가 쓰던 client ID와 first-touch 플래그를 그대로 재사용합니다. 자동 이벤트 이름을 위조하지 않고 다음 계약을 사용합니다.
 
@@ -92,48 +92,33 @@ pnpm check:firebase:android
 
 설정 파일이 없으면 Android Gradle Firebase plugin과 JS telemetry 초기화는 건너뜁니다. 이 상태에서는 기존 로컬 빌드가 Firebase 연결 없이 동작합니다.
 
-## Remote Config 기본 키
+## 원격 설정 없음
 
-Remote Config 템플릿은 repo root의 `remoteconfig.template.json`으로 관리합니다.
+Firebase Remote Config는 사용하지 않습니다. 광고 on/off, 수집 토글, 최소지원버전,
+광고 빈도·cap을 원격에서 바꾸던 경로를 모두 걷어냈고, 이 값들은 이제 빌드에
+고정됩니다.
 
-```text
-analytics_collection_enabled = true
-crashlytics_collection_enabled = true
-mobile_ads_global_enabled = true
-cloud_save_backup_enabled = false
-minimum_supported_version_code = 1
-force_update_url = ""
-remote_balance_enabled = false
-```
+- 광고 빈도·cap: `packages/farm-core/src/balance.json`이 정본입니다. 바꾸려면
+  balance를 고쳐 배포합니다.
+- Analytics·Crashlytics 수집: 빌드에서 항상 켭니다.
+- 광고 단위·그룹 ID: `apps/mobile/src/ads/config.ts`와 `apps/ait/src/pages/index.tsx`의
+  상수입니다. AdMob 식별자의 정본은 중앙 원장
+  [seorilabs/.github#167](https://github.com/seorilabs/.github/issues/167)입니다.
 
-광고는 Google Play, App Store, AppsInToss 모두 `mobile_ads_global_enabled` 하나로만 제어합니다. `true`이면 각 타깃이 연결한 광고 형식이 로드되고, `false`이면 광고를 로드하지 않습니다. 버전별 또는 광고 형식별 노출 제어는 운영 부담을 줄이기 위해 사용하지 않습니다.
+### 잃은 운영 수단
 
-`mobile_ads_enabled_max_build_number`, `rewarded_ads_enabled`, `interstitial_ads_enabled`는 이전 모바일 빌드 호환용 legacy key입니다. 새 빌드는 이 값을 읽지 않으며, 운영 중에는 변경하지 않습니다.
+원격 설정을 걷어내면서 **배포 없이 대응하던 두 수단이 사라졌습니다.**
 
-AppsInToss 보상형 광고는 AppsInToss 광고 그룹 ID가 발급된 뒤 `apps/ait`의 광고 설정에 반영합니다. AIT도 Firebase Web Remote Config에서 `mobile_ads_global_enabled`를 읽습니다.
+- **광고 전역 kill switch**: 광고 정책 위반이나 SDK 사고 시 즉시 광고를 끌 수
+  없습니다. 새 빌드를 올려 스토어 심사를 거쳐야 합니다.
+- **강제 업데이트 게이트**: 구버전을 차단할 수 없습니다. 치명적 결함은 수정 빌드의
+  스토어 자동 업데이트 전파 속도에 의존합니다.
+
+둘 중 하나라도 다시 필요해지면 원격 설정을 되살리는 대신, 그때의 요구사항에 맞는
+최소 수단을 새로 설계합니다.
 
 게임 경제, gold, 저장 데이터는 계속 로컬 권위 상태이며 서버 신뢰값으로 쓰지 않습니다.
 
-## 강제 업데이트 게이트 (최소지원버전)
-
-모바일 앱(Google Play/App Store)은 기동 시 Remote Config `fetchAndActivate` 완료 후 설치된 빌드의 `RELEASE_INFO.buildNumber`를 `minimum_supported_version_code`와 비교해, 구버전이면 스토어로 유도하는 차단형 안내(닫기 불가 모달)를 노출합니다. AppsInToss(WEB)은 서버 배포형이라 이 게이트를 적용하지 않습니다.
-
-판정 로직은 `apps/mobile/src/firebase/updateGate.ts`의 순수 함수 `shouldPromptForceUpdate`이며, 다음 오차단 방지 가드를 지킵니다.
-
-- `minimum_supported_version_code`가 기본값 `1` 이하이면(미설정·fetch 실패 폴백 포함) 절대 발동하지 않습니다.
-- `buildNumber`가 유효한 양의 정수가 아니면(로컬/미버전 빌드의 `0` 등) 발동하지 않습니다.
-- 위를 모두 통과하고 `buildNumber < minimum_supported_version_code`일 때만 안내를 노출합니다.
-
-### 운영 절차 — 언제 최소버전을 올리나
-
-1. **원칙**: 이미 배포·전파된 수정을 구버전이 무효화하고 있고(예: 스팸/오작동), 스토어 자동 업데이트만으로는 전파가 느릴 때만 올립니다. 상시로 최신 빌드를 강제하지 않습니다.
-2. **선행 조건**: 올릴 목표 버전(고정 대상 `versionCode`/`buildNumber`)이 **이미 스토어에 승인·게시**되어 사용자가 실제로 업데이트할 수 있어야 합니다. 게시 전에 올리면 업데이트할 곳이 없어 사용자가 갇힙니다.
-3. **`force_update_url` 설정(권장, iOS는 필수)**:
-   - Android는 미설정 시 패키지명 기반 Play Store URL(`https://play.google.com/store/apps/details?id=com.seorilabs.happyfarm`)로 폴백합니다.
-   - iOS는 숫자 App Store ID가 레포에 없어 정식 딥링크를 구성할 수 없습니다. **iOS 운영 시 반드시 `force_update_url`에 해당 App Store 링크를 설정**하세요(미설정 시 App Store 앱만 여는 최후 폴백).
-4. **값 설정**: Firebase 콘솔 Remote Config에서 `minimum_supported_version_code`를 목표 버전으로 올리고 게시합니다. 클라이언트는 `minimumFetchIntervalMillis`(release 15분) 주기로 반영됩니다.
-5. **롤백**: 문제가 생기면 값을 다시 `1`로 내려 게이트를 즉시 해제합니다.
-6. **측정**: 배포 후 `update_gate_shown`/`update_gate_store_click`(파라미터 `build_number`/`minimum_supported_version_code`/`platform`)와 버전 분포 수렴 속도를 BigQuery로 확인합니다.
 
 ## 로컬 농장 알림
 
@@ -149,7 +134,7 @@ AppsInToss 보상형 광고는 AppsInToss 광고 그룹 ID가 발급된 뒤 `app
 
 ## 익명 Auth와 클라우드 저장 백업
 
-모바일 앱은 `cloud_save_backup_enabled`가 `true`이고 Firebase 설정이 있는 경우 Firebase Anonymous Auth로 앱 설치 단위 UID를 확보한 뒤 Firestore에 현재 저장 데이터를 백업합니다. 기본값은 `false`이며, Firestore API, Anonymous Auth provider, Firestore rules 배포가 끝난 뒤 Remote Config에서 켭니다.
+모바일 앱은 Firebase 설정이 있으면 Firebase Anonymous Auth로 앱 설치 단위 UID를 확보한 뒤 Firestore에 현재 저장 데이터를 백업합니다. Firebase 설정 파일이 없으면 백업 경로 전체가 비활성이라 게임은 로컬 저장만 사용합니다.
 
 저장 원칙:
 
@@ -182,19 +167,13 @@ updatedAt = Firestore server timestamp
 
 Firestore 보안 규칙은 `firestore.rules`에 두며, `request.auth.uid == {uid}`인 사용자만 자신의 `users/{uid}/saves/current` 문서를 읽고 쓸 수 있습니다. 저장 payload는 900KB 이하로 제한합니다.
 
-Auth/Firestore/Remote Config 배포:
+Auth/Firestore 배포:
 
 ```bash
-firebase deploy --only firestore:rules,firestore:indexes,remoteconfig --project happy-farm-tycoon
+firebase deploy --only firestore:rules,firestore:indexes --project happy-farm-tycoon
 ```
 
-운영 전 Firebase Console에서 Firestore API/database와 Anonymous provider가 활성화되어 있어야 합니다. 현재 CLI 계정은 `happy-farm-tycoon`의 `firestore.googleapis.com` 활성화 권한이 없으므로, 프로젝트 owner가 먼저 Firestore API를 켜야 합니다. `cloud_save_backup_enabled=false`로 두면 게임은 로컬 저장만 사용합니다.
-
-배포:
-
-```bash
-firebase deploy --only remoteconfig --project happy-farm-tycoon
-```
+운영 전 Firebase Console에서 Firestore API/database와 Anonymous provider가 활성화되어 있어야 합니다. 현재 CLI 계정은 `happy-farm-tycoon`의 `firestore.googleapis.com` 활성화 권한이 없으므로, 프로젝트 owner가 먼저 Firestore API를 켜야 합니다.
 
 ## 검증
 

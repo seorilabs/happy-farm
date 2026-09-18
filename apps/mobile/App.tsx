@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { AppState } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
@@ -7,7 +7,6 @@ import { useAdMobInterstitialAd } from './src/ads/adMobInterstitialAd';
 import { useAdMobRewardedAd } from './src/ads/adMobRewardedAd';
 import { mobileFarmArt } from './src/art/farmArt';
 import { useMobileFarmAudio } from './src/audio/farmAudio';
-import { ForceUpdateGate } from './src/components/ForceUpdateGate';
 import { useAdFreePurchase } from './src/iap/useAdFreePurchase';
 import {
   initializeMobileFirebaseServices,
@@ -28,13 +27,9 @@ import {
 function App() {
   const farmAudio = useMobileFarmAudio();
   const adFreePurchase = useAdFreePurchase();
-  // #428: Remote Config fetchAndActivate 완료 신호. 완료 후에만 강제 업데이트 게이트를
-  // 평가해 활성화된 최소지원버전을 반영한다(실패해도 finally로 켜서, 기본값 폴백 →
-  // 게이트 미발동을 보장).
-  const [remoteConfigReady, setRemoteConfigReady] = useState(false);
 
   useEffect(() => {
-    void initializeMobileFirebaseServices().finally(() => setRemoteConfigReady(true));
+    void initializeMobileFirebaseServices();
   }, []);
 
   useEffect(() => {
@@ -72,7 +67,6 @@ function App() {
         useInterstitialAd={useAdMobInterstitialAd}
         useRewardedAd={useAdMobRewardedAd}
       />
-      <ForceUpdateGate remoteConfigReady={remoteConfigReady} />
     </SafeAreaProvider>
   );
 }

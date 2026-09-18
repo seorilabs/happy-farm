@@ -57,10 +57,6 @@ jest.mock('@apps-in-toss/framework', () => ({
   showFullScreenAd: mockShowFullScreenAd,
 }));
 
-jest.mock('../../firebaseWeb/remoteConfig', () => ({
-  useAppsInTossAdsEnabled: () => true,
-}));
-
 jest.mock('../../platformEvents', () => ({
   ensureAppsInTossAdsSession: mockEnsureAppsInTossAdsSession,
   appsInTossPlatformAds: {

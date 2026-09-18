@@ -18,13 +18,9 @@ type AppsInTossAnalyticsInitResult =
   | { status: 'ready'; firstTouch: 'storage_error'; reason: string }
   | { status: 'error'; reason: string };
 
-let collectionEnabled = true;
 let initializePromise: Promise<AppsInTossAnalyticsInitResult> | null = null;
 
 export const trackAppsInTossAnalyticsEvent: TrackGameEvent = (name, params = {}) => {
-  if (!collectionEnabled) {
-    return;
-  }
   trackAppsInTossPlatformEvent(name, params);
 };
 
@@ -62,10 +58,6 @@ export function initializeAppsInTossAnalytics(): Promise<AppsInTossAnalyticsInit
     return result;
   });
   return initializePromise;
-}
-
-export function setAppsInTossAnalyticsCollectionEnabled(enabled: boolean): void {
-  collectionEnabled = enabled;
 }
 
 export const handleAppsInTossAnalyticsAppStateChange = analyticsLifecycle.handleAppStateChange;

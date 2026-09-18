@@ -3,7 +3,6 @@ import mobileAds, { AdEventType, InterstitialAd } from 'react-native-google-mobi
 
 import { normalizeAdFailureReason, type RewardedAdShowResult } from '../../../../packages/farm-core/src';
 import { getInterstitialAdUnitId } from './config';
-import { useMobileAdsEnabled } from './policy';
 import { recordNonFatalError } from '../firebase/crashlytics';
 import { ensureMobilePlatformSession, mobilePlatformAds } from '../platformEvents';
 
@@ -52,15 +51,13 @@ function disposeInstance(instance: InterstitialInstance | null) {
  * 호출부(진행 마일스톤·복귀 지면)가 요청하면 노출하고, 닫히는 즉시 다음 노출을
  * 위해 인스턴스를 회전해 재로드한다. 빈도 제한과 지면 판단은 FarmGame이 소유한다.
  *
- * 광고를 끄는 경로는 세 가지이며 모두 여기서 막는다.
- * - Remote Config `mobile_ads_global_enabled` kill switch
+ * 광고를 끄는 경로는 두 가지이며 모두 여기서 막는다.
  * - Seorilabs Platform 광고 정책(appUsesAds / adsEnabled)
  * - 전면 ad unit ID 미설정(보상형과 동일하게 ID가 비면 미지원으로 동작)
  */
 export function useAdMobInterstitialAd() {
-  const adsEnabled = useMobileAdsEnabled();
   const [platformPolicyEnabled, setPlatformPolicyEnabled] = useState(__DEV__);
-  const adUnitId = adsEnabled && platformPolicyEnabled ? getInterstitialAdUnitId() : null;
+  const adUnitId = platformPolicyEnabled ? getInterstitialAdUnitId() : null;
   const instanceRef = useRef<InterstitialInstance | null>(null);
   const rotateRef = useRef<((expectedToken?: symbol) => void) | null>(null);
   const pendingShowRef = useRef<PendingShow | null>(null);
@@ -75,8 +72,8 @@ export function useAdMobInterstitialAd() {
   }, []);
 
   useEffect(() => {
-    if (__DEV__ || !adsEnabled) {
-      setPlatformPolicyEnabled(__DEV__ && adsEnabled);
+    if (__DEV__) {
+      setPlatformPolicyEnabled(true);
       return;
     }
     let cancelled = false;
@@ -91,7 +88,7 @@ export function useAdMobInterstitialAd() {
     return () => {
       cancelled = true;
     };
-  }, [adsEnabled]);
+  }, []);
 
   const finishPendingShow = useCallback(
     (token: symbol, result: RewardedAdShowResult, options: { reload?: boolean } = {}) => {

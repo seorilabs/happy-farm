@@ -15,19 +15,18 @@ import { recordNonFatalError } from './crashlytics';
 import {
   createMobileCloudSaveBackup,
   type CloudSaveDocument,
+  type CloudSaveNetworkBudget,
   type CloudSaveStore,
 } from './cloudBackupCore';
 import { runWithNetworkPolicy } from './network';
-import { getRemoteBoolean } from './remoteConfig';
 
-const CLOUD_SAVE_ENABLED_KEY = 'cloud_save_backup_enabled';
 
 // Firestore 호출은 게임 로딩(클라우드 복원)을 막을 수 있으므로 타임아웃·재시도를
 // 건다. 모든 경로는 고정 문서('current')에 대한 멱등 연산이라 재시도가 안전하다.
 // 타임아웃/최종 실패 에러는 cloudBackupCore의 try/catch로 전파되어 Crashlytics에
 // 일관되게 기록된다.
 const firestoreCloudSaveStore: CloudSaveStore = {
-  async readCurrentSave(uid: string) {
+  async readCurrentSave(uid: string, budget?: CloudSaveNetworkBudget) {
     return runWithNetworkPolicy(
       async () => {
         const snapshot = await getDoc(doc(getFirestore(), 'users', uid, 'saves', 'current'));
@@ -36,7 +35,7 @@ const firestoreCloudSaveStore: CloudSaveStore = {
         }
         return snapshot.data() as CloudSaveDocument;
       },
-      { label: 'firestore:read_current_save' }
+      { label: 'firestore:read_current_save', timeoutMs: budget?.timeoutMs, retries: budget?.retries }
     );
   },
 
@@ -65,7 +64,7 @@ const firestoreCloudSaveStore: CloudSaveStore = {
 export function createDefaultMobileCloudSaveBackup(storage: Parameters<typeof createMobileCloudSaveBackup>[0]['storage']) {
   return createMobileCloudSaveBackup({
     storage,
-    isEnabled: () => isFirebaseConfigured() && getRemoteBoolean(CLOUD_SAVE_ENABLED_KEY),
+    isEnabled: () => isFirebaseConfigured(),
     canDelete: isFirebaseConfigured,
     ensureUser: ensureMobileAnonymousUser,
     store: firestoreCloudSaveStore,

@@ -60,67 +60,13 @@ export const DEFAULT_AD_LIMITS: AdLimitsConfig = {
   returnInterstitialCooldownMs: balance.ads.returnInterstitialCooldownMs,
 };
 
-export type AdLimitsOverrides = Partial<Record<keyof AdLimitsConfig, unknown>>;
-
-let activeAdLimits: AdLimitsConfig = { ...DEFAULT_AD_LIMITS };
-
-// 0 이상의 유한 정수만 유효한 오버라이드로 인정하고, 그 외(타입 불일치/음수/소수/NaN)는
-// 해당 필드 기본값으로 폴백한다.
-function resolveField(value: unknown, fallback: number): number {
-  if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) {
-    return fallback;
-  }
-  return value;
-}
-
 /**
- * 현재 적용 중인 광고 빈도·cap 설정. applyAdLimitsOverrides 호출 전에는 기본값을 반환한다.
+ * 광고 빈도·cap 설정. balance.json이 정본이며 런타임에 바뀌지 않는다.
+ *
+ * 예전에는 Remote Config `ad_limits_overrides`로 이 값을 원격에서 덮어썼지만, 원격
+ * 설정을 걷어내면서 오버라이드 경로도 함께 제거했다. 빈도를 바꾸려면 balance.json을
+ * 고쳐 배포한다.
  */
 export function getAdLimits(): AdLimitsConfig {
-  return activeAdLimits;
-}
-
-/**
- * 부분 오버라이드를 기본값 위에 병합해 적용한다. 누락/무효 필드는 기본값으로 폴백하며,
- * 반환값은 적용 후의 전체 설정이다.
- */
-export function applyAdLimitsOverrides(overrides?: AdLimitsOverrides | null): AdLimitsConfig {
-  const source = overrides ?? {};
-  const next = {} as AdLimitsConfig;
-  (Object.keys(DEFAULT_AD_LIMITS) as Array<keyof AdLimitsConfig>).forEach((key) => {
-    next[key] = resolveField(source[key], DEFAULT_AD_LIMITS[key]);
-  });
-  activeAdLimits = next;
-  return activeAdLimits;
-}
-
-/**
- * Remote Config 문자열(JSON 오브젝트)을 오버라이드 맵으로 파싱한다. 빈 문자열/비오브젝트/
- * 배열/파싱 실패 시 빈 맵을 반환해 모든 필드가 기본값으로 폴백되게 한다.
- */
-export function parseAdLimitsOverrides(raw?: string | null): AdLimitsOverrides {
-  if (raw == null) {
-    return {};
-  }
-  const trimmed = raw.trim();
-  if (trimmed.length === 0) {
-    return {};
-  }
-  try {
-    const parsed: unknown = JSON.parse(trimmed);
-    if (parsed == null || typeof parsed !== 'object' || Array.isArray(parsed)) {
-      return {};
-    }
-    return parsed as AdLimitsOverrides;
-  } catch {
-    return {};
-  }
-}
-
-/**
- * 적용 설정을 기본값으로 되돌린다(테스트/세션 리셋용).
- */
-export function resetAdLimits(): AdLimitsConfig {
-  activeAdLimits = { ...DEFAULT_AD_LIMITS };
-  return activeAdLimits;
+  return DEFAULT_AD_LIMITS;
 }

@@ -83,18 +83,6 @@ describe('AppsInToss Platform Analytics relay', () => {
     });
   });
 
-  test('Remote Config 수집 비활성은 이후 커스텀 이벤트를 즉시 무시한다', () => {
-    const {
-      setAppsInTossAnalyticsCollectionEnabled,
-      trackAppsInTossAnalyticsEvent,
-    } = loadAnalytics();
-
-    setAppsInTossAnalyticsCollectionEnabled(false);
-    trackAppsInTossAnalyticsEvent('game_start', { source: 'test' });
-
-    expect(mockTrackPlatform).not.toHaveBeenCalled();
-  });
-
   test('30분 백그라운드 복귀는 숫자 세션 정본을 갱신하고 Platform 이벤트를 남긴다', async () => {
     const {
       handleAppsInTossAnalyticsAppStateChange,

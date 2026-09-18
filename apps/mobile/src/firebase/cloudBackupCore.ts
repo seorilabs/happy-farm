@@ -26,8 +26,24 @@ export type CloudSaveDocument = {
   platform: 'mobile';
 };
 
+// 네트워크 호출에 얹는 예산. 앱 로딩을 막는 경로에서 기본 정책(10초 타임아웃 +
+// 재시도)보다 짧게 끊기 위해 쓴다.
+export type CloudSaveNetworkBudget = {
+  timeoutMs?: number;
+  retries?: number;
+};
+
+// 첫 실행 클라우드 복원의 예산. 이 경로는 게임 로딩을 await로 막기 때문에, 기본
+// 정책이면 익명 로그인(최악 20.5초)과 문서 읽기(최악 31.5초)가 더해져 앱이 1분 가까이
+// 멈출 수 있다. 실패해도 이번 실행을 로컬 없이 시작할 뿐이고(애초에 로컬 세이브가
+// 없는 상태라 잃을 진행이 없다) 다음 실행에서 다시 시도한다.
+export const STARTUP_RESTORE_NETWORK_BUDGET: CloudSaveNetworkBudget = {
+  timeoutMs: 3_000,
+  retries: 0,
+};
+
 export type CloudSaveStore = {
-  readCurrentSave(uid: string): Promise<CloudSaveDocument | null>;
+  readCurrentSave(uid: string, budget?: CloudSaveNetworkBudget): Promise<CloudSaveDocument | null>;
   writeCurrentSave(uid: string, document: CloudSaveDocument): Promise<void>;
   deleteCurrentSave(uid: string): Promise<void>;
 };
@@ -36,7 +52,7 @@ export type CloudSaveBackupDependencies = {
   storage: KeyValueStorage;
   isEnabled: () => boolean;
   canDelete?: () => boolean;
-  ensureUser: () => Promise<CloudSaveUser | null>;
+  ensureUser: (budget?: CloudSaveNetworkBudget) => Promise<CloudSaveUser | null>;
   store: CloudSaveStore;
   appVersion: string;
   now?: () => number;
@@ -261,12 +277,12 @@ export function createMobileCloudSaveBackup(dependencies: CloudSaveBackupDepende
         return { status: 'local_exists' };
       }
 
-      const user = await dependencies.ensureUser();
+      const user = await dependencies.ensureUser(STARTUP_RESTORE_NETWORK_BUDGET);
       if (user == null) {
         return { status: 'signed_out' };
       }
 
-      const document = await dependencies.store.readCurrentSave(user.uid);
+      const document = await dependencies.store.readCurrentSave(user.uid, STARTUP_RESTORE_NETWORK_BUDGET);
       if (document == null) {
         return { status: 'missing' };
       }
