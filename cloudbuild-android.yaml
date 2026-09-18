@@ -44,7 +44,19 @@ artifacts:
       - dist/android/happy-farm.aab
 
 options:
-  machineType: E2_STANDARD_2
+  # machineType 은 지정하지 않는다.
+  #
+  # 여기에 E2_STANDARD_2 가 적혀 있었고 CI 가 제출 단계에서 죽었다.
+  #   ERROR: ... as build config: .options.machineType: unused
+  # gcloud 는 build config 를 클라이언트에 번들된 스키마로 파싱하고,
+  # 모르는 enum 값을 만나면 그 필드를 unrecognized 로 떨어뜨린 뒤 이 메시지를
+  # 낸다. E2_STANDARD_2 는 비교적 최근 추가된 값이라, CI 에 설치된 gcloud 가
+  # 그보다 오래되면 값이 유효한데도 거부된다. 값을 적어두는 한 빌드가 러너
+  # 이미지의 gcloud 버전에 묶인다.
+  #
+  # 공식 문서 기준 "The default machine type is e2-standard-2 with 2 CPUs" 라,
+  # 비워두면 E2_STANDARD_2 와 같은 사양이면서 gcloud 버전에 영향받지 않는다.
+  # 무료 한도 대상으로 내린 ffa5e40 의 의도도 그대로 유지된다.
   logging: CLOUD_LOGGING_ONLY
 
 timeout: 7200s
