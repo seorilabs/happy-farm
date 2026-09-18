@@ -41,11 +41,15 @@ i18n 계획과 변경 지침은 `docs/i18n-plan.md`를 기준으로 관리합니
   돌고, self-hosted ARC 러너로는 가지 않습니다. fork PR이 self-hosted 러너에 닿지
   않게 하는 경계이므로 이 분기를 지우지 않습니다.
 - 마켓 배포 워크플로(`deploy-all`, `deploy-apps-in-toss`, `deploy-google-play`)는
-  ARC 러너를 쓰고 `workflow_dispatch`/`workflow_call` 전용이라 PR로는 트리거되지
-  않습니다. 배포는 Release/Tag를 지정해 수동으로 실행합니다.
-- 같은 접두사의 `deploy-drift-check`는 배포가 아니라 마켓 등록 상태 점검이고,
-  매일 schedule로 ARC 러너에서 돕니다. 이 워크플로들은 모두 fork PR로는 트리거되지
-  않으므로 public 전환 뒤에도 ARC 러너가 외부에 노출되지 않습니다.
+  `workflow_dispatch`/`workflow_call` 전용이라 PR로는 트리거되지 않습니다.
+  배포는 Release/Tag를 지정해 수동으로 실행합니다.
+- 같은 접두사의 `deploy-drift-check`는 배포가 아니라 마켓 등록 상태 점검이고
+  매일 schedule로 돕니다.
+- **배포 워크플로도 GitHub-hosted 러너에서 돕니다.** org의 ARC 러너 그룹은
+  모두 `allows_public_repositories=false`라, public 저장소에서는 self-hosted
+  러너에 job을 보낼 수 없습니다. `runs-on`을 `seorilabs-rpi-arm64`로 되돌리면
+  job이 실패하지 않고 **영원히 queued로 남습니다.** AAB는 Cloud Build에서
+  빌드되고 러너는 submit과 아티팩트 수거만 하므로 hosted로 충분합니다.
 - AppsInToss 배포에는 GitHub Actions secret `APPS_IN_TOSS_API_KEY`가 필요합니다.
 
 ## 샌드박스 URL

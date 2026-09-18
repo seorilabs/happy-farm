@@ -22,7 +22,9 @@ concurrency:
 jobs:
   drift-check:
     name: Check channel deploy drift
-    runs-on: seorilabs-rpi-arm64
+    # 저장소가 public 이라 ARC(self-hosted)를 쓸 수 없다. 자세한 사유는
+    # deploy-apps-in-toss.yml 의 같은 자리 주석을 참고한다.
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - name: Checkout

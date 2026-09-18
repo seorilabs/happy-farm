@@ -43,7 +43,10 @@ jobs:
   deploy:
     name: AIT artifact deploy
     needs: resolve
-    runs-on: seorilabs-rpi-arm64
+    # 저장소가 public 이라 ARC(self-hosted)를 쓸 수 없다. org 러너 그룹이 모두
+    # allows_public_repositories=false 라, seorilabs-rpi-arm64 로 보내면 job 이
+    # 영원히 queued 로 남는다. 이 잡은 pnpm 빌드와 AIT 업로드뿐이라 hosted 로 충분하다.
+    runs-on: ubuntu-latest
     timeout-minutes: 25
     environment: apps-in-toss
 
