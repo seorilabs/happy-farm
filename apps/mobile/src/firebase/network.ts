@@ -2,7 +2,7 @@
 // 정책. Firebase SDK는 오프라인 캐시는 두지만 호출 자체가 무한정 매달릴 수 있어,
 // 게임 로딩을 막는 경로(클라우드 복원 등)가 영원히 대기하지 않도록 상한을 둔다.
 // 일시적 실패는 지수 백오프로 제한적으로 재시도하고, 모두 소진되면 마지막 에러를
-// 그대로 던져 호출 측의 Crashlytics 기록 경로로 일관되게 흘려보낸다.
+// 그대로 던져 호출 측의 진단 로그 경로로 일관되게 흘려보낸다.
 
 export const DEFAULT_NETWORK_TIMEOUT_MS = 10_000;
 export const DEFAULT_NETWORK_RETRIES = 2;
@@ -10,7 +10,7 @@ export const DEFAULT_NETWORK_RETRY_BASE_DELAY_MS = 500;
 
 type TimerHandle = ReturnType<typeof setTimeout>;
 
-// 타임아웃으로 중단된 호출임을 호출 측/Crashlytics에서 식별할 수 있도록 별도 타입.
+// 타임아웃으로 중단된 호출임을 호출 측에서 식별할 수 있도록 별도 타입.
 export class NetworkTimeoutError extends Error {
   readonly label: string;
   readonly timeoutMs: number;
@@ -24,7 +24,7 @@ export class NetworkTimeoutError extends Error {
 }
 
 export type NetworkPolicyOptions = {
-  // Crashlytics/타임아웃 메시지에 쓰이는 호출 식별자.
+  // 타임아웃 메시지에 쓰이는 호출 식별자.
   label: string;
   timeoutMs?: number;
   // 재시도 횟수(최초 시도 제외). 0이면 한 번만 시도한다.

@@ -188,7 +188,7 @@ flowchart TB
   - [x] 프로덕션 경로 console.warn 정리 또는 로깅 통합 (`logDevWarning` 도입, audio 2곳 라우팅)
   - [x] 릴리스 빌드의 versionName/buildNumber·Ad Unit ID 주입 확인 결과 기록 (아래)
 - **빌드 주입 점검 결과(2026-06-23):**
-  - **releaseInfo.ts(versionName/buildNumber/gitSha):** 세 배포 워크플로가 불변 중앙 `release-version-authority-v1`에서 exact tag binding을 받은 뒤 `scripts/write-release-info.mjs`로 확정값만 기록. 레포의 `v0.0.0`은 CI가 덮어쓰는 placeholder이며 authority가 아님. analytics와 클라우드 백업이 `RELEASE_INFO`를 소비.
+  - **releaseInfo.ts(versionName/buildNumber/gitSha):** 세 배포 워크플로가 불변 중앙 `release-version-authority-v1`에서 exact tag binding을 받은 뒤 `scripts/write-release-info.mjs`로 확정값만 기록. 레포의 `v0.0.0`은 CI가 덮어쓰는 placeholder이며 authority가 아님. analytics가 `RELEASE_INFO`를 소비.
   - **Android(versionName/versionCode):** `deploy-google-play.yml`이 `./gradlew :app:bundleRelease -PversionCodeOverride=… -PversionNameOverride=…`로 주입. `build.gradle`은 `versionNameOverride`→env→기본값(`1.0.1`/`2`) 순으로 폴백.
   - **iOS(CFBundleVersion):** Xcode Cloud `ci_scripts`가 태그 파생 build number를 주입하고, 아카이브의 `CFBundleVersion`을 읽어 불일치 시 실패시킨다.
   - **Ad Unit ID:** `apps/mobile/src/ads/config.ts`가 `__DEV__`면 `TestIds.REWARDED`, 아니면 하드코딩된 프로덕션 단위 ID 사용 → 릴리스(`__DEV__=false`)에서 실 단위 ID. AIT에는 AdMob 미사용(ads 디렉터리 없음). env 주입이 아닌 컴파일타임 분기.

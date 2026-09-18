@@ -4,39 +4,6 @@
   "summary": "행복한 농장 타이쿤의 세이브 안전성, 업데이트 게이트, 광고, 경제 콘텐츠와 런타임 플래그를 운영합니다.",
   "tools": [
     {
-      "id": "save-integrity",
-      "section": "operations",
-      "title": "세이브 무결성",
-      "description": "로컬 권위 세이브와 선택적 Firestore 백업의 상태를 읽기 전용으로 진단합니다.",
-      "runbook": "docs/04-work/backoffice-operations.md",
-      "operations": [
-        {
-          "id": "inspect-backup",
-          "label": "백업 상태 조회",
-          "description": "플레이어 참조와 마켓을 기준으로 백업 활성화·버전·최근 동기화 상태를 조회합니다.",
-          "intent": "read",
-          "inputs": [
-            {
-              "key": "player_ref",
-              "label": "플레이어 참조",
-              "type": "text",
-              "help": "이메일이나 표시 이름이 아니라 지원 채널에서 확인한 익명 참조만 입력합니다."
-            },
-            {
-              "key": "market",
-              "label": "마켓",
-              "type": "select",
-              "options": [
-                { "value": "apps_in_toss", "label": "AppsInToss" },
-                { "value": "google_play", "label": "Google Play" },
-                { "value": "app_store", "label": "App Store" }
-              ]
-            }
-          ]
-        }
-      ]
-    },
-    {
       "id": "rewarded-ad-health",
       "section": "ads",
       "title": "보상형 광고 상태",

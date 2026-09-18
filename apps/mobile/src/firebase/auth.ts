@@ -1,9 +1,12 @@
 import { getAuth, getIdToken, signInAnonymously } from '@react-native-firebase/auth';
 
+import { logDevWarning } from '../../../../packages/farm-core/src';
 import { isFirebaseConfigured } from './app';
-import { recordNonFatalError } from './crashlytics';
 import { runWithNetworkPolicy } from './network';
 
+// 익명 로그인은 Seorilabs Platform 세션의 자격증명이다. 클라우드 저장을 걷어낸
+// 뒤에도 남는 이유가 여기 있다 — Platform 세션 없이는 보상형 광고의 정책 조회와
+// claim 검증, analytics relay, IAP 경로가 모두 막힌다.
 export type MobileAnonymousUser = {
   uid: string;
   isAnonymous: boolean;
@@ -22,9 +25,7 @@ function normalizeUser(user: { uid: string; isAnonymous: boolean } | null | unde
   };
 }
 
-export async function ensureMobileAnonymousUser(
-  budget?: { timeoutMs?: number; retries?: number }
-): Promise<MobileAnonymousUser | null> {
+export async function ensureMobileAnonymousUser(): Promise<MobileAnonymousUser | null> {
   if (!isFirebaseConfigured()) {
     return null;
   }
@@ -40,15 +41,13 @@ export async function ensureMobileAnonymousUser(
     // 디바이스의 익명 로그인은 멱등하므로 타임아웃 후 제한적 재시도가 안전하다.
     signInPromise ??= runWithNetworkPolicy(() => signInAnonymously(auth), {
       label: 'auth:anonymous_sign_in',
-      // 앱 로딩을 막는 첫 실행 복원은 더 짧은 예산을 넘겨 온다.
-      retries: budget?.retries ?? 1,
-      timeoutMs: budget?.timeoutMs,
+      retries: 1,
     })
       .then((credential) => normalizeUser(credential.user))
       .catch((error: unknown) => {
         if (!authFailureRecorded) {
           authFailureRecorded = true;
-          recordNonFatalError(error, 'auth:anonymous_sign_in');
+          logDevWarning('[auth] anonymous sign-in failed', error);
         }
         return null;
       })
@@ -60,7 +59,7 @@ export async function ensureMobileAnonymousUser(
   } catch (error) {
     if (!authFailureRecorded) {
       authFailureRecorded = true;
-      recordNonFatalError(error, 'auth:anonymous_sign_in');
+      logDevWarning('[auth] anonymous sign-in failed', error);
     }
     return null;
   }
@@ -79,7 +78,7 @@ export async function getMobileFirebaseIdToken(): Promise<string | null> {
   try {
     return await getIdToken(currentUser);
   } catch (error) {
-    recordNonFatalError(error, 'auth:id_token');
+    logDevWarning('[auth] id token failed', error);
     return null;
   }
 }

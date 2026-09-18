@@ -5,12 +5,12 @@ import {
   combineTrackers,
   createFarmAnalytics,
   RELEASE_INFO,
+  logDevWarning,
   withStandardAnalyticsParams,
   type TrackGameEvent,
 } from '../../../../packages/farm-core/src';
 
 import { isFirebaseConfigured } from './app';
-import { recordNonFatalError } from './crashlytics';
 import { trackMobilePlatformEvent } from '../platformEvents';
 
 type FirebaseAnalyticsParams = Record<string, string | number>;
@@ -38,10 +38,10 @@ const trackFirebaseGameEvent: TrackGameEvent = (name, params = {}) => {
       params,
     );
     void logFirebaseEvent(getAnalytics(), name, normalizedParams).catch((error: unknown) => {
-      recordNonFatalError(error, `analytics:${name}`);
+      logDevWarning(`[analytics] ${name} failed`, error);
     });
   } catch (error) {
-    recordNonFatalError(error, `analytics:${name}`);
+    logDevWarning(`[analytics] ${name} failed`, error);
   }
 };
 

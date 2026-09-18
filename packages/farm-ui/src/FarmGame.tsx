@@ -120,7 +120,6 @@ import {
   normalizeAdFailureFamily,
   shouldRetryRewardedShow,
   createInitialState,
-  migrateLoadedState,
   resolveOnboardingStep,
   DEFAULT_LOCALE,
   LOCALE_ENDONYMS,
@@ -279,7 +278,7 @@ import { MissionsSheet } from './components/MissionsSheet';
 import { ProductionSheet, type ProductionTabKey } from './components/ProductionSheet';
 import { StatsSheet, type FarmRecordStats } from './components/StatsSheet';
 import { WheelSheet } from './components/WheelSheet';
-import { AdRewardCard, CloudSaveSection, SettingToggle, SheetAction, ShopCard, sheetPartStyles } from './components/SheetParts';
+import { AdRewardCard, SettingToggle, SheetAction, ShopCard, sheetPartStyles } from './components/SheetParts';
 import {
   DISCOVERY_BANNER_BASE_BOTTOM,
   getPlotTileSize,
@@ -652,20 +651,6 @@ export type FarmGameNotifications = {
 // backup wired inside persistence: this adapter surfaces an explicit entry point
 // and result status in the UI. When isSupported is false the settings section is
 // hidden entirely (AIT / default).
-export type FarmCloudSaveBackupOutcome =
-  | { status: 'disabled' | 'signed_out' | 'error' }
-  | { status: 'backed_up'; clientRevision: number };
-
-export type FarmCloudSaveRestoreOutcome =
-  | { status: 'disabled' | 'signed_out' | 'missing' | 'invalid' | 'error' }
-  | { status: 'restored'; clientRevision: number; gameState: GameState };
-
-export type FarmCloudSave = {
-  isSupported: boolean;
-  backupNow: (gameState: GameState) => Promise<FarmCloudSaveBackupOutcome>;
-  restoreFromCloud: () => Promise<FarmCloudSaveRestoreOutcome>;
-};
-
 export type FarmAdFreePurchase = {
   isSupported: boolean;
   active: boolean;
@@ -677,7 +662,6 @@ export type FarmAdFreePurchase = {
 
 export type FarmGameProps = {
   persistence?: FarmGamePersistence;
-  cloudSave?: FarmCloudSave;
   adFreePurchase?: FarmAdFreePurchase;
   analytics?: FarmAnalytics;
   useRewardedAd?: UseFarmAd;
@@ -998,11 +982,6 @@ const defaultFarmNotifications: FarmGameNotifications = {
   scheduleReminder: async () => undefined,
   cancelReminder: async () => undefined,
 };
-const defaultCloudSave: FarmCloudSave = {
-  isSupported: false,
-  backupNow: async () => ({ status: 'disabled' }),
-  restoreFromCloud: async () => ({ status: 'disabled' }),
-};
 const defaultAdFreePurchase: FarmAdFreePurchase = {
   isSupported: false,
   active: false,
@@ -1092,7 +1071,6 @@ export default function FarmGame(props: FarmGameProps = {}) {
 
 function FarmGameBody({
   persistence = defaultPersistence,
-  cloudSave = defaultCloudSave,
   adFreePurchase = defaultAdFreePurchase,
   analytics = defaultFarmAnalytics,
   useRewardedAd = useUnsupportedAd,
@@ -1147,8 +1125,6 @@ function FarmGameBody({
   const [resetConfirmText, setResetConfirmText] = useState('');
   // Cloud backup/restore: in-flight guard against double taps, plus the last
   // result notice shown in the settings section.
-  const [cloudSaveBusy, setCloudSaveBusy] = useState(false);
-  const [cloudSaveNotice, setCloudSaveNotice] = useState<string | null>(null);
   const [isSaveLoaded, setIsSaveLoaded] = useState(false);
   const [isSettingsLoaded, setIsSettingsLoaded] = useState(false);
   const [gameSettings, setGameSettings] = useState<FarmGameSettings>(DEFAULT_FARM_GAME_SETTINGS);
@@ -4998,104 +4974,6 @@ function FarmGameBody({
     toast(messages.resetDoneToast);
   }
 
-  function cloudBackupOutcomeMessage(status: FarmCloudSaveBackupOutcome['status']) {
-    switch (status) {
-      case 'backed_up':
-        return messages.cloudBackupDoneToast;
-      case 'disabled':
-        return messages.cloudSaveDisabledToast;
-      case 'signed_out':
-        return messages.cloudSaveSignedOutToast;
-      default:
-        return messages.cloudSaveErrorToast;
-    }
-  }
-
-  function cloudRestoreOutcomeMessage(status: FarmCloudSaveRestoreOutcome['status']) {
-    switch (status) {
-      case 'restored':
-        return messages.cloudRestoreDoneToast;
-      case 'missing':
-        return messages.cloudRestoreMissingToast;
-      case 'invalid':
-        return messages.cloudRestoreInvalidToast;
-      case 'disabled':
-        return messages.cloudSaveDisabledToast;
-      case 'signed_out':
-        return messages.cloudSaveSignedOutToast;
-      default:
-        return messages.cloudSaveErrorToast;
-    }
-  }
-
-  async function backupToCloud() {
-    if (cloudSaveBusy) {
-      return;
-    }
-    setCloudSaveBusy(true);
-    setCloudSaveNotice(messages.cloudBackupInProgress);
-    try {
-      const outcome = await cloudSave.backupNow(gameState);
-      const notice = cloudBackupOutcomeMessage(outcome.status);
-      setCloudSaveNotice(notice);
-      toast(notice);
-    } finally {
-      setCloudSaveBusy(false);
-    }
-  }
-
-  async function restoreFromCloud() {
-    if (cloudSaveBusy) {
-      return;
-    }
-    setCloudSaveBusy(true);
-    setCloudSaveNotice(messages.cloudRestoreInProgress);
-    try {
-      const outcome = await cloudSave.restoreFromCloud();
-      if (outcome.status === 'restored') {
-        flushManualHarvestCombo('cloud_restore');
-        flushAutoHarvestSummary();
-        flushCropReadySummary();
-        cropReadyLogStateRef.current = {};
-        fundedLandmarkStagesRef.current.clear();
-        pendingLandmarkFundEffectsRef.current.clear();
-        // The cloud payload may come from an older app version, so run it through
-        // the same migration/normalization as the load path before showing it.
-        const restored = migrateLoadedState(outcome.gameState, createInitialState());
-        const normalizedRestored: GameState = {
-          ...restored,
-          dailyBonusState: normalizeDailyBonusState(restored.dailyBonusState as unknown),
-        };
-        setGameState(normalizedRestored);
-        deferredOnboardingSheetRef.current =
-          !normalizedRestored.onboardingCompleted &&
-          previewDailyBonus(
-            normalizedRestored.dailyBonusState,
-            Date.now(),
-            getRewardedGoldAmount(normalizedRestored)
-          ).available
-            ? { type: 'dailyBonus', source: 'auto_popup' }
-            : null;
-        onboardingStepViewedRef.current = null;
-        onboardingFinishCommittedRef.current = false;
-        notificationPromptResolvedRef.current = normalizedRestored.harvestNotificationPromptSeen;
-        activeNotificationPromptGenerationRef.current = null;
-        setNotificationPromptGeneration(null);
-        setOnboardingStep(null);
-        setSelectedArea(FIRST_AREA.key);
-        setSelectedTool('harvest');
-        if (!normalizedRestored.onboardingCompleted) {
-          setActiveSheet(null);
-        }
-      }
-      const notice = cloudRestoreOutcomeMessage(outcome.status);
-      setCloudSaveNotice(notice);
-      toast(notice);
-    } finally {
-      setCloudSaveBusy(false);
-    }
-  }
-
   function plantCrop(index: number, cropKey: CropKey) {
     const now = Date.now();
     const effectId = ++commandEffectIdRef.current;
@@ -6555,19 +6433,6 @@ function FarmGameBody({
             </View>
             <Text style={sheetPartStyles.settingDesc}>{messages.languageDesc}</Text>
 
-            {cloudSave.isSupported ? (
-              <CloudSaveSection
-                title={messages.cloudBackupSection}
-                desc={messages.cloudBackupDesc}
-                notice={cloudSaveNotice}
-                backupLabel={messages.cloudBackupAction}
-                restoreLabel={messages.cloudRestoreAction}
-                busy={cloudSaveBusy}
-                onBackup={() => void backupToCloud()}
-                onRestore={() => void restoreFromCloud()}
-              />
-            ) : null}
-
             {adFreePurchase.isSupported ? (
               <View>
                 <Text style={styles.sheetSectionTitle}>{messages.adFreeSection}</Text>
@@ -6577,7 +6442,7 @@ function FarmGameBody({
                     : messages.adFreeInactiveDesc(adFreePurchase.displayPrice)}
                 </Text>
                 {adFreePurchase.status === 'failed' || adFreePurchase.status === 'unavailable' ? (
-                  <Text style={sheetPartStyles.cloudSaveNotice}>{messages.adFreeFailed}</Text>
+                  <Text style={sheetPartStyles.sheetNotice}>{messages.adFreeFailed}</Text>
                 ) : null}
                 {!adFreePurchase.active ? (
                   <SheetAction

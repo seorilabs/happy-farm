@@ -65,7 +65,7 @@ summary이므로 별도 `harvest_source`가 아니다. schema v2 전 `crop_harve
 
 `auto_harvest_summary.schema_version=2`부터 자동수확은 per-crop `crop_harvested`를 보내지
 않고 `(crop, area, crop_tier)` bucket별 summary를 최대 60초에 1건 보낸다. 앱 background,
-프레스티지, 초기화, 클라우드 복원 경계에서는 부분 window를 먼저 flush한다. 1.8.7 이하의
+프레스티지와 초기화 경계에서는 부분 window를 먼저 flush한다. 1.8.7 이하의
 `harvest_source=auto` raw 이벤트는 자동화 처리량과 초대형 경제값으로 지표를 왜곡하므로
 현재 집계에서 제외하고 summary만 합산한다. 숫자 파라미터는 JS 안전 범위로 clamp한다.
 돌연변이 최초 발견은 희소한 사용자 성과이므로 자동수확에서도 `mutation_discovered`를

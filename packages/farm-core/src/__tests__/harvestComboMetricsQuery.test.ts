@@ -51,7 +51,7 @@ describe('harvest-combo-metrics.sql 계약 가드 (#348)', () => {
     for (const tier of ['normal', 'great', 'legendary']) {
       expect(sql).toContain(`'${tier}'`);
     }
-    for (const reason of ['timeout', 'background', 'prestige', 'reset', 'cloud_restore']) {
+    for (const reason of ['timeout', 'background', 'prestige', 'reset']) {
       expect(sql).toContain(`'${reason}'`);
     }
     expect(sql).toContain('schema_version = 1');

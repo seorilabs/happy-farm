@@ -1,12 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import {
-  createFarmPersistence,
-  type FarmCloudSave,
-  type FarmGamePersistence,
-} from '../../../../packages/farm-ui/src';
-import { isFirebaseConfigured } from '../firebase/app';
-import { createDefaultMobileCloudSaveBackup } from '../firebase/cloudBackup';
+import { createFarmPersistence, type FarmGamePersistence } from '../../../../packages/farm-ui/src';
 
 const asyncStorage = {
   getItem: (key: string) => AsyncStorage.getItem(key),
@@ -14,38 +8,5 @@ const asyncStorage = {
   removeItem: (key: string) => AsyncStorage.removeItem(key),
 };
 
-const localFarmPersistence = createFarmPersistence(asyncStorage);
-const cloudSaveBackup = createDefaultMobileCloudSaveBackup(asyncStorage);
-
-export const mobileFarmPersistence: FarmGamePersistence = {
-  async readPersistedGameState() {
-    await cloudSaveBackup.restoreLatestLocalSaveIfMissing();
-    const gameState = await localFarmPersistence.readPersistedGameState();
-    cloudSaveBackup.scheduleBackup(gameState);
-    return gameState;
-  },
-
-  async writePersistedGameState(gameState) {
-    await localFarmPersistence.writePersistedGameState(gameState);
-    cloudSaveBackup.scheduleBackup(gameState);
-  },
-
-  async removePersistedGameState() {
-    await localFarmPersistence.removePersistedGameState();
-    await cloudSaveBackup.deleteBackup();
-  },
-
-  readPersistedGameSettings: localFarmPersistence.readPersistedGameSettings,
-  writePersistedGameSettings: localFarmPersistence.writePersistedGameSettings,
-  readLastSeenAt: localFarmPersistence.readLastSeenAt,
-  writeLastSeenAt: localFarmPersistence.writeLastSeenAt,
-};
-
-// Manual backup/restore entry point for the settings screen. Shares the same
-// instance as the automatic backup so device-id/revision metadata stays in sync.
-// When Firebase is not configured, isSupported is false and the section is hidden.
-export const mobileCloudSave: FarmCloudSave = {
-  isSupported: isFirebaseConfigured(),
-  backupNow: (gameState) => cloudSaveBackup.backupNow(gameState),
-  restoreFromCloud: () => cloudSaveBackup.restoreFromCloud(),
-};
+// 저장은 로컬 하나다. Firebase에서 쓰는 기능은 GA4뿐이라 클라우드 백업 경로가 없다.
+export const mobileFarmPersistence: FarmGamePersistence = createFarmPersistence(asyncStorage);

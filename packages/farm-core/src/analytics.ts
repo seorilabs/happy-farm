@@ -121,7 +121,7 @@ export type DailyBonusSource = 'auto_popup' | 'more' | 'welcome_back';
 // Stable values for the manual-only harvest-combo summary. Keep these keys
 // untranslated so BigQuery cohorts stay joinable across every market.
 export type HarvestComboTier = 'normal' | 'great' | 'legendary';
-export type HarvestComboEndReason = 'timeout' | 'background' | 'prestige' | 'reset' | 'cloud_restore';
+export type HarvestComboEndReason = 'timeout' | 'background' | 'prestige' | 'reset';
 
 // Stable source/reward dimensions for crop_harvested. Offline settlement only
 // advances time and leaves crops ripe, while combo is a summary over manual
