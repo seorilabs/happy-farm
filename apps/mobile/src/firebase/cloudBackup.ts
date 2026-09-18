@@ -15,6 +15,7 @@ import { recordNonFatalError } from './crashlytics';
 import {
   createMobileCloudSaveBackup,
   type CloudSaveDocument,
+  type CloudSaveNetworkBudget,
   type CloudSaveStore,
 } from './cloudBackupCore';
 import { runWithNetworkPolicy } from './network';
@@ -25,7 +26,7 @@ import { runWithNetworkPolicy } from './network';
 // 타임아웃/최종 실패 에러는 cloudBackupCore의 try/catch로 전파되어 Crashlytics에
 // 일관되게 기록된다.
 const firestoreCloudSaveStore: CloudSaveStore = {
-  async readCurrentSave(uid: string) {
+  async readCurrentSave(uid: string, budget?: CloudSaveNetworkBudget) {
     return runWithNetworkPolicy(
       async () => {
         const snapshot = await getDoc(doc(getFirestore(), 'users', uid, 'saves', 'current'));
@@ -34,7 +35,7 @@ const firestoreCloudSaveStore: CloudSaveStore = {
         }
         return snapshot.data() as CloudSaveDocument;
       },
-      { label: 'firestore:read_current_save' }
+      { label: 'firestore:read_current_save', timeoutMs: budget?.timeoutMs, retries: budget?.retries }
     );
   },
 

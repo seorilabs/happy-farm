@@ -2,6 +2,7 @@ import { SAVE_KEY, createInitialState } from '../../../../../packages/farm-core/
 import type { KeyValueStorage } from '../../../../../packages/farm-ui/src';
 import {
   CLOUD_SAVE_SCHEMA_VERSION,
+  STARTUP_RESTORE_NETWORK_BUDGET,
   createMobileCloudSaveBackup,
   type CloudSaveDocument,
   type CloudSaveStore,
@@ -135,6 +136,33 @@ describe('mobile cloud save backup core', () => {
     });
 
     expect(JSON.parse((await storage.getItem(SAVE_KEY)) ?? '{}')).toMatchObject({ gold: 1234 });
+  });
+
+  test('첫 실행 복원은 로딩을 막지 않도록 짧은 네트워크 예산으로 호출한다', async () => {
+    // 이 경로는 readPersistedGameState가 await한다. 기본 정책(10초 타임아웃 + 재시도)
+    // 이면 익명 로그인과 문서 읽기가 더해져 앱이 1분 가까이 멈출 수 있다.
+    const storage = createMemoryStorage();
+    const ensureUser = jest.fn(async () => ({ uid: 'user-1' }));
+    const store: CloudSaveStore = {
+      readCurrentSave: jest.fn(async () => null),
+      writeCurrentSave: jest.fn(),
+      deleteCurrentSave: jest.fn(),
+    };
+    const backup = createMobileCloudSaveBackup({
+      storage,
+      store,
+      isEnabled: () => true,
+      ensureUser,
+      appVersion: '1.2.3',
+    });
+
+    await backup.restoreLatestLocalSaveIfMissing();
+
+    expect(ensureUser).toHaveBeenCalledWith(STARTUP_RESTORE_NETWORK_BUDGET);
+    expect(store.readCurrentSave).toHaveBeenCalledWith('user-1', STARTUP_RESTORE_NETWORK_BUDGET);
+    // 재시도 없이 3초 안에 끊어야 로딩 지연이 눈에 띄지 않는다.
+    expect(STARTUP_RESTORE_NETWORK_BUDGET.retries).toBe(0);
+    expect(STARTUP_RESTORE_NETWORK_BUDGET.timeoutMs).toBeLessThanOrEqual(3_000);
   });
 
   test('keeps local save when one already exists', async () => {
