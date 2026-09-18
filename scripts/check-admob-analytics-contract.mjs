@@ -42,12 +42,29 @@ const productionIdentifiers = {
     `ca-app-pub-${publisher}/7956883150`,
     `ca-app-pub-${publisher}/4017638142`,
   ],
+  // 릴리스 문서도 원장 값을 그대로 적는다. 문서만 뒤처지면 이를 보고 설정을 맞출 때
+  // 레거시 계정으로 되돌아간다(happy-farm#521).
+  'docs/app-store-release.md': [
+    `ca-app-pub-${publisher}~1809085234`,
+    `ca-app-pub-${publisher}/4017638142`,
+  ],
 };
+
+// 레거시 Publisher가 되살아나선 안 되는 경로. 식별자를 직접 적지 않는 문서도
+// 포함한다 — #521 인수조건은 "최종 산출물에서 이전 게시자 식별자가 제거된다"다.
+const legacyPublisherFreePaths = [
+  ...Object.keys(productionIdentifiers),
+  'docs/google-play-release.md',
+  'README.md',
+];
 
 for (const [path, identifiers] of Object.entries(productionIdentifiers)) {
   for (const identifier of identifiers) {
     expectText(path, identifier, `중앙 AdMob 원장 식별자가 없습니다 (${identifier})`);
   }
+}
+
+for (const path of legacyPublisherFreePaths) {
   rejectText(path, 'ca-app-pub-2444587584524186', '이전 Publisher 식별자가 남아 있습니다');
   rejectText(path, 'ca-app-pub-3940256099942544', 'Google 테스트 Publisher가 프로덕션 설정에 있습니다');
 }
