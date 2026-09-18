@@ -19,9 +19,11 @@ export function getRewardedAdUnitId() {
   return adUnitId.length > 0 ? adUnitId : null;
 }
 
-// 전면광고 ad unit. AdMob 콘솔에서 Android/iOS 전면 unit을 만든 뒤 채운다.
-// 비워 두면 getInterstitialAdUnitId가 null을 돌려주고 컨트롤러가 미지원으로
-// 동작해, 진행 마일스톤·복귀 지면이 조용히 비활성된다(보상형과 같은 규칙).
+// 전면광고 ad unit. 중앙 원장(seorilabs/.github#167)에 행복 농장 전면 단위는
+// 아직 발급 기록이 없다. 유지 게시자 pub-9932778305312246으로 발급된 뒤
+// 원장에 등록되면 그 값을 채운다. 비워 두면 getInterstitialAdUnitId가 null을
+// 돌려주고 컨트롤러가 미지원으로 동작해, 진행 마일스톤·복귀 지면이 조용히
+// 비활성된다(보상형과 같은 규칙).
 const PRODUCTION_INTERSTITIAL_AD_UNIT_IDS = {
   android: '',
   ios: '',

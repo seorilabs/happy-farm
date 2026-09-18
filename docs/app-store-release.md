@@ -84,12 +84,18 @@ Firebase project는 `happy-farm-tycoon`을 사용합니다. iOS 앱을 Firebase 
 apps/mobile/ios/HappyFarmMobile/GoogleService-Info.plist
 ```
 
-현재 iOS AdMob 값은 다음으로 확정했습니다.
+현재 iOS AdMob 값은 다음으로 확정했습니다. 유지 게시자 계정
+`pub-9932778305312246` 소속이며, 중앙 원장은
+[seorilabs/.github#167](https://github.com/seorilabs/.github/issues/167)입니다.
 
-- App ID: `ca-app-pub-2444587584524186~5266256811`
-- 보상형 광고 단위 ID: `ca-app-pub-2444587584524186/5623525630`
+- App ID: `ca-app-pub-9932778305312246~1809085234`
+- 보상형 광고 단위 ID(`shared`): `ca-app-pub-9932778305312246/4017638142`
 
 `apps/mobile/app.json`, `apps/mobile/src/ads/config.ts`, `apps/mobile/ios/HappyFarmMobile/Info.plist`가 같은 값을 기준으로 합니다.
+
+전면 광고 단위는 중앙 원장에 아직 발급 기록이 없습니다. 발급 전까지
+`apps/mobile/src/ads/config.ts`의 전면 unit은 빈 값으로 두고, 컨트롤러가
+미지원으로 동작해 노출되지 않습니다.
 
 광고 SDK, Firebase Analytics, Crashlytics, Remote Config 사용 여부는 App Store Connect 앱 개인정보 답변에 반영해야 합니다.
 
