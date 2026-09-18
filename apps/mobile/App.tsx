@@ -3,6 +3,7 @@ import { AppState } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { FarmGame, detectRuntimeLocale } from '../../packages/farm-ui/src';
+import { useAdMobInterstitialAd } from './src/ads/adMobInterstitialAd';
 import { useAdMobRewardedAd } from './src/ads/adMobRewardedAd';
 import { mobileFarmArt } from './src/art/farmArt';
 import { useMobileFarmAudio } from './src/audio/farmAudio';
@@ -67,6 +68,8 @@ function App() {
         notifications={mobileHarvestNotifications}
         persistence={mobileFarmPersistence}
         preferredLocale={detectRuntimeLocale()}
+        interstitialPlacements={{ returnWelcomeBack: true, progressionMilestone: true }}
+        useInterstitialAd={useAdMobInterstitialAd}
         useRewardedAd={useAdMobRewardedAd}
       />
       <ForceUpdateGate remoteConfigReady={remoteConfigReady} />

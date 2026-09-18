@@ -72,7 +72,7 @@ function Page() {
         audio={audio}
         interstitialPlacements={{
           returnWelcomeBack: true,
-          progressionMilestone: false,
+          progressionMilestone: true,
         }}
         persistence={appsInTossPersistence}
         preferredLocale={detectRuntimeLocale()}

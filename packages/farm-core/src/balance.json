@@ -55,7 +55,10 @@
     "rewardedGoldMaxUsesPerWindow": 3,
     "rewardedGoldDailyLimit": 4,
     "rewardedGoldScaling": {
-      "nextGoalRatio": 0.05
+      "agentPurpose": "Rewarded-gold payout scale. The payout starts at nextGoalRatio of the next area unlock cost (a progression-relative floor), but that floor alone made one ad worth less than a few seconds of active play from the mid game on. productivityMinutes converts the player's own offline rate (planted plots only, same efficiencyRatio as offlineIncome) into an equivalent payout so the reward tracks what the farm actually earns. nextGoalCapRatio bounds the result against the same goal so a fast-cycling early farm cannot mint past the progression curve: at 0.25 a full day of rewarded ads (rewardedGoldDailyLimit) is worth at most one area unlock.",
+      "nextGoalRatio": 0.05,
+      "productivityMinutes": 10,
+      "nextGoalCapRatio": 0.25
     },
     "harvestBonusMultiplier": 2,
     "harvestBonusAdCooldownMs": 43200000,
