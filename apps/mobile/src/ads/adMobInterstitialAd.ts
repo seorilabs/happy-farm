@@ -9,6 +9,12 @@ import { ensureMobilePlatformSession, mobilePlatformAds } from '../platformEvent
 
 export const MOBILE_INTERSTITIAL_LOAD_TIMEOUT_MS = 10_000;
 export const MOBILE_INTERSTITIAL_SHOW_TIMEOUT_MS = 60_000;
+// 로드 실패(오프라인·no-fill·SDK 오류) 뒤 재시도 간격. FarmGame은 전면 컨트롤러의
+// reloadAd를 부르지 않으므로, 여기서 다시 시도하지 않으면 첫 로드가 실패한 세션은
+// 끝까지 notReady로 굳어 전면광고가 한 번도 뜨지 않는다. 연속 실패는 지수적으로
+// 간격을 벌려 오프라인 기기가 로드를 반복하지 않게 한다.
+export const MOBILE_INTERSTITIAL_RETRY_BASE_MS = 30_000;
+export const MOBILE_INTERSTITIAL_RETRY_MAX_MS = 10 * 60_000;
 
 type InterstitialInstance = {
   token: symbol;
@@ -60,6 +66,8 @@ export function useAdMobInterstitialAd() {
   const pendingShowRef = useRef<PendingShow | null>(null);
   const isAdReadyRef = useRef(false);
   const [isAdReady, setIsAdReady] = useState(false);
+  const retryAttemptRef = useRef(0);
+  const retryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const updateReady = useCallback((ready: boolean) => {
     isAdReadyRef.current = ready;
@@ -119,6 +127,25 @@ export function useAdMobInterstitialAd() {
 
     let loadTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
+    // 노출 중이 아니고 아직 준비되지 않았을 때만 한 번 더 로드한다. 이미 예약된
+    // 재시도가 있으면 겹쳐 잡지 않는다.
+    const scheduleRetry = () => {
+      if (retryTimeoutRef.current != null) {
+        return;
+      }
+      const delay = Math.min(
+        MOBILE_INTERSTITIAL_RETRY_BASE_MS * 2 ** retryAttemptRef.current,
+        MOBILE_INTERSTITIAL_RETRY_MAX_MS
+      );
+      retryAttemptRef.current += 1;
+      retryTimeoutRef.current = setTimeout(() => {
+        retryTimeoutRef.current = null;
+        if (pendingShowRef.current == null && !isAdReadyRef.current) {
+          rotate();
+        }
+      }, delay);
+    };
+
     const createInstance = (): InterstitialInstance => {
       const token = Symbol('mobile-interstitial-instance');
       const ad = InterstitialAd.createForAdRequest(adUnitId, {
@@ -135,6 +162,7 @@ export function useAdMobInterstitialAd() {
             clearTimeout(loadTimeoutId);
             loadTimeoutId = null;
           }
+          retryAttemptRef.current = 0;
           updateReady(true);
           return;
         }
@@ -147,7 +175,13 @@ export function useAdMobInterstitialAd() {
           const reason = normalizeAdFailureReason(payload);
           recordNonFatalError(new Error(reason), 'ads:interstitial:error');
           updateReady(false);
+          const wasShowing = pendingShowRef.current?.token === token;
+          // 노출 중 실패는 finishPendingShow가 인스턴스를 회전해 다시 로드한다.
+          // 로드 단계 실패는 그 경로를 타지 않으므로 여기서 재시도를 예약한다.
           finishPendingShow(token, { status: 'failed', error: reason });
+          if (!wasShowing) {
+            scheduleRetry();
+          }
         }
       });
 
@@ -168,15 +202,18 @@ export function useAdMobInterstitialAd() {
       }
       // 로드가 끝내 오지 않아도 ready가 true로 굳지 않게 한다. 실패는 다음 회전에서
       // 다시 시도되므로 별도 재시도 타이머를 두지 않는다.
+      // 로드가 끝내 오지 않는 경우(에러 이벤트조차 없는 경우)도 재시도로 회수한다.
       loadTimeoutId = setTimeout(() => {
         if (instanceRef.current?.token === next.token && !isAdReadyRef.current) {
           updateReady(false);
+          scheduleRetry();
         }
       }, MOBILE_INTERSTITIAL_LOAD_TIMEOUT_MS);
       try {
         next.ad.load();
       } catch {
         updateReady(false);
+        scheduleRetry();
       }
     };
 
@@ -188,6 +225,11 @@ export function useAdMobInterstitialAd() {
       if (loadTimeoutId != null) {
         clearTimeout(loadTimeoutId);
       }
+      if (retryTimeoutRef.current != null) {
+        clearTimeout(retryTimeoutRef.current);
+        retryTimeoutRef.current = null;
+      }
+      retryAttemptRef.current = 0;
       const pendingShow = pendingShowRef.current;
       if (pendingShow != null) {
         finishPendingShow(pendingShow.token, { status: 'dismissed' }, { reload: false });
@@ -237,6 +279,12 @@ export function useAdMobInterstitialAd() {
     if (isAdReadyRef.current) {
       return;
     }
+    // 예약된 재시도를 기다리지 않고 즉시 다시 시도한다.
+    if (retryTimeoutRef.current != null) {
+      clearTimeout(retryTimeoutRef.current);
+      retryTimeoutRef.current = null;
+    }
+    retryAttemptRef.current = 0;
     rotateRef.current?.();
   }, []);
 
