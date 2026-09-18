@@ -155,7 +155,7 @@
     },
     "notes": [
       "App Store Connect 앱 개인정보 답변은 심사 통과 기준으로 완료됨.",
-      "Firebase Analytics, Firebase Crashlytics, Firebase Remote Config, Firebase Auth, Firestore, AdMob SDK 구성 변경 시 App Store Connect 앱 개인정보 답변을 재검토합니다.",
+      "Firebase Analytics, Firebase Auth(Platform 세션), AdMob SDK 구성 변경 시 App Store Connect 앱 개인정보 답변을 재검토합니다.",
       "tracking=yes 기준을 유지합니다. IDFA/ATT 또는 비개인화 광고 정책을 바꾸면 콘솔 답변과 PrivacyInfo.xcprivacy를 함께 확인합니다."
     ]
   },

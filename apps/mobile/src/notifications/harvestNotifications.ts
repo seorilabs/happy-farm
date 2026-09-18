@@ -6,8 +6,8 @@ import notifee, {
   type TimestampTrigger,
 } from '@notifee/react-native';
 
+import { logDevWarning } from '../../../../packages/farm-core/src';
 import type { FarmGameNotifications, FarmReminderKind } from '../../../../packages/farm-ui/src';
-import { recordNonFatalError } from '../firebase/crashlytics';
 
 const HARVEST_READY_NOTIFICATION_ID = 'happy-farm-harvest-ready';
 const HARVEST_READY_CHANNEL_ID = 'harvest-ready';
@@ -51,7 +51,7 @@ export const mobileHarvestNotifications: FarmGameNotifications = {
       });
       return isAuthorized(settings.authorizationStatus);
     } catch (error) {
-      recordNonFatalError(error, 'notifications:permission');
+      logDevWarning('[notifications] permission failed', error);
       return false;
     }
   },
@@ -80,7 +80,7 @@ export const mobileHarvestNotifications: FarmGameNotifications = {
         trigger
       );
     } catch (error) {
-      recordNonFatalError(error, 'notifications:schedule_harvest_ready');
+      logDevWarning('[notifications] schedule harvest failed', error);
     }
   },
 
@@ -88,7 +88,7 @@ export const mobileHarvestNotifications: FarmGameNotifications = {
     try {
       await notifee.cancelTriggerNotification(HARVEST_READY_NOTIFICATION_ID);
     } catch (error) {
-      recordNonFatalError(error, 'notifications:cancel_harvest_ready');
+      logDevWarning('[notifications] cancel harvest failed', error);
     }
   },
 
@@ -117,7 +117,7 @@ export const mobileHarvestNotifications: FarmGameNotifications = {
         trigger
       );
     } catch (error) {
-      recordNonFatalError(error, 'notifications:schedule_reminder');
+      logDevWarning('[notifications] schedule reminder failed', error);
     }
   },
 
@@ -125,7 +125,7 @@ export const mobileHarvestNotifications: FarmGameNotifications = {
     try {
       await notifee.cancelTriggerNotification(COMEBACK_REMINDER_NOTIFICATION_IDS[kind]);
     } catch (error) {
-      recordNonFatalError(error, 'notifications:cancel_reminder');
+      logDevWarning('[notifications] cancel reminder failed', error);
     }
   },
 };
@@ -145,7 +145,7 @@ export function registerHarvestNotificationOpenTracking(onOpen: () => void): () 
       }
     })
     .catch((error: unknown) => {
-      recordNonFatalError(error, 'notifications:initial_notification');
+      logDevWarning('[notifications] initial notification failed', error);
     });
 
   return notifee.onForegroundEvent(({ type, detail }) => {

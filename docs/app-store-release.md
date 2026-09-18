@@ -97,7 +97,7 @@ apps/mobile/ios/HappyFarmMobile/GoogleService-Info.plist
 `apps/mobile/src/ads/config.ts`의 전면 unit은 빈 값으로 두고, 컨트롤러가
 미지원으로 동작해 노출되지 않습니다.
 
-광고 SDK, Firebase Analytics, Crashlytics 사용 여부는 App Store Connect 앱 개인정보 답변에 반영해야 합니다.
+광고 SDK와 Firebase Analytics 사용 여부는 App Store Connect 앱 개인정보 답변에 반영해야 합니다. Crashlytics와 Firestore 클라우드 저장은 제거했으므로 답변에서 빼야 합니다.
 
 Firebase Analytics는 유지하고 저빈도 핵심 이벤트만 익명 Platform BigQuery sink에도
 복제합니다. Platform에는 OS, 앱 버전, locale과 허용 이벤트 파라미터만 보내며 Firebase
@@ -127,7 +127,7 @@ UID, GA4 client ID, token은 보내지 않습니다. 상세 경계는 `docs/fire
 
 앱 개인정보의 `대략적인 위치`는 AdMob/Firebase 기준으로 수집됨으로 보고, 사용 목적은 `타사 광고`와 `분석`만 선택합니다. 게임 기능 자체는 위치를 사용하지 않으므로 `앱 기능`, `제품 개인 맞춤화`, `개발자의 광고 또는 마케팅`, `기타 목적`은 선택하지 않습니다. 추적 목적 사용 여부는 AdMob 광고 SDK가 타깃 광고 또는 광고 측정 목적으로 타사 데이터와 결합될 수 있으므로 `예`로 답변합니다.
 
-Firebase Anonymous Auth와 Firestore 클라우드 저장 백업을 사용하는 빌드는 앱 생성 사용자 식별자와 게임 진행 저장 데이터를 앱 기능(저장 복구) 목적으로 수집한다고 답변합니다. 사용자가 직접 로그인하지 않으므로 심사 정보의 `requiresSignIn`은 `no`를 유지하지만, App Privacy 데이터 유형은 UID/게임 진행 데이터 수집을 반영해야 합니다.
+Firebase Anonymous Auth는 계속 사용합니다. 클라우드 저장을 걷어낸 뒤에도 Seorilabs Platform 세션(광고 정책·claim, analytics relay, IAP)의 자격증명이기 때문입니다. 따라서 앱 생성 사용자 식별자 수집은 답변에 유지하되, **게임 진행 저장 데이터는 더 이상 수집하지 않습니다**(Firestore 클라우드 저장 제거). 사용자가 직접 로그인하지 않으므로 심사 정보의 `requiresSignIn`은 `no`를 유지합니다.
 
 농장 알림은 첫 수확 뒤 안내에서 사용자가 명시적으로 수락하거나 설정에서 개별 토글을 켠 경우에만 iOS 로컬 알림 권한을 요청합니다. 수락 시 수확 시점과 데일리 보너스·오늘의 작물 복귀 리마인더가 함께 활성화되며, 설정에서 각각 끌 수 있습니다. FCM/APNs 원격 push token을 서버로 보내지 않고 기기 로컬 trigger notification만 예약하므로 App Privacy 수집 데이터 항목을 추가하지 않습니다.
 

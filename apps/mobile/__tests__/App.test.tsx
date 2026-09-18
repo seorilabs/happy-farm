@@ -84,22 +84,6 @@ jest.mock('react-native-iap', () => ({
   })),
 }));
 
-jest.mock('@react-native-firebase/crashlytics', () => ({
-  getCrashlytics: jest.fn(() => ({})),
-  log: jest.fn(),
-  recordError: jest.fn(),
-  setCrashlyticsCollectionEnabled: jest.fn(() => Promise.resolve()),
-}));
-
-jest.mock('@react-native-firebase/firestore', () => ({
-  deleteDoc: jest.fn(() => Promise.resolve()),
-  doc: jest.fn((_firestore, ...path: string[]) => ({ path })),
-  getDoc: jest.fn(() => Promise.resolve({ exists: () => false, data: () => null })),
-  getFirestore: jest.fn(() => ({})),
-  serverTimestamp: jest.fn(() => 'server-timestamp'),
-  setDoc: jest.fn(() => Promise.resolve()),
-}));
-
 jest.mock('@notifee/react-native', () => ({
   __esModule: true,
   default: {

@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import mobileAds, { AdEventType, InterstitialAd } from 'react-native-google-mobile-ads';
 
-import { normalizeAdFailureReason, type RewardedAdShowResult } from '../../../../packages/farm-core/src';
+import { logDevWarning, normalizeAdFailureReason, type RewardedAdShowResult } from '../../../../packages/farm-core/src';
 import { getInterstitialAdUnitId } from './config';
-import { recordNonFatalError } from '../firebase/crashlytics';
 import { ensureMobilePlatformSession, mobilePlatformAds } from '../platformEvents';
 
 export const MOBILE_INTERSTITIAL_LOAD_TIMEOUT_MS = 10_000;
@@ -119,7 +118,7 @@ export function useAdMobInterstitialAd() {
     void mobileAds()
       .initialize()
       .catch((error: unknown) => {
-        recordNonFatalError(error, 'ads:initialize');
+        logDevWarning('[ads] initialize failed', error);
       });
 
     let loadTimeoutId: ReturnType<typeof setTimeout> | null = null;
@@ -170,7 +169,7 @@ export function useAdMobInterstitialAd() {
         }
         if (type === AdEventType.ERROR) {
           const reason = normalizeAdFailureReason(payload);
-          recordNonFatalError(new Error(reason), 'ads:interstitial:error');
+          logDevWarning('[ads] interstitial error', reason);
           updateReady(false);
           const wasShowing = pendingShowRef.current?.token === token;
           // 노출 중 실패는 finishPendingShow가 인스턴스를 회전해 다시 로드한다.

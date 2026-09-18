@@ -2,7 +2,7 @@
 
 Firebase project는 `.firebaserc`의 `happy-farm-tycoon`을 기본값으로 사용합니다.
 
-- Mobile: Analytics, Crashlytics, Anonymous Auth, Firestore cloud-save backup
+- Mobile: Analytics(GA4)와 Platform 세션용 Anonymous Auth
 - AppsInToss: Firebase Web App 등록 완료. AIT target은 Firebase Web SDK를 `apps/ait/src/firebaseWeb/*`에서만 import합니다.
 - 미사용: Cloud Functions, Cloud Messaging
 - Mobile local notifications: Notifee 기반 기기 로컬 농장 알림(수확·데일리 보너스·오늘의 작물). FCM token이나 서버 푸시는 사용하지 않습니다.
@@ -100,7 +100,7 @@ Firebase Remote Config는 사용하지 않습니다. 광고 on/off, 수집 토�
 
 - 광고 빈도·cap: `packages/farm-core/src/balance.json`이 정본입니다. 바꾸려면
   balance를 고쳐 배포합니다.
-- Analytics·Crashlytics 수집: 빌드에서 항상 켭니다.
+- Analytics 수집: 빌드에서 항상 켭니다.
 - 광고 단위·그룹 ID: `apps/mobile/src/ads/config.ts`와 `apps/ait/src/pages/index.tsx`의
   상수입니다. AdMob 식별자의 정본은 중앙 원장
   [seorilabs/.github#167](https://github.com/seorilabs/.github/issues/167)입니다.
@@ -132,48 +132,40 @@ Firebase Remote Config는 사용하지 않습니다. 광고 on/off, 수집 토�
 - Firebase Cloud Messaging, 서버 저장 token, 원격 push campaign은 사용하지 않습니다.
 - 각 알림을 끄거나 예약 대상이 없으면 해당 로컬 trigger notification을 취소합니다.
 
-## 익명 Auth와 클라우드 저장 백업
+## 익명 Auth (Platform 세션)
 
-모바일 앱은 Firebase 설정이 있으면 Firebase Anonymous Auth로 앱 설치 단위 UID를 확보한 뒤 Firestore에 현재 저장 데이터를 백업합니다. Firebase 설정 파일이 없으면 백업 경로 전체가 비활성이라 게임은 로컬 저장만 사용합니다.
+Firebase에서 쓰는 기능은 **GA4 하나**입니다. Crashlytics, Firestore 클라우드 저장,
+Remote Config는 모두 제거했습니다.
 
-저장 원칙:
+다만 **Firebase Anonymous Auth는 남습니다.** 클라우드 저장용이 아니라 Seorilabs
+Platform 세션의 자격증명이기 때문입니다. `ensureMobilePlatformSession()`이 Firebase
+ID token을 짧은 Platform 세션으로 교환하고, 그 세션 위에서 다음이 동작합니다.
 
-- 로컬 저장이 계속 권위 상태입니다.
-- Firestore 저장본은 복구용 백업본이며 서버 검증/치트 방지 원장으로 사용하지 않습니다.
-- 앱 시작 시 로컬 저장이 없고 같은 Firebase Auth 세션의 Firestore 백업이 있으면 로컬 저장으로 복원합니다.
-- 앱 삭제, 기기 초기화, 계정 linking 없는 기기 이전까지 보장하지 않습니다. 그 범위는 Google/Apple 계정 linking을 별도 기능으로 추가할 때 다룹니다.
-- `packages/farm-core`와 `packages/farm-ui`에는 Firebase SDK를 import하지 않고, 모바일 어댑터가 Auth/Firestore를 담당합니다.
+- 보상형 광고의 정책 조회와 claim 생성·확인(AdMob SSV 검증)
+- Platform analytics relay
+- 인앱결제(광고 제거) 경로
 
-Firestore 경로:
+즉 Auth를 함께 걷어내면 프로덕션 광고 수익 경로가 멈춥니다.
 
-```text
-users/{uid}/saves/current
-```
+### 저장
 
-저장 필드:
+저장은 로컬 하나입니다. 서버 사본이 없습니다.
 
-```text
-schemaVersion = happy-farm-save-v1
-payloadJson = serialized GameState
-payloadBytes = approximate UTF-8 byte size
-saveHash = client-side hash for diagnostics
-clientRevision = client-side incrementing revision
-clientUpdatedAtMs = client wall-clock timestamp
-deviceId = app-install-scoped device id
-appVersion = releaseInfo.versionName
-platform = mobile
-updatedAt = Firestore server timestamp
-```
+- 게임 진행 데이터는 기기 밖으로 나가지 않습니다.
+- 기기를 바꾸면 진행이 이어지지 않습니다. 계정 연동으로 이어가려면 Google/Apple
+  계정 linking을 별도 기능으로 설계합니다.
+- `packages/farm-core`와 `packages/farm-ui`에는 Firebase SDK를 import하지 않습니다.
 
-Firestore 보안 규칙은 `firestore.rules`에 두며, `request.auth.uid == {uid}`인 사용자만 자신의 `users/{uid}/saves/current` 문서를 읽고 쓸 수 있습니다. 저장 payload는 900KB 이하로 제한합니다.
+### 잃은 것
 
-Auth/Firestore 배포:
+원격 설정 제거(위)에 더해 **크래시 리포팅이 없습니다.** 출시 후 문제를 감지할 수단은
+GA4 이벤트뿐이며, 스택 트레이스나 비치명적 오류는 수집되지 않습니다. 내부에서 쓰던
+`recordNonFatalError` 호출은 개발 빌드에서만 경고를 남기는 `logDevWarning`으로
+바뀌었고, 릴리스 빌드에서는 no-op입니다.
 
-```bash
-firebase deploy --only firestore:rules,firestore:indexes --project happy-farm-tycoon
-```
+과거 클라우드 백업이 켜져 있던 기간에 Firestore에 쌓인 사용자 문서는 앱에서 더 이상
+읽지 않습니다. 그 데이터 정리는 별도 운영 작업입니다.
 
-운영 전 Firebase Console에서 Firestore API/database와 Anonymous provider가 활성화되어 있어야 합니다. 현재 CLI 계정은 `happy-farm-tycoon`의 `firestore.googleapis.com` 활성화 권한이 없으므로, 프로젝트 owner가 먼저 Firestore API를 켜야 합니다.
 
 ## 검증
 
@@ -210,5 +202,3 @@ adb shell am start -n com.seorilabs.happyfarm.debug/com.seorilabs.happyfarm.Main
 ```
 
 Firebase Console의 Analytics DebugView에서 `game_start`, `farm_main_screen` 이벤트가 보이는지 확인합니다.
-
-Crashlytics 최초 연결 확인은 실제 기기나 에뮬레이터에서 non-fatal smoke test를 기록한 뒤 Firebase Console에 수집되는지 확인합니다. 실제 crash 테스트는 릴리즈 직전 별도 임시 버튼이나 디버그 메뉴로만 수행합니다.

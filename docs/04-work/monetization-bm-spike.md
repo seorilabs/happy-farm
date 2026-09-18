@@ -46,7 +46,7 @@ happy-farm은 현재 **광고 only** 수익화다(보상형 5지면 + 전면 2�
 |---|---|---|
 | 스토어 상품 등록(Play/App Store) | 1개 비소모성 | 패스 상품(기간/시즌) + 갱신 운영 |
 | 결제/영수증/복원 | 필요(공통 토대) | 필요(공통 토대) |
-| Entitlement 영속화 | 단순(boolean, 세이브/클라우드) | 복잡(시즌·티어·클레임·만료 상태머신) |
+| Entitlement 영속화 | 단순(boolean, 로컬 세이브) | 복잡(시즌·티어·클레임·만료 상태머신) |
 | 게임 로직 변경 | 최소(광고 토글 재사용) | 큼(진행도→티어 매핑, 보상 지급, UI) |
 | 라이브옵스 | 없음 | 큼(시즌 콘텐츠 주기적 공급) |
 | AIT(Toss) 결제 | **미확인**(아래 4절) | **미확인** |
@@ -71,8 +71,8 @@ happy-farm은 현재 **광고 only** 수익화다(보상형 5지면 + 전면 2�
 ## 5. 후속 구현 범위 (Phase 정의)
 도입 결정 시 아래 단위로 이슈를 분할한다(본 스파이크의 산출물).
 - **P0 공통 결제 토대**: `react-native-iap` 통합, 상품 조회, 구매/복원, 영수증 검증(서버 또는 스토어
-  단), `entitlements`(예: `adsRemoved: boolean`) 게임 상태/세이브·클라우드 동기화.
-  (`apps/mobile`, `packages/farm-core/src/types.ts` 정규화, 클라우드 백업)
+  단), `entitlements`(예: `adsRemoved: boolean`) 게임 상태/로컬 세이브 반영.
+  (`apps/mobile`, `packages/farm-core/src/types.ts` 정규화)
 - **P1 광고 제거 상품(A)**: 스토어 상품 1개, 구매 플로우 UI(상점/설정), 구매 시 광고 전역 off
   (광고 컨트롤러의 `isAdSupported`에 물리는 로컬 entitlement), 복원 진입점.
 - **P2 분석**: `iap_impression`/`purchase`/`purchase_restored`/`purchase_failed`(상품ID·가격·placement),

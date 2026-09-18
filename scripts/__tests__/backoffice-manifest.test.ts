@@ -165,7 +165,7 @@ describe('행복한 농장 전용 백오피스 manifest', () => {
   it('runbook이 세이브 권위·직접 수정 금지·D-1 지연·실행 경계를 명시한다', () => {
     const runbook = fs.readFileSync(path.join(root, 'docs/04-work/backoffice-operations.md'), 'utf8');
 
-    expect(runbook).toContain('로컬 세이브가 항상 권위 원본이다');
+    expect(runbook).toContain('로컬 세이브가 유일한 저장소다');
     expect(runbook).toContain('Firebase와 Firestore를 직접 변경하지 않는다');
     expect(runbook).toContain('일별 export의 확정 구간(D-1)');
     expect(runbook).toContain('실제 변경 실행기는 아직 연결되지 않았다');

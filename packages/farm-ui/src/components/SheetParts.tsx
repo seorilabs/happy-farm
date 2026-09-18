@@ -139,43 +139,6 @@ export function AdRewardCard({
   );
 }
 
-// Settings cloud-backup section: description + last-result notice + backup/restore
-// buttons. The caller (FarmGame) owns the actual actions and status mapping; this
-// only renders. Both buttons are disabled while busy to prevent re-entry.
-export function CloudSaveSection({
-  title,
-  desc,
-  notice,
-  backupLabel,
-  restoreLabel,
-  busy,
-  onBackup,
-  onRestore,
-}: {
-  title: string;
-  desc: string;
-  notice: string | null;
-  backupLabel: string;
-  restoreLabel: string;
-  busy: boolean;
-  onBackup: () => void;
-  onRestore: () => void;
-}) {
-  return (
-    <View>
-      <Text style={sheetPartStyles.sheetSectionTitle}>{title}</Text>
-      <Text style={sheetPartStyles.settingDesc}>{desc}</Text>
-      {notice != null ? (
-        <Text style={sheetPartStyles.cloudSaveNotice} accessibilityLiveRegion="polite">
-          {notice}
-        </Text>
-      ) : null}
-      <SheetAction label={backupLabel} disabled={busy} onPress={onBackup} />
-      <SheetAction label={restoreLabel} secondary disabled={busy} onPress={onRestore} />
-    </View>
-  );
-}
-
 export function SettingToggle({
   label,
   desc,
@@ -320,7 +283,7 @@ export const sheetPartStyles = StyleSheet.create({
     lineHeight: 18,
     fontWeight: '600',
   },
-  cloudSaveNotice: {
+  sheetNotice: {
     marginTop: 8,
     color: '#6b4a22',
     fontSize: 13,

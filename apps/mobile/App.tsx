@@ -16,7 +16,7 @@ import {
   mobileHarvestNotifications,
   registerHarvestNotificationOpenTracking,
 } from './src/notifications/harvestNotifications';
-import { mobileCloudSave, mobileFarmPersistence } from './src/storage/farmPersistence';
+import { mobileFarmPersistence } from './src/storage/farmPersistence';
 import {
   ensureMobilePlatformSession,
   handleMobilePlatformAppStateChange,
@@ -58,7 +58,6 @@ function App() {
         analytics={mobileFarmAnalytics}
         art={mobileFarmArt}
         audio={farmAudio}
-        cloudSave={mobileCloudSave}
         market="mobile"
         notifications={mobileHarvestNotifications}
         persistence={mobileFarmPersistence}

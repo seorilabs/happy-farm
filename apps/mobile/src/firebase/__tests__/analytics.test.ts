@@ -4,7 +4,6 @@ jest.mock('@react-native-firebase/analytics', () => ({
 }));
 
 jest.mock('../app', () => ({ isFirebaseConfigured: jest.fn(() => true) }));
-jest.mock('../crashlytics', () => ({ recordNonFatalError: jest.fn() }));
 jest.mock('../../platformEvents', () => ({ trackMobilePlatformEvent: jest.fn() }));
 
 import { mobileFarmAnalytics } from '../analytics';

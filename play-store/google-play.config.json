@@ -56,7 +56,7 @@
     "contentRating": "completed_in_play_console",
     "targetAudience": "completed_in_play_console",
     "dataSafety": "completed_in_play_console",
-    "dataSafetyNotes": "Firebase Anonymous Auth app-generated user ID and Firestore cloud-save gameplay progress are collected for app functionality/save backup. They are not used for advertising tracking.",
+    "dataSafetyNotes": "Firebase Anonymous Auth app-generated user ID is collected for app functionality: it authenticates the Seorilabs Platform session used by rewarded-ad policy/claim checks, analytics relay, and in-app purchases. It is not used for advertising tracking. Gameplay progress never leaves the device — cloud save was removed, so the only save is local.",
     "ads": "yes",
     "koreaDistribution": "yes",
     "koreaGameRating": "not_required"

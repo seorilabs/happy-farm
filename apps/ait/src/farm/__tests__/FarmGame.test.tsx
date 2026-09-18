@@ -3127,47 +3127,6 @@ describe('FarmGame UI flow', () => {
       fireEvent.press(screen.getByTestId('onboarding-reward-confirm'));
       await waitFor(() => expect(screen.getByText(messages.sheetTitleDailyBonus)).toBeTruthy());
     });
-
-    test('replaces the local onboarding step when an incomplete cloud save is restored', async () => {
-      const restoredState: GameState = {
-        ...createInitialState(),
-        // #427: plant 재개는 빈 밭 전제(작물이 있으면 곧장 harvest로 넘어간다).
-        plots: createEmptyPlots(),
-        onboardingCompleted: false,
-        onboardingStep: 'plant',
-      };
-      const restoreFromCloud = jest.fn(async () => ({
-        status: 'restored' as const,
-        clientRevision: 2,
-        gameState: restoredState,
-      }));
-      const screen = await renderOnboardingGame(createRewardStepState(), {
-        cloudSave: {
-          isSupported: true,
-          backupNow: jest.fn(async () => ({ status: 'backed_up' as const, clientRevision: 1 })),
-          restoreFromCloud,
-        },
-      });
-      await waitFor(() => expect(screen.getByText(messages.onboardingRewardTitle)).toBeTruthy());
-
-      fireEvent.press(screen.getByLabelText('설정'));
-      fireEvent.press(screen.getByText(messages.cloudRestoreAction));
-
-      await waitFor(() => expect(restoreFromCloud).toHaveBeenCalledTimes(1));
-      await waitFor(() => expect(screen.getByText(messages.onboardingPlantTitle)).toBeTruthy());
-      expect(screen.queryByText(messages.onboardingRewardTitle)).toBeNull();
-      fireEvent.press(screen.getAllByText('빈 밭')[0]!);
-      await waitFor(() => expect(screen.getByText(messages.onboardingHarvestTitle)).toBeTruthy());
-      await act(async () => {
-        jest.advanceTimersByTime(2500);
-      });
-      fireEvent.press(await screen.findByText('GET'));
-      await waitFor(() => expect(screen.getByText(messages.onboardingRewardTitle)).toBeTruthy());
-      fireEvent.press(screen.getByTestId('first-harvest-overlay'));
-      fireEvent.press(screen.getByTestId('onboarding-reward-confirm'));
-      await waitFor(() => expect(screen.getByText(messages.sheetTitleDailyBonus)).toBeTruthy());
-    });
-
     test('shows skip only at harvest and requires explicit confirmation', async () => {
       // #159/#427: 건너뛰기는 harvest 단계에서만 노출한다(reward는 별도 확인 버튼).
       // 첫 파종이 자동화된 뒤 신규 유저의 시작 단계가 harvest이므로 여기서 바로 노출된다.
@@ -4488,43 +4447,6 @@ describe('FarmGame UI flow', () => {
       expect(summaries.every(([, params]) => params.window_seconds >= 1 && params.window_seconds < 60)).toBe(true);
     });
 
-    test('flushes pending buckets with the old context before cloud restore', async () => {
-      const track = jest.fn();
-      const restoreFromCloud = jest.fn(async () => ({
-        status: 'restored' as const,
-        clientRevision: 2,
-        gameState: createInitialState(),
-      }));
-      const screen = await renderGame(
-        { ...createCropReadyBatchState(), gold: 777 },
-        {
-          analytics: createFarmAnalytics(track),
-          cloudSave: {
-            isSupported: true,
-            backupNow: jest.fn(async () => ({ status: 'backed_up' as const, clientRevision: 1 })),
-            restoreFromCloud,
-          },
-        }
-      );
-
-      await act(async () => {
-        jest.advanceTimersByTime(4_250);
-      });
-      fireEvent.press(screen.getByLabelText(getFarmMessages().settingsAccessibilityLabel));
-      fireEvent.press(screen.getByText(getFarmMessages().cloudRestoreAction));
-
-      await waitFor(() => expect(restoreFromCloud).toHaveBeenCalledTimes(1));
-      await waitFor(() =>
-        expect(track.mock.calls.filter(([name]) => name === 'crop_ready_summary')).toHaveLength(2)
-      );
-      const summaries = track.mock.calls.filter(([name]) => name === 'crop_ready_summary');
-      expect(summaries.every(([, params]) => params.gold === 777)).toBe(true);
-
-      await act(async () => {
-        jest.advanceTimersByTime(CROP_READY_SUMMARY_INTERVAL_MS);
-      });
-      expect(track.mock.calls.filter(([name]) => name === 'crop_ready_summary')).toHaveLength(2);
-    });
   });
 
   test('never drives the growth bar with a full-grow-time animation (legend crops crashed iOS)', async () => {
@@ -6142,36 +6064,6 @@ describe('FarmGame UI flow', () => {
       );
     });
 
-    test('emits cloud_restore before a successful restore replaces state', async () => {
-      const track = jest.fn();
-      const messages = getFarmMessages(DEFAULT_LOCALE);
-      const restoreFromCloud = jest.fn(async () => ({
-        status: 'restored' as const,
-        clientRevision: 2,
-        gameState: createInitialState(),
-      }));
-      const screen = await renderGame(createLateGameState(), {
-        analytics: createFarmAnalytics(track),
-        cloudSave: {
-          isSupported: true,
-          backupNow: jest.fn(async () => ({ status: 'backed_up' as const, clientRevision: 1 })),
-          restoreFromCloud,
-        },
-      });
-
-      fireEvent.press(screen.getAllByText('GET')[0]!);
-      await waitFor(() => expect(track).toHaveBeenCalledWith('crop_harvested', expect.anything()));
-      fireEvent.press(screen.getByLabelText(messages.settingsAccessibilityLabel));
-      fireEvent.press(screen.getByText(messages.cloudRestoreAction));
-
-      await waitFor(() => expect(restoreFromCloud).toHaveBeenCalledTimes(1));
-      await waitFor(() =>
-        expect(comboEvents(track)).toEqual([
-          expect.objectContaining({ manual_harvest_count: 1, end_reason: 'cloud_restore' }),
-        ])
-      );
-    });
-
     test('does not emit from real unmount cleanup', async () => {
       const track = jest.fn();
       const screen = await renderGame(createLateGameState(), { analytics: createFarmAnalytics(track) });
@@ -7522,51 +7414,6 @@ describe('NextGoalBar', () => {
       await waitFor(() =>
         expect(mockPersistence.writePersistedGameState).toHaveBeenCalledWith(
           expect.objectContaining({ harvestNotificationPromptSeen: true })
-        )
-      );
-    });
-
-    test('accepts a new prompt generation after cloud restore and ignores the retired generation', async () => {
-      const notifications = createNotificationsMock();
-      const restoreFromCloud = jest.fn(async () => ({
-        status: 'restored' as const,
-        clientRevision: 2,
-        gameState: createPostAhaState(),
-      }));
-      const screen = await renderGame(createPostAhaState(), {
-        notifications,
-        cloudSave: {
-          isSupported: true,
-          backupNow: jest.fn(async () => ({ status: 'backed_up' as const, clientRevision: 1 })),
-          restoreFromCloud,
-        },
-      });
-
-      const retiredAccept = await waitFor(() => screen.getByTestId('notification-prompt-accept'));
-      fireEvent.press(screen.getByTestId('notification-prompt-decline'));
-      await waitFor(() => expect(screen.queryByTestId('notification-prompt-card')).toBeNull());
-
-      fireEvent.press(screen.getByLabelText(promptMessages.settingsAccessibilityLabel));
-      fireEvent.press(screen.getByText(promptMessages.cloudRestoreAction));
-      await waitFor(() => expect(restoreFromCloud).toHaveBeenCalledTimes(1));
-      fireEvent.press(screen.getByLabelText(promptMessages.sheetCloseAccessibilityLabel));
-      await waitFor(() => expect(screen.getByTestId('notification-prompt-card')).toBeTruthy());
-
-      await act(async () => {
-        fireEvent.press(retiredAccept);
-        await Promise.resolve();
-      });
-      expect(notifications.requestPermission).not.toHaveBeenCalled();
-      expect(screen.getByTestId('notification-prompt-card')).toBeTruthy();
-
-      fireEvent.press(screen.getByTestId('notification-prompt-accept'));
-      await waitFor(() => expect(notifications.requestPermission).toHaveBeenCalledTimes(1));
-      await waitFor(() =>
-        expect(mockPersistence.writePersistedGameSettings).toHaveBeenCalledWith(
-          expect.objectContaining({
-            harvestNotificationsEnabled: true,
-            comebackRemindersEnabled: true,
-          })
         )
       );
     });

@@ -3,13 +3,13 @@ import { Platform } from 'react-native';
 import mobileAds, { AdEventType, RewardedAd, RewardedAdEventType } from 'react-native-google-mobile-ads';
 
 import {
+  logDevWarning,
   normalizeAdFailureReason,
   type RewardedAdRequest,
   type RewardedAdReward,
   type RewardedAdShowResult,
 } from '../../../../packages/farm-core/src';
 import { getRewardedAdUnitId } from './config';
-import { recordNonFatalError } from '../firebase/crashlytics';
 import { ensureMobilePlatformSession, mobilePlatformAds } from '../platformEvents';
 import { showPlatformAdMobReward, type PlatformAdMobAdapter } from './platformRewardedAd';
 
@@ -308,7 +308,7 @@ export function useAdMobRewardedAd() {
     void mobileAds()
       .initialize()
       .catch((error: unknown) => {
-        recordNonFatalError(error, 'ads:initialize');
+        logDevWarning('[ads] initialize failed', error);
       });
 
     const createAdInstance = () => {
@@ -364,7 +364,7 @@ export function useAdMobRewardedAd() {
 
         if (type === AdEventType.ERROR) {
           const reason = normalizeAdFailureReason(payload);
-          recordNonFatalError(new Error(reason), 'ads:rewarded:error');
+          logDevWarning('[ads] rewarded error', reason);
           updateReady(false);
           finishPendingLoad(token, false);
           finishPendingShow(token, { status: 'failed', error: reason });

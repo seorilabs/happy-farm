@@ -8,7 +8,6 @@ import java.util.Locale
 def googleServicesConfigFile = file("google-services.json")
 if (googleServicesConfigFile.exists()) {
     apply plugin: "com.google.gms.google-services"
-    apply plugin: "com.google.firebase.crashlytics"
 } else {
     logger.lifecycle("Skipping Firebase Android Gradle plugins because ${googleServicesConfigFile} is missing.")
 }
