@@ -56,10 +56,21 @@ describe('Android Cloud Build 배포 계약', () => {
     expect(cloudBuild).toContain('happy-farm-firebase-google-services');
     expect(cloudBuild).toContain('happy-farm-play-keystore');
     expect(cloudBuild).toContain('logging: CLOUD_LOGGING_ONLY');
-    expect(cloudBuild).toContain('machineType: E2_STANDARD_2');
     expect(buildEnv).toContain('ANDROID_PLATFORM=36');
     expect(buildEnv).toContain('ANDROID_BUILD_TOOLS=36.0.0');
     expect(buildEnv).toContain('EXPECTED_ANDROID_PACKAGE=com.seorilabs.happyfarm');
+  });
+
+  it('build config 의 machineType 은 API enum 에 있는 값만 쓴다', () => {
+    // options.machineType 은 CLI 플래그(--machine-type=e2-standard-2)와 달리
+    // API enum 만 받는다. enum 에 없는 값을 쓰면 gcloud 가
+    // ".options.machineType: unused" 로 제출 자체를 거부한다.
+    const VALID = ['E2_MEDIUM', 'E2_HIGHCPU_8', 'E2_HIGHCPU_32', 'N1_HIGHCPU_8', 'N1_HIGHCPU_32'];
+    const found = cloudBuild.match(/^\s*machineType:\s*(\S+)/m);
+    // 지정하지 않으면 기본값이 e2-standard-2(무료 한도 대상)라 그대로 두어도 된다.
+    if (found != null) {
+      expect(VALID).toContain(found[1]);
+    }
   });
 
   it('빌드와 Google Play internal 업로드를 분리한다', () => {

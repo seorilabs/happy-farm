@@ -44,7 +44,12 @@ artifacts:
       - dist/android/happy-farm.aab
 
 options:
-  machineType: E2_STANDARD_2
+  # machineType 은 지정하지 않는다. build config 의 options.machineType 은 API
+  # enum(E2_MEDIUM, E2_HIGHCPU_8/32, N1_HIGHCPU_8/32)만 받는데 여기 있던
+  # E2_STANDARD_2 는 그 enum 에 없어서 gcloud 가
+  # ".options.machineType: unused" 로 제출을 거부한다. 무료 한도 대상인
+  # e2-standard-2 는 machineType 을 비웠을 때의 기본값이라, 지우는 것이
+  # 원래 의도(무료 한도 유지)와 같다.
   logging: CLOUD_LOGGING_ONLY
 
 timeout: 7200s
