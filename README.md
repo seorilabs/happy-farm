@@ -48,6 +48,7 @@ intoss://happy-farm/
 
 - `apps/ait/granite.config.ts`의 `brand.icon`은 승인된 AppsInToss 콘솔 로고 URL로 설정했습니다.
 - 공용 게임 컴포넌트는 `packages/farm-ui/src/FarmGame.tsx`이며, AppsInToss 광고 그룹 ID는 `apps/ait/src/pages/index.tsx`와 Firebase Remote Config에서 주입합니다. 보상형 ID는 설정 완료했습니다. 전면형 그룹은 AppsInToss 콘솔에 생성했지만 아직 `REGISTERING`이라 코드용 ID가 발급되지 않았습니다. `ENABLED` 전환과 복귀 전용 클라이언트 공개를 모두 확인한 뒤 `appsintoss_interstitial_ad_group_id` 운영값으로 주입해야 합니다. 성장 구매 지면은 정책·빈도 검증 전까지 비활성입니다.
+- **모바일 전면광고 ad unit이 아직 비어 있습니다.** `apps/mobile/src/ads/config.ts`의 `PRODUCTION_INTERSTITIAL_AD_UNIT_IDS`에 AdMob 콘솔에서 만든 Android/iOS 전면 unit ID를 채워야 프로덕션에서 노출됩니다. 비어 있는 동안에는 지면이 켜져 있어도 컨트롤러가 미지원으로 동작해 노출되지 않습니다. debug 빌드는 `TestIds.INTERSTITIAL`을 씁니다.
 - Google Play package name은 `com.seorilabs.happyfarm`으로 확정했습니다.
 - 고객지원 이메일은 `cs@seorilabs.com`, 개인정보 처리방침은 `https://www.seorilabs.com/privacy`로 확정했습니다.
 - Google Play 광고 포함 여부와 한국 게임 배포 선언은 `yes`로 확정했습니다.

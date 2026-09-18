@@ -685,6 +685,89 @@ describe('getRewardedGoldAmount', () => {
     expect(getRewardedGoldAmount(state)).toBeGreaterThan(REWARDED_GOLD_AMOUNT);
   });
 
+  test('심어 둔 밭의 실제 수익을 반영해 목표 비율 floor보다 큰 보상을 준다', () => {
+    // 광고 1회가 활성 플레이 몇 초보다 못한 상태를 없앤다. 같은 진행도라도 농장이
+    // 실제로 벌고 있으면 그만큼 보상이 따라 오른다.
+    const base = createInitialState();
+    const vegetableUnlocked: GameState = {
+      ...base,
+      unlockedAreas: [...base.unlockedAreas, 'vegetable_field'],
+    };
+    const idleFarm = getRewardedGoldAmount(vegetableUnlocked);
+
+    const plantedFarm = getRewardedGoldAmount({
+      ...vegetableUnlocked,
+      plots: vegetableUnlocked.plots.map((plot) => ({
+        ...plot,
+        cropType: 'carrot',
+        startTime: Date.now(),
+        state: 1,
+      })),
+    });
+
+    expect(plantedFarm).toBeGreaterThan(idleFarm);
+  });
+
+  test('보상은 다음 목표 대비 상한을 넘지 않는다', () => {
+    // 초반 밭은 회전이 빨라 생산성만 보면 진행 곡선을 건너뛸 수 있다. 하루 한도를
+    // 다 써도 다음 구역 하나까지만 열리도록 같은 목표 비용으로 상한을 건다.
+    const base = createInitialState();
+    const vegetableUnlocked: GameState = {
+      ...base,
+      unlockedAreas: [...base.unlockedAreas, 'vegetable_field'],
+      // 회전이 매우 빠른 작물을 모든 밭에 심어 생산성 항을 상한 위로 밀어 올린다.
+      plots: base.plots.map((plot) => ({
+        ...plot,
+        cropType: 'carrot' as const,
+        startTime: Date.now(),
+        state: 1 as const,
+      })),
+    };
+    const fruitCost = balance.areas.find((a) => a.key === 'fruit_field')!.unlock.cost;
+    const cap = Math.floor(fruitCost * balance.ads.rewardedGoldScaling.nextGoalCapRatio);
+
+    expect(getRewardedGoldAmount(vegetableUnlocked)).toBe(cap);
+    expect(getRewardedGoldAmount(vegetableUnlocked) * balance.ads.rewardedGoldDailyLimit).toBeLessThanOrEqual(
+      fruitCost
+    );
+  });
+
+  test('수확 대기·빈 밭만 있는 농장은 목표 비율 floor를 그대로 쓴다', () => {
+    // 오프라인 수익과 같은 규칙으로 "지금 자라는 중인 밭"만 센다. 방치된 농장이
+    // 생산성 보너스를 받지 않아 초반 밸런스가 흔들리지 않는다.
+    const base = createInitialState();
+    const vegetableUnlocked: GameState = {
+      ...base,
+      unlockedAreas: [...base.unlockedAreas, 'vegetable_field'],
+    };
+    const expectedFloor = Math.floor(
+      balance.areas.find((a) => a.key === 'fruit_field')!.unlock.cost *
+        balance.ads.rewardedGoldScaling.nextGoalRatio
+    );
+
+    const readyOnly = getRewardedGoldAmount({
+      ...vegetableUnlocked,
+      plots: vegetableUnlocked.plots.map((plot) => ({
+        ...plot,
+        cropType: 'carrot' as const,
+        startTime: 0,
+        state: 2 as const,
+      })),
+    });
+    const emptyOnly = getRewardedGoldAmount({
+      ...vegetableUnlocked,
+      plots: vegetableUnlocked.plots.map((plot) => ({
+        ...plot,
+        cropType: null,
+        startTime: null,
+        state: 0 as const,
+      })),
+    });
+
+    expect(readyOnly).toBe(expectedFloor);
+    expect(emptyOnly).toBe(expectedFloor);
+  });
+
   test('scales with orchard cost when fruit_field is already unlocked', () => {
     const state: GameState = {
       ...createInitialState(),

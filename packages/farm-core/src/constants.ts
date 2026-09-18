@@ -178,11 +178,42 @@ export function getGrowthAdSkipMs(remainingMs: number): number {
 // in the designed progression, not the cheapest remaining unlock.
 const NON_GATED_AREAS = FARM_AREAS.filter((area) => area.unlock.gate == null && area.unlock.cost > 0);
 
+// 현재 농장이 실제로 벌어들이는 시간당 골드(심어 둔 밭만, offlineIncome과 같은
+// efficiencyRatio). returnSummary의 동명 계산과 같은 규칙이지만, constants ↔
+// returnSummary 순환 import를 만들지 않으려고 여기서 지역적으로 계산한다.
+function getPlantedFarmGoldPerHour(gameState: GameState): number {
+  const speedMultiplier = getSpeedMultiplier(gameState.upgrades.speed);
+  const profitMultiplier = getProfitMultiplier(gameState.upgrades.profit);
+
+  let netProfitPerHour = 0;
+  for (const plot of gameState.plots) {
+    if (plot.id >= gameState.unlockedPlotCount || plot.state !== 1 || plot.cropType == null) {
+      continue;
+    }
+    if (CROPS[plot.cropType] == null) {
+      continue;
+    }
+    netProfitPerHour += getCropEconomyEstimate(plot.cropType, {
+      speedMultiplier,
+      profitMultiplier,
+    }).netProfitPerHour;
+  }
+
+  const goldPerHour = netProfitPerHour * OFFLINE_INCOME_EFFICIENCY_RATIO;
+  return Number.isFinite(goldPerHour) && goldPerHour > 0 ? goldPerHour : 0;
+}
+
 /**
  * Returns the rewarded-gold ad payout scaled to the player's current
- * progression. Uses 5 % of the next area unlock cost as the base amount,
- * falling back to 5 % of the prestige graduation cost once all non-gated
- * areas are unlocked. The result is always at least REWARDED_GOLD_AMOUNT.
+ * progression. The floor is 5 % of the next area unlock cost (or of the
+ * prestige graduation cost once all non-gated areas are unlocked), never below
+ * REWARDED_GOLD_AMOUNT.
+ *
+ * That floor alone left one ad worth less than a few seconds of active play, so
+ * the payout also tracks what the farm actually earns: productivityMinutes of
+ * the player's own offline rate. The same next goal caps the result
+ * (nextGoalCapRatio) so a fast-cycling early farm cannot mint past the
+ * progression curve — a full day of rewarded ads buys at most one area unlock.
  */
 export function getRewardedGoldAmount(gameState: GameState): number {
   const nextArea = NON_GATED_AREAS.find((area) => !isAreaUnlocked(gameState, area.key));
@@ -196,13 +227,32 @@ export function getRewardedGoldAmount(gameState: GameState): number {
           balance.regions.graduation.costBase *
             Math.pow(balance.regions.graduation.costGrowth, prestigeLevel)
         );
+  const scaling = balance.ads.rewardedGoldScaling;
   const ratio =
-    Number.isFinite(balance.ads.rewardedGoldScaling.nextGoalRatio) &&
-    balance.ads.rewardedGoldScaling.nextGoalRatio > 0
-      ? balance.ads.rewardedGoldScaling.nextGoalRatio
-      : 0.05;
+    Number.isFinite(scaling.nextGoalRatio) && scaling.nextGoalRatio > 0 ? scaling.nextGoalRatio : 0.05;
   const scaled = Math.floor(nextGoalCost * ratio);
-  return Number.isFinite(scaled) ? Math.max(REWARDED_GOLD_AMOUNT, scaled) : REWARDED_GOLD_AMOUNT;
+  const floorAmount = Number.isFinite(scaled)
+    ? Math.max(REWARDED_GOLD_AMOUNT, scaled)
+    : REWARDED_GOLD_AMOUNT;
+
+  const minutes =
+    Number.isFinite(scaling.productivityMinutes) && scaling.productivityMinutes > 0
+      ? scaling.productivityMinutes
+      : 0;
+  if (minutes <= 0) {
+    return floorAmount;
+  }
+  const productivityAmount = Math.floor((getPlantedFarmGoldPerHour(gameState) * minutes) / 60);
+  if (!Number.isFinite(productivityAmount) || productivityAmount <= floorAmount) {
+    return floorAmount;
+  }
+
+  const capRatio =
+    Number.isFinite(scaling.nextGoalCapRatio) && scaling.nextGoalCapRatio > 0
+      ? scaling.nextGoalCapRatio
+      : 0;
+  const cap = capRatio > 0 ? Math.max(floorAmount, Math.floor(nextGoalCost * capRatio)) : floorAmount;
+  return Math.min(productivityAmount, cap);
 }
 
 export type ShopRewardedAdOffer =
