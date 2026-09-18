@@ -9,15 +9,24 @@ const uploadScript = fs.readFileSync(path.join(root, 'scripts/upload-google-play
 const buildEnv = fs.readFileSync(path.join(root, 'build.env'), 'utf8');
 
 describe('Android Cloud Build 배포 계약', () => {
-  it('ARC는 Cloud Build 제출과 산출물 회수만 담당한다', () => {
-    expect(workflow).toContain('runs-on: seorilabs-rpi-arm64');
+  it('러너는 Cloud Build 제출과 산출물 회수만 담당한다', () => {
     expect(workflow).toContain('gcloud builds submit .');
     expect(workflow).toContain('--config=cloudbuild-android.yaml');
     expect(workflow).toContain('--region=global');
     expect(workflow).toContain('gcloud storage cp');
     expect(workflow).not.toContain('--gcs-log-dir');
-    expect(workflow).not.toContain('runs-on: ubuntu-latest');
+    // 러너에서 직접 빌드하지 않는다는 것이 이 계약의 핵심이다.
     expect(workflow).not.toContain('./gradlew');
+  });
+
+  it('public 저장소라 self-hosted 러너를 쓰지 않는다', () => {
+    // org 의 ARC 러너 그룹은 모두 allows_public_repositories=false 라,
+    // self-hosted 로 보내면 job 이 실패하지 않고 영원히 queued 로 남는다.
+    expect(workflow).not.toContain('seorilabs-rpi-arm64');
+    expect(workflow).not.toContain('seorilabs-x64');
+    expect(workflow).toContain('runs-on: ubuntu-latest');
+    // hosted 러너는 x64 다. arm64 를 고정하면 Python 설치가 깨진다.
+    expect(workflow).not.toMatch(/^\s*architecture:\s*arm64/m);
   });
 
   it('exact release tag의 source와 build tooling만 사용한다', () => {

@@ -66,7 +66,11 @@ jobs:
   build-aab:
     name: Cloud Build signed Android App Bundle
     needs: resolve
-    runs-on: seorilabs-rpi-arm64
+    # 저장소가 public 이라 ARC(self-hosted)를 쓸 수 없다. 자세한 사유는
+    # deploy-apps-in-toss.yml 의 같은 자리 주석을 참고한다. AAB 자체는
+    # Cloud Build 에서 빌드되고 이 잡은 submit 과 아티팩트 수거만 하므로
+    # hosted 로 충분하다.
+    runs-on: ubuntu-latest
     timeout-minutes: 75
     environment: google-play
     defaults:
@@ -263,7 +267,9 @@ jobs:
     name: Upload AAB to Google Play internal track
     if: ${{ inputs.send_to_google_play }}
     needs: build-aab
-    runs-on: seorilabs-rpi-arm64
+    # 저장소가 public 이라 ARC(self-hosted)를 쓸 수 없다. 자세한 사유는
+    # deploy-apps-in-toss.yml 의 같은 자리 주석을 참고한다.
+    runs-on: ubuntu-latest
     timeout-minutes: 25
     environment: google-play
 
@@ -298,7 +304,9 @@ jobs:
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
         with:
           python-version: '3.13'
-          architecture: arm64
+          # architecture 는 지정하지 않는다. ARC(ARM64) 시절의 잔재로 arm64 가
+          # 박혀 있었는데, hosted ubuntu-latest 는 x64 라 그대로 두면 설치가
+          # 깨진다. 기본값이 러너 아키텍처를 따라가므로 비워 두는 편이 안전하다.
 
       - name: Install Google Play API client
         run: >-

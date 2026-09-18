@@ -36,16 +36,17 @@ i18n 계획과 변경 지침은 `docs/i18n-plan.md`를 기준으로 관리합니
 - `main` push와 `main` 대상 PR에서 `static-checks` 워크플로가 lint, typecheck, test,
   i18n·balance·admob 계약 검사, `apps/mobile` typecheck·test를 실행합니다. 문서와
   에셋만 바뀐 변경은 `paths-ignore`로 건너뜁니다.
-- **이 저장소는 public입니다.** `static-checks`는
-  `github.event.repository.private` 분기에 따라 GitHub-hosted `ubuntu-latest`에서
-  돌고, self-hosted ARC 러너로는 가지 않습니다. fork PR이 self-hosted 러너에 닿지
-  않게 하는 경계이므로 이 분기를 지우지 않습니다.
+- **이 저장소는 public이고 모든 워크플로가 GitHub-hosted 러너에서 돕니다.**
+  org의 ARC(self-hosted) 러너 그룹은 전부 `allows_public_repositories=false`라
+  public 저장소에서는 job을 보낼 수 없습니다. `runs-on`을 `seorilabs-*`로
+  되돌리면 러너가 online이어도 job이 실패하지 않고 **영원히 queued로 남으므로**
+  증상을 알아채기 어렵습니다. 무거운 작업은 러너가 아니라 Cloud Build에서
+  돌기 때문에 hosted로 충분합니다.
 - 마켓 배포 워크플로(`deploy-all`, `deploy-apps-in-toss`, `deploy-google-play`)는
-  ARC 러너를 쓰고 `workflow_dispatch`/`workflow_call` 전용이라 PR로는 트리거되지
-  않습니다. 배포는 Release/Tag를 지정해 수동으로 실행합니다.
-- 같은 접두사의 `deploy-drift-check`는 배포가 아니라 마켓 등록 상태 점검이고,
-  매일 schedule로 ARC 러너에서 돕니다. 이 워크플로들은 모두 fork PR로는 트리거되지
-  않으므로 public 전환 뒤에도 ARC 러너가 외부에 노출되지 않습니다.
+  `workflow_dispatch`/`workflow_call` 전용이라 PR로는 트리거되지 않습니다.
+  배포는 Release/Tag를 지정해 수동으로 실행합니다.
+- 같은 접두사의 `deploy-drift-check`는 배포가 아니라 마켓 등록 상태 점검이고
+  매일 schedule로 돕니다.
 - AppsInToss 배포에는 GitHub Actions secret `APPS_IN_TOSS_API_KEY`가 필요합니다.
 
 ## 샌드박스 URL
