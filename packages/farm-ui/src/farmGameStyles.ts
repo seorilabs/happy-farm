@@ -941,12 +941,16 @@ export const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
   },
+  // dim은 Modal 루트가 직접 칠한다. 백드롭 전용 absolute View에 opacity를 걸었을
+  // 때는 Android Modal 안에서 dim이 전혀 나타나지 않았고, 배경 탭으로 닫히지도
+  // 않았다(실기기 재현). 루트 배경은 시트가 뜨는 즉시 확실히 적용된다.
   modalRoot: {
     flex: 1,
     justifyContent: 'flex-end',
-  },
-  modalBackdrop: {
     backgroundColor: 'rgba(16, 24, 40, 0.45)',
+  },
+  sheetBackdropFill: {
+    flex: 1,
   },
   sheet: {
     maxHeight: '86%',
@@ -971,9 +975,29 @@ export const styles = StyleSheet.create({
     borderRadius: 2,
     backgroundColor: '#d8bd8c',
   },
+  sheetTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
   sheetTitle: {
+    flexShrink: 1,
     color: '#6b4a22',
     fontSize: 21,
+    fontWeight: '900',
+  },
+  sheetGold: {
+    flexShrink: 0,
+    overflow: 'hidden',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderWidth: 2,
+    borderColor: '#e8c976',
+    backgroundColor: '#fff9e8',
+    color: '#c07a12',
+    fontSize: 15,
     fontWeight: '900',
   },
   sheetDescription: {
@@ -1043,32 +1067,41 @@ export const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '900',
   },
+  // 지원 로케일이 8개라 한 행에 flex:1로 나누면 칸 폭이 endonym보다 좁아져 글자가
+  // 세로로 쪼개졌다("한국어"→"국/어", "English"→"gl/is/h"). 줄바꿈을 허용하고 칩마다
+  // 최소 폭을 줘, 언어 수가 늘어도 레이아웃이 깨지지 않게 한다.
   languageOptions: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 8,
   },
   languageOption: {
-    flex: 1,
+    flexGrow: 1,
+    minWidth: 96,
     minHeight: 44,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#d0d5dd',
-    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: '#e4d3ae',
+    borderBottomWidth: 4,
+    borderBottomColor: '#dcc189',
+    borderRadius: 10,
     paddingHorizontal: 12,
-    backgroundColor: '#f7fafc',
+    paddingVertical: 8,
+    backgroundColor: '#fffaf0',
   },
   activeLanguageOption: {
-    borderColor: '#4d9d56',
-    backgroundColor: '#edf8ed',
+    borderColor: '#4d8a22',
+    borderBottomColor: '#3f7a1c',
+    backgroundColor: '#eaf6df',
   },
   languageOptionText: {
-    color: '#344054',
+    color: '#6b4a22',
     fontSize: 14,
     fontWeight: '900',
   },
   activeLanguageOptionText: {
-    color: '#247241',
+    color: '#3f7a1c',
   },
   researchSummary: {
     marginTop: -2,
@@ -1181,10 +1214,14 @@ export const styles = StyleSheet.create({
     minHeight: 48,
     borderRadius: 10,
     paddingHorizontal: 14,
-    backgroundColor: '#edf2f7',
+    borderWidth: 2,
+    borderColor: '#e4d3ae',
+    borderBottomWidth: 4,
+    borderBottomColor: '#dcc189',
+    backgroundColor: '#fffaf0',
   },
   moreMenuButtonText: {
-    color: '#344054',
+    color: '#6b4a22',
     fontSize: 15,
     fontWeight: '800',
   },

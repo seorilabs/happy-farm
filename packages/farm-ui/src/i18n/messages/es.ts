@@ -213,6 +213,9 @@ export const esFarmMessages: FarmMessages = {
   lockedAreaHint: (areaName, requirement) => `Requisitos de ${areaName} · ${requirement}`,
   collectionUnlockHint: (requirement) => `🔒 Desbloquear: ${requirement}`,
   harvestHint: 'Toca una parcela para cosechar.',
+  harvestHintEmpty: 'Elige una semilla abajo y plántala en una parcela vacía.',
+  harvestHintGrowing: 'Tus cultivos aún están creciendo. Tócalos cuando estén listos.',
+  sheetGoldLabel: (amount) => `🪙 ${amount} G`,
   harvestAllButton: (count) => `🧺 Cosechar todo ${count}`,
   harvestReplantButton: '🔁 Cosechar y Replantar',
   harvestReplantToast: (amount, harvested, planted) =>

@@ -213,6 +213,9 @@ export const enFarmMessages: FarmMessages = {
   lockedAreaHint: (areaName, requirement) => `${areaName} requirements · ${requirement}`,
   collectionUnlockHint: (requirement) => `🔒 Unlock: ${requirement}`,
   harvestHint: 'Tap a plot to harvest.',
+  harvestHintEmpty: 'Pick a seed below and plant it in an empty plot.',
+  harvestHintGrowing: 'Your crops are still growing. Tap them once they are ready.',
+  sheetGoldLabel: (amount) => `🪙 ${amount} G`,
   harvestAllButton: (count) => `🧺 Harvest All ${count}`,
   harvestReplantButton: '🔁 Harvest & Replant',
   harvestReplantToast: (amount, harvested, planted) =>

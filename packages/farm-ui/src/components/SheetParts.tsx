@@ -30,11 +30,17 @@ export function SheetAction({
         sheetPartStyles.sheetAction,
         secondary && sheetPartStyles.secondarySheetAction,
         danger && sheetPartStyles.dangerSheetAction,
-        disabled && sheetPartStyles.disabledCard,
+        disabled && sheetPartStyles.disabledSheetAction,
       ]}
       onPress={onPress}
     >
-      <Text style={[sheetPartStyles.sheetActionText, secondary && sheetPartStyles.secondarySheetActionText]}>
+      <Text
+        style={[
+          sheetPartStyles.sheetActionText,
+          secondary && sheetPartStyles.secondarySheetActionText,
+          disabled && sheetPartStyles.disabledSheetActionText,
+        ]}
+      >
         {label}
       </Text>
     </Pressable>
@@ -59,7 +65,7 @@ export function ShopCard({
   onPress: () => void;
 }) {
   const showProgress = disabled === true && goldProgress != null && goldProgress > 0 && goldProgress < 1;
-  const fillColor = priceTone === 'speed' ? '#2f7de1' : priceTone === 'profit' ? '#bf7a00' : '#2f8747';
+  const fillColor = priceTone === 'speed' ? '#9a63e0' : priceTone === 'profit' ? '#bf7a00' : '#2f8747';
 
   return (
     <Pressable
@@ -73,7 +79,9 @@ export function ShopCard({
       <View style={sheetPartStyles.shopCardRow}>
         <View style={sheetPartStyles.shopTextGroup}>
           <Text style={sheetPartStyles.shopTitle}>{title}</Text>
-          <Text style={sheetPartStyles.shopDesc}>{desc}</Text>
+          <Text style={sheetPartStyles.shopDesc} textBreakStrategy="balanced">
+            {desc}
+          </Text>
         </View>
         <Text
           style={[
@@ -121,7 +129,9 @@ export function AdRewardCard({
       <View style={sheetPartStyles.shopCardRow}>
         <View style={sheetPartStyles.shopTextGroup}>
           <Text style={sheetPartStyles.shopTitle}>{title}</Text>
-          <Text style={sheetPartStyles.shopDesc}>{desc}</Text>
+          <Text style={sheetPartStyles.shopDesc} textBreakStrategy="balanced">
+            {desc}
+          </Text>
         </View>
         <Text style={sheetPartStyles.shopPrice}>{cta}</Text>
       </View>
@@ -226,7 +236,7 @@ export const sheetPartStyles = StyleSheet.create({
   upgradeTrack: {
     marginTop: 8,
     height: 3,
-    backgroundColor: '#e0e8f0',
+    backgroundColor: '#eadfc4',
     borderRadius: 2,
     overflow: 'hidden',
   },
@@ -274,7 +284,7 @@ export const sheetPartStyles = StyleSheet.create({
     fontWeight: '900',
   },
   speedPrice: {
-    backgroundColor: '#2f7de1',
+    backgroundColor: '#9a63e0',
   },
   profitPrice: {
     backgroundColor: '#bf7a00',
@@ -312,7 +322,7 @@ export const sheetPartStyles = StyleSheet.create({
   },
   cloudSaveNotice: {
     marginTop: 8,
-    color: '#344054',
+    color: '#6b4a22',
     fontSize: 13,
     lineHeight: 18,
     fontWeight: '700',
@@ -322,11 +332,11 @@ export const sheetPartStyles = StyleSheet.create({
     height: 28,
     borderRadius: 14,
     padding: 3,
-    backgroundColor: '#d0d5dd',
+    backgroundColor: '#d9cdb4',
     justifyContent: 'center',
   },
   activeToggleTrack: {
-    backgroundColor: '#2f7de1',
+    backgroundColor: '#68b035',
   },
   toggleThumb: {
     width: 22,
@@ -341,15 +351,23 @@ export const sheetPartStyles = StyleSheet.create({
     minHeight: 48,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 8,
+    borderRadius: 10,
     paddingHorizontal: 16,
     marginTop: 8,
-    backgroundColor: '#2f7de1',
+    borderWidth: 2,
+    borderColor: '#4d8a22',
+    borderBottomWidth: 4,
+    borderBottomColor: '#3f7a1c',
+    backgroundColor: '#68b035',
   },
   secondarySheetAction: {
-    backgroundColor: '#edf2f7',
+    borderColor: '#e4d3ae',
+    borderBottomColor: '#dcc189',
+    backgroundColor: '#fffaf0',
   },
   dangerSheetAction: {
+    borderColor: '#c23b3f',
+    borderBottomColor: '#a83034',
     backgroundColor: '#e5484d',
   },
   sheetActionText: {
@@ -359,6 +377,20 @@ export const sheetPartStyles = StyleSheet.create({
     textAlign: 'center',
   },
   secondarySheetActionText: {
-    color: '#344054',
+    color: '#6b4a22',
+  },
+  // 비활성 버튼은 카드용 disabledCard를 쓰지 않는다. 그쪽 opacity 0.7이 라벨까지
+  // 연하게 만들어, 색을 내려도 실제 렌더 대비가 2.79:1에 그쳤다(실기기 측정).
+  // 버튼은 투명도 없이 배경·테두리·글자색만으로 비활성을 전달한다.
+  disabledSheetAction: {
+    backgroundColor: '#f0ece2',
+    borderColor: '#d9d2c2',
+    borderBottomColor: '#cec6b3',
+  },
+  // 흰 라벨이 그대로 남아 대비 1.08:1로 사실상 읽히지 않았다(실기기 측정).
+  // 비활성 배경 위에서 4.5:1을 넘는 갈색으로 내려, 파괴적 액션의 확인 버튼까지
+  // 라벨이 읽히게 한다.
+  disabledSheetActionText: {
+    color: '#7a6647',
   },
 });
