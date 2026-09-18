@@ -12,14 +12,14 @@
   "marketingUrl": "https://happy-farm-tycoon.web.app",
   "copyright": "2026 Seorilabs",
   "releaseNotes": {
-    "ko-KR": "새 구역을 여는 표현을 더 쉬운 용어로 바꾸고, 현재 농장의 예상 생산성을 시간당 골드로 볼 수 있게 했습니다. 작물 선택 화면에는 작물별 투자효율을 추가해 어떤 작물을 심을지 더 쉽게 판단할 수 있습니다.",
-    "en-US": "Updated area-opening copy to simpler wording, added an estimated gold-per-hour productivity readout, and added crop efficiency indicators to help players choose what to plant.",
-    "ja": "区域を開くときの文言をよりわかりやすい表現に更新し、1時間あたりのおおよそのゴールド生産性の表示と、何を植えるか選びやすくする作物の効率インジケーターを追加しました。",
-    "zh-Hans": "将开启区域的文案改得更通俗易懂，新增了每小时预估金币的产能显示，并加入作物效率指示，帮助玩家挑选该种什么。",
-    "zh-Hant": "將開啟區域的文案改為更簡潔的說法，新增每小時金幣產能的預估顯示，並加入作物效率指標，協助玩家選擇要種什麼。",
-    "de": "Texte zum Öffnen von Gebieten vereinfacht, eine geschätzte Anzeige für Gold pro Stunde hinzugefügt und Effizienz-Anzeigen für Pflanzen ergänzt, damit du leichter entscheidest, was du anbaust.",
-    "fr": "Textes d'ouverture de zone simplifiés, ajout d'un estimatif de productivité en or par heure, et ajout d'indicateurs d'efficacité des cultures pour aider à choisir quoi planter.",
-    "es": "Actualizamos el texto de apertura de áreas a un lenguaje más sencillo, añadimos una lectura estimada de productividad de oro por hora y añadimos indicadores de eficiencia de cultivos para ayudar a los jugadores a elegir qué plantar."
+    "ko-KR": "메인 화면과 설정·상점 시트를 따뜻한 나무 톤으로 새단장했습니다. 시트가 열려 있을 때 알림이 가려지던 문제를 고치고, 시트 바깥을 눌러 닫을 수 있게 했습니다. 광고 보상을 농장 생산성에 맞게 조정하고 앱 시작 속도를 개선했습니다. 클라우드 백업 기능은 종료되었으며 게임 진행은 기기에 저장됩니다.",
+    "en-US": "Redesigned the main screen and the settings and shop sheets in a warm wood tone. Fixed notifications being hidden behind an open sheet, and sheets can now be closed by tapping outside. Ad rewards now scale with your farm's productivity, and app startup is faster. Cloud backup has been discontinued; your progress is saved on your device.",
+    "ja": "メイン画面と設定・ショップシートを温かみのある木目調に一新しました。シートを開いている間に通知が隠れる問題を修正し、シートの外側をタップして閉じられるようにしました。広告報酬を農場の生産性に合わせて調整し、アプリの起動速度を改善しました。クラウドバックアップ機能は終了し、ゲームの進行は端末に保存されます。",
+    "zh-Hans": "主界面与设置、商店面板焕新为温暖的木质色调。修复了面板打开时通知被遮挡的问题，现在可以点击面板外部关闭。广告奖励已根据农场产能进行调整，应用启动速度也有提升。云备份功能已停止服务，游戏进度将保存在您的设备上。",
+    "zh-Hant": "主畫面與設定、商店面板煥新為溫暖的木質色調。修正了面板開啟時通知被遮擋的問題，現在可以點擊面板外部關閉。廣告獎勵已根據農場產能進行調整，應用程式啟動速度也有提升。雲端備份功能已停止服務，遊戲進度將儲存在您的裝置上。",
+    "de": "Der Hauptbildschirm sowie die Einstellungs- und Shop-Blätter erscheinen in einem warmen Holzton. Hinweise werden nicht mehr von einem geöffneten Blatt verdeckt, und Blätter lassen sich durch Tippen außerhalb schließen. Werbebelohnungen richten sich jetzt nach der Produktivität deines Hofes, und die App startet schneller. Die Cloud-Sicherung wurde eingestellt; dein Spielfortschritt wird auf dem Gerät gespeichert.",
+    "fr": "L'écran principal ainsi que les feuilles de réglages et de boutique adoptent une teinte bois chaleureuse. Les notifications ne sont plus masquées par une feuille ouverte, et les feuilles se ferment en touchant l'extérieur. Les récompenses publicitaires s'ajustent à la productivité de votre ferme et l'application démarre plus vite. La sauvegarde dans le cloud a été interrompue ; votre progression est enregistrée sur votre appareil.",
+    "es": "La pantalla principal y las hojas de ajustes y tienda se han rediseñado con un cálido tono de madera. Los avisos ya no quedan ocultos tras una hoja abierta y las hojas se cierran tocando fuera. Las recompensas por anuncios se ajustan a la productividad de tu granja y la aplicación se inicia más rápido. La copia de seguridad en la nube se ha descontinuado; tu progreso se guarda en el dispositivo."
   },
   "versioning": {
     "source": "github_release_tag",
