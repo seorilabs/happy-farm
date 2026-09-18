@@ -61,16 +61,16 @@ describe('Android Cloud Build 배포 계약', () => {
     expect(buildEnv).toContain('EXPECTED_ANDROID_PACKAGE=com.seorilabs.happyfarm');
   });
 
-  it('build config 의 machineType 은 API enum 에 있는 값만 쓴다', () => {
-    // options.machineType 은 CLI 플래그(--machine-type=e2-standard-2)와 달리
-    // API enum 만 받는다. enum 에 없는 값을 쓰면 gcloud 가
-    // ".options.machineType: unused" 로 제출 자체를 거부한다.
-    const VALID = ['E2_MEDIUM', 'E2_HIGHCPU_8', 'E2_HIGHCPU_32', 'N1_HIGHCPU_8', 'N1_HIGHCPU_32'];
-    const found = cloudBuild.match(/^\s*machineType:\s*(\S+)/m);
-    // 지정하지 않으면 기본값이 e2-standard-2(무료 한도 대상)라 그대로 두어도 된다.
-    if (found != null) {
-      expect(VALID).toContain(found[1]);
-    }
+  it('build config 에 machineType 을 박아 gcloud 버전에 묶이지 않는다', () => {
+    // gcloud 는 build config 를 클라이언트에 번들된 스키마로 파싱하고, 모르는
+    // enum 값을 만나면 그 필드를 unrecognized 로 떨어뜨린 뒤
+    // ".options.machineType: unused" 로 제출을 거부한다. 값 자체가 유효해도
+    // 러너의 gcloud 가 그 값보다 오래되면 배포가 죽는다(v1.11.1 실패 원인).
+    //
+    // 기본값이 e2-standard-2(2 CPU)라 비워두면 사양은 그대로면서 러너 이미지의
+    // gcloud 버전과 무관해진다. 더 큰 머신이 실제로 필요해지면 그때 이 테스트를
+    // 함께 고치고, 러너 gcloud 가 그 값을 아는지 확인한 뒤 넣는다.
+    expect(cloudBuild).not.toMatch(/^\s*machineType:/m);
   });
 
   it('빌드와 Google Play internal 업로드를 분리한다', () => {
