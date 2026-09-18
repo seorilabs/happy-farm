@@ -61,11 +61,12 @@ describe('Android Cloud Build 배포 계약', () => {
     expect(workflow).toContain('retention-days: 3');
   });
 
-  it('버전은 exact 중앙 workflow SHA의 release binding에서만 받는다', () => {
-    // 중앙 판본은 올라간다. 특정 SHA 를 박아 두면 판본을 올릴 때마다 이 테스트까지
-    // 고쳐야 하고, 빠뜨리면 CI 가 빨간불로 남는다. immutable commit SHA 인지만 본다.
+  it('버전은 중앙 정본 release binding에서만 받는다', () => {
+    // #526에서 caller가 중앙 정본 main을 보도록 바뀌었다. 판본을 올릴 때마다 SHA를
+    // 따라 고치지 않으려는 의도이므로, 참조가 중앙 workflow를 가리키는지만 본다.
+    // ref 뒤 경계를 막지 않으면 @main-foo 같은 다른 브랜치도 부분 일치로 통과한다.
     expect(workflow).toMatch(
-      /seorilabs\/\.github\/\.github\/workflows\/resolve-release-version\.yml@[0-9a-f]{40}/
+      /seorilabs\/\.github\/\.github\/workflows\/resolve-release-version\.yml@(main|[0-9a-f]{40})(?![\w.-])/
     );
     expect(workflow).toContain('SEORI_RELEASE_VERSION_CODE: ${{ needs.resolve.outputs.android_version_code }}');
     expect(workflow).not.toContain('scripts/resolve-release-version.mjs');
