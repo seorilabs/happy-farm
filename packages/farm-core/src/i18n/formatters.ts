@@ -83,7 +83,7 @@ const DURATION_LABELS: Record<SupportedLocale, DurationLabels> = {
     seconds: (value) => `${value}s`,
     minutes: (value) => `${value}m`,
     hours: (hours, minutes) => (minutes === 0 ? `${hours}h` : `${hours}h ${minutes}m`),
-    hourlyGoldSuffix: 'G/hr',
+    hourlyGoldSuffix: ' G/hr',
   },
   ja: {
     seconds: (value) => `${value}秒`,
@@ -107,19 +107,19 @@ const DURATION_LABELS: Record<SupportedLocale, DurationLabels> = {
     seconds: (value) => `${value}s`,
     minutes: (value) => `${value}min`,
     hours: (hours, minutes) => (minutes === 0 ? `${hours}h` : `${hours}h ${minutes}min`),
-    hourlyGoldSuffix: 'G/Std',
+    hourlyGoldSuffix: ' G/Std',
   },
   fr: {
     seconds: (value) => `${value}s`,
     minutes: (value) => `${value}min`,
     hours: (hours, minutes) => (minutes === 0 ? `${hours}h` : `${hours}h ${minutes}min`),
-    hourlyGoldSuffix: 'G/h',
+    hourlyGoldSuffix: ' G/h',
   },
   es: {
     seconds: (value) => `${value}s`,
     minutes: (value) => `${value}min`,
     hours: (hours, minutes) => (minutes === 0 ? `${hours}h` : `${hours}h ${minutes}min`),
-    hourlyGoldSuffix: 'G/h',
+    hourlyGoldSuffix: ' G/h',
   },
 };
 

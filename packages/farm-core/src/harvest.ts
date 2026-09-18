@@ -430,6 +430,19 @@ export function getReadyPlotCount(gameState: GameState): number {
   return count;
 }
 
+// How many unlocked plots are empty and waiting for a seed. The tool strip hint
+// uses this to tell "nothing ripe yet, plant something" apart from "everything
+// is still growing", instead of always claiming a plot can be harvested.
+export function getEmptyPlotCount(gameState: GameState): number {
+  let count = 0;
+  for (const plot of gameState.plots) {
+    if (isPlotPlantable(gameState, plot)) {
+      count += 1;
+    }
+  }
+  return count;
+}
+
 export type HarvestAllEntry = {
   plotIndex: number;
   outcome: HarvestOutcome;

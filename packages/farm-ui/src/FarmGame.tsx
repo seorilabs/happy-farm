@@ -237,6 +237,7 @@ import {
   performHarvestAll,
   performHarvestAndReplant,
   performPlantAll,
+  getEmptyPlotCount,
   getPlantAllPreview,
   getReadyPlotCount,
   recordHarvestBonusAdPrompt,
@@ -331,6 +332,9 @@ const PLANT_ALL_MIN_COUNT = 2;
 // "전체 비료"(#359) 단축 버튼도 같은 원칙: 성장 중이면서 지금 골드로 감당 가능한 밭이
 // 이만큼 있을 때만 조건부 행에 노출한다. 한두 칸은 밭 시트 안 단일 비료로 충분하다.
 const FERTILIZE_ALL_MIN_COUNT = 2;
+// 일괄 액션 행의 구성이 바뀐 직후 탭을 무시하는 시간. 버튼이 교체되는 찰나에 이미
+// 내려오던 손가락이 다른 액션을 실행하는 것을 막는다.
+const BATCH_ACTION_SETTLE_MS = 350;
 // 큰 골드 지출이라 1탭으로 즉시 실행하지 않는다. 1차 탭은 확인(버튼 라벨 전환), 2차 탭이
 // 실행이며, 이 시간 안에 다시 누르지 않으면 확인 상태가 자동 해제된다(오조작 방지).
 const FERTILIZE_ALL_CONFIRM_WINDOW_MS = 4000;
@@ -3274,6 +3278,7 @@ function FarmGameBody({
     [visibleCropKeys, seedSortMode, cropEconomyByKey]
   );
   const readyPlotCount = useMemo(() => getReadyPlotCount(gameState), [gameState]);
+  const emptyPlotCount = useMemo(() => getEmptyPlotCount(gameState), [gameState]);
   // Plant-all affordance for the currently selected crop tool: how many empty
   // plots could be sown and the gold it costs. 'harvest' yields zeros so the
   // button stays hidden. Recomputed each tick so gold/plot changes stay live.
@@ -3311,6 +3316,33 @@ function FarmGameBody({
     (showHarvestBatchActions ? 2 : showPlantAllAction ? 1 : 0) +
     (showFertilizeAllAction ? 1 : 0);
   const useCompactBatchActions = batchActionCount >= 3;
+  // 초보 밭은 2초마다 익어 이 행의 구성이 수시로 교체된다. 교체되는 순간 같은 좌표의
+  // 탭이 다른 액션으로 실행돼, 전체 비료를 누르려던 탭이 "수확 후 재심기"로 실행되는
+  // 것을 실기기에서 재현했다. 행 구성이 바뀐 직후 짧게 탭을 무시해, 손가락이 향하던
+  // 버튼이 눌리는 순간 다른 것으로 바뀌는 경우를 막는다.
+  const batchActionSignature = `${showHarvestBatchActions ? 'h' : ''}${
+    showPlantAllAction ? 'p' : ''
+  }${showFertilizeAllAction ? 'f' : ''}`;
+  const batchActionChangedAtRef = useRef(0);
+  const batchActionSignatureRef = useRef<string | null>(null);
+  useEffect(() => {
+    const previous = batchActionSignatureRef.current;
+    batchActionSignatureRef.current = batchActionSignature;
+    // 행이 처음 생길 때는 막지 않는다. 이미 버튼이 놓여 있던 자리에서 구성이 바뀐
+    // 경우에만, 직전에 시작된 탭이 다른 액션으로 새는 것을 막는다.
+    if (previous != null && previous !== '' && previous !== batchActionSignature) {
+      batchActionChangedAtRef.current = Date.now();
+    }
+  }, [batchActionSignature]);
+  const guardFreshBatchAction = useCallback(
+    (run: () => void) => () => {
+      if (Date.now() - batchActionChangedAtRef.current < BATCH_ACTION_SETTLE_MS) {
+        return;
+      }
+      run();
+    },
+    []
+  );
   // 2탭 확인의 "확인 대기" 상태. 핸들러 분기는 ref(동기, 더블탭 경쟁 방지)로 판정하고,
   // state는 버튼 라벨 재렌더용으로만 미러링한다.
   const fertilizeAllArmedRef = useRef(false);
@@ -5498,7 +5530,13 @@ function FarmGameBody({
       );
     }
     if (selectedTool === 'harvest') {
-      return messages.harvestHint;
+      // 수확 도구를 든 채 밭이 전부 비면 "밭을 눌러 수확할 수 있어요"가 남아, 실제로
+      // 밭을 누르면 "씨앗을 선택해 주세요" 토스트로 튕기는 모순이 생겼다(온보딩 직후
+      // 신규 유저가 그대로 겪는 경로). 지금 무엇을 할 수 있는지로 안내를 나눈다.
+      if (readyPlotCount > 0) {
+        return messages.harvestHint;
+      }
+      return emptyPlotCount > 0 ? messages.harvestHintEmpty : messages.harvestHintGrowing;
     }
     return messages.plantHint(
       getLocalizedCropName(selectedTool),
@@ -5507,10 +5545,12 @@ function FarmGameBody({
     );
   }, [
     cropEconomyByKey,
+    emptyPlotCount,
     gameState,
     getLocalizedCropName,
     locale,
     messages,
+    readyPlotCount,
     selectedArea,
     selectedAreaLabel.name,
     selectedAreaUnlocked,
@@ -5671,6 +5711,16 @@ function FarmGameBody({
     !prestigeGuide
       ? getPendingFeatureCoachmark(gameState)
       : null;
+
+  // 시트(RN Modal)는 별도 네이티브 윈도우라 같은 트리의 토스트를 덮어버린다. 같은
+  // 노드를 메인 트리와 Sheet의 overlay 슬롯 양쪽에 넘겨, 시트가 열린 동안에도
+  // 광고 실패·조건 부족·구매 성공 같은 피드백이 보이게 한다.
+  const toastNode =
+    toastMessage != null ? (
+      <View pointerEvents="none" style={[styles.toast, { bottom: bottomSafeInset + 142 }]}>
+        <Text style={styles.toastText}>{toastMessage}</Text>
+      </View>
+    ) : null;
 
   return (
     <View testID="farm-root" style={[styles.root, { backgroundColor: environmentTone.backgroundColor }]}>
@@ -5897,13 +5947,13 @@ function FarmGameBody({
                 <HarvestAllButton
                   compact={useCompactBatchActions}
                   label={messages.harvestAllButton(readyPlotCount)}
-                  onPress={harvestAllCrops}
+                  onPress={guardFreshBatchAction(harvestAllCrops)}
                 />
                 <HarvestAllButton
                   compact={useCompactBatchActions}
                   testID="harvest-replant-button"
                   label={messages.harvestReplantButton}
-                  onPress={harvestAllAndReplant}
+                  onPress={guardFreshBatchAction(harvestAllAndReplant)}
                 />
               </>
             ) : showPlantAllAction ? (
@@ -5913,7 +5963,7 @@ function FarmGameBody({
                   plantAllPreview.plantableCount,
                   formatMoney(plantAllPreview.totalCost, locale)
                 )}
-                onPress={plantAllCrops}
+                onPress={guardFreshBatchAction(plantAllCrops)}
               />
             ) : null}
 
@@ -5934,7 +5984,7 @@ function FarmGameBody({
                         formatMoney(fertilizeAllPreview.totalCost, locale)
                       )
                 }
-                onPress={onFertilizeAllPress}
+                onPress={guardFreshBatchAction(onFertilizeAllPress)}
               />
             ) : null}
           </View>
@@ -6093,11 +6143,9 @@ function FarmGameBody({
         </View>
       </View>
 
-      {toastMessage != null ? (
-        <View pointerEvents="none" style={[styles.toast, { bottom: bottomSafeInset + 142 }]}>
-          <Text style={styles.toastText}>{toastMessage}</Text>
-        </View>
-      ) : null}
+      {/* 시트가 열려 있으면 토스트는 Sheet의 overlay 슬롯에서만 렌더한다. 양쪽에 두면
+          Modal에 가려 보이지 않는 사본이 접근성 트리에 하나 더 남는다. */}
+      {activeSheet == null ? toastNode : null}
 
       <MutationFlashOverlay ref={mutationFlashRef} />
 
@@ -6120,6 +6168,8 @@ function FarmGameBody({
         title={getSheetTitle(activeSheet, messages)}
         closeLabel={messages.sheetCloseAccessibilityLabel}
         bottomInset={bottomSafeInset}
+        overlay={toastNode}
+        goldLabel={messages.sheetGoldLabel(formatMoney(gameState.gold, locale))}
         canClose={() => activeSheet?.type !== 'welcomeBack' || !offlineBonusAdInFlightRef.current}
         onClose={() => {
           if (activeSheet?.type === 'welcomeBack' && !collectReturnSummaryOffline(activeSheet.summary)) {
@@ -8548,12 +8598,20 @@ function Sheet({
   bottomInset,
   canClose,
   onClose,
+  overlay,
+  goldLabel,
 }: {
   activeSheet: ActiveSheet;
   children: React.ReactNode;
   description: string;
   title: string;
   closeLabel: string;
+  // 시트 제목 옆에 보여 줄 현재 보유 골드. 시트가 헤더를 덮기 때문에 필요하다.
+  goldLabel?: string;
+  // 시트가 열린 동안에도 보여야 하는 오버레이(현재는 토스트). 시트는 RN Modal이라
+  // 별도 네이티브 윈도우에 그려지고, 같은 트리의 토스트는 그 뒤에 가려 보이지 않는다.
+  // 그래서 같은 노드를 Modal 안에서 한 번 더 렌더한다.
+  overlay?: React.ReactNode;
   // 하단 시스템 UI와 시트 하단 버튼이 겹치지 않도록 확보할 하단 인셋(#236).
   bottomInset: number;
   // Rewarded-ad requests may temporarily own a sheet snapshot. Reject the
@@ -8569,12 +8627,9 @@ function Sheet({
   const dragY = dragYRef.current;
   const wasVisibleRef = useRef(false);
   const isClosingRef = useRef(false);
-  const dimmedOpacity = dragY.interpolate({
-    inputRange: [0, SHEET_DISMISS_TRANSLATE_Y],
-    outputRange: [1, 0],
-    extrapolate: 'clamp',
-  });
   const shouldHandleSheetDrag = useCallback((dy: number, dx: number) => dy > 4 && Math.abs(dy) > Math.abs(dx), []);
+  // 시트 위치만 되돌린다. dim은 열림/닫힘에만 반응하므로, 드래그를 놓거나 닫기가
+  // 거부된 경우처럼 시트가 계속 열려 있는 경로에서는 이미 1이라 건드리지 않는다.
   const restoreSheetPosition = useCallback(() => {
     dragY.stopAnimation();
     Animated.spring(dragY, {
@@ -8667,19 +8722,30 @@ function Sheet({
   return (
     <Modal transparent visible={activeSheet != null} animationType="none" onRequestClose={closeSheetWithAnimation}>
       <KeyboardAvoidingView behavior="padding" style={styles.modalRoot}>
-        <Animated.View style={[StyleSheet.absoluteFillObject, styles.modalBackdrop, { opacity: dimmedOpacity }]}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={closeLabel}
-            style={StyleSheet.absoluteFillObject}
-            onPress={closeSheetWithAnimation}
-          />
-        </Animated.View>
+        {/* 시트 위 남는 공간을 그대로 차지하는 닫기 영역. absoluteFill Pressable로
+            두었을 때는 Android Modal 안에서 탭이 전혀 전달되지 않아, 배경을 눌러도
+            시트가 닫히지 않았다(실기기 재현). 레이아웃 흐름에 넣어 hit test를 보장한다. */}
+        <Pressable
+          testID="sheet-backdrop"
+          accessibilityRole="button"
+          accessibilityLabel={closeLabel}
+          style={styles.sheetBackdropFill}
+          onPress={closeSheetWithAnimation}
+        />
         <Animated.View style={[styles.sheet, { transform: [{ translateY: dragY }] }]}>
           <View testID="sheet-drag-handle" style={styles.sheetDragArea} {...panResponder.panHandlers}>
             <View style={styles.sheetHandle} />
           </View>
-          <Text style={styles.sheetTitle}>{title}</Text>
+          <View style={styles.sheetTitleRow}>
+            <Text style={styles.sheetTitle}>{title}</Text>
+            {/* 시트가 헤더 골드 카드를 덮어, 구매를 결정하는 순간 정작 보유 골드를
+                읽을 수 없었다(실기기 재현). 시트 자체에 현재 보유액을 둔다. */}
+            {goldLabel != null ? (
+              <Text testID="sheet-gold" style={styles.sheetGold} numberOfLines={1}>
+                {goldLabel}
+              </Text>
+            ) : null}
+          </View>
           <Text style={styles.sheetDescription}>{description}</Text>
           <ScrollView
             showsVerticalScrollIndicator={false}
@@ -8691,6 +8757,11 @@ function Sheet({
             {children}
           </ScrollView>
         </Animated.View>
+        {overlay != null ? (
+          <View testID="sheet-overlay" pointerEvents="box-none" style={StyleSheet.absoluteFillObject}>
+            {overlay}
+          </View>
+        ) : null}
       </KeyboardAvoidingView>
     </Modal>
   );

@@ -216,6 +216,9 @@ export const koFarmMessages = {
   lockedAreaHint: (areaName: string, requirement: string) => `${areaName} 열기 조건 · ${requirement}`,
   collectionUnlockHint: (requirement: string) => `🔒 해금 조건: ${requirement}`,
   harvestHint: '밭을 눌러 수확할 수 있어요.',
+  harvestHintEmpty: '아래에서 씨앗을 골라 빈 밭에 심어 보세요.',
+  harvestHintGrowing: '작물이 자라는 중이에요. 다 자라면 눌러서 수확해요.',
+  sheetGoldLabel: (amount: string) => `🪙 ${amount}G`,
   harvestAllButton: (count: number) => `🧺 모두 수확 ${count}`,
   // #252: 수확 후 같은/선택 작물로 빈 밭 재심기를 한 번에.
   harvestReplantButton: '🔁 수확 후 재심기',

@@ -213,6 +213,9 @@ export const jaFarmMessages: FarmMessages = {
   lockedAreaHint: (areaName, requirement) => `${areaName} 解放条件 · ${requirement}`,
   collectionUnlockHint: (requirement) => `🔒 解放条件: ${requirement}`,
   harvestHint: '畑をタップして収穫できます。',
+  harvestHintEmpty: '下から種を選んで、空いた畑に植えてみましょう。',
+  harvestHintGrowing: '作物が育っています。育ちきったらタップして収穫します。',
+  sheetGoldLabel: (amount) => `🪙 ${amount}G`,
   harvestAllButton: (count) => `🧺 すべて収穫 ${count}`,
   harvestReplantButton: '🔁 収穫して植え直し',
   harvestReplantToast: (amount, harvested, planted) =>

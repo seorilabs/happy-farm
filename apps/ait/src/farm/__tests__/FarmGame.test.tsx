@@ -1488,8 +1488,10 @@ describe('FarmGame UI flow', () => {
       await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
 
       // starter_field (default selection) is unlocked with 5 crops → toggle shown.
+      // 초기 상태는 첫 밭이 자라는 중이고 나머지는 빈 밭이라, 수확 도구 힌트는
+      // "수확하세요"가 아니라 "씨앗을 심어보세요"가 맞다.
       const metaRow = screen.getByTestId('seed-meta-row');
-      expect(within(metaRow).getByText(messages.harvestHint)).toBeTruthy();
+      expect(within(metaRow).getByText(messages.harvestHintEmpty)).toBeTruthy();
       expect(within(metaRow).getByTestId('seed-sort-toggle')).toBeTruthy();
 
       // A locked area renders no seed buttons, so there is nothing to sort.
@@ -7708,5 +7710,103 @@ describe('하단 safe-area 인셋 적용 (#236)', () => {
       await waitFor(() => expect(screen.getByTestId('onboarding-coachmark')).toBeTruthy());
       expect(screen.queryByTestId('feature-coachmark-card')).toBeNull();
     });
+  });
+});
+
+// 실기기 E2E 플레이에서 잡은 결함들의 회귀 방지.
+describe('E2E 실기기 플레이에서 드러난 결함 회귀', () => {
+  const messages = getFarmMessages(DEFAULT_LOCALE);
+  const completedState = (): GameState => ({ ...createInitialState(), onboardingCompleted: true });
+
+  test('밭이 전부 비면 수확이 아니라 심기를 안내한다', async () => {
+    // 밭이 전부 비었는데도 "밭을 눌러 수확할 수 있어요"가 남아, 실제로 누르면
+    // "씨앗을 선택해 주세요"로 튕기는 모순이 있었다(온보딩 직후 신규 유저 경로).
+    const base = completedState();
+    const screen = await renderGame({
+      ...base,
+      plots: base.plots.map((plot) => ({ ...plot, cropType: null, startTime: null, state: 0 as const })),
+    });
+    await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+    const metaRow = screen.getByTestId('seed-meta-row');
+    expect(within(metaRow).getByText(messages.harvestHintEmpty)).toBeTruthy();
+    expect(within(metaRow).queryByText(messages.harvestHint)).toBeNull();
+  });
+
+  test('밭이 전부 성장 중이면 심으라고 안내하지 않는다', async () => {
+    const base = completedState();
+    const screen = await renderGame({
+      ...base,
+      plots: base.plots.map((plot) => ({
+        ...plot,
+        cropType: 'carrot' as const,
+        startTime: Date.now(),
+        state: 1 as const,
+      })),
+    });
+    await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+    const metaRow = screen.getByTestId('seed-meta-row');
+    expect(within(metaRow).getByText(messages.harvestHintGrowing)).toBeTruthy();
+    expect(within(metaRow).queryByText(messages.harvestHint)).toBeNull();
+  });
+
+  test('익은 밭이 있을 때만 수확을 안내한다', async () => {
+    const base = completedState();
+    const screen = await renderGame({
+      ...base,
+      plots: base.plots.map((plot) => ({
+        ...plot,
+        cropType: 'carrot' as const,
+        startTime: Date.now() - 600_000,
+        state: 2 as const,
+      })),
+    });
+    await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+    expect(within(screen.getByTestId('seed-meta-row')).getByText(messages.harvestHint)).toBeTruthy();
+  });
+
+  test('시트가 열려 있어도 토스트가 시트와 같은 윈도우에 한 번만 렌더된다', async () => {
+    // 시트는 RN Modal이라 별도 네이티브 윈도우에 그려진다. 같은 트리의 토스트는 그
+    // 뒤에 가려, 실기기에서는 밭 개간 성공 토스트조차 화면에 나타나지 않았다.
+    const screen = await renderGame({ ...completedState(), gold: 100_000 });
+    await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+
+    fireEvent.press(screen.getByTestId('shop-nav-button'));
+    await waitFor(() => expect(screen.getByText(messages.sheetTitleShop)).toBeTruthy());
+
+    await act(async () => {
+      fireEvent.press(screen.getByLabelText(new RegExp(`^${messages.shopPlotTitle}`)));
+    });
+
+    const toasts = await screen.findAllByText(messages.plotExpandedToast);
+    expect(toasts).toHaveLength(1);
+    // 토스트가 Modal 안 오버레이 슬롯에 있어야 시트 위에서 실제로 보인다.
+    expect(
+      within(screen.getByTestId('sheet-overlay')).getByText(messages.plotExpandedToast)
+    ).toBeTruthy();
+  });
+
+  test('일괄 액션 행이 처음 나타날 때의 탭은 막지 않는다', async () => {
+    // 오탭 가드가 버튼의 첫 등장까지 막으면 정상 사용이 불가능해진다.
+    const base = completedState();
+    const state: GameState = {
+      ...base,
+      gold: 100,
+      plots: base.plots.map((plot) => ({
+        ...plot,
+        cropType: 'carrot' as const,
+        startTime: NOW - 600_000,
+        state: 2 as const,
+      })),
+    };
+    const screen = await renderGame(state);
+    await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+
+    const readyCount = state.plots.filter((plot) => plot.id < state.unlockedPlotCount).length;
+    await act(async () => {
+      fireEvent.press(screen.getByText(messages.harvestAllButton(readyCount)));
+    });
+    await waitFor(() =>
+      expect(screen.queryByText(`${formatMoney(state.gold, DEFAULT_LOCALE)}G`)).toBeNull()
+    );
   });
 });

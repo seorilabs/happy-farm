@@ -61,6 +61,7 @@ import {
   COLLECTION_CELL_WIDTH,
   styles as collectionStyles,
 } from '../../../../../packages/farm-ui/src/components/CollectionSheet';
+import { SheetAction, sheetPartStyles } from '../../../../../packages/farm-ui/src/components/SheetParts';
 import { StatsSheet } from '../../../../../packages/farm-ui/src/components/StatsSheet';
 import { AchievementsSheet } from '../../../../../packages/farm-ui/src/components/AchievementsSheet';
 import { LabSheet } from '../../../../../packages/farm-ui/src/components/LabSheet';
@@ -219,7 +220,9 @@ describe('ready output batch actions', () => {
 
     const cancel = screen.getByTestId(`workshop-cancel-${recipe.key}`);
     expect(cancel.props.accessibilityLabel).toBe(messages.workshopCancelAction);
-    expect(StyleSheet.flatten(cancel.props.style).backgroundColor).toBe('#edf2f7');
+    expect(StyleSheet.flatten(cancel.props.style).backgroundColor).toBe(
+      sheetPartStyles.secondarySheetAction.backgroundColor
+    );
     fireEvent.press(cancel);
     expect(onCancel).toHaveBeenCalledTimes(1);
     expect(onCancel).toHaveBeenCalledWith(recipe.key);
@@ -1840,3 +1843,37 @@ describe('cooking sheet (#442)', () => {
     ).toBeTruthy();
   });
 });
+
+describe('비활성 액션 버튼 가독성 회귀', () => {
+  test('disabled SheetAction은 배경만 내리지 않고 라벨 색도 함께 내린다', () => {
+    // disabledCard가 배경을 밝은 베이지로 바꾸는데 라벨은 흰색 그대로라, 실기기에서
+    // 대비 1.08:1로 "축사 짓기 · 600G"나 초기화 확정 버튼이 읽히지 않았다.
+    const screen = render(<SheetAction label="disabled-label" disabled onPress={jest.fn()} />);
+    const label = screen.getByText('disabled-label');
+    const labelColor = StyleSheet.flatten(label.props.style).color;
+    expect(labelColor).toBe(sheetPartStyles.disabledSheetActionText.color);
+    expect(labelColor).not.toBe(sheetPartStyles.sheetActionText.color);
+
+    const buttonStyle = StyleSheet.flatten(screen.getByLabelText('disabled-label').props.style);
+    // 투명도가 끼면 실제 렌더 대비가 스타일 값보다 낮아진다(실기기에서 2.79:1로 측정).
+    // 비활성 버튼은 투명도 없이 색만으로 상태를 전달해야 이 단언이 실제를 반영한다.
+    expect(buttonStyle.opacity).toBeUndefined();
+    expect(
+      contrastRatio(labelColor as string, buttonStyle.backgroundColor as string)
+    ).toBeGreaterThanOrEqual(4.5);
+  });
+});
+
+// WCAG 상대 휘도 대비비. 팔레트를 바꿔도 비활성 라벨이 다시 안 보이게 되는 것을 막는다.
+function contrastRatio(foreground: string, background: string): number {
+  const luminance = (hex: string) => {
+    const value = hex.replace('#', '');
+    const channels = [0, 2, 4].map((offset) => {
+      const channel = parseInt(value.slice(offset, offset + 2), 16) / 255;
+      return channel <= 0.03928 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+    });
+    return 0.2126 * channels[0]! + 0.7152 * channels[1]! + 0.0722 * channels[2]!;
+  };
+  const [lighter, darker] = [luminance(foreground), luminance(background)].sort((a, b) => b - a);
+  return (lighter! + 0.05) / (darker! + 0.05);
+}

@@ -249,7 +249,7 @@ const styles = StyleSheet.create({
   },
   missionProgress: {
     marginTop: 6,
-    color: '#667085',
+    color: '#a98a4e',
     fontSize: 12,
     fontWeight: '800',
   },
@@ -258,7 +258,7 @@ const styles = StyleSheet.create({
     height: 6,
     borderRadius: 3,
     overflow: 'hidden',
-    backgroundColor: '#edf2f7',
+    backgroundColor: '#eadfc4',
   },
   progressFill: {
     height: '100%',

@@ -213,6 +213,9 @@ export const zhHantFarmMessages: FarmMessages = {
   lockedAreaHint: (areaName, requirement) => `${areaName} 開啟條件 · ${requirement}`,
   collectionUnlockHint: (requirement) => `🔒 解鎖：${requirement}`,
   harvestHint: '點擊田地即可收成。',
+  harvestHintEmpty: '在下方選擇種子，種到空田地上吧。',
+  harvestHintGrowing: '作物正在生長，長成後點擊即可收成。',
+  sheetGoldLabel: (amount) => `🪙 ${amount}G`,
   harvestAllButton: (count) => `🧺 全部收成 ${count}`,
   harvestReplantButton: '🔁 收成後補種',
   harvestReplantToast: (amount, harvested, planted) =>
