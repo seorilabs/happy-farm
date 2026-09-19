@@ -12,8 +12,11 @@ import {
   PLOT_DISCOUNT_AD_DAILY_LIMIT,
   PLOT_DISCOUNT_AD_PERCENT,
   RETURN_INTERSTITIAL_COOLDOWN_MS,
+  canShowHarvestInterstitial,
   canShowReturnInterstitial,
   getDiscountedPlotCost,
+  getInterstitialCooldownMs,
+  recordBatchHarvest,
   recordReturnInterstitial,
   HARVEST_BONUS_AD_COOLDOWN_MS,
   HARVEST_BONUS_BOOST_DURATION_MS,
@@ -51,6 +54,7 @@ import {
   recordRewardedAdUsage,
   resolveOnboardingStep,
 } from '../constants';
+import { getAdLimits } from '../adLimits';
 import type { CropKey, GameState } from '../types';
 
 const NOW = Date.parse('2026-05-27T03:00:00.000Z');
@@ -307,6 +311,9 @@ describe('farm save migration', () => {
       },
       cookingSpeedAd: { lastUsedAt: null, dailyCount: 0 },
       returnInterstitialAt: null,
+      // 구 세이브에는 없던 필드라 0부터 시작한다. 일일 카운터와 달리 날짜가
+      // 바뀌어도 리셋되지 않는 누적값이다.
+      batchHarvestCount: 0,
     });
   });
 
@@ -604,6 +611,59 @@ describe('farm ad limits', () => {
 
     // Once the cooldown elapses → allowed again.
     expect(canShowReturnInterstitial(afterShow, NOW + RETURN_INTERSTITIAL_COOLDOWN_MS)).toBe(true);
+  });
+
+  test('일괄 수확 전면광고는 진행도 유예를 채운 뒤에만 열린다', () => {
+    const limits = getAdLimits();
+    const grace = limits.interstitialHarvestGraceCount;
+    expect(grace).toBeGreaterThan(0);
+
+    // 온보딩을 마치지 않았으면 유예와 무관하게 닫혀 있다. 신규 플레이어의 첫
+    // 세션 초반 노출이 업계에서 가장 흔한 실수로 꼽히는 지점이다.
+    const onboarding: GameState = { ...createInitialState(), onboardingCompleted: false };
+    expect(canShowHarvestInterstitial(onboarding, NOW)).toBe(false);
+
+    let state: GameState = { ...createInitialState(), onboardingCompleted: true };
+    expect(state.adUsage.batchHarvestCount).toBe(0);
+    expect(canShowHarvestInterstitial(state, NOW)).toBe(false);
+
+    for (let i = 0; i < grace; i += 1) {
+      expect(canShowHarvestInterstitial(state, NOW)).toBe(false);
+      state = { ...state, adUsage: recordBatchHarvest(state, NOW) };
+    }
+
+    expect(state.adUsage.batchHarvestCount).toBe(grace);
+    expect(canShowHarvestInterstitial(state, NOW)).toBe(true);
+
+    // 유예를 넘기면 더 세지 않는다. 게이트 판정에만 쓰이는 값이라 무한히
+    // 커질 이유가 없고, 호출부도 이 값이 그대로면 상태를 갱신하지 않는다.
+    expect(recordBatchHarvest(state, NOW).batchHarvestCount).toBe(grace);
+    expect(recordBatchHarvest({ ...state, adUsage: recordBatchHarvest(state, NOW) }, NOW).batchHarvestCount).toBe(
+      grace
+    );
+  });
+
+  test('전면광고 간격은 세션 내 노출 횟수에 따라 늘어난다', () => {
+    const backoff = getAdLimits().interstitialBackoffMs;
+    expect(backoff.length).toBeGreaterThan(0);
+
+    backoff.forEach((expected, index) => {
+      expect(getInterstitialCooldownMs(index)).toBe(expected);
+    });
+
+    // 배열 끝을 넘어가면 마지막 값(상한)이 계속 적용된다.
+    const last = backoff[backoff.length - 1];
+    expect(getInterstitialCooldownMs(backoff.length)).toBe(last);
+    expect(getInterstitialCooldownMs(backoff.length + 50)).toBe(last);
+
+    // 음수·소수 입력도 첫 단계로 안전하게 떨어진다.
+    expect(getInterstitialCooldownMs(-3)).toBe(backoff[0]);
+    expect(getInterstitialCooldownMs(1.9)).toBe(backoff[Math.min(1, backoff.length - 1)]);
+
+    // 단조 증가여야 "뒤로 갈수록 뜸해진다"는 의도가 유지된다.
+    for (let i = 1; i < backoff.length; i += 1) {
+      expect(backoff[i]!).toBeGreaterThanOrEqual(backoff[i - 1]!);
+    }
   });
 
   test('ad usage normalization rejects future and non-finite timestamps', () => {

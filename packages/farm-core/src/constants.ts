@@ -142,7 +142,6 @@ export const PLOT_DISCOUNT_AD_PERCENT = balance.ads.plotDiscountAdPercent;
 export const PLOT_DISCOUNT_AD_DAILY_LIMIT = balance.ads.plotDiscountAdDailyLimit;
 export const PLOT_DISCOUNT_AD_COOLDOWN_MS = balance.ads.plotDiscountAdCooldownMs;
 export const OFFLINE_BONUS_MULTIPLIER = balance.ads.offlineBonusMultiplier;
-export const INTERSTITIAL_MILESTONE_COOLDOWN_MS = balance.ads.interstitialMilestoneCooldownMs;
 // Minimum gap between two return (welcome-back) interstitials. Keeps the
 // session-return ad non-intrusive for players who reopen the app often.
 export const RETURN_INTERSTITIAL_COOLDOWN_MS = balance.ads.returnInterstitialCooldownMs;
@@ -620,6 +619,7 @@ export function createInitialAdUsage(now = Date.now()): GameState['adUsage'] {
     harvestBonusAd: { lastUsedAt: null, lastPromptedAt: null, boostEndsAt: null, dailyCount: 0 },
     cookingSpeedAd: { lastUsedAt: null, dailyCount: 0 },
     returnInterstitialAt: null,
+    batchHarvestCount: 0,
   };
 }
 
@@ -633,6 +633,15 @@ function isFiniteTimestamp(value: unknown): value is number {
 
 function normalizeDailyCount(value: unknown, isSameDay: boolean) {
   if (!isSameDay || typeof value !== 'number' || !Number.isFinite(value)) {
+    return 0;
+  }
+  return Math.max(0, Math.floor(value));
+}
+
+// 날짜 경계와 무관한 누적 카운터. 예전 세이브에는 아예 없던 필드라
+// 값이 없거나 깨져 있으면 0부터 시작한다.
+function normalizeCount(value: unknown) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
     return 0;
   }
   return Math.max(0, Math.floor(value));
@@ -688,7 +697,45 @@ export function normalizeAdUsage(
     returnInterstitialAt: isFinitePastTimestamp(adUsage?.returnInterstitialAt, now)
       ? adUsage.returnInterstitialAt
       : null,
+    // 일일 카운터와 달리 날짜가 바뀌어도 리셋하지 않는다. 신규 플레이어
+    // 유예는 "오늘 몇 번 했나"가 아니라 "이 세이브에서 몇 번 해봤나"다.
+    batchHarvestCount: normalizeCount(adUsage?.batchHarvestCount),
   };
+}
+
+// 일괄 수확을 한 번 했다고 기록한다. 유예 구간을 벗어나면 더 세지 않는다 —
+// 게이트 판정에 쓰이는 값이라 상한을 넘겨 계속 키울 이유가 없다.
+export function recordBatchHarvest(gameState: GameState, now = Date.now()): GameState['adUsage'] {
+  const adUsage = normalizeAdUsage(gameState.adUsage, now);
+  const graceCount = getAdLimits().interstitialHarvestGraceCount;
+  if (adUsage.batchHarvestCount >= graceCount) {
+    return adUsage;
+  }
+  return { ...adUsage, batchHarvestCount: adUsage.batchHarvestCount + 1 };
+}
+
+// 일괄 수확 전면 광고의 진행도 게이트. 온보딩을 마쳤고 유예 횟수를 채운
+// 세이브에서만 열린다. 시간 기준 간격은 getInterstitialCooldownMs가 따로 본다.
+export function canShowHarvestInterstitial(gameState: GameState, now = Date.now()): boolean {
+  if (!gameState.onboardingCompleted) {
+    return false;
+  }
+  const adUsage = normalizeAdUsage(gameState.adUsage, now);
+  return adUsage.batchHarvestCount >= getAdLimits().interstitialHarvestGraceCount;
+}
+
+// 세션 안에서 이미 shownCount번 띄웠을 때, 다음 전면 광고까지 필요한 최소
+// 간격. 배열 끝을 넘어가면 마지막 값(상한)이 계속 적용돼 오래 붙잡고 있는
+// 플레이어일수록 뜸해진다.
+export function getInterstitialCooldownMs(shownCount: number): number {
+  const backoff = getAdLimits().interstitialBackoffMs;
+  if (backoff.length === 0) {
+    // check-balance가 빈 배열을 막지만, 설정이 깨졌을 때 쿨다운 0(=연타 노출)로
+    // 무너지는 대신 광고를 아예 막는 쪽이 안전하다.
+    return Number.POSITIVE_INFINITY;
+  }
+  const index = Math.min(Math.max(0, Math.floor(shownCount)), backoff.length - 1);
+  return backoff[index] ?? backoff[backoff.length - 1] ?? Number.POSITIVE_INFINITY;
 }
 
 // Whether the return (welcome-back) interstitial may fire now: never fired, or

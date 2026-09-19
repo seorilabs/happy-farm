@@ -20,11 +20,10 @@ import {
 const APPS_IN_TOSS_REWARDED_AD_GROUP_ID = 'ait.v2.live.6fc77adf3f034cd6';
 // 전면 광고 그룹. 보상형과 같은 공개 식별자라 코드에 둔다.
 //
-// AppsInToss 클라이언트에 공개된 범위는 복귀(welcome-back) 지면뿐이다. 진행
-// 마일스톤 같은 다른 지면을 켜려면 콘솔에서 해당 지면의 정책·빈도 승인을 먼저
-// 받아야 한다. 이 제약은 Remote Config 파라미터 설명에 적혀 있었는데, 원격 설정을
-// 걷어내면서 값과 함께 여기로 옮겼다.
-const APPS_IN_TOSS_INTERSTITIAL_AD_GROUP_ID = 'ait.v2.live.fc8c280163284428';
+// 복귀(welcome-back)·진행 마일스톤·일괄 수확 세 지면이 이 그룹 하나를 공유한다.
+// 지면별 빈도는 FarmGame 쪽 백오프가 정하고, 세 지면이 같은 타임라인을 쓰므로
+// 수확과 해금이 연달아 일어나도 광고가 붙어서 뜨지 않는다.
+const APPS_IN_TOSS_INTERSTITIAL_AD_GROUP_ID = 'ait.v2.live.521b503408b94852';
 
 function useAppsInTossRewardedAd(adGroupId?: string) {
   return useFullScreenAd(adGroupId, {
@@ -74,9 +73,8 @@ function Page() {
         audio={audio}
         interstitialPlacements={{
           returnWelcomeBack: true,
-          // 콘솔에 공개된 지면이 복귀뿐이라 진행 마일스톤은 닫아 둔다. 승인을 받으면
-          // 켠다. 모바일(AdMob)에는 이 제약이 없어 두 지면 모두 열려 있다.
-          progressionMilestone: false,
+          progressionMilestone: true,
+          harvestBatch: true,
         }}
         persistence={appsInTossPersistence}
         preferredLocale={detectRuntimeLocale()}
