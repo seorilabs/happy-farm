@@ -89,8 +89,6 @@ import {
   PLOT_DISCOUNT_AD_PERCENT,
   getRewardedGoldAmount,
   getShopRewardedAdOffer,
-  REWARDED_GOLD_MAX_USES_PER_WINDOW,
-  REWARDED_GOLD_WINDOW_MS,
   type AreaKey,
   type AnimalsScreenSource,
   type CollectionRewardKey,
@@ -5781,6 +5779,22 @@ function FarmGameBody({
             accessibilityLabel={messages.moreButtonAccessibilityLabel}
             onPress={openMore}
           />
+          {/* 수확 부스트. 광고 보상 중 유일하게 "기다려서는 얻을 수 없는" 것이라
+              상점 안에 묻어두지 않고 메인에 꺼내 둔다. 부스트 중에는 남은 시간을
+              그대로 보여줘 언제 다시 볼지 판단할 수 있게 한다. 이 행은 가로
+              스크롤이라 버튼이 하나 늘어도 나머지가 좁아지지 않는다. */}
+          {rewardedAd.isAdSupported ? (
+            <NavButton
+              testID="boost-nav-button"
+              label={
+                harvestBonusBoost.active
+                  ? messages.boostNavActiveLabel(formatDuration(safeBoostRemainingMs, locale))
+                  : messages.boostNavLabel(HARVEST_BONUS_MULTIPLIER)
+              }
+              accessibilityLabel={messages.boostNavAccessibilityLabel}
+              onPress={() => setActiveSheet({ type: 'harvestBonus' })}
+            />
+          ) : null}
         </ScrollView>
       </View>
 
@@ -6252,26 +6266,24 @@ function FarmGameBody({
                 {activeShopTab === 'rewards' && adSupported ? (
                   <View testID="shop-tab-panel-rewards">
                     <Text style={styles.sheetSectionTitle}>{messages.adRewardsSection}</Text>
-                    <AdRewardCard
-                      title={
-                        shopRewardedAdOffer.kind === 'gold'
-                          ? messages.rewardedGoldTitle(formatMoney(shopRewardedAdOffer.amount, locale))
-                          : messages.landmarkAdMaterialTitle
-                      }
-                      desc={
-                        rewardedGoldLimit.allowed
-                          ? shopRewardedAdOffer.kind === 'gold'
-                            ? messages.rewardedGoldReadyDesc(
-                                REWARDED_GOLD_WINDOW_MS / 60000,
-                                REWARDED_GOLD_MAX_USES_PER_WINDOW
-                              )
-                            : messages.landmarkAdMaterialDescription(shopRewardedAdOffer.amount)
-                          : rewardedGoldLimit.reason
-                      }
-                      cta={rewardedGoldLimit.allowed ? messages.rewardReceiveCta : messages.rewardWaitCta}
-                      disabled={!rewardedAd.isAdSupported || !rewardedGoldLimit.allowed}
-                      onPress={() => void rewardGoldFromAd()}
-                    />
+                    {/* 골드 보상은 지면에서 뺐다. 방치형에서 "10분치 골드"는 10분
+                        기다리면 그냥 얻는 것이라 광고를 볼 이유가 약했고, 같은 광고
+                        시청으로 수확 부스트를 받는 편이 명백히 낫다. 열등한 선택지를
+                        나란히 두면 사용자가 손해 보는 쪽을 고르게 된다.
+                        랜드마크 재료는 기다려서 얻을 수 없는 보상이라 그대로 둔다. */}
+                    {shopRewardedAdOffer.kind !== 'gold' ? (
+                      <AdRewardCard
+                        title={messages.landmarkAdMaterialTitle}
+                        desc={
+                          rewardedGoldLimit.allowed
+                            ? messages.landmarkAdMaterialDescription(shopRewardedAdOffer.amount)
+                            : rewardedGoldLimit.reason
+                        }
+                        cta={rewardedGoldLimit.allowed ? messages.rewardReceiveCta : messages.rewardWaitCta}
+                        disabled={!rewardedAd.isAdSupported || !rewardedGoldLimit.allowed}
+                        onPress={() => void rewardGoldFromAd()}
+                      />
+                    ) : null}
                     <AdRewardCard
                       title={messages.rewardedPlotTitle}
                       desc={

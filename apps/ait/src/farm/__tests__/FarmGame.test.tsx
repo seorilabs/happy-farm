@@ -19,7 +19,6 @@ import {
   MAX_PLOTS,
   PLOT_DISCOUNT_AD_DAILY_LIMIT,
   REWARDED_GOLD_MAX_USES_PER_WINDOW,
-  REWARDED_GOLD_WINDOW_MS,
   RESEARCH_BATCH_STEP,
   PRESTIGE_STARS_BASE,
   PRODUCTION_RECIPES,
@@ -90,6 +89,11 @@ import {
 } from '../../../../../packages/farm-ui/src/farmGameLayout';
 
 const NOW = Date.parse('2026-05-27T03:00:00.000Z');
+
+// 수확 부스트 시트의 CTA. 골드 보상 지면을 걷어낸 뒤로 보상 광고 흐름을
+// 검증하는 진입점이 이쪽으로 옮겨졌다(메인 네비의 부스트 버튼 → 시트 → CTA).
+const HARVEST_BONUS_SHEET_TITLE = '수확 보너스';
+const HARVEST_BONUS_CTA = `광고 보고 30분 동안 수확 ${HARVEST_BONUS_MULTIPLIER}배`;
 
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
@@ -3686,11 +3690,13 @@ describe('FarmGame UI flow', () => {
     });
 
     await waitFor(() => expect(screen.getByText(`${formatMoney(shopReadyState.gold)}G`)).toBeTruthy());
-    fireEvent.press(screen.getByText('🏪 상점'));
-    fireEvent.press(screen.getByTestId('shop-tab-rewards'));
-    fireEvent.press(screen.getByText('받기'));
+    fireEvent.press(screen.getByTestId('boost-nav-button'));
+    fireEvent.press(screen.getByText(HARVEST_BONUS_CTA));
     await waitFor(() => expect(rewarded.showAd).toHaveBeenCalledTimes(1));
 
+    // 보상 광고가 공유 전면 표면을 붙잡고 있는 동안 마일스톤 전면이 끼어들지
+    // 않아야 한다. 부스트 시트는 CTA 직후 닫히므로 상점을 새로 열어 트리거한다.
+    fireEvent.press(screen.getByTestId('shop-nav-button'));
     fireEvent.press(screen.getByTestId('shop-tab-expand'));
     fireEvent.press(screen.getByText('밭 개간하기'));
     expect(interstitial.showAd).not.toHaveBeenCalled();
@@ -4123,46 +4129,26 @@ describe('FarmGame UI flow', () => {
     });
   });
 
-  test('REWARDED_GOLD_WINDOW_MS is a whole number of minutes so the description divides without rounding', () => {
-    expect(REWARDED_GOLD_WINDOW_MS % 60000).toBe(0);
-  });
-
-  test('shows the correct window duration and max uses in the rewarded gold ad description', async () => {
-    const messages = getFarmMessages(DEFAULT_LOCALE);
-    const rewardedAd = createReadyRewardedAd();
-    const screen = await renderGame(null, { useRewardedAd: () => rewardedAd });
-
-    await waitFor(() => expect(screen.getByText('🏪 상점')).toBeTruthy());
-    fireEvent.press(screen.getByText('🏪 상점'));
-    // 광고 보상은 보상 탭으로 이동(#372).
-    fireEvent.press(screen.getByTestId('shop-tab-rewards'));
-
-    // Use direct division — the invariant test above guarantees no remainder.
-    const expectedDesc = messages.rewardedGoldReadyDesc(
-      REWARDED_GOLD_WINDOW_MS / 60000,
-      REWARDED_GOLD_MAX_USES_PER_WINDOW
-    );
-    expect(screen.getByText(expectedDesc)).toBeTruthy();
-  });
-
-  test('closes the shop sheet after a rewarded gold ad so the farm remains tappable', async () => {
+  test('closes the sheet after a rewarded ad so the farm remains tappable', async () => {
     const rewardedAd = createReadyRewardedAd();
     const screen = await renderGame(null, { useRewardedAd: () => rewardedAd });
 
     await waitFor(() => expect(screen.getByText('50G')).toBeTruthy());
 
-    fireEvent.press(screen.getByText('🏪 상점'));
-    expect(screen.getByText('농장 관리소')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('boost-nav-button'));
+    expect(screen.getByText(HARVEST_BONUS_SHEET_TITLE)).toBeTruthy();
 
-    fireEvent.press(screen.getByTestId('shop-tab-rewards'));
-    fireEvent.press(screen.getByText('받기'));
+    fireEvent.press(screen.getByText(HARVEST_BONUS_CTA));
 
     await waitFor(() => expect(rewardedAd.showAd).toHaveBeenCalledTimes(1));
-    await waitFor(() => expect(screen.queryByText('농장 관리소')).toBeNull());
-    await waitFor(() => expect(screen.getByText(`${formatMoney(50 + 100)}G`)).toBeTruthy());
+    await waitFor(() => expect(screen.queryByText(HARVEST_BONUS_SHEET_TITLE)).toBeNull());
 
-    fireEvent.press(screen.getByText('당근'));
-    expect(screen.getByText('당근 심기 · 10G · 투자효율 +40%')).toBeTruthy();
+    // 시트가 닫힌 뒤 농장이 다시 조작 가능한지까지 본다(시트가 남아 농장을
+    // 가리는 회귀를 막는 것이 이 테스트의 목적이다).
+    await waitFor(() => expect(screen.getAllByText('당근').length).toBeGreaterThan(0));
+    fireEvent.press(screen.getAllByText('당근')[0]!);
+    // 투자효율 수치는 부스트 적용 여부에 따라 달라지므로 값을 박지 않는다.
+    await waitFor(() => expect(screen.getByText(/당근 심기 · 10G/)).toBeTruthy());
   }, 30_000);
 
   test('첫 졸업 이후 상점 보상 광고는 골드 대신 랜드마크 축제 포인트를 지급한다', async () => {
@@ -4245,17 +4231,16 @@ describe('FarmGame UI flow', () => {
 
     await waitFor(() => expect(screen.getByText('50G')).toBeTruthy());
 
-    fireEvent.press(screen.getByText('🏪 상점'));
-
-    fireEvent.press(screen.getByTestId('shop-tab-rewards'));
-    fireEvent.press(screen.getByText('받기'));
+    fireEvent.press(screen.getByTestId('boost-nav-button'));
+    fireEvent.press(screen.getByText(HARVEST_BONUS_CTA));
 
     await waitFor(() => expect(rewardedAd.showAd).toHaveBeenCalledTimes(1));
-    await waitFor(() => expect(screen.queryByText('농장 관리소')).toBeNull());
+    await waitFor(() => expect(screen.queryByText(HARVEST_BONUS_SHEET_TITLE)).toBeNull());
     expect(screen.getByText('50G')).toBeTruthy();
 
-    fireEvent.press(screen.getByText('당근'));
-    expect(screen.getByText('당근 심기 · 10G · 투자효율 +40%')).toBeTruthy();
+    await waitFor(() => expect(screen.getAllByText('당근').length).toBeGreaterThan(0));
+    fireEvent.press(screen.getAllByText('당근')[0]!);
+    await waitFor(() => expect(screen.getByText(/당근 심기 · 10G/)).toBeTruthy());
   }, 30_000);
 
   test('normalizes thrown rewarded ad failures and closes the active sheet', async () => {
@@ -4268,17 +4253,16 @@ describe('FarmGame UI flow', () => {
 
     await waitFor(() => expect(screen.getByText('50G')).toBeTruthy());
 
-    fireEvent.press(screen.getByText('🏪 상점'));
-    fireEvent.press(screen.getByTestId('shop-tab-rewards'));
-    fireEvent.press(screen.getByText('받기'));
+    fireEvent.press(screen.getByTestId('boost-nav-button'));
+    fireEvent.press(screen.getByText(HARVEST_BONUS_CTA));
 
     await waitFor(() => expect(rewardedAd.showAd).toHaveBeenCalledTimes(1));
-    await waitFor(() => expect(screen.queryByText('농장 관리소')).toBeNull());
+    await waitFor(() => expect(screen.queryByText(HARVEST_BONUS_SHEET_TITLE)).toBeNull());
 
     expect(track).toHaveBeenCalledWith(
       'ad_reward_failed',
       expect.objectContaining({
-        ad_type: 'rewardedGold',
+        ad_type: 'harvestBonusAd',
         reason: 'show_ad_threw',
       })
     );
@@ -4295,16 +4279,15 @@ describe('FarmGame UI flow', () => {
 
     await waitFor(() => expect(screen.getByText('50G')).toBeTruthy());
 
-    fireEvent.press(screen.getByText('🏪 상점'));
-    fireEvent.press(screen.getByTestId('shop-tab-rewards'));
-    fireEvent.press(screen.getByText('받기'));
+    fireEvent.press(screen.getByTestId('boost-nav-button'));
+    fireEvent.press(screen.getByText(HARVEST_BONUS_CTA));
 
     // 실패 → 실제 준비 확인 → 재시도(성공)로 showAd가 정확히 2회 호출된다.
     await waitFor(() => expect(rewardedAd.showAd).toHaveBeenCalledTimes(2));
     expect(rewardedAd.ensureAdReady).toHaveBeenCalledTimes(1);
     expect(rewardedAd.reloadAd).not.toHaveBeenCalled();
 
-    expect(track).toHaveBeenCalledWith('ad_reward_completed', expect.objectContaining({ ad_type: 'rewardedGold' }));
+    expect(track).toHaveBeenCalledWith('ad_reward_completed', expect.objectContaining({ ad_type: 'harvestBonusAd' }));
     expect(track).not.toHaveBeenCalledWith('ad_reward_failed', expect.anything());
   }, 30_000);
 
@@ -4321,9 +4304,8 @@ describe('FarmGame UI flow', () => {
 
     await waitFor(() => expect(screen.getByText('50G')).toBeTruthy());
 
-    fireEvent.press(screen.getByText('🏪 상점'));
-    fireEvent.press(screen.getByTestId('shop-tab-rewards'));
-    fireEvent.press(screen.getByText('받기'));
+    fireEvent.press(screen.getByTestId('boost-nav-button'));
+    fireEvent.press(screen.getByText(HARVEST_BONUS_CTA));
 
     await waitFor(() => expect(rewardedAd.showAd).toHaveBeenCalledTimes(2));
     expect(rewardedAd.ensureAdReady).toHaveBeenCalledTimes(1);
@@ -4331,10 +4313,10 @@ describe('FarmGame UI flow', () => {
 
     const failedCalls = track.mock.calls.filter(([event]) => event === 'ad_reward_failed');
     expect(failedCalls).toHaveLength(1);
-    expect(failedCalls[0][1]).toEqual(expect.objectContaining({ ad_type: 'rewardedGold', reason: 'no_fill' }));
+    expect(failedCalls[0][1]).toEqual(expect.objectContaining({ ad_type: 'harvestBonusAd', reason: 'no_fill' }));
   }, 30_000);
 
-  test('미로드 상태의 실제 CTA 탭을 계측하고 보상 탭 진입 시 프리로드를 킥한다', async () => {
+  test('보상 탭에 진입할 때만 프리로드를 킥한다', async () => {
     const rewardedAd: RewardedAdController = {
       isAdReady: false,
       isAdSupported: true,
@@ -4359,13 +4341,41 @@ describe('FarmGame UI flow', () => {
       jest.advanceTimersByTime(GAME_TICK_INTERVAL_MS * 8);
     });
     expect(rewardedAd.reloadAd).toHaveBeenCalledTimes(1);
+  }, 30_000);
+
+  test('미로드 상태의 실제 CTA 탭을 계측하되 네이티브 show는 부르지 않는다', async () => {
+    // 상점 보상 카드는 부스트 시트와 달리 readiness 로 비활성화하지 않는다.
+    // "준비 안 됐는데도 누른" 강한 의도를 계측으로 남기기 위해서다. 프레스티지
+    // 이후 지면(랜드마크 물자)이 그 카드를 쓴다.
+    const base = createInitialState();
+    const state: GameState = {
+      ...base,
+      gold: 123_456,
+      prestige: { ...base.prestige, level: 1 },
+      unlockedAreas: FARM_AREAS.filter((area) => area.unlock.gate == null).map((area) => area.key),
+    };
+    const rewardedAd: RewardedAdController = {
+      isAdReady: false,
+      isAdSupported: true,
+      reloadAd: jest.fn(),
+      showAd: jest.fn(async (): Promise<RewardedAdShowResult> => ({ status: 'notReady' })),
+    };
+    const track = jest.fn();
+    const screen = await renderGame(state, {
+      analytics: createFarmAnalytics(track),
+      useRewardedAd: () => rewardedAd,
+    });
+
+    await waitFor(() => expect(screen.getByText(`${formatMoney(state.gold)}G`)).toBeTruthy());
+
+    fireEvent.press(screen.getByTestId('shop-nav-button'));
+    fireEvent.press(screen.getByTestId('shop-tab-rewards'));
 
     // CTA 탭 의도는 readiness와 무관하게 click→failed(not_ready)로 남지만,
     // 준비되지 않은 네이티브 show는 호출하지 않고 보상도 지급하지 않는다.
     fireEvent.press(screen.getByText('받기'));
     fireEvent.press(screen.getByText('받기'));
     expect(rewardedAd.showAd).not.toHaveBeenCalled();
-    expect(screen.getByText(getFarmMessages(DEFAULT_LOCALE).adPreparingToast)).toBeTruthy();
     expect(track.mock.calls.filter(([event]) => event === 'ad_reward_click')).toHaveLength(1);
     expect(track.mock.calls.filter(([event]) => event === 'ad_reward_failed')).toHaveLength(1);
   }, 30_000);
@@ -6520,8 +6530,13 @@ describe('FarmGame UI flow', () => {
     await waitFor(() => expect(screen.queryByText('수확 보너스')).toBeNull());
 
     // 부스트가 실제로 다음 수확 골드에 적용되는지(핵심 동작) 먼저 확인한다.
+    // 첫 수확은 배율 없이, 두 번째 수확만 부스트가 붙으므로 누적은 (1 + 배율)배다.
     fireEvent.press(screen.getAllByText('GET')[0]!);
-    expect(screen.getByText(`${formatMoney(readyHarvestState.gold + carrotRevenue * 3)}G`)).toBeTruthy();
+    expect(
+      screen.getByText(
+        `${formatMoney(readyHarvestState.gold + Math.floor(carrotRevenue * (1 + HARVEST_BONUS_MULTIPLIER)))}G`
+      )
+    ).toBeTruthy();
 
     // 부스트 지표 표기는 상단 HUD가 아니라 '농장 현황' 시트로 이동했다(#233).
     fireEvent.press(screen.getByTestId('cotd-chip'));

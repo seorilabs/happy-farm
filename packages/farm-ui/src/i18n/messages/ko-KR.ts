@@ -231,6 +231,9 @@ export const koFarmMessages = {
   missionsButtonAccessibilityLabel: '오늘의 미션',
   // navRow 과밀 정리(#241): 룰렛·도감·연구소·개척·업적을 '더보기' 시트 뒤로 묶는다.
   moreButton: '📂 더보기',
+  boostNavLabel: (multiplier: number) => `⚡ 수확 ${multiplier}배`,
+  boostNavActiveLabel: (remaining: string) => `⚡ ${remaining} 남음`,
+  boostNavAccessibilityLabel: '수확 부스트',
   moreButtonAccessibilityLabel: '더보기 메뉴',
   sheetTitleMore: '더보기',
   sheetDescriptionMore: '매일 할 것·부가 생산·장기 성장 메뉴를 한곳에서 열어요.',

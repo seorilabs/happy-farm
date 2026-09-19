@@ -613,14 +613,23 @@ const rewardedAdGates = [
   { key: 'cookingSpeedAd', dailyLimit: ads.cookingSpeedAdDailyLimit, cooldownMs: ads.cookingSpeedAdCooldownMs },
 ];
 for (const gate of rewardedAdGates) {
+  // dailyLimit === null 은 "일일 한도 없음"을 뜻한다. 이때는 쿨다운이 유일한
+  // 게이트라 0보다 커야 한다(0이면 무한 연타가 된다).
+  const unlimited = gate.dailyLimit === null;
   check(
-    Number.isInteger(gate.dailyLimit) && gate.dailyLimit >= 1,
-    `ads.${gate.key}DailyLimit(${gate.dailyLimit})는 1 이상의 정수여야 합니다.`
+    unlimited || (Number.isInteger(gate.dailyLimit) && gate.dailyLimit >= 1),
+    `ads.${gate.key}DailyLimit(${gate.dailyLimit})는 1 이상의 정수이거나 null(한도 없음)이어야 합니다.`
   );
   check(
     isFiniteNumber(gate.cooldownMs) && gate.cooldownMs >= 0,
     `ads.${gate.key}CooldownMs(${gate.cooldownMs})는 0 이상의 유한 값이어야 합니다.`
   );
+  if (unlimited) {
+    check(
+      isFiniteNumber(gate.cooldownMs) && gate.cooldownMs > 0,
+      `ads.${gate.key}: 일일 한도가 없으면(null) 쿨다운이 유일한 게이트이므로 0보다 커야 합니다.`
+    );
+  }
   // 한도가 2회 이상이면 쿨다운으로 연타를 막아야 빈도 게이트가 의미를 갖는다.
   if (Number.isInteger(gate.dailyLimit) && gate.dailyLimit >= 2) {
     check(
@@ -629,6 +638,15 @@ for (const gate of rewardedAdGates) {
     );
   }
 }
+
+// 부스트가 끊기지 않고 계속 이어지면 사실상 상시 배율이 되어 밸런스가 그만큼
+// 상향된다. 쿨다운이 지속시간 이상이어야 최소한 겹치지는 않는다.
+check(
+  isFiniteNumber(ads.harvestBonusAdCooldownMs) &&
+    isFiniteNumber(ads.harvestBonusBoostDurationMs) &&
+    ads.harvestBonusAdCooldownMs >= ads.harvestBonusBoostDurationMs,
+  `ads.harvestBonusAdCooldownMs(${ads.harvestBonusAdCooldownMs})는 부스트 지속시간(${ads.harvestBonusBoostDurationMs}) 이상이어야 합니다(부스트 중첩 방지).`
+);
 
 // rewardedGold는 윈도우 기반 분리 모델: 보상액/윈도우/회수/일일 한도가 유한·합리 범위.
 check(

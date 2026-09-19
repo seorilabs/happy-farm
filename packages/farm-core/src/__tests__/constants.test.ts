@@ -697,7 +697,7 @@ describe('farm ad limits', () => {
     });
   });
 
-  test('harvest bonus prompt uses a long exposure cooldown', () => {
+  test('harvest bonus prompt is gated by its cooldown', () => {
     let state: GameState = { ...createInitialState(), adUsage: createInitialAdUsage(NOW) };
 
     expect(getHarvestBonusPromptStatus(state, NOW).allowed).toBe(true);
@@ -706,8 +706,31 @@ describe('farm ad limits', () => {
 
     const blocked = getHarvestBonusPromptStatus(state, NOW + 1);
     expect(blocked.allowed).toBe(false);
-    expect(blocked.reason).toContain('12시간');
+    // 쿨다운 값은 balance.json 이 정본이라 문구에 값을 박지 않는다. 남은 시간이
+    // 안내되는지와 경계 동작만 본다.
+    expect(blocked.reason.length).toBeGreaterThan(0);
+    expect(getHarvestBonusPromptStatus(state, NOW + HARVEST_BONUS_AD_COOLDOWN_MS - 1).allowed).toBe(false);
     expect(getHarvestBonusPromptStatus(state, NOW + HARVEST_BONUS_AD_COOLDOWN_MS + 1).allowed).toBe(true);
+  });
+
+  test('수확 부스트는 일일 한도 없이 쿨다운만으로 제한된다', () => {
+    // 방치형에서 "기다리면 얻는" 골드 보상 대신 시간을 압축하는 보상이라,
+    // 많이 볼수록 이득인 구조가 의도다. 대신 쿨다운이 유일한 게이트이므로
+    // 0보다 크고, 부스트가 겹치지 않도록 지속시간 이상이어야 한다.
+    const limits = getAdLimits();
+    expect(limits.harvestBonusAdDailyLimit).toBeNull();
+    expect(limits.harvestBonusAdCooldownMs).toBeGreaterThan(0);
+    expect(limits.harvestBonusAdCooldownMs).toBeGreaterThanOrEqual(HARVEST_BONUS_BOOST_DURATION_MS);
+
+    // 한도가 없으니 dailyCount 가 아무리 쌓여도 한도 사유로 막히지 않는다.
+    const state: GameState = {
+      ...createInitialState(),
+      adUsage: {
+        ...createInitialAdUsage(NOW),
+        harvestBonusAd: { lastUsedAt: null, lastPromptedAt: null, boostEndsAt: null, dailyCount: 99 },
+      },
+    };
+    expect(getRewardedAdLimitStatus(state, 'harvestBonusAd', NOW).allowed).toBe(true);
   });
 
   test('harvest bonus ad activates a timed reward multiplier', () => {

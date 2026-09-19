@@ -90,8 +90,12 @@ describe('보상형 광고 빈도 게이트 정합성(check-balance 가드와 �
 
   test('각 보상 광고의 일일 한도는 1 이상 정수, 쿨다운은 0 이상 유한 값', () => {
     for (const { limit, cooldown } of gates) {
-      expect(Number.isInteger(DEFAULT_AD_LIMITS[limit])).toBe(true);
-      expect(DEFAULT_AD_LIMITS[limit]).toBeGreaterThanOrEqual(1);
+      // null 은 "일일 한도 없음"이다. 쿨다운만으로 빈도를 조절하는 광고가 그렇다.
+      const dailyLimit = DEFAULT_AD_LIMITS[limit];
+      if (dailyLimit !== null) {
+        expect(Number.isInteger(dailyLimit)).toBe(true);
+        expect(dailyLimit).toBeGreaterThanOrEqual(1);
+      }
       expect(Number.isFinite(DEFAULT_AD_LIMITS[cooldown])).toBe(true);
       expect(DEFAULT_AD_LIMITS[cooldown]).toBeGreaterThanOrEqual(0);
     }
@@ -99,7 +103,9 @@ describe('보상형 광고 빈도 게이트 정합성(check-balance 가드와 �
 
   test('일일 한도가 2 이상인 보상 광고는 쿨다운이 0보다 크다(같은 날 연타 방지)', () => {
     for (const { limit, cooldown } of gates) {
-      if (DEFAULT_AD_LIMITS[limit] >= 2) {
+      const dailyLimit = DEFAULT_AD_LIMITS[limit];
+      // 한도가 없으면(null) 쿨다운이 유일한 게이트라 반드시 0보다 커야 한다.
+      if (dailyLimit === null || dailyLimit >= 2) {
         expect(DEFAULT_AD_LIMITS[cooldown]).toBeGreaterThan(0);
       }
     }

@@ -60,10 +60,10 @@
       "productivityMinutes": 10,
       "nextGoalCapRatio": 0.25
     },
-    "harvestBonusMultiplier": 2,
-    "harvestBonusAdCooldownMs": 43200000,
+    "harvestBonusMultiplier": 1.5,
+    "harvestBonusAdCooldownMs": 1800000,
     "harvestBonusBoostDurationMs": 1800000,
-    "harvestBonusAdDailyLimit": 2,
+    "harvestBonusAdDailyLimit": null,
     "growthAdMinRemainingMs": 4000,
     "growthAdSkipMs": 600000,
     "growthAdSkipPercent": 0.25,
