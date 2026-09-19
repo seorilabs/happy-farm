@@ -97,6 +97,8 @@ export const zhHansFarmMessages: FarmMessages = {
   adFreePurchaseAction: (price: string) => `移除广告 · ${price}`,
   adFreeRestoreAction: '恢复购买',
   adFreeFailed: '无法确认购买状态，请稍后重试。',
+  privacySection: '隐私',
+  adPrivacyOptionsAction: '广告隐私设置',
   emptyPlot: '空地',
   readyBadge: 'GET',
   plotLockedAccessibilityLabel: (plotNumber) => `第${plotNumber}块地，已锁定。可在商店中开启。`,

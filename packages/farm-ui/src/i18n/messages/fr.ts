@@ -98,6 +98,8 @@ export const frFarmMessages: FarmMessages = {
   adFreePurchaseAction: (price: string) => `Supprimer les pubs · ${price}`,
   adFreeRestoreAction: 'Restaurer l’achat',
   adFreeFailed: 'Impossible de vérifier votre achat. Réessayez plus tard.',
+  privacySection: 'Confidentialité',
+  adPrivacyOptionsAction: 'Choix de confidentialité publicitaire',
   emptyPlot: 'Vide',
   readyBadge: 'GET',
   plotLockedAccessibilityLabel: (plotNumber) => `Parcelle ${plotNumber}, verrouillée. Débloque-la en boutique.`,

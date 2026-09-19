@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Platform } from 'react-native';
-import mobileAds, { AdEventType, RewardedAd, RewardedAdEventType } from 'react-native-google-mobile-ads';
+import { AdEventType, RewardedAd, RewardedAdEventType } from 'react-native-google-mobile-ads';
 
 import {
   logDevWarning,
@@ -10,6 +10,7 @@ import {
   type RewardedAdShowResult,
 } from '../../../../packages/farm-core/src';
 import { getRewardedAdUnitId } from './config';
+import { ensureAdMobReady } from './adMobConsent';
 import { ensureMobilePlatformSession, mobilePlatformAds } from '../platformEvents';
 import { showPlatformAdMobReward, type PlatformAdMobAdapter } from './platformRewardedAd';
 
@@ -25,7 +26,9 @@ function createPlatformAdMobAdapter(adUnitId: string): PlatformAdMobAdapter {
 
   return {
     async load(ssv) {
-      await mobileAds().initialize();
+      if (!(await ensureAdMobReady())) {
+        return false;
+      }
       const ad = RewardedAd.createForAdRequest(adUnitId, {
         requestNonPersonalizedAdsOnly: true,
         serverSideVerificationOptions: { customData: ssv.customData, userId: ssv.userId },
@@ -305,11 +308,7 @@ export function useAdMobRewardedAd() {
       return () => updateReady(false);
     }
 
-    void mobileAds()
-      .initialize()
-      .catch((error: unknown) => {
-        logDevWarning('[ads] initialize failed', error);
-      });
+    let cancelled = false;
 
     const createAdInstance = () => {
       const token = Symbol('mobile-rewarded-ad-instance');
@@ -384,12 +383,18 @@ export function useAdMobRewardedAd() {
       updateReady(false);
     };
 
-    rotateAdInstanceRef.current = rotateAdInstance;
-    rotateAdInstance();
-
-    void loadAd();
+    void ensureAdMobReady().then((ready) => {
+      if (!ready || cancelled) {
+        updateReady(false);
+        return;
+      }
+      rotateAdInstanceRef.current = rotateAdInstance;
+      rotateAdInstance();
+      void loadAd();
+    });
 
     return () => {
+      cancelled = true;
       rotateAdInstanceRef.current = null;
       const pendingShow = pendingShowRef.current;
       if (pendingShow != null) {

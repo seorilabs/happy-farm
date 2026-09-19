@@ -98,6 +98,8 @@ export const enFarmMessages: FarmMessages = {
   adFreePurchaseAction: (price: string) => `Remove ads · ${price}`,
   adFreeRestoreAction: 'Restore purchase',
   adFreeFailed: 'We could not verify your purchase status. Please try again.',
+  privacySection: 'Privacy',
+  adPrivacyOptionsAction: 'Advertising privacy choices',
   emptyPlot: 'Empty',
   readyBadge: 'GET',
   plotLockedAccessibilityLabel: (plotNumber) => `Plot ${plotNumber}, locked. Unlock it in the shop.`,

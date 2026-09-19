@@ -98,6 +98,8 @@ export const esFarmMessages: FarmMessages = {
   adFreePurchaseAction: (price: string) => `Eliminar anuncios · ${price}`,
   adFreeRestoreAction: 'Restaurar compra',
   adFreeFailed: 'No pudimos verificar tu compra. Inténtalo de nuevo.',
+  privacySection: 'Privacidad',
+  adPrivacyOptionsAction: 'Opciones de privacidad de anuncios',
   emptyPlot: 'Vacía',
   readyBadge: 'GET',
   plotLockedAccessibilityLabel: (plotNumber) => `Parcela ${plotNumber}, bloqueada. Desbloquéala en la tienda.`,
