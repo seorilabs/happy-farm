@@ -11,14 +11,14 @@
     "authority": "exact-central-workflow-artifact"
   },
   "releaseNotes": {
-    "ko-KR": "Android 내부 테스트 빌드를 다시 만들고, 무한 엔드게임 시스템(마스터리, 변이 도감, 연구소, 교배/자동화, 농장 체인 개척, 업적/칭호)이 Android bundle에 포함되도록 수정했습니다.",
-    "en-US": "Rebuilt the Android internal test build so the endless endgame systems, including mastery, mutation collection, Research Lab, breeding, automation, farm-chain pioneering, achievements, and titles, are included in the Android bundle.",
-    "ja": "マスタリー、変異コレクション、研究所、交配、自動化、農場チェーン開拓、実績、称号など、終わりのないエンドゲーム要素をAndroidバンドルに収録するため、Android内部テストビルドを再構築しました。",
-    "zh-Hans": "重新构建了 Android 内测版本，将熟练度、变异收集、研究所、杂交、自动化、连锁农场开拓、成就和称号等无尽终局系统全部纳入 Android 安装包。",
-    "zh-Hant": "重新建置了 Android 內部測試版本，讓無盡的終局系統，包括熟練度、變異收集、研究室、育種、自動化、連鎖農場開拓、成就與稱號，都納入 Android 安裝包中。",
-    "de": "Android-Testversion neu erstellt, damit die endlosen Endgame-Systeme im Android-Paket enthalten sind: Meisterschaft, Mutationssammlung, Forschungslabor, Zucht, Automatisierung, Kettenfarm-Erschließung, Erfolge und Titel.",
-    "fr": "Build de test interne Android reconstruit : les systèmes de fin de jeu sans fin (maîtrise, collection de mutations, Labo de recherche, croisement, automatisation, exploration en chaîne, succès et titres) sont désormais inclus dans le bundle Android.",
-    "es": "Reconstruimos la versión de prueba interna de Android para que los sistemas infinitos de final de partida, incluidas la maestría, la colección de mutaciones, el Laboratorio de Investigación, el cruce, la automatización, la colonización de granjas en cadena, los logros y los títulos, se incluyan en el paquete de Android."
+    "ko-KR": "설정에서 광고 개인정보 선택을 직접 열 수 있게 했습니다. 앱 실행 안정성을 개선했습니다.",
+    "en-US": "You can now open your ad privacy choices directly from Settings. Improved app startup stability.",
+    "ja": "設定から広告のプライバシー選択を直接開けるようにしました。アプリ起動の安定性を改善しました。",
+    "zh-Hans": "现在可以在设置中直接打开广告隐私选项。改进了应用启动的稳定性。",
+    "zh-Hant": "現在可以在設定中直接開啟廣告隱私選項。改善了應用程式啟動的穩定性。",
+    "de": "Die Datenschutzeinstellungen für Werbung lassen sich jetzt direkt in den Einstellungen öffnen. Die Stabilität beim App-Start wurde verbessert.",
+    "fr": "Vous pouvez désormais ouvrir vos choix de confidentialité publicitaire directement depuis les Réglages. La stabilité au démarrage a été améliorée.",
+    "es": "Ahora puedes abrir tus opciones de privacidad publicitaria directamente desde Ajustes. Se ha mejorado la estabilidad al iniciar la app."
   },
   "storeListing": {
     "appName": {
