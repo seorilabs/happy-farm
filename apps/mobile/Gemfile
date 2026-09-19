@@ -1,5 +1,18 @@
 source 'https://rubygems.org'
 
+# 주의: iOS Pods 는 이 Gemfile 로 설치하지 않는다. `pod install` 을 그대로 쓴다.
+#
+# Xcode Cloud(ci_scripts/ci_post_clone.sh)가 `brew install cocoapods` 로 받은
+# 판을 쓰고, Podfile.lock 의 COCOAPODS 줄도 그 버전으로 커밋돼 있다. 반면 이
+# Gemfile.lock 은 아래 xcodeproj 제약 때문에 cocoapods 1.15.2 에 묶여 있어서,
+# `bundle exec pod install` 을 쓰면 Podfile.lock 이 1.15.2 로 뒤집히고 커밋된
+# 것과 어긋난다. 실제로 그렇게 만든 archive 가 심사에 올라간 적이 있다.
+#
+# Gemfile.lock 을 올려 맞추는 쪽도 시도했지만, xcodeproj 제약을 풀면
+# cocoapods 가 brew 판보다 앞선 버전(1.17.0)으로 가서 다시 어긋난다. 설치
+# 경로를 하나(brew)로 두는 편이 단순하다. 이 파일은 RN 템플릿에서 온 것이고
+# pod 이외의 Ruby 도구를 쓰게 되면 그때 정본으로 삼는다.
+
 # You may use http://rbenv.org/ or https://rvm.io/ to install and use this version
 ruby ">= 2.6.10"
 
