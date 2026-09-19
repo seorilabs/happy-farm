@@ -41,6 +41,10 @@ const productionIdentifiers = {
   'apps/mobile/src/ads/config.ts': [
     `ca-app-pub-${publisher}/7956883150`,
     `ca-app-pub-${publisher}/4017638142`,
+    // 전면 단위. 지면 배선만 있고 값이 비면 노출이 조용히 0회로 돌아가므로
+    // 보상형과 같이 원장 값으로 못박는다.
+    `ca-app-pub-${publisher}/2237490915`,
+    `ca-app-pub-${publisher}/6470968134`,
   ],
   // 릴리스 문서도 원장 값을 그대로 적는다. 문서만 뒤처지면 이를 보고 설정을 맞출 때
   // 레거시 계정으로 되돌아간다(happy-farm#521).
@@ -70,6 +74,7 @@ for (const path of legacyPublisherFreePaths) {
 }
 
 expectText('apps/mobile/src/ads/config.ts', 'TestIds.REWARDED', 'debug 보상형 테스트 ID를 유지해야 합니다');
+expectText('apps/mobile/src/ads/config.ts', 'TestIds.INTERSTITIAL', 'debug 전면 테스트 ID를 유지해야 합니다');
 expectText('apps/mobile/android/app/build.gradle', 'com.seorilabs.happyfarm', 'Android package가 원장과 다릅니다');
 expectText(
   'apps/mobile/ios/HappyFarmMobile.xcodeproj/project.pbxproj',
