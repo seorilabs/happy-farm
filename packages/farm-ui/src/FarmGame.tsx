@@ -84,6 +84,7 @@ import {
   HARVEST_BONUS_MULTIPLIER,
   OFFLINE_BONUS_MULTIPLIER,
   getAdLimits,
+  getInterstitialCooldownMs,
   MAX_PLOTS,
   PLOT_DISCOUNT_AD_PERCENT,
   getRewardedGoldAmount,
@@ -112,6 +113,7 @@ import {
   getPrestigeRequirementStatus,
   grantLandmarkFestivalDeliveryPoints,
   type LandmarkStageKey,
+  canShowHarvestInterstitial,
   canShowReturnInterstitial,
   canUnlockArea,
   claimCollectionReward,
@@ -240,6 +242,7 @@ import {
   getPlantAllPreview,
   getReadyPlotCount,
   recordHarvestBonusAdPrompt,
+  recordBatchHarvest,
   recordReturnInterstitial,
   recordRewardedAdUsage,
   type CropHarvestedGameEvent,
@@ -608,11 +611,14 @@ export type FarmGameAdGroupIds = {
 export type FarmGameInterstitialPlacements = {
   returnWelcomeBack: boolean;
   progressionMilestone: boolean;
+  // 일괄 수확 직후. 핵심 루프에 붙는 지면이라 노출 빈도가 가장 높다.
+  harvestBatch: boolean;
 };
 
 const DEFAULT_INTERSTITIAL_PLACEMENTS: FarmGameInterstitialPlacements = {
   returnWelcomeBack: false,
   progressionMilestone: false,
+  harvestBatch: false,
 };
 
 // One-shot SFX beyond the base harvest coin. Adapters map each key to a
@@ -1240,6 +1246,13 @@ function FarmGameBody({
   const goldPulseScale = goldPulseScaleRef.current;
   useEffect(() => () => goldPulse.stopAnimation(), [goldPulse]);
   const lastInterstitialShownAtRef = useRef(0);
+  // 이번 세션에서 전면 광고를 몇 번 띄웠는지. 다음 노출까지의 간격이 이 값에
+  // 따라 늘어난다(120s → 180s → 300s). 오래 붙잡고 있는 플레이어일수록
+  // 뜸해지게 해 피로를 줄이는 것이 목적이다.
+  const interstitialSessionShownRef = useRef(0);
+  // 마지막으로 백그라운드에 들어간 시각. 충분히 오래 비웠다 돌아오면 위
+  // 카운터를 초기화해 새 세션으로 본다.
+  const interstitialBackgroundedAtRef = useRef<number | null>(null);
   const sessionStartedAtRef = useRef(Date.now());
   // Target time of the last scheduled harvest reminder. This effect re-runs
   // every tick, so we only emit notification_scheduled when that target
@@ -1932,6 +1945,20 @@ function FarmGameBody({
             void audio.playHarvest();
           }
           incrementCombo(effect.harvestedCount);
+          // 진행도 유예 카운터. 유예를 채우고 나면 값이 더 오르지 않으므로,
+          // 그때부터는 수확할 때마다 상태를 새로 만들지 않는다(normalizeAdUsage가
+          // 늘 새 객체를 돌려주니 참조가 아니라 값으로 비교한다).
+          setGameState((state) => {
+            const nextAdUsage = recordBatchHarvest(state, Date.now());
+            return nextAdUsage.batchHarvestCount === state.adUsage.batchHarvestCount
+              ? state
+              : { ...state, adUsage: nextAdUsage };
+          });
+          // 일괄 수확이 끝난 직후가 전면 광고를 끼우기 가장 자연스러운 지점이다.
+          // 한 번의 탭으로 여러 밭을 거둔 뒤라 사이클이 끝났다는 감각이 있고,
+          // 입력 중이 아니라 오탭 위험도 낮다. 실제 노출 여부는 진행도 유예와
+          // 백오프가 정한다.
+          void maybeShowHarvestAd();
         }
         continue;
       }
@@ -2648,12 +2675,24 @@ function FarmGameBody({
     const subscription = AppState.addEventListener('change', (nextState) => {
       if (nextState === 'background' || nextState === 'inactive') {
         manualHarvestComboPendingEndReasonRef.current = 'background';
+        interstitialBackgroundedAtRef.current = Date.now();
         markSeen();
         flushAutoHarvestSummary();
         flushCropReadySummary();
         flushManualHarvestCombo('background');
       } else if (nextState === 'active') {
         manualHarvestComboPendingEndReasonRef.current = null;
+        // 충분히 오래 비웠다 돌아오면 새 세션으로 보고 전면 광고 백오프를
+        // 처음 단계로 되돌린다. 잠깐 앱을 전환한 정도로는 리셋되지 않으므로
+        // 백오프를 우회하려고 앱을 껐다 켜는 것이 이득이 되지 않는다.
+        const backgroundedAt = interstitialBackgroundedAtRef.current;
+        if (
+          backgroundedAt != null &&
+          Date.now() - backgroundedAt >= getAdLimits().interstitialSessionResetMs
+        ) {
+          interstitialSessionShownRef.current = 0;
+        }
+        interstitialBackgroundedAtRef.current = null;
       }
     });
     return () => {
@@ -4713,17 +4752,16 @@ function FarmGameBody({
     }
   }
 
-  async function maybeShowMilestoneAd(placement: string) {
-    if (
-      !interstitialPlacements.progressionMilestone ||
-      fullScreenAdInFlightRef.current ||
-      !interstitialAd.isAdReady
-    ) {
+  // 마일스톤과 일괄 수확이 공유하는 실제 노출 경로. 간격은 세션 내 노출
+  // 횟수에 따라 늘어나고(백오프), 두 지면이 하나의 타임라인을 공유하므로
+  // 수확과 해금이 연달아 일어나도 광고가 붙어서 뜨지 않는다.
+  async function showInterstitial(placement: string) {
+    if (fullScreenAdInFlightRef.current || !interstitialAd.isAdReady) {
       return;
     }
 
     const now = Date.now();
-    if (now - lastInterstitialShownAtRef.current < getAdLimits().interstitialMilestoneCooldownMs) {
+    if (now - lastInterstitialShownAtRef.current < getInterstitialCooldownMs(interstitialSessionShownRef.current)) {
       return;
     }
 
@@ -4735,6 +4773,7 @@ function FarmGameBody({
       }
       const shownAt = Date.now();
       lastInterstitialShownAtRef.current = shownAt;
+      interstitialSessionShownRef.current += 1;
       farmAnalytics.trackInterstitialShown(placement, analyticsContext());
     } catch {
       // Host adapters are expected to return a failed result, but a throwing
@@ -4743,6 +4782,34 @@ function FarmGameBody({
     } finally {
       fullScreenAdInFlightRef.current = false;
     }
+  }
+
+  async function maybeShowMilestoneAd(placement: string) {
+    // 온보딩 중에는 띄우지 않는다. 복귀 지면에는 원래 이 가드가 있었는데
+    // 마일스톤에는 빠져 있어, 튜토리얼 중 첫 밭 해금에 광고가 뜰 수 있었다.
+    if (
+      !interstitialPlacements.progressionMilestone ||
+      onboardingStep != null ||
+      !gameStateRef.current.onboardingCompleted
+    ) {
+      return;
+    }
+    await showInterstitial(placement);
+  }
+
+  // 일괄 수확 직후 지면. 진행도 유예(누적 일괄 수확 N회)를 통과한 세이브에서만
+  // 열린다. 시간이 아니라 진행도로 재기 때문에 짧게 자주 노는 사람도 몇 판
+  // 안에 유예를 통과하고, 신규 플레이어의 첫 세션 초반만 보호된다.
+  async function maybeShowHarvestAd() {
+    if (interstitialPlacements.harvestBatch !== true || onboardingStep != null) {
+      return;
+    }
+    const now = Date.now();
+    const stateBeforeShow = gameStateRef.current;
+    if (!canShowHarvestInterstitial(stateBeforeShow, now)) {
+      return;
+    }
+    await showInterstitial('harvest_batch');
   }
 
   // A non-intrusive interstitial on session return, shown after the player has

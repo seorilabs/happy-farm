@@ -2569,6 +2569,7 @@ describe('FarmGame UI flow', () => {
         interstitialPlacements: {
           returnWelcomeBack: true,
           progressionMilestone: false,
+        harvestBatch: false,
         },
         useInterstitialAd: () => interstitial,
       });
@@ -2599,6 +2600,7 @@ describe('FarmGame UI flow', () => {
         interstitialPlacements: {
           returnWelcomeBack: true,
           progressionMilestone: false,
+        harvestBatch: false,
         },
         useInterstitialAd: () => interstitial,
       });
@@ -3641,6 +3643,7 @@ describe('FarmGame UI flow', () => {
       interstitialPlacements: {
         returnWelcomeBack: true,
         progressionMilestone: false,
+      harvestBatch: false,
       },
       useInterstitialAd: () => interstitial,
     });
@@ -3676,6 +3679,7 @@ describe('FarmGame UI flow', () => {
       interstitialPlacements: {
         returnWelcomeBack: false,
         progressionMilestone: true,
+      harvestBatch: false,
       },
       useInterstitialAd: () => interstitial,
       useRewardedAd: () => rewarded,

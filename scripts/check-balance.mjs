@@ -671,11 +671,34 @@ for (const key of [
   'harvestBonusBoostDurationMs',
   'growthAdMinRemainingMs',
   'growthAdSkipMs',
-  'interstitialMilestoneCooldownMs',
+  'interstitialSessionResetMs',
   'returnInterstitialCooldownMs',
 ]) {
   check(isFiniteNumber(ads[key]) && ads[key] >= 0, `ads.${key}(${ads[key]})는 0 이상의 유한 값이어야 합니다.`);
 }
+
+// 전면 광고 백오프: 세션 내 n번째 노출의 최소 간격. 단조 증가여야 뒤로 갈수록
+// 뜸해진다는 의도가 유지되고, 0이면 연타로 노출돼 게이트가 무의미해진다.
+check(
+  Array.isArray(ads.interstitialBackoffMs) && ads.interstitialBackoffMs.length > 0,
+  `ads.interstitialBackoffMs는 비어 있지 않은 배열이어야 합니다.`
+);
+if (Array.isArray(ads.interstitialBackoffMs)) {
+  ads.interstitialBackoffMs.forEach((ms, index) => {
+    check(
+      isFiniteNumber(ms) && ms > 0,
+      `ads.interstitialBackoffMs[${index}](${ms})는 0보다 큰 유한 값이어야 합니다.`
+    );
+    check(
+      index === 0 || ms >= ads.interstitialBackoffMs[index - 1],
+      `ads.interstitialBackoffMs[${index}](${ms})는 앞 단계(${ads.interstitialBackoffMs[index - 1]}) 이상이어야 합니다(백오프는 단조 증가).`
+    );
+  });
+}
+check(
+  Number.isInteger(ads.interstitialHarvestGraceCount) && ads.interstitialHarvestGraceCount >= 0,
+  `ads.interstitialHarvestGraceCount(${ads.interstitialHarvestGraceCount})는 0 이상의 정수여야 합니다.`
+);
 
 // 12) 비료(즉시 성장 촉진) 가격 안전성(#227): 계수는 유한·합리 범위이고, 작물별로
 // "비료 비용 > 단축되는 시간 동안의 net 골드 가치"라는 불변식을 만족해야 한다.

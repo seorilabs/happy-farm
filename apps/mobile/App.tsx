@@ -62,7 +62,15 @@ function App() {
         notifications={mobileHarvestNotifications}
         persistence={mobileFarmPersistence}
         preferredLocale={detectRuntimeLocale()}
-        interstitialPlacements={{ returnWelcomeBack: true, progressionMilestone: true }}
+        // 세 지면 모두 연다. 프로덕션 전면 ad unit 이 아직 비어 있어
+        // getInterstitialAdUnitId 가 null 을 돌려주는 동안에는 컨트롤러가
+        // 미지원으로 동작해 아무것도 뜨지 않는다. 중앙 원장에 단위가 등록되고
+        // config 에 값을 채우면 이 배선 그대로 노출이 시작된다.
+        interstitialPlacements={{
+          returnWelcomeBack: true,
+          progressionMilestone: true,
+          harvestBatch: true,
+        }}
         useInterstitialAd={useAdMobInterstitialAd}
         useRewardedAd={useAdMobRewardedAd}
       />

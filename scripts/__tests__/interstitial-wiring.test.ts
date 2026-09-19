@@ -11,26 +11,27 @@ function readSource(relativePath: string) {
 }
 
 describe('전면광고 연결 계약', () => {
-  test('모바일 앱이 전면 어댑터와 두 지면을 FarmGame에 넘긴다', () => {
+  test('모바일 앱이 전면 어댑터와 세 지면을 FarmGame에 넘긴다', () => {
     const app = readSource('apps/mobile/App.tsx');
-
     expect(app).toContain('useInterstitialAd={useAdMobInterstitialAd}');
-    expect(app).toMatch(/interstitialPlacements=\{\{[^}]*returnWelcomeBack:\s*true/);
-    expect(app).toMatch(/interstitialPlacements=\{\{[^}]*progressionMilestone:\s*true/);
+    const placements = app.slice(app.indexOf('interstitialPlacements={{'));
+
+    expect(placements).toMatch(/returnWelcomeBack:\s*true/);
+    expect(placements).toMatch(/progressionMilestone:\s*true/);
+    expect(placements).toMatch(/harvestBatch:\s*true/);
   });
 
-  test('AppsInToss는 콘솔에 공개된 복귀 지면만 켠다', () => {
-    // AIT 콘솔이 복귀 지면만 승인해 둔 상태다. 진행 마일스톤을 켜려면 해당 지면의
-    // 정책·빈도 승인이 먼저 필요하므로, 승인 없이 열리는 것을 막는다.
+  test('AppsInToss도 세 지면을 모두 켠다', () => {
     const page = readSource('apps/ait/src/pages/index.tsx');
     expect(page).toContain('interstitialPlacements={{');
     const placements = page.slice(page.indexOf('interstitialPlacements={{'));
 
     expect(placements).toMatch(/returnWelcomeBack:\s*true/);
-    expect(placements).toMatch(/progressionMilestone:\s*false/);
+    expect(placements).toMatch(/progressionMilestone:\s*true/);
+    expect(placements).toMatch(/harvestBatch:\s*true/);
   });
 
-  test('FarmGame 기본값은 두 지면 모두 꺼진 상태를 유지한다', () => {
+  test('FarmGame 기본값은 세 지면 모두 꺼진 상태를 유지한다', () => {
     // 호스트가 명시적으로 켜지 않으면 노출하지 않는다. 광고 어댑터를 넘기지 않는
     // 테스트·미지원 호스트가 전면광고를 띄우는 일이 없어야 한다.
     const farmGame = readSource('packages/farm-ui/src/FarmGame.tsx');
@@ -39,6 +40,31 @@ describe('전면광고 연결 계약', () => {
 
     expect(defaults).toMatch(/returnWelcomeBack:\s*false/);
     expect(defaults).toMatch(/progressionMilestone:\s*false/);
+    expect(defaults).toMatch(/harvestBatch:\s*false/);
+  });
+
+  test('마일스톤·수확 지면은 온보딩 중에 뜨지 않는다', () => {
+    // 복귀 지면에만 있던 가드가 빠져 있어 튜토리얼 중 첫 밭 해금에 광고가
+    // 뜰 수 있었다. 세 지면 모두 온보딩을 마친 뒤에만 열린다.
+    const farmGame = readSource('packages/farm-ui/src/FarmGame.tsx');
+
+    const milestone = farmGame.slice(farmGame.indexOf('async function maybeShowMilestoneAd'));
+    expect(milestone.slice(0, 600)).toMatch(/onboardingStep != null/);
+    expect(milestone.slice(0, 600)).toMatch(/onboardingCompleted/);
+
+    const harvest = farmGame.slice(farmGame.indexOf('async function maybeShowHarvestAd'));
+    expect(harvest.slice(0, 600)).toMatch(/onboardingStep != null/);
+    // 진행도 유예는 core 게이트가 본다(온보딩 완료 여부도 그 안에 있다).
+    expect(harvest.slice(0, 600)).toContain('canShowHarvestInterstitial');
+  });
+
+  test('전면 노출 간격은 세션 내 횟수에 따라 늘어난다', () => {
+    // 고정 쿨다운이 아니라 백오프다. 초반엔 자주, 오래 붙잡고 있을수록 뜸하게.
+    const farmGame = readSource('packages/farm-ui/src/FarmGame.tsx');
+    expect(farmGame).toContain('getInterstitialCooldownMs(interstitialSessionShownRef.current)');
+    expect(farmGame).toContain('interstitialSessionShownRef.current += 1');
+    // 오래 비웠다 돌아오면 새 세션으로 보고 백오프를 되돌린다.
+    expect(farmGame).toContain('interstitialSessionResetMs');
   });
 
   test('전면 ad unit이 비어 있으면 프로덕션에서 미지원으로 떨어진다', () => {

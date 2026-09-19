@@ -140,6 +140,11 @@ export type AdUsage = {
   // Last time the return (welcome-back) interstitial was shown; gates its
   // cooldown across app restarts. Null until the first return ad fires.
   returnInterstitialAt: number | null;
+  // 일괄 수확 누적 횟수. 전면 광고의 초기 유예를 시간이 아니라 진행도로
+  // 재는 기준이다. 세션이 아니라 세이브에 쌓이므로, 짧게 자주 노는 사람도
+  // 몇 판 안에 유예를 통과한다. 업계에서 가장 흔한 실수로 꼽히는 "신규
+  // 사용자 첫 세션 초반 전면 광고"만 피하는 것이 목적이다.
+  batchHarvestCount: number;
 };
 
 export type GameState = {

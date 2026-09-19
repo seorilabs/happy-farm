@@ -35,8 +35,12 @@ export type AdLimitsConfig = {
   cookingSpeedAdDailyLimit: number;
   /** 요리 즉시 완성 광고: 쿨다운(ms) */
   cookingSpeedAdCooldownMs: number;
-  /** 마일스톤 전면 광고: 최소 노출 간격(ms) */
-  interstitialMilestoneCooldownMs: number;
+  /** 전면 광고: 이 횟수만큼 일괄 수확할 때까지는 띄우지 않는다(신규 플레이어 첫인상 보호) */
+  interstitialHarvestGraceCount: number;
+  /** 전면 광고: 세션 내 n번째 노출의 최소 간격(ms). 마지막 값이 이후 전부에 적용된다 */
+  interstitialBackoffMs: number[];
+  /** 전면 광고: 이 시간 이상 백그라운드에 있다 돌아오면 백오프 단계를 처음으로 되돌린다(ms) */
+  interstitialSessionResetMs: number;
   /** 복귀(welcome-back) 전면 광고: 최소 노출 간격(ms) */
   returnInterstitialCooldownMs: number;
 };
@@ -56,7 +60,9 @@ export const DEFAULT_AD_LIMITS: AdLimitsConfig = {
   wheelBonusAdCooldownMs: balance.ads.wheelBonusAdCooldownMs,
   cookingSpeedAdDailyLimit: balance.ads.cookingSpeedAdDailyLimit,
   cookingSpeedAdCooldownMs: balance.ads.cookingSpeedAdCooldownMs,
-  interstitialMilestoneCooldownMs: balance.ads.interstitialMilestoneCooldownMs,
+  interstitialHarvestGraceCount: balance.ads.interstitialHarvestGraceCount,
+  interstitialBackoffMs: balance.ads.interstitialBackoffMs,
+  interstitialSessionResetMs: balance.ads.interstitialSessionResetMs,
   returnInterstitialCooldownMs: balance.ads.returnInterstitialCooldownMs,
 };
 
