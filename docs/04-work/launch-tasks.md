@@ -148,7 +148,7 @@ flowchart TB
 - **인수조건:**
   - [x] BM 옵션 비교/권고안 문서 작성 → `docs/04-work/monetization-bm-spike.md`
   - [x] 후속 구현 범위 정의(동 문서 5절: P0 결제 토대 → P1 광고 제거 → P2 분석 → P3 AIT 결제 조사 → P4 보상 패스)
-- **결론:** 광고 제거(영구 1회성) IAP를 1차 추진, 보상 패스는 결제 토대 안정 후 2차 보류. AIT 결제는 별도 조사.
+- **결론(2026-09-19 갱신):** 인앱 결제를 도입하지 않는다. 스파이크 권고안이던 광고 제거 IAP는 상품을 등록하지 않은 채 구매 동선만 앱에 남아 App Store Guideline 2.1(b) 반려를 유발했고, 관련 코드를 전부 제거했다. 수익화는 광고 only를 유지한다.
 - **관련 파일:** `docs/04-work/monetization-bm-spike.md`, `packages/farm-core/src/ads.ts`
 
 ---

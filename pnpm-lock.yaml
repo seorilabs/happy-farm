@@ -224,9 +224,6 @@ importers:
       react-native-google-mobile-ads:
         specifier: 16.3.3
         version: 16.3.3(react@19.2.3)
-      react-native-iap:
-        specifier: 14.7.9
-        version: 14.7.9(react-native-nitro-modules@0.31.10(react-native@0.85.0(@babel/core@7.28.5)(@react-native-community/cli@20.1.0(typescript@5.9.3))(@react-native/jest-preset@0.85.0(@babel/core@7.28.5)(react@19.2.3))(@react-native/metro-config@0.85.0(@babel/core@7.28.5))(@types/react@19.2.0)(react@19.2.3))(react@19.2.3))(react-native@0.85.0(@babel/core@7.28.5)(@react-native-community/cli@20.1.0(typescript@5.9.3))(@react-native/jest-preset@0.85.0(@babel/core@7.28.5)(react@19.2.3))(@react-native/metro-config@0.85.0(@babel/core@7.28.5))(@types/react@19.2.0)(react@19.2.3))(react@19.2.3)
       react-native-nitro-modules:
         specifier: 0.31.10
         version: 0.31.10(react-native@0.85.0(@babel/core@7.28.5)(@react-native-community/cli@20.1.0(typescript@5.9.3))(@react-native/jest-preset@0.85.0(@babel/core@7.28.5)(react@19.2.3))(@react-native/metro-config@0.85.0(@babel/core@7.28.5))(@types/react@19.2.0)(react@19.2.3))(react@19.2.3)
@@ -7004,13 +7001,6 @@ packages:
     peerDependenciesMeta:
       expo:
         optional: true
-
-  react-native-iap@14.7.9:
-    resolution: {integrity: sha512-ZT5A7y6vnBerU3t4PNPhv/8yZMed+gax4cXOd840P1fO1JheNXBeFor/3/KBps7kCpvSiZ9ReTHnUihHdP8Fdg==}
-    peerDependencies:
-      react: '*'
-      react-native: '*'
-      react-native-nitro-modules: ^0.31.1
 
   react-native-nitro-modules@0.31.10:
     resolution: {integrity: sha512-hcvjTu9YJE9fMmnAUvhG8CxvYLpOuMQ/2eyi/S6GyrecezF6Rmk/uRQEL6v09BRFWA/xRVZNQVulQPS+2HS3mQ==}
@@ -17202,12 +17192,6 @@ snapshots:
       use-deep-compare-effect: 1.8.1(react@19.2.3)
     transitivePeerDependencies:
       - react
-
-  react-native-iap@14.7.9(react-native-nitro-modules@0.31.10(react-native@0.85.0(@babel/core@7.28.5)(@react-native-community/cli@20.1.0(typescript@5.9.3))(@react-native/jest-preset@0.85.0(@babel/core@7.28.5)(react@19.2.3))(@react-native/metro-config@0.85.0(@babel/core@7.28.5))(@types/react@19.2.0)(react@19.2.3))(react@19.2.3))(react-native@0.85.0(@babel/core@7.28.5)(@react-native-community/cli@20.1.0(typescript@5.9.3))(@react-native/jest-preset@0.85.0(@babel/core@7.28.5)(react@19.2.3))(@react-native/metro-config@0.85.0(@babel/core@7.28.5))(@types/react@19.2.0)(react@19.2.3))(react@19.2.3):
-    dependencies:
-      react: 19.2.3
-      react-native: 0.85.0(@babel/core@7.28.5)(@react-native-community/cli@20.1.0(typescript@5.9.3))(@react-native/jest-preset@0.85.0(@babel/core@7.28.5)(react@19.2.3))(@react-native/metro-config@0.85.0(@babel/core@7.28.5))(@types/react@19.2.0)(react@19.2.3)
-      react-native-nitro-modules: 0.31.10(react-native@0.85.0(@babel/core@7.28.5)(@react-native-community/cli@20.1.0(typescript@5.9.3))(@react-native/jest-preset@0.85.0(@babel/core@7.28.5)(react@19.2.3))(@react-native/metro-config@0.85.0(@babel/core@7.28.5))(@types/react@19.2.0)(react@19.2.3))(react@19.2.3)
 
   react-native-nitro-modules@0.31.10(react-native@0.85.0(@babel/core@7.28.5)(@react-native-community/cli@20.1.0(typescript@5.9.3))(@react-native/jest-preset@0.85.0(@babel/core@7.28.5)(react@19.2.3))(@react-native/metro-config@0.85.0(@babel/core@7.28.5))(@types/react@19.2.0)(react@19.2.3))(react@19.2.3):
     dependencies:

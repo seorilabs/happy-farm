@@ -3951,30 +3951,6 @@ describe('FarmGame UI flow', () => {
     expect(within(screen.getByTestId('shop-nav-button')).queryByText('1')).toBeNull();
   });
 
-  test('ad_free가 활성화되면 준비된 광고 adapter도 공통 비활성화한다', async () => {
-    const rewardedAd = createReadyRewardedAd();
-    const interstitialAd = createReadyRewardedAd();
-    const screen = await renderGame(null, {
-      adFreePurchase: {
-        isSupported: true,
-        active: true,
-        status: 'active',
-        displayPrice: '₩3,900',
-        purchase: jest.fn(async () => undefined),
-        restore: jest.fn(async () => undefined),
-      },
-      useRewardedAd: () => rewardedAd,
-      useInterstitialAd: () => interstitialAd,
-    });
-
-    await waitFor(() => expect(screen.getByTestId('shop-nav-button')).toBeTruthy());
-    expect(within(screen.getByTestId('shop-nav-button')).queryByText('1')).toBeNull();
-    fireEvent.press(screen.getByTestId('shop-nav-button'));
-    expect(screen.queryByTestId('shop-tab-rewards')).toBeNull();
-    expect(rewardedAd.showAd).not.toHaveBeenCalled();
-    expect(interstitialAd.showAd).not.toHaveBeenCalled();
-  });
-
   test('hides the shop badge when the rewarded ad rate limit is exhausted', async () => {
     // The badge lights up when either shop reward is available: the gold reward
     // (gated by the rewardedGold sliding window) or the plot discount (gated by
@@ -5049,6 +5025,21 @@ describe('FarmGame UI flow', () => {
 
     await waitFor(() => expect(screen.queryByTestId('prestige-graduation-overlay')).toBeNull());
     expect(screen.queryByTestId('prestige-guide-overlay')).toBeNull();
+  });
+
+  test('설정 시트 어디에도 인앱 결제 진입점이 없다', async () => {
+    // 등록한 상품이 없는데 "광고 제거" 구매 UI 만 남아 App Store Guideline 2.1(b)
+    // 로 반려됐다. 결제 계획이 없으므로 구매·복원 동선이 다시 붙지 않게 막는다.
+    const screen = await renderGame(null);
+
+    await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+    fireEvent.press(screen.getByLabelText('설정'));
+
+    expect(screen.getByText('설정')).toBeTruthy();
+    expect(screen.queryByTestId('ad-free-purchase')).toBeNull();
+    expect(screen.queryByTestId('ad-free-restore')).toBeNull();
+    expect(screen.queryByText(/광고 제거/)).toBeNull();
+    expect(screen.queryByText(/구매 복원/)).toBeNull();
   });
 
   test('keeps reset behind the settings sheet', async () => {
