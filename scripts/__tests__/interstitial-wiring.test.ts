@@ -67,17 +67,31 @@ describe('전면광고 연결 계약', () => {
     expect(farmGame).toContain('interstitialSessionResetMs');
   });
 
-  test('전면 ad unit이 비어 있으면 프로덕션에서 미지원으로 떨어진다', () => {
-    // 운영 ID를 채우기 전까지는 지면이 켜져 있어도 노출되지 않아야 한다.
+  test('전면 ad unit이 양 플랫폼 모두 채워져 있다', () => {
+    // 지면 플래그와 어댑터가 연결돼 있어도 ad unit 이 비면 노출이 조용히 0회로
+    // 돌아간다. 값 자체는 중앙 원장 검증(check-admob-analytics)이 맡고, 여기서는
+    // 두 플랫폼 모두 비어 있지 않은지만 본다.
     const config = readSource('apps/mobile/src/ads/config.ts');
     expect(config).toContain('PRODUCTION_INTERSTITIAL_AD_UNIT_IDS');
+    const production = config.slice(
+      config.indexOf('PRODUCTION_INTERSTITIAL_AD_UNIT_IDS'),
+      config.indexOf('function getProductionInterstitialAdUnitId')
+    );
+
+    expect(production).toMatch(/android:\s*'ca-app-pub-\d+\/\d+'/);
+    expect(production).toMatch(/ios:\s*'ca-app-pub-\d+\/\d+'/);
+  });
+
+  test('ad unit이 비면 프로덕션에서 미지원으로 떨어진다', () => {
+    // 값이 빠졌을 때 빈 문자열을 그대로 SDK 에 넘기지 않고 null 로 떨어뜨려,
+    // 컨트롤러가 미지원으로 동작하게 하는 가드는 유지돼야 한다.
+    const config = readSource('apps/mobile/src/ads/config.ts');
     expect(config).toContain('export function getInterstitialAdUnitId');
-    const production = config.slice(config.indexOf('PRODUCTION_INTERSTITIAL_AD_UNIT_IDS'));
     const getter = config.slice(config.indexOf('export function getInterstitialAdUnitId'));
 
-    expect(production).toMatch(/android:\s*''/);
-    expect(production).toMatch(/ios:\s*''/);
     expect(getter).toContain('adUnitId.length > 0 ? adUnitId : null');
+    // debug 빌드는 실 단위가 아니라 테스트 ID 를 써야 한다(실적 오염 방지).
+    expect(getter).toContain('TestIds.INTERSTITIAL');
   });
 
   test('로드 실패 뒤 재시도를 예약한다', () => {
