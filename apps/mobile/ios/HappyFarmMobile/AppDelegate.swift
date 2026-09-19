@@ -17,6 +17,13 @@ import ReactAppDependencyProvider
 
 @main
 class AppDelegate: UIResponder, UIApplicationDelegate {
+  // UIScene 으로 옮기면서 window 소유권은 SceneDelegate 로 갔지만, 이 프로퍼티를
+  // 없앨 수는 없다. react-native-google-mobile-ads 의 동의 폼·배너·Ad Inspector 가
+  // root view controller 를 UIApplication.shared.delegate.window 로 찾는다. 없으면
+  // unrecognized selector 로 앱이 즉시 종료된다(전면·보상 광고는 keyWindow 를 써서
+  // 영향이 없어 동의 흐름을 붙이기 전까지 드러나지 않았다).
+  // UIApplicationSupportsMultipleScenes 가 false 라 window 는 항상 하나다.
+  var window: UIWindow?
   var reactNativeDelegate: ReactNativeDelegate?
   var reactNativeFactory: RCTReactNativeFactory?
 
@@ -78,12 +85,20 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     // UIScreen.main 이 아니라 연결된 scene 에서 window 를 만들어야 화면에 붙는다.
     let window = UIWindow(windowScene: windowScene)
     self.window = window
+    appDelegate.window = window
 
     factory.startReactNative(
       withModuleName: "HappyFarmMobile",
       in: window,
       launchOptions: appDelegate.launchOptions
     )
+  }
+
+  func sceneDidDisconnect(_ scene: UIScene) {
+    if let appDelegate = UIApplication.shared.delegate as? AppDelegate,
+       appDelegate.window === window {
+      appDelegate.window = nil
+    }
   }
 
   // 방치형 게임이라 포그라운드에서는 화면이 꺼지지 않게 둔다. OS 권한은 필요 없고,
