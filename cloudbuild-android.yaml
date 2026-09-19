@@ -1,3 +1,22 @@
+# Android 서명 AAB 를 굽는 Cloud Build 설정. 2026-09-19 부터 평시 경로가 아니다.
+#
+# 저장소가 public 이 된 뒤 릴리즈 빌드는 GitHub Actions 로 옮겼다(#549).
+# deploy-google-play.yml -> 중앙 rn-deploy-google-play.yml(ubuntu-latest) 이 정본이고,
+# 같은 빌드가 Cloud Build 34분에서 13분으로 줄었으며 과금도 없다.
+#
+# 그런데도 이 파일을 지우지 않는다. GitHub Actions 로 갈 수 없게 되는 상황(무료 분량
+# 소진, hosted 러너 장애, 정책 변경)에서 되돌아올 경로이기 때문이다. 실제로 2026-09-19
+# 하루에만 ARC public 차단과 릴리즈 원장 결함으로 배포 경로가 두 번 막혔다.
+#
+# 짝이 되는 실행부는 scripts/build-android.sh 의 market-upload 모드다. 둘은 함께
+# 유지하거나 함께 지운다. 한쪽만 지우면 폴백이 성립하지 않는다.
+#
+# 되돌리는 방법:
+#   gcloud builds submit . --project=seorilabs-ci --region=global \
+#     --config=cloudbuild-android.yaml --ignore-file=.gcloudignore \
+#     --substitutions="_SEORI_RELEASE_TAG=...,_ANDROID_VERSION_CODE=..."
+#   그 뒤 _ARTIFACT_BUCKET 에서 AAB 를 받아 업로드한다.
+
 substitutions:
   _SEORI_RELEASE_TAG: "v1.10.2"
   _SEORI_RELEASE_SOURCE_SHA: "0000000000000000000000000000000000000000"

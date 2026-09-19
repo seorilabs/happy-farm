@@ -11,6 +11,18 @@ set -a
 . ./build.env
 set +a
 
+# 모드 둘 다 살아 있다. 이름과 달리 이 스크립트는 어떤 마켓에도 업로드하지 않는다.
+# 둘의 차이는 업로드 여부가 아니라 버전을 어디서 받고 결과를 어디에 두느냐다.
+#
+#   build-only    중앙 WorkflowBundle v5 가 쓰는 평시 경로. 중앙이 릴리즈 값을 주입하거나
+#                 (태그 실행) 비워서(compile-only) 부른다. 결과는 app-release.aab.
+#                 seorilabs/.github 의 rn-android-build-only.yaml, -v2.yaml 이 호출한다.
+#   market-upload cloudbuild-android.yaml 이 쓰는 Cloud Build 폴백 경로. 릴리즈 환경변수
+#                 전체를 요구하고 결과를 dist/android/happy-farm.aab 에 둔다.
+#
+# 평시 릴리즈 빌드는 2026-09-19 부터 GitHub Actions 로 옮겨(#549) 이 스크립트를 거치지
+# 않는다. market-upload 는 그쪽이 막혔을 때 되돌아올 경로로 남겨둔 것이다.
+# cloudbuild-android.yaml 과 함께 유지하거나 함께 지운다.
 build_mode="${SEORI_BUILD_MODE:-market-upload}"
 echo "Android Cloud Build 계약 검증 시작: mode=$build_mode"
 
