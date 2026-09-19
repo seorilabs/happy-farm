@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  중앙 rn-deploy-app-store.yml 의 exportArchive 계약이다.
+
+  - archive 는 CODE_SIGN_STYLE=Automatic + Apple Development 로 뜨고, 배포 서명은 이 단계에서
+    다시 한다. 그래서 signingStyle 은 automatic 이어야 하고, 프로파일을 여기에 적지 않는다.
+    필요한 App Store 프로파일은 -allowProvisioningUpdates 와 ASC API 키로 그때 발급된다.
+  - destination 이 upload 라서 exportArchive 가 곧 업로드다. 중앙 워크플로에 별도 altool
+    단계가 없고, upload=false 면 export 단계 자체를 건너뛰고 xcarchive 만 artifact 로 남긴다.
+  - 버전은 릴리즈 태그가 정본이다. manageAppVersionAndBuildNumber 를 켜면 Xcode 가 빌드번호를
+    임의로 올려 태그 파생값 readback 과 어긋나므로 반드시 false 로 둔다.
+-->
+<plist version="1.0">
+<dict>
+  <key>method</key>
+  <string>app-store-connect</string>
+  <key>destination</key>
+  <string>upload</string>
+  <key>teamID</key>
+  <string>HCDUXX4Z3X</string>
+  <key>signingStyle</key>
+  <string>automatic</string>
+  <key>uploadSymbols</key>
+  <true/>
+  <key>manageAppVersionAndBuildNumber</key>
+  <false/>
+</dict>
+</plist>

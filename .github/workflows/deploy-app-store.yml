@@ -1,0 +1,85 @@
+name: Deploy App Store
+
+# iOS archive·업로드를 조직 공통 워크플로(macos-26)에 위임한다. 저장소가 public 이라
+# GitHub-hosted macOS 러너를 쓸 수 있고, 그 전까지 쓰던 로컬 archive 는 사람이 붙어 있어야
+# 했다. Xcode Cloud 는 private 저장소용 경로라 여기서는 쓰지 않는다.
+#
+# 서명은 중앙이 맡는다. archive 는 CODE_SIGN_STYLE=Automatic 으로 뜨고 배포 서명은
+# app-store/exportOptions.plist 로 다시 하므로, 저장소의 Xcode 프로젝트가 Manual 이어도
+# 개조할 필요가 없다.
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: '빌드/업로드할 릴리즈 태그 (예: v1.11.7). 비우면 최신 vX.Y.Z.'
+        required: false
+        type: string
+      upload:
+        description: 'App Store Connect 에 업로드. 끄면 xcarchive 만 artifact 로 남긴다.'
+        required: false
+        default: true
+        type: boolean
+  workflow_call:
+    inputs:
+      release_tag:
+        required: false
+        type: string
+      upload:
+        required: false
+        default: true
+        type: boolean
+    secrets:
+      APPLE_DISTRIBUTION_CERTIFICATE_BASE64:
+        required: false
+      APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD:
+        required: false
+      APPLE_KEYCHAIN_PASSWORD:
+        required: false
+      APPLE_PROVISIONING_PROFILE_BASE64:
+        required: false
+      APP_STORE_CONNECT_API_KEY_ID:
+        required: false
+      APP_STORE_CONNECT_ISSUER_ID:
+        required: false
+      APP_STORE_CONNECT_PRIVATE_KEY_BASE64:
+        required: false
+      FIREBASE_IOS_GOOGLE_SERVICE_INFO_PLIST_BASE64:
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: happy-farm-app-store-${{ inputs.release_tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  app-store:
+    name: Deploy App Store
+    uses: seorilabs/.github/.github/workflows/rn-deploy-app-store.yml@main
+    with:
+      release_tag: ${{ inputs.release_tag }}
+      bundle_id: com.seorilabs.happyfarm
+      upload: ${{ inputs.upload }}
+      ios_dir: apps/mobile/ios
+      xcode_workspace: HappyFarmMobile.xcworkspace
+      scheme: HappyFarmMobile
+      export_options_plist: app-store/exportOptions.plist
+      package_manager: pnpm
+      pnpm_version: '11.3.0'
+      node_version: '24.16.0'
+      install_command: 'pnpm install --frozen-lockfile'
+      # iOS archive 는 pod install 부터 export·업로드까지 길다. 기본 타임아웃으로는 모자란다.
+      timeout_minutes: 60
+      # firebase_restore_script 는 비워 둔다. GoogleService-Info.plist 가 저장소에 추적돼
+      # 있어 복원 단계가 필요 없고, 값을 주면 없는 스크립트를 찾다가 죽는다.
+    secrets:
+      APPLE_DISTRIBUTION_CERTIFICATE_BASE64: ${{ secrets.APPLE_DISTRIBUTION_CERTIFICATE_BASE64 }}
+      APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD }}
+      APPLE_KEYCHAIN_PASSWORD: ${{ secrets.APPLE_KEYCHAIN_PASSWORD }}
+      APPLE_PROVISIONING_PROFILE_BASE64: ${{ secrets.APPLE_PROVISIONING_PROFILE_BASE64 }}
+      APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+      APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+      APP_STORE_CONNECT_PRIVATE_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY_BASE64 }}
+      FIREBASE_IOS_GOOGLE_SERVICE_INFO_PLIST_BASE64: ${{ secrets.FIREBASE_IOS_GOOGLE_SERVICE_INFO_PLIST_BASE64 }}
