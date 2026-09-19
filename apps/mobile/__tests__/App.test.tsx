@@ -4,13 +4,22 @@
 
 import React from 'react';
 import ReactTestRenderer from 'react-test-renderer';
-import { AdEventType, RewardedAd, RewardedAdEventType } from 'react-native-google-mobile-ads';
+import {
+  AdEventType,
+  AdsConsent,
+  RewardedAd,
+  RewardedAdEventType,
+} from 'react-native-google-mobile-ads';
 import App from '../App';
 import {
   MOBILE_REWARDED_AD_LOAD_TIMEOUT_MS,
   MOBILE_REWARDED_AD_SHOW_TIMEOUT_MS,
   useAdMobRewardedAd,
 } from '../src/ads/adMobRewardedAd';
+import {
+  ensureAdMobReady,
+  resetAdMobConsentStateForTests,
+} from '../src/ads/adMobConsent';
 
 jest.mock('../src/audio/assets/harvest_coin.wav', () => 1);
 jest.mock('../src/audio/assets/farm_bgm_loop.wav', () => 2);
@@ -105,6 +114,26 @@ jest.mock('react-native-google-mobile-ads', () => {
     __esModule: true,
     default: jest.fn(() => ({ initialize: jest.fn(() => Promise.resolve()) })),
     AdEventType: { CLOSED: 'closed', ERROR: 'error' },
+    AdsConsent: {
+      gatherConsent: jest.fn(() =>
+        Promise.resolve({
+          canRequestAds: true,
+          privacyOptionsRequirementStatus: 'NOT_REQUIRED',
+        })
+      ),
+      getConsentInfo: jest.fn(() =>
+        Promise.resolve({
+          canRequestAds: true,
+          privacyOptionsRequirementStatus: 'NOT_REQUIRED',
+        })
+      ),
+      showPrivacyOptionsForm: jest.fn(() => Promise.resolve()),
+    },
+    AdsConsentPrivacyOptionsRequirementStatus: {
+      NOT_REQUIRED: 'NOT_REQUIRED',
+      REQUIRED: 'REQUIRED',
+      UNKNOWN: 'UNKNOWN',
+    },
     RewardedAd: {
       createForAdRequest: jest.fn(() => ({
         addAdEventsListener: jest.fn(() => jest.fn()),
@@ -160,6 +189,7 @@ function getRewardedAdEventListener(rewardedAd: MockRewardedAd) {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  resetAdMobConsentStateForTests();
 });
 
 afterEach(() => {
@@ -189,6 +219,18 @@ test('renders correctly', async () => {
   });
   expect(platformEvents.shutdownMobilePlatformEvents).toHaveBeenCalledTimes(1);
 }, 30000);
+
+test('does not initialize AdMob when UMP has not authorized ad requests', async () => {
+  (AdsConsent.gatherConsent as jest.Mock).mockResolvedValueOnce({
+    canRequestAds: false,
+    privacyOptionsRequirementStatus: 'REQUIRED',
+  });
+
+  await expect(ensureAdMobReady()).resolves.toBe(false);
+
+  const mobileAdsFactory = jest.requireMock('react-native-google-mobile-ads').default as jest.Mock;
+  expect(mobileAdsFactory).not.toHaveBeenCalled();
+});
 
 test('waits for rewarded ad close before resolving an earned reward', async () => {
   let renderer: ReactTestRenderer.ReactTestRenderer | undefined;

@@ -664,9 +664,15 @@ export type FarmAdFreePurchase = {
   restore: () => Promise<void>;
 };
 
+export type FarmPrivacySettings = {
+  isSupported: boolean;
+  openAdPrivacyOptions: () => Promise<void>;
+};
+
 export type FarmGameProps = {
   persistence?: FarmGamePersistence;
   adFreePurchase?: FarmAdFreePurchase;
+  privacySettings?: FarmPrivacySettings;
   analytics?: FarmAnalytics;
   useRewardedAd?: UseFarmAd;
   useInterstitialAd?: UseFarmAd;
@@ -1076,6 +1082,7 @@ export default function FarmGame(props: FarmGameProps = {}) {
 function FarmGameBody({
   persistence = defaultPersistence,
   adFreePurchase = defaultAdFreePurchase,
+  privacySettings,
   analytics = defaultFarmAnalytics,
   useRewardedAd = useUnsupportedAd,
   useInterstitialAd = useUnsupportedAd,
@@ -6537,6 +6544,18 @@ function FarmGameBody({
                   secondary
                   disabled={['loading', 'purchasing', 'verifying', 'restoring'].includes(adFreePurchase.status)}
                   onPress={() => void adFreePurchase.restore()}
+                />
+              </View>
+            ) : null}
+
+            {privacySettings?.isSupported ? (
+              <View>
+                <Text style={styles.sheetSectionTitle}>{messages.privacySection}</Text>
+                <SheetAction
+                  testID="ad-privacy-options"
+                  label={messages.adPrivacyOptionsAction}
+                  secondary
+                  onPress={() => void privacySettings.openAdPrivacyOptions()}
                 />
               </View>
             ) : null}

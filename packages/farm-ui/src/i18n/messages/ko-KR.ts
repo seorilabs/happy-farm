@@ -96,6 +96,8 @@ export const koFarmMessages = {
   adFreePurchaseAction: (price: string) => `광고 제거 구매 · ${price}`,
   adFreeRestoreAction: '구매 복원하기',
   adFreeFailed: '구매 상태를 확인하지 못했어요. 잠시 후 다시 시도해 주세요.',
+  privacySection: '개인정보',
+  adPrivacyOptionsAction: '광고 개인정보 설정',
   emptyPlot: '빈 밭',
   readyBadge: 'GET',
   // 접근성(a11y): 밭 타일은 이모지/배지뿐이라 스크린 리더용 상태 라벨을 따로 제공한다.

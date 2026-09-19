@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import mobileAds, { AdEventType, InterstitialAd } from 'react-native-google-mobile-ads';
+import { AdEventType, InterstitialAd } from 'react-native-google-mobile-ads';
 
 import { logDevWarning, normalizeAdFailureReason, type RewardedAdShowResult } from '../../../../packages/farm-core/src';
 import { getInterstitialAdUnitId } from './config';
+import { ensureAdMobReady } from './adMobConsent';
 import { ensureMobilePlatformSession, mobilePlatformAds } from '../platformEvents';
 
 export const MOBILE_INTERSTITIAL_LOAD_TIMEOUT_MS = 10_000;
@@ -115,12 +116,7 @@ export function useAdMobInterstitialAd() {
       return;
     }
 
-    void mobileAds()
-      .initialize()
-      .catch((error: unknown) => {
-        logDevWarning('[ads] initialize failed', error);
-      });
-
+    let cancelled = false;
     let loadTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
     // 노출 중이 아니고 아직 준비되지 않았을 때만 한 번 더 로드한다. 이미 예약된
@@ -213,10 +209,17 @@ export function useAdMobInterstitialAd() {
       }
     };
 
-    rotateRef.current = rotate;
-    rotate();
+    void ensureAdMobReady().then((ready) => {
+      if (!ready || cancelled) {
+        updateReady(false);
+        return;
+      }
+      rotateRef.current = rotate;
+      rotate();
+    });
 
     return () => {
+      cancelled = true;
       rotateRef.current = null;
       if (loadTimeoutId != null) {
         clearTimeout(loadTimeoutId);

@@ -98,6 +98,8 @@ export const deFarmMessages: FarmMessages = {
   adFreePurchaseAction: (price: string) => `Werbung entfernen · ${price}`,
   adFreeRestoreAction: 'Kauf wiederherstellen',
   adFreeFailed: 'Der Kaufstatus konnte nicht geprüft werden. Bitte versuche es erneut.',
+  privacySection: 'Datenschutz',
+  adPrivacyOptionsAction: 'Datenschutzeinstellungen für Werbung',
   emptyPlot: 'Leer',
   readyBadge: 'GET',
   plotLockedAccessibilityLabel: (plotNumber) => `Feld ${plotNumber}, gesperrt. Im Shop freischalten.`,

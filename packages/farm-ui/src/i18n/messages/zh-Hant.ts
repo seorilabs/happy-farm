@@ -98,6 +98,8 @@ export const zhHantFarmMessages: FarmMessages = {
   adFreePurchaseAction: (price: string) => `移除廣告 · ${price}`,
   adFreeRestoreAction: '恢復購買',
   adFreeFailed: '無法確認購買狀態，請稍後再試。',
+  privacySection: '隱私權',
+  adPrivacyOptionsAction: '廣告隱私權設定',
   emptyPlot: '空田',
   readyBadge: 'GET',
   plotLockedAccessibilityLabel: (plotNumber) => `第 ${plotNumber} 塊田，已鎖定。可在商店中開啟。`,

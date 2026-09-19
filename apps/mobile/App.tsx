@@ -1,10 +1,14 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { AppState } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { FarmGame, detectRuntimeLocale } from '../../packages/farm-ui/src';
 import { useAdMobInterstitialAd } from './src/ads/adMobInterstitialAd';
 import { useAdMobRewardedAd } from './src/ads/adMobRewardedAd';
+import {
+  isAdMobPrivacyOptionsRequired,
+  showAdMobPrivacyOptions,
+} from './src/ads/adMobConsent';
 import { mobileFarmArt } from './src/art/farmArt';
 import { useMobileFarmAudio } from './src/audio/farmAudio';
 import { useAdFreePurchase } from './src/iap/useAdFreePurchase';
@@ -27,6 +31,28 @@ import {
 function App() {
   const farmAudio = useMobileFarmAudio();
   const adFreePurchase = useAdFreePurchase();
+  const [adPrivacyOptionsRequired, setAdPrivacyOptionsRequired] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    void isAdMobPrivacyOptionsRequired().then((required) => {
+      if (!cancelled) setAdPrivacyOptionsRequired(required);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const privacySettings = useMemo(
+    () => ({
+      isSupported: adPrivacyOptionsRequired,
+      openAdPrivacyOptions: async () => {
+        await showAdMobPrivacyOptions();
+        setAdPrivacyOptionsRequired(await isAdMobPrivacyOptionsRequired());
+      },
+    }),
+    [adPrivacyOptionsRequired]
+  );
 
   useEffect(() => {
     void initializeMobileFirebaseServices();
@@ -61,6 +87,7 @@ function App() {
         market="mobile"
         notifications={mobileHarvestNotifications}
         persistence={mobileFarmPersistence}
+        privacySettings={privacySettings}
         preferredLocale={detectRuntimeLocale()}
         // 세 지면 모두 연다. 프로덕션 전면 ad unit 이 아직 비어 있어
         // getInterstitialAdUnitId 가 null 을 돌려주는 동안에는 컨트롤러가

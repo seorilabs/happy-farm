@@ -98,6 +98,8 @@ export const jaFarmMessages: FarmMessages = {
   adFreePurchaseAction: (price: string) => `広告を削除 · ${price}`,
   adFreeRestoreAction: '購入を復元',
   adFreeFailed: '購入状態を確認できませんでした。もう一度お試しください。',
+  privacySection: 'プライバシー',
+  adPrivacyOptionsAction: '広告のプライバシー設定',
   emptyPlot: '空き畑',
   readyBadge: 'GET',
   plotLockedAccessibilityLabel: (plotNumber) => `${plotNumber}番の畑、ロック中。ショップで開けられます。`,
