@@ -7,7 +7,7 @@
   },
   "android": {
     "authority": "github-ledger",
-    "lastVersionCode": 1010004,
+    "lastVersionCode": 1001011005,
     "legacyFallbackSealed": true
   },
   "ios": {
