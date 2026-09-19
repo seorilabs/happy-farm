@@ -24,7 +24,8 @@ export type AdLimitsConfig = {
   /** 복귀 오프라인 골드 2배 광고: 쿨다운(ms) */
   offlineBonusAdCooldownMs: number;
   /** 수확 보너스 광고: 일일 한도 */
-  harvestBonusAdDailyLimit: number;
+  /** 수확 부스트 광고: 일일 한도. null 이면 한도 없이 쿨다운만으로 조절한다 */
+  harvestBonusAdDailyLimit: number | null;
   /** 수확 보너스 광고: 쿨다운(ms) */
   harvestBonusAdCooldownMs: number;
   /** 룰렛 보너스 스핀 광고: 일일 한도 */

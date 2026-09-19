@@ -836,7 +836,10 @@ export function getRewardedAdLimitStatus(
             ? adUsage.cookingSpeedAd
             : adUsage.harvestBonusAd;
 
-  if (usage.dailyCount >= limit) {
+  // limit 이 null 인 광고는 일일 한도 없이 쿨다운만으로 빈도를 조절한다.
+  // 수확 부스트가 그렇다 — 방치형에서 "기다리면 얻는" 보상 대신 시간을
+  // 압축하는 보상이라, 많이 볼수록 이득인 구조가 의도다.
+  if (limit != null && usage.dailyCount >= limit) {
     return { allowed: false, reason: messages.adDailyLimitReached };
   }
 
