@@ -94,6 +94,21 @@ describe('전면광고 연결 계약', () => {
     expect(getter).toContain('TestIds.INTERSTITIAL');
   });
 
+  test('부스트 네비 버튼은 광고 정책 조회 결과에 좌우되지 않는다', () => {
+    // isAdSupported 는 Platform 광고 정책 조회가 끝나야 true 가 된다. 그 값으로
+    // 버튼을 감싸면 앱 시작 직후에는 없다가 뒤늦게 끼어들어 네비 행이 밀리고,
+    // 조회가 실패하면 영영 보이지 않는다. 광고 제거를 산 경우에만 숨긴다.
+    const farmGame = readSource('packages/farm-ui/src/FarmGame.tsx');
+    const navRow = farmGame.slice(
+      farmGame.indexOf("testID=\"nav-row\""),
+      farmGame.indexOf('</ScrollView>')
+    );
+
+    expect(navRow).toContain('boost-nav-button');
+    expect(navRow).toContain('adFreePurchase.active ? null :');
+    expect(navRow).not.toContain('rewardedAd.isAdSupported ?');
+  });
+
   test('로드 실패 뒤 재시도를 예약한다', () => {
     // FarmGame은 전면 컨트롤러의 reloadAd를 부르지 않는다. 첫 로드가 실패한 세션이
     // 끝까지 notReady로 굳으면 전면광고가 한 번도 뜨지 않으므로, 어댑터가 스스로

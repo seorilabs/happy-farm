@@ -5783,7 +5783,12 @@ function FarmGameBody({
               상점 안에 묻어두지 않고 메인에 꺼내 둔다. 부스트 중에는 남은 시간을
               그대로 보여줘 언제 다시 볼지 판단할 수 있게 한다. 이 행은 가로
               스크롤이라 버튼이 하나 늘어도 나머지가 좁아지지 않는다. */}
-          {rewardedAd.isAdSupported ? (
+          {/* 표시 조건을 isAdSupported 로 두면 안 된다. 그 값은 Platform 광고
+              정책 조회 결과에 묶여 있어 앱 시작 직후에는 false 이고, 조회가
+              끝나야 true 가 된다. 버튼이 뒤늦게 끼어들어 네비 행이 밀리고,
+              정책 조회가 실패하면 아예 보이지 않는다. 광고를 볼 수 없는
+              상태는 시트를 열었을 때 CTA 문구로 안내한다. */}
+          {adFreePurchase.active ? null : (
             <NavButton
               testID="boost-nav-button"
               label={
@@ -5794,7 +5799,7 @@ function FarmGameBody({
               accessibilityLabel={messages.boostNavAccessibilityLabel}
               onPress={() => setActiveSheet({ type: 'harvestBonus' })}
             />
-          ) : null}
+          )}
         </ScrollView>
       </View>
 

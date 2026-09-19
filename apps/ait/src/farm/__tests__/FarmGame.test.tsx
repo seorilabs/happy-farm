@@ -463,8 +463,9 @@ describe('FarmGame UI flow', () => {
     const screen = await renderGame({ ...createInitialState(), onboardingCompleted: true });
     await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
 
-    // AC-5: 계절 연출로 상시 진입점이 늘지 않는다 — navRow는 정확히 3개.
-    expect(within(screen.getByTestId('nav-row')).getAllByRole('button')).toHaveLength(3);
+    // AC-5: 계절 연출로 상시 진입점이 늘지 않는다 — navRow 개수가 그대로다
+    // (상점·미션·더보기 + 수확 부스트 4개).
+    expect(within(screen.getByTestId('nav-row')).getAllByRole('button')).toHaveLength(4);
 
     // AC-4: 계절 파티클은 농장 스테이지의 '배경' backdrop 레이어(child[0])로만 전달된다
     //       (시트/헤더 아님). 전달 값은 현재 로컬 월의 결정론 계절 파티클과 일치한다.
@@ -742,8 +743,9 @@ describe('FarmGame UI flow', () => {
     expect(screen.getByTestId('stats-prestige-stars')).toHaveTextContent('★ 2');
     expect(screen.getByTestId('stats-prestige-skills')).toBeTruthy();
 
-    // AC-2: 강등 정보를 옮기며 신규 탭 타깃/HUD 진입점을 만들지 않았다 — navRow는 여전히 3개.
-    expect(within(screen.getByTestId('nav-row')).getAllByRole('button')).toHaveLength(3);
+    // AC-2: 강등 정보를 옮기며 신규 탭 타깃/HUD 진입점을 만들지 않았다 — navRow는
+    // 상점·미션·더보기 + 수확 부스트 4개 그대로다.
+    expect(within(screen.getByTestId('nav-row')).getAllByRole('button')).toHaveLength(4);
   });
 
   test('reaches all three demoted metrics via the single openStats header tab with no new entry point (#355 AC-2)', async () => {
@@ -777,16 +779,19 @@ describe('FarmGame UI flow', () => {
     expect(screen.getByTestId('stats-prestige-stars')).toHaveTextContent('★ 2');
     expect(screen.getByTestId('stats-prestige-skills')).toBeTruthy();
 
-    // 신규 탭 타깃/HUD 진입점 증가 없음 — navRow는 여전히 정확히 3개다.
-    expect(within(screen.getByTestId('nav-row')).getAllByRole('button')).toHaveLength(3);
+    // 신규 탭 타깃/HUD 진입점 증가 없음 — navRow는 상점·미션·더보기 +
+    // 수확 부스트 4개 그대로다.
+    expect(within(screen.getByTestId('nav-row')).getAllByRole('button')).toHaveLength(4);
   });
 
   test('keeps the navRow at exactly three NavButtons after the header declutter (#355 AC-4)', async () => {
     const screen = await renderGame({ ...createInitialState(), onboardingCompleted: true });
     await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
 
-    // navRow 진입점은 상점·미션·더보기 3개로 정확히 유지된다(#355로 늘거나 줄지 않음).
-    expect(within(screen.getByTestId('nav-row')).getAllByRole('button')).toHaveLength(3);
+    // navRow 진입점은 상점·미션·더보기 + 수확 부스트 4개다. #355 당시에는 3개였고
+    // 부스트는 그 뒤 광고 개편에서 더해졌다. #355 작업 자체가 진입점을 늘리지
+    // 않았다는 것이 이 단언의 의도다.
+    expect(within(screen.getByTestId('nav-row')).getAllByRole('button')).toHaveLength(4);
     expect(screen.getByTestId('shop-nav-button')).toBeTruthy();
     expect(screen.getByTestId('more-nav-button')).toBeTruthy();
     expect(
@@ -816,7 +821,7 @@ describe('FarmGame UI flow', () => {
 
     // mobile에서도 핵심 상시 지표·단일 요약 chip·navRow 3개가 한 행 안에 유지된다.
     expect(screen.getByTestId('cotd-chip')).toBeTruthy();
-    expect(within(screen.getByTestId('nav-row')).getAllByRole('button')).toHaveLength(3);
+    expect(within(screen.getByTestId('nav-row')).getAllByRole('button')).toHaveLength(4);
   });
 
   test('shows a placeholder in the stats sheet when no title is equipped (#355)', async () => {
