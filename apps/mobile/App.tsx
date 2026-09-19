@@ -11,7 +11,6 @@ import {
 } from './src/ads/adMobConsent';
 import { mobileFarmArt } from './src/art/farmArt';
 import { useMobileFarmAudio } from './src/audio/farmAudio';
-import { useAdFreePurchase } from './src/iap/useAdFreePurchase';
 import {
   initializeMobileFirebaseServices,
   mobileFarmAnalytics,
@@ -30,7 +29,6 @@ import {
 
 function App() {
   const farmAudio = useMobileFarmAudio();
-  const adFreePurchase = useAdFreePurchase();
   const [adPrivacyOptionsRequired, setAdPrivacyOptionsRequired] = useState(false);
 
   useEffect(() => {
@@ -80,7 +78,6 @@ function App() {
   return (
     <SafeAreaProvider>
       <FarmGame
-        adFreePurchase={adFreePurchase}
         analytics={mobileFarmAnalytics}
         art={mobileFarmArt}
         audio={farmAudio}

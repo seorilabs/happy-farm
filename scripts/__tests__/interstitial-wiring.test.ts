@@ -94,10 +94,10 @@ describe('전면광고 연결 계약', () => {
     expect(getter).toContain('TestIds.INTERSTITIAL');
   });
 
-  test('부스트 네비 버튼은 광고 정책 조회 결과에 좌우되지 않는다', () => {
+  test('부스트 네비 버튼은 항상 렌더한다', () => {
     // isAdSupported 는 Platform 광고 정책 조회가 끝나야 true 가 된다. 그 값으로
     // 버튼을 감싸면 앱 시작 직후에는 없다가 뒤늦게 끼어들어 네비 행이 밀리고,
-    // 조회가 실패하면 영영 보이지 않는다. 광고 제거를 산 경우에만 숨긴다.
+    // 조회가 실패하면 영영 보이지 않는다. 버튼을 감싸는 조건을 두지 않는다.
     const farmGame = readSource('packages/farm-ui/src/FarmGame.tsx');
     const navRow = farmGame.slice(
       farmGame.indexOf("testID=\"nav-row\""),
@@ -105,8 +105,33 @@ describe('전면광고 연결 계약', () => {
     );
 
     expect(navRow).toContain('boost-nav-button');
-    expect(navRow).toContain('adFreePurchase.active ? null :');
     expect(navRow).not.toContain('rewardedAd.isAdSupported ?');
+  });
+
+  test('앱 어디에도 인앱 결제 경로가 남아 있지 않다', () => {
+    // 인앱 결제 상품을 등록한 적이 없는데 "광고 제거" 문구와 구매 동선이 남아 있어
+    // App Store 심사에서 Guideline 2.1(b) 로 반려됐다. 결제 계획이 없으므로
+    // 결제 SDK, 상품 ID, 구매 UI 가 다시 들어오지 않도록 소스에서 막는다.
+    const sources = [
+      'packages/farm-ui/src/FarmGame.tsx',
+      'apps/mobile/App.tsx',
+      'apps/mobile/src/platformEvents.ts',
+      'apps/ait/src/pages/index.tsx',
+    ];
+
+    for (const path of sources) {
+      const source = readSource(path);
+      expect(source).not.toMatch(/adFree|react-native-iap|requestPurchase/);
+    }
+
+    const manifest = JSON.parse(readSource('apps/mobile/package.json')) as {
+      dependencies?: Record<string, string>;
+      devDependencies?: Record<string, string>;
+    };
+
+    expect(Object.keys({ ...manifest.dependencies, ...manifest.devDependencies })).not.toContain(
+      'react-native-iap'
+    );
   });
 
   test('로드 실패 뒤 재시도를 예약한다', () => {

@@ -651,19 +651,6 @@ export type FarmGameNotifications = {
   cancelReminder: (kind: FarmReminderKind) => Promise<void>;
 };
 
-// User-triggered cloud backup/restore from settings. Distinct from the automatic
-// backup wired inside persistence: this adapter surfaces an explicit entry point
-// and result status in the UI. When isSupported is false the settings section is
-// hidden entirely (AIT / default).
-export type FarmAdFreePurchase = {
-  isSupported: boolean;
-  active: boolean;
-  status: 'loading' | 'ready' | 'purchasing' | 'verifying' | 'restoring' | 'active' | 'failed' | 'unavailable';
-  displayPrice: string;
-  purchase: () => Promise<void>;
-  restore: () => Promise<void>;
-};
-
 export type FarmPrivacySettings = {
   isSupported: boolean;
   openAdPrivacyOptions: () => Promise<void>;
@@ -671,7 +658,6 @@ export type FarmPrivacySettings = {
 
 export type FarmGameProps = {
   persistence?: FarmGamePersistence;
-  adFreePurchase?: FarmAdFreePurchase;
   privacySettings?: FarmPrivacySettings;
   analytics?: FarmAnalytics;
   useRewardedAd?: UseFarmAd;
@@ -992,19 +978,6 @@ const defaultFarmNotifications: FarmGameNotifications = {
   scheduleReminder: async () => undefined,
   cancelReminder: async () => undefined,
 };
-const defaultAdFreePurchase: FarmAdFreePurchase = {
-  isSupported: false,
-  active: false,
-  status: 'unavailable',
-  displayPrice: '₩3,900',
-  purchase: async () => undefined,
-  restore: async () => undefined,
-};
-const adFreeBlockedController: RewardedAdController = {
-  isAdReady: false,
-  isAdSupported: false,
-  showAd: async () => ({ status: 'unsupported' }),
-};
 const defaultPersistence: FarmGamePersistence = {
   readPersistedGameState: async () => createInitialState(),
   writePersistedGameState: async () => undefined,
@@ -1081,7 +1054,6 @@ export default function FarmGame(props: FarmGameProps = {}) {
 
 function FarmGameBody({
   persistence = defaultPersistence,
-  adFreePurchase = defaultAdFreePurchase,
   privacySettings,
   analytics = defaultFarmAnalytics,
   useRewardedAd = useUnsupportedAd,
@@ -1291,12 +1263,8 @@ function FarmGameBody({
   const scalingBulkGuardRef = useRef<number | null>(null);
   const autoHarvestSummaryRef = useRef(createAutoHarvestSummaryState());
   const cropReadySummaryRef = useRef(createCropReadySummaryState());
-  const rewardedAdAdapter = useRewardedAd(adGroupIds.rewarded);
-  const interstitialAdAdapter = useInterstitialAd(adGroupIds.interstitial);
-  // 구매 projection이 활성화되면 두 광고 형식을 같은 경계에서 즉시 끊는다.
-  // adapter의 정책 재조회 시점과 무관하게 UI와 호출 경로 모두 fail-closed다.
-  const rewardedAd = adFreePurchase.active ? adFreeBlockedController : rewardedAdAdapter;
-  const interstitialAd = adFreePurchase.active ? adFreeBlockedController : interstitialAdAdapter;
+  const rewardedAd = useRewardedAd(adGroupIds.rewarded);
+  const interstitialAd = useInterstitialAd(adGroupIds.interstitial);
   const farmAnalytics = analytics;
   const locale = normalizeLocale(gameSettings.locale);
   const messages = useMemo(() => getFarmMessages(locale), [locale]);
@@ -5790,23 +5758,20 @@ function FarmGameBody({
               상점 안에 묻어두지 않고 메인에 꺼내 둔다. 부스트 중에는 남은 시간을
               그대로 보여줘 언제 다시 볼지 판단할 수 있게 한다. 이 행은 가로
               스크롤이라 버튼이 하나 늘어도 나머지가 좁아지지 않는다. */}
-          {/* 표시 조건을 isAdSupported 로 두면 안 된다. 그 값은 Platform 광고
-              정책 조회 결과에 묶여 있어 앱 시작 직후에는 false 이고, 조회가
-              끝나야 true 가 된다. 버튼이 뒤늦게 끼어들어 네비 행이 밀리고,
-              정책 조회가 실패하면 아예 보이지 않는다. 광고를 볼 수 없는
-              상태는 시트를 열었을 때 CTA 문구로 안내한다. */}
-          {adFreePurchase.active ? null : (
-            <NavButton
-              testID="boost-nav-button"
-              label={
-                harvestBonusBoost.active
-                  ? messages.boostNavActiveLabel(formatDuration(safeBoostRemainingMs, locale))
-                  : messages.boostNavLabel(HARVEST_BONUS_MULTIPLIER)
-              }
-              accessibilityLabel={messages.boostNavAccessibilityLabel}
-              onPress={() => setActiveSheet({ type: 'harvestBonus' })}
-            />
-          )}
+          {/* 조건을 붙이지 않는다. isAdSupported 는 Platform 광고 정책 조회
+              결과에 묶여 있어 앱 시작 직후 false 이고, 그걸로 감싸면 버튼이
+              뒤늦게 끼어들어 네비 행이 밀리거나 조회 실패 시 아예 사라진다.
+              광고를 볼 수 없는 상태는 시트를 열었을 때 CTA 문구로 안내한다. */}
+          <NavButton
+            testID="boost-nav-button"
+            label={
+              harvestBonusBoost.active
+                ? messages.boostNavActiveLabel(formatDuration(safeBoostRemainingMs, locale))
+                : messages.boostNavLabel(HARVEST_BONUS_MULTIPLIER)
+            }
+            accessibilityLabel={messages.boostNavAccessibilityLabel}
+            onPress={() => setActiveSheet({ type: 'harvestBonus' })}
+          />
         </ScrollView>
       </View>
 
@@ -6523,35 +6488,6 @@ function FarmGameBody({
               })}
             </View>
             <Text style={sheetPartStyles.settingDesc}>{messages.languageDesc}</Text>
-
-            {adFreePurchase.isSupported ? (
-              <View>
-                <Text style={styles.sheetSectionTitle}>{messages.adFreeSection}</Text>
-                <Text style={sheetPartStyles.settingDesc}>
-                  {adFreePurchase.active
-                    ? messages.adFreeActiveDesc
-                    : messages.adFreeInactiveDesc(adFreePurchase.displayPrice)}
-                </Text>
-                {adFreePurchase.status === 'failed' || adFreePurchase.status === 'unavailable' ? (
-                  <Text style={sheetPartStyles.sheetNotice}>{messages.adFreeFailed}</Text>
-                ) : null}
-                {!adFreePurchase.active ? (
-                  <SheetAction
-                    testID="ad-free-purchase"
-                    label={messages.adFreePurchaseAction(adFreePurchase.displayPrice)}
-                    disabled={['loading', 'purchasing', 'verifying', 'restoring'].includes(adFreePurchase.status)}
-                    onPress={() => void adFreePurchase.purchase()}
-                  />
-                ) : null}
-                <SheetAction
-                  testID="ad-free-restore"
-                  label={messages.adFreeRestoreAction}
-                  secondary
-                  disabled={['loading', 'purchasing', 'verifying', 'restoring'].includes(adFreePurchase.status)}
-                  onPress={() => void adFreePurchase.restore()}
-                />
-              </View>
-            ) : null}
 
             {privacySettings?.isSupported ? (
               <View>

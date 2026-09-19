@@ -63,8 +63,6 @@ export function ensureMobilePlatformSession(): Promise<boolean> {
   return sessionPromise;
 }
 
-export const mobilePlatformIap = mobilePlatform.iap;
-
 export const trackMobilePlatformEvent: TrackGameEvent = (name, params = {}) => {
   const isIos = Platform.OS === 'ios';
   mobilePlatform.events.track({
