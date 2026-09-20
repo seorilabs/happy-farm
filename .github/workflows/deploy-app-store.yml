@@ -72,8 +72,11 @@ jobs:
       install_command: 'pnpm install --frozen-lockfile'
       # iOS archive 는 pod install 부터 export·업로드까지 길다. 기본 타임아웃으로는 모자란다.
       timeout_minutes: 60
-      # firebase_restore_script 는 비워 둔다. GoogleService-Info.plist 가 저장소에 추적돼
-      # 있어 복원 단계가 필요 없고, 값을 주면 없는 스크립트를 찾다가 죽는다.
+      # 반드시 빈 문자열을 명시한다. 이 입력의 중앙 기본값은 빈 값이 아니라
+      # scripts/restore-mobile-firebase-config.mjs 라서, 생략하면 복원 단계가 그 파일을
+      # 찾다가 죽는다(첫 검증 실행 35446435100 이 여기서 실패했다).
+      # GoogleService-Info.plist 는 저장소에 추적돼 있어 복원 자체가 필요 없다.
+      firebase_restore_script: ''
     secrets:
       APPLE_DISTRIBUTION_CERTIFICATE_BASE64: ${{ secrets.APPLE_DISTRIBUTION_CERTIFICATE_BASE64 }}
       APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD }}
