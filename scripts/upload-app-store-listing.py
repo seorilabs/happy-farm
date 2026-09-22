@@ -49,8 +49,10 @@ CONFIG_TO_ASC_LOCALE = {
     "es": "es-ES",
 }
 
-# 기본 대상: 이번 글로벌 론칭에서 추가/갱신할 6개 언어.
-DEFAULT_TARGET_LOCALES = ["ja", "zh-Hans", "zh-Hant", "de", "fr", "es"]
+# 기본 대상은 config 가 다루는 8개 언어 전부다. 한때 글로벌 론칭에서 새로 추가한 6개
+# 언어만 기본값이었는데, 그러면 그냥 돌렸을 때 ko-KR / en-US 가 조용히 빠져 한국어·영어
+# whatsNew 가 빈 채로 제출된다.
+DEFAULT_TARGET_LOCALES = ["ko-KR", "en-US", "ja", "zh-Hans", "zh-Hant", "de", "fr", "es"]
 
 # localizedScreenshots 필드 -> ASC screenshotDisplayType.
 # 기존 en-US/ko 로컬라이제이션과 동일 슬롯(6.5" iPhone / 12.9" iPad Pro)을 사용한다.
@@ -427,14 +429,14 @@ def main():
 
     t = sub.add_parser("text", help="App 정보/버전 텍스트 로컬라이제이션 업로드")
     t.add_argument("--bundle-id", default=None)
-    t.add_argument("--locales", nargs="*", default=None, help="config 로케일 키(기본: 6개 신규 언어)")
+    t.add_argument("--locales", nargs="*", default=None, help="config 로케일 키(기본: 8개 전부)")
     t.add_argument("--commit", action="store_true", help="실제 전송(라이브 반영)")
     t.add_argument("--dry-run", action="store_true", help="미리보기만")
     t.set_defaults(func=upload_text)
 
     s = sub.add_parser("screenshots", help="버전 스크린샷(6.5 iPhone / 12.9 iPad) 업로드")
     s.add_argument("--bundle-id", default=None)
-    s.add_argument("--locales", nargs="*", default=None, help="config 로케일 키(기본: 6개 신규 언어)")
+    s.add_argument("--locales", nargs="*", default=None, help="config 로케일 키(기본: 8개 전부)")
     s.add_argument("--commit", action="store_true", help="실제 전송(라이브 반영)")
     s.add_argument("--dry-run", action="store_true", help="미리보기만")
     s.set_defaults(func=upload_screenshots)
