@@ -1292,3 +1292,90 @@ describe('Firebase 애널리틱스 값 정규화(공유 어댑터 헬퍼)', () =
     expect(toFirebaseAnalyticsParams()).toEqual({});
   });
 });
+
+describe('mission funnel analytics (#475)', () => {
+  function collect() {
+    const events: { name: string; params: Record<string, unknown> }[] = [];
+    const analytics = createFarmAnalytics((name, params) => {
+      events.push({ name, params: params as Record<string, unknown> });
+    });
+    const context = getGameAnalyticsContext(createInitialState(), Date.now());
+    return { events, analytics, context };
+  }
+
+  test('시트 도달에 일일·주간 진행 스냅샷을 함께 싣는다', () => {
+    const { events, analytics, context } = collect();
+
+    analytics.trackMissionsScreen({
+      dailyCompleted: 2,
+      dailyClaimable: 1,
+      dailyClaimed: 1,
+      dailyTotal: 3,
+      weeklyCompleted: 1,
+      weeklyClaimable: 0,
+      weeklyClaimed: 1,
+      weeklyTotal: 3,
+      context,
+    });
+
+    expect(events).toHaveLength(1);
+    expect(events[0]?.name).toBe('missions_screen');
+    expect(events[0]?.params).toMatchObject({
+      daily_completed: 2,
+      daily_claimable: 1,
+      daily_claimed: 1,
+      daily_total: 3,
+      weekly_completed: 1,
+      weekly_claimable: 0,
+      weekly_claimed: 1,
+      weekly_total: 3,
+    });
+  });
+
+  test('완료와 수령을 분리해 발화한다 — 완료 후 미수령 구간을 볼 수 있어야 한다', () => {
+    const { events, analytics, context } = collect();
+
+    analytics.trackMissionCompleted({
+      missionKind: 'daily',
+      missionType: 'harvest',
+      slot: 1,
+      target: 20,
+      context,
+    });
+    analytics.trackMissionRewardClaimed({
+      missionKind: 'weekly',
+      missionType: 'collect_produce',
+      slot: 2,
+      rewardGold: 4200,
+      context,
+    });
+
+    expect(events.map((event) => event.name)).toEqual(['mission_completed', 'mission_reward_claimed']);
+    expect(events[0]?.params).toMatchObject({
+      mission_kind: 'daily',
+      mission_type: 'harvest',
+      mission_slot: 1,
+      mission_target: 20,
+    });
+    expect(events[1]?.params).toMatchObject({
+      mission_kind: 'weekly',
+      mission_type: 'collect_produce',
+      mission_slot: 2,
+      reward_gold: 4200,
+    });
+  });
+
+  test('수령 보상 골드는 analytics 안전 범위로 clamp된다', () => {
+    const { events, analytics, context } = collect();
+
+    analytics.trackMissionRewardClaimed({
+      missionKind: 'daily',
+      missionType: 'watch_ad',
+      slot: 0,
+      rewardGold: Number.MAX_VALUE,
+      context,
+    });
+
+    expect(events[0]?.params.reward_gold).toBe(Number.MAX_SAFE_INTEGER);
+  });
+});

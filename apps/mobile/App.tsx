@@ -68,10 +68,11 @@ function App() {
     };
   }, []);
 
-  // 수확 알림 탭으로 복귀한 경우를 계측한다(알림 동작 자체는 변경 없음).
+  // 알림 탭으로 복귀한 경우를 계측한다(알림 동작 자체는 변경 없음). 수확 알림과 복귀
+  // 리마인더를 kind 로 구분하고, 백그라운드에서 탭된 항목도 큐에서 이어받는다(#476).
   useEffect(() => {
-    return registerHarvestNotificationOpenTracking(() => {
-      mobileFarmAnalytics.trackNotificationOpened({ kind: 'harvest' });
+    return registerHarvestNotificationOpenTracking((kind) => {
+      mobileFarmAnalytics.trackNotificationOpened({ kind });
     });
   }, []);
 

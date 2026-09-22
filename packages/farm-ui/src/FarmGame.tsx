@@ -1242,6 +1242,12 @@ function FarmGameBody({
   const tickNowMsRef = useRef(Date.now());
   const gameStartTrackedRef = useRef(false);
   const claimedRewardKeysRef = useRef<Set<CollectionRewardKey>>(new Set());
+  // 미션 완료 계측을 슬롯당 한 번으로 묶는 가드. 키는 `${periodKey}:${kind}:${slot}`ㅡ
+  // 자정/주간 롤오버로 periodKey가 바뀌면 같은 슬롯이라도 다시 셀 수 있다(#475).
+  const completedMissionKeysRef = useRef<Set<string>>(new Set());
+  // 미션 수령 더블탭 가드. 골드 지급은 core가 idempotent하게 막지만 토스트·계측은
+  // 정확히 한 번이어야 한다(claimCollectionReward와 같은 패턴).
+  const claimedMissionKeysRef = useRef<Set<string>>(new Set());
   const achievementClaimInFlightRef = useRef(false);
   const commandEffectIdRef = useRef(0);
   const pendingCommandEffectsRef = useRef<PendingFarmCommandEffect[]>([]);
@@ -2911,6 +2917,39 @@ function FarmGameBody({
     if (transitionedSheet.type === 'collection') {
       farmAnalytics.trackCollectionScreen(buildContext());
     }
+    if (transitionedSheet.type === 'missions') {
+      // 도달 시점의 일일·주간 진행 상태를 함께 남긴다. 완료했는데 받으러 오지 않는
+      // 구간과 아예 진행조차 없는 구간을 이 한 이벤트로 갈라 볼 수 있다(#475).
+      const state = gameStateRef.current;
+      const now = Date.now();
+      const daily = getDailyMissionsSnapshot(
+        state.dailyMissionState,
+        now,
+        state.unlockedAreas,
+        undefined,
+        rewardedAd.isAdSupported,
+        state
+      ).missions;
+      const weekly = getWeeklyMissionsSnapshot(
+        state.weeklyMissionState,
+        now,
+        state.unlockedAreas,
+        undefined,
+        rewardedAd.isAdSupported,
+        state
+      ).missions;
+      farmAnalytics.trackMissionsScreen({
+        dailyCompleted: daily.filter((mission) => mission.completed).length,
+        dailyClaimable: daily.filter((mission) => mission.claimable).length,
+        dailyClaimed: daily.filter((mission) => mission.claimed).length,
+        dailyTotal: daily.length,
+        weeklyCompleted: weekly.filter((mission) => mission.completed).length,
+        weeklyClaimable: weekly.filter((mission) => mission.claimable).length,
+        weeklyClaimed: weekly.filter((mission) => mission.claimed).length,
+        weeklyTotal: weekly.length,
+        context: buildContext(state),
+      });
+    }
     if (transitionedSheet.type === 'production' && transitionedSheet.tab === 'animals') {
       const state = gameStateRef.current;
       const statuses = getAnimalStates(state, Date.now());
@@ -3172,6 +3211,56 @@ function FarmGameBody({
       ).missions.filter((mission) => mission.claimable).length,
     [gameState, rewardedAd.isAdSupported]
   );
+  // 미션이 목표에 처음 도달한 순간을 정확히 한 번만 계측한다(#475). 키에 dayKey/weekKey를
+  // 넣어 롤오버 뒤 같은 슬롯이 다시 완료되면 새로 발화한다. 의존성을 미션 상태로 좁혀
+  // 250ms 게임 틱이 이 계산을 다시 돌리지 않게 한다.
+  useEffect(() => {
+    const buildContext = analyticsContextRef.current;
+    if (buildContext == null) return;
+    const state = gameStateRef.current;
+    const now = Date.now();
+    const daily = getDailyMissionsSnapshot(
+      state.dailyMissionState,
+      now,
+      state.unlockedAreas,
+      undefined,
+      rewardedAd.isAdSupported,
+      state
+    );
+    const weekly = getWeeklyMissionsSnapshot(
+      state.weeklyMissionState,
+      now,
+      state.unlockedAreas,
+      undefined,
+      rewardedAd.isAdSupported,
+      state
+    );
+    const entries: { kind: 'daily' | 'weekly'; periodKey: string; missions: typeof daily.missions }[] = [
+      { kind: 'daily', periodKey: daily.dayKey, missions: daily.missions },
+      { kind: 'weekly', periodKey: weekly.weekKey, missions: weekly.missions },
+    ];
+    for (const entry of entries) {
+      for (const mission of entry.missions) {
+        if (!mission.completed) continue;
+        const key = `${entry.periodKey}:${entry.kind}:${mission.slot}`;
+        if (completedMissionKeysRef.current.has(key)) continue;
+        completedMissionKeysRef.current.add(key);
+        farmAnalytics.trackMissionCompleted({
+          missionKind: entry.kind,
+          missionType: mission.type,
+          slot: mission.slot,
+          target: mission.target,
+          context: buildContext(state),
+        });
+      }
+    }
+  }, [
+    gameState.dailyMissionState,
+    gameState.weeklyMissionState,
+    farmAnalytics,
+    rewardedAd.isAdSupported,
+  ]);
+
   const labActionableCount = useMemo(
     () =>
       RESEARCH_NODES.filter((node) => canUnlockNode(gameState, node.key)).length +
@@ -3894,19 +3983,43 @@ function FarmGameBody({
     // Functional updater keeps the claim idempotent: a concurrent second tap
     // evaluates claimMission against the already-updated state, gets null, and
     // leaves gold untouched. The reward is read from the holder for the toast.
-    const rewardHolder: { gold: number | null } = { gold: null };
-    setGameState((prev) => {
-      const beforeGold = prev.gold;
-      // 진행도 스케일 광고 보상을 주입해 시트 표시 금액과 동일한 스케일로 지급한다.
-      const next = claimMission(prev, slot, now, getRewardedGoldAmount(prev), rewardedAd.isAdSupported);
-      if (next == null) {
-        return prev;
-      }
-      rewardHolder.gold = next.gold - beforeGold;
-      return next;
-    });
-    if (rewardHolder.gold != null) {
-      toast(messages.missionClaimedToast(formatMoney(rewardHolder.gold, locale)));
+    // 보상액과 미션 종류를 현재 상태로 먼저 계산한다. claimMission은 순수 함수라
+    // 미리 돌려 본 결과가 실제 반영 결과와 같다. setGameState updater 안에서 읽으면
+    // React가 updater를 렌더 단계에서 실행하는 탓에 호출 직후에는 값이 비어 있어,
+    // 토스트와 계측이 조용히 누락된다.
+    const claimKey = `daily:${slot}`;
+    if (claimedMissionKeysRef.current.has(claimKey)) {
+      return;
+    }
+    const preview = claimMission(gameState, slot, now, getRewardedGoldAmount(gameState), rewardedAd.isAdSupported);
+    if (preview == null) {
+      return;
+    }
+    const rewardGold = preview.gold - gameState.gold;
+    const missionType =
+      getDailyMissionsSnapshot(
+        gameState.dailyMissionState,
+        now,
+        gameState.unlockedAreas,
+        undefined,
+        rewardedAd.isAdSupported,
+        gameState
+      ).missions.find((mission) => mission.slot === slot)?.type ?? null;
+    claimedMissionKeysRef.current.add(claimKey);
+
+    setGameState(
+      (prev) => claimMission(prev, slot, now, getRewardedGoldAmount(prev), rewardedAd.isAdSupported) ?? prev
+    );
+    toast(messages.missionClaimedToast(formatMoney(rewardGold, locale)));
+    const buildContext = analyticsContextRef.current;
+    if (buildContext != null && missionType != null) {
+      farmAnalytics.trackMissionRewardClaimed({
+        missionKind: 'daily',
+        missionType,
+        slot,
+        rewardGold,
+        context: buildContext(gameState),
+      });
     }
   }
 
@@ -3915,19 +4028,46 @@ function FarmGameBody({
     // Same idempotent functional-updater pattern as the daily claim: a concurrent
     // second tap evaluates claimWeeklyMission against the already-updated state,
     // gets null, and leaves gold untouched. The reward is read for the toast.
-    const rewardHolder: { gold: number | null } = { gold: null };
-    setGameState((prev) => {
-      const beforeGold = prev.gold;
-      // 일일 미션 수령과 동일하게 진행도 스케일 광고 보상을 주입한다.
-      const next = claimWeeklyMission(prev, slot, now, getRewardedGoldAmount(prev), rewardedAd.isAdSupported);
-      if (next == null) {
-        return prev;
-      }
-      rewardHolder.gold = next.gold - beforeGold;
-      return next;
-    });
-    if (rewardHolder.gold != null) {
-      toast(messages.missionClaimedToast(formatMoney(rewardHolder.gold, locale)));
+    // 일일 수령과 같은 이유로 보상액과 종류를 먼저 계산한다.
+    const claimKey = `weekly:${slot}`;
+    if (claimedMissionKeysRef.current.has(claimKey)) {
+      return;
+    }
+    const preview = claimWeeklyMission(
+      gameState,
+      slot,
+      now,
+      getRewardedGoldAmount(gameState),
+      rewardedAd.isAdSupported
+    );
+    if (preview == null) {
+      return;
+    }
+    const rewardGold = preview.gold - gameState.gold;
+    const missionType =
+      getWeeklyMissionsSnapshot(
+        gameState.weeklyMissionState,
+        now,
+        gameState.unlockedAreas,
+        undefined,
+        rewardedAd.isAdSupported,
+        gameState
+      ).missions.find((mission) => mission.slot === slot)?.type ?? null;
+    claimedMissionKeysRef.current.add(claimKey);
+
+    setGameState(
+      (prev) => claimWeeklyMission(prev, slot, now, getRewardedGoldAmount(prev), rewardedAd.isAdSupported) ?? prev
+    );
+    toast(messages.missionClaimedToast(formatMoney(rewardGold, locale)));
+    const buildContext = analyticsContextRef.current;
+    if (buildContext != null && missionType != null) {
+      farmAnalytics.trackMissionRewardClaimed({
+        missionKind: 'weekly',
+        missionType,
+        slot,
+        rewardGold,
+        context: buildContext(gameState),
+      });
     }
   }
 
