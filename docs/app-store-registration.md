@@ -115,23 +115,31 @@ Updated area-opening copy to simpler wording, added an estimated gold-per-hour p
 
 ## 스크린샷과 미리보기
 
-앱 미리보기는 선택 항목이므로 1차 제출에서는 비워 둡니다. iOS 앱은 screenshot이 필수입니다.
+앱 미리보기는 선택 항목이므로 비워 둡니다. iOS 앱은 screenshot이 필수입니다.
 
-생성된 파일:
+경로는 `app-store/app-store.config.json`이 정본입니다(`localizedScreenshots`, `assets`).
 
-```text
-app-store/assets/app-icon-1024.png
-app-store/screenshots/iphone-6.9/iphone-1.png
-app-store/screenshots/iphone-6.9/iphone-2.png
-app-store/screenshots/iphone-6.5/iphone-1.png
-app-store/screenshots/iphone-6.5/iphone-2.png
-app-store/screenshots/ipad-13/ipad-1.png
-app-store/screenshots/ipad-13/ipad-2.png
-```
+| 슬롯 | 경로 | 해상도 | 장수 |
+| --- | --- | --- | --- |
+| 6.9형 iPhone | `app-store/screenshots/<locale>/iphone-6.9/iphone-<n>.png` | 1320x2868 | 4 |
+| 6.5형 iPhone | `app-store/screenshots/<locale>/iphone-6.5/iphone-<n>.png` | 1284x2778 | 4 |
+| 13형 iPad | `app-store/screenshots/<locale>/ipad-13/ipad-<n>.png` | 2064x2752 | 4 |
 
-2026-06-05 기준 screenshot은 `en_US` iPhone 17 Pro Max, iPad Pro 13-inch 시뮬레이터에서 실제 앱 화면으로 재생성했습니다. iPhone 6.5형 파일은 iPhone 6.9형 실캡처를 `1284x2778` 규격으로 리사이즈/크롭한 자산입니다.
+언어는 `ko-KR`, `en-US`, `ja`, `zh-Hans`, `zh-Hant`, `de`, `fr`, `es` 8개입니다. 로케일 폴더가
+없는 루트 경로(`app-store/screenshots/iphone-6.9/` 등)는 `assets` 키가 참조하는 기본 언어
+(`ko-KR`) 세트입니다.
 
-현재 `apps/mobile` Xcode target은 iPhone과 iPad를 모두 지원하므로 iPad 13형 스크린샷도 필요합니다. Apple Watch 앱은 없으므로 Apple Watch 스크린샷은 해당 없습니다.
+App Store Connect에 실제로 올라가는 슬롯은 `APP_IPHONE_65`와 `APP_IPAD_PRO_3GEN_129` 두 개입니다.
+6.9형 캡처는 원본으로 보관하고, 6.5형은 `scripts/store-screenshots/install.py`가 이 원본을
+`1284x2778`로 리사이즈해 파생합니다.
+
+2026-09-22에 8개 언어를 모두 다시 캡처했습니다. 직전 자산은 2026-06-05 캡처본이라 clay 작물
+아트(`d7df7d6`)와 Warm Wood 크롬 개편(#525)이 반영되지 않아 실제 첫 화면과 달랐습니다.
+iPhone 17 Pro Max / iPad Pro 13-inch (M5) 시뮬레이터에서 실제 앱을 실행해 캡처했으며, 절차와
+장면 정의는 `scripts/store-screenshots/README.md`에 있습니다.
+
+현재 `apps/mobile` Xcode target은 iPhone과 iPad를 모두 지원하므로 iPad 13형 스크린샷도 필요합니다.
+Apple Watch 앱은 없으므로 Apple Watch 스크린샷은 해당 없습니다.
 
 ## 남은 운영 확인
 

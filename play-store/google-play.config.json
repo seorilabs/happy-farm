@@ -64,78 +64,116 @@
   "assets": {
     "playIcon": "play-store/assets/icon-512.png",
     "featureGraphic": "play-store/assets/feature-graphic-1024x500.png",
-    "phoneScreenshots": ["play-store/screenshots/phone/phone-1.png", "play-store/screenshots/phone/phone-2.png"],
+    "phoneScreenshots": [
+      "play-store/screenshots/phone/phone-1.png",
+      "play-store/screenshots/phone/phone-2.png",
+      "play-store/screenshots/phone/phone-3.png",
+      "play-store/screenshots/phone/phone-4.png"
+    ],
     "sevenInchTabletScreenshots": [
       "play-store/screenshots/tablet-7/tablet-7-1.png",
-      "play-store/screenshots/tablet-7/tablet-7-2.png"
+      "play-store/screenshots/tablet-7/tablet-7-2.png",
+      "play-store/screenshots/tablet-7/tablet-7-3.png",
+      "play-store/screenshots/tablet-7/tablet-7-4.png"
     ],
     "tenInchTabletScreenshots": [
       "play-store/screenshots/tablet-10/tablet-10-1.png",
-      "play-store/screenshots/tablet-10/tablet-10-2.png"
+      "play-store/screenshots/tablet-10/tablet-10-2.png",
+      "play-store/screenshots/tablet-10/tablet-10-3.png",
+      "play-store/screenshots/tablet-10/tablet-10-4.png"
     ]
   },
   "localizedAssets": {
     "ko-KR": {
       "featureGraphic": "play-store/assets/ko-KR/feature-graphic-1024x500.png",
-      "phoneScreenshots": ["play-store/screenshots/ko-KR/phone/phone-1.png", "play-store/screenshots/ko-KR/phone/phone-2.png"],
+      "phoneScreenshots": [
+        "play-store/screenshots/ko-KR/phone/phone-1.png",
+        "play-store/screenshots/ko-KR/phone/phone-2.png",
+        "play-store/screenshots/ko-KR/phone/phone-3.png",
+        "play-store/screenshots/ko-KR/phone/phone-4.png"
+      ],
       "sevenInchTabletScreenshots": [
         "play-store/screenshots/ko-KR/tablet-7/tablet-7-1.png",
-        "play-store/screenshots/ko-KR/tablet-7/tablet-7-2.png"
+        "play-store/screenshots/ko-KR/tablet-7/tablet-7-2.png",
+        "play-store/screenshots/ko-KR/tablet-7/tablet-7-3.png",
+        "play-store/screenshots/ko-KR/tablet-7/tablet-7-4.png"
       ],
       "tenInchTabletScreenshots": [
         "play-store/screenshots/ko-KR/tablet-10/tablet-10-1.png",
-        "play-store/screenshots/ko-KR/tablet-10/tablet-10-2.png"
+        "play-store/screenshots/ko-KR/tablet-10/tablet-10-2.png",
+        "play-store/screenshots/ko-KR/tablet-10/tablet-10-3.png",
+        "play-store/screenshots/ko-KR/tablet-10/tablet-10-4.png"
       ]
     },
     "en-US": {
       "featureGraphic": "play-store/assets/en-US/feature-graphic-1024x500.png",
-      "phoneScreenshots": ["play-store/screenshots/en-US/phone/phone-1.png", "play-store/screenshots/en-US/phone/phone-2.png"],
+      "phoneScreenshots": [
+        "play-store/screenshots/en-US/phone/phone-1.png",
+        "play-store/screenshots/en-US/phone/phone-2.png",
+        "play-store/screenshots/en-US/phone/phone-3.png",
+        "play-store/screenshots/en-US/phone/phone-4.png"
+      ],
       "sevenInchTabletScreenshots": [
         "play-store/screenshots/en-US/tablet-7/tablet-7-1.png",
-        "play-store/screenshots/en-US/tablet-7/tablet-7-2.png"
+        "play-store/screenshots/en-US/tablet-7/tablet-7-2.png",
+        "play-store/screenshots/en-US/tablet-7/tablet-7-3.png",
+        "play-store/screenshots/en-US/tablet-7/tablet-7-4.png"
       ],
       "tenInchTabletScreenshots": [
         "play-store/screenshots/en-US/tablet-10/tablet-10-1.png",
-        "play-store/screenshots/en-US/tablet-10/tablet-10-2.png"
+        "play-store/screenshots/en-US/tablet-10/tablet-10-2.png",
+        "play-store/screenshots/en-US/tablet-10/tablet-10-3.png",
+        "play-store/screenshots/en-US/tablet-10/tablet-10-4.png"
       ]
     },
-
-      "ja": {
-        "phoneScreenshots": [
-          "play-store/screenshots/ja/phone/phone-1.png",
-          "play-store/screenshots/ja/phone/phone-2.png"
-        ]
-      },
-      "zh-Hans": {
-        "phoneScreenshots": [
-          "play-store/screenshots/zh-Hans/phone/phone-1.png",
-          "play-store/screenshots/zh-Hans/phone/phone-2.png"
-        ]
-      },
-      "zh-Hant": {
-        "phoneScreenshots": [
-          "play-store/screenshots/zh-Hant/phone/phone-1.png",
-          "play-store/screenshots/zh-Hant/phone/phone-2.png"
-        ]
-      },
-      "de": {
-        "phoneScreenshots": [
-          "play-store/screenshots/de/phone/phone-1.png",
-          "play-store/screenshots/de/phone/phone-2.png"
-        ]
-      },
-      "fr": {
-        "phoneScreenshots": [
-          "play-store/screenshots/fr/phone/phone-1.png",
-          "play-store/screenshots/fr/phone/phone-2.png"
-        ]
-      },
-      "es": {
-        "phoneScreenshots": [
-          "play-store/screenshots/es/phone/phone-1.png",
-          "play-store/screenshots/es/phone/phone-2.png"
-        ]
-      }
+    "ja": {
+      "phoneScreenshots": [
+        "play-store/screenshots/ja/phone/phone-1.png",
+        "play-store/screenshots/ja/phone/phone-2.png",
+        "play-store/screenshots/ja/phone/phone-3.png",
+        "play-store/screenshots/ja/phone/phone-4.png"
+      ]
+    },
+    "zh-Hans": {
+      "phoneScreenshots": [
+        "play-store/screenshots/zh-Hans/phone/phone-1.png",
+        "play-store/screenshots/zh-Hans/phone/phone-2.png",
+        "play-store/screenshots/zh-Hans/phone/phone-3.png",
+        "play-store/screenshots/zh-Hans/phone/phone-4.png"
+      ]
+    },
+    "zh-Hant": {
+      "phoneScreenshots": [
+        "play-store/screenshots/zh-Hant/phone/phone-1.png",
+        "play-store/screenshots/zh-Hant/phone/phone-2.png",
+        "play-store/screenshots/zh-Hant/phone/phone-3.png",
+        "play-store/screenshots/zh-Hant/phone/phone-4.png"
+      ]
+    },
+    "de": {
+      "phoneScreenshots": [
+        "play-store/screenshots/de/phone/phone-1.png",
+        "play-store/screenshots/de/phone/phone-2.png",
+        "play-store/screenshots/de/phone/phone-3.png",
+        "play-store/screenshots/de/phone/phone-4.png"
+      ]
+    },
+    "fr": {
+      "phoneScreenshots": [
+        "play-store/screenshots/fr/phone/phone-1.png",
+        "play-store/screenshots/fr/phone/phone-2.png",
+        "play-store/screenshots/fr/phone/phone-3.png",
+        "play-store/screenshots/fr/phone/phone-4.png"
+      ]
+    },
+    "es": {
+      "phoneScreenshots": [
+        "play-store/screenshots/es/phone/phone-1.png",
+        "play-store/screenshots/es/phone/phone-2.png",
+        "play-store/screenshots/es/phone/phone-3.png",
+        "play-store/screenshots/es/phone/phone-4.png"
+      ]
+    }
   },
   "automation": {
     "developerApiAuth": "GitHub Actions OIDC + Google Cloud Workload Identity Federation",

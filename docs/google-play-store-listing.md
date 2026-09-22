@@ -59,40 +59,26 @@ Rebuilt the Android internal test build so the endless endgame systems, includin
 - 원본 앱 아이콘: `assets/행복농장앱아이콘_600x600.png`
 - Play 앱 아이콘: `play-store/assets/icon-512.png`
 - 피처 그래픽 기본값(ko-KR): `play-store/assets/feature-graphic-1024x500.png`
-- 피처 그래픽 ko-KR: `play-store/assets/ko-KR/feature-graphic-1024x500.png`
-- 피처 그래픽 en-US: `play-store/assets/en-US/feature-graphic-1024x500.png`
-- 기본 phone screenshot(ko-KR):
-  - `play-store/screenshots/phone/phone-1.png`
-  - `play-store/screenshots/phone/phone-2.png`
-- 기본 7-inch tablet screenshot(ko-KR):
-  - `play-store/screenshots/tablet-7/tablet-7-1.png`
-  - `play-store/screenshots/tablet-7/tablet-7-2.png`
-- 기본 10-inch tablet screenshot(ko-KR):
-  - `play-store/screenshots/tablet-10/tablet-10-1.png`
-  - `play-store/screenshots/tablet-10/tablet-10-2.png`
+- 피처 그래픽 ko-KR / en-US: `play-store/assets/<locale>/feature-graphic-1024x500.png`
 
-locale별 실제 Android 캡처 경로:
+스크린샷 경로는 `play-store/google-play.config.json`이 정본입니다. 규칙은 다음과 같습니다.
 
-- ko-KR phone:
-  - `play-store/screenshots/ko-KR/phone/phone-1.png`
-  - `play-store/screenshots/ko-KR/phone/phone-2.png`
-- ko-KR 7-inch tablet:
-  - `play-store/screenshots/ko-KR/tablet-7/tablet-7-1.png`
-  - `play-store/screenshots/ko-KR/tablet-7/tablet-7-2.png`
-- ko-KR 10-inch tablet:
-  - `play-store/screenshots/ko-KR/tablet-10/tablet-10-1.png`
-  - `play-store/screenshots/ko-KR/tablet-10/tablet-10-2.png`
-- en-US phone:
-  - `play-store/screenshots/en-US/phone/phone-1.png`
-  - `play-store/screenshots/en-US/phone/phone-2.png`
-- en-US 7-inch tablet:
-  - `play-store/screenshots/en-US/tablet-7/tablet-7-1.png`
-  - `play-store/screenshots/en-US/tablet-7/tablet-7-2.png`
-- en-US 10-inch tablet:
-  - `play-store/screenshots/en-US/tablet-10/tablet-10-1.png`
-  - `play-store/screenshots/en-US/tablet-10/tablet-10-2.png`
+| 슬롯 | 경로 | 장수 | 대상 언어 |
+| --- | --- | --- | --- |
+| 기본(ko-KR) | `play-store/screenshots/{phone,tablet-7,tablet-10}/` | 4 | 콘솔 기본값 |
+| phone | `play-store/screenshots/<locale>/phone/phone-<n>.png` | 4 | 8개 언어 전부 |
+| 7-inch tablet | `play-store/screenshots/<locale>/tablet-7/tablet-7-<n>.png` | 4 | ko-KR, en-US |
+| 10-inch tablet | `play-store/screenshots/<locale>/tablet-10/tablet-10-<n>.png` | 4 | ko-KR, en-US |
 
-현재 Play 스크린샷은 `com.seorilabs.happyfarm` Play 설치본 `1.3.2 / 1003002`를 Android 기기에서 실행해 캡처한 실제 게임 화면입니다. phone은 `1080x1920`, tablet 슬롯은 Android `wm size 1440x2560`으로 앱을 다시 렌더링해 캡처했습니다.
+언어는 `ko-KR`, `en-US`, `ja`, `zh-Hans`, `zh-Hant`, `de`, `fr`, `es` 8개입니다. 7-inch와
+10-inch 슬롯은 같은 1440x2560 캡처를 공유합니다. Play가 슬롯별로 다른 기기를 요구하지 않고,
+기존 자산도 두 슬롯이 동일 파일이었습니다.
+
+2026-09-22에 8개 언어를 모두 다시 캡처했습니다. 직전 자산은 2026-06-05 캡처본이라 clay 작물
+아트(`d7df7d6`)와 Warm Wood 크롬 개편(#525)이 반영되지 않아 실제 첫 화면과 달랐습니다.
+phone은 `wm size 1080x2160` + `wm density 432`(Play의 종횡비 2:1 제한), tablet은
+`wm size 1440x2560` + `wm density 384`로 렌더해 캡처했습니다. 절차와 장면 정의는
+`scripts/store-screenshots/README.md`에 있습니다.
 
 ## API 자동화 범위
 
