@@ -26,8 +26,11 @@ substitutions:
   _ARTIFACT_BUCKET: "gs://seorilabs-ci-build-artifacts/seorilabs/happy-farm/manual"
 
 steps:
+  # builder 이미지는 US 사본을 쓴다. 이 빌드는 default pool 에서 도는데 default
+  # pool 은 미국에서 실행된다. 서울 사본을 당기면 빌드마다 2GB 가 대륙을 건너
+  # egress 로 붙는다(9/18~19 릴리스 5건에 10.3GiB, 1,145원).
   - id: build-signed-aab
-    name: asia-northeast3-docker.pkg.dev/seorilabs-ci/builders/rn-android-builder:node24-jdk17-android36
+    name: us-docker.pkg.dev/seorilabs-ci/builders/rn-android-builder:node24-jdk17-android36
     entrypoint: bash
     args:
       - scripts/build-android.sh
