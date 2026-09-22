@@ -12,14 +12,14 @@
   "marketingUrl": "https://happy-farm-tycoon.web.app",
   "copyright": "2026 Seorilabs",
   "releaseNotes": {
-    "ko-KR": "설정에서 광고 개인정보 선택을 직접 열 수 있게 했습니다. 앱 실행 안정성을 개선했습니다.",
-    "en-US": "You can now open your ad privacy choices directly from Settings. Improved app startup stability.",
-    "ja": "設定から広告のプライバシー選択を直接開けるようにしました。アプリ起動の安定性を改善しました。",
-    "zh-Hans": "现在可以在设置中直接打开广告隐私选项。改进了应用启动的稳定性。",
-    "zh-Hant": "現在可以在設定中直接開啟廣告隱私選項。改善了應用程式啟動的穩定性。",
-    "de": "Die Datenschutzeinstellungen für Werbung lassen sich jetzt direkt in den Einstellungen öffnen. Die Stabilität beim App-Start wurde verbessert.",
-    "fr": "Vous pouvez désormais ouvrir vos choix de confidentialité publicitaire directement depuis les Réglages. La stabilité au démarrage a été améliorée.",
-    "es": "Ahora puedes abrir tus opciones de privacidad publicitaria directamente desde Ajustes. Se ha mejorado la estabilidad al iniciar la app."
+    "ko-KR": "미션 보상을 받으면 받은 금액이 화면에 표시됩니다. 알림을 눌러 돌아온 경로를 정확히 기록하도록 고쳤습니다.",
+    "en-US": "Claiming a mission reward now shows how much you earned. Fixed tracking for players returning through notifications.",
+    "ja": "ミッション報酬を受け取ると獲得額が画面に表示されます。通知から復帰した経路を正しく記録するよう修正しました。",
+    "zh-Hans": "领取任务奖励时会显示获得的金额。修正了通过通知返回游戏的记录方式。",
+    "zh-Hant": "領取任務獎勵時會顯示獲得的金額。修正了透過通知返回遊戲的記錄方式。",
+    "de": "Beim Einlösen einer Missionsbelohnung wird jetzt angezeigt, wie viel du erhalten hast. Die Erfassung von Rückkehrern über Benachrichtigungen wurde korrigiert.",
+    "fr": "La récompense de mission affiche désormais le montant obtenu. Le suivi des retours via les notifications a été corrigé.",
+    "es": "Al reclamar la recompensa de una misión ahora se muestra cuánto has ganado. Se ha corregido el seguimiento de los regresos mediante notificaciones."
   },
   "versioning": {
     "source": "github_release_tag",
