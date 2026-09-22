@@ -114,6 +114,9 @@ export function toFirebaseAnalyticsParams(
 // 도입 시 같은 계약으로 확장할 수 있도록 종류를 미리 정의해 둔다.
 export type FarmNotificationKind = 'harvest' | 'daily_bonus' | 'crop_of_the_day';
 
+// 일일/주간 미션을 한 이벤트 집합에서 구분하는 축(#475). 번역하지 않는 stable key다.
+export type MissionAnalyticsKind = 'daily' | 'weekly';
+
 // Stable acquisition path for the daily-bonus impression → claim funnel.
 // Keep these values untranslated so BigQuery cohorts remain joinable.
 export type DailyBonusSource = 'auto_popup' | 'more' | 'welcome_back';
@@ -727,6 +730,68 @@ export function createFarmAnalytics(emit: TrackGameEvent = noopTrackGameEvent) {
 
     trackCollectionScreen: (context: GameAnalyticsContext) => {
       track('collection_screen', context);
+    },
+
+    // === 일일·주간 미션 퍼널 (#475) ===
+    // 미션은 "오늘 다시 들어올 이유"에 해당하는 거의 유일한 장치인데 도달·완료·수령 중
+    // 어느 것도 측정되지 않아, 데일리 루프가 작동하는지 판단할 근거가 없었다.
+    // 시트 도달 시점의 완료/수령 가능 슬롯 수를 함께 실어 진행 상태를 스냅샷으로 남긴다.
+    trackMissionsScreen: (params: {
+      dailyCompleted: number;
+      dailyClaimable: number;
+      dailyClaimed: number;
+      dailyTotal: number;
+      weeklyCompleted: number;
+      weeklyClaimable: number;
+      weeklyClaimed: number;
+      weeklyTotal: number;
+      context: GameAnalyticsContext;
+    }) => {
+      track('missions_screen', {
+        daily_completed: params.dailyCompleted,
+        daily_claimable: params.dailyClaimable,
+        daily_claimed: params.dailyClaimed,
+        daily_total: params.dailyTotal,
+        weekly_completed: params.weeklyCompleted,
+        weekly_claimable: params.weeklyClaimable,
+        weekly_claimed: params.weeklyClaimed,
+        weekly_total: params.weeklyTotal,
+        ...params.context,
+      });
+    },
+
+    // 진행도가 목표에 처음 도달한 순간. 수령(claim)과 분리해야 "완료했지만 받으러 오지
+    // 않는" 구간을 볼 수 있다.
+    trackMissionCompleted: (params: {
+      missionKind: MissionAnalyticsKind;
+      missionType: string;
+      slot: number;
+      target: number;
+      context: GameAnalyticsContext;
+    }) => {
+      track('mission_completed', {
+        mission_kind: params.missionKind,
+        mission_type: params.missionType,
+        mission_slot: params.slot,
+        mission_target: params.target,
+        ...params.context,
+      });
+    },
+
+    trackMissionRewardClaimed: (params: {
+      missionKind: MissionAnalyticsKind;
+      missionType: string;
+      slot: number;
+      rewardGold: number;
+      context: GameAnalyticsContext;
+    }) => {
+      track('mission_reward_claimed', {
+        mission_kind: params.missionKind,
+        mission_type: params.missionType,
+        mission_slot: params.slot,
+        reward_gold: toSafeAnalyticsNumber(params.rewardGold),
+        ...params.context,
+      });
     },
 
     trackCollectionRewardClaimed: (params: {
