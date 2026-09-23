@@ -175,6 +175,16 @@ resolve_build_only_version() {
   build_only_version_code="$release_version_code"
 }
 
+# 자격증명은 Secret Manager 가 아니라 일회성 GCS 객체로 들어온다. cloudbuild 의
+# fetch-ephemeral-credentials 가 BUILD_CREDENTIAL_DIR 에 내려두고 prefix 를 즉시 지운다.
+# exit 가 아니라 return 으로 실패를 알린다. 명령 치환 안의 exit 는 서브셸만 끝내고
+# 부모 스크립트는 계속 돈다.
+read_credential() {
+  local path="$BUILD_CREDENTIAL_DIR/$1"
+  [ -s "$path" ] || { echo "자격증명 파일이 없거나 비어 있음: $1" >&2; return 1; }
+  cat "$path"
+}
+
 run_build_only() {
   local name
   for name in \
@@ -184,7 +194,8 @@ run_build_only() {
     GOOGLE_PLAY_UPLOAD_KEYSTORE_BASE64 \
     GOOGLE_PLAY_UPLOAD_KEYSTORE_PASSWORD \
     GOOGLE_PLAY_UPLOAD_KEY_PASSWORD \
-    GOOGLE_PLAY_UPLOAD_KEY_ALIAS; do
+    GOOGLE_PLAY_UPLOAD_KEY_ALIAS \
+    BUILD_CREDENTIAL_DIR; do
     reject_env "$name"
   done
 
@@ -263,10 +274,7 @@ run_market_upload() {
   for name in \
     ANDROID_VERSION_NAME ANDROID_VERSION_CODE \
     SEORI_RELEASE_TAG SEORI_RELEASE_VERSION SEORI_RELEASE_VERSION_CODE SEORI_RELEASE_SOURCE_SHA \
-    FIREBASE_ANDROID_GOOGLE_SERVICES_JSON_BASE64 \
-    GOOGLE_PLAY_UPLOAD_KEYSTORE_BASE64 \
-    GOOGLE_PLAY_UPLOAD_KEYSTORE_PASSWORD \
-    GOOGLE_PLAY_UPLOAD_KEY_PASSWORD \
+    BUILD_CREDENTIAL_DIR \
     GOOGLE_PLAY_UPLOAD_KEY_ALIAS; do
     require_env "$name"
   done
@@ -295,14 +303,16 @@ run_market_upload() {
   }
   echo "중앙 릴리즈 binding 확인 완료"
 
-  local firebase_config_base64="$FIREBASE_ANDROID_GOOGLE_SERVICES_JSON_BASE64"
-  local upload_keystore_base64="$GOOGLE_PLAY_UPLOAD_KEYSTORE_BASE64"
-  local upload_store_password="$GOOGLE_PLAY_UPLOAD_KEYSTORE_PASSWORD"
-  local upload_key_password="$GOOGLE_PLAY_UPLOAD_KEY_PASSWORD"
-  unset FIREBASE_ANDROID_GOOGLE_SERVICES_JSON_BASE64
-  unset GOOGLE_PLAY_UPLOAD_KEYSTORE_BASE64
-  unset GOOGLE_PLAY_UPLOAD_KEYSTORE_PASSWORD
-  unset GOOGLE_PLAY_UPLOAD_KEY_PASSWORD
+  # 자격증명은 환경변수가 아니라 BUILD_CREDENTIAL_DIR 의 파일에서 읽는다.
+  # 선언과 대입을 나눈 건 `local VAR="$(f)"` 가 local 의 종료 상태 0 으로 덮여
+  # set -e 에 걸리지 않기 때문이다. export 도 같은 함정이고, 그대로 두면
+  # 자격증명 파일이 없을 때 빈 값으로 빌드가 계속된다.
+  local firebase_config_base64 upload_keystore_base64
+  local upload_store_password upload_key_password
+  firebase_config_base64="$(read_credential firebase-android-config.b64)"
+  upload_keystore_base64="$(read_credential play-keystore.b64)"
+  upload_store_password="$(read_credential play-keystore-password)"
+  upload_key_password="$(read_credential play-key-password)"
 
   require_clean_credential_files
   secret_dir="$(mktemp -d)"
