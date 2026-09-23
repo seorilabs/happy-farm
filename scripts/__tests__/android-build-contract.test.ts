@@ -262,3 +262,61 @@ describe('Android build-only 실행 계약', () => {
     expect(fs.existsSync(fixture.output)).toBe(false);
   });
 });
+
+// Cloud Build 폴백은 사람이 급할 때 로컬에서 제출하는 경로라 평소에는 아무도 돌리지 않는다.
+// #549 가 평시 경로를 중앙 워크플로로 옮기며 pnpm store 를 채우던 단계를 지웠고, 폴백은
+// market-upload 의 store 검사에서 멈추는 채로 남았다. 필수·거부 목록을 여기 다시 적지 않고
+// 스크립트에서 직접 읽어 cloudbuild-android.yaml 과 대조한다.
+describe('Cloud Build 폴백 설정', () => {
+  const cloudBuild = fs.readFileSync(path.join(repositoryRoot, 'cloudbuild-android.yaml'), 'utf8');
+  const buildEnv = fs.readFileSync(path.join(repositoryRoot, 'build.env'), 'utf8');
+
+  function marketUpload(): string {
+    const start = sourceBuildScript.indexOf('run_market_upload() {');
+    expect(start).toBeGreaterThanOrEqual(0);
+    return sourceBuildScript.slice(start, sourceBuildScript.indexOf('\n}\n', start));
+  }
+
+  function buildStep(): { body: string; env: Record<string, string> } {
+    const match = cloudBuild.match(/- id: build-signed-aab\n([\s\S]*?)(?=\n {2}- id: |\n\S)/);
+    expect(match).not.toBeNull();
+    const body = match![1];
+    const env: Record<string, string> = {};
+    for (const entry of body.matchAll(/^ {6}- ([A-Z0-9_]+)=(.*)$/gm)) env[entry[1]] = entry[2];
+    return { body, env };
+  }
+
+  it('market-upload 의 필수값을 모두 넘기고 거부값은 넘기지 않는다', () => {
+    const market = marketUpload();
+    const requiredBlock = market.match(/for name in \\\n([\s\S]*?); do\n\s*require_env "\$name"/);
+    expect(requiredBlock).not.toBeNull();
+    const required = requiredBlock![1].split(/[\s\\]+/).filter(Boolean);
+    const rejected = [...market.matchAll(/^\s*reject_env ([A-Z0-9_]+)$/gm)].map(entry => entry[1]);
+    expect(required.length).toBeGreaterThan(0);
+
+    const { env } = buildStep();
+    for (const name of required) expect(Object.keys(env)).toContain(name);
+    for (const name of rejected) expect(Object.keys(env)).not.toContain(name);
+
+    const declared = new Set([...cloudBuild.matchAll(/^ {2}(_[A-Z0-9_]+):/gm)].map(entry => entry[1]));
+    for (const value of Object.values(env)) {
+      for (const entry of value.matchAll(/\$\{(_[A-Z0-9_]+)\}/g)) expect(declared.has(entry[1])).toBe(true);
+    }
+  });
+
+  it('market-upload 가 요구하는 pnpm store 디렉터리를 스크립트 전에 만든다', () => {
+    expect(marketUpload()).toContain('CLOUD_BUILD_PNPM_STORE');
+    expect(buildEnv).toMatch(/^CLOUD_BUILD_PNPM_STORE=\S+$/m);
+    const { body } = buildStep();
+    expect(body).toContain('CLOUD_BUILD_PNPM_STORE');
+    expect(body).toMatch(/mkdir -p "\/workspace\/\$\$store"/);
+    expect(body.indexOf('mkdir -p')).toBeLessThan(body.indexOf('scripts/build-android.sh'));
+  });
+
+  it('릴리즈마다 달라지는 값에 옛 기본값을 남기지 않고 Secret Manager 를 쓰지 않는다', () => {
+    for (const key of ['_SEORI_RELEASE_TAG', '_SEORI_RELEASE_SOURCE_SHA', '_ANDROID_VERSION_NAME', '_ANDROID_VERSION_CODE']) {
+      expect(cloudBuild).toMatch(new RegExp(`^ {2}${key}: ""$`, 'm'));
+    }
+    expect(cloudBuild).not.toMatch(/availableSecrets|secretEnv|secretManager/);
+  });
+});

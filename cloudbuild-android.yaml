@@ -26,16 +26,20 @@
 #   for f in "$D"/*; do gcloud storage cp "$f" "$B/$(basename "$f")"; done
 #   gcloud builds submit . --project=seorilabs-ci --region=global \
 #     --config=cloudbuild-android.yaml --ignore-file=.gcloudignore \
-#     --substitutions="_SEORI_RELEASE_TAG=...,_ANDROID_VERSION_CODE=...,_CREDENTIAL_BUCKET=$B"
+#     --substitutions="_SEORI_RELEASE_TAG=v1.11.6,_SEORI_RELEASE_SOURCE_SHA=$(git rev-parse HEAD),_ANDROID_VERSION_NAME=1.11.6,_ANDROID_VERSION_CODE=...,_CREDENTIAL_BUCKET=$B"
 #   rm -rf "$D"
+#   _SEORI_RELEASE_SOURCE_SHA 는 제출하는 트리의 40자리 커밋 SHA 다. 스크립트가 0 으로 채운
+#   placeholder 를 거부한다. 네 값 모두 기본값이 비어 있어 빠뜨리면 빌드 전에 멈춘다.
 #   그 뒤 _ARTIFACT_BUCKET 에서 AAB 를 받아 업로드한다. 빌드가 prefix 를 지우지만
 #   버킷 수명주기 1일이 백스톱이라 실패해도 하루 뒤 사라진다.
 
 substitutions:
-  _SEORI_RELEASE_TAG: "v1.10.2"
-  _SEORI_RELEASE_SOURCE_SHA: "0000000000000000000000000000000000000000"
-  _ANDROID_VERSION_NAME: "1.10.2"
-  _ANDROID_VERSION_CODE: "1001010002"
+  # 릴리즈마다 달라지는 네 값은 기본값을 비운다. 옛 값(v1.10.2)이 남아 있으면 틀린 버전으로
+  # 조용히 빌드될 수 있다. 비어 있으면 스크립트가 필수값 검사에서 멈춘다.
+  _SEORI_RELEASE_TAG: ""
+  _SEORI_RELEASE_SOURCE_SHA: ""
+  _ANDROID_VERSION_NAME: ""
+  _ANDROID_VERSION_CODE: ""
   _GOOGLE_PLAY_UPLOAD_KEY_ALIAS: "happy-farm-upload"
   _ARTIFACT_BUCKET: "gs://seorilabs-ci-build-artifacts/seorilabs/happy-farm/manual"
   _CREDENTIAL_BUCKET: ""
@@ -68,8 +72,20 @@ steps:
   - id: build-signed-aab
     name: us-docker.pkg.dev/seorilabs-ci/builders/rn-android-builder:node24-jdk17-android36
     entrypoint: bash
+    # pnpm store 디렉터리를 먼저 만든다. market-upload 는 build.env 의 CLOUD_BUILD_PNPM_STORE 가
+    # 없으면 멈추는데, #549 이전에는 배포 워크플로가 제출 직전에
+    # `pnpm store add @seorilabs/platform-sdk` 로 채웠다. platform-sdk 가 비공개였던 시절의
+    # 흔적이다. #549 가 평시 경로를 중앙 워크플로로 옮기며 그 단계를 지웠고 이 폴백만 남았다.
+    # 지금은 공개 npm 패키지이고 스크립트의 pnpm install 이 --offline 이 아니라, 빈 디렉터리면
+    # 레지스트리에서 받아 채운다.
     args:
-      - scripts/build-android.sh
+      - -c
+      - |
+        set -euo pipefail
+        store="$$(grep '^CLOUD_BUILD_PNPM_STORE=' build.env | cut -d= -f2-)"
+        [ -n "$$store" ]
+        mkdir -p "/workspace/$$store"
+        exec bash scripts/build-android.sh
     env:
       - SEORI_RELEASE_TAG=${_SEORI_RELEASE_TAG}
       - SEORI_RELEASE_VERSION=${_ANDROID_VERSION_NAME}
