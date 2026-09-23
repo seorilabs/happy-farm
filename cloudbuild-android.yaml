@@ -11,11 +11,25 @@
 # 짝이 되는 실행부는 scripts/build-android.sh 의 market-upload 모드다. 둘은 함께
 # 유지하거나 함께 지운다. 한쪽만 지우면 폴백이 성립하지 않는다.
 #
+# 자격증명은 Secret Manager 가 아니라 일회성 GCS 객체로 들어온다. 평시 경로가 아니므로
+# 워크플로가 올려주지 않는다. 되돌릴 때 사람이 로컬 카탈로그에서 직접 올린다.
+# 로컬 원본이 source of truth 이고 ~/.config/seorilabs 아래에 있다.
+#
 # 되돌리는 방법:
+#   B="gs://seorilabs-ci-build-credentials/seorilabs/happy-farm/manual-$(date +%s)"
+#   C="$HOME/.config/seorilabs"
+#   D="$(mktemp -d)"; umask 077
+#   base64 -i "$C/firebase/happy-farm-google-services.json" | tr -d '\n' > "$D/firebase-android-config.b64"
+#   base64 -i "$C/play-store/happy-farm-upload.jks"          | tr -d '\n' > "$D/play-keystore.b64"
+#   grep '^storePassword=' "$C/play-store/happy-farm-keystore.properties" | cut -d= -f2- | tr -d '\n' > "$D/play-keystore-password"
+#   grep '^keyPassword='   "$C/play-store/happy-farm-keystore.properties" | cut -d= -f2- | tr -d '\n' > "$D/play-key-password"
+#   for f in "$D"/*; do gcloud storage cp "$f" "$B/$(basename "$f")"; done
 #   gcloud builds submit . --project=seorilabs-ci --region=global \
 #     --config=cloudbuild-android.yaml --ignore-file=.gcloudignore \
-#     --substitutions="_SEORI_RELEASE_TAG=...,_ANDROID_VERSION_CODE=..."
-#   그 뒤 _ARTIFACT_BUCKET 에서 AAB 를 받아 업로드한다.
+#     --substitutions="_SEORI_RELEASE_TAG=...,_ANDROID_VERSION_CODE=...,_CREDENTIAL_BUCKET=$B"
+#   rm -rf "$D"
+#   그 뒤 _ARTIFACT_BUCKET 에서 AAB 를 받아 업로드한다. 빌드가 prefix 를 지우지만
+#   버킷 수명주기 1일이 백스톱이라 실패해도 하루 뒤 사라진다.
 
 substitutions:
   _SEORI_RELEASE_TAG: "v1.10.2"
@@ -24,8 +38,30 @@ substitutions:
   _ANDROID_VERSION_CODE: "1001010002"
   _GOOGLE_PLAY_UPLOAD_KEY_ALIAS: "happy-farm-upload"
   _ARTIFACT_BUCKET: "gs://seorilabs-ci-build-artifacts/seorilabs/happy-farm/manual"
+  _CREDENTIAL_BUCKET: ""
 
 steps:
+  # rm 에 `|| true` 를 붙이지 않는다. prefix 는 제출 직전에 사람이 만든 것이라 반드시
+  # 존재하고, 삭제 실패는 키스토어가 GCS 에 남았다는 뜻이다. 빌드 맨 앞 단계라
+  # 세워도 긴 AAB 빌드를 낭비하지 않는다.
+  - id: fetch-ephemeral-credentials
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        install -d -m 0700 /workspace/.ci-secrets
+        for name in \
+          firebase-android-config.b64 \
+          play-keystore.b64 \
+          play-keystore-password \
+          play-key-password; do
+          gcloud storage cp "${_CREDENTIAL_BUCKET}/$$name" "/workspace/.ci-secrets/$$name"
+          chmod 0600 "/workspace/.ci-secrets/$$name"
+        done
+        gcloud storage rm --recursive "${_CREDENTIAL_BUCKET}"
+
   # builder 이미지는 US 사본을 쓴다. 이 빌드는 default pool 에서 도는데 default
   # pool 은 미국에서 실행된다. 서울 사본을 당기면 빌드마다 2GB 가 대륙을 건너
   # egress 로 붙는다(9/18~19 릴리스 5건에 10.3GiB, 1,145원).
@@ -42,22 +78,7 @@ steps:
       - ANDROID_VERSION_NAME=${_ANDROID_VERSION_NAME}
       - ANDROID_VERSION_CODE=${_ANDROID_VERSION_CODE}
       - GOOGLE_PLAY_UPLOAD_KEY_ALIAS=${_GOOGLE_PLAY_UPLOAD_KEY_ALIAS}
-    secretEnv:
-      - FIREBASE_ANDROID_GOOGLE_SERVICES_JSON_BASE64
-      - GOOGLE_PLAY_UPLOAD_KEYSTORE_BASE64
-      - GOOGLE_PLAY_UPLOAD_KEYSTORE_PASSWORD
-      - GOOGLE_PLAY_UPLOAD_KEY_PASSWORD
-
-availableSecrets:
-  secretManager:
-    - versionName: projects/seorilabs-ci/secrets/happy-farm-firebase-google-services/versions/latest
-      env: FIREBASE_ANDROID_GOOGLE_SERVICES_JSON_BASE64
-    - versionName: projects/seorilabs-ci/secrets/happy-farm-play-keystore/versions/latest
-      env: GOOGLE_PLAY_UPLOAD_KEYSTORE_BASE64
-    - versionName: projects/seorilabs-ci/secrets/happy-farm-play-keystore-password/versions/latest
-      env: GOOGLE_PLAY_UPLOAD_KEYSTORE_PASSWORD
-    - versionName: projects/seorilabs-ci/secrets/happy-farm-play-key-password/versions/latest
-      env: GOOGLE_PLAY_UPLOAD_KEY_PASSWORD
+      - BUILD_CREDENTIAL_DIR=/workspace/.ci-secrets
 
 artifacts:
   objects:
