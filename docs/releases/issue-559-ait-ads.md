@@ -37,3 +37,7 @@
 ## WEB 이벤트 중계 후속 조사
 
 AIT 부팅은 익명 Platform 인증, SDK events ingest, GA4 relay 순이다. 클라이언트 바인딩 수정과 별도로 원격 Platform 레지스트리에는 GA4 measurement ID와 `ad_load_result` allowlist 항목이 없다. 서버는 각각 relay 생략과 이벤트 폐기로 처리한다. 운영 revision 및 로그는 등록된 provisioner의 `run.services.get`/logging 권한 오류로 확인하지 못했다. 운영 배포의 직접 원인은 단정하지 않는다. 후속 이슈: https://github.com/seorilabs/platform/issues/212.
+
+## 실기기 검증 경로 정정
+
+공식 문서 https://developers-apps-in-toss.toss.im/development/test/sandbox.md 의 지원표에 따르면 샌드박스 앱은 인앱 광고와 분석을 지원하지 않는다. 연결된 Android Seeker / Android 16에는 `viva.republica.toss.test`만 설치돼 있다. 인증은 샌드박스로 확인할 수 있지만, 실제 광고·수확 부스트·분석 확인은 동일 업로드 번들의 콘솔 QR 테스트 링크를 일반 Toss 앱에서 실행해야 한다. 일반 Toss 앱의 로그인과 현재 번들 실제 테스트 완료는 외부 의존성이다.
