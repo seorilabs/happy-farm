@@ -1,4 +1,5 @@
 type MockPlatformOptions = {
+  fetchImpl: typeof fetch;
   appId: string;
   baseUrl: string;
   ingestBaseUrl: string;
@@ -31,6 +32,10 @@ jest.mock('../firebaseWeb/analyticsIdentity', () => ({
 }));
 
 jest.mock('@seorilabs/platform-sdk', () => {
+  globalThis.fetch = jest.fn(function (this: unknown) {
+    if (this !== globalThis) throw new TypeError('Illegal invocation');
+    return Promise.resolve({ ok: true, status: 200, json: async () => ({ ok: true, result: { appUsesAds: true, adsEnabled: true, disabledBy: [] } }) });
+  }) as unknown as typeof fetch;
   const platform = {
     events: {
       track: jest.fn(),
@@ -56,6 +61,7 @@ jest.mock('@seorilabs/platform-sdk', () => {
 
 import { RELEASE_INFO } from '../../../../packages/farm-core/src';
 import {
+  appsInTossPlatformAds,
   ensureAppsInTossAdsSession,
   ensureAppsInTossPlatformSession,
   flushAppsInTossPlatformEvents,
@@ -231,7 +237,7 @@ describe('Platform 세션 부트스트랩', () => {
   test('광고 세션은 그대로 ait-login 자격증명을 쓴다', async () => {
     mockPlatform?.session.token.mockRejectedValue(new Error('no session'));
 
-    await expect(ensureAppsInTossAdsSession()).resolves.toBe(true);
+    await expect(ensureAppsInTossAdsSession()).resolves.toEqual({ ok: true });
 
     expect(mockAppLogin).toHaveBeenCalledTimes(1);
     expect(mockPlatform?.signIn).toHaveBeenCalledWith({
@@ -240,5 +246,59 @@ describe('Platform 세션 부트스트랩', () => {
       referrer: 'SANDBOX',
     });
     expect(mockGetAnonymousKey).not.toHaveBeenCalled();
+  });
+});
+
+describe('광고 세션 실패 분류와 재시도', () => {
+  beforeEach(() => {
+    mockPlatform?.session.token.mockRejectedValue(new Error('no session'));
+    mockPlatform?.signIn.mockReset().mockResolvedValue(undefined);
+    mockAppLogin.mockReset().mockResolvedValue({ authorizationCode: 'transient-code', referrer: 'SANDBOX' });
+  });
+
+  test('브라우저 receiver 제약을 재현하고 세 클라이언트 주입이 안전한지 확인한다', async () => {
+    const unbound = { fetch: globalThis.fetch };
+    expect(() => unbound.fetch('https://example.test')).toThrow('Illegal invocation');
+    for (const [options] of mockCreatePlatform.mock.calls) {
+      const transport = { fetch: options.fetchImpl };
+      await expect(transport.fetch('https://example.test')).resolves.toMatchObject({ ok: true });
+    }
+    mockPlatform?.session.token.mockResolvedValue('platform-token');
+    await expect(appsInTossPlatformAds.policy()).resolves.toMatchObject({ adsEnabled: true });
+  });
+
+  test('기존 광고 세션이 있으면 로그인하지 않는다', async () => {
+    mockPlatform?.session.token.mockResolvedValue('platform-token');
+    await expect(ensureAppsInTossAdsSession()).resolves.toEqual({ ok: true });
+    expect(mockAppLogin).not.toHaveBeenCalled();
+  });
+
+  test('동시 호출은 로그인을 공유하고 실패 후 다음 호출은 재시도한다', async () => {
+    mockAppLogin.mockRejectedValueOnce({ code: 'USER_CANCELLED', message: 'secret-code' });
+    const first = ensureAppsInTossAdsSession();
+    expect(ensureAppsInTossAdsSession()).toBe(first);
+    await expect(first).resolves.toEqual({ ok: false, stage: 'login', reason: 'cancelled' });
+    await expect(ensureAppsInTossAdsSession()).resolves.toEqual({ ok: true });
+    expect(mockAppLogin).toHaveBeenCalledTimes(2);
+  });
+
+  test.each([
+    [{ status: 0 }, 'network'],
+    [{ status: 401 }, 'unauthorized'],
+    [{ status: 403 }, 'unauthorized'],
+    [{ status: 429 }, 'rate_limited'],
+    [{ status: 503 }, 'server'],
+    [{ code: 'private-code', message: 'private-token' }, 'unknown'],
+    ['private-token', 'unknown'],
+  ])('세션 교환 실패는 제한된 분류만 반환한다: %j', async (error, reason) => {
+    mockPlatform?.signIn.mockRejectedValueOnce(error);
+    await expect(ensureAppsInTossAdsSession()).resolves.toEqual({ ok: false, stage: 'session_exchange', reason });
+    await expect(ensureAppsInTossAdsSession()).resolves.toEqual({ ok: true });
+  });
+
+  test('분류할 수 없는 로그인 실패는 원문을 반환하지 않는다', async () => {
+    mockAppLogin.mockRejectedValueOnce(new Error('private-token'));
+    await expect(ensureAppsInTossAdsSession()).resolves.toEqual({ ok: false, stage: 'login', reason: 'unknown' });
+    expect(mockPlatform?.signIn).not.toHaveBeenCalled();
   });
 });
