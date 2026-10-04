@@ -1,0 +1,173 @@
+{
+  "schemaVersion": 1,
+  "app": {
+    "name": "happy-farm",
+    "repo": "seorilabs/happy-farm",
+    "sourceRevision": "c7ef59a583601817317f0b6ce12baa9f490f682e"
+  },
+  "release": {
+    "version": "1.11.9",
+    "tag": "v1.11.9",
+    "objective": "public_live",
+    "countries": [
+      "KR"
+    ],
+    "rolloutMode": "existing AppsInToss audience, full replacement after approval"
+  },
+  "deploymentApproval": {
+    "status": "approved",
+    "markets": [
+      "apps_in_toss"
+    ],
+    "objective": "public_live",
+    "approvedAt": "2026-10-04T00:07:49.962577+00:00",
+    "evidence": [
+      "2026-10-04 user instructed implementation through AIT public live; no Play/App Store, scheduled jobs or external alerts. User later accepted physical-device QA ownership."
+    ]
+  },
+  "commonGates": {
+    "candidate": {
+      "status": "pass",
+      "evidence": [
+        "PR #560 merged c7ef59a583601817317f0b6ce12baa9f490f682e",
+        "v1.11.9 annotated receipt and release-version-ledger match source SHA/versionCode 1001011008"
+      ],
+      "checkedAt": "2026-10-04T00:07:49.962577+00:00",
+      "blocker": null
+    },
+    "quality": {
+      "status": "pass",
+      "evidence": [
+        "pnpm lint/typecheck/test/check:i18n/check:ait passed; 1483 tests",
+        "CI https://github.com/seorilabs/happy-farm/actions/runs/37163622569 success; Copilot thread resolved"
+      ],
+      "checkedAt": "2026-10-04T00:07:49.962577+00:00",
+      "blocker": null
+    },
+    "production_dependencies": {
+      "status": "pending",
+      "evidence": [],
+      "checkedAt": null,
+      "blocker": null
+    },
+    "observability": {
+      "status": "blocked",
+      "evidence": [
+        "AIT auth/ingest browser fetch fixed; upstream registry follow-up https://github.com/seorilabs/platform/issues/212"
+      ],
+      "checkedAt": "2026-10-04T00:07:49.962577+00:00",
+      "blocker": "Live ingest revision/log readback denied to registered provisioner; registry missing GA4 measurement ID and ad_load_result allowlist. Runtime delivery not verified."
+    }
+  },
+  "markets": {
+    "apps_in_toss": {
+      "objective": "public_live",
+      "state": "processing",
+      "identity": {
+        "applicationId": "happy-farm",
+        "version": "1.11.9",
+        "build": "20261004-52",
+        "workspaceId": 38345,
+        "miniAppId": 31877,
+        "deploymentId": "01a1043e-987a-7d92-a2b6-2243183edfac"
+      },
+      "gates": {
+        "candidate": {
+          "status": "pass",
+          "evidence": [
+            "miniapp_get appName happy-farm / workspace 38345 / miniApp 31877; v1.11.9@c7ef59a; AIT-only dispatch 37163926973"
+          ],
+          "checkedAt": "2026-10-04T00:07:49.962577+00:00",
+          "blocker": null
+        },
+        "artifact": {
+          "status": "pass",
+          "evidence": [
+            "Workflow 37163926973 success; artifact 11288776548 archive digest sha256:612ae7277d9b44499aca675f9943cef80c6854030186b246db70555574a26fee",
+            "happy-farm.ait SHA256 702a1788e874fe6223158b84a3cfa1408e0fb16403655b137a48e8628adea8d5",
+            "All four iOS/Android runtime sourcemaps contain bound fetch, v1.11.9 and exact c7ef59a source SHA"
+          ],
+          "checkedAt": "2026-10-04T00:13:09.086907+00:00",
+          "blocker": null
+        },
+        "upload": {
+          "status": "pass",
+          "evidence": [
+            "https://github.com/seorilabs/happy-farm/actions/runs/37163926973",
+            "bundle_list memo v1.11.9 GitHub Actions v1.11.9@c7ef59a, deployment 01a1043e-987a-7d92-a2b6-2243183edfac"
+          ],
+          "checkedAt": "2026-10-04T00:13:09.086907+00:00",
+          "blocker": null
+        },
+        "processing": {
+          "status": "pass",
+          "evidence": [
+            "bundle_build_status isBuilding=false; bundle_list reviewStatus CREATED; no failure reason"
+          ],
+          "checkedAt": "2026-10-04T00:13:09.086907+00:00",
+          "blocker": null
+        },
+        "qa": {
+          "status": "blocked",
+          "evidence": [
+            "User will run physical-device QA in normal Toss via console QR for exact uploaded bundle; sandbox does not support ads/analytics"
+          ],
+          "checkedAt": "2026-10-04T00:07:49.962577+00:00",
+          "blocker": "Waiting for user report of actual ad exposure and harvest boost delivery on v1.11.9."
+        },
+        "metadata": {
+          "status": "pending",
+          "evidence": [
+            "releaseNote set and read back: 광고 연결 오류를 개선했습니다.; listing/assets unchanged, not freshly visually checked"
+          ],
+          "checkedAt": null,
+          "blocker": null
+        },
+        "policy": {
+          "status": "pending",
+          "evidence": [
+            "Ads/SDK/permissions/rewards unchanged; pre-upload releaseDecision and reviewRequestDecision ALLOWED; runtime device confirmation pending"
+          ],
+          "checkedAt": null,
+          "blocker": null
+        },
+        "submission": {
+          "status": "pending",
+          "evidence": [],
+          "checkedAt": null,
+          "blocker": null
+        },
+        "approval": {
+          "status": "pending",
+          "evidence": [],
+          "checkedAt": null,
+          "blocker": null
+        },
+        "release": {
+          "status": "pending",
+          "evidence": [],
+          "checkedAt": null,
+          "blocker": null
+        },
+        "live_smoke": {
+          "status": "pending",
+          "evidence": [],
+          "checkedAt": null,
+          "blocker": null
+        }
+      }
+    }
+  },
+  "postLiveObservation": {
+    "status": "pending",
+    "minimumDays": 7,
+    "evidence": [],
+    "note": "Keep issue #559 open until ad impressions and WEB failure distribution verified. No events is not 0% failure. No scheduled jobs created."
+  },
+  "lastLiveReadback": {
+    "checkedAt": "2026-10-04T00:13:09.086907+00:00",
+    "tag": "v1.11.6",
+    "deploymentId": "01a0b98a-9a77-7e63-b0ca-676c6ac96b65",
+    "note": "v1.11.9 not submitted or live; no test push or external notification sent"
+  }
+}

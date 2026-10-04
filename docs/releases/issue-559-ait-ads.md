@@ -25,8 +25,8 @@
 
 - [x] 실제 브라우저 fetch 제약 재현과 주입 후 성공
 - [x] 세션 실패 원인 분류 계측 구현·자동 검증
-- [ ] 고정된 병합 SHA의 patch 태그와 receipt 확인
-- [ ] AIT 전용 workflow 업로드·콘솔 deployment readback
+- [x] 고정된 병합 SHA의 patch 태그와 receipt 확인
+- [x] AIT 전용 workflow 업로드·콘솔 deployment readback
 - [ ] 해당 번들 Android 샌드박스 인증·광고 노출·수확 부스트 한 번 지급·이벤트 전송
 - [ ] 같은 번들의 심사 제출·승인
 - [ ] 라이브 deployment/태그/SHA readback과 공개 채널 광고·보상 확인
@@ -41,3 +41,17 @@ AIT 부팅은 익명 Platform 인증, SDK events ingest, GA4 relay 순이다. �
 ## 실기기 검증 경로 정정
 
 공식 문서 https://developers-apps-in-toss.toss.im/development/test/sandbox.md 의 지원표에 따르면 샌드박스 앱은 인앱 광고와 분석을 지원하지 않는다. 연결된 Android Seeker / Android 16에는 `viva.republica.toss.test`만 설치돼 있다. 인증은 샌드박스로 확인할 수 있지만, 실제 광고·수확 부스트·분석 확인은 동일 업로드 번들의 콘솔 QR 테스트 링크를 일반 Toss 앱에서 실행해야 한다. 일반 Toss 앱의 로그인과 현재 번들 실제 테스트 완료는 외부 의존성이다.
+
+## 2026-10-04 업로드 완료와 사용자 검증 대기
+
+- PR #560 squash merge: `c7ef59a583601817317f0b6ce12baa9f490f682e`; 최종 CI https://github.com/seorilabs/happy-farm/actions/runs/37163622569 통과. Copilot 문서 지적 1건 반영·해제.
+- 태그 `v1.11.9`, receipt source SHA와 원장 일치. Android versionCode `1001011008`, receipt Apple build number `1011009`. Play·App Store 업로드는 실행하지 않았다.
+- AIT 단독 workflow https://github.com/seorilabs/happy-farm/actions/runs/37163926973 성공.
+- 콘솔 버전 `20261004-52`, deployment `01a1043e-987a-7d92-a2b6-2243183edfac`, memo `v1.11.9 GitHub Actions v1.11.9@c7ef59a`.
+- 상태 `CREATED`, `isTested=false`, `deployed=false`, 서버 빌드 진행 없음. 출시노트 등록·readback 완료.
+- `.ait` SHA256 `702a1788e874fe6223158b84a3cfa1408e0fb16403655b137a48e8628adea8d5`. 네 가지 iOS/Android runtime sourcemap에서 fetch 바인딩·태그·고정 source SHA 확인.
+- 사용자가 실기기 검증을 맡기로 했다. https://apps-in-toss.toss.im/workspace/38345/mini-app/31877/home 의 해당 번들 테스트 QR를 일반 Toss 앱으로 열어 광고 노출·완료 후 수확 부스트 한 번 지급·다음 시도를 확인한다.
+- 테스트 결과 대기 중이며 심사를 제출하지 않았다. 현재 라이브는 여전히 `v1.11.6`이다. 테스트 푸시, 외부 알림, 예약 작업은 만들지 않았다.
+- 운영 브라우저는 Toss 수동 로그인 상태다. QA 통과 후 같은 번들의 심사·승인·라이브 전환과 이후 7일 관찰을 계속한다.
+
+구조화된 진행 기록: `release/market-launch-state.json`. 전체 라이브 완료 검사는 아직 미완료이며 QA·관측·심사·승인·라이브 단계가 열려 있다.
