@@ -69,3 +69,20 @@ AIT 부팅은 익명 Platform 인증, SDK events ingest, GA4 relay 순이다. �
 AIT 광고 제거 구매는 노출하지 않으며 운영 차단은 콘솔 광고 그룹 설정을 사용한다.
 모바일의 정책·claim 경로, 광고 빈도와 보상 설계는 유지한다. 다음 patch 번들에서 사용자
 실기기 재검증 후 심사·라이브 단계를 진행한다. 로그인 설정 복구는 광고 해결 조건이 아니다.
+
+## 로그인 없는 광고 수정과 v1.11.10 후보
+
+- PR #562 병합 SHA `fe375001854e7df2d3191657fdc27e42c85dcaba`.
+- 로컬 전체 91 suites / 1,463 tests, 추가 최종 회귀 23개, lint/typecheck/i18n/AIT build 통과.
+- CI https://github.com/seorilabs/happy-farm/actions/runs/37173636102 통과. Copilot 리뷰 완료, 결함 지적·미해결 thread 없음.
+- `v1.11.10` receipt와 원장은 source SHA 및 Android versionCode `1001011009` 일치. receipt Apple build number `1011010`.
+- 태그 발급 workflow https://github.com/seorilabs/happy-farm/actions/runs/37174060805 성공.
+- 로그인 설정 복구 이슈 https://github.com/seorilabs/platform/issues/213 은 진단 정정 후 종료.
+- AIT 전용 업로드 https://github.com/seorilabs/happy-farm/actions/runs/37174111542 성공. Play·App Store workflow는 실행하지 않았다.
+- 기존 `20261004-52` QA 실패 이력을 유지하고 새 후보도 실기기 광고·보상 검증 전에는 심사·라이브 완료로 판정하지 않는다.
+
+- 콘솔 버전 `20261004-53`, deployment `01a104f5-365f-75c2-882a-f6441ea47396`, memo `v1.11.10 GitHub Actions v1.11.10@fe37500`.
+- 출시노트 set/readback 완료. review `CREATED`, `isTested=true`, `deployed=false`; 서버 빌드 없음.
+- artifact `11291849625`, zip digest `e1b5579e4db90c32f6d863c98cc05ee6c5eb2d4ee0fdfe9b33419b55d9b311c8`; `.ait` SHA256 `f49861cc696e8f5ec5170042bf90a170658bd8b02e1e3185116008794576ebc7`.
+- 네 가지 runtime sourcemap에서 로그인 없는 SDK 광고 경로, 분석 fetch 바인딩과 고정 태그·SHA 확인.
+- 사용자는 일반 Toss QR에서 보상 광고·부스트 1회 지급·다음 시도 모두 정상을 확인했다. 전면광고·분석 전송은 추가 확인 중이다.
