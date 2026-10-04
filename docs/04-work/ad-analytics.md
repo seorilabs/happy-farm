@@ -38,12 +38,8 @@ AppsInToss 광고 SDK 로드는 `ad_load_result`로 별도 진단한다.
 | 파라미터 | 의미 |
 |---|---|
 | `ad_format` | `rewarded` 또는 `interstitial` |
-| `result` | `loaded`, `sdk_error`, `timeout`, `unsupported`, `session_blocked`, `policy_blocked`, `policy_error` |
-| `attempt_stage` | 정책/세션 판정이 발생한 `load` 또는 `show` 단계 |
-| `block_reason` | `ads_session_failed`, `app_uses_ads_false`, `ads_disabled` 중 차단 원인 |
-| `session_stage` | 세션 실패 시 `login` 또는 `session_exchange`. `block_reason=ads_session_failed`일 때만 기록한다. |
-| `session_failure_reason` | 세션 실패의 고정 분류: `cancelled`, `network`, `unauthorized`, `rate_limited`, `server`, `unknown`. 인증 코드·토큰·원문 오류는 기록하지 않는다. |
-| `disabled_by` | 정책이 반환한 비활성 주체 목록. 여러 값은 쉼표로 연결한다. |
+| `result` | `loaded`, `sdk_error`, `timeout`, `unsupported` |
+| `attempt_stage` | SDK 호출이 발생한 `load` 또는 `show` 단계 |
 | `client_os` | Granite 런타임의 `ios` 또는 `android` |
 | `load_latency_ms` | 로드 또는 차단 결과까지 걸린 시간 |
 | `reason`, `failure_family` | 오류가 있을 때의 정규화된 원인과 집계 family |
@@ -53,11 +49,14 @@ AppsInToss 광고 SDK 로드는 `ad_load_result`로 별도 진단한다.
 fill 실패를 확정하지 않는다. AppsInToss 공식 안내에 따라 iOS에서 `sdk_error`가 집중되면
 실기기 Toss 앱 버전과 ATT 허용 상태를 함께 확인한다.
 
-명시적 정책 거부(`app_uses_ads_false`, `ads_disabled`)는 AIT 앱 세션 동안 캐시한다.
-rewarded/interstitial 컨트롤러가 같은 결정을 공유하므로 차단 중에는 SDK load/show를 호출하지
-않고 `ad_load_result`도 세션당 최초 1건만 남긴다. `ads_session_failed`와 `policy_error`는
-일시 장애일 수 있어 캐시하지 않는다. background→active 복귀에서는 캐시를 비우고 정책을
-다시 평가한다.
+AIT 광고는 토스 SDK를 직접 호출하며 토스 로그인이나 Platform 인증·정책·claim API를
+선행 조건으로 사용하지 않는다. AIT에는 광고 제거 구매가 노출되지 않는다. 광고 그룹의
+운영 중단은 AppsInToss 콘솔에서 관리한다. 모바일의 서버 정책·claim 경로는 유지한다.
+보상은 `userEarnedReward` 이벤트를 받은 경우에만 한 번 반환하며, 표시 종료 후 다음
+광고를 로드한다. 분석 세션 실패는 광고 호출에 영향을 주지 않는다.
+
+이전 릴리스의 `session_blocked`, `policy_blocked`, `policy_error`와 관련 세션·차단
+파라미터는 과거 진단값으로만 남으며 다음 쿼리는 해당 릴리스 조사에 사용한다.
 
 ### 라이브 번들 진단 파라미터 도달 확인
 

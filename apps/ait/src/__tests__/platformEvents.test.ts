@@ -61,8 +61,6 @@ jest.mock('@seorilabs/platform-sdk', () => {
 
 import { RELEASE_INFO } from '../../../../packages/farm-core/src';
 import {
-  appsInTossPlatformAds,
-  ensureAppsInTossAdsSession,
   ensureAppsInTossPlatformSession,
   flushAppsInTossPlatformEvents,
   handleAppsInTossPlatformAppStateChange,
@@ -86,7 +84,7 @@ const mockPlatform = mockCreatePlatform.mock.results[0]?.value;
 
 describe('AppsInToss Platform events', () => {
   test('익명 AIT context와 GA4 relay client ID로 SDK를 생성한다', () => {
-    expect(mockCreatePlatform).toHaveBeenCalledTimes(2);
+    expect(mockCreatePlatform).toHaveBeenCalledTimes(1);
     const options = mockCreatePlatform.mock.calls[0]?.[0];
     expect(options).toMatchObject({
       appId: 'happy-farm',
@@ -108,10 +106,7 @@ describe('AppsInToss Platform events', () => {
     });
     expect(options).not.toHaveProperty('sessionStore');
 
-    expect(mockCreatePlatform.mock.calls[1]?.[0]).toMatchObject({
-      appId: 'happy-farm',
-      baseUrl: 'https://platform-ads-306278488979.asia-northeast3.run.app',
-    });
+
   });
 
   test('tracker와 lifecycle을 SDK에 위임한다', async () => {
@@ -233,72 +228,10 @@ describe('Platform 세션 부트스트랩', () => {
     expect(warnSpy).toHaveBeenCalled();
   });
 
-  // 부팅 세션은 광고·결제가 쓰는 ait-login 경로를 건드리면 안 된다.
-  test('광고 세션은 그대로 ait-login 자격증명을 쓴다', async () => {
-    mockPlatform?.session.token.mockRejectedValue(new Error('no session'));
-
-    await expect(ensureAppsInTossAdsSession()).resolves.toEqual({ ok: true });
-
-    expect(mockAppLogin).toHaveBeenCalledTimes(1);
-    expect(mockPlatform?.signIn).toHaveBeenCalledWith({
-      kind: 'ait-login',
-      value: 'transient-code',
-      referrer: 'SANDBOX',
-    });
-    expect(mockGetAnonymousKey).not.toHaveBeenCalled();
-  });
-});
-
-describe('광고 세션 실패 분류와 재시도', () => {
-  beforeEach(() => {
-    mockPlatform?.session.token.mockRejectedValue(new Error('no session'));
-    mockPlatform?.signIn.mockReset().mockResolvedValue(undefined);
-    mockAppLogin.mockReset().mockResolvedValue({ authorizationCode: 'transient-code', referrer: 'SANDBOX' });
-  });
-
-  test('브라우저 receiver 제약을 재현하고 세 클라이언트 주입이 안전한지 확인한다', async () => {
+  test('브라우저 receiver를 유지하는 fetch를 분석 클라이언트에 주입한다', async () => {
     const unbound = { fetch: globalThis.fetch };
     expect(() => unbound.fetch('https://example.test')).toThrow('Illegal invocation');
-    for (const [options] of mockCreatePlatform.mock.calls) {
-      const transport = { fetch: options.fetchImpl };
-      await expect(transport.fetch('https://example.test')).resolves.toMatchObject({ ok: true });
-    }
-    mockPlatform?.session.token.mockResolvedValue('platform-token');
-    await expect(appsInTossPlatformAds.policy()).resolves.toMatchObject({ adsEnabled: true });
-  });
-
-  test('기존 광고 세션이 있으면 로그인하지 않는다', async () => {
-    mockPlatform?.session.token.mockResolvedValue('platform-token');
-    await expect(ensureAppsInTossAdsSession()).resolves.toEqual({ ok: true });
-    expect(mockAppLogin).not.toHaveBeenCalled();
-  });
-
-  test('동시 호출은 로그인을 공유하고 실패 후 다음 호출은 재시도한다', async () => {
-    mockAppLogin.mockRejectedValueOnce({ code: 'USER_CANCELLED', message: 'secret-code' });
-    const first = ensureAppsInTossAdsSession();
-    expect(ensureAppsInTossAdsSession()).toBe(first);
-    await expect(first).resolves.toEqual({ ok: false, stage: 'login', reason: 'cancelled' });
-    await expect(ensureAppsInTossAdsSession()).resolves.toEqual({ ok: true });
-    expect(mockAppLogin).toHaveBeenCalledTimes(2);
-  });
-
-  test.each([
-    [{ status: 0 }, 'network'],
-    [{ status: 401 }, 'unauthorized'],
-    [{ status: 403 }, 'unauthorized'],
-    [{ status: 429 }, 'rate_limited'],
-    [{ status: 503 }, 'server'],
-    [{ code: 'private-code', message: 'private-token' }, 'unknown'],
-    ['private-token', 'unknown'],
-  ])('세션 교환 실패는 제한된 분류만 반환한다: %j', async (error, reason) => {
-    mockPlatform?.signIn.mockRejectedValueOnce(error);
-    await expect(ensureAppsInTossAdsSession()).resolves.toEqual({ ok: false, stage: 'session_exchange', reason });
-    await expect(ensureAppsInTossAdsSession()).resolves.toEqual({ ok: true });
-  });
-
-  test('분류할 수 없는 로그인 실패는 원문을 반환하지 않는다', async () => {
-    mockAppLogin.mockRejectedValueOnce(new Error('private-token'));
-    await expect(ensureAppsInTossAdsSession()).resolves.toEqual({ ok: false, stage: 'login', reason: 'unknown' });
-    expect(mockPlatform?.signIn).not.toHaveBeenCalled();
+    const transport = { fetch: mockCreatePlatform.mock.calls[0]![0].fetchImpl };
+    await expect(transport.fetch('https://example.test')).resolves.toMatchObject({ ok: true });
   });
 });

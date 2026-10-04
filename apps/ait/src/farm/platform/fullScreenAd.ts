@@ -1,11 +1,9 @@
 import { loadFullScreenAd, showFullScreenAd } from '@apps-in-toss/framework';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AppState, Platform, type AppStateStatus } from 'react-native';
+import { AppState, Platform } from 'react-native';
 
 import type {
-  PlatformAdsPolicy,
   RewardedAdController,
-  RewardedAdRequest,
   RewardedAdShowResult,
   TrackGameEvent,
 } from '../../../../../packages/farm-core/src';
@@ -13,7 +11,6 @@ import {
   normalizeAdFailureFamily,
   normalizeAdFailureReason,
 } from '../../../../../packages/farm-core/src';
-import { appsInTossPlatformAds, ensureAppsInTossAdsSession, type AppsInTossAdsSessionResult } from '../../platformEvents';
 
 export const FULL_SCREEN_AD_LOAD_TIMEOUT_MS = 10_000;
 export const FULL_SCREEN_AD_SHOW_TIMEOUT_MS = 120_000;
@@ -37,6 +34,7 @@ export type FullScreenAdOptions = {
 
 type PendingShow = {
   token: symbol;
+  startedAt: number;
   settled: boolean;
   rewardGranted: boolean;
   resolve: (result: RewardedAdShowResult) => void;
@@ -44,78 +42,7 @@ type PendingShow = {
   unregister: (() => void) | null;
 };
 
-type PlatformAdsBlockReason =
-  | 'ads_session_failed'
-  | 'app_uses_ads_false'
-  | 'ads_disabled';
-
-type PlatformAdsDecision =
-  | { allowed: true }
-  | {
-      allowed: false;
-      blockReason: PlatformAdsBlockReason;
-      disabledBy: PlatformAdsPolicy['disabledBy'];
-      sessionFailure?: Extract<AppsInTossAdsSessionResult, { ok: false }>;
-    };
-
-type PlatformAdsBlockedDecision = Extract<PlatformAdsDecision, { allowed: false }>;
-
-type PendingPlatformAdsDecision = {
-  generation: number;
-  promise: Promise<PlatformAdsDecision>;
-};
-
-type AdLoadResult =
-  | 'loaded'
-  | 'sdk_error'
-  | 'timeout'
-  | 'unsupported'
-  | 'session_blocked'
-  | 'policy_blocked'
-  | 'policy_error';
-
-let platformAdsPolicySessionGeneration = 0;
-let cachedPlatformAdsBlockedDecision: PlatformAdsBlockedDecision | null = null;
-let pendingPlatformAdsDecision: PendingPlatformAdsDecision | null = null;
-let reportedPolicyBlockGeneration: number | null = null;
-let observedAppState: AppStateStatus | null = AppState.currentState;
-
-function clearPlatformAdsPolicySessionCache() {
-  platformAdsPolicySessionGeneration += 1;
-  cachedPlatformAdsBlockedDecision = null;
-  pendingPlatformAdsDecision = null;
-  reportedPolicyBlockGeneration = null;
-}
-
-export function resetFullScreenAdPolicySession() {
-  clearPlatformAdsPolicySessionCache();
-  observedAppState = AppState.currentState;
-}
-
-function observePlatformAdsAppState(nextState: AppStateStatus) {
-  const previousState = observedAppState;
-  observedAppState = nextState;
-  if (nextState === 'active' && previousState != null && previousState !== 'active') {
-    clearPlatformAdsPolicySessionCache();
-  }
-}
-
-function isCacheablePlatformAdsBlock(
-  decision: PlatformAdsDecision
-): decision is PlatformAdsBlockedDecision {
-  return !decision.allowed && decision.blockReason !== 'ads_session_failed';
-}
-
-function shouldTrackPlatformAdsBlock(decision: PlatformAdsBlockedDecision) {
-  if (decision.blockReason === 'ads_session_failed') {
-    return true;
-  }
-  if (reportedPolicyBlockGeneration === platformAdsPolicySessionGeneration) {
-    return false;
-  }
-  reportedPolicyBlockGeneration = platformAdsPolicySessionGeneration;
-  return true;
-}
+type AdLoadResult = 'loaded' | 'sdk_error' | 'timeout' | 'unsupported';
 
 function safeUnregister(unregister: (() => void) | null) {
   try {
@@ -158,64 +85,6 @@ function waitForLoadWithTimeout(promise: Promise<boolean>, timeoutMs: number) {
   });
 }
 
-function platformRequestId() {
-  return `hf-ait-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
-}
-
-async function queryPlatformAdsDecision(): Promise<PlatformAdsDecision> {
-  const session = await ensureAppsInTossAdsSession();
-  if (!session.ok) {
-    return { allowed: false, blockReason: 'ads_session_failed', disabledBy: [], sessionFailure: session };
-  }
-  const policy = await appsInTossPlatformAds.policy();
-  if (!policy.appUsesAds) {
-    return {
-      allowed: false,
-      blockReason: 'app_uses_ads_false',
-      disabledBy: policy.disabledBy,
-    };
-  }
-  if (!policy.adsEnabled) {
-    return { allowed: false, blockReason: 'ads_disabled', disabledBy: policy.disabledBy };
-  }
-  return { allowed: true };
-}
-
-function platformAdsAllowed(): Promise<PlatformAdsDecision> {
-  if (cachedPlatformAdsBlockedDecision != null) {
-    return Promise.resolve(cachedPlatformAdsBlockedDecision);
-  }
-
-  const generation = platformAdsPolicySessionGeneration;
-  if (pendingPlatformAdsDecision?.generation === generation) {
-    return pendingPlatformAdsDecision.promise;
-  }
-
-  const promise = queryPlatformAdsDecision()
-    .then((decision): PlatformAdsDecision | Promise<PlatformAdsDecision> => {
-      if (generation !== platformAdsPolicySessionGeneration) {
-        return platformAdsAllowed();
-      }
-      if (isCacheablePlatformAdsBlock(decision)) {
-        cachedPlatformAdsBlockedDecision = decision;
-      }
-      return decision;
-    })
-    .catch((error: unknown): PlatformAdsDecision | Promise<PlatformAdsDecision> => {
-      if (generation !== platformAdsPolicySessionGeneration) {
-        return platformAdsAllowed();
-      }
-      throw error;
-    })
-    .finally(() => {
-      if (pendingPlatformAdsDecision?.generation === generation) {
-        pendingPlatformAdsDecision = null;
-      }
-    });
-  pendingPlatformAdsDecision = { generation, promise };
-  return promise;
-}
-
 export function useFullScreenAd(
   adGroupId?: string,
   { adFormat = 'rewarded', track }: FullScreenAdOptions = {}
@@ -233,7 +102,6 @@ export function useFullScreenAd(
       startedAt: number,
       options: {
         attemptStage?: 'load' | 'show';
-        blockedDecision?: PlatformAdsBlockedDecision;
         error?: unknown;
       } = {}
     ) => {
@@ -244,14 +112,6 @@ export function useFullScreenAd(
         client_os: Platform.OS,
         load_latency_ms: Math.max(0, Date.now() - startedAt),
       };
-      if (options.blockedDecision != null) {
-        params.block_reason = options.blockedDecision.blockReason;
-        params.disabled_by = options.blockedDecision.disabledBy.join(',');
-        if (options.blockedDecision.sessionFailure != null) {
-          params.session_stage = options.blockedDecision.sessionFailure.stage;
-          params.session_failure_reason = options.blockedDecision.sessionFailure.reason;
-        }
-      }
       if (options.error != null) {
         params.reason = normalizeAdFailureReason(options.error);
         params.failure_family = normalizeAdFailureFamily(options.error);
@@ -313,35 +173,6 @@ export function useFullScreenAd(
       }
       if (pendingLoadRef.current != null && !pendingLoadRef.current.settled) {
         return pendingLoadRef.current.promise;
-      }
-
-      try {
-        const decision = await platformAdsAllowed();
-        if (!decision.allowed) {
-          if (decision.blockReason === 'ads_session_failed') {
-            // The SDK is supported and the failed Ads session is retryable. Keep
-            // the surface available so upper layers can issue their reload kick.
-            setIsSupported(true);
-          } else {
-            setIsSupported(false);
-          }
-          updateLoaded(false);
-          if (shouldTrackPlatformAdsBlock(decision)) {
-            trackLoadResult(
-              decision.blockReason === 'ads_session_failed' ? 'session_blocked' : 'policy_blocked',
-              startedAt,
-              { blockedDecision: decision }
-            );
-          }
-          return false;
-        }
-      } catch (error) {
-        // A policy lookup error is transient, unlike an explicit policy denial.
-        // Keep reload kicks available while recording the failed attempt.
-        setIsSupported(true);
-        updateLoaded(false);
-        trackLoadResult('policy_error', startedAt, { error });
-        return false;
       }
 
       setIsSupported(true);
@@ -416,6 +247,12 @@ export function useFullScreenAd(
       }
 
       pendingShow.settled = true;
+      if (result.status === 'failed') {
+        trackLoadResult('sdk_error', pendingShow.startedAt, {
+          attemptStage: 'show',
+          error: result.error,
+        });
+      }
       if (pendingShow.timeoutId != null) {
         clearTimeout(pendingShow.timeoutId);
       }
@@ -427,13 +264,12 @@ export function useFullScreenAd(
         void loadAd();
       }
     },
-    [loadAd]
+    [loadAd, trackLoadResult]
   );
 
   useEffect(() => {
     void loadAd();
     const subscription = AppState.addEventListener('change', (nextState) => {
-      observePlatformAdsAppState(nextState);
       // 오래 백그라운드에 있던 프리로드는 만료되거나 앱 전환 중 실패할 수 있다.
       // 복귀 시 준비된 광고가 없을 때만 다시 로드해 welcome-back CTA의 준비율을 높인다.
       if (
@@ -479,6 +315,7 @@ export function useFullScreenAd(
     return new Promise<RewardedAdShowResult>((resolve) => {
       const pendingShow: PendingShow = {
         token: Symbol('full-screen-ad-show'),
+        startedAt: Date.now(),
         settled: false,
         rewardGranted: false,
         resolve,
@@ -541,49 +378,6 @@ export function useFullScreenAd(
     });
   }, [finishPendingShow, normalizedAdGroupId, updateLoaded]);
 
-  const showAd = useCallback(async (request?: RewardedAdRequest): Promise<RewardedAdShowResult> => {
-    const startedAt = Date.now();
-    try {
-      const decision = await platformAdsAllowed();
-      if (!decision.allowed) {
-        if (decision.blockReason !== 'ads_session_failed') {
-          setIsSupported(false);
-        }
-        updateLoaded(false);
-        if (shouldTrackPlatformAdsBlock(decision)) {
-          trackLoadResult(
-            decision.blockReason === 'ads_session_failed' ? 'session_blocked' : 'policy_blocked',
-            startedAt,
-            { attemptStage: 'show', blockedDecision: decision }
-          );
-        }
-        return { status: 'unsupported' };
-      }
-      const claim = request == null ? null : await appsInTossPlatformAds.createClaim({
-        requestId: platformRequestId(),
-        placement: request.placement,
-        provider: 'apps_in_toss',
-        clientPlatform: 'apps_in_toss',
-      });
-      const result = await showSdkAd();
-      if (result.status !== 'earned' || claim == null) {
-        return result;
-      }
-      const confirmed = await appsInTossPlatformAds.confirm(
-        claim.claimId,
-        `ait-${claim.claimId}-${Date.now().toString(36)}`
-      );
-      if (confirmed.state !== 'confirmed' || confirmed.assurance !== 'client_confirmed') {
-        return { status: 'failed', error: 'client_confirmation_failed' };
-      }
-      return { ...result, claimId: claim.claimId };
-    } catch (error) {
-      updateLoaded(false);
-      trackLoadResult('policy_error', startedAt, { attemptStage: 'show', error });
-      return { status: 'failed', error: 'platform_ads_unavailable' };
-    }
-  }, [showSdkAd, trackLoadResult, updateLoaded]);
-
   const ensureAdReady = useCallback(
     (timeoutMs?: number) => {
       if (isLoadedRef.current) {
@@ -601,16 +395,11 @@ export function useFullScreenAd(
     await loadAd();
   }, [loadAd]);
 
-  const acknowledgeReward = useCallback(async (claimId: string) => {
-    await appsInTossPlatformAds.ack(claimId);
-  }, []);
-
   return {
     isAdReady: isSupported && isLoaded,
     isAdSupported: isSupported,
-    showAd,
+    showAd: showSdkAd,
     reloadAd,
     ensureAdReady,
-    acknowledgeReward,
   };
 }
