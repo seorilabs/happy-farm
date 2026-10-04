@@ -13,7 +13,7 @@ import {
   normalizeAdFailureFamily,
   normalizeAdFailureReason,
 } from '../../../../../packages/farm-core/src';
-import { appsInTossPlatformAds, ensureAppsInTossAdsSession } from '../../platformEvents';
+import { appsInTossPlatformAds, ensureAppsInTossAdsSession, type AppsInTossAdsSessionResult } from '../../platformEvents';
 
 export const FULL_SCREEN_AD_LOAD_TIMEOUT_MS = 10_000;
 export const FULL_SCREEN_AD_SHOW_TIMEOUT_MS = 120_000;
@@ -55,6 +55,7 @@ type PlatformAdsDecision =
       allowed: false;
       blockReason: PlatformAdsBlockReason;
       disabledBy: PlatformAdsPolicy['disabledBy'];
+      sessionFailure?: Extract<AppsInTossAdsSessionResult, { ok: false }>;
     };
 
 type PlatformAdsBlockedDecision = Extract<PlatformAdsDecision, { allowed: false }>;
@@ -162,8 +163,9 @@ function platformRequestId() {
 }
 
 async function queryPlatformAdsDecision(): Promise<PlatformAdsDecision> {
-  if (!(await ensureAppsInTossAdsSession())) {
-    return { allowed: false, blockReason: 'ads_session_failed', disabledBy: [] };
+  const session = await ensureAppsInTossAdsSession();
+  if (!session.ok) {
+    return { allowed: false, blockReason: 'ads_session_failed', disabledBy: [], sessionFailure: session };
   }
   const policy = await appsInTossPlatformAds.policy();
   if (!policy.appUsesAds) {
@@ -245,6 +247,10 @@ export function useFullScreenAd(
       if (options.blockedDecision != null) {
         params.block_reason = options.blockedDecision.blockReason;
         params.disabled_by = options.blockedDecision.disabledBy.join(',');
+        if (options.blockedDecision.sessionFailure != null) {
+          params.session_stage = options.blockedDecision.sessionFailure.stage;
+          params.session_failure_reason = options.blockedDecision.sessionFailure.reason;
+        }
       }
       if (options.error != null) {
         params.reason = normalizeAdFailureReason(options.error);

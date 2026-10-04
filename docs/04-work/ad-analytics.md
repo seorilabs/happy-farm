@@ -41,6 +41,8 @@ AppsInToss 광고 SDK 로드는 `ad_load_result`로 별도 진단한다.
 | `result` | `loaded`, `sdk_error`, `timeout`, `unsupported`, `session_blocked`, `policy_blocked`, `policy_error` |
 | `attempt_stage` | 정책/세션 판정이 발생한 `load` 또는 `show` 단계 |
 | `block_reason` | `ads_session_failed`, `app_uses_ads_false`, `ads_disabled` 중 차단 원인 |
+| `session_stage` | 세션 실패 시 `login` 또는 `session_exchange`. `block_reason=ads_session_failed`일 때만 기록한다. |
+| `session_failure_reason` | 세션 실패의 고정 분류: `cancelled`, `network`, `unauthorized`, `rate_limited`, `server`, `unknown`. 인증 코드·토큰·원문 오류는 기록하지 않는다. |
 | `disabled_by` | 정책이 반환한 비활성 주체 목록. 여러 값은 쉼표로 연결한다. |
 | `client_os` | Granite 런타임의 `ios` 또는 `android` |
 | `load_latency_ms` | 로드 또는 차단 결과까지 걸린 시간 |

@@ -15,7 +15,11 @@ const PLATFORM_API_URL = 'https://platform-api-306278488979.asia-northeast3.run.
 const PLATFORM_INGEST_URL = 'https://platform-ingest-306278488979.asia-northeast3.run.app';
 export const PLATFORM_ADS_URL = 'https://platform-ads-306278488979.asia-northeast3.run.app';
 
+// 브라우저 fetch는 Window를 receiver로 유지해야 한다. SDK의 메서드 호출에도 안전하다.
+const browserFetch = globalThis.fetch.bind(globalThis);
+
 const appsInTossPlatform = createPlatform({
+  fetchImpl: browserFetch,
   appId: 'happy-farm',
   baseUrl: PLATFORM_API_URL,
   ingestBaseUrl: PLATFORM_INGEST_URL,
@@ -36,16 +40,40 @@ const appsInTossPlatform = createPlatform({
   }),
 });
 
-const appsInTossAdsPlatform = createPlatform({ appId: 'happy-farm', baseUrl: PLATFORM_ADS_URL });
+const appsInTossAdsPlatform = createPlatform({
+  appId: 'happy-farm',
+  baseUrl: PLATFORM_ADS_URL,
+  fetchImpl: browserFetch,
+});
 
 export const appsInTossPlatformAds = new PlatformAdsClient({
   appId: 'happy-farm',
   baseUrl: PLATFORM_ADS_URL,
   getToken: () => appsInTossAdsPlatform.session.token(),
+  fetch: browserFetch,
 });
 
 let platformSessionPromise: Promise<boolean> | null = null;
-let adsSessionPromise: Promise<boolean> | null = null;
+export type AppsInTossAdsSessionResult =
+  | { ok: true }
+  | { ok: false; stage: 'login' | 'session_exchange'; reason: AdsSessionFailureReason };
+
+type AdsSessionFailureReason =
+  | 'cancelled' | 'network' | 'unauthorized' | 'rate_limited' | 'server' | 'unknown';
+
+// 코드·토큰·원문 메시지는 계측하지 않고 고정된 분류만 전달한다.
+function classifyAdsSessionFailure(error: unknown): AdsSessionFailureReason {
+  if (typeof error !== 'object' || error == null) return 'unknown';
+  const { status, code } = error as { status?: unknown; code?: unknown };
+  if (code === 'CANCELLED' || code === 'USER_CANCELLED') return 'cancelled';
+  if (status === 0 || code === 'network_error') return 'network';
+  if (status === 401 || status === 403) return 'unauthorized';
+  if (status === 429) return 'rate_limited';
+  if (typeof status === 'number' && status >= 500 && status <= 599) return 'server';
+  return 'unknown';
+}
+
+let adsSessionPromise: Promise<AppsInTossAdsSessionResult> | null = null;
 let analyticsSessionId = Date.now();
 
 // 신규 사용자마다 Platform 계정을 연다. Platform은 identity를 처음 만들 때만
@@ -85,15 +113,21 @@ export function ensureAppsInTossPlatformSession(): Promise<boolean> {
   return platformSessionPromise;
 }
 
-export function ensureAppsInTossAdsSession(): Promise<boolean> {
-  adsSessionPromise ??= (async () => {
+export function ensureAppsInTossAdsSession(): Promise<AppsInTossAdsSessionResult> {
+  adsSessionPromise ??= (async (): Promise<AppsInTossAdsSessionResult> => {
     try {
       await appsInTossAdsPlatform.session.token();
-      return true;
+      return { ok: true };
     } catch {
       // 세션이 없거나 갱신할 수 없을 때만 새 authorization code를 요청한다.
     }
-    const { authorizationCode, referrer } = await appLogin();
+    let login: Awaited<ReturnType<typeof appLogin>>;
+    try {
+      login = await appLogin();
+    } catch (error) {
+      return { ok: false, stage: 'login', reason: classifyAdsSessionFailure(error) };
+    }
+    const { authorizationCode, referrer } = login;
     // SDK 런타임은 credential 객체를 그대로 전달한다. referrer는 Platform Ads
     // 계약 필드이며 원문 authorization code는 세션 교환 뒤 버린다.
     const credential: Credential & { referrer: 'DEFAULT' | 'SANDBOX' } = {
@@ -101,9 +135,13 @@ export function ensureAppsInTossAdsSession(): Promise<boolean> {
       value: authorizationCode,
       referrer,
     };
-    await appsInTossAdsPlatform.signIn(credential);
-    return true;
-  })().catch(() => false).finally(() => {
+    try {
+      await appsInTossAdsPlatform.signIn(credential);
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, stage: 'session_exchange', reason: classifyAdsSessionFailure(error) };
+    }
+  })().finally(() => {
     adsSessionPromise = null;
   });
   return adsSessionPromise;

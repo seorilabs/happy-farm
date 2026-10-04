@@ -22,7 +22,7 @@ type FullScreenAdRequest = {
 
 const mockUnregisterLoad = jest.fn();
 const mockUnregisterShow = jest.fn();
-const mockEnsureAppsInTossAdsSession = jest.fn(async () => true);
+const mockEnsureAppsInTossAdsSession = jest.fn<Promise<import('../../platformEvents').AppsInTossAdsSessionResult>, []>(async () => ({ ok: true }));
 const mockAdsPolicy = jest.fn(async (): Promise<PlatformAdsPolicy> => ({
   appUsesAds: true,
   adsEnabled: true,
@@ -123,7 +123,7 @@ describe('useFullScreenAd', () => {
     mockLoadFullScreenAd.isSupported.mockClear();
     mockShowFullScreenAd.isSupported.mockClear();
     mockEnsureAppsInTossAdsSession.mockClear();
-    mockEnsureAppsInTossAdsSession.mockResolvedValue(true);
+    mockEnsureAppsInTossAdsSession.mockResolvedValue({ ok: true });
     mockAdsPolicy.mockClear();
     mockAdsPolicy.mockResolvedValue({
       appUsesAds: true,
@@ -414,7 +414,7 @@ describe('useFullScreenAd', () => {
   });
 
   test('tracks a retryable Ads session failure separately and retries the next load', async () => {
-    mockEnsureAppsInTossAdsSession.mockResolvedValue(false);
+    mockEnsureAppsInTossAdsSession.mockResolvedValue({ ok: false, stage: 'session_exchange', reason: 'network' });
     const controllerRef: { current?: RewardedAdController } = {};
 
     render(<Harness onController={(value) => { controllerRef.current = value; }} />);
@@ -426,12 +426,14 @@ describe('useFullScreenAd', () => {
       attempt_stage: 'load',
       result: 'session_blocked',
       block_reason: 'ads_session_failed',
+      session_stage: 'session_exchange',
+      session_failure_reason: 'network',
       disabled_by: '',
     }));
     expect(controllerRef.current?.isAdSupported).toBe(true);
     expect(controllerRef.current?.isAdReady).toBe(false);
 
-    mockEnsureAppsInTossAdsSession.mockResolvedValue(true);
+    mockEnsureAppsInTossAdsSession.mockResolvedValue({ ok: true });
     const reloadAd = controllerRef.current?.reloadAd;
     if (reloadAd == null) throw new Error('reloadAd not provided');
     let reloadPromise!: Promise<void>;
@@ -652,7 +654,7 @@ describe('useFullScreenAd', () => {
     await waitFor(() => expect(latestLoadRequest).not.toBeNull());
     act(() => { latestLoadRequest?.onEvent({ type: 'loaded' }); });
     await waitFor(() => expect(controllerRef.current?.isAdReady).toBe(true));
-    mockEnsureAppsInTossAdsSession.mockResolvedValue(false);
+    mockEnsureAppsInTossAdsSession.mockResolvedValue({ ok: false, stage: 'session_exchange', reason: 'network' });
 
     let result: RewardedAdShowResult | null = null;
     await act(async () => {
@@ -666,6 +668,8 @@ describe('useFullScreenAd', () => {
       attempt_stage: 'show',
       result: 'session_blocked',
       block_reason: 'ads_session_failed',
+      session_stage: 'session_exchange',
+      session_failure_reason: 'network',
       disabled_by: '',
     }));
   });
@@ -693,6 +697,7 @@ describe('useFullScreenAd', () => {
     await waitFor(() => expect(mockShowFullScreenAd).toHaveBeenCalledTimes(1));
     act(() => {
       latestShowRequest?.onEvent({ type: 'userEarnedReward' });
+      latestShowRequest?.onEvent({ type: 'userEarnedReward' });
       latestShowRequest?.onEvent({ type: 'dismissed' });
     });
 
@@ -701,6 +706,7 @@ describe('useFullScreenAd', () => {
       placement: 'wheel_bonus_spin',
       provider: 'apps_in_toss',
     }));
+    expect(mockConfirmClaim).toHaveBeenCalledTimes(1);
     expect(mockConfirmClaim).toHaveBeenCalledWith('claim-ait-1', expect.stringMatching(/^ait-claim-ait-1-/));
   });
 
