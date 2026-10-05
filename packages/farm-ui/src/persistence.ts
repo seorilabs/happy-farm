@@ -19,27 +19,23 @@ export function createFarmPersistence(storage: KeyValueStorage) {
     async readPersistedGameState() {
       const base = createInitialState();
 
-      try {
-        const raw = await storage.getItem(SAVE_KEY);
-        if (raw == null) {
-          return base;
-        }
-
-        // Keep a one-time snapshot of the raw save before migration touches
-        // it, so a migration bug never destroys the only copy.
-        try {
-          const backupKey = `${SAVE_KEY}.backup`;
-          if ((await storage.getItem(backupKey)) == null) {
-            await storage.setItem(backupKey, raw);
-          }
-        } catch {
-          // Backup failures must not block loading.
-        }
-
-        return migrateLoadedState(JSON.parse(raw) as Partial<GameState>, base);
-      } catch {
+      const raw = await storage.getItem(SAVE_KEY);
+      if (raw == null) {
         return base;
       }
+
+      // Keep a one-time snapshot of the raw save before migration touches
+      // it, so a migration bug never destroys the only copy.
+      try {
+        const backupKey = `${SAVE_KEY}.backup`;
+        if ((await storage.getItem(backupKey)) == null) {
+          await storage.setItem(backupKey, raw);
+        }
+      } catch {
+        // Backup failures must not block loading.
+      }
+
+      return migrateLoadedState(JSON.parse(raw) as Partial<GameState>, base);
     },
 
     async writePersistedGameState(gameState: GameState) {
@@ -62,21 +58,17 @@ export function createFarmPersistence(storage: KeyValueStorage) {
     },
 
     async readPersistedGameSettings() {
-      try {
-        const raw = await storage.getItem(FARM_GAME_SETTINGS_KEY);
-        if (raw == null) {
-          return null;
-        }
-
-        const parsed = JSON.parse(raw) as unknown;
-        if (typeof parsed !== 'object' || parsed == null) {
-          return null;
-        }
-
-        return parsed as Partial<FarmGameSettings>;
-      } catch {
+      const raw = await storage.getItem(FARM_GAME_SETTINGS_KEY);
+      if (raw == null) {
         return null;
       }
+
+      const parsed = JSON.parse(raw) as unknown;
+      if (typeof parsed !== 'object' || parsed == null) {
+        return null;
+      }
+
+      return parsed as Partial<FarmGameSettings>;
     },
 
     async writePersistedGameSettings(settings: FarmGameSettings) {
@@ -88,16 +80,12 @@ export function createFarmPersistence(storage: KeyValueStorage) {
     },
 
     async readLastSeenAt(): Promise<number | null> {
-      try {
-        const raw = await storage.getItem(LAST_SEEN_KEY);
-        if (raw == null) {
-          return null;
-        }
-        const value = Number(raw);
-        return Number.isFinite(value) && value > 0 ? value : null;
-      } catch {
+      const raw = await storage.getItem(LAST_SEEN_KEY);
+      if (raw == null) {
         return null;
       }
+      const value = Number(raw);
+      return Number.isFinite(value) && value > 0 ? value : null;
     },
 
     async writeLastSeenAt(timestamp: number) {

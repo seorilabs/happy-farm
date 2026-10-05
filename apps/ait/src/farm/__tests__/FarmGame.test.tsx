@@ -405,6 +405,25 @@ describe('FarmGame UI flow', () => {
     jest.useRealTimers();
   });
 
+  test('enters with the prepared save and settings without reading them a second time', async () => {
+    const savedState = {
+      ...createInitialState(),
+      gold: 4321,
+      onboardingCompleted: true,
+      onboardingStep: null,
+      dailyBonusState: { lastClaimedAt: NOW, streak: 1 },
+    };
+    const view = await renderGame(savedState, {
+      startupSnapshot: { gameState: savedState, settings: { locale: 'en-US' }, lastSeenAt: null },
+    });
+    expect(view.getByTestId('farm-root')).toBeTruthy();
+    expect(view.getByText('Gold')).toBeTruthy();
+    expect(mockPersistence.readPersistedGameState).not.toHaveBeenCalled();
+    expect(mockPersistence.readPersistedGameSettings).not.toHaveBeenCalled();
+    expect(mockPersistence.readLastSeenAt).not.toHaveBeenCalled();
+    expect(getLatestPersistedState().gold).toBe(4321);
+  });
+
   test('applies the time-of-day environment tone to the top-level background', async () => {
     const screen = await renderGame(null);
 

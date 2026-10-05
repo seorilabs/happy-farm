@@ -1,9 +1,10 @@
 import { createRoute } from '@granite-js/react-native';
 import React, { useMemo } from 'react';
-import { FarmGame, detectRuntimeLocale, type FarmGameAdGroupIds } from '../../../../packages/farm-ui/src';
+import { FarmGame, FarmStartup, detectRuntimeLocale, type FarmGameAdGroupIds } from '../../../../packages/farm-ui/src';
 import { appsInTossFarmAnalytics } from '../firebaseWeb';
 import { trackAppsInTossAnalyticsEvent } from '../firebaseWeb/analytics';
 import { appsInTossFarmArt } from '../farm/platform/appsInTossArt';
+import { appsInTossTitleArt } from '../farm/platform/titleArt.generated';
 import { useAppsInTossFarmAudio } from '../farm/platform/appsInTossAudio';
 import { useFullScreenAd } from '../farm/platform/fullScreenAd';
 import { useAppsInTossScreenAwake } from '../farm/platform/screenAwake';
@@ -66,21 +67,26 @@ function Page() {
 
   return (
     <>
-      <FarmGame
-        analytics={appsInTossFarmAnalytics}
-        adGroupIds={adGroupIds}
-        art={appsInTossFarmArt}
-        audio={audio}
-        interstitialPlacements={{
-          returnWelcomeBack: true,
-          progressionMilestone: true,
-          harvestBatch: true,
-        }}
-        persistence={appsInTossPersistence}
-        preferredLocale={detectRuntimeLocale()}
-        useInterstitialAd={useAppsInTossInterstitialAd}
-        useRewardedAd={useAppsInTossRewardedAd}
-      />
+      <FarmStartup persistence={appsInTossPersistence} preferredLocale={detectRuntimeLocale()} art={appsInTossTitleArt}>
+        {(startupSnapshot) => (
+          <FarmGame
+            startupSnapshot={startupSnapshot}
+            analytics={appsInTossFarmAnalytics}
+            adGroupIds={adGroupIds}
+            art={appsInTossFarmArt}
+            audio={audio}
+            interstitialPlacements={{
+              returnWelcomeBack: true,
+              progressionMilestone: true,
+              harvestBatch: true,
+            }}
+            persistence={appsInTossPersistence}
+            preferredLocale={detectRuntimeLocale()}
+            useInterstitialAd={useAppsInTossInterstitialAd}
+            useRewardedAd={useAppsInTossRewardedAd}
+          />
+        )}
+      </FarmStartup>
       {audioElement}
     </>
   );

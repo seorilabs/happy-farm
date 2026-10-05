@@ -81,3 +81,7 @@ Updated area-opening copy to simpler wording, added an estimated gold-per-hour p
 작물 성장 보상 광고: 성장 완료 / 1
 수확 보너스 광고: 수확 보너스 / 2배
 ```
+
+## 2026-10-05 타이틀 진입 변경
+
+A — 아침 농장 타이틀을 추가했다. 준비 완료 후 `농장으로 가기` / `Enter Farm`을 누르면 기존 농장과 튜토리얼로 진입한다. 8개 UI locale을 함께 갱신했다. [구현과 검증 기록](ui/title/qa.md)에 플랫폼별 완료 범위와 출시 전 확인을 기록했다. 스토어 문구·버전·기존 플레이 스크린샷과 콘솔 값은 이번 구현에서 갱신하지 않았다.

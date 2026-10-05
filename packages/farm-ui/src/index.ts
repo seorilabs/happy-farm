@@ -5,3 +5,4 @@ export * from './farmGoldPulse';
 export * from './gameSettings';
 export * from './i18n';
 export * from './persistence';
+export * from './FarmStartup';
