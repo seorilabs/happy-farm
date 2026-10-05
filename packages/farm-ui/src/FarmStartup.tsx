@@ -6,6 +6,7 @@ import { DEFAULT_LOCALE, type GameState, type SupportedLocale } from '../../farm
 import type { FarmGamePersistence } from './FarmGame';
 import { normalizeFarmGameSettings, type FarmGameSettings } from './gameSettings';
 import { getFarmMessages } from './i18n';
+import { resolveBottomSafeInset } from './safeArea';
 
 export type FarmStartupSnapshot = {
   gameState: GameState;
@@ -60,6 +61,7 @@ export function FarmStartup({
   const [started, setStarted] = useState(false);
   const startCommitted = useRef(false);
   const insets = useSafeAreaInsets();
+  const bottomSafeInset = resolveBottomSafeInset(insets.bottom);
   const { width, height } = useWindowDimensions();
   const compact = height < 700;
   const messages = getFarmMessages(state.locale);
@@ -161,7 +163,7 @@ export function FarmStartup({
           {
             left: compact ? 24 : 34,
             right: compact ? 24 : 34,
-            bottom: Math.max(insets.bottom + 32, compact ? 42 : 70),
+            bottom: Math.max(bottomSafeInset + 32, compact ? 42 : 70),
           },
         ]}
       >
@@ -229,7 +231,7 @@ export function FarmStartup({
       </View>
       <Text
         allowFontScaling={false}
-        style={[styles.footer, { bottom: Math.max(insets.bottom + 8, compact ? 15 : 24) }]}
+        style={[styles.footer, { bottom: bottomSafeInset + 8 }]}
       >
         {messages.titlePublisher}
       </Text>
