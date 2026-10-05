@@ -1,0 +1,34 @@
+{
+  "provider": "Codex built-in gpt-image-2",
+  "style": "../../../assets/art/style/style-guide.md",
+  "styleReference": "../../../assets/art/style/anchor.png",
+  "purpose": "타이틀 시안 2종 비교 후 사용자가 A를 선택했다. A 배경만 제품 에셋에 포함한다.",
+  "generatedAt": "2026-10-05",
+  "assets": [
+    {
+      "name": "background-a",
+      "path": "reference/background-a.png",
+      "prompt": "Use case: stylized-concept. Asset type: opaque portrait background artwork for an existing mobile farming game, Happy Farm. Generate a brand-new image; the provided carrot is ONLY a material/color style reference. Soft 3D clay render: cute chunky rounded objects, matte polymer clay, subtle gradients, no outlines, soft lighting from top front-left, warm cozy palette grass #7CC043 leaf #59A83B terracotta #E8863C cream #F4E7C8 soil #8A5A34. Original game art, no existing franchise style or character imitation. Portrait 1:2 ratio, intended canvas 1024x2048. NO TEXT, no logo, no lettering, no buttons, no loading bar, no watermark. Reserve the upper 8%-32% as quiet uncluttered negative space for a large title logo, and bottom 74%-96% as quiet uncluttered space for a progress bar and start button. Keep important objects within center 80% horizontally so narrower screens can crop safely. Professional polished game title key art, carefully art directed, not an app icon. Direction A: immersive morning farm valley. Camera at a gently elevated angle looking into a cozy vegetable farm. Pale blue morning sky with a few soft clouds high and far away, hazy rolling green hills at horizon y=38%, a modest original terracotta-roof barn to the left at y=48%, rounded fruit tree to right, a curving path leading toward three readable vegetable garden beds with plump carrots, tomatoes and wheat in middle y=52%-70%. White picket fence helps frame scene near outer sides. Natural scene fills canvas, clear depth, fresh verdant bright colors, a small chicken near path. Bottom foreground becomes soft lightly textured grass and cream dusty path with no clutter. No giant vegetables in sky. Logo and UI will be added separately.",
+      "transparent": false
+    },
+    {
+      "name": "background-b",
+      "path": "reference/background-b.png",
+      "prompt": "Use case: stylized-concept. Asset type: opaque portrait background artwork for an existing mobile farming game, Happy Farm. Generate a brand-new image; the provided carrot is ONLY a material/color style reference. Soft 3D clay render: cute chunky rounded objects, matte polymer clay, subtle gradients, no outlines, soft lighting from top front-left, warm cozy palette grass #7CC043 leaf #59A83B terracotta #E8863C cream #F4E7C8 soil #8A5A34. Original game art, no existing franchise style or character imitation. Portrait 1:2 ratio, intended canvas 1024x2048. NO TEXT, no logo, no lettering, no buttons, no loading bar, no watermark. Reserve the upper 8%-32% as quiet uncluttered negative space for a large title logo, and bottom 74%-96% as quiet uncluttered space for a progress bar and start button. Keep important objects within center 80% horizontally so narrower screens can crop safely. Professional polished game title key art, carefully art directed, not an app icon. Direction B: collectible miniature farm diorama on a warm cream seamless studio backdrop, no horizon. A handcrafted oval patch of earth and grass as a soft-edged toy island centered from y=38% to 70%, at isometric three-quarter camera. Compact terracotta-roof barn in rear left, round apple tree rear right, three neat soil garden beds holding recognizable clay carrots, tomatoes, wheat; one very small chicken, tiny cream stone footpath. The entire diorama has a generous silhouette and one soft contact shadow beneath it, centered and visually coherent, not floating individual parts. Cream #F4E7C8 studio background fills upper and lower spaces. Earth rim at y=65% reinforces miniature physical scale. No decorative marks, no confetti, no UI elements. Quiet refined toy-like composition, plump shapes, premium material finish. Logo and UI will be added separately.",
+      "transparent": false
+    }
+  ],
+  "selectedDirection": "A",
+  "production": {
+    "background": "../../../assets/art/title-background.jpg",
+    "source": "reference/background-a.png",
+    "operation": "JPEG quality 90, original pixels and composition preserved",
+    "shade": "../../../assets/art/title-shade.png",
+    "shadeDescription": "Code-generated cream alpha gradient, 1x512 RGBA; no source-art retouch",
+    "generator": "../../../scripts/generate-title-art.mjs",
+    "delivery": {
+      "mobile": "Bundled asset require",
+      "ait": "Embedded data URI, no Hosting deployment"
+    }
+  }
+}

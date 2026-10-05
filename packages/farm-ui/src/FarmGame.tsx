@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import type { FarmStartupSnapshot } from './FarmStartup';
 import {
   Animated,
   AppState,
@@ -657,6 +658,7 @@ export type FarmPrivacySettings = {
 };
 
 export type FarmGameProps = {
+  startupSnapshot?: FarmStartupSnapshot;
   persistence?: FarmGamePersistence;
   privacySettings?: FarmPrivacySettings;
   analytics?: FarmAnalytics;
@@ -1053,6 +1055,7 @@ export default function FarmGame(props: FarmGameProps = {}) {
 }
 
 function FarmGameBody({
+  startupSnapshot,
   persistence = defaultPersistence,
   privacySettings,
   analytics = defaultFarmAnalytics,
@@ -2300,8 +2303,8 @@ function FarmGameBody({
     let cancelled = false;
 
     async function loadSavedGame() {
-      const savedState = await persistence.readPersistedGameState();
-      const lastSeenAt = (await persistence.readLastSeenAt?.()) ?? null;
+      const savedState = startupSnapshot != null ? startupSnapshot.gameState : await persistence.readPersistedGameState();
+      const lastSeenAt = startupSnapshot != null ? startupSnapshot.lastSeenAt : (await persistence.readLastSeenAt?.()) ?? null;
       if (cancelled) {
         return;
       }
@@ -2395,13 +2398,13 @@ function FarmGameBody({
     return () => {
       cancelled = true;
     };
-  }, [persistence]);
+  }, [persistence, startupSnapshot]);
 
   useEffect(() => {
     let cancelled = false;
 
     async function loadSavedSettings() {
-      const savedSettings = await persistence.readPersistedGameSettings?.();
+      const savedSettings = startupSnapshot != null ? startupSnapshot.settings : await persistence.readPersistedGameSettings?.();
       if (cancelled) {
         return;
       }
@@ -2414,7 +2417,7 @@ function FarmGameBody({
     return () => {
       cancelled = true;
     };
-  }, [persistence, preferredLocale]);
+  }, [persistence, preferredLocale, startupSnapshot]);
 
   useEffect(() => {
     if (!isSaveLoaded) {

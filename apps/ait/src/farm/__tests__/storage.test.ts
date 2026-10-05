@@ -34,19 +34,30 @@ describe('farm storage', () => {
     jest.useRealTimers();
   });
 
-  test('returns a safe initial state when storage is empty or invalid', async () => {
+  test('returns an initial state only when storage is empty', async () => {
     mockStorage.getItem.mockResolvedValueOnce(null);
     const emptyState = await readPersistedGameState();
 
     expect(mockStorage.getItem).toHaveBeenCalledWith(SAVE_KEY);
     expect(emptyState.gold).toBe(50);
     expect(emptyState.plots).toHaveLength(MAX_PLOTS);
+  });
 
+  test('reports corrupt or unavailable saves without replacing them', async () => {
     mockStorage.getItem.mockResolvedValueOnce('{bad json');
-    const invalidState = await readPersistedGameState();
+    await expect(readPersistedGameState()).rejects.toThrow();
+    expect(mockStorage.setItem).not.toHaveBeenCalledWith(SAVE_KEY, expect.anything());
+    mockStorage.getItem.mockRejectedValueOnce(new Error('unavailable'));
+    await expect(readPersistedGameState()).rejects.toThrow('unavailable');
+    expect(mockStorage.removeItem).not.toHaveBeenCalled();
+  });
 
-    expect(invalidState.gold).toBe(50);
-    expect(invalidState.plots).toHaveLength(MAX_PLOTS);
+  test('reports settings and last-seen read failures instead of inventing defaults', async () => {
+    mockStorage.getItem.mockRejectedValueOnce(new Error('settings unavailable'));
+    await expect(readPersistedGameSettings()).rejects.toThrow('settings unavailable');
+    mockStorage.getItem.mockRejectedValueOnce(new Error('last-seen unavailable'));
+    await expect(readLastSeenAt()).rejects.toThrow('last-seen unavailable');
+    expect(mockStorage.setItem).not.toHaveBeenCalled();
   });
 
   test('migrates persisted state before returning it to the UI', async () => {

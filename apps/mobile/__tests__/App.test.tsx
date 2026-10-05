@@ -11,6 +11,7 @@ import {
   RewardedAdEventType,
 } from 'react-native-google-mobile-ads';
 import App from '../App';
+import { FarmStartup } from '../../../packages/farm-ui/src';
 import {
   MOBILE_REWARDED_AD_LOAD_TIMEOUT_MS,
   MOBILE_REWARDED_AD_SHOW_TIMEOUT_MS,
@@ -192,6 +193,12 @@ test('renders correctly', async () => {
   });
 
   const createRewardedAd = RewardedAd.createForAdRequest as jest.Mock;
+  expect(createRewardedAd).not.toHaveBeenCalled();
+  expect(AdsConsent.gatherConsent).not.toHaveBeenCalled();
+  await ReactTestRenderer.act(async () => {
+    const startup = renderer!.root.findByType(FarmStartup);
+    startup.findByProps({ testID: 'title-start' }).props.onPress();
+  });
   expect(createRewardedAd).toHaveBeenCalledWith('test-rewarded', {
     requestNonPersonalizedAdsOnly: true,
   });
