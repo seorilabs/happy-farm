@@ -2,7 +2,7 @@
   "bundleId": "com.seorilabs.happyfarm",
   "appleTeamId": "HCDUXX4Z3X",
   "sku": "happy-farm-ios",
-  "primaryLanguage": "ko-KR",
+  "primaryLanguage": "en-US",
   "platform": "iOS",
   "appType": "game",
   "freeOrPaid": "free",
@@ -12,14 +12,14 @@
   "marketingUrl": "https://happy-farm-tycoon.web.app",
   "copyright": "2026 Seorilabs",
   "releaseNotes": {
-    "ko-KR": "미션 보상을 받으면 받은 금액이 화면에 표시됩니다. 알림을 눌러 돌아온 경로를 정확히 기록하도록 고쳤습니다.",
-    "en-US": "Claiming a mission reward now shows how much you earned. Fixed tracking for players returning through notifications.",
-    "ja": "ミッション報酬を受け取ると獲得額が画面に表示されます。通知から復帰した経路を正しく記録するよう修正しました。",
-    "zh-Hans": "领取任务奖励时会显示获得的金额。修正了通过通知返回游戏的记录方式。",
-    "zh-Hant": "領取任務獎勵時會顯示獲得的金額。修正了透過通知返回遊戲的記錄方式。",
-    "de": "Beim Einlösen einer Missionsbelohnung wird jetzt angezeigt, wie viel du erhalten hast. Die Erfassung von Rückkehrern über Benachrichtigungen wurde korrigiert.",
-    "fr": "La récompense de mission affiche désormais le montant obtenu. Le suivi des retours via les notifications a été corrigé.",
-    "es": "Al reclamar la recompensa de una misión ahora se muestra cuánto has ganado. Se ha corregido el seguimiento de los regresos mediante notificaciones."
+    "ko-KR": "- 아침 농장 풍경의 새 타이틀 화면에서 게임을 시작하세요.\n- 저장된 농장을 준비하는 상태를 보여주며, 읽기에 실패하면 다시 시도할 수 있어요.",
+    "en-US": "- Start your game from a new title screen with a morning farm scene.\n- See saved-farm loading progress and retry if your farm cannot be read.",
+    "ja": "- 朝の農場風景を描いた新しいタイトル画面からゲームを始めましょう。\n- 保存した農場の読み込み状況を表示し、読み込めない場合は再試行できます。",
+    "zh-Hans": "- 从全新的晨间农场标题画面开始游戏。\n- 查看已保存农场的加载进度，读取失败时可重试。",
+    "zh-Hant": "- 從全新的晨間農場標題畫面開始遊戲。\n- 查看已儲存農場的載入進度，讀取失敗時可重試。",
+    "de": "- Starte das Spiel auf einem neuen Titelbildschirm mit einer Farm am Morgen.\n- Verfolge das Laden deiner gespeicherten Farm und versuche es bei einem Lesefehler erneut.",
+    "fr": "- Démarre sur un nouvel écran titre montrant la ferme au petit matin.\n- Suis le chargement de ta ferme sauvegardée et réessaie si elle ne peut pas être lue.",
+    "es": "- Empieza desde una nueva pantalla de título con una granja al amanecer.\n- Sigue la carga de tu granja guardada y vuelve a intentarlo si no se puede leer."
   },
   "versioning": {
     "source": "github_release_tag",
@@ -152,22 +152,31 @@
           "appFunctionality"
         ],
         "usedForTracking": false,
-        "notes": "Firebase Anonymous Auth가 앱 생성 UID를 사용해 사용자의 Firestore 클라우드 저장 백업 문서를 분리합니다. 사용자가 직접 로그인하지 않으며 광고 추적 목적으로 사용하지 않습니다."
+        "notes": "Firebase Anonymous Auth의 앱 생성 UID를 Seorilabs Platform 세션의 인증, 광고 정책 조회 및 보상 claim 검증에 사용합니다. 광고 추적용 식별자로 사용하지 않습니다.",
+        "linkedToUser": true
       },
       "gameplayProgress": {
-        "collected": true,
-        "purposes": [
-          "appFunctionality"
-        ],
+        "collected": false,
+        "purposes": [],
         "usedForTracking": false,
-        "notes": "Firestore cloud-save backup은 로컬 GameState 직렬화 데이터를 저장 복구 목적으로 저장합니다. 서버 검증 원장이나 광고 추적 목적으로 사용하지 않습니다."
+        "notes": "Firestore 클라우드 저장을 제거했으므로 저장 복구용 GameState는 서버에 전송하지 않습니다. 게임 진행은 로컬에 저장합니다."
       }
     },
     "notes": [
-      "App Store Connect 앱 개인정보 답변은 심사 통과 기준으로 완료됨.",
+      "현재 공개 App Privacy 선언은 기존 심사를 통과한 상태입니다. v1.12.0의 사용자 ID 항목은 pendingConsoleUpdate와 마켓 검수 원장에 따라 추가 확인이 필요합니다.",
       "Firebase Analytics, Firebase Auth(Platform 세션), AdMob SDK 구성 변경 시 App Store Connect 앱 개인정보 답변을 재검토합니다.",
       "tracking=yes 기준을 유지합니다. IDFA/ATT 또는 비개인화 광고 정책을 바꾸면 콘솔 답변과 PrivacyInfo.xcprivacy를 함께 확인합니다."
-    ]
+    ],
+    "pendingConsoleUpdate": {
+      "dataType": "userId",
+      "purposes": [
+        "appFunctionality"
+      ],
+      "linkedToUser": true,
+      "usedForTracking": false,
+      "evidence": "v1.12.0 archive FirebaseAuth_Privacy.bundle/PrivacyInfo.xcprivacy declares UserID, linked true, tracking false, AppFunctionality; current public App Privacy omits User ID.",
+      "state": "awaiting_console_authentication"
+    }
   },
   "review": {
     "signInRequired": false,
@@ -403,7 +412,7 @@
     }
   },
   "automation": {
-    "workflow": "backoffice-asc-ci-build-runs",
+    "workflow": ".github/workflows/deploy-app-store.yml",
     "appStoreConnectApiKeyIdSecret": "APP_STORE_CONNECT_API_KEY_ID",
     "appStoreConnectIssuerIdSecret": "APP_STORE_CONNECT_ISSUER_ID",
     "appStoreConnectPrivateKeyBase64Secret": "APP_STORE_CONNECT_PRIVATE_KEY_BASE64",

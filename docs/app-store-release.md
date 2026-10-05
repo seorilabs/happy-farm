@@ -24,6 +24,8 @@ pnpm check:app-store -- --json
 
 ## 현재 상태
 
+2026-10-05 v1.12.0은 빌드·업로드와 8개 언어·64장 이미지 대조까지 완료했다. TestFlight 실행과 App Privacy 선언 대조가 남아 심사 제출·공개는 미완료다. 실제 App Store Connect 기본 언어는 `en-US`이며 기존 값을 유지하고 config를 맞췄다. 최신 상태는 [마켓 검수 기록](../release/history/v1.12.0/README.md)과 `release/market-launch-state.json`을 따른다. 아래 과거 빌드 결과는 이 버전의 완료 근거로 사용하지 않는다.
+
 - App Store archive용 Apple Distribution signing 설정은 완료됐습니다.
 - GitHub Actions `Deploy App Store` run `26832379683`에서 `v1.1.1 / 1001001` archive/upload가 성공했습니다.
 - CI runner는 `macos-26`을 사용하며, `Verify Xcode SDK` 단계에서 `iphoneos SDK 26.x`가 아니면 실패시킵니다.
@@ -129,7 +131,9 @@ UID, GA4 client ID, token은 보내지 않습니다. 상세 경계는 `docs/fire
 
 앱 개인정보의 `대략적인 위치`는 AdMob/Firebase 기준으로 수집됨으로 보고, 사용 목적은 `타사 광고`와 `분석`만 선택합니다. 게임 기능 자체는 위치를 사용하지 않으므로 `앱 기능`, `제품 개인 맞춤화`, `개발자의 광고 또는 마케팅`, `기타 목적`은 선택하지 않습니다. 추적 목적 사용 여부는 AdMob 광고 SDK가 타깃 광고 또는 광고 측정 목적으로 타사 데이터와 결합될 수 있으므로 `예`로 답변합니다.
 
-Firebase Anonymous Auth는 계속 사용합니다. 클라우드 저장을 걷어낸 뒤에도 Seorilabs Platform 세션(광고 정책·claim, analytics relay)의 자격증명이기 때문입니다. 따라서 앱 생성 사용자 식별자 수집은 답변에 유지하되, **게임 진행 저장 데이터는 더 이상 수집하지 않습니다**(Firestore 클라우드 저장 제거). 사용자가 직접 로그인하지 않으므로 심사 정보의 `requiresSignIn`은 `no`를 유지합니다.
+Firebase Anonymous Auth는 계속 사용합니다. 클라우드 저장을 걷어낸 뒤에도 Seorilabs Platform 세션(광고 정책·claim, analytics relay)의 자격증명이기 때문입니다. 따라서 앱 생성 사용자 식별자 수집을 선언해야 하며, **게임 진행 저장 데이터는 더 이상 수집하지 않습니다**(Firestore 클라우드 저장 제거). 사용자가 직접 로그인하지 않으므로 심사 정보의 `requiresSignIn`은 `no`를 유지합니다.
+
+2026-10-05 v1.12.0 검증 archive의 `FirebaseAuth_Privacy.bundle/PrivacyInfo.xcprivacy`는 사용자 ID를 `AppFunctionality / linked=true / tracking=false`로 명시한다. 현재 공개 App Privacy에는 사용자 ID가 없으므로 Console의 저장된 선언·미공개 초안을 확인하고 필요하면 수정해야 한다. 전용 브라우저 인증이 남아 있어 선언 대조를 완료 처리하지 않았다. [마켓 검수 기록](../release/history/v1.12.0/README.md)에 정확한 빌드·문구·이미지 대조와 남은 단계를 기록했다.
 
 농장 알림은 첫 수확 뒤 안내에서 사용자가 명시적으로 수락하거나 설정에서 개별 토글을 켠 경우에만 iOS 로컬 알림 권한을 요청합니다. 수락 시 수확 시점과 데일리 보너스·오늘의 작물 복귀 리마인더가 함께 활성화되며, 설정에서 각각 끌 수 있습니다. FCM/APNs 원격 push token을 서버로 보내지 않고 기기 로컬 trigger notification만 예약하므로 App Privacy 수집 데이터 항목을 추가하지 않습니다.
 

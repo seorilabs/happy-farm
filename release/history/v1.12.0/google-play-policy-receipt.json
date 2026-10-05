@@ -1,0 +1,20 @@
+{
+  "ads": true,
+  "requiresUserSignIn": false,
+  "targetAgeBands": [
+    "13-15",
+    "16-17",
+    "18+"
+  ],
+  "iarcState": "completed",
+  "iarcCertificateId": "482b0aef-4af2-8e1e-8370-3f52a71726b4",
+  "adIdUsed": true,
+  "adIdPurposes": [
+    "analytics",
+    "advertising",
+    "fraudPreventionSecurity"
+  ],
+  "free": true,
+  "policyIssues": null,
+  "dataSafetyReceipt": "google-play-data-safety-receipt.json"
+}

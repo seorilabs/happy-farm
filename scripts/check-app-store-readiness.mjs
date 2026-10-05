@@ -557,11 +557,14 @@ if (config == null) {
     fail('iOS Info.plist가 없습니다.', 'apps/mobile/ios/HappyFarmMobile/Info.plist');
   } else {
     const displayName = plistValue(infoPlist, 'CFBundleDisplayName');
-    const appName = localizedValue(config, 'storeListing', 'appName', locale);
-    if (displayName !== appName) {
-      fail('CFBundleDisplayName과 App Store 앱 이름이 다릅니다.', `${displayName} != ${appName}`);
+    const appNames = config.storeListing?.appName;
+    const localizedAppNames = typeof appNames === 'object' && appNames != null
+      ? Object.values(appNames)
+      : [appNames];
+    if (!isConcrete(displayName) || !localizedAppNames.includes(displayName)) {
+      fail('CFBundleDisplayName이 등록된 App Store 현지화 앱 이름과 다릅니다.', displayName ?? 'missing');
     } else {
-      pass('CFBundleDisplayName과 App Store 앱 이름이 일치합니다.', displayName);
+      pass('CFBundleDisplayName이 등록된 App Store 현지화 앱 이름과 일치합니다.', displayName);
     }
 
     if (plistHasEmptyUsageDescription(infoPlist)) {
