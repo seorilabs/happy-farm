@@ -1,0 +1,37 @@
+[
+  {
+    "language": "ko-KR",
+    "imageType": "sevenInchScreenshots",
+    "imageId": "16851108889576306411",
+    "sha256": "f7cb99e538b4ab5b951497a2536413e7def8d53627baf195b3aebd37e536bc0f",
+    "reason": "old launch logo"
+  },
+  {
+    "language": "ko-KR",
+    "imageType": "tenInchScreenshots",
+    "imageId": "5875024396590431863",
+    "sha256": "f7cb99e538b4ab5b951497a2536413e7def8d53627baf195b3aebd37e536bc0f",
+    "reason": "old launch logo"
+  },
+  {
+    "language": "en-US",
+    "imageType": "sevenInchScreenshots",
+    "imageId": "10822982648555213676",
+    "sha256": "f7cb99e538b4ab5b951497a2536413e7def8d53627baf195b3aebd37e536bc0f",
+    "reason": "old launch logo"
+  },
+  {
+    "language": "en-US",
+    "imageType": "tenInchScreenshots",
+    "imageId": "8542884206791821984",
+    "sha256": "f7cb99e538b4ab5b951497a2536413e7def8d53627baf195b3aebd37e536bc0f",
+    "reason": "old launch logo"
+  },
+  {
+    "language": "zh-CN",
+    "imageType": "phoneScreenshots",
+    "imageId": "16898185956458022361",
+    "sha256": "3c75634b8de15a6d7dde8f735400244bdcf4f0f3ec1ae4c48cfb2a7fbe022ea9",
+    "reason": "Fast Refresh and debugger UI"
+  }
+]

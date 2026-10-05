@@ -1,0 +1,39 @@
+{
+  "schema": "seorilabs.release-notes/v2",
+  "version": "v1.12.0",
+  "notes": {
+    "ko-KR": "- 아침 농장 풍경의 새 타이틀 화면에서 게임을 시작하세요.\n- 저장된 농장을 준비하는 상태를 보여주며, 읽기에 실패하면 다시 시도할 수 있어요.",
+    "en-US": "- Start your game from a new title screen with a morning farm scene.\n- See saved-farm loading progress and retry if your farm cannot be read.",
+    "ja-JP": "- 朝の農場風景を描いた新しいタイトル画面からゲームを始めましょう。\n- 保存した農場の読み込み状況を表示し、読み込めない場合は再試行できます。",
+    "zh-CN": "- 从全新的晨间农场标题画面开始游戏。\n- 查看已保存农场的加载进度，读取失败时可重试。",
+    "zh-TW": "- 從全新的晨間農場標題畫面開始遊戲。\n- 查看已儲存農場的載入進度，讀取失敗時可重試。",
+    "de-DE": "- Starte das Spiel auf einem neuen Titelbildschirm mit einer Farm am Morgen.\n- Verfolge das Laden deiner gespeicherten Farm und versuche es bei einem Lesefehler erneut.",
+    "fr-FR": "- Démarre sur un nouvel écran titre montrant la ferme au petit matin.\n- Suis le chargement de ta ferme sauvegardée et réessaie si elle ne peut pas être lue.",
+    "es-ES": "- Empieza desde una nueva pantalla de título con una granja al amanecer.\n- Sigue la carga de tu granja guardada y vuelve a intentarlo si no se puede leer."
+  },
+  "markets": {
+    "googlePlay": {
+      "ko-KR": "- 아침 농장 풍경의 새 타이틀 화면에서 게임을 시작하세요.\n- 저장된 농장을 준비하는 상태를 보여주며, 읽기에 실패하면 다시 시도할 수 있어요.",
+      "en-US": "- Start your game from a new title screen with a morning farm scene.\n- See saved-farm loading progress and retry if your farm cannot be read.",
+      "ja-JP": "- 朝の農場風景を描いた新しいタイトル画面からゲームを始めましょう。\n- 保存した農場の読み込み状況を表示し、読み込めない場合は再試行できます。",
+      "zh-CN": "- 从全新的晨间农场标题画面开始游戏。\n- 查看已保存农场的加载进度，读取失败时可重试。",
+      "zh-TW": "- 從全新的晨間農場標題畫面開始遊戲。\n- 查看已儲存農場的載入進度，讀取失敗時可重試。",
+      "de-DE": "- Starte das Spiel auf einem neuen Titelbildschirm mit einer Farm am Morgen.\n- Verfolge das Laden deiner gespeicherten Farm und versuche es bei einem Lesefehler erneut.",
+      "fr-FR": "- Démarre sur un nouvel écran titre montrant la ferme au petit matin.\n- Suis le chargement de ta ferme sauvegardée et réessaie si elle ne peut pas être lue.",
+      "es-ES": "- Empieza desde una nueva pantalla de título con una granja al amanecer.\n- Sigue la carga de tu granja guardada y vuelve a intentarlo si no se puede leer."
+    },
+    "appStore": {
+      "ko-KR": "- 아침 농장 풍경의 새 타이틀 화면에서 게임을 시작하세요.\n- 저장된 농장을 준비하는 상태를 보여주며, 읽기에 실패하면 다시 시도할 수 있어요.",
+      "en-US": "- Start your game from a new title screen with a morning farm scene.\n- See saved-farm loading progress and retry if your farm cannot be read.",
+      "ja-JP": "- 朝の農場風景を描いた新しいタイトル画面からゲームを始めましょう。\n- 保存した農場の読み込み状況を表示し、読み込めない場合は再試行できます。",
+      "zh-CN": "- 从全新的晨间农场标题画面开始游戏。\n- 查看已保存农场的加载进度，读取失败时可重试。",
+      "zh-TW": "- 從全新的晨間農場標題畫面開始遊戲。\n- 查看已儲存農場的載入進度，讀取失敗時可重試。",
+      "de-DE": "- Starte das Spiel auf einem neuen Titelbildschirm mit einer Farm am Morgen.\n- Verfolge das Laden deiner gespeicherten Farm und versuche es bei einem Lesefehler erneut.",
+      "fr-FR": "- Démarre sur un nouvel écran titre montrant la ferme au petit matin.\n- Suis le chargement de ta ferme sauvegardée et réessaie si elle ne peut pas être lue.",
+      "es-ES": "- Empieza desde una nueva pantalla de título con una granja al amanecer.\n- Sigue la carga de tu granja guardada y vuelve a intentarlo si no se puede leer."
+    },
+    "appsInToss": {
+      "ko-KR": "- 아침 농장 풍경의 새 타이틀 화면에서 게임을 시작하세요.\n- 저장된 농장을 준비하는 상태를 보여주며, 읽기에 실패하면 다시 시도할 수 있어요."
+    }
+  }
+}

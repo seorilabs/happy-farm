@@ -11,14 +11,14 @@
     "authority": "exact-central-workflow-artifact"
   },
   "releaseNotes": {
-    "ko-KR": "설정에서 광고 개인정보 선택을 직접 열 수 있게 했습니다. 앱 실행 안정성을 개선했습니다.",
-    "en-US": "You can now open your ad privacy choices directly from Settings. Improved app startup stability.",
-    "ja": "設定から広告のプライバシー選択を直接開けるようにしました。アプリ起動の安定性を改善しました。",
-    "zh-Hans": "现在可以在设置中直接打开广告隐私选项。改进了应用启动的稳定性。",
-    "zh-Hant": "現在可以在設定中直接開啟廣告隱私選項。改善了應用程式啟動的穩定性。",
-    "de": "Die Datenschutzeinstellungen für Werbung lassen sich jetzt direkt in den Einstellungen öffnen. Die Stabilität beim App-Start wurde verbessert.",
-    "fr": "Vous pouvez désormais ouvrir vos choix de confidentialité publicitaire directement depuis les Réglages. La stabilité au démarrage a été améliorée.",
-    "es": "Ahora puedes abrir tus opciones de privacidad publicitaria directamente desde Ajustes. Se ha mejorado la estabilidad al iniciar la app."
+    "ko-KR": "- 아침 농장 풍경의 새 타이틀 화면에서 게임을 시작하세요.\n- 저장된 농장을 준비하는 상태를 보여주며, 읽기에 실패하면 다시 시도할 수 있어요.",
+    "en-US": "- Start your game from a new title screen with a morning farm scene.\n- See saved-farm loading progress and retry if your farm cannot be read.",
+    "ja": "- 朝の農場風景を描いた新しいタイトル画面からゲームを始めましょう。\n- 保存した農場の読み込み状況を表示し、読み込めない場合は再試行できます。",
+    "zh-Hans": "- 从全新的晨间农场标题画面开始游戏。\n- 查看已保存农场的加载进度，读取失败时可重试。",
+    "zh-Hant": "- 從全新的晨間農場標題畫面開始遊戲。\n- 查看已儲存農場的載入進度，讀取失敗時可重試。",
+    "de": "- Starte das Spiel auf einem neuen Titelbildschirm mit einer Farm am Morgen.\n- Verfolge das Laden deiner gespeicherten Farm und versuche es bei einem Lesefehler erneut.",
+    "fr": "- Démarre sur un nouvel écran titre montrant la ferme au petit matin.\n- Suis le chargement de ta ferme sauvegardée et réessaie si elle ne peut pas être lue.",
+    "es": "- Empieza desde una nueva pantalla de título con una granja al amanecer.\n- Sigue la carga de tu granja guardada y vuelve a intentarlo si no se puede leer."
   },
   "storeListing": {
     "appName": {
@@ -59,7 +59,20 @@
     "dataSafetyNotes": "Firebase Anonymous Auth app-generated user ID is collected for app functionality: it authenticates the Seorilabs Platform session used by rewarded-ad policy/claim checks and the analytics relay. It is not used for advertising tracking. Gameplay progress never leaves the device — cloud save was removed, so the only save is local.",
     "ads": "yes",
     "koreaDistribution": "yes",
-    "koreaGameRating": "not_required"
+    "koreaGameRating": "not_required",
+    "dataSafetyUserId": {
+      "collected": true,
+      "shared": false,
+      "ephemeral": false,
+      "optional": false,
+      "purposes": [
+        "appFunctionality",
+        "accountManagement"
+      ],
+      "source": "Firebase Anonymous Auth + Seorilabs Platform session",
+      "savedAnswersMatchReviewedSource": true,
+      "receipt": "release/history/v1.12.0/google-play-data-safety-receipt.json"
+    }
   },
   "assets": {
     "playIcon": "play-store/assets/icon-512.png",
@@ -73,14 +86,12 @@
     "sevenInchTabletScreenshots": [
       "play-store/screenshots/tablet-7/tablet-7-1.png",
       "play-store/screenshots/tablet-7/tablet-7-2.png",
-      "play-store/screenshots/tablet-7/tablet-7-3.png",
-      "play-store/screenshots/tablet-7/tablet-7-4.png"
+      "play-store/screenshots/tablet-7/tablet-7-3.png"
     ],
     "tenInchTabletScreenshots": [
       "play-store/screenshots/tablet-10/tablet-10-1.png",
       "play-store/screenshots/tablet-10/tablet-10-2.png",
-      "play-store/screenshots/tablet-10/tablet-10-3.png",
-      "play-store/screenshots/tablet-10/tablet-10-4.png"
+      "play-store/screenshots/tablet-10/tablet-10-3.png"
     ]
   },
   "localizedAssets": {
@@ -95,14 +106,12 @@
       "sevenInchTabletScreenshots": [
         "play-store/screenshots/ko-KR/tablet-7/tablet-7-1.png",
         "play-store/screenshots/ko-KR/tablet-7/tablet-7-2.png",
-        "play-store/screenshots/ko-KR/tablet-7/tablet-7-3.png",
-        "play-store/screenshots/ko-KR/tablet-7/tablet-7-4.png"
+        "play-store/screenshots/ko-KR/tablet-7/tablet-7-3.png"
       ],
       "tenInchTabletScreenshots": [
         "play-store/screenshots/ko-KR/tablet-10/tablet-10-1.png",
         "play-store/screenshots/ko-KR/tablet-10/tablet-10-2.png",
-        "play-store/screenshots/ko-KR/tablet-10/tablet-10-3.png",
-        "play-store/screenshots/ko-KR/tablet-10/tablet-10-4.png"
+        "play-store/screenshots/ko-KR/tablet-10/tablet-10-3.png"
       ]
     },
     "en-US": {
@@ -114,13 +123,11 @@
         "play-store/screenshots/en-US/phone/phone-4.png"
       ],
       "sevenInchTabletScreenshots": [
-        "play-store/screenshots/en-US/tablet-7/tablet-7-1.png",
         "play-store/screenshots/en-US/tablet-7/tablet-7-2.png",
         "play-store/screenshots/en-US/tablet-7/tablet-7-3.png",
         "play-store/screenshots/en-US/tablet-7/tablet-7-4.png"
       ],
       "tenInchTabletScreenshots": [
-        "play-store/screenshots/en-US/tablet-10/tablet-10-1.png",
         "play-store/screenshots/en-US/tablet-10/tablet-10-2.png",
         "play-store/screenshots/en-US/tablet-10/tablet-10-3.png",
         "play-store/screenshots/en-US/tablet-10/tablet-10-4.png"
@@ -137,7 +144,6 @@
     "zh-Hans": {
       "phoneScreenshots": [
         "play-store/screenshots/zh-Hans/phone/phone-1.png",
-        "play-store/screenshots/zh-Hans/phone/phone-2.png",
         "play-store/screenshots/zh-Hans/phone/phone-3.png",
         "play-store/screenshots/zh-Hans/phone/phone-4.png"
       ]

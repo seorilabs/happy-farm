@@ -65,10 +65,12 @@ Rebuilt the Android internal test build so the endless endgame systems, includin
 
 | 슬롯 | 경로 | 장수 | 대상 언어 |
 | --- | --- | --- | --- |
-| 기본(ko-KR) | `play-store/screenshots/{phone,tablet-7,tablet-10}/` | 4 | 콘솔 기본값 |
-| phone | `play-store/screenshots/<locale>/phone/phone-<n>.png` | 4 | 8개 언어 전부 |
-| 7-inch tablet | `play-store/screenshots/<locale>/tablet-7/tablet-7-<n>.png` | 4 | ko-KR, en-US |
-| 10-inch tablet | `play-store/screenshots/<locale>/tablet-10/tablet-10-<n>.png` | 4 | ko-KR, en-US |
+| 기본(ko-KR) | `play-store/screenshots/{phone,tablet-7,tablet-10}/` | phone 4, tablet 각 3 | 콘솔 기본값 |
+| phone | `play-store/screenshots/<locale>/phone/phone-<n>.png` | zh-Hans 3, 나머지 각 4 | 8개 언어 전부 |
+| 7-inch tablet | `play-store/screenshots/<locale>/tablet-7/tablet-7-<n>.png` | 3 | ko-KR, en-US |
+| 10-inch tablet | `play-store/screenshots/<locale>/tablet-10/tablet-10-<n>.png` | 3 | ko-KR, en-US |
+
+2026-10-05의 v1.12.0 마켓 검수에서 옛 시작 로고만 있는 태블릿 이미지 4장과 개발 경고가 보이는 zh-Hans phone 이미지 1장을 콘솔과 config에서 제외했다. 기본 언어용 중복 파일 2장도 제거했다. [검수 기록](../release/history/v1.12.0/README.md)에 저장 후 대조 결과와 남은 출시 검수를 기록했다.
 
 언어는 `ko-KR`, `en-US`, `ja`, `zh-Hans`, `zh-Hant`, `de`, `fr`, `es` 8개입니다. 7-inch와
 10-inch 슬롯은 같은 1440x2560 캡처를 공유합니다. Play가 슬롯별로 다른 기기를 요구하지 않고,

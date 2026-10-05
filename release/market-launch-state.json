@@ -3,134 +3,318 @@
   "app": {
     "name": "happy-farm",
     "repo": "seorilabs/happy-farm",
-    "sourceRevision": "fe375001854e7df2d3191657fdc27e42c85dcaba"
+    "sourceRevision": "82b5470e5af5c827b1b976ab89a1ddf8ba3de248"
   },
   "release": {
-    "version": "1.11.10",
-    "tag": "v1.11.10",
+    "version": "1.12.0",
+    "tag": "v1.12.0",
     "objective": "public_live",
     "countries": [
-      "KR"
+      "AE",
+      "AG",
+      "AL",
+      "AM",
+      "AO",
+      "AR",
+      "AT",
+      "AU",
+      "AW",
+      "AZ",
+      "BA",
+      "BD",
+      "BE",
+      "BF",
+      "BG",
+      "BH",
+      "BJ",
+      "BM",
+      "BO",
+      "BR",
+      "BS",
+      "BW",
+      "BY",
+      "BZ",
+      "CA",
+      "CD",
+      "CG",
+      "CH",
+      "CI",
+      "CL",
+      "CM",
+      "CN",
+      "CO",
+      "CR",
+      "CU",
+      "CV",
+      "CY",
+      "CZ",
+      "DE",
+      "DJ",
+      "DK",
+      "DM",
+      "DO",
+      "DZ",
+      "EC",
+      "EE",
+      "EG",
+      "ER",
+      "ES",
+      "ET",
+      "FI",
+      "FJ",
+      "FM",
+      "FR",
+      "GA",
+      "GB",
+      "GD",
+      "GE",
+      "GH",
+      "GI",
+      "GM",
+      "GN",
+      "GR",
+      "GT",
+      "GW",
+      "HK",
+      "HN",
+      "HR",
+      "HT",
+      "HU",
+      "ID",
+      "IE",
+      "IL",
+      "IN",
+      "IQ",
+      "IR",
+      "IS",
+      "IT",
+      "JM",
+      "JO",
+      "JP",
+      "KE",
+      "KG",
+      "KH",
+      "KM",
+      "KN",
+      "KR",
+      "KW",
+      "KY",
+      "KZ",
+      "LA",
+      "LB",
+      "LC",
+      "LI",
+      "LK",
+      "LR",
+      "LT",
+      "LU",
+      "LV",
+      "LY",
+      "MA",
+      "MC",
+      "MD",
+      "MK",
+      "ML",
+      "MM",
+      "MN",
+      "MO",
+      "MT",
+      "MU",
+      "MV",
+      "MX",
+      "MY",
+      "MZ",
+      "NA",
+      "NE",
+      "NG",
+      "NI",
+      "NL",
+      "NO",
+      "NP",
+      "NZ",
+      "OM",
+      "PA",
+      "PE",
+      "PG",
+      "PH",
+      "PK",
+      "PL",
+      "PT",
+      "PY",
+      "QA",
+      "RO",
+      "RS",
+      "RU",
+      "RW",
+      "SA",
+      "SB",
+      "SC",
+      "SD",
+      "SE",
+      "SG",
+      "SI",
+      "SK",
+      "SL",
+      "SM",
+      "SN",
+      "SO",
+      "SR",
+      "SV",
+      "TC",
+      "TD",
+      "TG",
+      "TH",
+      "TJ",
+      "TM",
+      "TN",
+      "TO",
+      "TR",
+      "TT",
+      "TW",
+      "TZ",
+      "UA",
+      "UG",
+      "US",
+      "UY",
+      "UZ",
+      "VA",
+      "VE",
+      "VG",
+      "VN",
+      "VU",
+      "WS",
+      "YE",
+      "ZA",
+      "ZM",
+      "ZW"
     ],
-    "rolloutMode": "existing AppsInToss audience, full replacement after approval"
+    "rolloutMode": "existing countries and free pricing; Google Play full rollout; App Store AFTER_APPROVAL; AppsInToss full replacement after approval",
+    "restOfWorld": true
   },
   "deploymentApproval": {
     "status": "approved",
     "markets": [
+      "google_play",
+      "app_store",
       "apps_in_toss"
     ],
     "objective": "public_live",
-    "approvedAt": "2026-10-04T00:07:49.962577+00:00",
+    "approvedAt": "2026-10-05T13:57:07.338530+00:00",
     "evidence": [
-      "2026-10-04 user instructed implementation through AIT public live; no Play/App Store, scheduled jobs or external alerts. User later accepted physical-device QA ownership."
+      "2026-10-05 user: 세 마켓 빌드 후에 프로덕션 공개 및 심사 제출까지 진행해. Existing identities/countries/free pricing and full rollout retained."
     ]
   },
   "commonGates": {
     "candidate": {
       "status": "pass",
       "evidence": [
-        "PR #562 merged fe375001854e7df2d3191657fdc27e42c85dcaba",
-        "v1.11.10 receipt/ledger match source SHA and versionCode 1001011009"
+        "v1.12.0 annotated receipt binds source 82b5470e5af5c827b1b976ab89a1ddf8ba3de248, Android 1001011010, Apple 1012000; authority revision 26721fdbf3cdde6da01b8af05f7d867bfe71a40e7180f1bc1f6c903df4aa9422",
+        "Release tag workflow https://github.com/seorilabs/happy-farm/actions/runs/37320317736"
       ],
-      "checkedAt": "2026-10-04T03:30:58.029880+00:00",
+      "checkedAt": "2026-10-05T13:57:07.338530+00:00",
       "blocker": null
     },
     "quality": {
       "status": "pass",
       "evidence": [
-        "Local full tests 1463 + final targeted regression 23; lint/typecheck/i18n/AIT build passed",
-        "CI 37173636102 passed; Copilot review completed with no findings/threads"
+        "92 suites / 1474 tests + 5 Presence tests passed; TypeScript and lint passed",
+        "PR #567 Copilot review has no findings/unresolved threads; static checks 37319425119 and main checks 37320056646 passed"
       ],
-      "checkedAt": "2026-10-04T03:30:58.029880+00:00",
+      "checkedAt": "2026-10-05T13:57:07.338530+00:00",
       "blocker": null
     },
     "production_dependencies": {
-      "status": "pending",
-      "evidence": [],
-      "checkedAt": null,
-      "blocker": null
+      "status": "blocked",
+      "evidence": [
+        "Privacy, terms, support HTTPS URLs return 200.",
+        "Production Auth/Platform policy and current-candidate backend flows have not been verified on release devices."
+      ],
+      "checkedAt": "2026-10-05T14:27:53.679512+00:00",
+      "blocker": "Current-candidate device/backend evidence pending; no production backend resources created or altered."
     },
     "observability": {
       "status": "blocked",
       "evidence": [
-        "AIT auth/ingest browser fetch fixed; upstream registry follow-up https://github.com/seorilabs/platform/issues/212"
+        "Current platform issue #212 remains open: https://github.com/seorilabs/platform/issues/212"
       ],
-      "checkedAt": "2026-10-04T00:07:49.962577+00:00",
-      "blocker": "Live ingest revision/log readback denied to registered provisioner; registry missing GA4 measurement ID and ad_load_result allowlist. Runtime delivery not verified."
+      "checkedAt": "2026-10-05T13:57:07.338530+00:00",
+      "blocker": "AIT event relay runtime delivery remains unverified; no current-candidate device evidence yet. Existing backend issue is preserved."
     }
   },
   "markets": {
-    "apps_in_toss": {
+    "google_play": {
       "objective": "public_live",
       "state": "processing",
       "identity": {
-        "applicationId": "happy-farm",
-        "version": "1.11.10",
-        "build": "20261004-53",
-        "workspaceId": 38345,
-        "miniAppId": 31877,
-        "deploymentId": "01a104f5-365f-75c2-882a-f6441ea47396"
+        "applicationId": "com.seorilabs.happyfarm",
+        "version": "1.12.0",
+        "build": "1001011010",
+        "developerAccountId": "7593567020638200144",
+        "developerAccountName": "SeoriLabs",
+        "developerAccountType": "personal",
+        "consoleAppId": "4973229988023852564"
       },
       "gates": {
         "candidate": {
           "status": "pass",
           "evidence": [
-            "happy-farm workspace 38345 / miniApp 31877, v1.11.10@fe37500; source fe375001854e7df2d3191657fdc27e42c85dcaba"
+            "Release tag/source bound to v1.12.0@82b5470; existing live application identity confirmed"
           ],
-          "checkedAt": "2026-10-04T03:30:58.029880+00:00",
+          "checkedAt": "2026-10-05T13:57:07.338530+00:00",
           "blocker": null
         },
         "artifact": {
           "status": "pass",
           "evidence": [
-            "Workflow 37174111542 passed; artifact 11291849625 archive digest sha256:e1b5579e4db90c32f6d863c98cc05ee6c5eb2d4ee0fdfe9b33419b55d9b311c8",
-            "happy-farm.ait SHA256 f49861cc696e8f5ec5170042bf90a170658bd8b02e1e3185116008794576ebc7",
-            "Four iOS/Android runtime sourcemaps: AIT ads have no appLogin/Platform ads dependency; bound event fetch, v1.11.10 and exact source SHA verified"
+            "Workflow 37320518692 binds v1.12.0@82b5470 to AAB SHA256 f6b101acb51445bff4a37d18b6d83de3483cd9541fc5b3e7add2f22cac478a62; uploaded bundle API SHA256 agrees.",
+            "Play-generated signed universal APK verified: com.seorilabs.happyfarm / 1.12.0 / 1001011010 / targetSdk 36 / production app-signing SHA256 443f2fa63220e3dcf94a19538925803d80f92bcb4d709d1632ace2a69dfa30ff.",
+            "Upload-key certificate preflight passed."
           ],
-          "checkedAt": "2026-10-04T03:31:34.714946+00:00",
+          "checkedAt": "2026-10-05T14:27:53.679512+00:00",
           "blocker": null
         },
         "upload": {
           "status": "pass",
           "evidence": [
-            "https://github.com/seorilabs/happy-farm/actions/runs/37174111542",
-            "bundle_list: v1.11.10 GitHub Actions v1.11.10@fe37500; deployment 01a104f5-365f-75c2-882a-f6441ea47396"
+            "Publisher API and Console show internal completed release 1.12.0 / 1001011010; Console release ID 47."
           ],
-          "checkedAt": "2026-10-04T03:30:58.029880+00:00",
+          "checkedAt": "2026-10-05T14:27:53.679512+00:00",
           "blocker": null
         },
         "processing": {
           "status": "pass",
           "evidence": [
-            "bundle_build_status isBuilding=false; review CREATED, failureReason=null, deployed=false"
+            "Console: 내부 테스터에게 제공됨. Generated APK available with no artifact-blocking error.",
+            "No pre-launch report available for this internal-only candidate; current report page recommends closed testing."
           ],
-          "checkedAt": "2026-10-04T03:30:58.029880+00:00",
+          "checkedAt": "2026-10-05T14:27:53.679512+00:00",
           "blocker": null
         },
         "qa": {
           "status": "blocked",
           "evidence": [
-            "User QA of previous 20261004-52: both ads absent, preparing message repeats",
-            "20261004-53 has isTested=true; this proves QR entry, not ad/reward success",
-            "User confirmed on 20261004-53: rewarded ad, harvest boost once and next attempt all normal. Interstitial QA pending."
+            "Galaxy Note9 is absent from current ADB inventory; internal candidate is prepared."
           ],
-          "checkedAt": "2026-10-04T03:30:58.029880+00:00",
-          "blocker": "Rewarded QA passed; awaiting interstitial device report and analytics delivery verification."
+          "checkedAt": "2026-10-05T14:27:53.679512+00:00",
+          "blocker": "Exact release installation from Play and physical device validation pending. Prior debug-title QA is not candidate-specific release QA."
         },
         "metadata": {
-          "status": "pending",
+          "status": "pass",
           "evidence": [
-            "releaseNote set/read back: 광고가 준비되지 않아 시청할 수 없던 문제를 수정했습니다.; listing/assets unchanged"
+            "All eight active listing languages and 52 original images reviewed. Five invalid images removed via exact IDs; all remaining 47 image IDs and order read back.",
+            "All eight internal release notes equal frozen release-notes.json; support cs@seorilabs.com and https://www.seorilabs.com read back."
           ],
-          "checkedAt": null,
+          "checkedAt": "2026-10-05T14:27:53.679512+00:00",
           "blocker": null
         },
         "policy": {
-          "status": "pending",
+          "status": "pass",
           "evidence": [
-            "AIT login/Platform ad policy/claims removed per user requirement; SDK/permissions/frequency/rewards unchanged; operator ad-group disable remains in Console; device QA pending"
+            "Current Console: ten declarations completed, no policy issue, app free. Detailed Data Safety comparison remains pending.",
+            "Saved Data Safety User ID collection added with AppFunctionality/AccountManagement; all 782 exported rows match reviewed source, only 6 answer fields changed.",
+            "Selected Console declarations verified: ads yes, no user sign-in/paywall, ages 13-15/16-17/18+, IARC completed certificate 482b0aef-4af2-8e1e-8370-3f52a71726b4, AD_ID yes with analytics/ads/fraud prevention purposes."
           ],
-          "checkedAt": null,
+          "checkedAt": "2026-10-05T14:47:19.006994+00:00",
           "blocker": null
         },
         "submission": {
@@ -157,19 +341,633 @@
           "checkedAt": null,
           "blocker": null
         }
+      },
+      "buildRun": {
+        "id": 37320518692,
+        "url": "https://github.com/seorilabs/happy-farm/actions/runs/37320518692"
+      },
+      "countries": [
+        "AE",
+        "AG",
+        "AL",
+        "AM",
+        "AO",
+        "AR",
+        "AT",
+        "AU",
+        "AW",
+        "AZ",
+        "BA",
+        "BD",
+        "BE",
+        "BF",
+        "BG",
+        "BH",
+        "BJ",
+        "BM",
+        "BO",
+        "BR",
+        "BS",
+        "BW",
+        "BY",
+        "BZ",
+        "CA",
+        "CD",
+        "CG",
+        "CH",
+        "CI",
+        "CL",
+        "CM",
+        "CN",
+        "CO",
+        "CR",
+        "CU",
+        "CV",
+        "CY",
+        "CZ",
+        "DE",
+        "DJ",
+        "DK",
+        "DM",
+        "DO",
+        "DZ",
+        "EC",
+        "EE",
+        "EG",
+        "ER",
+        "ES",
+        "ET",
+        "FI",
+        "FJ",
+        "FM",
+        "FR",
+        "GA",
+        "GB",
+        "GD",
+        "GE",
+        "GH",
+        "GI",
+        "GM",
+        "GN",
+        "GR",
+        "GT",
+        "GW",
+        "HK",
+        "HN",
+        "HR",
+        "HT",
+        "HU",
+        "ID",
+        "IE",
+        "IL",
+        "IN",
+        "IQ",
+        "IR",
+        "IS",
+        "IT",
+        "JM",
+        "JO",
+        "JP",
+        "KE",
+        "KG",
+        "KH",
+        "KM",
+        "KN",
+        "KR",
+        "KW",
+        "KY",
+        "KZ",
+        "LA",
+        "LB",
+        "LC",
+        "LI",
+        "LK",
+        "LR",
+        "LT",
+        "LU",
+        "LV",
+        "LY",
+        "MA",
+        "MC",
+        "MD",
+        "MK",
+        "ML",
+        "MM",
+        "MN",
+        "MO",
+        "MT",
+        "MU",
+        "MV",
+        "MX",
+        "MY",
+        "MZ",
+        "NA",
+        "NE",
+        "NG",
+        "NI",
+        "NL",
+        "NO",
+        "NP",
+        "NZ",
+        "OM",
+        "PA",
+        "PE",
+        "PG",
+        "PH",
+        "PK",
+        "PL",
+        "PT",
+        "PY",
+        "QA",
+        "RO",
+        "RS",
+        "RU",
+        "RW",
+        "SA",
+        "SB",
+        "SC",
+        "SD",
+        "SE",
+        "SG",
+        "SI",
+        "SK",
+        "SL",
+        "SM",
+        "SN",
+        "SO",
+        "SR",
+        "SV",
+        "TC",
+        "TD",
+        "TG",
+        "TH",
+        "TJ",
+        "TM",
+        "TN",
+        "TO",
+        "TR",
+        "TT",
+        "TW",
+        "TZ",
+        "UA",
+        "UG",
+        "US",
+        "UY",
+        "UZ",
+        "VA",
+        "VE",
+        "VG",
+        "VN",
+        "VU",
+        "WS",
+        "YE",
+        "ZA",
+        "ZM",
+        "ZW"
+      ],
+      "restOfWorld": true,
+      "consoleCountryDisplay": "178개 — API countries 177 plus restOfWorld",
+      "publishingMode": "standard — managed publishing disabled, current Console readback",
+      "policyMetadata": {
+        "state": "in_review",
+        "receipt": "release/history/v1.12.0/google-play-data-safety-receipt.json",
+        "scope": "global_data_safety_metadata_only",
+        "candidateProductionBinarySubmitted": false,
+        "checkedAt": "2026-10-05T14:59:35.931484+00:00"
+      }
+    },
+    "app_store": {
+      "objective": "public_live",
+      "state": "processing",
+      "identity": {
+        "applicationId": "com.seorilabs.happyfarm",
+        "version": "1.12.0",
+        "build": "1012000",
+        "appleAppId": "6775451733",
+        "teamId": "HCDUXX4Z3X",
+        "releaseType": "AFTER_APPROVAL"
+      },
+      "gates": {
+        "candidate": {
+          "status": "pass",
+          "evidence": [
+            "Release tag/source bound to v1.12.0@82b5470; existing live application identity confirmed"
+          ],
+          "checkedAt": "2026-10-05T13:57:07.338530+00:00",
+          "blocker": null
+        },
+        "artifact": {
+          "status": "pass",
+          "evidence": [
+            "Upload workflow 37320525118 archive/bundle/version checks succeeded.",
+            "Audit archive workflow 37322813684 from the same fixed tag/source and build identity: Apple Distribution Seori Labs HCDUXX4Z3X, get-task-allow false, beta-reports-active true, privacy manifest plus 18 SDK manifests, iPhone/iPad AppIcon present.",
+            "Final Info.plist com.seorilabs.happyfarm / 1.12.0 / 1012000 / ITSAppUsesNonExemptEncryption false. Audit archive is a separate verification build, not claimed byte-identical to the uploaded archive."
+          ],
+          "checkedAt": "2026-10-05T14:27:53.679512+00:00",
+          "blocker": null
+        },
+        "upload": {
+          "status": "pass",
+          "evidence": [
+            "App Store Connect build ID 6cb6f8dd-7e20-432b-95a1-244176123e25 / 1.12.0 / 1012000 read back."
+          ],
+          "checkedAt": "2026-10-05T14:27:53.679512+00:00",
+          "blocker": null
+        },
+        "processing": {
+          "status": "pass",
+          "evidence": [
+            "Build VALID and APP_STORE_ELIGIBLE; internalBuildState IN_BETA_TESTING; exact build available in existing internal beta group c72105de-c2be-4ae0-b819-bb6019951d4c."
+          ],
+          "checkedAt": "2026-10-05T14:27:53.679512+00:00",
+          "blocker": null
+        },
+        "qa": {
+          "status": "blocked",
+          "evidence": [
+            "Connected iPhone currently has 1.11.8 / 1011008; TestFlight present. Exact new-build user testing requested.",
+            "iPhone Mirroring UI unavailable: cgWindowNotFound."
+          ],
+          "checkedAt": "2026-10-05T14:27:53.679512+00:00",
+          "blocker": "Physical TestFlight 1.12.0 / 1012000 validation and iPad coverage pending."
+        },
+        "metadata": {
+          "status": "pass",
+          "evidence": [
+            "New version 66e840f6-c545-44ce-b8b8-739196f11e41 selects exact build and AFTER_APPROVAL. All eight saved notes match frozen source.",
+            "All descriptions/keywords/promotional text/support/marketing URLs match visually reviewed live metadata; promotional text restored because ASC did not copy it to new version.",
+            "64 new-version screenshots COMPLETE, checksum/content/order identical to visually reviewed images; zero app previews in every active locale. Updated title-entry review instructions saved and GET compared."
+          ],
+          "checkedAt": "2026-10-05T14:27:53.679512+00:00",
+          "blocker": null
+        },
+        "policy": {
+          "status": "blocked",
+          "evidence": [
+            "Current age-rating declaration read back: advertising true, all content categories NONE. Build export compliance false; app free in 175 storefronts.",
+            "Public App Privacy lists Device ID for advertising/analytics but omits User ID for the active Firebase anonymous Platform session. Apple browser profile is in manual-login mode and cannot be acquired.",
+            "Exact audit archive FirebaseAuth privacy manifest explicitly declares UserID linked=true, tracking=false, AppFunctionality."
+          ],
+          "checkedAt": "2026-10-05T14:27:53.679512+00:00",
+          "blocker": "App Privacy User ID AppFunctionality, linked=true, tracking=false must be saved/read back in Console; Apple browser manual-login mode blocks access."
+        },
+        "submission": {
+          "status": "pending",
+          "evidence": [],
+          "checkedAt": null,
+          "blocker": null
+        },
+        "approval": {
+          "status": "pending",
+          "evidence": [],
+          "checkedAt": null,
+          "blocker": null
+        },
+        "release": {
+          "status": "pending",
+          "evidence": [],
+          "checkedAt": null,
+          "blocker": null
+        },
+        "live_smoke": {
+          "status": "pending",
+          "evidence": [],
+          "checkedAt": null,
+          "blocker": null
+        }
+      },
+      "buildRun": {
+        "id": 37320525118,
+        "url": "https://github.com/seorilabs/happy-farm/actions/runs/37320525118"
+      },
+      "countries": [
+        "SGP",
+        "AUS",
+        "IND",
+        "PHL",
+        "CAN",
+        "MMR",
+        "IRL",
+        "NZL",
+        "GBR",
+        "KOR",
+        "USA",
+        "FRA",
+        "DEU",
+        "AUT",
+        "BEL",
+        "FIN",
+        "GRC",
+        "ITA",
+        "LUX",
+        "NLD",
+        "PRT",
+        "ESP",
+        "SWE",
+        "NOR",
+        "DNK",
+        "CHE",
+        "JPN",
+        "HKG",
+        "CHN",
+        "MEX",
+        "RUS",
+        "TWN",
+        "VNM",
+        "ZAF",
+        "MYS",
+        "THA",
+        "IDN",
+        "PAK",
+        "POL",
+        "SAU",
+        "TUR",
+        "ARE",
+        "HUN",
+        "CHL",
+        "NPL",
+        "PAN",
+        "LKA",
+        "ROU",
+        "MDV",
+        "CZE",
+        "ISR",
+        "UKR",
+        "KWT",
+        "HRV",
+        "CRI",
+        "SVK",
+        "LBN",
+        "QAT",
+        "SVN",
+        "SRB",
+        "COL",
+        "VEN",
+        "BRA",
+        "GTM",
+        "ARG",
+        "SLV",
+        "PER",
+        "DOM",
+        "ECU",
+        "HND",
+        "JAM",
+        "NIC",
+        "PRY",
+        "URY",
+        "MAC",
+        "EGY",
+        "KAZ",
+        "EST",
+        "LVA",
+        "LTU",
+        "MLT",
+        "MDA",
+        "ARM",
+        "BWA",
+        "BGR",
+        "CIV",
+        "JOR",
+        "KEN",
+        "MKD",
+        "MDG",
+        "MLI",
+        "MUS",
+        "NER",
+        "SEN",
+        "TUN",
+        "UGA",
+        "AIA",
+        "BHS",
+        "ATG",
+        "BRB",
+        "BMU",
+        "VGB",
+        "CYM",
+        "DMA",
+        "GRD",
+        "MSR",
+        "KNA",
+        "LCA",
+        "VCT",
+        "TTO",
+        "TCA",
+        "GUY",
+        "SUR",
+        "BLZ",
+        "BOL",
+        "CYP",
+        "ISL",
+        "BHR",
+        "BRN",
+        "NGA",
+        "OMN",
+        "DZA",
+        "AGO",
+        "BLR",
+        "UZB",
+        "LBY",
+        "AZE",
+        "YEM",
+        "TZA",
+        "GHA",
+        "CMR",
+        "ALB",
+        "BEN",
+        "BTN",
+        "BFA",
+        "KHM",
+        "CPV",
+        "TCD",
+        "COG",
+        "FJI",
+        "GMB",
+        "GNB",
+        "KGZ",
+        "LAO",
+        "LBR",
+        "MWI",
+        "MRT",
+        "FSM",
+        "MNG",
+        "MOZ",
+        "NAM",
+        "PLW",
+        "PNG",
+        "STP",
+        "SYC",
+        "SLE",
+        "SLB",
+        "SWZ",
+        "TJK",
+        "TKM",
+        "ZWE",
+        "NRU",
+        "TON",
+        "VUT",
+        "AFG",
+        "BIH",
+        "COD",
+        "GAB",
+        "GEO",
+        "IRQ",
+        "MNE",
+        "MAR",
+        "RWA",
+        "ZMB",
+        "XKS"
+      ],
+      "freePrice": "0.0"
+    },
+    "apps_in_toss": {
+      "objective": "public_live",
+      "state": "processing",
+      "identity": {
+        "applicationId": "happy-farm",
+        "version": "1.12.0",
+        "build": "20261005-54",
+        "workspaceId": 38345,
+        "miniAppId": 31877,
+        "deploymentId": "01a10c5a-d1d9-7bde-9a13-93623b6909de"
+      },
+      "gates": {
+        "candidate": {
+          "status": "pass",
+          "evidence": [
+            "Release tag/source bound to v1.12.0@82b5470; existing live application identity confirmed"
+          ],
+          "checkedAt": "2026-10-05T13:57:07.338530+00:00",
+          "blocker": null
+        },
+        "artifact": {
+          "status": "pass",
+          "evidence": [
+            "All four bundled FarmStartup sources exactly match release source 82b5470; iOS and Android 0.72.6 and 0.84.0 maps inspected.",
+            "Ait SHA256 434cec9973a29e8e1d8bf3233b4b9d9f06cbc2366dbd05c31eb34ea9cc99e41c"
+          ],
+          "checkedAt": "2026-10-05T14:09:28.070535+00:00",
+          "blocker": null
+        },
+        "upload": {
+          "status": "pass",
+          "evidence": [
+            "CLI upload and Console readback match deployment 01a10c5a-d1d9-7bde-9a13-93623b6909de / 20261005-54 / v1.12.0@82b5470"
+          ],
+          "checkedAt": "2026-10-05T14:09:28.070535+00:00",
+          "blocker": null
+        },
+        "processing": {
+          "status": "pass",
+          "evidence": [
+            "Exact deployment CREATED with failureReason null; private test environment prepared successfully. isTested means readiness, not completed QA."
+          ],
+          "checkedAt": "2026-10-05T14:09:28.070535+00:00",
+          "blocker": null
+        },
+        "qa": {
+          "status": "blocked",
+          "evidence": [
+            "Deployment 20261005-54 isTested true means test environment ready only; exact private link and QR provided to user."
+          ],
+          "checkedAt": "2026-10-05T14:27:53.679512+00:00",
+          "blocker": "Console tool requires explicit actual testing completion before bundle_submit_review; user confirmation pending."
+        },
+        "metadata": {
+          "status": "pass",
+          "evidence": [
+            "Current Korean and English names, Korean description/category, 600x600 logo and 1932x828 thumbnail reviewed. No other public screenshot assets registered.",
+            "Saved releaseNote equals frozen AppsInToss notes; exact deployment remains CREATED and deployed false."
+          ],
+          "checkedAt": "2026-10-05T14:27:53.679512+00:00",
+          "blocker": null
+        },
+        "policy": {
+          "status": "pending",
+          "evidence": [
+            "Current releaseDecision and reviewRequestDecision ALLOWED; game rating existing approved. Two internal rating-content images cannot be viewed without Console authentication (HTTP 403)."
+          ],
+          "checkedAt": "2026-10-05T14:27:53.679512+00:00",
+          "blocker": null
+        },
+        "submission": {
+          "status": "pending",
+          "evidence": [],
+          "checkedAt": null,
+          "blocker": null
+        },
+        "approval": {
+          "status": "pending",
+          "evidence": [],
+          "checkedAt": null,
+          "blocker": null
+        },
+        "release": {
+          "status": "pending",
+          "evidence": [],
+          "checkedAt": null,
+          "blocker": null
+        },
+        "live_smoke": {
+          "status": "pending",
+          "evidence": [],
+          "checkedAt": null,
+          "blocker": null
+        }
+      },
+      "buildRun": {
+        "id": 37320532858,
+        "url": "https://github.com/seorilabs/happy-farm/actions/runs/37320532858"
+      },
+      "countries": [
+        "KR"
+      ],
+      "artifact": {
+        "fileName": "happy-farm.ait",
+        "sha256": "434cec9973a29e8e1d8bf3233b4b9d9f06cbc2366dbd05c31eb34ea9cc99e41c",
+        "githubArtifactId": 11350670104,
+        "bytes": 9242716
       }
     }
   },
-  "postLiveObservation": {
-    "status": "pending",
-    "minimumDays": 7,
-    "evidence": [],
-    "note": "Keep issue #559 open until ad impressions and WEB failure distribution verified. No events is not 0% failure. No scheduled jobs created."
-  },
-  "lastLiveReadback": {
-    "checkedAt": "2026-10-04T03:30:58.029880+00:00",
-    "tag": "v1.11.6",
-    "deploymentId": "01a0b98a-9a77-7e63-b0ca-676c6ac96b65",
-    "note": "Live v1.11.6 unchanged; v1.11.10 CREATED, not submitted/live. No test push, external notification or scheduled jobs."
+  "metadataReview": {
+    "releaseNotesSha256": "e669a63ac6ff06239fee8557de07b5edaf99764046bb94d32b344a7bc61345dc",
+    "releaseNotesAsset": "https://github.com/seorilabs/happy-farm/releases/download/v1.12.0/release-notes.json",
+    "appStore": {
+      "locales": [
+        "ko",
+        "en-US",
+        "ja",
+        "zh-Hans",
+        "zh-Hant",
+        "de-DE",
+        "fr-FR",
+        "es-ES"
+      ],
+      "reviewedAt": "2026-10-05T13:57:07.338530+00:00",
+      "text": "All active app-info and version fields read and reviewed; final notes contain only new title/loading/retry experience",
+      "images": "64 current live iPhone/iPad screenshots visually inspected in 8 locale contact sheets; all COMPLETE; final new-version screenshot readback pending",
+      "finalSavedComparison": "pass — all eight notes, text fields, 64 screenshots/order/checksums, no previews, review instructions, exact build and AFTER_APPROVAL",
+      "receipt": "release/history/v1.12.0/app-store-metadata-receipt.json"
+    },
+    "googlePlay": {
+      "locales": [
+        "ko-KR",
+        "en-US",
+        "ja-JP",
+        "zh-CN",
+        "zh-TW",
+        "de-DE",
+        "fr-FR",
+        "es-ES"
+      ],
+      "registeredImageCount": 47,
+      "allImagesVisuallyReviewed": true,
+      "issues": [
+        "4 tablet launch-logo images in ko-KR/en-US",
+        "1 zh-CN phone image includes Fast Refresh/debugger UI"
+      ],
+      "resolution": "Exact five IDs removed and 47 remaining image IDs/order read back; image-only edit auto-sent for review because this Console rejects changesNotSentForReview.",
+      "receipt": "release/history/v1.12.0/google-play-metadata-receipt.json"
+    }
   }
 }

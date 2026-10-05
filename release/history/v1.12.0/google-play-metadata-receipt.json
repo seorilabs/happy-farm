@@ -1,0 +1,285 @@
+{
+  "versionCode": "1001011010",
+  "version": "1.12.0",
+  "track": "internal",
+  "status": "completed",
+  "notesMatchAllActiveLocales": true,
+  "locales": [
+    "de-DE",
+    "en-US",
+    "es-ES",
+    "fr-FR",
+    "ja-JP",
+    "ko-KR",
+    "zh-CN",
+    "zh-TW"
+  ],
+  "imageCount": 47,
+  "images": {
+    "ko-KR": {
+      "icon": [
+        {
+          "id": "10785027673287631225",
+          "sha256": "508325ad37447f42de78399e0c64afeed00b94467becddf411cf0fb8ee91701f"
+        }
+      ],
+      "featureGraphic": [
+        {
+          "id": "6559913433402571445",
+          "sha256": "5f3efe2bfef92a75c2ffefac41103401e13f12aef5b7b1755eb80c8862a8b593"
+        }
+      ],
+      "phoneScreenshots": [
+        {
+          "id": "2075090958988115402",
+          "sha256": "a3295dae07bb235863fc65674d5348d872a948e06ac8de9e3698427a6aeab25b"
+        },
+        {
+          "id": "5836539087905918233",
+          "sha256": "8421baa91fd116810e5115b7910575c05bc4e13cbfb699efc5983658458309fe"
+        },
+        {
+          "id": "13584200679786048006",
+          "sha256": "5e6e6c1c86f4ee5614cfbb1577ac1563df0629a5aea93e6397bcb7d1385445e3"
+        },
+        {
+          "id": "12906148717875027829",
+          "sha256": "2045d68fd5d9bccc4701989e82fbd20148d5cef19ee633bc55ac641a7615bc0f"
+        }
+      ],
+      "sevenInchScreenshots": [
+        {
+          "id": "4090398984765678361",
+          "sha256": "7cb99508ed1a3e497640aa269151366cf2721ee763f82f05a7a6c42712b53ac8"
+        },
+        {
+          "id": "1546835710558742406",
+          "sha256": "c14ae2b7d6b209b37f0ce3679f086be0ef44c364b09d46da39f575a5cea9cde1"
+        },
+        {
+          "id": "13944245213218541127",
+          "sha256": "8e15ebafd30e657053f10b3323f22c973c1b3f5b2210bcd29dc2dbf6558d7341"
+        }
+      ],
+      "tenInchScreenshots": [
+        {
+          "id": "6175123092736540277",
+          "sha256": "7cb99508ed1a3e497640aa269151366cf2721ee763f82f05a7a6c42712b53ac8"
+        },
+        {
+          "id": "8833474979922701133",
+          "sha256": "c14ae2b7d6b209b37f0ce3679f086be0ef44c364b09d46da39f575a5cea9cde1"
+        },
+        {
+          "id": "10766580388145185458",
+          "sha256": "8e15ebafd30e657053f10b3323f22c973c1b3f5b2210bcd29dc2dbf6558d7341"
+        }
+      ]
+    },
+    "en-US": {
+      "icon": [
+        {
+          "id": "9375286206339580300",
+          "sha256": "508325ad37447f42de78399e0c64afeed00b94467becddf411cf0fb8ee91701f"
+        }
+      ],
+      "featureGraphic": [
+        {
+          "id": "13974023292833521952",
+          "sha256": "00e36dec184d67bca8dcc3401a64263f48b36ae960cd38dee664e497ecd5fb47"
+        }
+      ],
+      "phoneScreenshots": [
+        {
+          "id": "4459095392631122905",
+          "sha256": "cfda1f52e797a13ae6710af3dbb7cfd654fb7f5e6ce0501924c155bba2f5ddbf"
+        },
+        {
+          "id": "231579521626057022",
+          "sha256": "8cbcda3748864b45250f12fc1eadfb05840f6e65aa5863dca068d284015510f1"
+        },
+        {
+          "id": "2999149573881234827",
+          "sha256": "16f2dc0cfe4410325e5b582b409843ae38aa1c76faa7ca02c618e9fd588dc6ed"
+        },
+        {
+          "id": "15660354215863999632",
+          "sha256": "5e05593846d9e5f2c79cecb23bfdadebc41fb83854ac8b8e08086ccfdd8a8fdb"
+        }
+      ],
+      "sevenInchScreenshots": [
+        {
+          "id": "7924436804110882029",
+          "sha256": "19a0cb17d244ab858b6aab7874e37922842d59755e4df00c8479ad584ee6e1de"
+        },
+        {
+          "id": "1413802482307817005",
+          "sha256": "7fcbd720b8da5a26bd72ff68564074bdda1d48309d80e4474be8c4ea62344040"
+        },
+        {
+          "id": "7316571635116067374",
+          "sha256": "1684d7436fc478e0e581da660937d727897bd5651da38bb9dc1ad148df1edaea"
+        }
+      ],
+      "tenInchScreenshots": [
+        {
+          "id": "12383576534438731627",
+          "sha256": "19a0cb17d244ab858b6aab7874e37922842d59755e4df00c8479ad584ee6e1de"
+        },
+        {
+          "id": "2353171637134818090",
+          "sha256": "7fcbd720b8da5a26bd72ff68564074bdda1d48309d80e4474be8c4ea62344040"
+        },
+        {
+          "id": "15144443439147540490",
+          "sha256": "1684d7436fc478e0e581da660937d727897bd5651da38bb9dc1ad148df1edaea"
+        }
+      ]
+    },
+    "ja-JP": {
+      "icon": [],
+      "featureGraphic": [],
+      "phoneScreenshots": [
+        {
+          "id": "4577803755406108837",
+          "sha256": "182a6cba79754721fd7125a9d555a98efb8779d9b86747382d74e07f5a9986dc"
+        },
+        {
+          "id": "12824684068981409850",
+          "sha256": "a11322944fba3141899b2d99414f9cf2a4deddf422124094caacbdeb7eeacffb"
+        },
+        {
+          "id": "11493834590491767751",
+          "sha256": "298c4e64e715f651471c9dfee18b403dd2b2afa59cab181a930f75d52718be70"
+        },
+        {
+          "id": "8846777583536110824",
+          "sha256": "1b1eead0ab20d19bc620e1a399ebc2187a7ff66e517f450b13f45c3802eb33fa"
+        }
+      ],
+      "sevenInchScreenshots": [],
+      "tenInchScreenshots": []
+    },
+    "zh-CN": {
+      "icon": [],
+      "featureGraphic": [],
+      "phoneScreenshots": [
+        {
+          "id": "3235844837687650900",
+          "sha256": "a881b77ec2538a1afff19e1a53e09698949993aa629a4162158480b44e52b9f0"
+        },
+        {
+          "id": "13948540895801866225",
+          "sha256": "23165e4a90b9abe5c6cd8da14592e91c434f4cbd593c9f7395cfca26c4b0a5f2"
+        },
+        {
+          "id": "7819226555856433119",
+          "sha256": "a3ab9cc3e7946ae513f17e83ff3e80aeca7498ddc427da3f6089b3096ea54560"
+        }
+      ],
+      "sevenInchScreenshots": [],
+      "tenInchScreenshots": []
+    },
+    "zh-TW": {
+      "icon": [],
+      "featureGraphic": [],
+      "phoneScreenshots": [
+        {
+          "id": "11932854645392489897",
+          "sha256": "c9e2e1542713e2940918bd09dba9d96fdacee327b394477c80c185e80ee51b8f"
+        },
+        {
+          "id": "6365818192116047393",
+          "sha256": "b43aa5966a2bad1a2b24fa1fcc86bbb1caca04e8380560a199ffe7c8868bb18b"
+        },
+        {
+          "id": "14245449588181792202",
+          "sha256": "65a49c0a396dc2e0a3b444f3416dbb9fbd3f59ede9f2c6e1e71fcb7c5c185b8f"
+        },
+        {
+          "id": "13287510065430667889",
+          "sha256": "378083a206facceae5270f29c56e09c9d8dca93b699500d6967ce95772c01ca8"
+        }
+      ],
+      "sevenInchScreenshots": [],
+      "tenInchScreenshots": []
+    },
+    "de-DE": {
+      "icon": [],
+      "featureGraphic": [],
+      "phoneScreenshots": [
+        {
+          "id": "10551458634174004366",
+          "sha256": "859ce264e201573d6bc5ccfa9ebf3fe8046f08324bb78af508201abeda380725"
+        },
+        {
+          "id": "9703212662759447446",
+          "sha256": "4c9baeab89de9b464b2fac13569aee13871fdd9e1e2722ceb443e65a221fe3d8"
+        },
+        {
+          "id": "12764082225003119040",
+          "sha256": "d30e18a5d92a1a36554669ca59f612835105c57a4310be4f441ca8b6ab6e9cd9"
+        },
+        {
+          "id": "17042026300465805230",
+          "sha256": "40c538b691eeef45397b7187f125b896e78ad307128e22d554a5270d4a36c45d"
+        }
+      ],
+      "sevenInchScreenshots": [],
+      "tenInchScreenshots": []
+    },
+    "fr-FR": {
+      "icon": [],
+      "featureGraphic": [],
+      "phoneScreenshots": [
+        {
+          "id": "4522887123515663128",
+          "sha256": "f162ad6ac243ebed76c028c75572ec8df827a79add2c19b90dfad0ed68cc6f50"
+        },
+        {
+          "id": "6627166415654795104",
+          "sha256": "9ca4c35ec8fde8505c06f8dfe6cede6ca083e121de9feefd0b08ddc213a11dc6"
+        },
+        {
+          "id": "10125565414270473926",
+          "sha256": "496f043054203c9c18a963d1d6eb60b0eb6d0cd91f96cebdcbe3945d0dbdd2e2"
+        },
+        {
+          "id": "9161510548637620720",
+          "sha256": "21ad57780b6d97467268e4d8a184e1d9119fa358abdd87f5f22db3221fc72011"
+        }
+      ],
+      "sevenInchScreenshots": [],
+      "tenInchScreenshots": []
+    },
+    "es-ES": {
+      "icon": [],
+      "featureGraphic": [],
+      "phoneScreenshots": [
+        {
+          "id": "4107520013312670390",
+          "sha256": "3322fba6049252486beb48be310582c24643b421896694056f17710c263ca832"
+        },
+        {
+          "id": "9306545644149506688",
+          "sha256": "e86a83aebc17b9522947163c0326889121e7ce9e9dcf6b1af6533c0812a7a614"
+        },
+        {
+          "id": "13331258444174861786",
+          "sha256": "ef571878fa8e9c5a2d822b6c0e0d946542297619863d14e91296bdf2f9774887"
+        },
+        {
+          "id": "14940858001996189474",
+          "sha256": "f6fc4c1bd17d3ce7424edbfce59c1c6051880c4f853406ee40451fb644003763"
+        }
+      ],
+      "sevenInchScreenshots": [],
+      "tenInchScreenshots": []
+    }
+  },
+  "support": {
+    "defaultLanguage": "ko-KR",
+    "contactWebsite": "https://www.seorilabs.com",
+    "contactEmail": "cs@seorilabs.com"
+  }
+}

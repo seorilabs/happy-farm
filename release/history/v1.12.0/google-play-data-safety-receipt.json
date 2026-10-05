@@ -1,0 +1,55 @@
+{
+  "changes": [
+    {
+      "question": "PSL_DATA_TYPES_PERSONAL",
+      "answer": "PSL_USER_ACCOUNT",
+      "before": "",
+      "after": "true"
+    },
+    {
+      "question": "PSL_DATA_USAGE_RESPONSES:PSL_USER_ACCOUNT:PSL_DATA_USAGE_COLLECTION_AND_SHARING",
+      "answer": "PSL_DATA_USAGE_ONLY_COLLECTED",
+      "before": "",
+      "after": "true"
+    },
+    {
+      "question": "PSL_DATA_USAGE_RESPONSES:PSL_USER_ACCOUNT:PSL_DATA_USAGE_EPHEMERAL",
+      "answer": "",
+      "before": "",
+      "after": "false"
+    },
+    {
+      "question": "PSL_DATA_USAGE_RESPONSES:PSL_USER_ACCOUNT:DATA_USAGE_USER_CONTROL",
+      "answer": "PSL_DATA_USAGE_USER_CONTROL_REQUIRED",
+      "before": "",
+      "after": "true"
+    },
+    {
+      "question": "PSL_DATA_USAGE_RESPONSES:PSL_USER_ACCOUNT:DATA_USAGE_COLLECTION_PURPOSE",
+      "answer": "PSL_APP_FUNCTIONALITY",
+      "before": "",
+      "after": "true"
+    },
+    {
+      "question": "PSL_DATA_USAGE_RESPONSES:PSL_USER_ACCOUNT:DATA_USAGE_COLLECTION_PURPOSE",
+      "answer": "PSL_ACCOUNT_MANAGEMENT",
+      "before": "",
+      "after": "true"
+    }
+  ],
+  "originalSha256": "9065d3ff7d9d6089a50c1fc445fba6b6e1b5fdf9aa1ee258e4a29b3cb326c1ce",
+  "newSha256": "87cd1397256e2e39e5272c8ecd493e4dd3ce1cae5337818f46f8706beae472dd",
+  "source": "https://firebase.google.com/docs/android/play-data-disclosure#authentication",
+  "savedSha256": "1e2ce092ca4e726af6781cb5bf993d742791c4b8880aafb4c6273185ef90581b",
+  "savedAnswersMatchReviewedSource": true,
+  "savedQuestionCount": 782,
+  "review": {
+    "state": "in_review",
+    "scope": "global_data_safety_metadata_only",
+    "submittedChangeCount": 1,
+    "consoleReadback": "검토 중인 변경사항 / 앱 콘텐츠 / 데이터 보안 / 검토를 위해 변경사항 1개를 전송했습니다.",
+    "consoleUrl": "https://play.google.com/console/u/0/developers/7593567020638200144/app/4973229988023852564/publishing",
+    "checkedAt": "2026-10-05T14:59:35.931484+00:00",
+    "candidateProductionBinarySubmitted": false
+  }
+}
