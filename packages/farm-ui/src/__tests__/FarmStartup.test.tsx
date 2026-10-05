@@ -1,13 +1,14 @@
 import React, { useEffect } from 'react';
-import { Text } from 'react-native';
+import { StyleSheet, Text } from 'react-native';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
 import { createInitialState } from '../../../farm-core/src';
 import { FarmStartup, type FarmStartupSnapshot } from '../FarmStartup';
 import type { FarmGamePersistence } from '../FarmGame';
 
+let mockBottomInset = 0;
 jest.mock('react-native-safe-area-context', () => ({
-  useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
+  useSafeAreaInsets: () => ({ top: 0, bottom: mockBottomInset, left: 0, right: 0 }),
 }));
 
 function deferred<T>() {
@@ -36,7 +37,10 @@ function persistence(): FarmGamePersistence & {
   };
 }
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  mockBottomInset = 0;
+});
 
 test('shows real completed reads, waits for the save, and keeps gameplay unmounted until start', async () => {
   const host = persistence();
@@ -143,4 +147,17 @@ test('ignores late completion from an unmounted startup', async () => {
   await act(async () => pending.resolve(createInitialState()));
   expect(child).not.toHaveBeenCalled();
   expect(host.writePersistedGameState).not.toHaveBeenCalled();
+});
+
+
+test.each([0, 34])('keeps the publisher above the system area with reported bottom inset %s', async (bottomInset) => {
+  mockBottomInset = bottomInset;
+  render(
+    <FarmStartup art={art} persistence={persistence()}>
+      {() => <Text>game</Text>}
+    </FarmStartup>
+  );
+  await waitFor(() => expect(screen.getByText('Enter Farm')).toBeTruthy());
+  const footerStyle = StyleSheet.flatten(screen.getByText('SEORI LABS').props.style);
+  expect(footerStyle.bottom).toBeGreaterThanOrEqual(Math.max(24, bottomInset) + 8);
 });
