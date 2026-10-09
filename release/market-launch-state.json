@@ -201,7 +201,8 @@
     "objective": "public_live",
     "approvedAt": "2026-10-05T13:57:07.338530+00:00",
     "evidence": [
-      "2026-10-05 user: 세 마켓 빌드 후에 프로덕션 공개 및 심사 제출까지 진행해. Existing identities/countries/free pricing and full rollout retained."
+      "2026-10-05 user: 세 마켓 빌드 후에 프로덕션 공개 및 심사 제출까지 진행해. Existing identities/countries/free pricing and full rollout retained.",
+      "2026-10-09 user: iOS 심사제출하자. Reconfirmed App Store submission authorization for the existing v1.12.0 candidate; runtime QA evidence remains separate."
     ]
   },
   "commonGates": {
@@ -585,36 +586,40 @@
         "qa": {
           "status": "blocked",
           "evidence": [
-            "Connected iPhone currently has 1.11.8 / 1011008; TestFlight present. Exact new-build user testing requested.",
-            "iPhone Mirroring UI unavailable: cgWindowNotFound."
+            "Physical iPhone 12 Pro / iOS 26.6 has com.seorilabs.happyfarm 1.12.0 / 1012000; installation channel is not independently confirmed.",
+            "devicectl process launch succeeded. Root and independent reviewer ios_review observed the ready title and visible safe-area controls.",
+            "Enter Farm UI input failed with Computer Use server error -10005: noWindowsAvailable. Farm/settings/resume/save and supported iPad coverage remain unverified.",
+            "release/history/v1.12.0/app-store-review-preflight-20261009.json"
           ],
-          "checkedAt": "2026-10-05T14:27:53.679512+00:00",
-          "blocker": "Physical TestFlight 1.12.0 / 1012000 validation and iPad coverage pending."
+          "checkedAt": "2026-10-09T12:22:11.049800+00:00",
+          "blocker": "Exact TestFlight candidate runtime flows, applicable backend/ads and iPad evidence pending; device UI input tool blocks navigation."
         },
         "metadata": {
           "status": "pass",
           "evidence": [
-            "New version 66e840f6-c545-44ce-b8b8-739196f11e41 selects exact build and AFTER_APPROVAL. All eight saved notes match frozen source.",
-            "All descriptions/keywords/promotional text/support/marketing URLs match visually reviewed live metadata; promotional text restored because ASC did not copy it to new version.",
-            "64 new-version screenshots COMPLETE, checksum/content/order identical to visually reviewed images; zero app previews in every active locale. Updated title-entry review instructions saved and GET compared."
+            "Current version selects exact build 1012000 with AFTER_APPROVAL; saved release notes match frozen markets.appStore in all eight locales.",
+            "Independent reviewer ios_review read all active text fields and visually reviewed all 64 screenshots; all images COMPLETE and downloaded pixels/checksum/order match repository source. Zero blocking findings.",
+            "release/history/v1.12.0/app-store-review-preflight-20261009.json"
           ],
-          "checkedAt": "2026-10-05T14:27:53.679512+00:00",
+          "checkedAt": "2026-10-09T12:22:11.049800+00:00",
           "blocker": null
         },
         "policy": {
-          "status": "blocked",
+          "status": "pass",
           "evidence": [
-            "Current age-rating declaration read back: advertising true, all content categories NONE. Build export compliance false; app free in 175 storefronts.",
-            "Public App Privacy lists Device ID for advertising/analytics but omits User ID for the active Firebase anonymous Platform session. Apple browser profile is in manual-login mode and cannot be acquired.",
-            "Exact audit archive FirebaseAuth privacy manifest explicitly declares UserID linked=true, tracking=false, AppFunctionality."
+            "App Privacy User ID added and published: AppFunctionality, linked=true, tracking=false. Fresh browser reload confirms seven data types; six existing declarations preserved.",
+            "User ID answers match the same-source audit archive FirebaseAuth privacy manifest. Existing SDK tracking/ATT declarations retained; current age-rating answers and content rights read back; selected build usesNonExemptEncryption=false.",
+            "release/history/v1.12.0/app-store-review-preflight-20261009.json"
           ],
-          "checkedAt": "2026-10-05T14:27:53.679512+00:00",
-          "blocker": "App Privacy User ID AppFunctionality, linked=true, tracking=false must be saved/read back in Console; Apple browser manual-login mode blocks access."
+          "checkedAt": "2026-10-09T12:22:11.049800+00:00",
+          "blocker": null
         },
         "submission": {
           "status": "pending",
-          "evidence": [],
-          "checkedAt": null,
+          "evidence": [
+            "Current App Store Connect version remains PREPARE_FOR_SUBMISSION; no new App Review submission made while runtime QA remains blocked."
+          ],
+          "checkedAt": "2026-10-09T12:22:11.049800+00:00",
           "blocker": null
         },
         "approval": {
@@ -943,11 +948,11 @@
         "fr-FR",
         "es-ES"
       ],
-      "reviewedAt": "2026-10-05T13:57:07.338530+00:00",
+      "reviewedAt": "2026-10-09T12:01:43.937485+00:00",
       "text": "All active app-info and version fields read and reviewed; final notes contain only new title/loading/retry experience",
-      "images": "64 current live iPhone/iPad screenshots visually inspected in 8 locale contact sheets; all COMPLETE; final new-version screenshot readback pending",
+      "images": "Independent review of all 64 current iPhone/iPad screenshots in eight locales: COMPLETE, source checksums/order and downloaded pixels match reviewed repository images.",
       "finalSavedComparison": "pass — all eight notes, text fields, 64 screenshots/order/checksums, no previews, review instructions, exact build and AFTER_APPROVAL",
-      "receipt": "release/history/v1.12.0/app-store-metadata-receipt.json"
+      "receipt": "release/history/v1.12.0/app-store-review-preflight-20261009.json"
     },
     "googlePlay": {
       "locales": [

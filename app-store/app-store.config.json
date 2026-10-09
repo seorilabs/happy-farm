@@ -163,20 +163,10 @@
       }
     },
     "notes": [
-      "현재 공개 App Privacy 선언은 기존 심사를 통과한 상태입니다. v1.12.0의 사용자 ID 항목은 pendingConsoleUpdate와 마켓 검수 원장에 따라 추가 확인이 필요합니다.",
+      "2026-10-09 App Store Connect에 사용자 ID를 앱 기능·신원 연결·추적 안 함으로 게시했고, 새로고침한 저장 값을 확인했습니다. 기존 6개 데이터 유형의 설정은 유지했습니다. 근거: release/history/v1.12.0/app-store-review-preflight-20261009.json",
       "Firebase Analytics, Firebase Auth(Platform 세션), AdMob SDK 구성 변경 시 App Store Connect 앱 개인정보 답변을 재검토합니다.",
       "tracking=yes 기준을 유지합니다. IDFA/ATT 또는 비개인화 광고 정책을 바꾸면 콘솔 답변과 PrivacyInfo.xcprivacy를 함께 확인합니다."
-    ],
-    "pendingConsoleUpdate": {
-      "dataType": "userId",
-      "purposes": [
-        "appFunctionality"
-      ],
-      "linkedToUser": true,
-      "usedForTracking": false,
-      "evidence": "v1.12.0 archive FirebaseAuth_Privacy.bundle/PrivacyInfo.xcprivacy declares UserID, linked true, tracking false, AppFunctionality; current public App Privacy omits User ID.",
-      "state": "awaiting_console_authentication"
-    }
+    ]
   },
   "review": {
     "signInRequired": false,

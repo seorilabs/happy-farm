@@ -1,0 +1,240 @@
+{
+  "checkedAt": "2026-10-09T12:22:11.049800+00:00",
+  "appId": "6775451733",
+  "bundleId": "com.seorilabs.happyfarm",
+  "teamId": "HCDUXX4Z3X",
+  "candidateSha": "82b5470e5af5c827b1b976ab89a1ddf8ba3de248",
+  "version": "1.12.0",
+  "versionId": "66e840f6-c545-44ce-b8b8-739196f11e41",
+  "build": "1012000",
+  "buildId": "6cb6f8dd-7e20-432b-95a1-244176123e25",
+  "versionState": "PREPARE_FOR_SUBMISSION",
+  "releaseType": "AFTER_APPROVAL",
+  "exactBuildConnected": true,
+  "processingState": "VALID",
+  "metadata": {
+    "reviewer": "ios_review",
+    "reviewedAt": "2026-10-09T12:01:43.937485+00:00",
+    "snapshotSha256": "bc4efeba5d4dd77057e649a1502ed1206f45a158c9c50a18b45b00d83e9072e8",
+    "releaseNotesSha256": "e669a63ac6ff06239fee8557de07b5edaf99764046bb94d32b344a7bc61345dc",
+    "releaseNotesSource": "release/history/v1.12.0/release-notes.json markets.appStore with ASC locale mapping",
+    "activeLocales": [
+      "de-DE",
+      "en-US",
+      "es-ES",
+      "fr-FR",
+      "ja",
+      "ko",
+      "zh-Hans",
+      "zh-Hant"
+    ],
+    "fieldsReviewed": [
+      "name",
+      "subtitle",
+      "description",
+      "promotionalText",
+      "keywords",
+      "whatsNew"
+    ],
+    "textComparison": "8/8 locale fields match repository app-store.config.json; 8/8 Whats New match frozen markets.appStore",
+    "screenshots": {
+      "count": 64,
+      "displayTypes": [
+        "APP_IPHONE_65",
+        "APP_IPAD_PRO_3GEN_129"
+      ],
+      "perLocaleCount": 8,
+      "allDeliveryStateComplete": true,
+      "allApiSourceMD5MatchRepoFiles": true,
+      "allOrderAndChecksumMatchPriorReceipt": true,
+      "allDownloadedImagesPixelEqualRepoFiles": true,
+      "allVisualContentReviewed": true
+    },
+    "screenshotIdOrderChecksumReceipt": "release/history/v1.12.0/app-store-metadata-receipt.json",
+    "policyReview": {
+      "otherMobilePlatformOrMarketplaceFound": false,
+      "developerErrorOverlayFound": false,
+      "unsubstantiatedPublicFeatureClaimFound": false,
+      "allImagesShowGameplay": true
+    },
+    "blockingFindings": [],
+    "nonBlockingObservations": [
+      "Some existing crop labels are abbreviated in French/German narrow cards; primary actions and reward choices remain legible.",
+      "Existing screenshots show gameplay, not the new title screen; this is suitable gameplay imagery under 2.3.3."
+    ],
+    "verdict": "pass"
+  },
+  "appPrivacy": {
+    "state": "published",
+    "consoleUrl": "https://appstoreconnect.apple.com/apps/6775451733/distribution/privacy",
+    "reloadedSavedReadbackAt": "2026-10-09T12:22:11.049800+00:00",
+    "reloadedReadbackSha256": "f4a6e377322c3f8dd3c578d67a482572a7c0d9202d7afb958a327590c5cb8889",
+    "dataTypeCount": 7,
+    "addedDataTypes": [
+      "User ID"
+    ],
+    "preservedDataTypes": [
+      "Coarse Location",
+      "Device ID",
+      "Product Interaction",
+      "Advertising Data",
+      "Crash Data",
+      "Other Diagnostic Data"
+    ],
+    "userId": {
+      "collected": true,
+      "purposes": [
+        "appFunctionality"
+      ],
+      "linkedToUser": true,
+      "usedForTracking": false
+    },
+    "changeScope": "Only User ID added; existing six data types and their purposes/linkage/tracking selections preserved.",
+    "archiveSdkManifest": "HappyFarmMobile.app/FirebaseAuth_Privacy.bundle/PrivacyInfo.xcprivacy",
+    "archiveSdkManifestSha256": "04c162eafa49b2ced0663231a89cc9f5793506c802b68486719b5da0608aefd5",
+    "archiveSdkUserIdDeclaration": {
+      "NSPrivacyCollectedDataType": "NSPrivacyCollectedDataTypeUserID",
+      "NSPrivacyCollectedDataTypeLinked": true,
+      "NSPrivacyCollectedDataTypeTracking": false,
+      "NSPrivacyCollectedDataTypePurposes": [
+        "NSPrivacyCollectedDataTypePurposeAppFunctionality"
+      ]
+    },
+    "archiveRun": "https://github.com/seorilabs/happy-farm/actions/runs/37322813684",
+    "archiveLimitation": "Separate verification archive of the same fixed source/tag/build identity; not claimed byte-identical to the uploaded archive.",
+    "independentReviewer": "ios_review",
+    "independentReviewedAt": "2026-10-09T12:18:30.255760+00:00",
+    "independentVerdict": "Published User ID correction matches FirebaseAuth declaration.",
+    "binarySubmission": false
+  },
+  "policyReadback": {
+    "usesNonExemptEncryption": false,
+    "contentRightsDeclaration": "USES_THIRD_PARTY_CONTENT",
+    "ageRatings": {
+      "5c0a71cc-3c89-4759-8af8-073993b7b2ca": {
+        "advertising": true,
+        "alcoholTobaccoOrDrugUseOrReferences": "NONE",
+        "contests": "NONE",
+        "gambling": false,
+        "gamblingSimulated": "NONE",
+        "gunsOrOtherWeapons": "NONE",
+        "healthOrWellnessTopics": false,
+        "kidsAgeBand": null,
+        "lootBox": false,
+        "medicalOrTreatmentInformation": "NONE",
+        "messagingAndChat": false,
+        "parentalControls": false,
+        "profanityOrCrudeHumor": "NONE",
+        "ageAssurance": false,
+        "sexualContentGraphicAndNudity": "NONE",
+        "sexualContentOrNudity": "NONE",
+        "socialMedia": false,
+        "socialMediaAgeRestricted": false,
+        "horrorOrFearThemes": "NONE",
+        "matureOrSuggestiveThemes": "NONE",
+        "unrestrictedWebAccess": false,
+        "userGeneratedContent": false,
+        "violenceCartoonOrFantasy": "NONE",
+        "violenceRealisticProlongedGraphicOrSadistic": "NONE",
+        "violenceRealistic": "NONE",
+        "ageRatingOverride": "NONE",
+        "ageRatingOverrideV2": "NONE",
+        "koreaAgeRatingOverride": "NONE",
+        "gracRatingClassificationNumber": null,
+        "developerAgeRatingInfoUrl": null
+      },
+      "ac12f58e-5f81-47ab-8c7e-e1d14c81b315": {
+        "advertising": true,
+        "alcoholTobaccoOrDrugUseOrReferences": "NONE",
+        "contests": "NONE",
+        "gambling": false,
+        "gamblingSimulated": "NONE",
+        "gunsOrOtherWeapons": "NONE",
+        "healthOrWellnessTopics": false,
+        "kidsAgeBand": null,
+        "lootBox": false,
+        "medicalOrTreatmentInformation": "NONE",
+        "messagingAndChat": false,
+        "parentalControls": false,
+        "profanityOrCrudeHumor": "NONE",
+        "ageAssurance": false,
+        "sexualContentGraphicAndNudity": "NONE",
+        "sexualContentOrNudity": "NONE",
+        "socialMedia": false,
+        "socialMediaAgeRestricted": false,
+        "horrorOrFearThemes": "NONE",
+        "matureOrSuggestiveThemes": "NONE",
+        "unrestrictedWebAccess": false,
+        "userGeneratedContent": false,
+        "violenceCartoonOrFantasy": "NONE",
+        "violenceRealisticProlongedGraphicOrSadistic": "NONE",
+        "violenceRealistic": "NONE",
+        "ageRatingOverride": "NONE",
+        "ageRatingOverrideV2": "NONE",
+        "koreaAgeRatingOverride": "NONE",
+        "gracRatingClassificationNumber": null,
+        "developerAgeRatingInfoUrl": null
+      }
+    }
+  },
+  "deviceQa": {
+    "plannedAt": "2026-10-09T11:58:03.083469+00:00",
+    "checkedAt": "2026-10-09T12:22:11.049800+00:00",
+    "deviceModel": "iPhone 12 Pro",
+    "osVersion": "26.6",
+    "installedVersion": "1.12.0",
+    "installedBuild": "1012000",
+    "installedIdentitySource": "xcrun devicectl device info apps",
+    "expectedDistributionChannel": "TestFlight",
+    "installationChannelVerified": false,
+    "processLaunch": "success; xcrun devicectl device process launch com.seorilabs.happyfarm",
+    "titleObservation": "Morning farm title, Your farm is ready, filled progress, Enter Farm and Seori Labs footer visibly fit the screen.",
+    "independentReviewer": "ios_review",
+    "independentReviewedAt": "2026-10-09T12:18:30.255760+00:00",
+    "scenarioResults": [
+      {
+        "id": "cold-title",
+        "status": "partially-observed",
+        "reason": "Current installed candidate title ready state directly observed after root process launch; cold-start/loading transition not independently exercised."
+      },
+      {
+        "id": "enter-farm",
+        "status": "blocked",
+        "reason": "Root reports Enter Farm coordinate click also failed with noWindowsAvailable; independent reviewer made no further UI input."
+      },
+      {
+        "id": "settings-and-return",
+        "status": "blocked",
+        "reason": "Root reports Enter Farm coordinate click also failed with noWindowsAvailable; independent reviewer made no further UI input."
+      },
+      {
+        "id": "background-return",
+        "status": "blocked",
+        "reason": "Root reports Enter Farm coordinate click also failed with noWindowsAvailable; independent reviewer made no further UI input."
+      },
+      {
+        "id": "restart-save",
+        "status": "blocked",
+        "reason": "Root reports Enter Farm coordinate click also failed with noWindowsAvailable; independent reviewer made no further UI input."
+      }
+    ],
+    "dataPolicy": "Existing farm preserved; no save reset, reinstall, deletion or system setting change.",
+    "verdict": "blocked",
+    "blocker": "Enter Farm UI input fails: Computer Use server error -10005: noWindowsAvailable.",
+    "remaining": [
+      "TestFlight installation channel confirmation",
+      "Farm entry",
+      "Settings open/close",
+      "Background resume",
+      "Restart and save recovery",
+      "Supported iPad coverage",
+      "Applicable backend and ads paths"
+    ],
+    "evidenceLimitation": "Title observation is in CUA tool responses; no exported device screenshot is included. Rendering and installed identity do not establish downstream behavior."
+  },
+  "submission": {
+    "status": "not_submitted",
+    "reviewSubmissionId": null,
+    "reason": "Current-candidate runtime QA remains blocked. Submission authorization was received; no repeated approval is needed after QA evidence is obtained."
+  }
+}

@@ -6,7 +6,7 @@
 
 - App Store bundle ID: `com.seorilabs.happyfarm`
 - 표시 앱 이름: `행복 농장 타이쿤`
-- 기본 언어: `ko-KR`
+- 기본 언어: `en-US` — 실제 App Store Connect 값
 - 앱 유형: 게임
 - 가격: 무료
 - 고객지원 이메일: `cs@seorilabs.com`
@@ -24,7 +24,7 @@ pnpm check:app-store -- --json
 
 ## 현재 상태
 
-2026-10-05 v1.12.0은 빌드·업로드와 8개 언어·64장 이미지 대조까지 완료했다. TestFlight 실행과 App Privacy 선언 대조가 남아 심사 제출·공개는 미완료다. 실제 App Store Connect 기본 언어는 `en-US`이며 기존 값을 유지하고 config를 맞췄다. 최신 상태는 [마켓 검수 기록](../release/history/v1.12.0/README.md)과 `release/market-launch-state.json`을 따른다. 아래 과거 빌드 결과는 이 버전의 완료 근거로 사용하지 않는다.
+2026-10-09 v1.12.0은 빌드·업로드와 8개 언어·64장 이미지의 독립 검수까지 완료했다. App Privacy에 사용자 ID를 앱 기능·신원 연결·추적 안 함으로 게시하고 저장 값을 확인했다. 연결된 iPhone의 `1.12.0 / 1012000` 타이틀 준비 완료 화면도 확인했지만, 조작 도구 오류로 농장 진입·설정·저장 복귀는 미검수다. TestFlight 설치 경로와 지원 iPad 확인도 남아 심사 제출·공개는 미완료다. 실제 App Store Connect 기본 언어는 `en-US`이며 기존 값을 유지한다. 최신 상태는 [마켓 검수 기록](../release/history/v1.12.0/README.md)과 [현재 제출 전 확인 기록](../release/history/v1.12.0/app-store-review-preflight-20261009.json), `release/market-launch-state.json`을 따른다. 아래 과거 빌드 결과는 이 버전의 완료 근거로 사용하지 않는다.
 
 - App Store archive용 Apple Distribution signing 설정은 완료됐습니다.
 - GitHub Actions `Deploy App Store` run `26832379683`에서 `v1.1.1 / 1001001` archive/upload가 성공했습니다.
