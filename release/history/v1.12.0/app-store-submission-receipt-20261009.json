@@ -1,0 +1,309 @@
+{
+  "readbackAt": "2026-10-09T12:52:54.565675+00:00",
+  "appId": "6775451733",
+  "bundleId": "com.seorilabs.happyfarm",
+  "candidateSha": "82b5470e5af5c827b1b976ab89a1ddf8ba3de248",
+  "versionId": "66e840f6-c545-44ce-b8b8-739196f11e41",
+  "version": "1.12.0",
+  "buildId": "6cb6f8dd-7e20-432b-95a1-244176123e25",
+  "build": "1012000",
+  "reviewSubmissionId": "c383700a-8709-4915-be23-5c08c6fa2618",
+  "reviewSubmissionItemId": "YzM4MzcwMGEtODcwOS00OTE1LWJlMjMtNWMwOGM2ZmEyNjE4fDZ8ODkyNTY1OTE3",
+  "reviewSubmissionState": "WAITING_FOR_REVIEW",
+  "versionState": "WAITING_FOR_REVIEW",
+  "releaseType": "AFTER_APPROVAL",
+  "submittedDate": "2026-10-09T12:52:50.496Z",
+  "exactVersionItemAndBuildConfirmed": true,
+  "releaseNotesSha256": "e669a63ac6ff06239fee8557de07b5edaf99764046bb94d32b344a7bc61345dc",
+  "reviewNotesSha256": "8a7aafdcf3b5b87d07d474c2dabc512eeb4df84728fd4e0299ffbd2dc672e0f3",
+  "metadataPreflightAt": "2026-10-09T12:51:03.070616+00:00",
+  "activeLocales": [
+    "de-DE",
+    "en-US",
+    "es-ES",
+    "fr-FR",
+    "ja",
+    "ko",
+    "zh-Hans",
+    "zh-Hant"
+  ],
+  "screenshots": {
+    "de-DE": [
+      {
+        "setId": "0edc57e8-3708-44dc-8a36-656ea17a41a6",
+        "displayType": "APP_IPAD_PRO_3GEN_129",
+        "ids": [
+          "1127c304-df21-4f82-838f-c4fe42c2f486",
+          "360e7015-68f9-46b4-a25e-816d9f8543b7",
+          "8c581a94-aae9-41ad-9584-86f0a1db0385",
+          "abeebfff-1cdd-4858-a9f8-a3e2edd0c54e"
+        ],
+        "checksums": [
+          "cc3356b07dc8faa76cf88c5d048e3c77",
+          "cbd6d705f6ca85b7d621923b07b826d2",
+          "aba1b5701b3f94c35929cb8b9d2b2bf7",
+          "3bff069c07dcb1b3b739228cf677f14f"
+        ]
+      },
+      {
+        "setId": "baaddf64-e623-475f-bab1-a10cb7157f7e",
+        "displayType": "APP_IPHONE_65",
+        "ids": [
+          "72564a2c-3642-491b-aed2-e61d5a63423e",
+          "dac1e089-2b23-446d-8068-d2f151b00831",
+          "a202898f-4d66-4d08-8ca3-b35bb8a17b7b",
+          "18386900-3649-4092-9701-048b23936de8"
+        ],
+        "checksums": [
+          "3f7e6ec9a07545522b35700163738094",
+          "c85c65dc92d608fe9879bf4130cbff4d",
+          "b89b95ea1279600c08fb94b8b379d35e",
+          "f6c92d204c78a685960285cd96e1a78e"
+        ]
+      }
+    ],
+    "zh-Hans": [
+      {
+        "setId": "d4c9c42a-205a-4741-83f6-a42d335eb0db",
+        "displayType": "APP_IPAD_PRO_3GEN_129",
+        "ids": [
+          "89d4d5f7-2fef-4f10-af0f-d2f8e07dfaa3",
+          "753d0058-9a55-4b6c-8ce0-f2852957731a",
+          "9f51ce13-cb3f-4ff0-8cc0-37cdb7fa82f9",
+          "59842fb7-255b-42ad-8534-3eca62cedfaf"
+        ],
+        "checksums": [
+          "78bf8de9cc3f90ab08fd54903b0c0f71",
+          "cd351ea3650b1666ab8715e89bbda882",
+          "fa9019c002fb200d10dc7101163b96df",
+          "d938ad0363fd08ca3f160434bb5b66ae"
+        ]
+      },
+      {
+        "setId": "3d8a837c-4024-4487-8bf7-63c1e2ef39e4",
+        "displayType": "APP_IPHONE_65",
+        "ids": [
+          "ae5d33b1-b8db-4904-abf0-7bf31b1bcef3",
+          "d19c461a-75e4-4cc1-8495-25794966fe72",
+          "7c86c6c7-0e41-47eb-a88e-931ce1718a85",
+          "02dc501f-89fd-4111-9d1b-13b9db76e57e"
+        ],
+        "checksums": [
+          "1d000f9852f815e1797ae6af13aac708",
+          "ff23f81eb7dfb1db47474fe3ffbf203f",
+          "6eb4da26995f993ecc84f084356190b1",
+          "7411fd4595490c60e9bb5757aec1d24c"
+        ]
+      }
+    ],
+    "ja": [
+      {
+        "setId": "d2c70c1f-fe38-4858-8cd4-7b062d3e8e78",
+        "displayType": "APP_IPHONE_65",
+        "ids": [
+          "5a12e9b6-9775-4b40-a6ad-ca33b5546ffe",
+          "89f4bf1b-6260-4e36-89cc-921d4437ff90",
+          "fd1df5e8-8047-4ec2-9438-20d4db5332ca",
+          "45b2a23a-6135-4c22-a39e-d195af637c20"
+        ],
+        "checksums": [
+          "bc86e497d2ad49865da6cc2142d7dfc0",
+          "ae4900de699b9744980ecc38fd9542f4",
+          "32415f0e62b72939f99c99107383e3cd",
+          "817129aec1dad7af18a28592fc6f39b4"
+        ]
+      },
+      {
+        "setId": "f7880add-3e54-45c9-b1be-4bcb22c9a4e3",
+        "displayType": "APP_IPAD_PRO_3GEN_129",
+        "ids": [
+          "1813b546-b404-4eb8-b9bc-3416a2ee679f",
+          "57fe92d3-d519-469b-a0b4-3a032aa3d1c2",
+          "ff6bf331-175e-4577-adc7-7eae27cdc0c4",
+          "be6d4216-0156-42b2-aae0-3684469bafae"
+        ],
+        "checksums": [
+          "dc050016ee33f873919d7d5d46e30180",
+          "5079a10d332a9ffc6cd50ddea5e2a75a",
+          "7960815a38c34caa7daae2ae034536e8",
+          "de060e5ecfd8ad2177f4a2a064d0881c"
+        ]
+      }
+    ],
+    "ko": [
+      {
+        "setId": "3ee17df6-3805-4abf-ad53-a650c718c656",
+        "displayType": "APP_IPAD_PRO_3GEN_129",
+        "ids": [
+          "e0b2d6cb-90be-4904-b7c1-12b68ec926c9",
+          "b9e2422c-66d4-4ee8-ba48-96db7a92d37e",
+          "797652cd-298f-466c-8b8f-7d8d14037a38",
+          "c6dda5d5-db29-4584-9f71-176b8190755d"
+        ],
+        "checksums": [
+          "002d02b5740e6b9b047538f1a849c649",
+          "d7367ff67321ea5d4be8e45cbffcece5",
+          "1b2e68f6b1a3cf5a6eae120e24815b0f",
+          "4f9bf268947add3d0dd46b4d246ed37b"
+        ]
+      },
+      {
+        "setId": "aebd49b2-bc12-418c-8e34-06bc6f720d45",
+        "displayType": "APP_IPHONE_65",
+        "ids": [
+          "872a688b-3a2a-486c-8c5d-ab20ca5f08df",
+          "da80512f-1aed-4797-babe-c6015f04f79f",
+          "9692e18f-dc60-4a80-bb3a-872e334c1aaa",
+          "8d0c2681-3cff-4d54-ab0a-da66b8fa1ff8"
+        ],
+        "checksums": [
+          "1b14a0344b3c19931c9f668e62fe5527",
+          "e4ba1ffd2da90074cd423fc7d309feba",
+          "6be8ad40a2fe236069b662c6e5b1b138",
+          "4b0855c387e8d3244d7cae05969799a6"
+        ]
+      }
+    ],
+    "fr-FR": [
+      {
+        "setId": "0ab72b66-af9d-4ab3-9990-3e308bb4f19a",
+        "displayType": "APP_IPAD_PRO_3GEN_129",
+        "ids": [
+          "aa351b8e-41ac-410e-90a3-8ce961508142",
+          "1c6a1054-1c7d-4819-a840-0c0de8fdd5cf",
+          "7dcfdc06-fdea-4778-8e64-b6cb019170ce",
+          "fd4d250f-288e-4bcf-bd78-875e887cba75"
+        ],
+        "checksums": [
+          "8d2d6bf2548c99bd6acf0008a8ac91ab",
+          "d4cf0a847203964309ea12399d27713e",
+          "7fcdbb8600137acdbb5699118e5461c5",
+          "516e0811fa1f23eab32aec0c259071f3"
+        ]
+      },
+      {
+        "setId": "465f985e-e36b-459b-9219-a16f8d84b393",
+        "displayType": "APP_IPHONE_65",
+        "ids": [
+          "b5e771c9-ad5b-4d6e-9953-abeb6bf9bfe7",
+          "6727da30-f9b5-4cda-9c32-c450fcecb00d",
+          "097b4214-ceb8-4582-86fd-95047f8cd289",
+          "69f48ed4-9281-4af5-9bdb-d534518c0c01"
+        ],
+        "checksums": [
+          "0f85526d697bb28afe42ecea3a5b650a",
+          "63a8de6686c05130746af81b63bedacc",
+          "d9ea19543ded19be5a99ed14c7f756dc",
+          "274035fff387b728c39bdf3d245d5766"
+        ]
+      }
+    ],
+    "en-US": [
+      {
+        "setId": "d80397fc-594d-41a5-9e17-f00574888747",
+        "displayType": "APP_IPHONE_65",
+        "ids": [
+          "2fee4fd9-e713-4591-9cd9-ac8609cda477",
+          "179ef2cc-7334-4745-9796-76a0f4201070",
+          "03e3a570-5781-4348-b49e-ebefdc956bbf",
+          "e77dec56-ce41-45d5-81d9-432a64456532"
+        ],
+        "checksums": [
+          "743732881bc7eacec1acbeb6d60c54e0",
+          "c277566d90bd74f2ba04c0ff19e6d1f2",
+          "d2f50f08397f2d07e96e339dfd2bf46d",
+          "bf953746c74040a1a21247e9302482f6"
+        ]
+      },
+      {
+        "setId": "c7ae1f2b-034f-490a-ae5f-abc2e67708de",
+        "displayType": "APP_IPAD_PRO_3GEN_129",
+        "ids": [
+          "b09cf102-3216-431b-adc0-459f4a555d74",
+          "c70be99b-9f19-4321-a9b2-7dfff7c59cfd",
+          "d992fdd9-5b27-419f-b520-c3ab8518730f",
+          "ed487c6e-f7cb-4dbb-b147-1fd877c0ec55"
+        ],
+        "checksums": [
+          "4d617c433670bf6087c3014ca927dac9",
+          "844023df327499c41689b775ae6f5482",
+          "7c3de1de93dd70252628495f573fd7f4",
+          "fb1d9e91bd6300b8eb24283406ac8b65"
+        ]
+      }
+    ],
+    "zh-Hant": [
+      {
+        "setId": "00ba66a7-9991-4f21-80fe-9f4d679d3225",
+        "displayType": "APP_IPHONE_65",
+        "ids": [
+          "aa8dcfb0-249c-4668-b3bd-517ef433c73e",
+          "7c2c5579-086d-4491-8d1e-42f63b6d20b9",
+          "035fad50-74f8-4329-b0ff-65c40c2c07b2",
+          "06b70c4e-b8c9-4dc0-b3fa-03a746f95a2d"
+        ],
+        "checksums": [
+          "c3551503b4448e1f3c4390af0c4e9712",
+          "bd612677c11d48e48385b447b8f00961",
+          "3fccdae3e0bbd98824c0d47a9154cd23",
+          "db4fbe63be887285c25b636d3bc9ff4f"
+        ]
+      },
+      {
+        "setId": "efdfe4cb-6af7-4e8f-a264-3081f3384fe3",
+        "displayType": "APP_IPAD_PRO_3GEN_129",
+        "ids": [
+          "7aef33eb-98ee-4f2b-887f-fb29eac80225",
+          "e9b60740-417a-4019-81fc-bf6116f49f93",
+          "96f81bb5-861f-42a3-b2b7-2e6f8f62af6d",
+          "dbb9afe4-2a1e-45eb-927f-f79d645cb7d4"
+        ],
+        "checksums": [
+          "567e021372984211984967c7ae92ae27",
+          "1f444ed969dc37ab5e9bcb8c860fe3c2",
+          "f3b4380009268820ac2d7ea23f2d64a5",
+          "3f47df08a2d473653cc58715e1d5ed95"
+        ]
+      }
+    ],
+    "es-ES": [
+      {
+        "setId": "0649fd80-eeaf-43bc-b6dd-d68baeabe847",
+        "displayType": "APP_IPHONE_65",
+        "ids": [
+          "1769e1a1-6f0b-438b-89da-e78285d9b011",
+          "71edc57c-3836-46a1-8ed7-ee7fe9cef94c",
+          "3d52944d-c88e-4b27-8975-f3ef8da2b1db",
+          "601fdcb4-e43b-4006-b018-f92babed670a"
+        ],
+        "checksums": [
+          "92f5467daf49a17ad0bc546739c00eb3",
+          "1797341f0c106456bbc619e43fd9410d",
+          "9d2bf86873c467755446b467f81d1862",
+          "4a928a745ceaddc3e76c2f7236c55b6e"
+        ]
+      },
+      {
+        "setId": "31b98ecd-235d-45e7-8b7a-fd19a9b38e0c",
+        "displayType": "APP_IPAD_PRO_3GEN_129",
+        "ids": [
+          "b461991a-b04b-478d-bc27-3f8888f4e540",
+          "d76c088d-99a2-4072-b905-502533933da1",
+          "c7c670eb-3704-4941-8657-7488ffb4cb21",
+          "aa42b88e-6692-4e74-9b75-fa8f51b99824"
+        ],
+        "checksums": [
+          "044782809095db47cfb342fe9189157f",
+          "a168be61082db3b046fd841f293259e8",
+          "e17cbbc8021690529d1a9c6079e50cd1",
+          "88f9201638f682cb50f34770ac6ea856"
+        ]
+      }
+    ]
+  },
+  "appPreviewCount": 0,
+  "authorization": "2026-10-09 user: 바로 심사제출해. Direct submission requested after current-candidate runtime QA limitations were reported.",
+  "qaDisposition": "Runtime QA remains blocked/unverified; user instructed immediate submission. No device QA pass is asserted.",
+  "approved": false,
+  "publiclyReleased": false
+}
