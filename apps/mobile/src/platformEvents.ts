@@ -43,6 +43,8 @@ export const mobilePlatformAds = new PlatformAdsClient({
   appId: 'happy-farm',
   baseUrl: PLATFORM_ADS_URL,
   getToken: () => mobileAdsPlatform.session.token(),
+  // Metro 개발 빌드만 debug로 표시해 QA 광고 보상이 운영 알림·지표에 섞이지 않게 한다.
+  debugBuild: __DEV__,
 });
 
 let sessionPromise: Promise<boolean> | null = null;
