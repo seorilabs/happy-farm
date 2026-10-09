@@ -115,3 +115,37 @@ describe('Mobile Platform events', () => {
     expect(mockPlatform?.presence.resume).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('Mobile Platform Ads 빌드 표식', () => {
+  const runtime = globalThis as unknown as { __DEV__: boolean; fetch: typeof fetch };
+  const originalDev = runtime.__DEV__;
+  const originalFetch = runtime.fetch;
+
+  afterEach(() => {
+    runtime.__DEV__ = originalDev;
+    runtime.fetch = originalFetch;
+  });
+
+  // 광고 client는 모듈 로드 시 생성되므로 __DEV__를 바꾼 뒤 격리된 registry에서 다시 불러온다.
+  test.each([
+    [true, 'debug'],
+    [false, undefined],
+  ])('__DEV__=%s 빌드의 광고 요청 X-Seori-Build는 %s', async (dev, expected) => {
+    runtime.__DEV__ = dev;
+    const fetchMock = jest.fn<Promise<{ ok: boolean; status: number; json(): Promise<unknown> }>, [string, RequestInit?]>(
+      async () => ({ ok: true, status: 200, json: async () => ({ ok: true, result: {} }) }),
+    );
+    runtime.fetch = fetchMock as unknown as typeof fetch;
+
+    let isolated: typeof import('../platformEvents') | undefined;
+    jest.isolateModules(() => {
+      isolated = jest.requireActual<typeof import('../platformEvents')>('../platformEvents');
+    });
+    await isolated?.mobilePlatformAds.policy();
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const headers = fetchMock.mock.calls[0]?.[1]?.headers as Record<string, string>;
+    expect(headers['X-Seori-App']).toBe('happy-farm');
+    expect(headers['X-Seori-Build']).toBe(expected);
+  });
+});

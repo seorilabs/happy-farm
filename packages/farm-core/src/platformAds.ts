@@ -50,6 +50,12 @@ export type PlatformAdsClientOptions = {
   appId: string;
   getToken: () => Promise<string>;
   fetch?: FetchLike;
+  /**
+   * 개발 빌드면 true다. 조합 지점이 빌드 플래그(Metro `__DEV__`)를 명시적으로 넘긴다.
+   * Platform은 `X-Seori-Build: debug` 요청을 정상 처리하되 운영 알림과 지표에서 제외한다.
+   * 마켓 출시 빌드는 이 헤더를 보내면 안 되므로 버전 문자열 같은 추정 신호로 정하지 않는다.
+   */
+  debugBuild: boolean;
 };
 
 /**
@@ -61,12 +67,14 @@ export class PlatformAdsClient {
   private readonly appId: string;
   private readonly getToken: () => Promise<string>;
   private readonly fetcher: FetchLike;
+  private readonly debugBuild: boolean;
 
   constructor(options: PlatformAdsClientOptions) {
     this.baseUrl = options.baseUrl.replace(/\/+$/, '');
     this.appId = options.appId;
     this.getToken = options.getToken;
     this.fetcher = options.fetch ?? (globalThis.fetch as FetchLike);
+    this.debugBuild = options.debugBuild;
   }
 
   policy(): Promise<PlatformAdsPolicy> {
@@ -114,6 +122,7 @@ export class PlatformAdsClient {
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
         'X-Seori-App': this.appId,
+        ...(this.debugBuild ? { 'X-Seori-Build': 'debug' } : {}),
       },
     });
     let envelope: unknown;
