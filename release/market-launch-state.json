@@ -202,7 +202,8 @@
     "approvedAt": "2026-10-05T13:57:07.338530+00:00",
     "evidence": [
       "2026-10-05 user: 세 마켓 빌드 후에 프로덕션 공개 및 심사 제출까지 진행해. Existing identities/countries/free pricing and full rollout retained.",
-      "2026-10-09 user: iOS 심사제출하자. Reconfirmed App Store submission authorization for the existing v1.12.0 candidate; runtime QA evidence remains separate."
+      "2026-10-09 user: iOS 심사제출하자. Reconfirmed App Store submission authorization for the existing v1.12.0 candidate; runtime QA evidence remains separate.",
+      "2026-10-09 user: 바로 심사제출해. Direct submission requested after current-candidate runtime QA limitations were reported."
     ]
   },
   "commonGates": {
@@ -589,7 +590,8 @@
             "Physical iPhone 12 Pro / iOS 26.6 has com.seorilabs.happyfarm 1.12.0 / 1012000; installation channel is not independently confirmed.",
             "devicectl process launch succeeded. Root and independent reviewer ios_review observed the ready title and visible safe-area controls.",
             "Enter Farm UI input failed with Computer Use server error -10005: noWindowsAvailable. Farm/settings/resume/save and supported iPad coverage remain unverified.",
-            "release/history/v1.12.0/app-store-review-preflight-20261009.json"
+            "release/history/v1.12.0/app-store-review-preflight-20261009.json",
+            "2026-10-09 user explicitly requested immediate submission after runtime QA limitations were reported. Submission proceeded; QA remains blocked and is not marked pass."
           ],
           "checkedAt": "2026-10-09T12:22:11.049800+00:00",
           "blocker": "Exact TestFlight candidate runtime flows, applicable backend/ads and iPad evidence pending; device UI input tool blocks navigation."
@@ -599,9 +601,10 @@
           "evidence": [
             "Current version selects exact build 1012000 with AFTER_APPROVAL; saved release notes match frozen markets.appStore in all eight locales.",
             "Independent reviewer ios_review read all active text fields and visually reviewed all 64 screenshots; all images COMPLETE and downloaded pixels/checksum/order match repository source. Zero blocking findings.",
-            "release/history/v1.12.0/app-store-review-preflight-20261009.json"
+            "release/history/v1.12.0/app-store-review-preflight-20261009.json",
+            "Final submission preflight: all 8 saved locale texts, 64 screenshot IDs/checksums/order/COMPLETE state, zero previews and frozen review-note hash match reviewed sources immediately before submission."
           ],
-          "checkedAt": "2026-10-09T12:22:11.049800+00:00",
+          "checkedAt": "2026-10-09T12:51:03.070616+00:00",
           "blocker": null
         },
         "policy": {
@@ -615,11 +618,14 @@
           "blocker": null
         },
         "submission": {
-          "status": "pending",
+          "status": "pass",
           "evidence": [
-            "Current App Store Connect version remains PREPARE_FOR_SUBMISSION; no new App Review submission made while runtime QA remains blocked."
+            "App Review submission c383700a-8709-4915-be23-5c08c6fa2618 and version 1.12.0 / build 1012000 both WAITING_FOR_REVIEW; exact sole version item and selected build read back.",
+            "AFTER_APPROVAL retained; approval and public release remain pending.",
+            "2026-10-09 user: 바로 심사제출해. Direct submission requested after current-candidate runtime QA limitations were reported.",
+            "release/history/v1.12.0/app-store-submission-receipt-20261009.json"
           ],
-          "checkedAt": "2026-10-09T12:22:11.049800+00:00",
+          "checkedAt": "2026-10-09T12:52:54.565675+00:00",
           "blocker": null
         },
         "approval": {
@@ -822,7 +828,16 @@
         "ZMB",
         "XKS"
       ],
-      "freePrice": "0.0"
+      "freePrice": "0.0",
+      "reviewSubmission": {
+        "id": "c383700a-8709-4915-be23-5c08c6fa2618",
+        "itemId": "YzM4MzcwMGEtODcwOS00OTE1LWJlMjMtNWMwOGM2ZmEyNjE4fDZ8ODkyNTY1OTE3",
+        "state": "WAITING_FOR_REVIEW",
+        "versionState": "WAITING_FOR_REVIEW",
+        "submittedDate": "2026-10-09T12:52:50.496Z",
+        "readbackAt": "2026-10-09T12:52:54.565675+00:00",
+        "receipt": "release/history/v1.12.0/app-store-submission-receipt-20261009.json"
+      }
     },
     "apps_in_toss": {
       "objective": "public_live",
@@ -952,7 +967,9 @@
       "text": "All active app-info and version fields read and reviewed; final notes contain only new title/loading/retry experience",
       "images": "Independent review of all 64 current iPhone/iPad screenshots in eight locales: COMPLETE, source checksums/order and downloaded pixels match reviewed repository images.",
       "finalSavedComparison": "pass — all eight notes, text fields, 64 screenshots/order/checksums, no previews, review instructions, exact build and AFTER_APPROVAL",
-      "receipt": "release/history/v1.12.0/app-store-review-preflight-20261009.json"
+      "receipt": "release/history/v1.12.0/app-store-review-preflight-20261009.json",
+      "submissionReceipt": "release/history/v1.12.0/app-store-submission-receipt-20261009.json",
+      "finalSavedComparisonAt": "2026-10-09T12:51:03.070616+00:00"
     },
     "googlePlay": {
       "locales": [
