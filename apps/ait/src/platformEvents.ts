@@ -16,6 +16,7 @@ const PLATFORM_INGEST_URL = 'https://platform-ingest-306278488979.asia-northeast
 // 브라우저 fetch는 Window를 receiver로 유지해야 한다. SDK의 메서드 호출에도 안전하다.
 const browserFetch = globalThis.fetch.bind(globalThis);
 
+// SDK client는 debugBuild를 생략해 Granite 번들의 `__DEV__`를 따른다. `ait build` 번들은 false다.
 const appsInTossPlatform = createPlatform({
   fetchImpl: browserFetch,
   appId: 'happy-farm',
