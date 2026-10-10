@@ -15,6 +15,7 @@ const PLATFORM_API_URL = 'https://platform-api-306278488979.asia-northeast3.run.
 const PLATFORM_INGEST_URL = 'https://platform-ingest-306278488979.asia-northeast3.run.app';
 export const PLATFORM_ADS_URL = 'https://platform-ads-306278488979.asia-northeast3.run.app';
 
+// SDK client는 debugBuild를 생략해 Metro `__DEV__`를 따른다. 출시 번들은 false다.
 const mobilePlatform = createPlatform({
   appId: 'happy-farm',
   baseUrl: PLATFORM_API_URL,
