@@ -1,0 +1,236 @@
+{
+  "schemaVersion": 1,
+  "features": [
+    {
+      "id": "app-launch-shell",
+      "core": true
+    },
+    {
+      "id": "title-startup",
+      "core": true
+    },
+    {
+      "id": "onboarding",
+      "core": true
+    },
+    {
+      "id": "planting",
+      "core": true
+    },
+    {
+      "id": "growth-harvest",
+      "core": true
+    },
+    {
+      "id": "shop",
+      "core": true
+    },
+    {
+      "id": "welcome-back-offline",
+      "core": true
+    },
+    {
+      "id": "save-restore",
+      "core": true
+    },
+    {
+      "id": "reset-farm",
+      "core": true
+    },
+    {
+      "id": "hud-goals-status",
+      "core": false
+    },
+    {
+      "id": "menus-sheets",
+      "core": false
+    },
+    {
+      "id": "missions",
+      "core": false
+    },
+    {
+      "id": "daily-bonus-wheel",
+      "core": false
+    },
+    {
+      "id": "collection-achievements",
+      "core": false
+    },
+    {
+      "id": "production",
+      "core": false
+    },
+    {
+      "id": "research-automation",
+      "core": false
+    },
+    {
+      "id": "prestige-map-landmark",
+      "core": false
+    },
+    {
+      "id": "settings",
+      "core": false
+    },
+    {
+      "id": "rewarded-ads",
+      "core": false,
+      "foundation": true,
+      "paths": [
+        "apps/mobile/src/ads/**",
+        "apps/mobile/src/platformEvents.ts",
+        "apps/mobile/App.tsx",
+        "apps/mobile/app.json",
+        "apps/ait/src/farm/platform/fullScreenAd.ts",
+        "apps/ait/package.json",
+        "apps/ait/granite.config.ts",
+        "packages/farm-core/src/ads.ts",
+        "packages/farm-core/src/adLimits.ts",
+        "packages/farm-core/src/platformAds.ts",
+        "packages/farm-core/src/balance.json",
+        "packages/farm-ui/src/FarmGame.tsx",
+        "packages/farm-ui/src/shopTabs.ts",
+        "apps/mobile/package.json",
+        "pnpm-lock.yaml",
+        "apps/mobile/ios/Podfile",
+        "apps/mobile/ios/Podfile.lock",
+        "apps/mobile/ios/HappyFarmMobile/Info.plist",
+        "apps/mobile/ios/HappyFarmMobile/AppDelegate.swift",
+        "apps/mobile/android/build.gradle",
+        "apps/mobile/android/app/build.gradle",
+        "apps/mobile/android/app/src/main/AndroidManifest.xml",
+        "packages/farm-ui/src/components/WheelSheet.tsx",
+        "packages/farm-ui/src/components/CookingSheet.tsx",
+        "packages/farm-ui/src/components/SheetParts.tsx"
+      ]
+    },
+    {
+      "id": "interstitial-ads",
+      "core": false,
+      "foundation": true,
+      "paths": [
+        "apps/mobile/src/ads/**",
+        "apps/mobile/src/platformEvents.ts",
+        "apps/mobile/App.tsx",
+        "apps/mobile/app.json",
+        "apps/ait/src/farm/platform/fullScreenAd.ts",
+        "apps/ait/package.json",
+        "apps/ait/granite.config.ts",
+        "packages/farm-core/src/ads.ts",
+        "packages/farm-core/src/adLimits.ts",
+        "packages/farm-core/src/platformAds.ts",
+        "packages/farm-core/src/balance.json",
+        "packages/farm-ui/src/FarmGame.tsx",
+        "packages/farm-ui/src/shopTabs.ts",
+        "apps/mobile/package.json",
+        "pnpm-lock.yaml",
+        "apps/mobile/ios/Podfile",
+        "apps/mobile/ios/Podfile.lock",
+        "apps/mobile/ios/HappyFarmMobile/Info.plist",
+        "apps/mobile/ios/HappyFarmMobile/AppDelegate.swift",
+        "apps/mobile/android/build.gradle",
+        "apps/mobile/android/app/build.gradle",
+        "apps/mobile/android/app/src/main/AndroidManifest.xml"
+      ]
+    },
+    {
+      "id": "ad-consent",
+      "core": false,
+      "foundation": true,
+      "paths": [
+        "apps/mobile/src/ads/adMobConsent.ts",
+        "apps/mobile/App.tsx",
+        "packages/farm-ui/src/FarmGame.tsx",
+        "apps/mobile/ios/HappyFarmMobile/PrivacyInfo.xcprivacy",
+        "apps/mobile/package.json",
+        "pnpm-lock.yaml",
+        "apps/mobile/ios/Podfile",
+        "apps/mobile/ios/Podfile.lock",
+        "apps/mobile/ios/HappyFarmMobile/Info.plist",
+        "apps/mobile/ios/HappyFarmMobile/AppDelegate.swift",
+        "apps/mobile/android/build.gradle",
+        "apps/mobile/android/app/build.gradle",
+        "apps/mobile/android/app/src/main/AndroidManifest.xml"
+      ]
+    },
+    {
+      "id": "notifications",
+      "core": false,
+      "foundation": true,
+      "paths": [
+        "apps/mobile/src/notifications/**",
+        "apps/mobile/index.js",
+        "apps/mobile/App.tsx",
+        "packages/farm-ui/src/FarmGame.tsx",
+        "packages/farm-ui/src/gameSettings.ts",
+        "packages/farm-core/src/dailyBonus.ts",
+        "packages/farm-core/src/cropOfTheDay.ts",
+        "apps/mobile/package.json",
+        "pnpm-lock.yaml",
+        "apps/mobile/ios/Podfile",
+        "apps/mobile/ios/Podfile.lock",
+        "apps/mobile/ios/HappyFarmMobile/Info.plist",
+        "apps/mobile/ios/HappyFarmMobile/AppDelegate.swift",
+        "apps/mobile/android/build.gradle",
+        "apps/mobile/android/app/build.gradle",
+        "apps/mobile/android/app/src/main/AndroidManifest.xml"
+      ]
+    },
+    {
+      "id": "firebase-auth-analytics",
+      "core": false,
+      "foundation": true,
+      "paths": [
+        "apps/mobile/src/firebase/**",
+        "apps/mobile/App.tsx",
+        "apps/mobile/index.js",
+        "packages/farm-core/src/analytics.ts",
+        "packages/farm-core/src/metricsSink.ts",
+        "packages/farm-core/src/releaseInfo.ts",
+        "apps/mobile/app.json",
+        "apps/mobile/ios/HappyFarmMobile/GoogleService-Info.plist",
+        "apps/mobile/ios/HappyFarmMobile/PrivacyInfo.xcprivacy",
+        "apps/mobile/ios/ci_scripts/**",
+        "apps/mobile/android/app/google-services.json",
+        "apps/ait/src/firebaseWeb/**",
+        "apps/ait/src/farm/platform/analytics.ts",
+        "apps/mobile/package.json",
+        "pnpm-lock.yaml",
+        "apps/mobile/ios/Podfile",
+        "apps/mobile/ios/Podfile.lock",
+        "apps/mobile/ios/HappyFarmMobile/Info.plist",
+        "apps/mobile/ios/HappyFarmMobile/AppDelegate.swift",
+        "apps/mobile/android/build.gradle",
+        "apps/mobile/android/app/build.gradle",
+        "apps/mobile/android/app/src/main/AndroidManifest.xml"
+      ]
+    },
+    {
+      "id": "platform-session-events",
+      "core": false,
+      "foundation": true,
+      "paths": [
+        "apps/mobile/src/platformEvents.ts",
+        "apps/mobile/src/firebase/auth.ts",
+        "apps/mobile/App.tsx",
+        "apps/ait/src/platformEvents.ts",
+        "packages/farm-core/src/platformEvents.ts",
+        "packages/farm-core/src/platformAds.ts",
+        "packages/farm-core/src/releaseInfo.ts",
+        "pnpm-workspace.yaml",
+        "scripts/check-platform-sdk-lock.mjs",
+        "apps/ait/package.json",
+        "apps/mobile/package.json",
+        "pnpm-lock.yaml",
+        "apps/mobile/ios/Podfile",
+        "apps/mobile/ios/Podfile.lock",
+        "apps/mobile/ios/HappyFarmMobile/Info.plist",
+        "apps/mobile/ios/HappyFarmMobile/AppDelegate.swift",
+        "apps/mobile/android/build.gradle",
+        "apps/mobile/android/app/build.gradle",
+        "apps/mobile/android/app/src/main/AndroidManifest.xml"
+      ]
+    }
+  ]
+}
