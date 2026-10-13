@@ -103,7 +103,10 @@ export const frFarmMessages: FarmMessages = {
   resetInputPlaceholder: (confirmText) => `Tape ${confirmText}`,
   resetDeleteAction: 'Supprimer la sauvegarde et recommencer',
   resetKeepAction: 'Continuer à jouer',
-  privacySection: 'Confidentialité',
+  adInfoSection: 'Publicités et données',
+  adDataNotice:
+    'Ce jeu affiche des publicités de Google AdMob. Pour diffuser et mesurer les publicités et prévenir la fraude, Google peut traiter votre adresse IP (position approximative), des informations sur l’appareil et l’application, vos interactions avec les publicités et des données de diagnostic. Nous ne demandons que des publicités non personnalisées et n’utilisons pas ces données pour vous suivre.',
+  adDataPolicyAction: 'Comment Google utilise les données',
   adPrivacyOptionsAction: 'Choix de confidentialité publicitaire',
   emptyPlot: 'Vide',
   readyBadge: 'GET',

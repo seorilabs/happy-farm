@@ -102,7 +102,10 @@ export const zhHansFarmMessages: FarmMessages = {
   resetInputPlaceholder: (confirmText) => `输入 ${confirmText}`,
   resetDeleteAction: '删除农场存档并重新开始',
   resetKeepAction: '继续游戏',
-  privacySection: '隐私',
+  adInfoSection: '广告与数据',
+  adDataNotice:
+    '本游戏展示来自 Google AdMob 的广告。为投放和衡量广告并防止欺诈，Google 可能会处理你的 IP 地址（大致位置）、设备和应用信息、广告互动及诊断信息。我们只请求非个性化广告，不会将这些信息用于跟踪你。',
+  adDataPolicyAction: 'Google 如何使用数据',
   adPrivacyOptionsAction: '广告隐私设置',
   emptyPlot: '空地',
   readyBadge: 'GET',

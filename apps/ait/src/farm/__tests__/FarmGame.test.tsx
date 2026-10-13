@@ -5078,6 +5078,56 @@ describe('FarmGame UI flow', () => {
     expect(screen.getByText('새로 시작하기')).toBeTruthy();
   });
 
+  test('AC-8 shows the ad data notice and Google policy link to mobile hosts without UMP options', async () => {
+    const openAdDataPolicy = jest.fn(() => Promise.resolve());
+    const openAdPrivacyOptions = jest.fn(() => Promise.resolve());
+    const messages = getFarmMessages(DEFAULT_LOCALE);
+    const screen = await renderGame(null, {
+      privacySettings: { isSupported: false, openAdPrivacyOptions, openAdDataPolicy },
+    });
+
+    await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+    fireEvent.press(screen.getByLabelText('설정'));
+
+    expect(screen.getByText(messages.adInfoSection)).toBeTruthy();
+    expect(screen.getByTestId('ad-data-notice')).toHaveTextContent(messages.adDataNotice);
+    expect(screen.queryByTestId('ad-privacy-options')).toBeNull();
+
+    fireEvent.press(screen.getByTestId('ad-data-policy'));
+
+    expect(openAdDataPolicy).toHaveBeenCalledWith(DEFAULT_LOCALE);
+    expect(openAdPrivacyOptions).not.toHaveBeenCalled();
+  });
+
+  test('AC-8 keeps the UMP privacy options button under the ad notice when the host requires it', async () => {
+    const openAdPrivacyOptions = jest.fn(() => Promise.resolve());
+    const screen = await renderGame(null, {
+      privacySettings: {
+        isSupported: true,
+        openAdPrivacyOptions,
+        openAdDataPolicy: jest.fn(() => Promise.resolve()),
+      },
+    });
+
+    await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+    fireEvent.press(screen.getByLabelText('설정'));
+
+    expect(screen.getByTestId('ad-data-notice')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('ad-privacy-options'));
+
+    expect(openAdPrivacyOptions).toHaveBeenCalledTimes(1);
+  });
+
+  test('AC-8 shows no ad data section when the host passes no privacy settings', async () => {
+    const screen = await renderGame(null);
+
+    await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+    fireEvent.press(screen.getByLabelText('설정'));
+
+    expect(screen.queryByTestId('ad-data-notice')).toBeNull();
+    expect(screen.queryByTestId('ad-data-policy')).toBeNull();
+  });
+
   test('switches and persists the UI language from the settings language selector', async () => {
     const screen = await renderGame(null);
 

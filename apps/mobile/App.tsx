@@ -7,6 +7,7 @@ import {
   FarmStartup,
   detectRuntimeLocale,
 } from '../../packages/farm-ui/src';
+import { openAdDataPolicy } from './src/ads/adDataPolicy';
 import { useAdMobInterstitialAd } from './src/ads/adMobInterstitialAd';
 import { useAdMobRewardedAd } from './src/ads/adMobRewardedAd';
 import {
@@ -55,6 +56,7 @@ function App() {
         await showAdMobPrivacyOptions();
         setAdPrivacyOptionsRequired(await isAdMobPrivacyOptionsRequired());
       },
+      openAdDataPolicy,
     }),
     [adPrivacyOptionsRequired]
   );

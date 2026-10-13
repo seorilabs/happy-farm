@@ -101,7 +101,10 @@ export const koFarmMessages = {
   resetInputPlaceholder: (confirmText: string) => `${confirmText} 입력`,
   resetDeleteAction: '농장 기록 삭제하고 새로 시작',
   resetKeepAction: '계속 이어서 할게요',
-  privacySection: '개인정보',
+  adInfoSection: '광고 정보',
+  adDataNotice:
+    '이 게임은 Google AdMob 광고를 보여 줘요. Google은 광고 제공·측정과 부정 이용 방지를 위해 IP 주소(대략적인 위치), 기기·앱 정보, 광고 상호작용, 진단 정보를 처리할 수 있어요. 맞춤 광고는 요청하지 않고, 이 정보를 추적에 쓰지 않아요.',
+  adDataPolicyAction: 'Google의 데이터 사용 방식',
   adPrivacyOptionsAction: '광고 개인정보 설정',
   emptyPlot: '빈 밭',
   readyBadge: 'GET',

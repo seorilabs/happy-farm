@@ -103,7 +103,10 @@ export const zhHantFarmMessages: FarmMessages = {
   resetInputPlaceholder: (confirmText) => `請輸入 ${confirmText}`,
   resetDeleteAction: '刪除農場存檔並重新開始',
   resetKeepAction: '繼續遊玩',
-  privacySection: '隱私權',
+  adInfoSection: '廣告與資料',
+  adDataNotice:
+    '本遊戲會顯示 Google AdMob 的廣告。為了投放與衡量廣告並防止詐欺，Google 可能會處理你的 IP 位址（大概位置）、裝置與應用程式資訊、廣告互動及診斷資訊。我們只要求非個人化廣告，也不會將這些資訊用於追蹤你。',
+  adDataPolicyAction: 'Google 如何使用資料',
   adPrivacyOptionsAction: '廣告隱私權設定',
   emptyPlot: '空田',
   readyBadge: 'GET',

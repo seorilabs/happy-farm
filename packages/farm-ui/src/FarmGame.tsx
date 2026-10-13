@@ -653,8 +653,11 @@ export type FarmGameNotifications = {
 };
 
 export type FarmPrivacySettings = {
+  // True only when the ads consent provider asks for a privacy options entry point.
   isSupported: boolean;
   openAdPrivacyOptions: () => Promise<void>;
+  // Opens the ad provider's data-use page; the notice is shown even without a consent form.
+  openAdDataPolicy: (locale: SupportedLocale) => Promise<void>;
 };
 
 export type FarmGameProps = {
@@ -6632,15 +6635,26 @@ function FarmGameBody({
             </View>
             <Text style={sheetPartStyles.settingDesc}>{messages.languageDesc}</Text>
 
-            {privacySettings?.isSupported ? (
+            {privacySettings ? (
               <View>
-                <Text style={styles.sheetSectionTitle}>{messages.privacySection}</Text>
+                <Text style={styles.sheetSectionTitle}>{messages.adInfoSection}</Text>
+                <Text testID="ad-data-notice" style={sheetPartStyles.settingDesc}>
+                  {messages.adDataNotice}
+                </Text>
                 <SheetAction
-                  testID="ad-privacy-options"
-                  label={messages.adPrivacyOptionsAction}
+                  testID="ad-data-policy"
+                  label={messages.adDataPolicyAction}
                   secondary
-                  onPress={() => void privacySettings.openAdPrivacyOptions()}
+                  onPress={() => void privacySettings.openAdDataPolicy(locale)}
                 />
+                {privacySettings.isSupported ? (
+                  <SheetAction
+                    testID="ad-privacy-options"
+                    label={messages.adPrivacyOptionsAction}
+                    secondary
+                    onPress={() => void privacySettings.openAdPrivacyOptions()}
+                  />
+                ) : null}
               </View>
             ) : null}
 
