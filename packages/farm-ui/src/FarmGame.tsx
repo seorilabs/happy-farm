@@ -290,6 +290,12 @@ import {
 } from './farmGameLayout';
 import { styles } from './farmGameStyles';
 import { resolveUnaffordableSeedNudge, shouldFireStallNudge } from './onboardingNudge';
+import {
+  markOverlayModalPresented,
+  resolveOverlayModalSlot,
+  type OverlayModal,
+  type OverlayModalSlot,
+} from './overlayModalSlot';
 import { resolveBottomSafeInset } from './safeArea';
 import {
   getShopTabBadge,
@@ -316,6 +322,9 @@ const LAST_SEEN_HEARTBEAT_MS = 30_000;
 // iOS reports the sheet Modal's onDismiss within a frame or two; this only bounds the
 // wait if a host never reports it, so overlays cannot stay hidden for good.
 const SHEET_MODAL_DISMISS_FALLBACK_MS = 1_000;
+// An overlay Modal reports onShow about 0.3s after mounting. If it never does, iOS
+// refused the presentation, so the slot is released and the overlay retried.
+const OVERLAY_MODAL_SHOW_FALLBACK_MS = 3_000;
 const HARVEST_NOTIFICATION_MIN_LEAD_MS = 60_000;
 const PROGRESS_ANIMATION_DURATION_MS = GAME_TICK_INTERVAL_MS;
 // Fresh-plant sprout "bounce in" duration.
@@ -1086,22 +1095,44 @@ function FarmGameBody({
   // but invisible and swallows every touch (UI 검수 1회차 R1-2: finishing onboarding froze
   // the farm). Overlay Modals therefore wait until the sheet reports onDismiss. Android never
   // calls onDismiss and has no such limit, so there a closed sheet is gone at once.
+  // A requested sheet also waits while an overlay Modal holds the screen (see overlayModalSlot).
+  const [overlaySlot, setOverlaySlot] = useState<OverlayModalSlot>(null);
+  const isSheetModalVisible = activeSheet != null && overlaySlot == null;
   const [isSheetModalOnScreen, setIsSheetModalOnScreen] = useState(false);
-  if (activeSheet != null && !isSheetModalOnScreen) {
+  if (isSheetModalVisible && !isSheetModalOnScreen) {
     setIsSheetModalOnScreen(true);
-  } else if (activeSheet == null && isSheetModalOnScreen && Platform.OS !== 'ios') {
+  } else if (!isSheetModalVisible && isSheetModalOnScreen && Platform.OS !== 'ios') {
     setIsSheetModalOnScreen(false);
   }
   useEffect(() => {
-    if (activeSheet != null || !isSheetModalOnScreen) {
+    if (isSheetModalVisible || !isSheetModalOnScreen) {
       return;
     }
     const timer = setTimeout(() => setIsSheetModalOnScreen(false), SHEET_MODAL_DISMISS_FALLBACK_MS);
     return () => clearTimeout(timer);
-  }, [activeSheet, isSheetModalOnScreen]);
+  }, [isSheetModalVisible, isSheetModalOnScreen]);
   const handleSheetModalDismissed = useCallback(() => {
     setIsSheetModalOnScreen(false);
   }, []);
+  const handleOverlayModalShown = useCallback((overlay: OverlayModal) => {
+    setOverlaySlot((slot) => markOverlayModalPresented(slot, overlay));
+  }, []);
+  useEffect(() => {
+    if (overlaySlot == null || overlaySlot.presented) {
+      return;
+    }
+    const pendingSlot = overlaySlot;
+    const timer = setTimeout(
+      () => setOverlaySlot((slot) => (slot === pendingSlot ? null : slot)),
+      OVERLAY_MODAL_SHOW_FALLBACK_MS
+    );
+    return () => clearTimeout(timer);
+  }, [overlaySlot]);
+  // Interstitials are opportunistic; skip one rather than present over an overlay Modal.
+  const overlaySlotRef = useRef<OverlayModalSlot>(null);
+  useEffect(() => {
+    overlaySlotRef.current = overlaySlot;
+  }, [overlaySlot]);
   // #372 상점 시트 내부 활성 탭. 상점 진입 시 항상 첫 탭(확장)부터 보도록 초기화한다.
   const [shopTab, setShopTab] = useState<ShopTabKey>('expand');
   // #376 데일리 보너스는 열람 즉시 자동 수령되므로, 방금 지급된 streak·골드를
@@ -1122,6 +1153,13 @@ function FarmGameBody({
   // synchronously across both formats so rapid taps or transition callbacks
   // cannot overlap SDK show calls or replace a pending rewarded Promise.
   const fullScreenAdInFlightRef = useRef(false);
+  // Mirrors the reservation for rendering: overlay Modals must not start presenting
+  // while the ads SDK owns the screen.
+  const [isFullScreenAdInFlight, setIsFullScreenAdInFlight] = useState(false);
+  const setFullScreenAdInFlight = useCallback((inFlight: boolean) => {
+    fullScreenAdInFlightRef.current = inFlight;
+    setIsFullScreenAdInFlight(inFlight);
+  }, []);
   // Session-local, non-identifying attempt ids join one click to exactly one
   // terminal event in the BigQuery export. They are not registered as a GA4
   // custom dimension.
@@ -2649,7 +2687,7 @@ function FarmGameBody({
     // The permission education modal is the last post-activation surface. Let
     // the first-harvest celebration and any deferred daily/return sheet finish
     // first so two foreground modals are never mounted together.
-    if (firstHarvestNotice != null || isSheetModalOnScreen) return;
+    if (firstHarvestNotice != null || activeSheet != null || isSheetModalOnScreen) return;
     notificationPromptResolvedRef.current = true;
     if (gameSettings.harvestNotificationsEnabled) {
       markHarvestNotificationPromptSeen();
@@ -2668,6 +2706,7 @@ function FarmGameBody({
     gameState.harvestedCropKeys.length,
     gameSettings.harvestNotificationsEnabled,
     firstHarvestNotice,
+    activeSheet,
     isSheetModalOnScreen,
   ]);
 
@@ -4736,7 +4775,7 @@ function FarmGameBody({
     // Reserve before readiness/limit checks as well as before native show. A
     // same-frame double tap must not inflate click/failed intent metrics even
     // when the SDK is still loading.
-    fullScreenAdInFlightRef.current = true;
+    setFullScreenAdInFlight(true);
 
     // Tag the whole funnel with the type's canonical placement so blocked/click/
     // completed/failed all aggregate per placement (single source of truth).
@@ -4762,7 +4801,7 @@ function FarmGameBody({
       farmAnalytics.trackAdLimitBlocked(type, placement, limit.reason, analyticsContext(attemptState), baseMetadata);
       toast(limit.reason);
       void Promise.resolve().then(() => {
-        fullScreenAdInFlightRef.current = false;
+        setFullScreenAdInFlight(false);
       });
       return false;
     }
@@ -4783,7 +4822,7 @@ function FarmGameBody({
       );
       toast(rewardedAd.isAdSupported ? messages.adPreparingToast : messages.adUnsupportedToast);
       void Promise.resolve().then(() => {
-        fullScreenAdInFlightRef.current = false;
+        setFullScreenAdInFlight(false);
       });
       return false;
     }
@@ -4891,7 +4930,7 @@ function FarmGameBody({
 
       return false;
     } finally {
-      fullScreenAdInFlightRef.current = false;
+      setFullScreenAdInFlight(false);
     }
   }
 
@@ -4899,7 +4938,7 @@ function FarmGameBody({
   // 횟수에 따라 늘어나고(백오프), 두 지면이 하나의 타임라인을 공유하므로
   // 수확과 해금이 연달아 일어나도 광고가 붙어서 뜨지 않는다.
   async function showInterstitial(placement: string) {
-    if (fullScreenAdInFlightRef.current || !interstitialAd.isAdReady) {
+    if (fullScreenAdInFlightRef.current || overlaySlotRef.current != null || !interstitialAd.isAdReady) {
       return;
     }
 
@@ -4908,7 +4947,7 @@ function FarmGameBody({
       return;
     }
 
-    fullScreenAdInFlightRef.current = true;
+    setFullScreenAdInFlight(true);
     try {
       const result = await interstitialAd.showAd();
       if (result.status !== 'dismissed' && result.status !== 'earned') {
@@ -4923,7 +4962,7 @@ function FarmGameBody({
       // adapter must never escape a fire-and-forget transition callback.
       return;
     } finally {
-      fullScreenAdInFlightRef.current = false;
+      setFullScreenAdInFlight(false);
     }
   }
 
@@ -4963,7 +5002,8 @@ function FarmGameBody({
     if (
       !interstitialPlacements.returnWelcomeBack ||
       onboardingStep != null ||
-      fullScreenAdInFlightRef.current
+      fullScreenAdInFlightRef.current ||
+      overlaySlotRef.current != null
     ) {
       return;
     }
@@ -4976,7 +5016,7 @@ function FarmGameBody({
       return;
     }
 
-    fullScreenAdInFlightRef.current = true;
+    setFullScreenAdInFlight(true);
     try {
       const result = await interstitialAd.showAd();
       if (result.status !== 'dismissed' && result.status !== 'earned') {
@@ -5000,7 +5040,7 @@ function FarmGameBody({
       // Keep the cooldown available for a later return when the host throws.
       return;
     } finally {
-      fullScreenAdInFlightRef.current = false;
+      setFullScreenAdInFlight(false);
     }
   }
 
@@ -5801,13 +5841,28 @@ function FarmGameBody({
   const pendingFeatureCoachmark =
     gameState.onboardingCompleted &&
     onboardingStep == null &&
-    !isSheetModalOnScreen &&
     firstHarvestNotice == null &&
     notificationPromptGeneration == null &&
     !isNotificationPromptOwed &&
     !prestigeGuide
       ? getPendingFeatureCoachmark(gameState)
       : null;
+  const requestedOverlay: OverlayModal | null =
+    notificationPromptGeneration != null
+      ? { kind: 'notificationPrompt', generation: notificationPromptGeneration }
+      : prestigeGuide
+        ? { kind: 'prestigeGuide' }
+        : pendingFeatureCoachmark != null
+          ? { kind: 'featureCoachmark', key: pendingFeatureCoachmark }
+          : null;
+  const nextOverlaySlot = resolveOverlayModalSlot(
+    overlaySlot,
+    requestedOverlay,
+    activeSheet == null && !isSheetModalOnScreen && !isFullScreenAdInFlight
+  );
+  if (nextOverlaySlot !== overlaySlot) {
+    setOverlaySlot(nextOverlaySlot);
+  }
 
   // 시트(RN Modal)는 별도 네이티브 윈도우라 같은 트리의 토스트를 덮어버린다. 같은
   // 노드를 메인 트리와 Sheet의 overlay 슬롯 양쪽에 넘겨, 시트가 열린 동안에도
@@ -6286,6 +6341,7 @@ function FarmGameBody({
         overlay={toastNode}
         goldLabel={messages.sheetGoldLabel(formatMoney(gameState.gold, locale))}
         canClose={() => activeSheet?.type !== 'welcomeBack' || !offlineBonusAdInFlightRef.current}
+        isModalVisible={isSheetModalVisible}
         onDismiss={handleSheetModalDismissed}
         onClose={() => {
           if (activeSheet?.type === 'welcomeBack' && !collectReturnSummaryOffline(activeSheet.summary)) {
@@ -6672,7 +6728,7 @@ function FarmGameBody({
             {privacySettings ? (
               <View>
                 <Text style={styles.sheetSectionTitle}>{messages.adInfoSection}</Text>
-                <Text testID="ad-data-notice" style={sheetPartStyles.settingDesc}>
+                <Text testID="ad-data-notice" style={sheetPartStyles.sheetNotice}>
                   {messages.adDataNotice}
                 </Text>
                 <SheetAction
@@ -7100,27 +7156,48 @@ function FarmGameBody({
           onDismiss={dismissFirstHarvestCelebration}
         />
       ) : null}
-      {notificationPromptGeneration != null ? (
-        <NotificationPromptOverlay
-          messages={messages}
-          onAccept={() => {
-            void acceptNotificationPrompt(notificationPromptGeneration);
-          }}
-          onDecline={() => declineNotificationPrompt(notificationPromptGeneration)}
-        />
-      ) : null}
-      {prestigeGuide && !isSheetModalOnScreen ? (
-        <PrestigeGuideOverlay messages={messages} onDismiss={dismissPrestigeGuide} />
-      ) : null}
-      {pendingFeatureCoachmark != null ? (
-        <FeatureCoachmarkOverlay
-          key={pendingFeatureCoachmark}
-          featureKey={pendingFeatureCoachmark}
-          messages={messages}
-          onOpen={() => openFeatureCoachmark(pendingFeatureCoachmark)}
-          onDismiss={() => dismissFeatureCoachmark(pendingFeatureCoachmark)}
-        />
-      ) : null}
+      {overlaySlot?.overlay.kind === 'notificationPrompt'
+        ? (() => {
+            const overlay = overlaySlot.overlay;
+            return (
+              <NotificationPromptOverlay
+                messages={messages}
+                onShow={() => handleOverlayModalShown(overlay)}
+                onAccept={() => {
+                  void acceptNotificationPrompt(overlay.generation);
+                }}
+                onDecline={() => declineNotificationPrompt(overlay.generation)}
+              />
+            );
+          })()
+        : null}
+      {overlaySlot?.overlay.kind === 'prestigeGuide'
+        ? (() => {
+            const overlay = overlaySlot.overlay;
+            return (
+              <PrestigeGuideOverlay
+                messages={messages}
+                onShow={() => handleOverlayModalShown(overlay)}
+                onDismiss={dismissPrestigeGuide}
+              />
+            );
+          })()
+        : null}
+      {overlaySlot?.overlay.kind === 'featureCoachmark'
+        ? (() => {
+            const overlay = overlaySlot.overlay;
+            return (
+              <FeatureCoachmarkOverlay
+                key={overlay.key}
+                featureKey={overlay.key}
+                messages={messages}
+                onShow={() => handleOverlayModalShown(overlay)}
+                onOpen={() => openFeatureCoachmark(overlay.key)}
+                onDismiss={() => dismissFeatureCoachmark(overlay.key)}
+              />
+            );
+          })()
+        : null}
     </View>
   );
 }
@@ -7550,10 +7627,12 @@ function FirstHarvestOverlay({
 // calls requestPermission for players who opt in.
 function NotificationPromptOverlay({
   messages,
+  onShow,
   onAccept,
   onDecline,
 }: {
   messages: FarmMessages;
+  onShow: () => void;
   onAccept: () => void;
   onDecline: () => void;
 }) {
@@ -7561,7 +7640,7 @@ function NotificationPromptOverlay({
     // Fabric renders this absoluteFill overlay in normal flow — pushing the game
     // UI up with no dim backdrop — when it mounts as a plain View child. Hosting
     // it in a Modal (the pattern Sheet already uses) restores the true overlay.
-    <Modal transparent visible animationType="fade" onRequestClose={onDecline}>
+    <Modal transparent visible animationType="fade" onShow={onShow} onRequestClose={onDecline}>
       <View testID="notification-prompt-overlay" style={styles.notificationPromptBackdrop}>
         <View testID="notification-prompt-card" style={styles.notificationPromptCard}>
           <Text style={styles.notificationPromptIcon}>🔔</Text>
@@ -7598,15 +7677,17 @@ function NotificationPromptOverlay({
 // Dismissing it persists prestigeGuideSeen so it never returns.
 function PrestigeGuideOverlay({
   messages,
+  onShow,
   onDismiss,
 }: {
   messages: FarmMessages;
+  onShow: () => void;
   onDismiss: () => void;
 }) {
   return (
     // See NotificationPromptOverlay: Fabric mis-renders this absoluteFill overlay
     // as normal flow unless it is hosted in a Modal.
-    <Modal transparent visible animationType="fade" onRequestClose={onDismiss}>
+    <Modal transparent visible animationType="fade" onShow={onShow} onRequestClose={onDismiss}>
       <View testID="prestige-guide-overlay" style={styles.notificationPromptBackdrop}>
         <View testID="prestige-guide-card" style={styles.notificationPromptCard}>
           <Text style={styles.notificationPromptIcon}>🔗</Text>
@@ -7665,11 +7746,13 @@ function getFeatureCoachmarkText(
 function FeatureCoachmarkOverlay({
   featureKey,
   messages,
+  onShow,
   onOpen,
   onDismiss,
 }: {
   featureKey: FeatureCoachmarkKey;
   messages: FarmMessages;
+  onShow: () => void;
   onOpen: () => void;
   onDismiss: () => void;
 }) {
@@ -7677,7 +7760,7 @@ function FeatureCoachmarkOverlay({
   return (
     // PrestigeGuideOverlay와 동일하게 Modal에 호스팅해야 Fabric이 absoluteFill 오버레이를
     // 정상 렌더한다.
-    <Modal transparent visible animationType="fade" onRequestClose={onDismiss}>
+    <Modal transparent visible animationType="fade" onShow={onShow} onRequestClose={onDismiss}>
       <View testID="feature-coachmark-overlay" style={styles.notificationPromptBackdrop}>
         <View testID="feature-coachmark-card" style={styles.notificationPromptCard}>
           <Text style={styles.featureCoachmarkEyebrow}>{messages.featureCoachmarkEyebrow}</Text>
@@ -8693,6 +8776,7 @@ function Sheet({
   bottomInset,
   canClose,
   onClose,
+  isModalVisible,
   onDismiss,
   overlay,
   goldLabel,
@@ -8715,6 +8799,8 @@ function Sheet({
   // invisible, still-mounted modal behind.
   canClose?: () => boolean;
   onClose: () => boolean | void;
+  // False while an overlay Modal still holds the screen; the sheet presents afterwards.
+  isModalVisible: boolean;
   // iOS only: called once the native Modal has finished dismissing.
   onDismiss?: () => void;
 }) {
@@ -8820,7 +8906,7 @@ function Sheet({
   return (
     <Modal
       transparent
-      visible={activeSheet != null}
+      visible={isModalVisible}
       animationType="none"
       onRequestClose={closeSheetWithAnimation}
       onDismiss={onDismiss}

@@ -99,6 +99,35 @@ jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
 }));
 
+// The jest-preset Modal mock never reports onShow. FarmGame keeps an overlay Modal until
+// onShow confirms the presentation (iOS presentation lock, overlayModalSlot.ts), so this
+// mock reports onShow right after a visible mount, as the native host does once presented.
+// Tests that need to hold a presentation open set mockModalControl.autoShow = false.
+const mockModalControl = { autoShow: true, renders: [] as Array<string | undefined> };
+jest.mock('react-native/Libraries/Modal/Modal', () => {
+  const ReactModule = jest.requireActual<typeof import('react')>('react');
+  type MockModalProps = {
+    visible?: boolean;
+    onShow?: () => void;
+    children?: { props?: { testID?: string } };
+  } & Record<string, unknown>;
+  function MockModal(props: MockModalProps) {
+    const { visible, onShow, children } = props;
+    const isVisible = visible !== false;
+    ReactModule.useEffect(() => {
+      if (isVisible && mockModalControl.autoShow) {
+        onShow?.();
+      }
+    }, [isVisible]);
+    if (!isVisible) {
+      return null;
+    }
+    mockModalControl.renders.push(children?.props?.testID);
+    return ReactModule.createElement('Modal', props, children as React.ReactNode);
+  }
+  return { __esModule: true, default: MockModal };
+});
+
 const farmGameModule = jest.requireActual(
   '../../../../../packages/farm-ui/src/FarmGame'
 ) as typeof import('../../../../../packages/farm-ui/src/FarmGame');
@@ -7349,35 +7378,34 @@ describe('NextGoalBar', () => {
     // UI 검수 1회차 R1-2 root cause: the coachmark mounted for one render before the prompt
     // effect ran, then got swapped out mid-presentation and iOS refused the prompt.
     test('R1-2 never mounts the feature coachmark while the notification prompt is due', async () => {
-      const modalRender = jest.spyOn(Modal.prototype, 'render');
-      try {
-        const notifications = createNotificationsMock();
-        const screen = await renderGame({ ...createPostAhaState(), gold: 600 }, { notifications });
+      mockModalControl.renders = [];
+      const notifications = createNotificationsMock();
+      const screen = await renderGame({ ...createPostAhaState(), gold: 600 }, { notifications });
 
-        await waitFor(() => expect(screen.getByTestId('notification-prompt-card')).toBeTruthy());
-        const renderedOverlays = modalRender.mock.contexts.map(
-          (modal) => (modal as { props: { children?: { props?: { testID?: string } } } }).props.children?.props?.testID
-        );
-        expect(renderedOverlays).not.toContain('feature-coachmark-overlay');
+      await waitFor(() => expect(screen.getByTestId('notification-prompt-card')).toBeTruthy());
+      expect(mockModalControl.renders).not.toContain('feature-coachmark-overlay');
 
-        fireEvent.press(screen.getByTestId('notification-prompt-decline'));
-        await waitFor(() => expect(screen.getByTestId('feature-coachmark-card')).toBeTruthy());
-      } finally {
-        modalRender.mockRestore();
-      }
+      fireEvent.press(screen.getByTestId('notification-prompt-decline'));
+      await waitFor(() => expect(screen.getByTestId('feature-coachmark-card')).toBeTruthy());
     });
 
     test('R1-2 waits for the closing sheet to report onDismiss on iOS before showing the prompt', async () => {
-      const notifications = createNotificationsMock();
-      const screen = await renderGameWithDailyBonusSheet(createPostAhaState(), { notifications });
+      // Fake timers keep the 1s dismiss fallback from firing under a slow test runner.
+      jest.useFakeTimers();
+      try {
+        const notifications = createNotificationsMock();
+        const screen = await renderGameWithDailyBonusSheet(createPostAhaState(), { notifications });
 
-      await closeOpenSheet(screen);
-      expect(screen.queryByTestId('notification-prompt-card')).toBeNull();
+        await closeOpenSheet(screen);
+        expect(screen.queryByTestId('notification-prompt-card')).toBeNull();
 
-      await act(async () => {
-        getSheetModal(screen).props.onDismiss();
-      });
-      await waitFor(() => expect(screen.getByTestId('notification-prompt-card')).toBeTruthy());
+        await act(async () => {
+          getSheetModal(screen).props.onDismiss();
+        });
+        await waitFor(() => expect(screen.getByTestId('notification-prompt-card')).toBeTruthy());
+      } finally {
+        jest.useRealTimers();
+      }
     });
 
     test('R1-2 shows the prompt as soon as the sheet closes on Android, which never reports onDismiss', async () => {
@@ -7710,16 +7738,74 @@ describe('하단 safe-area 인셋 적용 (#236)', () => {
       expect(resumed.queryByTestId('feature-coachmark-card')).toBeNull();
     });
 
+    // UI 검수 2회차 R2-1: a harvest unlocked a coachmark and, one render later, opened the
+    // harvest bonus sheet. Pulling the coachmark mid-presentation froze the farm on iOS.
+    function getOverlayModal(screen: Awaited<ReturnType<typeof renderGame>>, testID: string) {
+      const overlayModal = screen
+        .UNSAFE_getAllByType(Modal)
+        .find((modal) => modal.props.children?.props?.testID === testID);
+      if (overlayModal == null) {
+        throw new Error(`Overlay Modal ${testID} is not mounted.`);
+      }
+      return overlayModal;
+    }
+
+    test('R2-1 keeps a presenting coachmark when a sheet opens and shows the sheet after onShow', async () => {
+      mockModalControl.autoShow = false;
+      try {
+        const messages = getFarmMessages(DEFAULT_LOCALE);
+        const screen = await renderGame(animalsUnlockedState());
+        await waitFor(() => expect(screen.getByTestId('feature-coachmark-card')).toBeTruthy());
+
+        fireEvent.press(screen.getByLabelText('설정'));
+
+        expect(screen.getByTestId('feature-coachmark-card')).toBeTruthy();
+        expect(getSheetModal(screen).props.visible).toBe(false);
+
+        await act(async () => {
+          getOverlayModal(screen, 'feature-coachmark-overlay').props.onShow();
+        });
+
+        await waitFor(() => expect(screen.queryByTestId('feature-coachmark-card')).toBeNull());
+        expect(getSheetModal(screen).props.visible).toBe(true);
+        expect(screen.getByText(messages.sheetTitleSettings)).toBeTruthy();
+      } finally {
+        mockModalControl.autoShow = true;
+      }
+    });
+
+    test('R2-1 releases a coachmark whose presentation iOS never confirms so sheets are not blocked', async () => {
+      mockModalControl.autoShow = false;
+      try {
+        const screen = await renderGame(animalsUnlockedState());
+        await waitFor(() => expect(screen.getByTestId('feature-coachmark-card')).toBeTruthy());
+
+        fireEvent.press(screen.getByLabelText('설정'));
+        expect(getSheetModal(screen).props.visible).toBe(false);
+
+        await waitFor(() => expect(getSheetModal(screen).props.visible).toBe(true), { timeout: 5000 });
+        expect(screen.queryByTestId('feature-coachmark-card')).toBeNull();
+      } finally {
+        mockModalControl.autoShow = true;
+      }
+    });
+
     test('R1-2 a pending coachmark waits for the closing sheet to report onDismiss on iOS', async () => {
-      const screen = await renderGameWithDailyBonusSheet(animalsUnlockedState());
+      // Fake timers keep the 1s dismiss fallback from firing under a slow test runner.
+      jest.useFakeTimers();
+      try {
+        const screen = await renderGameWithDailyBonusSheet(animalsUnlockedState());
 
-      await closeOpenSheet(screen);
-      expect(screen.queryByTestId('feature-coachmark-card')).toBeNull();
+        await closeOpenSheet(screen);
+        expect(screen.queryByTestId('feature-coachmark-card')).toBeNull();
 
-      await act(async () => {
-        getSheetModal(screen).props.onDismiss();
-      });
-      await waitFor(() => expect(screen.getByTestId('feature-coachmark-card')).toBeTruthy());
+        await act(async () => {
+          getSheetModal(screen).props.onDismiss();
+        });
+        await waitFor(() => expect(screen.getByTestId('feature-coachmark-card')).toBeTruthy());
+      } finally {
+        jest.useRealTimers();
+      }
     });
 
     test("'보러가기'는 해당 기능 시트를 열고 코치마크를 확인 처리한다", async () => {
