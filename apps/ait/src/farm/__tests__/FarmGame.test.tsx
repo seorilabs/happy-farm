@@ -2691,6 +2691,45 @@ describe('FarmGame UI flow', () => {
       );
     });
 
+    // UI 검수 2회차 R2-1: the ads SDK presents over the top-most controller, so a sheet that
+    // closes in the same tap as the return interstitial would have the ad presented on it.
+    // Dismissing that sheet then removed only the ad and left an empty sheet swallowing touches.
+    test('R2-1 keeps the closing welcome-back sheet presented until the return interstitial ends', async () => {
+      const state = withGrowingPlot('wheat' as CropKey, createInitialState());
+      mockPersistence.readLastSeenAt.mockResolvedValueOnce(NOW - TWO_HOURS_MS);
+      const offlineGold = getActiveFarmOfflineGold(state, TWO_HOURS_MS);
+      let finishAd!: (result: { status: 'dismissed' }) => void;
+      const interstitial = {
+        isAdReady: true,
+        isAdSupported: true,
+        showAd: jest.fn(
+          () =>
+            new Promise<{ status: 'dismissed' }>((resolve) => {
+              finishAd = resolve;
+            })
+        ),
+      };
+      const screen = await renderGame(state, {
+        interstitialPlacements: {
+          returnWelcomeBack: true,
+          progressionMilestone: false,
+          harvestBatch: false,
+        },
+        useInterstitialAd: () => interstitial,
+      });
+
+      const collectLabel = messages.welcomeBackCollectAction(formatMoney(offlineGold, DEFAULT_LOCALE));
+      fireEvent.press(await waitFor(() => screen.getByText(collectLabel)));
+      await waitFor(() => expect(interstitial.showAd).toHaveBeenCalledTimes(1));
+
+      expect(getSheetModal(screen).props.visible).toBe(true);
+
+      await act(async () => {
+        finishAd({ status: 'dismissed' });
+      });
+      await waitFor(() => expect(getSheetModal(screen).props.visible).toBe(false));
+    });
+
     test('does not consume the return cooldown when the interstitial fails to display', async () => {
       const track = jest.fn();
       const state = withGrowingPlot('wheat' as CropKey, createInitialState());
@@ -7409,29 +7448,41 @@ describe('NextGoalBar', () => {
     });
 
     test('R1-2 shows the prompt as soon as the sheet closes on Android, which never reports onDismiss', async () => {
-      const os = jest.replaceProperty(Platform, 'OS', 'android');
+      // Fake timers keep sheet animations and fallbacks deterministic under a slow test runner.
+      jest.useFakeTimers();
+      try {
+        const os = jest.replaceProperty(Platform, 'OS', 'android');
+        try {
+          const notifications = createNotificationsMock();
+          const screen = await renderGameWithDailyBonusSheet(createPostAhaState(), { notifications });
+
+          await closeOpenSheet(screen);
+
+          await waitFor(() => expect(screen.getByTestId('notification-prompt-card')).toBeTruthy());
+        } finally {
+          os.restore();
+        }
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    test('R1-2 still shows the prompt when iOS never reports onDismiss', async () => {
+      // Fake timers keep sheet animations and fallbacks deterministic under a slow test runner.
+      jest.useFakeTimers();
       try {
         const notifications = createNotificationsMock();
         const screen = await renderGameWithDailyBonusSheet(createPostAhaState(), { notifications });
 
         await closeOpenSheet(screen);
+        expect(screen.queryByTestId('notification-prompt-card')).toBeNull();
 
-        await waitFor(() => expect(screen.getByTestId('notification-prompt-card')).toBeTruthy());
+        await waitFor(() => expect(screen.getByTestId('notification-prompt-card')).toBeTruthy(), {
+          timeout: 3000,
+        });
       } finally {
-        os.restore();
+        jest.useRealTimers();
       }
-    });
-
-    test('R1-2 still shows the prompt when iOS never reports onDismiss', async () => {
-      const notifications = createNotificationsMock();
-      const screen = await renderGameWithDailyBonusSheet(createPostAhaState(), { notifications });
-
-      await closeOpenSheet(screen);
-      expect(screen.queryByTestId('notification-prompt-card')).toBeNull();
-
-      await waitFor(() => expect(screen.getByTestId('notification-prompt-card')).toBeTruthy(), {
-        timeout: 3000,
-      });
     });
 
     test('renders the combined farm-reminder consent copy in English', async () => {
@@ -7775,18 +7826,24 @@ describe('하단 safe-area 인셋 적용 (#236)', () => {
     });
 
     test('R2-1 releases a coachmark whose presentation iOS never confirms so sheets are not blocked', async () => {
-      mockModalControl.autoShow = false;
+      // Fake timers keep sheet animations and fallbacks deterministic under a slow test runner.
+      jest.useFakeTimers();
       try {
-        const screen = await renderGame(animalsUnlockedState());
-        await waitFor(() => expect(screen.getByTestId('feature-coachmark-card')).toBeTruthy());
+        mockModalControl.autoShow = false;
+        try {
+          const screen = await renderGame(animalsUnlockedState());
+          await waitFor(() => expect(screen.getByTestId('feature-coachmark-card')).toBeTruthy());
 
-        fireEvent.press(screen.getByLabelText('설정'));
-        expect(getSheetModal(screen).props.visible).toBe(false);
+          fireEvent.press(screen.getByLabelText('설정'));
+          expect(getSheetModal(screen).props.visible).toBe(false);
 
-        await waitFor(() => expect(getSheetModal(screen).props.visible).toBe(true), { timeout: 5000 });
-        expect(screen.queryByTestId('feature-coachmark-card')).toBeNull();
+          await waitFor(() => expect(getSheetModal(screen).props.visible).toBe(true), { timeout: 5000 });
+          expect(screen.queryByTestId('feature-coachmark-card')).toBeNull();
+        } finally {
+          mockModalControl.autoShow = true;
+        }
       } finally {
-        mockModalControl.autoShow = true;
+        jest.useRealTimers();
       }
     });
 

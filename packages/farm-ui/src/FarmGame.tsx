@@ -1097,7 +1097,18 @@ function FarmGameBody({
   // calls onDismiss and has no such limit, so there a closed sheet is gone at once.
   // A requested sheet also waits while an overlay Modal holds the screen (see overlayModalSlot).
   const [overlaySlot, setOverlaySlot] = useState<OverlayModalSlot>(null);
-  const isSheetModalVisible = activeSheet != null && overlaySlot == null;
+  // The ads SDK presents over the top-most controller. If the sheet were dismissed while
+  // an ad sat on top of it, UIKit would remove only the ad and leave an empty sheet that
+  // swallows every touch (UI 검수 2회차 R2-1, react-native#54858). So while a full-screen
+  // ad is in flight the sheet keeps its presentation state and catches up afterwards.
+  const [isFullScreenAdInFlight, setIsFullScreenAdInFlight] = useState(false);
+  const [heldSheetModalVisible, setHeldSheetModalVisible] = useState(false);
+  const isSheetModalVisible = isFullScreenAdInFlight
+    ? heldSheetModalVisible
+    : activeSheet != null && overlaySlot == null;
+  if (!isFullScreenAdInFlight && heldSheetModalVisible !== isSheetModalVisible) {
+    setHeldSheetModalVisible(isSheetModalVisible);
+  }
   const [isSheetModalOnScreen, setIsSheetModalOnScreen] = useState(false);
   if (isSheetModalVisible && !isSheetModalOnScreen) {
     setIsSheetModalOnScreen(true);
@@ -1153,9 +1164,8 @@ function FarmGameBody({
   // synchronously across both formats so rapid taps or transition callbacks
   // cannot overlap SDK show calls or replace a pending rewarded Promise.
   const fullScreenAdInFlightRef = useRef(false);
-  // Mirrors the reservation for rendering: overlay Modals must not start presenting
-  // while the ads SDK owns the screen.
-  const [isFullScreenAdInFlight, setIsFullScreenAdInFlight] = useState(false);
+  // Mirrored into isFullScreenAdInFlight for rendering: overlay Modals must not start
+  // presenting and the sheet must not change its presentation while the ads SDK owns the screen.
   const setFullScreenAdInFlight = useCallback((inFlight: boolean) => {
     fullScreenAdInFlightRef.current = inFlight;
     setIsFullScreenAdInFlight(inFlight);
