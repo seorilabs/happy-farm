@@ -573,6 +573,22 @@ if (config == null) {
       pass('빈 iOS privacy usage description이 없습니다.');
     }
 
+    // App Review rejects a tracking declaration without ATT under 5.1.2(i), as it did for 1.12.0.
+    const tracking = config.appPrivacy?.tracking;
+    const trackingDataTypes = Object.entries(config.appPrivacy?.dataTypes ?? {})
+      .filter(([, dataType]) => dataType?.usedForTracking === true)
+      .map(([name]) => name);
+    const hasTrackingPrompt = isConcrete(plistValue(infoPlist, 'NSUserTrackingUsageDescription'));
+    if (tracking === 'no' && trackingDataTypes.length > 0) {
+      fail('App Privacy 추적 신고가 추적 안 함인데 추적용 데이터 유형이 있습니다.', trackingDataTypes.join(', '));
+    } else if (tracking === 'yes' && !hasTrackingPrompt) {
+      fail('App Privacy 추적 신고가 있는데 Info.plist NSUserTrackingUsageDescription(ATT)이 없습니다.', trackingDataTypes.join(', ') || 'tracking=yes');
+    } else if (tracking === 'yes' || tracking === 'no') {
+      pass('App Privacy 추적 신고와 ATT 설정이 일치합니다.', `tracking=${tracking}`);
+    } else {
+      fail('App Privacy 추적 신고 값이 yes/no가 아닙니다.', tracking == null ? 'missing' : String(tracking));
+    }
+
     const gadApplicationIdentifier = plistValue(infoPlist, 'GADApplicationIdentifier');
     if (yesLike(config.contentDeclarations?.ads)) {
       if (!isConcrete(gadApplicationIdentifier)) {

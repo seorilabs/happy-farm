@@ -128,7 +128,7 @@
   "appPrivacy": {
     "status": "completed",
     "privacyPolicyUrl": "https://www.seorilabs.com/privacy",
-    "tracking": "yes",
+    "tracking": "no",
     "privacyManifest": "apps/mobile/ios/HappyFarmMobile/PrivacyInfo.xcprivacy",
     "dataTypes": {
       "approximateLocation": {
@@ -137,14 +137,14 @@
           "thirdPartyAdvertising",
           "analytics"
         ],
-        "usedForTracking": true,
+        "usedForTracking": false,
         "notSelectedPurposes": [
           "developersAdvertisingOrMarketing",
           "productPersonalization",
           "appFunctionality",
           "otherPurposes"
         ],
-        "notes": "AdMob SDK가 IP 주소를 통해 기기의 대략적인 위치를 추정할 수 있고, 광고 성능/타사 광고 및 분석 목적으로 사용될 수 있으므로 타사 광고와 분석을 선택합니다. 게임 기능 자체는 위치를 사용하지 않습니다."
+        "notes": "AdMob SDK가 IP 주소로 기기의 대략적인 위치를 추정할 수 있어 타사 광고와 분석 목적으로 수집됨을 유지합니다. 광고는 비개인화로만 요청하고 IDFA·ATT를 쓰지 않아 다른 회사 데이터와 결합하는 추적에는 사용하지 않습니다. 게임 기능 자체는 위치를 사용하지 않습니다."
       },
       "userId": {
         "collected": true,
@@ -164,8 +164,9 @@
     },
     "notes": [
       "2026-10-09 App Store Connect에 사용자 ID를 앱 기능·신원 연결·추적 안 함으로 게시했고, 새로고침한 저장 값을 확인했습니다. 기존 6개 데이터 유형의 설정은 유지했습니다. 근거: release/history/v1.12.0/app-store-review-preflight-20261009.json",
+      "2026-10-13 App Review 5.1.2(i) 거절(쿠키 동의 창 + ATT 없음) 대응으로 대략적 위치의 추적 사용을 아니요로 바꿨습니다. 설계: docs/design/2026-10-13-ios-no-tracking-consent/design.md",
       "Firebase Analytics, Firebase Auth(Platform 세션), AdMob SDK 구성 변경 시 App Store Connect 앱 개인정보 답변을 재검토합니다.",
-      "tracking=yes 기준을 유지합니다. IDFA/ATT 또는 비개인화 광고 정책을 바꾸면 콘솔 답변과 PrivacyInfo.xcprivacy를 함께 확인합니다."
+      "추적 안 함 기준입니다. iOS는 Google 광고 동의 창(UMP)을 띄우지 않고 비개인화 광고만 요청합니다. ATT·맞춤 광고를 도입하면 콘솔 답변, Info.plist NSUserTrackingUsageDescription, PrivacyInfo.xcprivacy를 함께 바꾸고 `pnpm check:app-store`로 일치를 확인합니다."
     ]
   },
   "review": {

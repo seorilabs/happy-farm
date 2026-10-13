@@ -185,12 +185,12 @@ App Store Connect의 `대략적인 위치` 사용 목적은 다음만 선택합�
 추적 목적 사용 여부는 다음으로 답변합니다.
 
 ```text
-예, 추적 목적으로 대략적인 위치 데이터를 사용합니다.
+아니요, 추적 목적으로 대략적인 위치 데이터를 사용하지 않습니다.
 ```
 
-근거: AdMob 광고 SDK는 광고 타깃팅 또는 광고 측정 목적으로 앱에서 수집된 데이터와 타사 데이터를 결합할 수 있는 타사 SDK에 해당합니다.
+근거: 광고는 비개인화(`requestNonPersonalizedAdsOnly`)로만 요청하고 IDFA·ATT를 쓰지 않습니다. iOS는 Google 광고 동의 창(UMP)을 띄우지 않으며 남은 `IABTCF_*` 동의 기록을 지웁니다. Google Mobile Ads SDK의 개인정보 목록도 모든 수집 항목을 추적 안 함으로 선언합니다. 1.12.0은 `예` 신고와 EEA 쿠키 동의 창이 있는데 ATT가 없어 5.1.2(i)로 거절됐습니다.
 
-운영 확인: 이 답변은 App Store 심사 통과 기준입니다. App Tracking Transparency/IDFA 또는 비개인화 광고 정책을 바꾸면 App Store Connect 답변과 `PrivacyInfo.xcprivacy`를 함께 재검토합니다.
+운영 확인: ATT·맞춤 광고를 도입하면 App Store Connect 답변, `Info.plist`의 `NSUserTrackingUsageDescription`, `PrivacyInfo.xcprivacy`를 함께 바꿉니다. `pnpm check:app-store`는 추적 신고와 ATT 설명이 어긋나면 실패합니다.
 
 선택하지 않습니다.
 

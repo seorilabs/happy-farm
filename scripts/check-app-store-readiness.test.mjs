@@ -47,3 +47,63 @@ test('빈 기기 이름을 차단한다', (t) => {
   assert.deepEqual(result.passes, []);
   assert.equal(result.failures.length, 1);
 });
+
+function checkTracking(t, {tracking, dataTypes = {}, trackingUsageDescription}) {
+  const root = mkdtempSync(join(tmpdir(), 'app-store-tracking-'));
+  t.after(() => rmSync(root, {recursive: true, force: true}));
+  mkdirSync(join(root, 'app-store'), {recursive: true});
+  mkdirSync(join(root, 'apps/mobile/ios/HappyFarmMobile'), {recursive: true});
+  writeFileSync(join(root, 'package.json'), '{}');
+  writeFileSync(join(root, 'app-store/app-store.config.json'), JSON.stringify({
+    appPrivacy: {tracking, dataTypes},
+  }));
+  const att = trackingUsageDescription == null
+    ? ''
+    : `<key>NSUserTrackingUsageDescription</key><string>${trackingUsageDescription}</string>`;
+  writeFileSync(join(root, 'apps/mobile/ios/HappyFarmMobile/Info.plist'), `<plist><dict>${att}</dict></plist>`);
+  const run = spawnSync(process.execPath, [checker, '--json'], {cwd: root, encoding: 'utf8'});
+  assert.equal(run.error, undefined);
+  const result = JSON.parse(run.stdout);
+  // This fixture covers only the tracking declaration; unrelated release requirements remain missing.
+  return {
+    passes: result.passes.filter(({message}) => message.includes('추적 신고')),
+    failures: result.failures.filter(({message}) => message.includes('추적 신고')),
+  };
+}
+
+test('추적 안 함 신고와 ATT 없는 빌드를 허용한다', (t) => {
+  const result = checkTracking(t, {
+    tracking: 'no',
+    dataTypes: {approximateLocation: {collected: true, usedForTracking: false}},
+  });
+  assert.equal(result.passes.length, 1);
+  assert.deepEqual(result.failures, []);
+});
+
+test('추적 신고가 있는데 ATT 설명이 없으면 차단한다', (t) => {
+  const result = checkTracking(t, {
+    tracking: 'yes',
+    dataTypes: {approximateLocation: {collected: true, usedForTracking: true}},
+  });
+  assert.deepEqual(result.passes, []);
+  assert.equal(result.failures.length, 1);
+});
+
+test('추적 안 함인데 추적용 데이터 유형이 남아 있으면 차단한다', (t) => {
+  const result = checkTracking(t, {
+    tracking: 'no',
+    dataTypes: {approximateLocation: {collected: true, usedForTracking: true}},
+  });
+  assert.deepEqual(result.passes, []);
+  assert.equal(result.failures.length, 1);
+});
+
+test('추적 신고와 ATT 설명이 함께 있으면 허용한다', (t) => {
+  const result = checkTracking(t, {
+    tracking: 'yes',
+    dataTypes: {approximateLocation: {collected: true, usedForTracking: true}},
+    trackingUsageDescription: 'Used to show relevant ads.',
+  });
+  assert.equal(result.passes.length, 1);
+  assert.deepEqual(result.failures, []);
+});
