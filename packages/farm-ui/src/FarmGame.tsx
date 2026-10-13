@@ -313,6 +313,9 @@ export const CROP_READY_SUMMARY_INTERVAL_MS = 60_000;
 // welcome-back recap measures the real away gap even if the app is killed
 // without firing a background event.
 const LAST_SEEN_HEARTBEAT_MS = 30_000;
+// iOS reports the sheet Modal's onDismiss within a frame or two; this only bounds the
+// wait if a host never reports it, so overlays cannot stay hidden for good.
+const SHEET_MODAL_DISMISS_FALLBACK_MS = 1_000;
 const HARVEST_NOTIFICATION_MIN_LEAD_MS = 60_000;
 const PROGRESS_ANIMATION_DURATION_MS = GAME_TICK_INTERVAL_MS;
 // Fresh-plant sprout "bounce in" duration.
@@ -1078,6 +1081,27 @@ function FarmGameBody({
   const { width: windowWidth } = useWindowDimensions();
   const [activeSheet, setActiveSheet] = useState<ActiveSheet>(null);
   const previousActiveSheetRef = useRef<ActiveSheet>(null);
+  // iOS presents every RN Modal from one root view controller and refuses a new one while
+  // the sheet's Modal is still on screen or animating away. The refused Modal stays mounted
+  // but invisible and swallows every touch (UI 검수 1회차 R1-2: finishing onboarding froze
+  // the farm). Overlay Modals therefore wait until the sheet reports onDismiss. Android never
+  // calls onDismiss and has no such limit, so there a closed sheet is gone at once.
+  const [isSheetModalOnScreen, setIsSheetModalOnScreen] = useState(false);
+  if (activeSheet != null && !isSheetModalOnScreen) {
+    setIsSheetModalOnScreen(true);
+  } else if (activeSheet == null && isSheetModalOnScreen && Platform.OS !== 'ios') {
+    setIsSheetModalOnScreen(false);
+  }
+  useEffect(() => {
+    if (activeSheet != null || !isSheetModalOnScreen) {
+      return;
+    }
+    const timer = setTimeout(() => setIsSheetModalOnScreen(false), SHEET_MODAL_DISMISS_FALLBACK_MS);
+    return () => clearTimeout(timer);
+  }, [activeSheet, isSheetModalOnScreen]);
+  const handleSheetModalDismissed = useCallback(() => {
+    setIsSheetModalOnScreen(false);
+  }, []);
   // #372 상점 시트 내부 활성 탭. 상점 진입 시 항상 첫 탭(확장)부터 보도록 초기화한다.
   const [shopTab, setShopTab] = useState<ShopTabKey>('expand');
   // #376 데일리 보너스는 열람 즉시 자동 수령되므로, 방금 지급된 streak·골드를
@@ -2625,7 +2649,7 @@ function FarmGameBody({
     // The permission education modal is the last post-activation surface. Let
     // the first-harvest celebration and any deferred daily/return sheet finish
     // first so two foreground modals are never mounted together.
-    if (firstHarvestNotice != null || activeSheet != null) return;
+    if (firstHarvestNotice != null || isSheetModalOnScreen) return;
     notificationPromptResolvedRef.current = true;
     if (gameSettings.harvestNotificationsEnabled) {
       markHarvestNotificationPromptSeen();
@@ -2644,7 +2668,7 @@ function FarmGameBody({
     gameState.harvestedCropKeys.length,
     gameSettings.harvestNotificationsEnabled,
     firstHarvestNotice,
-    activeSheet,
+    isSheetModalOnScreen,
   ]);
 
   // Keep the "last seen" timestamp fresh while the player is active so the
@@ -5766,12 +5790,21 @@ function FarmGameBody({
   // #367: 기본 온보딩을 마친 뒤, 다른 오버레이/시트가 떠 있지 않은 메인 화면에서만 딥 기능
   // 코치마크를 1개 노출한다. 가용 판정은 core의 순수 함수라 now에 의존하지 않아 틱마다
   // 흔들리지 않는다. 확인하면 markFeatureCoachmarkSeen로 저장되어 다시 뜨지 않는다.
+  // The notification prompt is chosen in an effect, one render after the screen frees up.
+  // Holding the coachmark back while that prompt is still owed keeps the two from swapping
+  // mid-presentation: iOS then refuses the prompt and the half-dismissed coachmark keeps
+  // swallowing touches (UI 검수 1회차 R1-2). Accepting or declining marks the prompt seen.
+  const isNotificationPromptOwed =
+    notifications.isSupported &&
+    !gameState.harvestNotificationPromptSeen &&
+    gameState.harvestedCropKeys.length > 0;
   const pendingFeatureCoachmark =
     gameState.onboardingCompleted &&
     onboardingStep == null &&
-    activeSheet == null &&
+    !isSheetModalOnScreen &&
     firstHarvestNotice == null &&
     notificationPromptGeneration == null &&
+    !isNotificationPromptOwed &&
     !prestigeGuide
       ? getPendingFeatureCoachmark(gameState)
       : null;
@@ -6253,6 +6286,7 @@ function FarmGameBody({
         overlay={toastNode}
         goldLabel={messages.sheetGoldLabel(formatMoney(gameState.gold, locale))}
         canClose={() => activeSheet?.type !== 'welcomeBack' || !offlineBonusAdInFlightRef.current}
+        onDismiss={handleSheetModalDismissed}
         onClose={() => {
           if (activeSheet?.type === 'welcomeBack' && !collectReturnSummaryOffline(activeSheet.summary)) {
             return false;
@@ -7075,7 +7109,7 @@ function FarmGameBody({
           onDecline={() => declineNotificationPrompt(notificationPromptGeneration)}
         />
       ) : null}
-      {prestigeGuide ? (
+      {prestigeGuide && !isSheetModalOnScreen ? (
         <PrestigeGuideOverlay messages={messages} onDismiss={dismissPrestigeGuide} />
       ) : null}
       {pendingFeatureCoachmark != null ? (
@@ -8659,6 +8693,7 @@ function Sheet({
   bottomInset,
   canClose,
   onClose,
+  onDismiss,
   overlay,
   goldLabel,
 }: {
@@ -8680,6 +8715,8 @@ function Sheet({
   // invisible, still-mounted modal behind.
   canClose?: () => boolean;
   onClose: () => boolean | void;
+  // iOS only: called once the native Modal has finished dismissing.
+  onDismiss?: () => void;
 }) {
   const dragYRef = useRef<Animated.Value | null>(null);
   if (dragYRef.current == null) {
@@ -8781,7 +8818,13 @@ function Sheet({
   }, [activeSheet, dragY]);
 
   return (
-    <Modal transparent visible={activeSheet != null} animationType="none" onRequestClose={closeSheetWithAnimation}>
+    <Modal
+      transparent
+      visible={activeSheet != null}
+      animationType="none"
+      onRequestClose={closeSheetWithAnimation}
+      onDismiss={onDismiss}
+    >
       <KeyboardAvoidingView behavior="padding" style={styles.modalRoot}>
         {/* 시트 위 남는 공간을 그대로 차지하는 닫기 영역. absoluteFill Pressable로
             두었을 때는 Android Modal 안에서 탭이 전혀 전달되지 않아, 배경을 눌러도
