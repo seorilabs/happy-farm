@@ -4,4 +4,4 @@
 
 | 날짜 | 설계 ID | 요약 | 상태 | 승인 커밋 | 티켓·PR·검수 |
 |---|---|---|---|---|---|
-| 2026-10-13 | [ios-no-tracking-consent](2026-10-13-ios-no-tracking-consent/design.md) | App Review 5.1.2(i) 대응: iOS를 추적 안 함으로 정리하고 Google 광고 동의 창 제거 | 승인 | `0a0967d` | — |
+| 2026-10-13 | [ios-no-tracking-consent](2026-10-13-ios-no-tracking-consent/design.md) | App Review 5.1.2(i) 대응: iOS를 추적 안 함으로 정리하고 Google 광고 동의 창 제거 | 승인(v2) | v1 `0a0967d`, v2 본문 커밋 | #573, #574 |
