@@ -581,8 +581,12 @@ if (config == null) {
     const hasTrackingPrompt = isConcrete(plistValue(infoPlist, 'NSUserTrackingUsageDescription'));
     if (tracking === 'no' && trackingDataTypes.length > 0) {
       fail('App Privacy 추적 신고가 추적 안 함인데 추적용 데이터 유형이 있습니다.', trackingDataTypes.join(', '));
+    } else if (tracking === 'no' && hasTrackingPrompt) {
+      fail('App Privacy 추적 신고가 추적 안 함인데 Info.plist NSUserTrackingUsageDescription(ATT)이 있습니다.', 'tracking=no');
+    } else if (tracking === 'yes' && trackingDataTypes.length === 0) {
+      fail('App Privacy 추적 신고가 있는데 추적용 데이터 유형이 없습니다.', 'tracking=yes');
     } else if (tracking === 'yes' && !hasTrackingPrompt) {
-      fail('App Privacy 추적 신고가 있는데 Info.plist NSUserTrackingUsageDescription(ATT)이 없습니다.', trackingDataTypes.join(', ') || 'tracking=yes');
+      fail('App Privacy 추적 신고가 있는데 Info.plist NSUserTrackingUsageDescription(ATT)이 없습니다.', trackingDataTypes.join(', '));
     } else if (tracking === 'yes' || tracking === 'no') {
       pass('App Privacy 추적 신고와 ATT 설정이 일치합니다.', `tracking=${tracking}`);
     } else {

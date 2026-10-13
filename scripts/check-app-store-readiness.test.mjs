@@ -107,3 +107,23 @@ test('추적 신고와 ATT 설명이 함께 있으면 허용한다', (t) => {
   assert.equal(result.passes.length, 1);
   assert.deepEqual(result.failures, []);
 });
+
+test('추적 안 함인데 ATT 설명이 남아 있으면 차단한다', (t) => {
+  const result = checkTracking(t, {
+    tracking: 'no',
+    dataTypes: {approximateLocation: {collected: true, usedForTracking: false}},
+    trackingUsageDescription: 'Used to show relevant ads.',
+  });
+  assert.deepEqual(result.passes, []);
+  assert.equal(result.failures.length, 1);
+});
+
+test('추적 신고인데 추적용 데이터 유형이 없으면 차단한다', (t) => {
+  const result = checkTracking(t, {
+    tracking: 'yes',
+    dataTypes: {approximateLocation: {collected: true, usedForTracking: false}},
+    trackingUsageDescription: 'Used to show relevant ads.',
+  });
+  assert.deepEqual(result.passes, []);
+  assert.equal(result.failures.length, 1);
+});

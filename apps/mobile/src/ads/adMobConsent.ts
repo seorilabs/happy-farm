@@ -1,4 +1,4 @@
-import { Platform, Settings } from 'react-native';
+import { Platform, Settings, TurboModuleRegistry, type TurboModule } from 'react-native';
 import mobileAds, {
   AdsConsent,
   AdsConsentPrivacyOptionsRequirementStatus,
@@ -38,11 +38,17 @@ const IAB_TCF_KEYS = [
   'IABTCF_AddtlConsent',
 ];
 
+interface SettingsManagerModule extends TurboModule {
+  deleteValues: (keys: Array<string>) => void;
+}
+
 function clearStoredConsentRecord() {
   try {
     const storedKeys = IAB_TCF_KEYS.filter((key) => Settings.get(key) != null);
     if (storedKeys.length > 0) {
-      Settings.set(Object.fromEntries(storedKeys.map((key) => [key, null])));
+      // Settings.set({ key: null }) cannot remove keys on the New Architecture: the
+      // TurboModule bridge drops null values before they reach NSUserDefaults.
+      TurboModuleRegistry.getEnforcing<SettingsManagerModule>('SettingsManager').deleteValues(storedKeys);
     }
   } catch (error) {
     logDevWarning('[ads] consent record cleanup failed', error);

@@ -2,7 +2,7 @@
  * @format
  */
 
-import { Platform, Settings } from 'react-native';
+import { Platform, Settings, TurboModuleRegistry } from 'react-native';
 import mobileAds, { AdsConsent } from 'react-native-google-mobile-ads';
 import {
   ensureAdMobReady,
@@ -79,14 +79,22 @@ const umpCalls = () => [
 
 const initializeMock = () => (mobileAds as unknown as jest.Mock)().initialize as jest.Mock;
 
+const deleteValues = jest.fn();
+
 function useStoredSettings(stored: Record<string, unknown>) {
   (Settings.get as jest.Mock).mockImplementation((key: string) => stored[key]);
 }
 
 beforeEach(() => {
   jest.clearAllMocks();
+  jest.restoreAllMocks();
   resetAdMobConsentStateForTests();
   useStoredSettings({});
+  const getEnforcing = TurboModuleRegistry.getEnforcing;
+  jest
+    .spyOn(TurboModuleRegistry, 'getEnforcing')
+    .mockImplementation(((name: string) =>
+      name === 'SettingsManager' ? { deleteValues } : getEnforcing(name)) as typeof getEnforcing);
 });
 
 describe('iOS', () => {
@@ -113,7 +121,7 @@ describe('iOS', () => {
     let removedBeforeInitialize = false;
     (mobileAds as unknown as jest.Mock).mockImplementationOnce(() => ({
       initialize: jest.fn(() => {
-        removedBeforeInitialize = (Settings.set as jest.Mock).mock.calls.length === 1;
+        removedBeforeInitialize = deleteValues.mock.calls.length === 1;
         return Promise.resolve();
       }),
     }));
@@ -122,10 +130,10 @@ describe('iOS', () => {
     await ensureAdMobReady();
 
     expect(removedBeforeInitialize).toBe(true);
-    expect(Settings.set).toHaveBeenCalledTimes(1);
-    expect(Settings.set).toHaveBeenCalledWith(
-      Object.fromEntries(IAB_TCF_KEYS.map((key) => [key, null]))
-    );
+    expect(deleteValues).toHaveBeenCalledTimes(1);
+    expect(deleteValues).toHaveBeenCalledWith(IAB_TCF_KEYS);
+    // Settings.set({ key: null }) never reaches NSUserDefaults on the New Architecture.
+    expect(Settings.set).not.toHaveBeenCalled();
   });
 
   test('AC-3 leaves settings untouched when no consent record is stored', async () => {
@@ -133,12 +141,12 @@ describe('iOS', () => {
 
     await expect(ensureAdMobReady()).resolves.toBe(true);
 
-    expect(Settings.set).not.toHaveBeenCalled();
+    expect(deleteValues).not.toHaveBeenCalled();
   });
 
   test('AC-3 still initializes ads when removing the consent record fails', async () => {
     useStoredSettings({ IABTCF_TCString: 'stale' });
-    (Settings.set as jest.Mock).mockImplementationOnce(() => {
+    deleteValues.mockImplementationOnce(() => {
       throw new Error('settings unavailable');
     });
 
@@ -158,7 +166,7 @@ describe('Android', () => {
 
     expect(AdsConsent.gatherConsent).toHaveBeenCalledTimes(1);
     expect(initializeMock()).toHaveBeenCalledTimes(1);
-    expect(Settings.set).not.toHaveBeenCalled();
+    expect(deleteValues).not.toHaveBeenCalled();
   });
 
   test('AC-4 keeps ads off when UMP does not allow ad requests', async () => {
