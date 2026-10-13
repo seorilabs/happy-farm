@@ -144,7 +144,56 @@
           "appFunctionality",
           "otherPurposes"
         ],
-        "notes": "AdMob SDK가 IP 주소로 기기의 대략적인 위치를 추정할 수 있어 타사 광고와 분석 목적으로 수집됨을 유지합니다. 광고는 비개인화로만 요청하고 IDFA·ATT를 쓰지 않아 다른 회사 데이터와 결합하는 추적에는 사용하지 않습니다. 게임 기능 자체는 위치를 사용하지 않습니다."
+        "notes": "AdMob SDK가 IP 주소로 기기의 대략적인 위치를 추정할 수 있어 타사 광고와 분석 목적으로 수집됨을 유지합니다. 광고는 비개인화로만 요청하고 IDFA·ATT를 쓰지 않아 다른 회사 데이터와 결합하는 추적에는 사용하지 않습니다. 게임 기능 자체는 위치를 사용하지 않습니다.",
+        "linkedToUser": false
+      },
+      "deviceId": {
+        "collected": true,
+        "purposes": [
+          "thirdPartyAdvertising",
+          "analytics"
+        ],
+        "usedForTracking": false,
+        "linkedToUser": false,
+        "notes": "Google Mobile Ads SDK 개인정보 목록은 기기 ID를 추적용으로 선언하지만, 이는 ATT 허용 시 IDFA를 쓰는 경우다. 이 앱은 ATT를 요청하지 않아 IDFA가 0으로만 반환되므로 추적에 사용하지 않습니다."
+      },
+      "productInteraction": {
+        "collected": true,
+        "purposes": [
+          "thirdPartyAdvertising",
+          "analytics"
+        ],
+        "usedForTracking": false,
+        "linkedToUser": false,
+        "notes": "AdMob·Firebase SDK가 앱·광고 상호작용를 처리합니다. 광고는 비개인화로만 요청하고 ATT를 요청하지 않아 IDFA를 쓸 수 없으므로, 다른 회사 데이터와 연결하는 추적에는 사용하지 않습니다."
+      },
+      "advertisingData": {
+        "collected": true,
+        "purposes": [
+          "thirdPartyAdvertising",
+          "analytics"
+        ],
+        "usedForTracking": false,
+        "linkedToUser": false,
+        "notes": "AdMob·Firebase SDK가 광고 노출·상호작용 데이터를 처리합니다. 광고는 비개인화로만 요청하고 ATT를 요청하지 않아 IDFA를 쓸 수 없으므로, 다른 회사 데이터와 연결하는 추적에는 사용하지 않습니다."
+      },
+      "crashData": {
+        "collected": true,
+        "purposes": [
+          "analytics"
+        ],
+        "usedForTracking": false,
+        "linkedToUser": false,
+        "notes": "Google Mobile Ads SDK의 SDK 진단용 충돌 기록입니다."
+      },
+      "otherDiagnosticData": {
+        "collected": true,
+        "purposes": [
+          "analytics"
+        ],
+        "usedForTracking": false,
+        "linkedToUser": false,
+        "notes": "Google Mobile Ads·Firebase SDK의 진단 정보입니다."
       },
       "userId": {
         "collected": true,
@@ -165,6 +214,7 @@
     "notes": [
       "2026-10-09 App Store Connect에 사용자 ID를 앱 기능·신원 연결·추적 안 함으로 게시했고, 새로고침한 저장 값을 확인했습니다. 기존 6개 데이터 유형의 설정은 유지했습니다. 근거: release/history/v1.12.0/app-store-review-preflight-20261009.json",
       "2026-10-13 App Review 5.1.2(i) 거절(쿠키 동의 창 + ATT 없음) 대응으로 대략적 위치의 추적 사용을 아니요로 바꿨습니다. 설계: docs/design/2026-10-13-ios-no-tracking-consent/design.md",
+      "2026-10-13 콘솔 실제 값을 읽어 보니 대략적 위치 외에 기기 ID·제품 상호 작용·광고 데이터도 '추적 목적으로 사용됨'이었습니다. 콘솔의 7개 유형을 모두 이 파일에 기록하고 추적 사용을 모두 아니요로 바꿉니다.",
       "Firebase Analytics, Firebase Auth(Platform 세션), AdMob SDK 구성 변경 시 App Store Connect 앱 개인정보 답변을 재검토합니다.",
       "추적 안 함 기준입니다. iOS는 Google 광고 동의 창(UMP)을 띄우지 않고 비개인화 광고만 요청합니다. ATT·맞춤 광고를 도입하면 콘솔 답변, Info.plist NSUserTrackingUsageDescription, PrivacyInfo.xcprivacy를 함께 바꾸고 `pnpm check:app-store`로 일치를 확인합니다."
     ]

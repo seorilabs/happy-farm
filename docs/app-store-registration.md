@@ -190,6 +190,8 @@ App Store Connect의 `대략적인 위치` 사용 목적은 다음만 선택합�
 
 근거: 광고는 비개인화(`requestNonPersonalizedAdsOnly`)로만 요청하고 IDFA·ATT를 쓰지 않습니다. iOS는 Google 광고 동의 창(UMP)을 띄우지 않으며 남은 `IABTCF_*` 동의 기록을 지웁니다. Google Mobile Ads SDK의 개인정보 목록도 모든 수집 항목을 추적 안 함으로 선언합니다. 1.12.0은 `예` 신고와 EEA 쿠키 동의 창이 있는데 ATT가 없어 5.1.2(i)로 거절됐습니다.
 
+같은 기준으로 기기 ID·제품 상호 작용·광고 데이터도 `추적 목적 사용: 아니요`로 답변합니다. Google Mobile Ads SDK의 개인정보 목록은 기기 ID를 추적용으로 선언하지만, 이는 ATT 허용 시 IDFA를 쓰는 경우입니다. 이 앱은 ATT를 요청하지 않아 IDFA가 0으로만 반환됩니다. 콘솔의 7개 데이터 유형과 답변은 `app-store/app-store.config.json`의 `appPrivacy.dataTypes`에 그대로 기록합니다.
+
 운영 확인: ATT·맞춤 광고를 도입하면 App Store Connect 답변, `Info.plist`의 `NSUserTrackingUsageDescription`, `PrivacyInfo.xcprivacy`를 함께 바꿉니다. `pnpm check:app-store`는 추적 신고와 ATT 설명이 어긋나면 실패합니다.
 
 선택하지 않습니다.
