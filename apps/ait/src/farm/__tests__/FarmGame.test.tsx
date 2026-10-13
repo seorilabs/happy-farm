@@ -339,13 +339,41 @@ function getSheetModal(screen: Awaited<ReturnType<typeof renderGame>>) {
   return sheetModal;
 }
 
+// UI 검수 1회차 R1-2: opens the game with today's daily bonus auto popup as the only
+// sheet. Some describes have no shared reset, so a queued last-seen value from an earlier
+// test would otherwise open the welcome-back recap instead.
+async function renderGameWithDailyBonusSheet(
+  savedState: GameState,
+  props: Partial<React.ComponentProps<typeof FarmGame>> = {}
+) {
+  mockPersistence.readLastSeenAt.mockReset();
+  mockPersistence.readLastSeenAt.mockResolvedValue(null);
+  return renderGame(
+    { ...savedState, dailyBonusState: { lastClaimedAt: null, streak: 0 } },
+    props,
+    null,
+    { preserveDailyBonus: true }
+  );
+}
+
 // UI 검수 1회차 R1-2: closes the open sheet the way a player does and waits until it
 // leaves the React tree. On iOS its native Modal may still be dismissing at this point.
 async function closeOpenSheet(screen: Awaited<ReturnType<typeof renderGame>>) {
   const closeLabel = getFarmMessages(DEFAULT_LOCALE).sheetCloseAccessibilityLabel;
   await waitFor(() => expect(screen.getByLabelText(closeLabel)).toBeTruthy());
-  fireEvent.press(screen.getByLabelText(closeLabel));
-  await waitFor(() => expect(screen.queryByLabelText(closeLabel)).toBeNull());
+  // A close pressed while the opening slide is still running can be interrupted, so press
+  // again like a player would until the sheet leaves (the sheet ignores repeat presses
+  // while a close is in flight).
+  await waitFor(
+    () => {
+      const close = screen.queryByLabelText(closeLabel);
+      if (close != null) {
+        fireEvent.press(close);
+      }
+      expect(screen.queryByLabelText(closeLabel)).toBeNull();
+    },
+    { timeout: 5000 }
+  );
   await act(async () => {
     await Promise.resolve();
   });
@@ -7318,10 +7346,6 @@ describe('NextGoalBar', () => {
 
     // UI 검수 1회차 R1-2: iOS refuses to present a Modal while the sheet's Modal is still
     // dismissing, and the refused prompt then swallows every touch on the farm.
-    function createPostAhaStateWithDailyBonus(): GameState {
-      return { ...createPostAhaState(), dailyBonusState: { lastClaimedAt: null, streak: 0 } };
-    }
-
     // UI 검수 1회차 R1-2 root cause: the coachmark mounted for one render before the prompt
     // effect ran, then got swapped out mid-presentation and iOS refused the prompt.
     test('R1-2 never mounts the feature coachmark while the notification prompt is due', async () => {
@@ -7345,9 +7369,7 @@ describe('NextGoalBar', () => {
 
     test('R1-2 waits for the closing sheet to report onDismiss on iOS before showing the prompt', async () => {
       const notifications = createNotificationsMock();
-      const screen = await renderGame(createPostAhaStateWithDailyBonus(), { notifications }, null, {
-        preserveDailyBonus: true,
-      });
+      const screen = await renderGameWithDailyBonusSheet(createPostAhaState(), { notifications });
 
       await closeOpenSheet(screen);
       expect(screen.queryByTestId('notification-prompt-card')).toBeNull();
@@ -7362,9 +7384,7 @@ describe('NextGoalBar', () => {
       const os = jest.replaceProperty(Platform, 'OS', 'android');
       try {
         const notifications = createNotificationsMock();
-        const screen = await renderGame(createPostAhaStateWithDailyBonus(), { notifications }, null, {
-          preserveDailyBonus: true,
-        });
+        const screen = await renderGameWithDailyBonusSheet(createPostAhaState(), { notifications });
 
         await closeOpenSheet(screen);
 
@@ -7376,9 +7396,7 @@ describe('NextGoalBar', () => {
 
     test('R1-2 still shows the prompt when iOS never reports onDismiss', async () => {
       const notifications = createNotificationsMock();
-      const screen = await renderGame(createPostAhaStateWithDailyBonus(), { notifications }, null, {
-        preserveDailyBonus: true,
-      });
+      const screen = await renderGameWithDailyBonusSheet(createPostAhaState(), { notifications });
 
       await closeOpenSheet(screen);
       expect(screen.queryByTestId('notification-prompt-card')).toBeNull();
@@ -7693,12 +7711,7 @@ describe('하단 safe-area 인셋 적용 (#236)', () => {
     });
 
     test('R1-2 a pending coachmark waits for the closing sheet to report onDismiss on iOS', async () => {
-      const screen = await renderGame(
-        { ...animalsUnlockedState(), dailyBonusState: { lastClaimedAt: null, streak: 0 } },
-        {},
-        null,
-        { preserveDailyBonus: true }
-      );
+      const screen = await renderGameWithDailyBonusSheet(animalsUnlockedState());
 
       await closeOpenSheet(screen);
       expect(screen.queryByTestId('feature-coachmark-card')).toBeNull();
