@@ -129,7 +129,7 @@ UID, GA4 client ID, token은 보내지 않습니다. 상세 경계는 `docs/fire
 
 조직 계정에서는 D-U-N-S 주소가 표시되고, 제품 페이지 표시용 전화번호와 이메일을 제공해야 합니다. 이메일은 `cs@seorilabs.com`을 사용하고, 전화번호 원문은 App Store Connect에만 저장합니다.
 
-앱 개인정보의 `대략적인 위치`는 AdMob/Firebase 기준으로 수집됨으로 보고, 사용 목적은 `타사 광고`와 `분석`만 선택합니다. 게임 기능 자체는 위치를 사용하지 않으므로 `앱 기능`, `제품 개인 맞춤화`, `개발자의 광고 또는 마케팅`, `기타 목적`은 선택하지 않습니다. 추적 목적 사용 여부는 AdMob 광고 SDK가 타깃 광고 또는 광고 측정 목적으로 타사 데이터와 결합될 수 있으므로 `예`로 답변합니다.
+앱 개인정보의 `대략적인 위치`는 AdMob/Firebase 기준으로 수집됨으로 보고, 사용 목적은 `타사 광고`와 `분석`만 선택합니다. 게임 기능 자체는 위치를 사용하지 않으므로 `앱 기능`, `제품 개인 맞춤화`, `개발자의 광고 또는 마케팅`, `기타 목적`은 선택하지 않습니다. 추적 목적 사용 여부는 `아니요`로 답변합니다. 광고는 비개인화로만 요청하고 IDFA·ATT를 쓰지 않으며, iOS는 Google 광고 동의 창(UMP)도 띄우지 않습니다. 1.12.0은 `예` 신고와 EEA 쿠키 동의 창이 있는데 ATT가 없어 5.1.2(i)로 거절됐습니다([설계](design/2026-10-13-ios-no-tracking-consent/design.md)).
 
 Firebase Anonymous Auth는 계속 사용합니다. 클라우드 저장을 걷어낸 뒤에도 Seorilabs Platform 세션(광고 정책·claim, analytics relay)의 자격증명이기 때문입니다. 따라서 앱 생성 사용자 식별자 수집을 선언해야 하며, **게임 진행 저장 데이터는 더 이상 수집하지 않습니다**(Firestore 클라우드 저장 제거). 사용자가 직접 로그인하지 않으므로 심사 정보의 `requiresSignIn`은 `no`를 유지합니다.
 
@@ -137,7 +137,7 @@ Firebase Anonymous Auth는 계속 사용합니다. 클라우드 저장을 걷어
 
 농장 알림은 첫 수확 뒤 안내에서 사용자가 명시적으로 수락하거나 설정에서 개별 토글을 켠 경우에만 iOS 로컬 알림 권한을 요청합니다. 수락 시 수확 시점과 데일리 보너스·오늘의 작물 복귀 리마인더가 함께 활성화되며, 설정에서 각각 끌 수 있습니다. FCM/APNs 원격 push token을 서버로 보내지 않고 기기 로컬 trigger notification만 예약하므로 App Privacy 수집 데이터 항목을 추가하지 않습니다.
 
-이 답변은 App Store 심사 통과 기준이며, App Tracking Transparency/IDFA 또는 비개인화 광고 정책을 바꾸면 App Store Connect 답변과 `PrivacyInfo.xcprivacy`를 함께 재검토합니다.
+ATT·맞춤 광고를 도입하면 App Store Connect 답변, `Info.plist`의 `NSUserTrackingUsageDescription`, `PrivacyInfo.xcprivacy`를 함께 바꿉니다. `pnpm check:app-store`는 추적 신고와 ATT 설명이 어긋나면 실패합니다.
 
 ## 4단계: App Store 등록 문구
 

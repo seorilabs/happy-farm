@@ -103,7 +103,10 @@ export const jaFarmMessages: FarmMessages = {
   resetInputPlaceholder: (confirmText) => `${confirmText} と入力`,
   resetDeleteAction: '農場の記録を削除して新しく始める',
   resetKeepAction: 'このまま続けます',
-  privacySection: 'プライバシー',
+  adInfoSection: '広告とデータ',
+  adDataNotice:
+    'このゲームはGoogle AdMobの広告を表示します。Googleは広告の配信・測定と不正防止のために、IPアドレス(おおよその位置)、端末・アプリ情報、広告の操作、診断情報を処理することがあります。パーソナライズド広告はリクエストせず、これらの情報をトラッキングに使用しません。',
+  adDataPolicyAction: 'Googleによるデータの使用方法',
   adPrivacyOptionsAction: '広告のプライバシー設定',
   emptyPlot: '空き畑',
   readyBadge: 'GET',

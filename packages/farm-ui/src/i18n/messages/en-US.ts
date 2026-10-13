@@ -103,7 +103,10 @@ export const enFarmMessages: FarmMessages = {
   resetInputPlaceholder: (confirmText) => `Type ${confirmText}`,
   resetDeleteAction: 'Delete farm save and start over',
   resetKeepAction: 'Keep playing',
-  privacySection: 'Privacy',
+  adInfoSection: 'Ads and your data',
+  adDataNotice:
+    "This game shows ads from Google AdMob. To deliver and measure ads and prevent fraud, Google may process your IP address (approximate location), device and app information, ad interactions, and diagnostics. We only request non-personalized ads and don't use this data to track you.",
+  adDataPolicyAction: 'How Google uses data',
   adPrivacyOptionsAction: 'Advertising privacy choices',
   emptyPlot: 'Empty',
   readyBadge: 'GET',

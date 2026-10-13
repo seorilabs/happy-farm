@@ -12,14 +12,14 @@
   "marketingUrl": "https://happy-farm-tycoon.web.app",
   "copyright": "2026 Seorilabs",
   "releaseNotes": {
-    "ko-KR": "- 아침 농장 풍경의 새 타이틀 화면에서 게임을 시작하세요.\n- 저장된 농장을 준비하는 상태를 보여주며, 읽기에 실패하면 다시 시도할 수 있어요.",
-    "en-US": "- Start your game from a new title screen with a morning farm scene.\n- See saved-farm loading progress and retry if your farm cannot be read.",
-    "ja": "- 朝の農場風景を描いた新しいタイトル画面からゲームを始めましょう。\n- 保存した農場の読み込み状況を表示し、読み込めない場合は再試行できます。",
-    "zh-Hans": "- 从全新的晨间农场标题画面开始游戏。\n- 查看已保存农场的加载进度，读取失败时可重试。",
-    "zh-Hant": "- 從全新的晨間農場標題畫面開始遊戲。\n- 查看已儲存農場的載入進度，讀取失敗時可重試。",
-    "de": "- Starte das Spiel auf einem neuen Titelbildschirm mit einer Farm am Morgen.\n- Verfolge das Laden deiner gespeicherten Farm und versuche es bei einem Lesefehler erneut.",
-    "fr": "- Démarre sur un nouvel écran titre montrant la ferme au petit matin.\n- Suis le chargement de ta ferme sauvegardée et réessaie si elle ne peut pas être lue.",
-    "es": "- Empieza desde una nueva pantalla de título con una granja al amanecer.\n- Sigue la carga de tu granja guardada y vuelve a intentarlo si no se puede leer."
+    "ko-KR": "- 아침 농장 풍경의 새 타이틀 화면에서 게임을 시작하세요.\n- 저장된 농장을 준비하는 상태를 보여주며, 읽기에 실패하면 다시 시도할 수 있어요.\n- 설정에서 광고가 어떤 정보를 처리하는지 확인할 수 있어요.\n- 튜토리얼을 마친 뒤나 수확 직후 화면이 멈추던 문제를 고쳤어요.",
+    "en-US": "- Start your game from a new title screen with a morning farm scene.\n- See saved-farm loading progress and retry if your farm cannot be read.\n- Check how ads use your data from Settings.\n- Fixed the farm freezing after the tutorial or right after a harvest.",
+    "ja": "- 朝の農場風景を描いた新しいタイトル画面からゲームを始めましょう。\n- 保存した農場の読み込み状況を表示し、読み込めない場合は再試行できます。\n- 設定から広告によるデータの扱いを確認できます。\n- チュートリアル終了後や収穫直後に画面が止まる問題を修正しました。",
+    "zh-Hans": "- 从全新的晨间农场标题画面开始游戏。\n- 查看已保存农场的加载进度，读取失败时可重试。\n- 可在设置中查看广告如何处理数据。\n- 修复了完成教程后或收获后画面卡住的问题。",
+    "zh-Hant": "- 從全新的晨間農場標題畫面開始遊戲。\n- 查看已儲存農場的載入進度，讀取失敗時可重試。\n- 可在設定中查看廣告如何處理資料。\n- 修正完成教學後或收成後畫面卡住的問題。",
+    "de": "- Starte das Spiel auf einem neuen Titelbildschirm mit einer Farm am Morgen.\n- Verfolge das Laden deiner gespeicherten Farm und versuche es bei einem Lesefehler erneut.\n- In den Einstellungen siehst du, wie Werbung deine Daten nutzt.\n- Behoben: Die Farm reagierte nach dem Tutorial oder direkt nach einer Ernte nicht mehr.",
+    "fr": "- Démarre sur un nouvel écran titre montrant la ferme au petit matin.\n- Suis le chargement de ta ferme sauvegardée et réessaie si elle ne peut pas être lue.\n- Consulte dans les réglages comment les publicités utilisent tes données.\n- Correction du blocage de la ferme après le tutoriel ou juste après une récolte.",
+    "es": "- Empieza desde una nueva pantalla de título con una granja al amanecer.\n- Sigue la carga de tu granja guardada y vuelve a intentarlo si no se puede leer.\n- Consulta en Ajustes cómo usan tus datos los anuncios.\n- Corregido el bloqueo de la granja tras el tutorial o justo después de una cosecha."
   },
   "versioning": {
     "source": "github_release_tag",
@@ -128,7 +128,7 @@
   "appPrivacy": {
     "status": "completed",
     "privacyPolicyUrl": "https://www.seorilabs.com/privacy",
-    "tracking": "yes",
+    "tracking": "no",
     "privacyManifest": "apps/mobile/ios/HappyFarmMobile/PrivacyInfo.xcprivacy",
     "dataTypes": {
       "approximateLocation": {
@@ -137,14 +137,63 @@
           "thirdPartyAdvertising",
           "analytics"
         ],
-        "usedForTracking": true,
+        "usedForTracking": false,
         "notSelectedPurposes": [
           "developersAdvertisingOrMarketing",
           "productPersonalization",
           "appFunctionality",
           "otherPurposes"
         ],
-        "notes": "AdMob SDK가 IP 주소를 통해 기기의 대략적인 위치를 추정할 수 있고, 광고 성능/타사 광고 및 분석 목적으로 사용될 수 있으므로 타사 광고와 분석을 선택합니다. 게임 기능 자체는 위치를 사용하지 않습니다."
+        "notes": "AdMob SDK가 IP 주소로 기기의 대략적인 위치를 추정할 수 있어 타사 광고와 분석 목적으로 수집됨을 유지합니다. 광고는 비개인화로만 요청하고 IDFA·ATT를 쓰지 않아 다른 회사 데이터와 결합하는 추적에는 사용하지 않습니다. 게임 기능 자체는 위치를 사용하지 않습니다.",
+        "linkedToUser": false
+      },
+      "deviceId": {
+        "collected": true,
+        "purposes": [
+          "thirdPartyAdvertising",
+          "analytics"
+        ],
+        "usedForTracking": false,
+        "linkedToUser": false,
+        "notes": "Google Mobile Ads SDK 개인정보 목록은 기기 ID를 추적용으로 선언하지만, 이는 ATT 허용 시 IDFA를 쓰는 경우다. 이 앱은 ATT를 요청하지 않아 IDFA가 0으로만 반환되므로 추적에 사용하지 않습니다."
+      },
+      "productInteraction": {
+        "collected": true,
+        "purposes": [
+          "thirdPartyAdvertising",
+          "analytics"
+        ],
+        "usedForTracking": false,
+        "linkedToUser": false,
+        "notes": "AdMob·Firebase SDK가 앱·광고 상호작용를 처리합니다. 광고는 비개인화로만 요청하고 ATT를 요청하지 않아 IDFA를 쓸 수 없으므로, 다른 회사 데이터와 연결하는 추적에는 사용하지 않습니다."
+      },
+      "advertisingData": {
+        "collected": true,
+        "purposes": [
+          "thirdPartyAdvertising",
+          "analytics"
+        ],
+        "usedForTracking": false,
+        "linkedToUser": false,
+        "notes": "AdMob·Firebase SDK가 광고 노출·상호작용 데이터를 처리합니다. 광고는 비개인화로만 요청하고 ATT를 요청하지 않아 IDFA를 쓸 수 없으므로, 다른 회사 데이터와 연결하는 추적에는 사용하지 않습니다."
+      },
+      "crashData": {
+        "collected": true,
+        "purposes": [
+          "analytics"
+        ],
+        "usedForTracking": false,
+        "linkedToUser": false,
+        "notes": "Google Mobile Ads SDK의 SDK 진단용 충돌 기록입니다."
+      },
+      "otherDiagnosticData": {
+        "collected": true,
+        "purposes": [
+          "analytics"
+        ],
+        "usedForTracking": false,
+        "linkedToUser": false,
+        "notes": "Google Mobile Ads·Firebase SDK의 진단 정보입니다."
       },
       "userId": {
         "collected": true,
@@ -164,8 +213,10 @@
     },
     "notes": [
       "2026-10-09 App Store Connect에 사용자 ID를 앱 기능·신원 연결·추적 안 함으로 게시했고, 새로고침한 저장 값을 확인했습니다. 기존 6개 데이터 유형의 설정은 유지했습니다. 근거: release/history/v1.12.0/app-store-review-preflight-20261009.json",
+      "2026-10-13 App Review 5.1.2(i) 거절(쿠키 동의 창 + ATT 없음) 대응으로 대략적 위치의 추적 사용을 아니요로 바꿨습니다. 설계: docs/design/2026-10-13-ios-no-tracking-consent/design.md",
+      "2026-10-13 콘솔 실제 값을 읽어 보니 대략적 위치 외에 기기 ID·제품 상호 작용·광고 데이터도 '추적 목적으로 사용됨'이었습니다. 콘솔의 7개 유형을 모두 이 파일에 기록하고 추적 사용을 모두 아니요로 바꿉니다.",
       "Firebase Analytics, Firebase Auth(Platform 세션), AdMob SDK 구성 변경 시 App Store Connect 앱 개인정보 답변을 재검토합니다.",
-      "tracking=yes 기준을 유지합니다. IDFA/ATT 또는 비개인화 광고 정책을 바꾸면 콘솔 답변과 PrivacyInfo.xcprivacy를 함께 확인합니다."
+      "추적 안 함 기준입니다. iOS는 Google 광고 동의 창(UMP)을 띄우지 않고 비개인화 광고만 요청합니다. ATT·맞춤 광고를 도입하면 콘솔 답변, Info.plist NSUserTrackingUsageDescription, PrivacyInfo.xcprivacy를 함께 바꾸고 `pnpm check:app-store`로 일치를 확인합니다."
     ]
   },
   "review": {

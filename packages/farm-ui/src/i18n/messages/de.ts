@@ -103,7 +103,10 @@ export const deFarmMessages: FarmMessages = {
   resetInputPlaceholder: (confirmText) => `${confirmText} eingeben`,
   resetDeleteAction: 'Spielstand löschen und neu starten',
   resetKeepAction: 'Weiterspielen',
-  privacySection: 'Datenschutz',
+  adInfoSection: 'Werbung und deine Daten',
+  adDataNotice:
+    'Dieses Spiel zeigt Werbung von Google AdMob. Um Anzeigen auszuliefern, zu messen und Betrug zu verhindern, kann Google deine IP-Adresse (ungefährer Standort), Geräte- und App-Informationen, Anzeigeninteraktionen und Diagnosedaten verarbeiten. Wir fordern nur nicht personalisierte Anzeigen an und nutzen diese Daten nicht, um dich zu tracken.',
+  adDataPolicyAction: 'Wie Google Daten nutzt',
   adPrivacyOptionsAction: 'Datenschutzeinstellungen für Werbung',
   emptyPlot: 'Leer',
   readyBadge: 'GET',
