@@ -12,14 +12,14 @@
   "marketingUrl": "https://happy-farm-tycoon.web.app",
   "copyright": "2026 Seorilabs",
   "releaseNotes": {
-    "ko-KR": "- 아침 농장 풍경의 새 타이틀 화면에서 게임을 시작하세요.\n- 저장된 농장을 준비하는 상태를 보여주며, 읽기에 실패하면 다시 시도할 수 있어요.\n- 설정에서 광고가 어떤 정보를 처리하는지 확인할 수 있어요.\n- 튜토리얼을 마친 뒤나 수확 직후 화면이 멈추던 문제를 고쳤어요.",
-    "en-US": "- Start your game from a new title screen with a morning farm scene.\n- See saved-farm loading progress and retry if your farm cannot be read.\n- Check how ads use your data from Settings.\n- Fixed the farm freezing after the tutorial or right after a harvest.",
-    "ja": "- 朝の農場風景を描いた新しいタイトル画面からゲームを始めましょう。\n- 保存した農場の読み込み状況を表示し、読み込めない場合は再試行できます。\n- 設定から広告によるデータの扱いを確認できます。\n- チュートリアル終了後や収穫直後に画面が止まる問題を修正しました。",
-    "zh-Hans": "- 从全新的晨间农场标题画面开始游戏。\n- 查看已保存农场的加载进度，读取失败时可重试。\n- 可在设置中查看广告如何处理数据。\n- 修复了完成教程后或收获后画面卡住的问题。",
-    "zh-Hant": "- 從全新的晨間農場標題畫面開始遊戲。\n- 查看已儲存農場的載入進度，讀取失敗時可重試。\n- 可在設定中查看廣告如何處理資料。\n- 修正完成教學後或收成後畫面卡住的問題。",
-    "de": "- Starte das Spiel auf einem neuen Titelbildschirm mit einer Farm am Morgen.\n- Verfolge das Laden deiner gespeicherten Farm und versuche es bei einem Lesefehler erneut.\n- In den Einstellungen siehst du, wie Werbung deine Daten nutzt.\n- Behoben: Die Farm reagierte nach dem Tutorial oder direkt nach einer Ernte nicht mehr.",
-    "fr": "- Démarre sur un nouvel écran titre montrant la ferme au petit matin.\n- Suis le chargement de ta ferme sauvegardée et réessaie si elle ne peut pas être lue.\n- Consulte dans les réglages comment les publicités utilisent tes données.\n- Correction du blocage de la ferme après le tutoriel ou juste après une récolte.",
-    "es": "- Empieza desde una nueva pantalla de título con una granja al amanecer.\n- Sigue la carga de tu granja guardada y vuelve a intentarlo si no se puede leer.\n- Consulta en Ajustes cómo usan tus datos los anuncios.\n- Corregido el bloqueo de la granja tras el tutorial o justo después de una cosecha."
+    "ko-KR": "- 아침 농장 풍경의 새 타이틀 화면에서 게임을 시작하세요.\n- 저장된 농장을 준비하는 상태를 보여주며, 읽기에 실패하면 다시 시도할 수 있어요.\n- 튜토리얼을 마친 뒤, 수확 직후, 광고를 오래 띄워 둔 뒤 화면이 멈추던 문제를 고쳤어요.",
+    "en-US": "- Start your game from a new title screen with a morning farm scene.\n- See saved-farm loading progress and retry if your farm cannot be read.\n- Fixed the farm freezing after the tutorial, right after a harvest, or after an ad stayed open for a long time.",
+    "ja": "- 朝の農場風景を描いた新しいタイトル画面からゲームを始めましょう。\n- 保存した農場の読み込み状況を表示し、読み込めない場合は再試行できます。\n- チュートリアル終了後、収穫直後、広告を長く表示した後に画面が止まる問題を修正しました。",
+    "zh-Hans": "- 从全新的晨间农场标题画面开始游戏。\n- 查看已保存农场的加载进度，读取失败时可重试。\n- 修复了完成教程后、收获后或广告长时间显示后画面卡住的问题。",
+    "zh-Hant": "- 從全新的晨間農場標題畫面開始遊戲。\n- 查看已儲存農場的載入進度，讀取失敗時可重試。\n- 修正完成教學後、收成後或廣告長時間顯示後畫面卡住的問題。",
+    "de": "- Starte das Spiel auf einem neuen Titelbildschirm mit einer Farm am Morgen.\n- Verfolge das Laden deiner gespeicherten Farm und versuche es bei einem Lesefehler erneut.\n- Behoben: Die Farm reagierte nach dem Tutorial, direkt nach einer Ernte oder nach einer lange geöffneten Werbung nicht mehr.",
+    "fr": "- Démarre sur un nouvel écran titre montrant la ferme au petit matin.\n- Suis le chargement de ta ferme sauvegardée et réessaie si elle ne peut pas être lue.\n- Correction du blocage de la ferme après le tutoriel, juste après une récolte ou après une publicité restée longtemps ouverte.",
+    "es": "- Empieza desde una nueva pantalla de título con una granja al amanecer.\n- Sigue la carga de tu granja guardada y vuelve a intentarlo si no se puede leer.\n- Corregido el bloqueo de la granja tras el tutorial, justo después de una cosecha o tras dejar un anuncio abierto mucho tiempo."
   },
   "versioning": {
     "source": "github_release_tag",
