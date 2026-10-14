@@ -543,8 +543,8 @@
       "state": "processing",
       "identity": {
         "applicationId": "com.seorilabs.happyfarm",
-        "version": "1.12.0",
-        "build": "1012000",
+        "version": "1.12.2",
+        "build": "1012002",
         "appleAppId": "6775451733",
         "teamId": "HCDUXX4Z3X",
         "releaseType": "AFTER_APPROVAL"
@@ -553,79 +553,71 @@
         "candidate": {
           "status": "pass",
           "evidence": [
-            "Release tag/source bound to v1.12.0@82b5470; existing live application identity confirmed"
+            "Release tag v1.12.2@ae4f7ea (receipt: apple-build-number 1012002). 1.12.0 was rejected under Guideline 5.1.2(i); v1.12.1@5fb1981 was superseded without a build after before-build E2E E7 found an input freeze after a rewarded ad left open past 120 s (fixed in #576)."
           ],
-          "checkedAt": "2026-10-05T13:57:07.338530+00:00",
+          "checkedAt": "2026-10-14T11:25:01.056218+00:00",
           "blocker": null
         },
         "artifact": {
           "status": "pass",
           "evidence": [
-            "Upload workflow 37320525118 archive/bundle/version checks succeeded.",
-            "Audit archive workflow 37322813684 from the same fixed tag/source and build identity: Apple Distribution Seori Labs HCDUXX4Z3X, get-task-allow false, beta-reports-active true, privacy manifest plus 18 SDK manifests, iPhone/iPad AppIcon present.",
-            "Final Info.plist com.seorilabs.happyfarm / 1.12.0 / 1012000 / ITSAppUsesNonExemptEncryption false. Audit archive is a separate verification build, not claimed byte-identical to the uploaded archive."
+            "Deploy run 38554938351 succeeded: archive version/bundle verification against the release tag, Editor E2E before-deploy verification, export and upload."
           ],
-          "checkedAt": "2026-10-05T14:27:53.679512+00:00",
+          "checkedAt": "2026-10-14T11:25:01.056218+00:00",
           "blocker": null
         },
         "upload": {
           "status": "pass",
           "evidence": [
-            "App Store Connect build ID 6cb6f8dd-7e20-432b-95a1-244176123e25 / 1.12.0 / 1012000 read back."
+            "App Store Connect build ID eb663acd-2087-4908-bfcb-d1a8b388e20d / 1.12.2 / 1012002 read back."
           ],
-          "checkedAt": "2026-10-05T14:27:53.679512+00:00",
+          "checkedAt": "2026-10-14T11:25:01.056218+00:00",
           "blocker": null
         },
         "processing": {
           "status": "pass",
           "evidence": [
-            "Build VALID and APP_STORE_ELIGIBLE; internalBuildState IN_BETA_TESTING; exact build available in existing internal beta group c72105de-c2be-4ae0-b819-bb6019951d4c."
+            "Build VALID, usesNonExemptEncryption false, not expired."
           ],
-          "checkedAt": "2026-10-05T14:27:53.679512+00:00",
+          "checkedAt": "2026-10-14T11:25:01.056218+00:00",
           "blocker": null
         },
         "qa": {
           "status": "blocked",
           "evidence": [
-            "Physical iPhone 12 Pro / iOS 26.6 has com.seorilabs.happyfarm 1.12.0 / 1012000; installation channel is not independently confirmed.",
-            "devicectl process launch succeeded. Root and independent reviewer ios_review observed the ready title and visible safe-area controls.",
-            "Enter Farm UI input failed with Computer Use server error -10005: noWindowsAvailable. Farm/settings/resume/save and supported iPad coverage remain unverified.",
-            "release/history/v1.12.0/app-store-review-preflight-20261009.json",
-            "2026-10-09 user explicitly requested immediate submission after runtime QA limitations were reported. Submission proceeded; QA remains blocked and is not marked pass."
+            "Development evidence (central verifier pass): https://github.com/seorilabs/happy-farm/releases/download/v1.12.2/development-evidence.app-store.before-build.json — 5 independent UI review rounds (rounds 4-5 owner-approved) and before-build E2E E1-E7 on Debug builds of the same source (iOS simulators, iPhone 12 Pro with an embedded bundle).",
+            "E7 '130 s ad hold' on the physical device was skipped by owner decision (2026-10-14T11:10:45Z); verified on simulators.",
+            "The uploaded Release build itself was not runtime-tested through TestFlight before submission; owner requested immediate submission."
           ],
-          "checkedAt": "2026-10-09T12:22:11.049800+00:00",
-          "blocker": "Exact TestFlight candidate runtime flows, applicable backend/ads and iPad evidence pending; device UI input tool blocks navigation."
+          "checkedAt": "2026-10-14T11:25:01.056218+00:00",
+          "blocker": "Release-build (TestFlight) runtime flows and supported iPad evidence not collected for 1.12.2."
         },
         "metadata": {
           "status": "pass",
           "evidence": [
-            "Current version selects exact build 1012000 with AFTER_APPROVAL; saved release notes match frozen markets.appStore in all eight locales.",
-            "Independent reviewer ios_review read all active text fields and visually reviewed all 64 screenshots; all images COMPLETE and downloaded pixels/checksum/order match repository source. Zero blocking findings.",
-            "release/history/v1.12.0/app-store-review-preflight-20261009.json",
-            "Final submission preflight: all 8 saved locale texts, 64 screenshot IDs/checksums/order/COMPLETE state, zero previews and frozen review-note hash match reviewed sources immediately before submission."
+            "Version 1.12.2 selects build 1012002 with AFTER_APPROVAL; whatsNew matches frozen release-notes.json in all eight locales; review notes explain the 5.1.2(i) response without the removed settings section."
           ],
-          "checkedAt": "2026-10-09T12:51:03.070616+00:00",
+          "checkedAt": "2026-10-14T11:25:01.056218+00:00",
           "blocker": null
         },
         "policy": {
           "status": "pass",
           "evidence": [
-            "App Privacy User ID added and published: AppFunctionality, linked=true, tracking=false. Fresh browser reload confirms seven data types; six existing declarations preserved.",
-            "User ID answers match the same-source audit archive FirebaseAuth privacy manifest. Existing SDK tracking/ATT declarations retained; current age-rating answers and content rights read back; selected build usesNonExemptEncryption=false.",
-            "release/history/v1.12.0/app-store-review-preflight-20261009.json"
+            "App Privacy republished 2026-10-13 with no data type used for tracking (seven types, read back after reload). iOS no longer shows the UMP form and clears stored IABTCF consent; no ATT request.",
+            "Public privacy policy updated: seorilabs/seorilabs-official#61 merged (44b7d29), live on www.seorilabs.com/privacy and /en/privacy."
           ],
-          "checkedAt": "2026-10-09T12:22:11.049800+00:00",
+          "checkedAt": "2026-10-14T11:25:01.056218+00:00",
           "blocker": null
         },
         "submission": {
           "status": "pass",
           "evidence": [
-            "App Review submission c383700a-8709-4915-be23-5c08c6fa2618 and version 1.12.0 / build 1012000 both WAITING_FOR_REVIEW; exact sole version item and selected build read back.",
-            "AFTER_APPROVAL retained; approval and public release remain pending.",
-            "2026-10-09 user: 바로 심사제출해. Direct submission requested after current-candidate runtime QA limitations were reported.",
-            "release/history/v1.12.0/app-store-submission-receipt-20261009.json"
+            "App Review submission 276964a2-b129-48e9-96c8-382d895083f4 and version 1.12.2 / build 1012002 both WAITING_FOR_REVIEW; exact sole version item read back.",
+            "Previous rejected submission c383700a-8709-4915-be23-5c08c6fa2618 canceled (COMPLETE).",
+            "2026-10-14 user: 이제 심사제출 하자.",
+            "release/history/v1.12.2/app-store-submission-receipt-20261014.json"
           ],
-          "checkedAt": "2026-10-09T12:52:54.565675+00:00",
+          "checkedAt": "2026-10-14T11:25:01.056218+00:00",
           "blocker": null
         },
         "approval": {
@@ -648,8 +640,8 @@
         }
       },
       "buildRun": {
-        "id": 37320525118,
-        "url": "https://github.com/seorilabs/happy-farm/actions/runs/37320525118"
+        "id": 38554938351,
+        "url": "https://github.com/seorilabs/happy-farm/actions/runs/38554938351"
       },
       "countries": [
         "SGP",
@@ -830,13 +822,13 @@
       ],
       "freePrice": "0.0",
       "reviewSubmission": {
-        "id": "c383700a-8709-4915-be23-5c08c6fa2618",
-        "itemId": "YzM4MzcwMGEtODcwOS00OTE1LWJlMjMtNWMwOGM2ZmEyNjE4fDZ8ODkyNTY1OTE3",
+        "id": "276964a2-b129-48e9-96c8-382d895083f4",
+        "itemId": "Mjc2OTY0YTItYjEyOS00OGU5LTk2YzgtMzgyZDg5NTA4M2Y0fDZ8ODkyNTY1OTE3",
         "state": "WAITING_FOR_REVIEW",
         "versionState": "WAITING_FOR_REVIEW",
-        "submittedDate": "2026-10-09T12:52:50.496Z",
-        "readbackAt": "2026-10-09T12:52:54.565675+00:00",
-        "receipt": "release/history/v1.12.0/app-store-submission-receipt-20261009.json"
+        "submittedDate": "2026-10-14T11:23:36.207Z",
+        "readbackAt": "2026-10-14T11:25:01.056218+00:00",
+        "receipt": "release/history/v1.12.2/app-store-submission-receipt-20261014.json"
       }
     },
     "apps_in_toss": {

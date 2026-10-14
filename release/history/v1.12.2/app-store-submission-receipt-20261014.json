@@ -1,0 +1,41 @@
+{
+  "readbackAt": "2026-10-14T11:25:01.056218+00:00",
+  "appId": "6775451733",
+  "bundleId": "com.seorilabs.happyfarm",
+  "candidateSha": "ae4f7ea0ff64dfb181f9247fa1ebce8d28740f0d",
+  "tag": "v1.12.2",
+  "versionId": "66e840f6-c545-44ce-b8b8-739196f11e41",
+  "version": "1.12.2",
+  "buildId": "eb663acd-2087-4908-bfcb-d1a8b388e20d",
+  "build": "1012002",
+  "buildProcessingState": "VALID",
+  "usesNonExemptEncryption": false,
+  "reviewSubmissionId": "276964a2-b129-48e9-96c8-382d895083f4",
+  "reviewSubmissionItemIds": [
+    "Mjc2OTY0YTItYjEyOS00OGU5LTk2YzgtMzgyZDg5NTA4M2Y0fDZ8ODkyNTY1OTE3"
+  ],
+  "reviewSubmissionState": "WAITING_FOR_REVIEW",
+  "submittedDate": "2026-10-14T11:23:36.207Z",
+  "versionState": "WAITING_FOR_REVIEW",
+  "releaseType": "AFTER_APPROVAL",
+  "deployRun": "https://github.com/seorilabs/happy-farm/actions/runs/38554938351",
+  "developmentEvidence": "https://github.com/seorilabs/happy-farm/releases/download/v1.12.2/development-evidence.app-store.before-build.json",
+  "releaseNotesSha256": "9b635353b6ba879c257341a5b8e3b3fdd557786d59e3063334fc81d2f22cd1ae",
+  "reviewNotesSha256": "b0ef3a13ab5124c9d33f6b80c603f28cd6bb145b13ff8bd74be1546635211ab5",
+  "activeLocales": [
+    "de-DE",
+    "en-US",
+    "es-ES",
+    "fr-FR",
+    "ja",
+    "ko",
+    "zh-Hans",
+    "zh-Hant"
+  ],
+  "whatsNewMatchesReleaseNotes": true,
+  "replaces": {
+    "tag": "v1.12.1",
+    "sourceSha": "5fb1981ff01cb9eddd23282504f6c29aa0b8c062",
+    "reason": "빌드 전 E2E E7에서 광고 120초 뒤 입력 멈춤 발견, 빌드 없이 대체"
+  }
+}
