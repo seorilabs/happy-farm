@@ -7,6 +7,7 @@ import ReactTestRenderer from 'react-test-renderer';
 import {
   AdEventType,
   AdsConsent,
+  InterstitialAd,
   RewardedAd,
   RewardedAdEventType,
 } from 'react-native-google-mobile-ads';
@@ -15,8 +16,10 @@ import { FarmStartup } from '../../../packages/farm-ui/src';
 import {
   MOBILE_REWARDED_AD_LOAD_TIMEOUT_MS,
   MOBILE_REWARDED_AD_SHOW_TIMEOUT_MS,
+  createPlatformAdMobAdapter,
   useAdMobRewardedAd,
 } from '../src/ads/adMobRewardedAd';
+import { MOBILE_INTERSTITIAL_SHOW_TIMEOUT_MS, useAdMobInterstitialAd } from '../src/ads/adMobInterstitialAd';
 import { resetAdMobConsentStateForTests } from '../src/ads/adMobConsent';
 
 jest.mock('../src/audio/assets/harvest_coin.wav', () => 1);
@@ -104,7 +107,7 @@ jest.mock('react-native-google-mobile-ads', () => {
   return {
     __esModule: true,
     default: jest.fn(() => ({ initialize: jest.fn(() => Promise.resolve()) })),
-    AdEventType: { CLOSED: 'closed', ERROR: 'error' },
+    AdEventType: { CLOSED: 'closed', ERROR: 'error', LOADED: 'loaded', OPENED: 'opened' },
     AdsConsent: {
       gatherConsent: jest.fn(() =>
         Promise.resolve({
@@ -125,6 +128,14 @@ jest.mock('react-native-google-mobile-ads', () => {
       REQUIRED: 'REQUIRED',
       UNKNOWN: 'UNKNOWN',
     },
+    InterstitialAd: {
+      createForAdRequest: jest.fn(() => ({
+        addAdEventsListener: jest.fn(() => jest.fn()),
+        load: jest.fn(),
+        removeAllListeners: jest.fn(),
+        show: jest.fn(() => Promise.resolve()),
+      })),
+    },
     RewardedAd: {
       createForAdRequest: jest.fn(() => ({
         addAdEventsListener: jest.fn(() => jest.fn()),
@@ -134,7 +145,7 @@ jest.mock('react-native-google-mobile-ads', () => {
       })),
     },
     RewardedAdEventType: { EARNED_REWARD: 'earned_reward', LOADED: 'loaded' },
-    TestIds: { REWARDED: 'test-rewarded' },
+    TestIds: { INTERSTITIAL: 'test-interstitial', REWARDED: 'test-rewarded' },
   };
 });
 
@@ -159,6 +170,15 @@ type MockRewardedAd = {
   show: jest.Mock<Promise<void>, []>;
 };
 type MobileRewardedAdController = ReturnType<typeof useAdMobRewardedAd>;
+
+function getLatestAdMock(createForAdRequest: unknown) {
+  const create = createForAdRequest as jest.Mock;
+  const lastResult = create.mock.results[create.mock.results.length - 1];
+  if (lastResult?.type !== 'return') {
+    throw new Error('createForAdRequest was not called.');
+  }
+  return lastResult.value as MockRewardedAd;
+}
 
 function getLatestRewardedAdMock() {
   const createRewardedAd = RewardedAd.createForAdRequest as jest.Mock;
@@ -526,6 +546,142 @@ test('ignores late events from a timed-out mobile ad after the next show starts'
     await showB;
   });
   await expect(showB).resolves.toEqual({ status: 'dismissed' });
+
+  await ReactTestRenderer.act(async () => { renderer?.unmount(); });
+});
+
+// AC-16: once the full-screen ad is on screen only the player can end it. Settling on the
+// show timeout let the game close the sheet under the ad, which left an empty sheet that
+// swallowed every touch (E2E E7, iPhone 12 Pro, 2026-10-14).
+test('AC-16 waits for an opened rewarded ad to close even past the show timeout', async () => {
+  jest.useFakeTimers();
+  let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
+  let controller: MobileRewardedAdController | undefined;
+  function Harness() {
+    controller = useAdMobRewardedAd();
+    return null;
+  }
+
+  await ReactTestRenderer.act(async () => {
+    renderer = ReactTestRenderer.create(<Harness />);
+    await Promise.resolve();
+  });
+  const rewardedAd = getLatestRewardedAdMock();
+  const emit = getRewardedAdEventListener(rewardedAd);
+  await ReactTestRenderer.act(async () => { emit({ type: RewardedAdEventType.LOADED }); });
+  if (controller == null) throw new Error('controller not provided');
+
+  let settled = false;
+  let resultPromise!: ReturnType<MobileRewardedAdController['showAd']>;
+  ReactTestRenderer.act(() => {
+    resultPromise = controller!.showAd();
+    void resultPromise.then(() => {
+      settled = true;
+    });
+  });
+  await ReactTestRenderer.act(async () => {
+    emit({ type: AdEventType.OPENED });
+    emit({ type: RewardedAdEventType.EARNED_REWARD, payload: { type: 'coin', amount: 1 } });
+    jest.advanceTimersByTime(MOBILE_REWARDED_AD_SHOW_TIMEOUT_MS * 2);
+    await Promise.resolve();
+  });
+  expect(settled).toBe(false);
+
+  await ReactTestRenderer.act(async () => {
+    emit({ type: AdEventType.CLOSED });
+    await Promise.resolve();
+  });
+  await expect(resultPromise).resolves.toEqual({ status: 'earned', reward: { type: 'coin', amount: 1 } });
+
+  await ReactTestRenderer.act(async () => { renderer?.unmount(); });
+});
+
+test('AC-16 the store-build rewarded adapter waits for an opened ad to close', async () => {
+  jest.useFakeTimers();
+  const adapter = createPlatformAdMobAdapter('store-rewarded');
+  let loaded!: Promise<boolean>;
+  await ReactTestRenderer.act(async () => {
+    loaded = adapter.load({ customData: 'claim', userId: 'player' });
+    for (let i = 0; i < 5; i += 1) await Promise.resolve();
+  });
+  const rewardedAd = getLatestRewardedAdMock();
+  const loadListener = rewardedAd.addAdEventsListener.mock.calls[0]?.[0] as (event: { type: string }) => void;
+  loadListener({ type: RewardedAdEventType.LOADED });
+  await expect(loaded).resolves.toBe(true);
+
+  let settled = false;
+  const shown = adapter.show();
+  void shown.then(() => {
+    settled = true;
+  });
+  const emit = rewardedAd.addAdEventsListener.mock.calls[1]?.[0] as (event: { type: string; payload?: unknown }) => void;
+  emit({ type: AdEventType.OPENED });
+  emit({ type: RewardedAdEventType.EARNED_REWARD, payload: { type: 'coin', amount: 1 } });
+  jest.advanceTimersByTime(MOBILE_REWARDED_AD_SHOW_TIMEOUT_MS * 2);
+  await Promise.resolve();
+  expect(settled).toBe(false);
+
+  emit({ type: AdEventType.CLOSED });
+  await expect(shown).resolves.toEqual({ status: 'earned', reward: { type: 'coin', amount: 1 } });
+});
+
+test('AC-16 the store-build rewarded adapter still times out an ad that never opens', async () => {
+  jest.useFakeTimers();
+  const adapter = createPlatformAdMobAdapter('store-rewarded');
+  let loaded!: Promise<boolean>;
+  await ReactTestRenderer.act(async () => {
+    loaded = adapter.load({ customData: 'claim', userId: 'player' });
+    for (let i = 0; i < 5; i += 1) await Promise.resolve();
+  });
+  const rewardedAd = getLatestRewardedAdMock();
+  const loadListener = rewardedAd.addAdEventsListener.mock.calls[0]?.[0] as (event: { type: string }) => void;
+  loadListener({ type: RewardedAdEventType.LOADED });
+  await expect(loaded).resolves.toBe(true);
+
+  const shown = adapter.show();
+  jest.advanceTimersByTime(MOBILE_REWARDED_AD_SHOW_TIMEOUT_MS);
+  await expect(shown).resolves.toEqual({ status: 'failed', error: 'show_timeout' });
+});
+
+test('AC-16 waits for an opened interstitial to close even past the show timeout', async () => {
+  jest.useFakeTimers();
+  let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
+  let controller: ReturnType<typeof useAdMobInterstitialAd> | undefined;
+  function Harness() {
+    controller = useAdMobInterstitialAd();
+    return null;
+  }
+
+  await ReactTestRenderer.act(async () => {
+    renderer = ReactTestRenderer.create(<Harness />);
+    for (let i = 0; i < 5; i += 1) await Promise.resolve();
+  });
+  const interstitial = getLatestAdMock(InterstitialAd.createForAdRequest);
+  const emit = getRewardedAdEventListener(interstitial);
+  await ReactTestRenderer.act(async () => { emit({ type: AdEventType.LOADED }); });
+  if (controller == null) throw new Error('controller not provided');
+  expect(controller.isAdReady).toBe(true);
+
+  let settled = false;
+  let resultPromise!: ReturnType<NonNullable<typeof controller>['showAd']>;
+  ReactTestRenderer.act(() => {
+    resultPromise = controller!.showAd();
+    void resultPromise.then(() => {
+      settled = true;
+    });
+  });
+  await ReactTestRenderer.act(async () => {
+    emit({ type: AdEventType.OPENED });
+    jest.advanceTimersByTime(MOBILE_INTERSTITIAL_SHOW_TIMEOUT_MS * 2);
+    await Promise.resolve();
+  });
+  expect(settled).toBe(false);
+
+  await ReactTestRenderer.act(async () => {
+    emit({ type: AdEventType.CLOSED });
+    await Promise.resolve();
+  });
+  await expect(resultPromise).resolves.toEqual({ status: 'dismissed' });
 
   await ReactTestRenderer.act(async () => { renderer?.unmount(); });
 });

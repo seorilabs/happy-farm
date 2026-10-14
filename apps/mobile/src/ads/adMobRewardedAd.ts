@@ -15,13 +15,16 @@ import { ensureMobilePlatformSession, mobilePlatformAds } from '../platformEvent
 import { showPlatformAdMobReward, type PlatformAdMobAdapter } from './platformRewardedAd';
 
 export const MOBILE_REWARDED_AD_LOAD_TIMEOUT_MS = 10_000;
+// Bounds only the wait for the ad to open. Once it is on screen only the player ends it:
+// settling earlier let the game close the sheet under the ad, which left an empty sheet
+// that swallowed every touch (E2E E7, 2026-10-14).
 export const MOBILE_REWARDED_AD_SHOW_TIMEOUT_MS = 120_000;
 
 function requestId() {
   return `hf-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
 }
 
-function createPlatformAdMobAdapter(adUnitId: string): PlatformAdMobAdapter {
+export function createPlatformAdMobAdapter(adUnitId: string): PlatformAdMobAdapter {
   let current: RewardedAd | null = null;
 
   return {
@@ -59,6 +62,7 @@ function createPlatformAdMobAdapter(adUnitId: string): PlatformAdMobAdapter {
         let reward: RewardedAdReward | undefined;
         const timeout = setTimeout(() => finish({ status: 'failed', error: 'show_timeout' }), MOBILE_REWARDED_AD_SHOW_TIMEOUT_MS);
         const unsubscribe = ad.addAdEventsListener(({ type, payload }) => {
+          if (type === AdEventType.OPENED) clearTimeout(timeout);
           if (type === RewardedAdEventType.EARNED_REWARD) reward = normalizeReward(payload);
           if (type === AdEventType.CLOSED) finish(reward == null ? { status: 'dismissed' } : { status: 'earned', reward });
           if (type === AdEventType.ERROR) finish({ status: 'failed', error: normalizeAdFailureReason(payload) });
@@ -329,6 +333,15 @@ export function useAdMobRewardedAd() {
         if (type === RewardedAdEventType.LOADED) {
           updateReady(true);
           finishPendingLoad(token, true);
+          return;
+        }
+
+        if (type === AdEventType.OPENED) {
+          const pendingShow = pendingShowRef.current;
+          if (pendingShow?.instanceToken === token && pendingShow.timeoutId != null) {
+            clearTimeout(pendingShow.timeoutId);
+            pendingShow.timeoutId = null;
+          }
           return;
         }
 

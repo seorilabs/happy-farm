@@ -3,7 +3,7 @@
  */
 
 import { Linking } from 'react-native';
-import { getAdDataPolicyUrl, openAdDataPolicy } from '../src/ads/adDataPolicy';
+import { getAdDataPolicyUrl, openAdDataPolicy, shouldShowAdInfoSettings } from '../src/ads/adDataPolicy';
 
 const POLICY_URL = 'https://policies.google.com/technologies/partner-sites';
 
@@ -36,4 +36,11 @@ test('AC-8 swallows a failure to open the page', async () => {
   jest.spyOn(Linking, 'openURL').mockRejectedValue(new Error('no browser'));
 
   await expect(openAdDataPolicy('de')).resolves.toBeUndefined();
+});
+
+test.each([
+  ['ios', false],
+  ['android', true],
+] as const)('AC-17 shows the ad info settings on %s: %s', (os, shown) => {
+  expect(shouldShowAdInfoSettings(os)).toBe(shown);
 });

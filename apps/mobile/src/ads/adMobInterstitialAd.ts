@@ -7,6 +7,7 @@ import { ensureAdMobReady } from './adMobConsent';
 import { ensureMobilePlatformSession, mobilePlatformAds } from '../platformEvents';
 
 export const MOBILE_INTERSTITIAL_LOAD_TIMEOUT_MS = 10_000;
+// Bounds only the wait for the ad to open; an ad on screen ends when the player closes it.
 export const MOBILE_INTERSTITIAL_SHOW_TIMEOUT_MS = 60_000;
 // 로드 실패(오프라인·no-fill·SDK 오류) 뒤 재시도 간격. FarmGame은 전면 컨트롤러의
 // reloadAd를 부르지 않으므로, 여기서 다시 시도하지 않으면 첫 로드가 실패한 세션은
@@ -156,6 +157,14 @@ export function useAdMobInterstitialAd() {
           }
           retryAttemptRef.current = 0;
           updateReady(true);
+          return;
+        }
+        if (type === AdEventType.OPENED) {
+          const pendingShow = pendingShowRef.current;
+          if (pendingShow?.token === token && pendingShow.timeoutId != null) {
+            clearTimeout(pendingShow.timeoutId);
+            pendingShow.timeoutId = null;
+          }
           return;
         }
         if (type === AdEventType.CLOSED) {
