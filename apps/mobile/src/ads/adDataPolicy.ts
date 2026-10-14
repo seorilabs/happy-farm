@@ -17,6 +17,12 @@ const GOOGLE_LANGUAGE: Record<SupportedLocale, string> = {
   es: 'es',
 };
 
+// The iOS settings carry no ad data section: the owner decided Google's data-use wording
+// must not appear in the iPhone app (2026-10-14). Android keeps it next to the UMP options.
+export function shouldShowAdInfoSettings(os: string) {
+  return os === 'android';
+}
+
 export function getAdDataPolicyUrl(locale: SupportedLocale) {
   return `${POLICY_URL}?hl=${GOOGLE_LANGUAGE[locale]}`;
 }

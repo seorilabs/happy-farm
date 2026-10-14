@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { AppState } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import {
@@ -7,7 +7,7 @@ import {
   FarmStartup,
   detectRuntimeLocale,
 } from '../../packages/farm-ui/src';
-import { openAdDataPolicy } from './src/ads/adDataPolicy';
+import { openAdDataPolicy, shouldShowAdInfoSettings } from './src/ads/adDataPolicy';
 import { useAdMobInterstitialAd } from './src/ads/adMobInterstitialAd';
 import { useAdMobRewardedAd } from './src/ads/adMobRewardedAd';
 import {
@@ -102,7 +102,7 @@ function App() {
             market="mobile"
             notifications={mobileHarvestNotifications}
             persistence={mobileFarmPersistence}
-            privacySettings={privacySettings}
+            privacySettings={shouldShowAdInfoSettings(Platform.OS) ? privacySettings : undefined}
             preferredLocale={detectRuntimeLocale()}
             // 세 지면 모두 연다. 프로덕션 전면 ad unit 이 아직 비어 있어
             // getInterstitialAdUnitId 가 null 을 돌려주는 동안에는 컨트롤러가
