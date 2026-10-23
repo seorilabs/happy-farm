@@ -23,6 +23,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   BREEDING_RECIPES,
   CROPS,
+  creditEconomyValue,
+  getCreditedWheelReward,
   FARM_AREAS,
   PRESTIGE_SKILLS,
   REGION_ARCHETYPES,
@@ -1698,7 +1700,7 @@ function FarmGameBody({
     // 원칙적으로 항상 수령 가능하다. 다만 클록 역전 등 희귀 케이스로 claim이 null이면
     // 지급·이벤트 발화 없이 시트를 조용히 닫아 기존 가드 의미를 유지한다.
     const now = Date.now();
-    const result = claimDailyBonus(gameState.dailyBonusState, now, getRewardedGoldAmount(gameState));
+    const result = claimDailyBonus(gameState.dailyBonusState, now, getRewardedGoldAmount(gameState), gameState.gold);
     if (result == null) {
       setActiveSheet(null);
       return;
@@ -1706,13 +1708,13 @@ function FarmGameBody({
     // 지급은 순수 함수 결과를 기준으로 하되, 동시 경로(다른 열람 트리거)의 이중 지급은
     // functional updater가 최신 prev로 재평가해 막는다: 이미 수령됐으면 null → prev 유지.
     setGameState((prev) => {
-      const applied = claimDailyBonus(prev.dailyBonusState, now, getRewardedGoldAmount(prev));
+      const applied = claimDailyBonus(prev.dailyBonusState, now, getRewardedGoldAmount(prev), prev.gold);
       if (applied == null) {
         return prev;
       }
       return {
         ...prev,
-        gold: prev.gold + applied.goldAwarded,
+        gold: creditEconomyValue(prev.gold, applied.goldAwarded).balance,
         dailyBonusState: applied.newState,
       };
     });
@@ -3729,6 +3731,7 @@ function FarmGameBody({
       return null;
     }
 
+    let creditedReward = preview.reward;
     wheelBonusSpinInFlightRef.current = true;
     try {
       const earned = await showRewardedAd('wheelBonusAd', 1, () => undefined, {
@@ -3737,6 +3740,7 @@ function FarmGameBody({
         rewardKind: 'wheel_bonus_spin',
         rewardKey: preview.reward.type,
         ctaPosition: 'wheel_sheet_bonus',
+        onRewardApplied: (before) => { creditedReward = getCreditedWheelReward(before, preview.reward); },
         applyRewardState: (state, rewardedAt) => {
           const committedResult = {
             reward: preview.reward,
@@ -3755,7 +3759,7 @@ function FarmGameBody({
         return null;
       }
       playSoundEffect('wheelSpin');
-      return preview.reward;
+      return creditedReward;
     } finally {
       wheelBonusSpinInFlightRef.current = false;
     }
@@ -4484,7 +4488,7 @@ function FarmGameBody({
   // Reserves one immutable welcome-back snapshot before any state transition or
   // side effect. Amounts come from the card's capture instant, not live plot
   // phases. During a rewarded request only its earned callback may reserve it.
-  function reserveReturnSummary(summary: ReturnSummary, allowDuringOfflineBonusAd = false) {
+  function reserveReturnSummary(summary: ReturnSummary, allowDuringOfflineBonusAd = false, payoutMultiplier = 1) {
     if (offlineBonusAdInFlightRef.current && !allowDuringOfflineBonusAd) {
       return false;
     }
@@ -4493,20 +4497,22 @@ function FarmGameBody({
     }
     completedReturnSummaryAtRef.current = summary.capturedAt;
 
+    const creditedGold = collectReturnSummaryOfflineGold(gameStateRef.current, summary, payoutMultiplier).collectedGold;
     farmAnalytics.trackReturnSummaryCollected({
       awayMs: summary.awayMs,
-      offlineGold: summary.offlineGold,
+      offlineGold: creditedGold,
       readyCropCount: summary.readyCropCount,
       context: analyticsContext(),
     });
 
-    if (summary.chainGold > 0) {
+    const settlement = collectReturnSummaryOfflineGold(gameStateRef.current, summary, payoutMultiplier);
+    if (settlement.chainGold > 0) {
       farmAnalytics.trackChainCollected({
-        collectedGold: summary.chainGold,
+        collectedGold: settlement.chainGold,
         farmCount: gameState.chainFarms.length,
         context: analyticsContext(),
       });
-      toast(messages.chainCollectedToast(formatMoney(summary.chainGold, locale)));
+      toast(messages.chainCollectedToast(formatMoney(settlement.chainGold, locale)));
     }
     return true;
   }
@@ -4774,6 +4780,7 @@ function FarmGameBody({
       keepSheetOnFailure?: boolean;
       keepSheetOnSuccess?: boolean;
       applyRewardState?: (state: GameState, rewardedAt: number) => GameState;
+      onRewardApplied?: (before: GameState, after: GameState) => void;
       rewardKind?: string;
       rewardKey?: string;
       ctaPosition?: string;
@@ -4885,7 +4892,7 @@ function FarmGameBody({
         onReward();
         // Reward, usage cap, and mission progress commit in one functional
         // update. A captured offer cannot be switched while the native ad is up.
-        const persistedState = await new Promise<GameState>((resolve) => setGameState((state) => {
+        const applied = await new Promise<{ before: GameState; after: GameState }>((resolve) => setGameState((state) => {
           const rewardedState = options.applyRewardState?.(state, rewardedAt) ?? state;
           const next = {
             ...rewardedState,
@@ -4902,9 +4909,14 @@ function FarmGameBody({
             ),
           };
           gameStateRef.current = next;
-          resolve(next);
+          resolve({ before: state, after: next });
           return next;
         }));
+        const persistedState = applied.after;
+        options.onRewardApplied?.(applied.before, persistedState);
+        const creditedRewardValue = options.rewardKind === 'gold' || options.rewardKind === 'offline_gold_multiplier'
+          ? Math.max(0, persistedState.gold - applied.before.gold)
+          : rewardValue;
         // Platform ack는 로컬 보상 상태가 실제 저장된 뒤에만 보낸다. ack가 실패해도
         // 로컬 지급을 되돌리거나 같은 광고를 다시 지급하지 않는다.
         await persistence.writePersistedGameState(persistedState);
@@ -4918,9 +4930,9 @@ function FarmGameBody({
         farmAnalytics.trackAdRewardCompleted({
           type,
           placement,
-          rewardValue,
+          rewardValue: creditedRewardValue,
           context: analyticsContext(attemptState),
-          metadata: terminalMetadata,
+          metadata: { ...terminalMetadata, rewardValue: creditedRewardValue },
         });
         return true;
       }
@@ -5072,12 +5084,17 @@ function FarmGameBody({
         // presented after completion (the total 2× payout for this placement).
         summary.offlineGold * OFFLINE_BONUS_MULTIPLIER,
         () => {
-          rewardReserved = reserveReturnSummary(summary, true);
-          if (!rewardReserved) return;
-          pulseGold();
-          toast(messages.welcomeBackDoubleAdToast(formatMoney(summary.offlineGold, locale)));
+          rewardReserved = reserveReturnSummary(summary, true, OFFLINE_BONUS_MULTIPLIER);
         },
         {
+          onRewardApplied: (before, after) => {
+            if (!rewardReserved) return;
+            pulseGold();
+            const credited = Math.max(0, after.gold - before.gold);
+            toast(credited === summary.offlineGold * OFFLINE_BONUS_MULTIPLIER
+              ? messages.welcomeBackDoubleAdToast(formatMoney(summary.offlineGold, locale))
+              : messages.receivedGoldToast(formatMoney(credited, locale)));
+          },
           // A dismissed/failed ad must leave the recap and its guaranteed 1×
           // claim intact. Only an earned result closes the sheet.
           keepSheetOnFailure: true,
@@ -5101,44 +5118,36 @@ function FarmGameBody({
     const offerState = gameStateRef.current;
     const offer = getShopRewardedAdOffer(offerState);
     const landmarkStatus = getLandmarkStatus(offerState);
-    const balanceBefore =
-      offer.kind === 'gold'
-        ? offerState.gold
-        : offerState.landmark.festivalDeliveryPoints;
-    const balanceAfter =
-      offer.kind === 'gold'
-        ? balanceBefore + offer.amount
-        : grantLandmarkFestivalDeliveryPoints(offerState, offer.amount).landmark.festivalDeliveryPoints;
-
     await showRewardedAd(
       'rewardedGold',
       offer.amount,
-      () => {
-        farmAnalytics.trackEconomyTransaction({
-          flow: 'source',
-          currency: offer.kind === 'gold' ? 'gold' : 'festival_delivery_point',
-          reason: 'rewarded_ad',
-          amount: Math.max(0, balanceAfter - balanceBefore),
-          balanceBefore,
-          balanceAfter,
-          prestigeLevel: offerState.prestige.level,
-          landmarkTier: landmarkStatus.isFeatureUnlocked ? landmarkStatus.currentTier : undefined,
-          landmarkStage: landmarkStatus.currentStageKey ?? undefined,
-        });
-        if (offer.kind === 'gold') {
-          pulseGold();
-          toast(messages.receivedGoldToast(formatMoney(offer.amount, locale)));
-        } else {
-          toast(messages.landmarkAdMaterialClaimedToast(offer.amount));
-        }
-      },
+      () => undefined,
       {
+        onRewardApplied: (before, after) => {
+          const balanceBefore = offer.kind === 'gold' ? before.gold : before.landmark.festivalDeliveryPoints;
+          const balanceAfter = offer.kind === 'gold' ? after.gold : after.landmark.festivalDeliveryPoints;
+          const amount = Math.max(0, balanceAfter - balanceBefore);
+          farmAnalytics.trackEconomyTransaction({
+            flow: 'source',
+            currency: offer.kind === 'gold' ? 'gold' : 'festival_delivery_point',
+            reason: 'rewarded_ad', amount, balanceBefore, balanceAfter,
+            prestigeLevel: before.prestige.level,
+            landmarkTier: landmarkStatus.isFeatureUnlocked ? landmarkStatus.currentTier : undefined,
+            landmarkStage: landmarkStatus.currentStageKey ?? undefined,
+          });
+          if (offer.kind === 'gold') {
+            pulseGold();
+            toast(messages.receivedGoldToast(formatMoney(amount, locale)));
+          } else {
+            toast(messages.landmarkAdMaterialClaimedToast(amount));
+          }
+        },
         rewardKind: offer.kind === 'gold' ? 'gold' : 'festival_delivery_points',
         rewardKey: offer.kind === 'gold' ? 'gold' : 'festival_delivery_point',
         ctaPosition: 'shop_rewards_primary',
         applyRewardState: (state) =>
           offer.kind === 'gold'
-            ? { ...state, gold: state.gold + offer.amount }
+            ? { ...state, gold: creditEconomyValue(state.gold, offer.amount).balance }
             : grantLandmarkFestivalDeliveryPoints(state, offer.amount),
       }
     );
@@ -5720,7 +5729,7 @@ function FarmGameBody({
   // within one tick when the player taps.
   const dailyBonusPreview =
     activeSheet?.type === 'dailyBonus'
-      ? previewDailyBonus(gameState.dailyBonusState, Date.now(), getRewardedGoldAmount(gameState))
+      ? previewDailyBonus(gameState.dailyBonusState, Date.now(), getRewardedGoldAmount(gameState), gameState.gold)
       : { available: false as const, streak: 1, goldAwarded: 50 };
   // #376 자동 수령 후엔 고정해 둔 수령값을 우선 표시한다. 자동 수령 effect가 실행되기
   // 직전(열람 첫 프레임)엔 dailyBonusClaim이 아직 null이라 preview로 폴백하는데,
@@ -6881,13 +6890,14 @@ function FarmGameBody({
               // 보상 적용은 core의 순수 함수(applyWheelReward)에 위임한다: gold(골드
               // 가산), rp(연구 포인트 + 누적치 가산), harvest_boost(광고 부스트와
               // 동일한 만료 경로로 연장). 여기서는 이중지급 가드만 담당.
+              const displayReward = getCreditedWheelReward(gameStateRef.current, result.reward);
               setGameState((prev) =>
                 getWheelStatus(prev.wheelState, now).canSpin ? applyWheelReward(prev, result, now) : prev
               );
               // 스핀 연출 시작과 동시에 감속 틱 사운드를 깐다(2000ms, WheelSheet의
               // ease-out 커브와 같은 길이로 구운 트랙 — scripts/synth-audio-sfx.py).
               playSoundEffect('wheelSpin');
-              return result.reward;
+              return displayReward;
             }}
             onBonusSpin={spinWheelWithAd}
             bonusAdSupported={rewardedAd.isAdSupported}
@@ -6989,7 +6999,7 @@ function FarmGameBody({
                 <View style={styles.welcomeBackRowText}>
                   <Text style={styles.welcomeBackRowLabel}>{messages.welcomeBackOfflineLabel}</Text>
                   <Text style={styles.welcomeBackRowValue}>
-                    +{formatMoney(activeSheet.summary.offlineGold, locale)}G
+                    +{formatMoney(collectReturnSummaryOfflineGold(gameState, activeSheet.summary).collectedGold, locale)}G
                   </Text>
                 </View>
               </View>
@@ -7095,7 +7105,7 @@ function FarmGameBody({
                 label={
                   offlineBonusAdLimit.allowed
                     ? messages.welcomeBackDoubleAdAction(
-                        formatMoney(activeSheet.summary.offlineGold * OFFLINE_BONUS_MULTIPLIER, locale)
+                        formatMoney(collectReturnSummaryOfflineGoldWithAdBonus(gameState, activeSheet.summary).collectedGold, locale)
                       )
                     : offlineBonusAdLimit.reason
                 }
@@ -7107,7 +7117,7 @@ function FarmGameBody({
               secondary={activeSheet.summary.readyCropCount > 0 || activeSheet.summary.dailyBonusAvailable}
               label={
                 activeSheet.summary.offlineGold > 0
-                  ? messages.welcomeBackCollectAction(formatMoney(activeSheet.summary.offlineGold, locale))
+                  ? messages.welcomeBackCollectAction(formatMoney(collectReturnSummaryOfflineGold(gameState, activeSheet.summary).collectedGold, locale))
                   : messages.welcomeBackConfirmAction
               }
               onPress={() => {

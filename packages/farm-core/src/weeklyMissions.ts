@@ -1,3 +1,4 @@
+import { creditEconomyValue } from './economy';
 // 주간 미션 트랙.
 // 일일 미션(오늘의 목표) 위에 "주(週)" 시간 지평을 얹어, 하루 목표 뒤에도 며칠에 걸쳐
 // 이어갈 장기 목표를 제공한다. UTC 월요일 자정 경계로 주가 바뀌며(cropOfTheDay/일일 미션과 같은
@@ -472,7 +473,7 @@ export function claimWeeklyMission(
   }
   return {
     ...gameState,
-    gold: gameState.gold + mission.rewardGold,
+    gold: creditEconomyValue(gameState.gold, mission.rewardGold).balance,
     weeklyMissionState: {
       ...snapshot.state,
       claimedSlots: [...snapshot.state.claimedSlots, slot],

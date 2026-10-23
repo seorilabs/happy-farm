@@ -1,3 +1,4 @@
+import { creditEconomyValue, normalizeEconomyValue } from './economy';
 import type { AreaKey, CropKey } from './types';
 
 export type AutoHarvestSummaryEntry = {
@@ -57,14 +58,14 @@ export function accumulateAutoHarvestSummary(
         cropTier: entry.cropTier,
         harvestedCount: 1,
         replantedCount: entry.replanted ? 1 : 0,
-        totalGold: entry.goldGained,
-        totalResearchPoints: entry.researchPointsGained,
+        totalGold: normalizeEconomyValue(entry.goldGained),
+        totalResearchPoints: normalizeEconomyValue(entry.researchPointsGained),
       });
     } else {
       existing.harvestedCount += 1;
       existing.replantedCount += entry.replanted ? 1 : 0;
-      existing.totalGold += entry.goldGained;
-      existing.totalResearchPoints += entry.researchPointsGained;
+      existing.totalGold = creditEconomyValue(existing.totalGold, entry.goldGained).balance;
+      existing.totalResearchPoints = creditEconomyValue(existing.totalResearchPoints, entry.researchPointsGained).balance;
     }
   }
 

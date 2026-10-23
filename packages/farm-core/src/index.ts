@@ -13,6 +13,7 @@ export * from './cropReady';
 export * from './dailyBonus';
 export * from './decorations';
 export * from './environment';
+export * from './economy';
 export * from './featureCoachmarks';
 export * from './fertilizer';
 export * from './growthStage';

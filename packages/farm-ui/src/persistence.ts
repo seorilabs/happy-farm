@@ -1,4 +1,4 @@
-import { createInitialState, migrateLoadedState, SAVE_KEY, type GameState } from '../../farm-core/src';
+import { createInitialState, migrateLoadedState, normalizeEconomyState, SAVE_KEY, type GameState } from '../../farm-core/src';
 
 import { FARM_GAME_SETTINGS_KEY, normalizeFarmGameSettings, type FarmGameSettings } from './gameSettings';
 
@@ -40,7 +40,7 @@ export function createFarmPersistence(storage: KeyValueStorage) {
 
     async writePersistedGameState(gameState: GameState) {
       try {
-        await storage.setItem(SAVE_KEY, JSON.stringify(gameState));
+        await storage.setItem(SAVE_KEY, JSON.stringify(normalizeEconomyState(gameState)));
       } catch {
         // Storage failures must not interrupt gameplay.
       }

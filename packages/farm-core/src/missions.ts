@@ -1,3 +1,4 @@
+import { creditEconomyValue } from './economy';
 // 일일 미션(오늘의 목표) 로직.
 // UTC 하루마다 balance 슬롯의 미션으로 작물·동물·공방·교배·골드 소비 플레이를 유도한다.
 // 목표치는 날짜 해시로 결정되고, harvest_area 미션의 "오늘의 구역"은 하루가 시작될 때(롤오버)
@@ -441,7 +442,7 @@ export function claimMission(
   }
   return {
     ...gameState,
-    gold: gameState.gold + mission.rewardGold,
+    gold: creditEconomyValue(gameState.gold, mission.rewardGold).balance,
     dailyMissionState: {
       ...snapshot.state,
       claimedSlots: [...snapshot.state.claimedSlots, slot],

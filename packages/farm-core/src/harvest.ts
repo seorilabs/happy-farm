@@ -1,3 +1,4 @@
+import { creditEconomyValue } from './economy';
 import type { CropKey, GameState, Plot } from './types';
 import { CROPS, getGrowthAdSkipMs, isAreaUnlocked } from './constants';
 import { getCropModifiers, getCropPurchaseCost } from './modifiers';
@@ -224,8 +225,10 @@ export function performHarvest(gameState: GameState, plotIndex: number, options:
   // Donation mode converts the full sale value (mutations included) into
   // research points instead of gold.
   const donated = gameState.automationSettings.donationModeEnabled;
-  const goldGained = donated ? 0 : saleValue;
-  const rpGained = donated ? getDonationRp(gameState, saleValue) : 0;
+  const goldCredit = creditEconomyValue(gameState.gold, donated ? 0 : saleValue);
+  const goldGained = goldCredit.credited;
+  const rpCredit = creditEconomyValue(gameState.research.points, donated ? getDonationRp(gameState, saleValue) : 0);
+  const rpGained = rpCredit.credited;
 
   const nextPlots = [...gameState.plots];
   nextPlots[plotIndex] = { id: plot.id, cropType: null, startTime: null, state: 0 };
@@ -250,7 +253,7 @@ export function performHarvest(gameState: GameState, plotIndex: number, options:
 
   const nextState: GameState = {
     ...gameState,
-    gold: gameState.gold + goldGained,
+    gold: goldCredit.balance,
     plots: nextPlots,
     harvestedCropKeys,
     harvestCounts,
@@ -275,15 +278,15 @@ export function performHarvest(gameState: GameState, plotIndex: number, options:
     ),
     research: {
       ...gameState.research,
-      points: gameState.research.points + rpGained,
-      totalPointsEarned: gameState.research.totalPointsEarned + rpGained,
+      points: rpCredit.balance,
+      totalPointsEarned: creditEconomyValue(gameState.research.totalPointsEarned, rpGained).balance,
     },
     lifetimeStats: {
       ...gameState.lifetimeStats,
       totalHarvests: gameState.lifetimeStats.totalHarvests + 1,
-      totalGoldEarned: gameState.lifetimeStats.totalGoldEarned + goldGained,
+      totalGoldEarned: creditEconomyValue(gameState.lifetimeStats.totalGoldEarned, goldGained).balance,
       mutationsFound: gameState.lifetimeStats.mutationsFound + (mutation != null ? 1 : 0),
-      researchPointsEarned: gameState.lifetimeStats.researchPointsEarned + rpGained,
+      researchPointsEarned: creditEconomyValue(gameState.lifetimeStats.researchPointsEarned, rpGained).balance,
     },
   };
 
@@ -493,8 +496,8 @@ export function performHarvestAll(gameState: GameState, options: HarvestAllOptio
     }
     state = outcome.state;
     harvests.push({ plotIndex, outcome });
-    totalGoldGained += outcome.goldGained;
-    totalRpGained += outcome.rpGained;
+    totalGoldGained = creditEconomyValue(totalGoldGained, outcome.goldGained).balance;
+    totalRpGained = creditEconomyValue(totalRpGained, outcome.rpGained).balance;
     if (outcome.mutation != null || outcome.newMasteryRank != null || outcome.boostActive) {
       specialCount += 1;
     }
@@ -585,8 +588,8 @@ export function runAutomationTick(gameState: GameState, options: HarvestOptions 
     result.state = outcome.state;
     result.harvests.push({ plotIndex, outcome });
     result.harvestedCount += 1;
-    result.goldGained += outcome.goldGained;
-    result.rpGained += outcome.rpGained;
+    result.goldGained = creditEconomyValue(result.goldGained, outcome.goldGained).balance;
+    result.rpGained = creditEconomyValue(result.rpGained, outcome.rpGained).balance;
 
     if (autoReplant) {
       const replanted = performPlant(result.state, plotIndex, cropKey, now);

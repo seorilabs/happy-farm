@@ -1,3 +1,4 @@
+import { normalizeEconomyValue } from './economy';
 import balance from './balance.json';
 import type { AreaKey, AutomationSettings, CropKey, GameState, ResearchNodeKey, ResearchState } from './types';
 import { recordMissionProgressEvent } from './missionEvents';
@@ -496,10 +497,7 @@ export function createInitialAutomationSettings(): AutomationSettings {
 }
 
 function normalizePoints(value: unknown): number {
-  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
-    return 0;
-  }
-  return Math.floor(value);
+  return Math.floor(normalizeEconomyValue(value));
 }
 
 export function normalizeResearchState(value: unknown): ResearchState {

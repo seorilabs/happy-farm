@@ -1,3 +1,4 @@
+import { creditEconomyValue } from './economy';
 // 일일 출석 보너스 로직
 // 마지막 수령으로부터 24시간이 지나면 보너스 지급.
 // streak은 "마지막 수령 시각(lastClaimedAt)" 기준으로 관리됩니다.
@@ -128,7 +129,8 @@ export function isDailyBonusAvailable(state: DailyBonusState, now = Date.now()):
 export function claimDailyBonus(
   state: DailyBonusState,
   now = Date.now(),
-  adRewardGold: number = DAILY_BONUS_BASE_AD_REWARD_GOLD
+  adRewardGold: number = DAILY_BONUS_BASE_AD_REWARD_GOLD,
+  currentGold = 0
 ): DailyBonusResult | null {
   if (!isDailyBonusAvailable(state, now)) return null;
 
@@ -140,8 +142,9 @@ export function claimDailyBonus(
     now - safeLastClaimedAt < DAILY_BONUS_STREAK_EXPIRE_MS;
 
   const newStreak = isStreakAlive ? state.streak + 1 : 1;
-  const milestoneBonus = getWeeklyMilestoneBonus(newStreak, adRewardGold);
-  const goldAwarded = getDailyBonusGold(newStreak, adRewardGold) + milestoneBonus;
+  const dailyGold = getDailyBonusGold(newStreak, adRewardGold);
+  const goldAwarded = creditEconomyValue(currentGold, dailyGold + getWeeklyMilestoneBonus(newStreak, adRewardGold)).credited;
+  const milestoneBonus = Math.max(0, goldAwarded - dailyGold);
   // 수령 전 상태 기준으로 판정한다: 한 번도 받은 적 없으면(lastClaimedAt == null) 첫 수령.
   const isFirstClaim = state.lastClaimedAt == null;
 
@@ -180,7 +183,8 @@ export function getDailyBonusReminderAt(state: DailyBonusState, now = Date.now()
 export function previewDailyBonus(
   state: DailyBonusState,
   now = Date.now(),
-  adRewardGold: number = DAILY_BONUS_BASE_AD_REWARD_GOLD
+  adRewardGold: number = DAILY_BONUS_BASE_AD_REWARD_GOLD,
+  currentGold = 0
 ): { available: boolean; streak: number; goldAwarded: number; milestoneBonus: number; isWeeklyMilestone: boolean } {
   const available = isDailyBonusAvailable(state, now);
   const safeLastClaimedAt = state.lastClaimedAt != null ? Math.min(state.lastClaimedAt, now) : null;
@@ -188,11 +192,13 @@ export function previewDailyBonus(
     safeLastClaimedAt != null &&
     now - safeLastClaimedAt < DAILY_BONUS_STREAK_EXPIRE_MS;
   const streak = isStreakAlive ? state.streak + 1 : 1;
-  const milestoneBonus = getWeeklyMilestoneBonus(streak, adRewardGold);
+  const dailyGold = getDailyBonusGold(streak, adRewardGold);
+  const goldAwarded = creditEconomyValue(currentGold, dailyGold + getWeeklyMilestoneBonus(streak, adRewardGold)).credited;
+  const milestoneBonus = Math.max(0, goldAwarded - dailyGold);
   return {
     available,
     streak,
-    goldAwarded: getDailyBonusGold(streak, adRewardGold) + milestoneBonus,
+    goldAwarded,
     milestoneBonus,
     isWeeklyMilestone: milestoneBonus > 0,
   };

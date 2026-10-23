@@ -1,3 +1,4 @@
+import { creditEconomyValue, normalizeEconomyValue } from './economy';
 import type { GameState } from './types';
 import { getAnimalStates } from './animals';
 import { collectChainIncome, getChainIncome } from './prestige';
@@ -73,10 +74,10 @@ export function getActiveFarmOfflineGoldPerHour(gameState: GameState): number {
   }
 
   const goldPerHour = netProfitPerHour * OFFLINE_INCOME_EFFICIENCY_RATIO;
-  if (!Number.isFinite(goldPerHour) || goldPerHour <= 0) {
+  if (Number.isNaN(goldPerHour) || goldPerHour <= 0) {
     return 0;
   }
-  return goldPerHour;
+  return normalizeEconomyValue(goldPerHour);
 }
 
 export function getActiveFarmOfflineGold(gameState: GameState, awayMs: number): number {
@@ -92,7 +93,7 @@ export function getActiveFarmOfflineGold(gameState: GameState, awayMs: number): 
   if (goldPerHour <= 0) {
     return 0;
   }
-  return Math.floor((goldPerHour * cappedMs) / MS_PER_HOUR);
+  return normalizeEconomyValue(Math.floor((goldPerHour * cappedMs) / MS_PER_HOUR));
 }
 
 // Sweeps the current active farm's offline gold into the player's purse,
@@ -105,17 +106,18 @@ export function creditActiveFarmOfflineGold(
   gameState: GameState,
   awayMs: number
 ): { state: GameState; grantedGold: number } {
-  const grantedGold = getActiveFarmOfflineGold(gameState, awayMs);
+  const credit = creditEconomyValue(gameState.gold, getActiveFarmOfflineGold(gameState, awayMs));
+  const grantedGold = credit.credited;
   if (grantedGold <= 0) {
     return { state: gameState, grantedGold: 0 };
   }
   return {
     state: {
       ...gameState,
-      gold: gameState.gold + grantedGold,
+      gold: credit.balance,
       lifetimeStats: {
         ...gameState.lifetimeStats,
-        totalGoldEarned: gameState.lifetimeStats.totalGoldEarned + grantedGold,
+        totalGoldEarned: creditEconomyValue(gameState.lifetimeStats.totalGoldEarned, grantedGold).balance,
       },
     },
     grantedGold,
@@ -164,16 +166,16 @@ export function collectReturnSummaryOfflineGold(
     return { state: gameState, collectedGold: 0, chainGold: 0, activeFarmGold: 0 };
   }
 
-  const chainGold =
-    Number.isFinite(summary.chainGold) && summary.chainGold > 0 ? Math.floor(summary.chainGold) : 0;
-  const activeFarmGold =
-    Number.isFinite(summary.activeFarmGold) && summary.activeFarmGold > 0
-      ? Math.floor(summary.activeFarmGold)
-      : 0;
-  const baseGold = chainGold + activeFarmGold;
+  const quotedChainGold = Math.floor(normalizeEconomyValue(summary.chainGold));
+  const quotedActiveFarmGold = Math.floor(normalizeEconomyValue(summary.activeFarmGold));
+  const baseGold = normalizeEconomyValue(quotedChainGold + quotedActiveFarmGold);
   const safeMultiplier =
     Number.isFinite(payoutMultiplier) && payoutMultiplier >= 1 ? Math.floor(payoutMultiplier) : 1;
-  const collectedGold = baseGold * safeMultiplier;
+  const chain = creditEconomyValue(gameState.gold, quotedChainGold * safeMultiplier);
+  const active = creditEconomyValue(chain.balance, quotedActiveFarmGold * safeMultiplier);
+  const chainGold = chain.credited;
+  const activeFarmGold = active.credited;
+  const collectedGold = chainGold + activeFarmGold;
 
   if (baseGold <= 0) {
     return { state: gameState, collectedGold: 0, chainGold: 0, activeFarmGold: 0 };
@@ -182,9 +184,9 @@ export function collectReturnSummaryOfflineGold(
   return {
     state: {
       ...gameState,
-      gold: gameState.gold + collectedGold,
+      gold: active.balance,
       chainFarms:
-        chainGold > 0
+        quotedChainGold > 0
           ? gameState.chainFarms.map((farm) => ({
               ...farm,
               lastCollectedAt: Math.max(farm.lastCollectedAt, capturedAt),
@@ -192,7 +194,7 @@ export function collectReturnSummaryOfflineGold(
           : gameState.chainFarms,
       lifetimeStats: {
         ...gameState.lifetimeStats,
-        totalGoldEarned: gameState.lifetimeStats.totalGoldEarned + collectedGold,
+        totalGoldEarned: creditEconomyValue(gameState.lifetimeStats.totalGoldEarned, collectedGold).balance,
       },
     },
     collectedGold,
@@ -237,7 +239,7 @@ export function getReturnSummary(
   // farm term is the entire idle reward; for graduated players it adds to it.
   const chainGold = getChainIncome(gameState, now).accruedGold;
   const activeFarmGold = getActiveFarmOfflineGold(gameState, awayMs);
-  const offlineGold = chainGold + activeFarmGold;
+  const offlineGold = normalizeEconomyValue(chainGold + activeFarmGold);
 
   let readyCropCount = 0;
   for (const plot of gameState.plots) {
