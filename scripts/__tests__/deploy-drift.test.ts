@@ -323,4 +323,18 @@ describe('release lag (#478)', () => {
     expect(table).toContain('문서 수정');
     expect(table.indexOf('릴리스 지연')).toBeLessThan(table.indexOf('| 채널'));
   });
+  test('많고 긴 제목은 앞뒤 일부만 표시하고 전체 커밋 수는 유지한다', () => {
+    const commitTitles = Array.from({ length: 1_000 }, (_, i) => `commit-${i + 1} ${'&'.repeat(2_000)}`);
+    const table = renderDriftTable(LATEST, [], {
+      ...evaluateReleaseLag({ commitsAhead: 1_000, oldestUnreleasedAgeHours: 72 }),
+      branch: 'main', commitTitles,
+    });
+    const body = buildIssueBody({ table, runUrl: 'https://github.com/test/test/actions/runs/1', checkedAtIso: '2026-10-23T00:00:00Z', releaseLag: true });
+    expect(body).toContain('1000커밋 앞섬');
+    expect(body).toContain('commit-1 ');
+    expect(body).toContain('commit-1000 ');
+    expect(body).not.toContain('commit-500 ');
+    expect(body).toContain('950개 제목 생략');
+    expect(Buffer.byteLength(body, 'utf8')).toBeLessThan(60_000);
+  });
 });

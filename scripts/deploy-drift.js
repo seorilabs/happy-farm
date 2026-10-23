@@ -125,7 +125,15 @@ function renderDriftTable(latestTag, rows, releaseLag = null) {
       const age = hours == null ? '해당 없음' : `${Math.floor(hours * 1_000) / 1_000}시간 경과`;
       lines.push(`릴리스 지연: ${escapeMarkdown(releaseLag.branch)}이 \`${escapeMarkdown(latestTag)}\`보다 ${releaseLag.commitsAhead}커밋 앞섬 / 가장 오래된 미발행 커밋 ${age}${releaseLag.lag ? ' ⚠️' : ''}`, '');
       if (releaseLag.lag) {
-        lines.push('미발행 커밋:', ...(releaseLag.commitTitles ?? []).map((title) => `- ${escapeMarkdown(title)}`), '');
+        // 전체 수와 경과 시간은 유지하고, 이슈/코멘트 본문은 앞뒤 25개와 제목 200자로 제한한다.
+        const titles = releaseLag.commitTitles ?? [];
+        const displayed = titles.length > 50 ? [...titles.slice(0, 25), ...titles.slice(-25)] : titles;
+        lines.push('미발행 커밋:', ...displayed.map((title) => {
+          const chars = Array.from(title);
+          return `- ${escapeMarkdown(chars.slice(0, 200).join(''))}${chars.length > 200 ? '…' : ''}`;
+        }));
+        if (titles.length > displayed.length) lines.push(`- … ${titles.length - displayed.length}개 제목 생략`);
+        lines.push('');
       }
     }
   }
