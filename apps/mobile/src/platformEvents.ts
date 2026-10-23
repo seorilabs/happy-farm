@@ -1,4 +1,5 @@
-import { createPlatform } from '@seorilabs/platform-sdk';
+import { createPlatform, type GateStore, type UpdateGateState } from '@seorilabs/platform-sdk';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform, type AppStateStatus } from 'react-native';
 
 import {
@@ -7,7 +8,7 @@ import {
   withStandardAnalyticsParams,
   type TrackGameEvent,
 } from '../../../packages/farm-core/src';
-import { detectRuntimeLocale } from '../../../packages/farm-ui/src';
+import { createUpdateGateStore, detectRuntimeLocale, type FarmUpdateGateController } from '../../../packages/farm-ui/src';
 import { PlatformAdsClient } from '../../../packages/farm-core/src';
 import { getMobileFirebaseIdToken } from './firebase/auth';
 
@@ -29,6 +30,7 @@ const mobilePlatform = createPlatform({
   // Presence는 Platform/Backoffice 운영 gate가 끝난 릴리스에서만 opt-in한다.
   // 기본값을 조합 지점에 명시해 SDK 업그레이드만으로 네트워크가 열리지 않게 한다.
   presenceEnabled: false,
+  gateStore: createUpdateGateStore(AsyncStorage) satisfies GateStore,
   presenceContext: () => ({
     platform: Platform.OS === 'ios' ? 'ios' : 'android',
     appVersion: RELEASE_INFO.versionName,
@@ -65,6 +67,25 @@ export function ensureMobilePlatformSession(): Promise<boolean> {
   });
   return sessionPromise;
 }
+
+export const mobileUpdateGate: FarmUpdateGateController = {
+  async load(locale) {
+    await mobilePlatform.session.token().catch(() => ensureMobilePlatformSession());
+    await mobilePlatform.config.fetch({
+      appVersion: RELEASE_INFO.versionName,
+      platform: Platform.OS === 'ios' ? 'ios' : 'android',
+      locale,
+    });
+    const state: UpdateGateState = mobilePlatform.config.gate();
+    if (state.kind === 'ok') return state;
+    const config = mobilePlatform.config.current();
+    const rawMessage = state.kind === 'maintenance' ? config.maintenance?.message : config.sdk?.message;
+    // SDK의 한국어 기본 문구 대신 화면 locale의 fallback을 사용할 수 있게 빈 서버 문구를 전달한다.
+    return { ...state, message: rawMessage?.trim() ? state.message : '' };
+  },
+  shouldPrompt: (state) => mobilePlatform.config.shouldPrompt(state),
+  markPrompted: (state) => mobilePlatform.config.markPrompted(state),
+};
 
 export const trackMobilePlatformEvent: TrackGameEvent = (name, params = {}) => {
   const isIos = Platform.OS === 'ios';

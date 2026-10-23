@@ -4,6 +4,9 @@
 // 데이터 수집(git/GH API)은 워크플로우가 담당하므로 여기서는 판정·렌더·이슈 결정만 고정한다.
 import {
   DRIFT_AGE_HOURS,
+  RELEASE_LAG_COMMITS,
+  RELEASE_LAG_AGE_HOURS,
+  evaluateReleaseLag,
   DRIFT_TAG_GAP,
   ISSUE_MARKER,
   buildChannelRow,
@@ -293,5 +296,45 @@ describe('chooseIssueAction', () => {
       { number: 12, body: ISSUE_MARKER, pull_request: { url: 'x' } },
     ]);
     expect(action).toEqual({ action: 'create' });
+  });
+});
+
+
+describe('release lag (#478)', () => {
+  test('임계값은 1개 커밋과 48시간이다', () => {
+    expect(RELEASE_LAG_COMMITS).toBe(1);
+    expect(RELEASE_LAG_AGE_HOURS).toBe(48);
+  });
+  test.each([
+    [0, 100, false], [3, 12, false], [1, 47.999, false],
+    [1, 48, true], [3, 72, true], [1, -1, false],
+  ])('%d commits, %d hours -> %s', (commitsAhead, oldestUnreleasedAgeHours, lag) => {
+    expect(evaluateReleaseLag({ commitsAhead, oldestUnreleasedAgeHours }).lag).toBe(lag);
+  });
+  test('비교할 수 없는 값은 최신으로 판정하지 않는다', () => {
+    expect(evaluateReleaseLag({ commitsAhead: null, oldestUnreleasedAgeHours: null })).toMatchObject({ lag: false, unknown: true });
+    expect(evaluateReleaseLag({ commitsAhead: 1, oldestUnreleasedAgeHours: NaN })).toMatchObject({ lag: false, unknown: true });
+  });
+  test('채널 표 위에 릴리스 지연과 제목 목록을 표시한다', () => {
+    const releaseLag = { ...evaluateReleaseLag({ commitsAhead: 3, oldestUnreleasedAgeHours: 72 }), branch: 'trunk', commitTitles: ['수확 수정', '저장 수정', '문서 수정'] };
+    const table = renderDriftTable(LATEST, [], releaseLag);
+    expect(table).toContain('릴리스 지연: trunk이 `v1.8.3`보다 3커밋 앞섬');
+    expect(table).toContain('가장 오래된 미발행 커밋 72시간 경과');
+    expect(table).toContain('문서 수정');
+    expect(table.indexOf('릴리스 지연')).toBeLessThan(table.indexOf('| 채널'));
+  });
+  test('많고 긴 제목은 앞뒤 일부만 표시하고 전체 커밋 수는 유지한다', () => {
+    const commitTitles = Array.from({ length: 1_000 }, (_, i) => `commit-${i + 1} ${'&'.repeat(2_000)}`);
+    const table = renderDriftTable(LATEST, [], {
+      ...evaluateReleaseLag({ commitsAhead: 1_000, oldestUnreleasedAgeHours: 72 }),
+      branch: 'main', commitTitles,
+    });
+    const body = buildIssueBody({ table, runUrl: 'https://github.com/test/test/actions/runs/1', checkedAtIso: '2026-10-23T00:00:00Z', releaseLag: true });
+    expect(body).toContain('1000커밋 앞섬');
+    expect(body).toContain('commit-1 ');
+    expect(body).toContain('commit-1000 ');
+    expect(body).not.toContain('commit-500 ');
+    expect(body).toContain('950개 제목 생략');
+    expect(Buffer.byteLength(body, 'utf8')).toBeLessThan(60_000);
   });
 });

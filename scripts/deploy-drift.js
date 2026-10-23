@@ -8,6 +8,32 @@
 // 드리프트 임계: 태그 2개 이상 뒤처지거나, 72시간 이상 최신 태그를 따라잡지 못하면 경고.
 const DRIFT_TAG_GAP = 2;
 const DRIFT_AGE_HOURS = 72;
+const RELEASE_LAG_COMMITS = 1;
+const RELEASE_LAG_AGE_HOURS = 48;
+
+// 중앙 릴리스 계약은 prerelease 없이 vMAJOR.MINOR.PATCH를 사용한다.
+function isReleaseTag(tag) {
+  return /^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(tag);
+}
+
+/** @param {{commitsAhead: number|null, oldestUnreleasedAgeHours: number|null}} params */
+function evaluateReleaseLag({ commitsAhead, oldestUnreleasedAgeHours }) {
+  const knownCount = Number.isSafeInteger(commitsAhead) && commitsAhead >= 0;
+  const knownAge = Number.isFinite(oldestUnreleasedAgeHours) && oldestUnreleasedAgeHours != null;
+  const unknown = !knownCount || (commitsAhead > 0 && !knownAge);
+  const age = knownAge ? Math.max(0, oldestUnreleasedAgeHours) : null;
+  return {
+    lag: !unknown && commitsAhead >= RELEASE_LAG_COMMITS && age >= RELEASE_LAG_AGE_HOURS,
+    unknown,
+    commitsAhead: knownCount ? commitsAhead : null,
+    oldestUnreleasedAgeHours: age,
+  };
+}
+
+function escapeMarkdown(value) {
+  return String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/[`|[\]]/g, '\\$&').replace(/[\r\n]+/g, ' ');
+}
+
 
 // 이슈 중복 생성을 막기 위한 마커(본문에 숨겨 삽입 후 재조회로 매칭).
 const ISSUE_MARKER = '<!-- deploy-drift-check -->';
@@ -82,15 +108,36 @@ function formatAge(ageHours) {
  * 채널별 판정 결과를 step summary용 마크다운 표로 렌더링한다.
  * @param {string} latestTag
  * @param {Array<{channel: string, deployedTag: string|null, deployRunUrl: string|null, ageHours: number|null, eval: ReturnType<typeof evaluateChannel>, note?: string, publicVersion?: string, releasedAt?: string, sourceUrl?: string}>} rows
+ * @param {(ReturnType<typeof evaluateReleaseLag> & {branch?: string|null, commitTitles?: string[]})|null} [releaseLag]
  * @returns {string}
  */
-function renderDriftTable(latestTag, rows) {
+function renderDriftTable(latestTag, rows, releaseLag = null) {
   const lines = [
     `최신 릴리즈 태그: **${latestTag ?? '(없음)'}**`,
     '',
-    '| 채널 | 최종 배포 태그 | 뒤처짐 | 미배포 경과 | 상태 |',
-    '| --- | --- | --- | --- | --- |',
   ];
+
+  if (releaseLag != null) {
+    if (releaseLag.unknown) {
+      lines.push('릴리스 지연: 확인 불가 (기본 브랜치와 태그 비교 자료를 확인하지 못했습니다.)', '');
+    } else {
+      const hours = releaseLag.oldestUnreleasedAgeHours;
+      const age = hours == null ? '해당 없음' : `${Math.floor(hours * 1_000) / 1_000}시간 경과`;
+      lines.push(`릴리스 지연: ${escapeMarkdown(releaseLag.branch)}이 \`${escapeMarkdown(latestTag)}\`보다 ${releaseLag.commitsAhead}커밋 앞섬 / 가장 오래된 미발행 커밋 ${age}${releaseLag.lag ? ' ⚠️' : ''}`, '');
+      if (releaseLag.lag) {
+        // 전체 수와 경과 시간은 유지하고, 이슈/코멘트 본문은 앞뒤 25개와 제목 200자로 제한한다.
+        const titles = releaseLag.commitTitles ?? [];
+        const displayed = titles.length > 50 ? [...titles.slice(0, 25), ...titles.slice(-25)] : titles;
+        lines.push('미발행 커밋:', ...displayed.map((title) => {
+          const chars = Array.from(title);
+          return `- ${escapeMarkdown(chars.slice(0, 200).join(''))}${chars.length > 200 ? '…' : ''}`;
+        }));
+        if (titles.length > displayed.length) lines.push(`- … ${titles.length - displayed.length}개 제목 생략`);
+        lines.push('');
+      }
+    }
+  }
+  lines.push('| 채널 | 최종 배포 태그 | 뒤처짐 | 미배포 경과 | 상태 |', '| --- | --- | --- | --- | --- |');
 
   for (const row of rows) {
     const result = row.eval;
@@ -196,19 +243,20 @@ function buildChannelRow({ channel, run, deployedTag, referenceMs, sortedTagsDes
  * @param {string} params.table renderDriftTable 결과
  * @param {string} params.runUrl 점검 워크플로우 run URL
  * @param {string} params.checkedAtIso 점검 시각 ISO 문자열
+ * @param {boolean} [params.releaseLag] 태그 발행 지연 여부
  * @returns {string}
  */
-function buildIssueBody({ table, runUrl, checkedAtIso }) {
+function buildIssueBody({ table, runUrl, checkedAtIso, releaseLag = false }) {
   return [
     ISSUE_MARKER,
-    '## 채널 배포 드리프트 감지',
+    releaseLag ? '## 릴리스 태그 발행 지연과 채널 상태' : '## 채널 배포 드리프트 감지',
     '',
     `점검 시각(UTC): ${checkedAtIso}`,
     `점검 워크플로우: ${runUrl}`,
     '',
     table,
     '',
-    '위 채널이 최신 릴리즈 태그를 따라잡지 못했습니다. `deploy-all` 또는 채널별 배포 워크플로우를 실행해 주세요.',
+    '미발행 커밋과 채널 상태를 대조해 다음 릴리스와 배포 계획을 확인해 주세요.',
   ].join('\n');
 }
 
@@ -230,6 +278,10 @@ function chooseIssueAction(openIssues) {
 module.exports = {
   DRIFT_TAG_GAP,
   DRIFT_AGE_HOURS,
+  RELEASE_LAG_COMMITS,
+  RELEASE_LAG_AGE_HOURS,
+  isReleaseTag,
+  evaluateReleaseLag,
   ISSUE_MARKER,
   tagGap,
   evaluateChannel,

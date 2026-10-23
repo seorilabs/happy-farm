@@ -33,7 +33,7 @@ const CHANNELS = [
  * @param {any} ctx.exec    actions/github-script exec
  * @param {typeof import('./deploy-drift')} [ctx.drift] 순수 로직(테스트 주입용, 기본은 require)
  * @param {NonNullable<Parameters<typeof lookupAppStoreVersion>[1]>['fetchImpl']} [ctx.fetchImpl] 공개 조회 경계
- * @param {() => number} [ctx.now] 점검 시각(ms)
+ * @param {() => number} [ctx.now] 점검 시각(ms), 한 실행에서 같은 기준을 사용
  */
 async function run({ github, context, core, exec, drift, fetchImpl, now = Date.now }) {
   const driftLib =
@@ -48,7 +48,7 @@ async function run({ github, context, core, exec, drift, fetchImpl, now = Date.n
     ['tag', '--list', 'v[0-9]*.[0-9]*.[0-9]*', '--sort=-v:refname'],
     { silent: true },
   );
-  const sortedTags = tagsOut.stdout.split('\n').map((s) => s.trim()).filter((tag) => normalizeVersion(tag) != null);
+  const sortedTags = tagsOut.stdout.split('\n').map((s) => s.trim()).filter(driftLib.isReleaseTag);
   const latestTag = sortedTags[0] ?? null;
 
   if (!latestTag) {
@@ -73,12 +73,45 @@ async function run({ github, context, core, exec, drift, fetchImpl, now = Date.n
       ['tag', '--points-at', sha, '--list', 'v[0-9]*.[0-9]*.[0-9]*', '--sort=-v:refname'],
       { silent: true, ignoreReturnCode: true },
     );
-    const found = out.stdout.split('\n').map((s) => s.trim()).filter((tag) => normalizeVersion(tag) != null);
+    const found = out.stdout.split('\n').map((s) => s.trim()).filter(driftLib.isReleaseTag);
     return found[0] ?? null;
   }
 
   const latestTagDate = await tagDate(latestTag);
   const referenceMs = latestTagDate != null && Number.isFinite(latestTagDate.getTime()) ? latestTagDate.getTime() : checkedAtMs;
+
+  async function collectReleaseLag() {
+    let branch = null;
+    try {
+      const repository = await github.rest.repos.get({ owner, repo });
+      branch = repository.data.default_branch;
+      if (typeof branch !== 'string' || branch.trim() === '') throw new Error('missing branch');
+      const commits = new Map();
+      let count = null;
+      for (let page = 1; ; page += 1) {
+        const { data } = await github.rest.repos.compareCommitsWithBasehead({ owner, repo, basehead: `${latestTag}...${branch}`, per_page: 100, page });
+        if (!['ahead', 'identical'].includes(data.status) || !Number.isSafeInteger(data.ahead_by) || data.ahead_by < 0 || data.total_commits !== data.ahead_by || !Array.isArray(data.commits)) throw new Error('invalid comparison');
+        if (count == null) count = data.ahead_by;
+        if (count !== data.ahead_by) throw new Error('comparison changed');
+        const previousSize = commits.size;
+        for (const commit of data.commits) {
+          if (typeof commit.sha !== 'string' || !commit.sha) throw new Error('missing commit');
+          commits.set(commit.sha, commit);
+        }
+        if (commits.size === count) break;
+        if (commits.size > count || commits.size === previousSize) throw new Error('incomplete comparison');
+      }
+      const unreleased = [...commits.values()];
+      const dates = unreleased.map((commit) => Date.parse(commit.commit?.committer?.date ?? ''));
+      if (dates.some((date) => !Number.isFinite(date))) throw new Error('missing date');
+      const age = dates.length === 0 ? null : Math.max(0, (checkedAtMs - dates.reduce((oldest, date) => Math.min(oldest, date), Infinity)) / 3_600_000);
+      return { ...driftLib.evaluateReleaseLag({ commitsAhead: count, oldestUnreleasedAgeHours: age }), branch, commitTitles: unreleased.map((commit) => (commit.commit?.message ?? '').split('\n')[0]) };
+    } catch {
+      // 조회 실패와 비교 불가는 미발행 커밋 0개 또는 최신 상태로 바꾸지 않는다.
+      return { ...driftLib.evaluateReleaseLag({ commitsAhead: null, oldestUnreleasedAgeHours: null }), branch, commitTitles: [] };
+    }
+  }
+  const releaseLag = await collectReleaseLag();
 
   // --- 2) 채널별 최근 성공 배포 run 수집 ------------------------------
   // 단독 workflow_dispatch run 은 해당 워크플로우 파일 run 목록에서,
@@ -162,7 +195,7 @@ async function run({ github, context, core, exec, drift, fetchImpl, now = Date.n
   });
 
   const rows = [...channelRows, iosRow];
-  const table = driftLib.renderDriftTable(latestTag, rows);
+  const table = driftLib.renderDriftTable(latestTag, rows, releaseLag);
   const driftedChannels = rows.filter((r) => r.eval.drift);
 
   // 채널별 수집·비교 결과 요약(테스트/후속 처리에서 채널→배포태그·뒤처짐을 확인).
@@ -181,14 +214,20 @@ async function run({ github, context, core, exec, drift, fetchImpl, now = Date.n
   core.summary.addHeading('채널 배포 드리프트 점검').addRaw(table, true);
   if (driftedChannels.length > 0) {
     core.summary.addRaw(`\n\n⚠️ 드리프트 감지: ${driftedChannels.map((r) => r.channel).join(', ')}`, true);
-  } else {
-    core.summary.addRaw(rows.some((r) => r.eval.external) ? '\n\n비교 가능한 채널은 드리프트가 없으며 일부 채널은 확인 불가입니다.' : '\n\n✅ 모든 채널이 최신 릴리즈 태그를 따라가고 있습니다.', true);
+  }
+  if (releaseLag.lag) core.summary.addRaw('\n\n⚠️ 릴리스 태그 발행 지연을 감지했습니다.', true);
+  if (driftedChannels.length === 0 && !releaseLag.lag) {
+    core.summary.addRaw(rows.some((row) => row.eval.external)
+      ? '\n\n비교 가능한 채널은 드리프트가 없으며 일부 채널은 확인 불가입니다.'
+      : releaseLag.unknown
+        ? '\n\n채널 드리프트 없음, 릴리스 지연은 확인 불가입니다.'
+        : '\n\n채널이 최신 릴리스 태그를 따라가고 있으며 태그 발행 지연도 없습니다.', true);
   }
   await core.summary.write();
 
-  if (driftedChannels.length === 0) {
+  if (driftedChannels.length === 0 && !releaseLag.lag) {
     core.info('드리프트 없음 — 이슈를 생성/코멘트하지 않습니다.');
-    return { latestTag, channels, driftedChannels: [], issue: null };
+    return { latestTag, channels, releaseLag, driftedChannels: [], issue: null };
   }
 
   // --- 4) 드리프트 감지 시 이슈 생성 또는 코멘트 ----------------------
@@ -201,10 +240,11 @@ async function run({ github, context, core, exec, drift, fetchImpl, now = Date.n
   const decision = driftLib.chooseIssueAction(openIssues);
 
   const body = driftLib.buildIssueBody({
-      table,
-      runUrl: `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`,
-      checkedAtIso: new Date(checkedAtMs).toISOString(),
-    });
+    table,
+    runUrl: `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`,
+    checkedAtIso: new Date(checkedAtMs).toISOString(),
+    releaseLag: releaseLag.lag,
+  });
 
   if (decision.action === 'comment') {
     await github.rest.issues.createComment({
@@ -214,17 +254,17 @@ async function run({ github, context, core, exec, drift, fetchImpl, now = Date.n
       body,
     });
     core.info(`기존 드리프트 이슈 #${decision.issueNumber} 에 코멘트했습니다.`);
-    return { latestTag, channels, driftedChannels: driftedChannels.map((r) => r.channel), issue: { action: 'comment', number: decision.issueNumber } };
+    return { latestTag, channels, releaseLag, driftedChannels: driftedChannels.map((r) => r.channel), issue: { action: 'comment', number: decision.issueNumber } };
   }
 
   const created = await github.rest.issues.create({
     owner,
     repo,
-    title: `🚚 채널 배포 드리프트 감지 (최신 ${latestTag})`,
+    title: `🚚 ${driftedChannels.length === 0 ? '릴리스 태그 발행 지연' : '채널 배포 드리프트'} 감지 (최신 ${latestTag})`,
     body,
   });
   core.info(`드리프트 이슈 #${created.data.number} 를 생성했습니다.`);
-  return { latestTag, channels, driftedChannels: driftedChannels.map((r) => r.channel), issue: { action: 'create', number: created.data.number } };
+  return { latestTag, channels, releaseLag, driftedChannels: driftedChannels.map((r) => r.channel), issue: { action: 'create', number: created.data.number } };
 }
 
 module.exports = { run, CHANNELS };

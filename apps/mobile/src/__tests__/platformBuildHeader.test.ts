@@ -4,6 +4,10 @@
 jest.mock('../firebase/auth', () => ({
   getMobileFirebaseIdToken: jest.fn(() => Promise.resolve('firebase-id-token')),
 }));
+jest.mock('@react-native-async-storage/async-storage', () => ({
+  getItem: jest.fn(async () => null),
+  setItem: jest.fn(async () => undefined),
+}));
 
 type FetchMock = jest.Mock<Promise<unknown>, [string, RequestInit?]>;
 

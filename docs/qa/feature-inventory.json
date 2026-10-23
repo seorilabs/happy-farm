@@ -233,16 +233,32 @@
       ]
     },
     {
+      "id": "update-gate",
+      "core": false,
+      "paths": [
+        "packages/farm-ui/src/FarmUpdateGate.tsx",
+        "packages/farm-ui/src/updateGate.ts",
+        "packages/farm-ui/src/__tests__/FarmUpdateGate.test.tsx",
+        "apps/mobile/src/__tests__/updateGateContract.test.ts",
+        "apps/mobile/src/platformEvents.ts",
+        "apps/ait/src/platformEvents.ts",
+        "apps/mobile/App.tsx",
+        "apps/ait/src/pages/index.tsx"
+      ]
+    },
+    {
       "id": "release-observability",
       "core": false,
       "paths": [
         "scripts/deploy-drift.js",
         "scripts/deploy-drift-run.js",
-        "scripts/app-store-lookup.js",
         "scripts/__tests__/deploy-drift*.test.ts",
+        ".github/workflows/deploy-drift-check.yml",
+        "scripts/app-store-lookup.js",
         "scripts/__tests__/app-store-lookup.test.ts",
-        ".github/workflows/deploy-drift-check.yml"
-      ]
+        "app-store/app-store.config.json"
+      ],
+      "runtimeKind": "service"
     }
   ]
 }
