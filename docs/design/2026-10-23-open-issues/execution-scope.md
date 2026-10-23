@@ -2,7 +2,9 @@
 
 ## 공통 실행 범위와 승인
 
-상태는 **사람 검토 대기**다. 2026-10-23 요청은 18건 순차 처리의 작업 지시이며, 사용자가 지정한 절차에 따라 이 문서와 같은 커밋의 test-plan.json을 검토한 뒤 구현한다. 원본 커밋은 이 설계 파일을 추가한 Git 커밋이다. 승인자와 승인 근거는 실제 응답 뒤 기록하며 현재 작성하지 않는다.
+설계 10건과 같은 커밋의 test-plan.json은 사용자가 승인했다. 승인 원본은 [PR #581의 46d3ac1965ce178f82632ffc0f3ca1b0219f3ea1](https://github.com/seorilabs/happy-farm/pull/581/commits/46d3ac1965ce178f82632ffc0f3ca1b0219f3ea1)이며, 병합 후 같은 트리의 조상은 2a3d1f4ea0755aa2a06690273e1976520f415695다. 승인 응답은 “설계 10건 승인, 구현과 병합 진행”이며 [승인 기록](https://github.com/seorilabs/happy-farm/pull/581#issuecomment-6355985613)에 연결한다. 승인 범위와 실행 결과는 [처리 기록](../../04-work/open-issues-execution-2026-10-23.md)에서 확인한다. 원래 설계 및 test-plan의 요구사항은 바꾸지 않았다.
+
+중앙 보완 설계는 [seorilabs/.github PR #309의 f7c461c3898b0ca8ff2dcb883ddf4d2b9ac1c452](https://github.com/seorilabs/.github/pull/309/commits/f7c461c3898b0ca8ff2dcb883ddf4d2b9ac1c452)에서 승인받았다. 병합 후 같은 트리의 조상은 a457599425e6bd535e63d3df127a6546dfe0f7c6다. 사용자 응답 “승인, 중앙 보완과 추가 3회 진행”과 [승인 기록](https://github.com/seorilabs/.github/pull/309#issuecomment-6359421385)에 따라 중앙 계약 두 건과 #512 독립 검수 4, 5, 6회를 수행했다.
 
 이번 끝 지점은 PR 병합이며 배포, 태그 발행, 업로드, 심사 제출, 운영 설정 변경과 기기 사용은 제외한다. #520의 공식 사이트 PR은 Ready에서 멈춘다. 중앙 test-plan schema는 release.markets 비어 있음과 병합 끝 지점을 지원하지 않으므로 시장은 영향 맥락, until은 허용 최소값 test-track으로 기록한다. **이 요청에서 release 필드는 실행 승인 대상에서 제외한다.** 향후 릴리스는 별도 명시 지시와 그 범위의 계획을 필요로 한다. 이를 근거로 테스트 채널 업로드를 시작하지 않는다.
 

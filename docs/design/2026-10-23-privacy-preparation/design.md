@@ -37,4 +37,4 @@ seorilabs-official origin/main의 기존 제품별 PrivacyContent, ko/en route, 
 
 ## 실행과 승인
 
-[공통 실행 범위, 검수와 복구](../2026-10-23-open-issues/execution-scope.md)를 따른다. 설계와 같은 커밋의 test-plan.json은 사람 검토 대기이며, 배포 실행은 승인 범위에서 제외한다.
+[공통 실행 범위, 검수와 복구](../2026-10-23-open-issues/execution-scope.md)를 따른다. 설계와 같은 커밋의 test-plan.json은 사용자가 승인했다. 정확한 승인 커밋과 응답은 위 공통 실행 범위에 기록했다. 배포 실행은 승인 범위에서 제외한다.
