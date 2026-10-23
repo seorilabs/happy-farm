@@ -285,7 +285,7 @@ export function WheelSheet({
               ]}
             >
               <Text style={styles.reelIcon}>{slot.icon}</Text>
-              <Text style={[styles.reelGold, active ? styles.reelGoldActive : null]} numberOfLines={1}>
+              <Text style={[styles.reelGold, active ? styles.reelGoldActive : null]}>
                 {formatRewardValue(getWheelSlotReward(slot, adRewardGold))}
               </Text>
             </Animated.View>
@@ -350,20 +350,19 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
   },
-  // 릴은 반드시 한 줄이어야 한다(nowrap): 줄바꿈되면 감속 하이라이트가 멈추는 셀의
-  // 시각 위치가 당첨 슬롯과 어긋난다. 셀은 flex 균등 분배 + 축소 허용으로 좁은
-  // 화면에서도 6칸이 한 줄에 들어간다.
+  // 하이라이트는 슬롯 key와 index를 따른다. 좁은 화면에서는 셀을 줄바꿈해
+  // 여덟 보상과 큰 글자 금액을 모두 읽을 수 있게 한다.
   reelRow: {
     flexDirection: 'row',
-    flexWrap: 'nowrap',
+    flexWrap: 'wrap',
     gap: 6,
     marginBottom: 14,
   },
   reelCell: {
     flexGrow: 1,
     flexShrink: 1,
-    flexBasis: 0,
-    minWidth: 0,
+    flexBasis: '22%',
+    minWidth: 96,
     alignItems: 'center',
     paddingVertical: 8,
     paddingHorizontal: 4,

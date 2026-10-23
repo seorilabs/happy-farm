@@ -16,6 +16,16 @@ export const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f1f8e9',
   },
+  viewportPageContent: { flex: 1 },
+  scrollablePageContent: { flexGrow: 1 },
+  wrappedHeaderTop: { flexWrap: 'wrap' },
+  fullWidthTitleGroup: { flexBasis: '100%', flexGrow: 0 },
+  stackedStatsPanel: { flexDirection: 'column' },
+  fullWidthSummary: { maxWidth: '100%', alignItems: 'flex-start' },
+  stackedActionRow: { flexDirection: 'column', alignItems: 'stretch' },
+  wrappedSeedMetaRow: { flexDirection: 'column', alignItems: 'flex-start' },
+  stackedSubtitleRow: { flexDirection: 'column', alignItems: 'flex-start' },
+  productivityBasis: { marginTop: 3, color: '#6b4a22', fontSize: 11, textAlign: 'right' },
   header: {
     paddingHorizontal: 16,
     paddingBottom: 8,
@@ -50,6 +60,7 @@ export const styles = StyleSheet.create({
     fontWeight: '800',
   },
   subtitle: {
+    flexShrink: 0,
     alignSelf: 'flex-start',
     marginTop: 2,
     paddingHorizontal: 7,
@@ -613,6 +624,7 @@ export const styles = StyleSheet.create({
   },
   toolHint: {
     minWidth: 0,
+    flexShrink: 1,
     flex: 1,
     color: '#8a6a34',
     fontSize: 13,
@@ -817,7 +829,7 @@ export const styles = StyleSheet.create({
   },
   toolButton: {
     width: 84,
-    height: 94,
+    minHeight: 94,
     borderRadius: 16,
     borderWidth: 2,
     borderColor: '#dcc189',
@@ -859,6 +871,7 @@ export const styles = StyleSheet.create({
     color: '#6b4a22',
     fontSize: 12,
     fontWeight: '900',
+    textAlign: 'center',
   },
   toolCost: {
     color: '#c07a12',
