@@ -231,6 +231,20 @@
         "apps/mobile/android/app/build.gradle",
         "apps/mobile/android/app/src/main/AndroidManifest.xml"
       ]
+    },
+    {
+      "id": "update-gate",
+      "core": false,
+      "paths": [
+        "packages/farm-ui/src/FarmUpdateGate.tsx",
+        "packages/farm-ui/src/updateGate.ts",
+        "packages/farm-ui/src/__tests__/FarmUpdateGate.test.tsx",
+        "apps/mobile/src/__tests__/updateGateContract.test.ts",
+        "apps/mobile/src/platformEvents.ts",
+        "apps/ait/src/platformEvents.ts",
+        "apps/mobile/App.tsx",
+        "apps/ait/src/pages/index.tsx"
+      ]
     }
   ]
 }

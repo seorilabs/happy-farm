@@ -162,6 +162,11 @@ jest.mock('../src/platformEvents', () => ({
   shutdownMobilePlatformEvents: jest.fn(() => Promise.resolve()),
   startMobilePlatformEvents: jest.fn(),
   trackMobilePlatformEvent: jest.fn(),
+  mobileUpdateGate: {
+    load: jest.fn(async () => ({ kind: 'ok' })),
+    shouldPrompt: jest.fn(async () => false),
+    markPrompted: jest.fn(async () => undefined),
+  },
 }));
 
 type MockRewardedAd = {

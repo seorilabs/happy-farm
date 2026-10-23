@@ -42,6 +42,24 @@ afterEach(() => {
   mockBottomInset = 0;
 });
 
+test('설정에서 읽은 언어를 안내에 전달하고 게임 진입 때 설정을 다시 읽지 않는다', async () => {
+  const host = persistence();
+  const settings = deferred<{ locale: 'en-US' }>(); host.readPersistedGameSettings.mockReturnValue(settings.promise);
+  const onSettingsReady = jest.fn();
+  render(
+    <FarmStartup art={art} persistence={host} preferredLocale="ko-KR" onSettingsReady={onSettingsReady}>
+      {() => <Text>game</Text>}
+    </FarmStartup>
+  );
+  expect(onSettingsReady).not.toHaveBeenCalled();
+  await act(async () => settings.resolve({ locale: 'en-US' }));
+  await screen.findByText('Enter Farm');
+  expect(onSettingsReady).toHaveBeenCalledWith('en-US');
+  fireEvent.press(screen.getByText('Enter Farm'));
+  expect(screen.getByText('game')).toBeTruthy();
+  expect(onSettingsReady).toHaveBeenCalledTimes(1);
+});
+
 test('shows real completed reads, waits for the save, and keeps gameplay unmounted until start', async () => {
   const host = persistence();
   const settings = deferred<{ locale: 'en-US' }>();
