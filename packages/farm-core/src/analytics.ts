@@ -1325,18 +1325,17 @@ export function createFarmAnalytics(emit: TrackGameEvent = noopTrackGameEvent) {
       });
     },
 
-    // === 강제 업데이트 게이트 (#428, 모바일 전용) ===
-    // 최소지원버전 게이트가 발동해 업데이트 안내가 노출됐다. 앱 기동 직후 게임 상태
-    // context 이전에 발생할 수 있어 context를 요구하지 않는다. 버전 분포 수렴 속도를
-    // BQ로 측정하기 위한 계측이다.
+    // 업데이트 안내는 게임 진입 전에 노출될 수 있어 게임 상태 context를 요구하지 않는다.
     trackUpdateGateShown: (params: {
       buildNumber: number;
-      minimumSupportedVersionCode: number;
+      gateKind: 'recommended' | 'required' | 'maintenance';
+      recommendedVersion?: string;
       platform: string;
     }) => {
       track('update_gate_shown', {
         build_number: params.buildNumber,
-        minimum_supported_version_code: params.minimumSupportedVersionCode,
+        gate_kind: params.gateKind,
+        ...(params.recommendedVersion ? { recommended_version: params.recommendedVersion } : {}),
         platform: params.platform,
       });
     },
@@ -1344,12 +1343,14 @@ export function createFarmAnalytics(emit: TrackGameEvent = noopTrackGameEvent) {
     // 업데이트 안내에서 스토어 열기 버튼 클릭. shown 대비 클릭률로 안내 효과를 측정한다.
     trackUpdateGateStoreClick: (params: {
       buildNumber: number;
-      minimumSupportedVersionCode: number;
+      gateKind: 'recommended' | 'required' | 'maintenance';
+      recommendedVersion?: string;
       platform: string;
     }) => {
       track('update_gate_store_click', {
         build_number: params.buildNumber,
-        minimum_supported_version_code: params.minimumSupportedVersionCode,
+        gate_kind: params.gateKind,
+        ...(params.recommendedVersion ? { recommended_version: params.recommendedVersion } : {}),
         platform: params.platform,
       });
     },

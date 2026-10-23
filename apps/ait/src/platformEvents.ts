@@ -1,5 +1,5 @@
 import { getAnonymousKey } from '@apps-in-toss/framework';
-import { createPlatform, type Credential } from '@seorilabs/platform-sdk';
+import { createPlatform, type Credential, type GateStore, type UpdateGateState } from '@seorilabs/platform-sdk';
 import type { AppStateStatus } from 'react-native';
 
 import {
@@ -7,8 +7,9 @@ import {
   withStandardAnalyticsParams,
   type TrackGameEvent,
 } from '../../../packages/farm-core/src';
-import { detectRuntimeLocale } from '../../../packages/farm-ui/src';
+import { createUpdateGateStore, detectRuntimeLocale, type FarmUpdateGateController } from '../../../packages/farm-ui/src';
 import { getAppsInTossGa4ClientId } from './firebaseWeb/analyticsIdentity';
+import { appsInTossStorage } from './farm/platform/appsInTossStorage';
 
 const PLATFORM_API_URL = 'https://platform-api-306278488979.asia-northeast3.run.app';
 const PLATFORM_INGEST_URL = 'https://platform-ingest-306278488979.asia-northeast3.run.app';
@@ -33,6 +34,7 @@ const appsInTossPlatform = createPlatform({
   // Presence는 Platform/Backoffice 운영 gate가 끝난 릴리스에서만 opt-in한다.
   // 기본값을 조합 지점에 명시해 SDK 업그레이드만으로 네트워크가 열리지 않게 한다.
   presenceEnabled: false,
+  gateStore: createUpdateGateStore(appsInTossStorage) satisfies GateStore,
   presenceContext: () => ({
     platform: 'ait',
     appVersion: RELEASE_INFO.versionName,
@@ -70,6 +72,20 @@ export function ensureAppsInTossPlatformSession(): Promise<boolean> {
     });
   return platformSessionPromise;
 }
+
+export const appsInTossUpdateGate: FarmUpdateGateController = {
+  async load(locale) {
+    await ensureAppsInTossPlatformSession();
+    await appsInTossPlatform.config.fetch({ appVersion: RELEASE_INFO.versionName, platform: 'ait', locale });
+    const state: UpdateGateState = appsInTossPlatform.config.gate();
+    if (state.kind === 'ok') return state;
+    const config = appsInTossPlatform.config.current();
+    const rawMessage = state.kind === 'maintenance' ? config.maintenance?.message : config.sdk?.message;
+    return { ...state, message: rawMessage?.trim() ? state.message : '' };
+  },
+  shouldPrompt: (state) => appsInTossPlatform.config.shouldPrompt(state),
+  markPrompted: (state) => appsInTossPlatform.config.markPrompted(state),
+};
 
 export const trackAppsInTossPlatformEvent: TrackGameEvent = (name, params = {}) => {
   appsInTossPlatform.events.track({

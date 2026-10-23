@@ -269,6 +269,8 @@ import {
 import { DEFAULT_FARM_GAME_SETTINGS, normalizeFarmGameSettings, type FarmGameSettings } from './gameSettings';
 import { CropGlyph, FarmArtProvider, useCropArtSource, useFarmArt, type FarmArt } from './farmArt';
 import { getFarmMessages, type FarmMessages } from './i18n';
+import type { FarmUpdateGatePresentation } from './updateGate';
+import { FarmUpdateGateModal } from './FarmUpdateGateModal';
 import { getWeeklyEventPresentation } from './weeklyEventPresentation';
 import { AchievementsSheet } from './components/AchievementsSheet';
 import { ChainMapSheet, PrestigeConfirmSheet } from './components/ChainMapSheet';
@@ -688,6 +690,8 @@ export type FarmGameProps = {
   notifications?: FarmGameNotifications;
   market?: FarmGameMarket;
   preferredLocale?: SupportedLocale;
+  onLocaleChange?: (locale: SupportedLocale) => void;
+  updateGate?: FarmUpdateGatePresentation | null;
   adGroupIds?: FarmGameAdGroupIds;
   interstitialPlacements?: FarmGameInterstitialPlacements;
 };
@@ -1081,6 +1085,8 @@ function FarmGameBody({
   audio = defaultFarmAudio,
   notifications = defaultFarmNotifications,
   preferredLocale = DEFAULT_LOCALE,
+  onLocaleChange,
+  updateGate,
   adGroupIds = {},
   interstitialPlacements = DEFAULT_INTERSTITIAL_PLACEMENTS,
 }: FarmGameProps = {}) {
@@ -1105,13 +1111,14 @@ function FarmGameBody({
   // ad is in flight the sheet keeps its presentation state and catches up afterwards.
   const [isFullScreenAdInFlight, setIsFullScreenAdInFlight] = useState(false);
   const [heldSheetModalVisible, setHeldSheetModalVisible] = useState(false);
+  const [isSheetModalOnScreen, setIsSheetModalOnScreen] = useState(false);
+  const [isUpdateGateModalOnScreen, setIsUpdateGateModalOnScreen] = useState(false);
   const isSheetModalVisible = isFullScreenAdInFlight
     ? heldSheetModalVisible
-    : activeSheet != null && overlaySlot == null;
+    : activeSheet != null && overlaySlot == null && !isUpdateGateModalOnScreen && (updateGate == null || isSheetModalOnScreen);
   if (!isFullScreenAdInFlight && heldSheetModalVisible !== isSheetModalVisible) {
     setHeldSheetModalVisible(isSheetModalVisible);
   }
-  const [isSheetModalOnScreen, setIsSheetModalOnScreen] = useState(false);
   if (isSheetModalVisible && !isSheetModalOnScreen) {
     setIsSheetModalOnScreen(true);
   } else if (!isSheetModalVisible && isSheetModalOnScreen && Platform.OS !== 'ios') {
@@ -1127,6 +1134,9 @@ function FarmGameBody({
   const handleSheetModalDismissed = useCallback(() => {
     setIsSheetModalOnScreen(false);
   }, []);
+  const isUpdateGateModalVisible = updateGate != null && updateGate.canPresent !== false && !isFullScreenAdInFlight && !isSheetModalOnScreen && overlaySlot == null;
+  const updateGateRef = useRef(updateGate);
+  updateGateRef.current = updateGate;
   const handleOverlayModalShown = useCallback((overlay: OverlayModal) => {
     setOverlaySlot((slot) => markOverlayModalPresented(slot, overlay));
   }, []);
@@ -2769,6 +2779,10 @@ function FarmGameBody({
     }
     void persistence.writePersistedGameSettings?.(gameSettings);
   }, [gameSettings, isSettingsLoaded, persistence]);
+
+  useEffect(() => {
+    if (isSettingsLoaded) onLocaleChange?.(gameSettings.locale);
+  }, [gameSettings.locale, isSettingsLoaded, onLocaleChange]);
 
   useEffect(() => {
     if (!isSaveLoaded || !isSettingsLoaded) {
@@ -4786,7 +4800,7 @@ function FarmGameBody({
       ctaPosition?: string;
     } = {}
   ) {
-    if (fullScreenAdInFlightRef.current) {
+    if (fullScreenAdInFlightRef.current || updateGateRef.current != null) {
       return false;
     }
     // Reserve before readiness/limit checks as well as before native show. A
@@ -4968,7 +4982,7 @@ function FarmGameBody({
   // 횟수에 따라 늘어나고(백오프), 두 지면이 하나의 타임라인을 공유하므로
   // 수확과 해금이 연달아 일어나도 광고가 붙어서 뜨지 않는다.
   async function showInterstitial(placement: string) {
-    if (fullScreenAdInFlightRef.current || overlaySlotRef.current != null || !interstitialAd.isAdReady) {
+    if (fullScreenAdInFlightRef.current || updateGateRef.current != null || overlaySlotRef.current != null || !interstitialAd.isAdReady) {
       return;
     }
 
@@ -5033,6 +5047,7 @@ function FarmGameBody({
       !interstitialPlacements.returnWelcomeBack ||
       onboardingStep != null ||
       fullScreenAdInFlightRef.current ||
+      updateGateRef.current != null ||
       overlaySlotRef.current != null
     ) {
       return;
@@ -5882,10 +5897,10 @@ function FarmGameBody({
         : pendingFeatureCoachmark != null
           ? { kind: 'featureCoachmark', key: pendingFeatureCoachmark }
           : null;
-  const nextOverlaySlot = resolveOverlayModalSlot(
+  const nextOverlaySlot = updateGate != null && overlaySlot != null ? overlaySlot : resolveOverlayModalSlot(
     overlaySlot,
     requestedOverlay,
-    activeSheet == null && !isSheetModalOnScreen && !isFullScreenAdInFlight
+    activeSheet == null && !isSheetModalOnScreen && !isFullScreenAdInFlight && updateGate == null && !isUpdateGateModalOnScreen
   );
   if (nextOverlaySlot !== overlaySlot) {
     setOverlaySlot(nextOverlaySlot);
@@ -6366,6 +6381,7 @@ function FarmGameBody({
         closeLabel={messages.sheetCloseAccessibilityLabel}
         bottomInset={bottomSafeInset}
         overlay={toastNode}
+        updateGate={!isFullScreenAdInFlight && isSheetModalVisible ? updateGate : null}
         goldLabel={messages.sheetGoldLabel(formatMoney(gameState.gold, locale))}
         canClose={() => activeSheet?.type !== 'welcomeBack' || !offlineBonusAdInFlightRef.current}
         isModalVisible={isSheetModalVisible}
@@ -7189,6 +7205,7 @@ function FarmGameBody({
             const overlay = overlaySlot.overlay;
             return (
               <NotificationPromptOverlay
+                updateGate={!isFullScreenAdInFlight ? updateGate : null}
                 messages={messages}
                 onShow={() => handleOverlayModalShown(overlay)}
                 onAccept={() => {
@@ -7204,6 +7221,7 @@ function FarmGameBody({
             const overlay = overlaySlot.overlay;
             return (
               <PrestigeGuideOverlay
+                updateGate={!isFullScreenAdInFlight ? updateGate : null}
                 messages={messages}
                 onShow={() => handleOverlayModalShown(overlay)}
                 onDismiss={dismissPrestigeGuide}
@@ -7216,6 +7234,7 @@ function FarmGameBody({
             const overlay = overlaySlot.overlay;
             return (
               <FeatureCoachmarkOverlay
+                updateGate={!isFullScreenAdInFlight ? updateGate : null}
                 key={overlay.key}
                 featureKey={overlay.key}
                 messages={messages}
@@ -7226,6 +7245,7 @@ function FarmGameBody({
             );
           })()
         : null}
+      <FarmUpdateGateModal testID="farm-update-gate-modal" presentation={isUpdateGateModalVisible ? updateGate : null} onScreenChange={setIsUpdateGateModalOnScreen} />
     </View>
   );
 }
@@ -7656,11 +7676,13 @@ function FirstHarvestOverlay({
 function NotificationPromptOverlay({
   messages,
   onShow,
+  updateGate,
   onAccept,
   onDecline,
 }: {
   messages: FarmMessages;
   onShow: () => void;
+  updateGate?: FarmUpdateGatePresentation | null;
   onAccept: () => void;
   onDecline: () => void;
 }) {
@@ -7668,9 +7690,9 @@ function NotificationPromptOverlay({
     // Fabric renders this absoluteFill overlay in normal flow — pushing the game
     // UI up with no dim backdrop — when it mounts as a plain View child. Hosting
     // it in a Modal (the pattern Sheet already uses) restores the true overlay.
-    <Modal transparent visible animationType="fade" onShow={onShow} onRequestClose={onDecline}>
-      <View testID="notification-prompt-overlay" style={styles.notificationPromptBackdrop}>
-        <View testID="notification-prompt-card" style={styles.notificationPromptCard}>
+    <Modal transparent visible animationType="fade" onShow={onShow} onRequestClose={updateGate?.onRequestClose ?? onDecline}>
+      <View testID="notification-prompt-overlay" style={[styles.notificationPromptBackdrop, updateGate != null && { backgroundColor: 'transparent' }]}>
+        <View testID="notification-prompt-card" style={[styles.notificationPromptCard, updateGate != null && { display: 'none' }]}>
           <Text style={styles.notificationPromptIcon}>🔔</Text>
           <Text style={styles.notificationPromptTitle}>{messages.notificationPromptTitle}</Text>
           <Text style={styles.notificationPromptDesc}>{messages.notificationPromptDesc}</Text>
@@ -7695,6 +7717,7 @@ function NotificationPromptOverlay({
             </Pressable>
           </View>
         </View>
+        {updateGate != null ? <UpdateGateSurface presentation={updateGate} /> : null}
       </View>
     </Modal>
   );
@@ -7706,18 +7729,20 @@ function NotificationPromptOverlay({
 function PrestigeGuideOverlay({
   messages,
   onShow,
+  updateGate,
   onDismiss,
 }: {
   messages: FarmMessages;
   onShow: () => void;
+  updateGate?: FarmUpdateGatePresentation | null;
   onDismiss: () => void;
 }) {
   return (
     // See NotificationPromptOverlay: Fabric mis-renders this absoluteFill overlay
     // as normal flow unless it is hosted in a Modal.
-    <Modal transparent visible animationType="fade" onShow={onShow} onRequestClose={onDismiss}>
-      <View testID="prestige-guide-overlay" style={styles.notificationPromptBackdrop}>
-        <View testID="prestige-guide-card" style={styles.notificationPromptCard}>
+    <Modal transparent visible animationType="fade" onShow={onShow} onRequestClose={updateGate?.onRequestClose ?? onDismiss}>
+      <View testID="prestige-guide-overlay" style={[styles.notificationPromptBackdrop, updateGate != null && { backgroundColor: 'transparent' }]}>
+        <View testID="prestige-guide-card" style={[styles.notificationPromptCard, updateGate != null && { display: 'none' }]}>
           <Text style={styles.notificationPromptIcon}>🔗</Text>
           <Text style={styles.notificationPromptTitle}>{messages.prestigeGuideTitle}</Text>
           <Text style={styles.notificationPromptDesc}>{messages.prestigeGuideBody}</Text>
@@ -7733,6 +7758,7 @@ function PrestigeGuideOverlay({
             </Pressable>
           </View>
         </View>
+        {updateGate != null ? <UpdateGateSurface presentation={updateGate} /> : null}
       </View>
     </Modal>
   );
@@ -7775,12 +7801,14 @@ function FeatureCoachmarkOverlay({
   featureKey,
   messages,
   onShow,
+  updateGate,
   onOpen,
   onDismiss,
 }: {
   featureKey: FeatureCoachmarkKey;
   messages: FarmMessages;
   onShow: () => void;
+  updateGate?: FarmUpdateGatePresentation | null;
   onOpen: () => void;
   onDismiss: () => void;
 }) {
@@ -7788,9 +7816,9 @@ function FeatureCoachmarkOverlay({
   return (
     // PrestigeGuideOverlay와 동일하게 Modal에 호스팅해야 Fabric이 absoluteFill 오버레이를
     // 정상 렌더한다.
-    <Modal transparent visible animationType="fade" onShow={onShow} onRequestClose={onDismiss}>
-      <View testID="feature-coachmark-overlay" style={styles.notificationPromptBackdrop}>
-        <View testID="feature-coachmark-card" style={styles.notificationPromptCard}>
+    <Modal transparent visible animationType="fade" onShow={onShow} onRequestClose={updateGate?.onRequestClose ?? onDismiss}>
+      <View testID="feature-coachmark-overlay" style={[styles.notificationPromptBackdrop, updateGate != null && { backgroundColor: 'transparent' }]}>
+        <View testID="feature-coachmark-card" style={[styles.notificationPromptCard, updateGate != null && { display: 'none' }]}>
           <Text style={styles.featureCoachmarkEyebrow}>{messages.featureCoachmarkEyebrow}</Text>
           <Text style={styles.notificationPromptIcon}>{FEATURE_COACHMARK_ICON[featureKey]}</Text>
           <Text style={styles.notificationPromptTitle}>{title}</Text>
@@ -7816,6 +7844,7 @@ function FeatureCoachmarkOverlay({
             </Pressable>
           </View>
         </View>
+        {updateGate != null ? <UpdateGateSurface presentation={updateGate} /> : null}
       </View>
     </Modal>
   );
@@ -8795,6 +8824,10 @@ function GrowthProgressBar({ progressRatio }: { progressRatio: number }) {
   );
 }
 
+function UpdateGateSurface({ presentation }: { presentation: FarmUpdateGatePresentation }) {
+  return <View testID="update-gate-surface" style={[StyleSheet.absoluteFill, { zIndex: 1_000 }]}>{presentation.node}</View>;
+}
+
 function Sheet({
   activeSheet,
   children,
@@ -8808,6 +8841,7 @@ function Sheet({
   onDismiss,
   overlay,
   goldLabel,
+  updateGate,
 }: {
   activeSheet: ActiveSheet;
   children: React.ReactNode;
@@ -8816,6 +8850,7 @@ function Sheet({
   closeLabel: string;
   // 시트 제목 옆에 보여 줄 현재 보유 골드. 시트가 헤더를 덮기 때문에 필요하다.
   goldLabel?: string;
+  updateGate?: FarmUpdateGatePresentation | null;
   // 시트가 열린 동안에도 보여야 하는 오버레이(현재는 토스트). 시트는 RN Modal이라
   // 별도 네이티브 윈도우에 그려지고, 같은 트리의 토스트는 그 뒤에 가려 보이지 않는다.
   // 그래서 같은 노드를 Modal 안에서 한 번 더 렌더한다.
@@ -8936,7 +8971,7 @@ function Sheet({
       transparent
       visible={isModalVisible}
       animationType="none"
-      onRequestClose={closeSheetWithAnimation}
+      onRequestClose={updateGate?.onRequestClose ?? closeSheetWithAnimation}
       onDismiss={onDismiss}
     >
       <KeyboardAvoidingView behavior="padding" style={styles.modalRoot}>
@@ -8947,10 +8982,10 @@ function Sheet({
           testID="sheet-backdrop"
           accessibilityRole="button"
           accessibilityLabel={closeLabel}
-          style={styles.sheetBackdropFill}
+          style={[styles.sheetBackdropFill, updateGate != null && { display: 'none' }]}
           onPress={closeSheetWithAnimation}
         />
-        <Animated.View style={[styles.sheet, { transform: [{ translateY: dragY }] }]}>
+        <Animated.View style={[styles.sheet, { transform: [{ translateY: dragY }] }, updateGate != null && { display: 'none' }]}>
           <View testID="sheet-drag-handle" style={styles.sheetDragArea} {...panResponder.panHandlers}>
             <View style={styles.sheetHandle} />
           </View>
@@ -8975,11 +9010,12 @@ function Sheet({
             {children}
           </ScrollView>
         </Animated.View>
-        {overlay != null ? (
+        {overlay != null && updateGate == null ? (
           <View testID="sheet-overlay" pointerEvents="box-none" style={StyleSheet.absoluteFillObject}>
             {overlay}
           </View>
         ) : null}
+        {updateGate != null ? <UpdateGateSurface presentation={updateGate} /> : null}
       </KeyboardAvoidingView>
     </Modal>
   );

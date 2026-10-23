@@ -7,7 +7,13 @@ type MockPlatformOptions = {
   presenceEnabled?: boolean;
   presenceContext?: () => Record<string, string>;
   sessionStore?: unknown;
+  gateStore?: { load: () => Promise<unknown>; save: (log: { version: string; promptedAt: number }) => Promise<void> };
 };
+
+jest.mock('@react-native-async-storage/async-storage', () => ({
+  getItem: jest.fn(async () => null),
+  setItem: jest.fn(async () => undefined),
+}));
 
 jest.mock('@seorilabs/platform-sdk', () => {
   const platform = {
@@ -21,6 +27,13 @@ jest.mock('@seorilabs/platform-sdk', () => {
       resume: jest.fn(),
     },
     session: { token: jest.fn(() => Promise.resolve('platform-token')) },
+    config: {
+      fetch: jest.fn(async () => undefined),
+      gate: jest.fn(() => ({ kind: 'recommended', message: 'SDK fallback', recommendedVersion: '1.13.0' })),
+      current: jest.fn(() => ({ sdk: { message: '' } })),
+      shouldPrompt: jest.fn(async () => true),
+      markPrompted: jest.fn(async () => undefined),
+    },
     iap: {},
     signIn: jest.fn(() => Promise.resolve()),
     start: jest.fn(),
@@ -44,6 +57,7 @@ import {
   shutdownMobilePlatformEvents,
   startMobilePlatformEvents,
   trackMobilePlatformEvent,
+  mobileUpdateGate,
 } from '../platformEvents';
 
 const platformSdkMock = jest.requireMock('@seorilabs/platform-sdk') as {
@@ -52,12 +66,23 @@ const platformSdkMock = jest.requireMock('@seorilabs/platform-sdk') as {
     presence: { start: jest.Mock; stop: jest.Mock; resume: jest.Mock };
     start: jest.Mock;
     shutdown: jest.Mock;
+    config: { fetch: jest.Mock; gate: jest.Mock; current: jest.Mock; shouldPrompt: jest.Mock; markPrompted: jest.Mock };
   }>;
 };
 const mockCreatePlatform = platformSdkMock.createPlatform;
 const mockPlatform = mockCreatePlatform.mock.results[0]?.value;
 
 describe('Mobile Platform events', () => {
+  test('설정 조회와 노출 이력 판단을 실제 SDK 계약에 위임하고 빈 메시지는 현지화용으로 남긴다', async () => {
+    const state = await mobileUpdateGate.load('en-US');
+    expect(mockPlatform.config.fetch).toHaveBeenCalledWith({ appVersion: RELEASE_INFO.versionName, platform: Platform.OS === 'ios' ? 'ios' : 'android', locale: 'en-US' });
+    expect(state).toEqual({ kind: 'recommended', message: '', recommendedVersion: '1.13.0' });
+    expect(await mobileUpdateGate.shouldPrompt(state)).toBe(true);
+    await mobileUpdateGate.markPrompted(state);
+    expect(mockPlatform.config.shouldPrompt).toHaveBeenCalledWith(state);
+    expect(mockPlatform.config.markPrompted).toHaveBeenCalledWith(state);
+    expect(mockCreatePlatform.mock.calls[0]?.[0]?.gateStore).toMatchObject({ load: expect.any(Function), save: expect.any(Function) });
+  });
   test('실제 OS context와 고정 allowlist로 SDK를 생성한다', () => {
     expect(mockCreatePlatform).toHaveBeenCalledTimes(2);
     const options = mockCreatePlatform.mock.calls[0]?.[0];

@@ -1,12 +1,15 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { AppState, Platform } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { AppState, Linking, Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import {
   FarmGame,
   FarmStartup,
+  FarmUpdateGate,
   detectRuntimeLocale,
+  type FarmUpdateNotice,
 } from '../../packages/farm-ui/src';
+import { RELEASE_INFO, type SupportedLocale } from '../../packages/farm-core/src';
 import { openAdDataPolicy, shouldShowAdInfoSettings } from './src/ads/adDataPolicy';
 import { useAdMobInterstitialAd } from './src/ads/adMobInterstitialAd';
 import { useAdMobRewardedAd } from './src/ads/adMobRewardedAd';
@@ -31,12 +34,20 @@ import {
   handleMobilePlatformAppStateChange,
   shutdownMobilePlatformEvents,
   startMobilePlatformEvents,
+  mobileUpdateGate,
 } from './src/platformEvents';
+
+function updateGateAnalytics(state: FarmUpdateNotice) {
+  return { buildNumber: RELEASE_INFO.buildNumber, platform: Platform.OS, gateKind: state.kind, recommendedVersion: state.kind === 'maintenance' ? undefined : state.recommendedVersion };
+}
 
 function App() {
   const farmAudio = useMobileFarmAudio();
   const [adPrivacyOptionsRequired, setAdPrivacyOptionsRequired] = useState(false);
   const [isFarmStarted, setIsFarmStarted] = useState(false);
+  const [gateLocale, setGateLocale] = useState<SupportedLocale>(detectRuntimeLocale);
+  const [gateReady, setGateReady] = useState(false);
+  const handleSettingsReady = useCallback((locale: SupportedLocale) => { setGateLocale(locale); setGateReady(true); }, []);
 
   useEffect(() => {
     if (!isFarmStarted) return;
@@ -87,15 +98,23 @@ function App() {
 
   return (
     <SafeAreaProvider>
+      <FarmUpdateGate controller={mobileUpdateGate} locale={gateLocale} enabled={gateReady} hosted={isFarmStarted}
+        openUrl={(url) => Linking.openURL(url)}
+        onShown={(state) => mobileFarmAnalytics.trackUpdateGateShown(updateGateAnalytics(state))}
+        onStoreClick={(state) => mobileFarmAnalytics.trackUpdateGateStoreClick(updateGateAnalytics(state))}>
+      {(updateGate) => (
       <FarmStartup
         persistence={mobileFarmPersistence}
         preferredLocale={detectRuntimeLocale()}
         art={mobileTitleArt}
         onStart={() => setIsFarmStarted(true)}
+        onSettingsReady={handleSettingsReady}
       >
         {(startupSnapshot) => (
           <FarmGame
             startupSnapshot={startupSnapshot}
+            updateGate={updateGate}
+            onLocaleChange={setGateLocale}
             analytics={mobileFarmAnalytics}
             art={mobileFarmArt}
             audio={farmAudio}
@@ -118,6 +137,8 @@ function App() {
           />
         )}
       </FarmStartup>
+      )}
+      </FarmUpdateGate>
     </SafeAreaProvider>
   );
 }

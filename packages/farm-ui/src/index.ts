@@ -6,3 +6,5 @@ export * from './gameSettings';
 export * from './i18n';
 export * from './persistence';
 export * from './FarmStartup';
+export * from './updateGate';
+export * from './FarmUpdateGate';

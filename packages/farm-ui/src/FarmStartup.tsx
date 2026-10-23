@@ -44,12 +44,14 @@ export function FarmStartup({
   art,
   children,
   onStart,
+  onSettingsReady,
 }: {
   persistence: FarmGamePersistence;
   preferredLocale?: SupportedLocale;
   art: FarmTitleArt;
   children: (snapshot: FarmStartupSnapshot) => ReactNode;
   onStart?: () => void;
+  onSettingsReady?: (locale: SupportedLocale) => void;
 }) {
   const [attempt, setAttempt] = useState(0);
   const [state, setState] = useState<StartupState>({
@@ -78,6 +80,7 @@ export function FarmStartup({
         if (cancelled) return;
         const locale = normalizeFarmGameSettings(settings, preferredLocale).locale;
         setState({ completed: 1, status: 'loading', locale, snapshot: null });
+        onSettingsReady?.(locale);
         const [gameState, lastSeenAt] = await Promise.all([
           persistence.readPersistedGameState(),
           persistence.readLastSeenAt?.() ?? Promise.resolve(null),
@@ -93,7 +96,7 @@ export function FarmStartup({
     return () => {
       cancelled = true;
     };
-  }, [attempt, persistence, preferredLocale]);
+  }, [attempt, persistence, preferredLocale, onSettingsReady]);
 
   if (started && state.snapshot != null) return <>{children(state.snapshot)}</>;
 
