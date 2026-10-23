@@ -1411,6 +1411,13 @@ function FarmGameBody({
       toastTimerRef.current = null;
     }, 1800);
   }, []);
+  const clearToast = useCallback(() => {
+    if (toastTimerRef.current != null) {
+      clearTimeout(toastTimerRef.current);
+      toastTimerRef.current = null;
+    }
+    setToastMessage(null);
+  }, []);
   // A quick "cha-ching" bump on the gold HUD when a harvest lands, so the eye
   // links the floating "+gold" at the plot to the balance actually rising.
   const pulseGold = useCallback(() => {
@@ -1599,13 +1606,14 @@ function FarmGameBody({
       previous != null &&
       activeSheet == null &&
       onboardingStepRef.current == null &&
+      gameState.onboardingCompleted &&
       deferredOnboardingSheetRef.current != null
     ) {
       const timer = setTimeout(revealDeferredOnboardingSheet, 0);
       return () => clearTimeout(timer);
     }
     return undefined;
-  }, [activeSheet, completeOnboarding, revealDeferredOnboardingSheet]);
+  }, [activeSheet, completeOnboarding, gameState.onboardingCompleted, revealDeferredOnboardingSheet]);
   const closeSheet = useCallback(() => {
     setActiveSheet(null);
   }, []);
@@ -1966,7 +1974,10 @@ function FarmGameBody({
             mutationFlashRef.current?.flash(effect.firstMutationFlash);
             playSoundEffect('mutation');
           }
-          if (effect.firstHarvest != null) {
+          const prioritizeRewardGuide = effect.firstHarvest != null && !gameStateRef.current.onboardingCompleted;
+          if (prioritizeRewardGuide) {
+            clearToast();
+          } else if (effect.firstHarvest != null) {
             showFirstHarvestCelebration({
               cropIcon: effect.firstHarvest.cropIcon,
               goldFormatted: formatMoney(effect.firstHarvest.goldGained, locale),
@@ -1986,7 +1997,9 @@ function FarmGameBody({
           // Donation mode converts the batch into research points; key the toast
           // on RP earned (not "gold === 0") so a future zero-value crop still
           // reads as a harvest rather than a donation.
-          if (effect.totalRpGained > 0) {
+          if (prioritizeRewardGuide) {
+            // The onboarding reward already describes this harvest.
+          } else if (effect.totalRpGained > 0) {
             toast(messages.harvestAllDonatedToast(formatMoney(effect.totalRpGained, locale), effect.harvestedCount));
           } else if (effect.replantedCount != null && effect.replantedCount > 0) {
             // 수확 후 재심기(#252): 한 탭의 결과(수확·재심 수)를 한 토스트로 알려, 골드
@@ -2277,7 +2290,10 @@ function FarmGameBody({
       const context = analyticsContext();
       recordManualHarvestCombo(effect.now, event.goldGained, context);
       trackCropHarvestedEvent(farmAnalytics, event, 'manual', context);
-      if (event.isFirstMeaningfulHarvest) {
+      const prioritizeRewardGuide = event.isFirstMeaningfulHarvest && !gameStateRef.current.onboardingCompleted;
+      if (prioritizeRewardGuide) {
+        clearToast();
+      } else if (event.isFirstMeaningfulHarvest) {
         showFirstHarvestCelebration({
           cropIcon: getCrop(event.cropKey).icon,
           goldFormatted: formatMoney(event.goldGained, locale),
@@ -2292,6 +2308,8 @@ function FarmGameBody({
           rankIcon: event.newMasteryRank.icon,
           rankName: getMasteryRankLabel(event.newMasteryRank.key, locale).name,
         });
+      } else if (prioritizeRewardGuide) {
+        // Keep the existing reward guide in front of duplicate harvest feedback.
       } else if (event.donated) {
         toast(messages.donatedToast(formatMoney(event.rpGained, locale)));
       } else if (event.mutation != null) {
@@ -2348,7 +2366,7 @@ function FarmGameBody({
         }
         playSoundEffect('mutation');
       }
-      if (event.isNewCropDiscovery) {
+      if (event.isNewCropDiscovery && !prioritizeRewardGuide) {
         const crop = getCrop(event.cropKey);
         discoveryBannerRef.current?.show(crop.icon, getLocalizedCropName(event.cropKey));
       }
@@ -2392,6 +2410,7 @@ function FarmGameBody({
     recordManualHarvestCombo,
     showFirstHarvestCelebration,
     showMasteryRankUpCelebration,
+    clearToast,
     toast,
     triggerHaptic,
   ]);
@@ -2943,8 +2962,10 @@ function FarmGameBody({
     const context = analyticsContext();
     farmAnalytics.trackGameStart(context);
     farmAnalytics.trackFarmScreen(context);
-    toast(messages.saveLoadedToast);
-  }, [analyticsContext, isSaveLoaded, messages.saveLoadedToast, toast]);
+    if (activeSheet?.type !== 'welcomeBack') {
+      toast(messages.saveLoadedToast);
+    }
+  }, [activeSheet, analyticsContext, isSaveLoaded, messages.saveLoadedToast, toast]);
 
   useEffect(() => {
     if (activeSheet?.type !== 'resetConfirm') {
@@ -5269,7 +5290,7 @@ function FarmGameBody({
     notificationPromptResolvedRef.current = false;
     activeNotificationPromptGenerationRef.current = null;
     setNotificationPromptGeneration(null);
-    setOnboardingStep(null);
+    setOnboardingStep(resolveOnboardingStep(resetState, resetState.onboardingStep));
     setGameState(resetState);
     setSelectedArea(FIRST_AREA.key);
     setSelectedTool('harvest');
@@ -6410,6 +6431,13 @@ function FarmGameBody({
 
       <Sheet
         activeSheet={activeSheet}
+        contentKey={activeSheet?.type === 'shop'
+          ? `shop:${resolveActiveShopTab(shopTab, { adSupported: rewardedAd.isAdSupported })}`
+          : activeSheet?.type === 'production'
+            ? `production:${activeSheet.tab}`
+            : activeSheet?.type === 'growthAd'
+              ? `growthAd:${activeSheet.plotIndex}`
+              : activeSheet?.type ?? 'closed'}
         description={getSheetDescription(activeSheet, messages, locale, getLocalizedCropName, collectionSummary, dailyBonusDisplay.streak, gameState)}
         title={activeSheet?.type === 'growthAd' && gameState.plots[activeSheet.plotIndex]?.state === 2
           ? messages.harvestTool : getSheetTitle(activeSheet, messages)}
@@ -8881,6 +8909,7 @@ function UpdateGateSurface({ presentation }: { presentation: FarmUpdateGatePrese
 
 function Sheet({
   activeSheet,
+  contentKey,
   children,
   description,
   title,
@@ -8895,6 +8924,7 @@ function Sheet({
   updateGate,
 }: {
   activeSheet: ActiveSheet;
+  contentKey: string;
   children: React.ReactNode;
   description: string;
   title: string;
@@ -9052,6 +9082,8 @@ function Sheet({
           </View>
           <Text style={styles.sheetDescription}>{description}</Text>
           <ScrollView
+            key={contentKey}
+            testID="sheet-scroll"
             showsVerticalScrollIndicator={false}
             contentContainerStyle={[
               styles.sheetContent,
