@@ -990,18 +990,21 @@ export const styles = StyleSheet.create({
   },
   sheetTitleRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 12,
   },
   sheetTitle: {
     flexShrink: 1,
+    maxWidth: '100%',
     color: '#6b4a22',
     fontSize: 21,
     fontWeight: '900',
   },
   sheetGold: {
     flexShrink: 0,
+    maxWidth: '100%',
     overflow: 'hidden',
     borderRadius: 12,
     paddingHorizontal: 12,
