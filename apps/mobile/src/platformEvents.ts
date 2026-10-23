@@ -8,9 +8,10 @@ import {
   withStandardAnalyticsParams,
   type TrackGameEvent,
 } from '../../../packages/farm-core/src';
-import { createUpdateGateStore, detectRuntimeLocale, type FarmUpdateGateController } from '../../../packages/farm-ui/src';
+import { createUpdateGateStore, type FarmUpdateGateController } from '../../../packages/farm-ui/src';
 import { PlatformAdsClient } from '../../../packages/farm-core/src';
 import { getMobileFirebaseIdToken } from './firebase/auth';
+import { detectMobileRuntimeLocale } from './locale';
 
 const PLATFORM_API_URL = 'https://platform-api-306278488979.asia-northeast3.run.app';
 const PLATFORM_INGEST_URL = 'https://platform-ingest-306278488979.asia-northeast3.run.app';
@@ -25,7 +26,7 @@ const mobilePlatform = createPlatform({
   eventContext: () => ({
     platform: Platform.OS === 'ios' ? 'ios' : 'android',
     appVersion: RELEASE_INFO.versionName,
-    locale: detectRuntimeLocale(),
+    locale: detectMobileRuntimeLocale(),
   }),
   // Presence는 Platform/Backoffice 운영 gate가 끝난 릴리스에서만 opt-in한다.
   // 기본값을 조합 지점에 명시해 SDK 업그레이드만으로 네트워크가 열리지 않게 한다.

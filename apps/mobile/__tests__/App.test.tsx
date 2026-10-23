@@ -3,7 +3,7 @@
  */
 
 import React from 'react';
-import { Platform } from 'react-native';
+import { Platform, Settings } from 'react-native';
 import ReactTestRenderer from 'react-test-renderer';
 import {
   AdEventType,
@@ -13,7 +13,7 @@ import {
   RewardedAdEventType,
 } from 'react-native-google-mobile-ads';
 import App from '../App';
-import { FarmStartup } from '../../../packages/farm-ui/src';
+import { FarmStartup, getFarmMessages } from '../../../packages/farm-ui/src';
 import {
   MOBILE_REWARDED_AD_LOAD_TIMEOUT_MS,
   MOBILE_REWARDED_AD_SHOW_TIMEOUT_MS,
@@ -210,6 +210,30 @@ beforeEach(() => {
 
 afterEach(() => {
   jest.useRealTimers();
+});
+
+test('저장이 없으면 Intl 언어보다 iOS의 한국어 선택을 타이틀에 반영한다', async () => {
+  const os = jest.replaceProperty(Platform, 'OS', 'ios');
+  const originalIntl = Intl.DateTimeFormat().resolvedOptions();
+  const intl = jest.spyOn(Intl.DateTimeFormat.prototype, 'resolvedOptions')
+    .mockReturnValue({ ...originalIntl, locale: 'en-US' });
+  const getSetting = Settings.get as jest.Mock;
+  const originalGet = getSetting.getMockImplementation();
+  getSetting.mockImplementation((key: string) => key === 'AppleLanguages' ? ['ko-KR', 'en-US'] : undefined);
+  let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
+  try {
+    await ReactTestRenderer.act(async () => {
+      renderer = ReactTestRenderer.create(<App />);
+      await Promise.resolve();
+    });
+    expect(renderer!.root.findByProps({ testID: 'title-status' }).props.children)
+      .toBe(getFarmMessages('ko-KR').titleReady);
+  } finally {
+    await ReactTestRenderer.act(async () => { renderer?.unmount(); });
+    getSetting.mockImplementation(originalGet ?? (() => undefined));
+    intl.mockRestore();
+    os.restore();
+  }
 });
 
 test('renders correctly', async () => {

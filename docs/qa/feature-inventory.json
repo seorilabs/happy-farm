@@ -212,6 +212,7 @@
       "foundation": true,
       "paths": [
         "apps/mobile/src/platformEvents.ts",
+        "apps/mobile/src/locale.ts",
         "apps/mobile/src/firebase/auth.ts",
         "apps/mobile/App.tsx",
         "apps/ait/src/platformEvents.ts",
