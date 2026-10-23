@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "level": "L3",
+  "baseline": "v1.12.2",
+  "changedFeatures": [
+    "growth-harvest",
+    "shop",
+    "save-restore",
+    "welcome-back-offline",
+    "missions",
+    "daily-bonus-wheel",
+    "production",
+    "research-automation",
+    "prestige-map-landmark"
+  ],
+  "environments": [
+    "dev"
+  ],
+  "redesign": false,
+  "foundationRerun": false,
+  "floorOverrides": [
+    {
+      "rule": "foundation",
+      "featureId": "rewarded-ads",
+      "reason": "이번 변경의 순수 로직과 상태 연결을 개발 런타임 및 플랫폼 경계 대체 구현으로 확인한다. 기기 사용은 요청 범위 밖이며 실제 SDK와 OS 동작 통과로 기록하지 않는다. 기존 기반 기능 경로가 넓어 생기는 하한만 낮춘다."
+    },
+    {
+      "rule": "foundation",
+      "featureId": "interstitial-ads",
+      "reason": "이번 변경의 순수 로직과 상태 연결을 개발 런타임 및 플랫폼 경계 대체 구현으로 확인한다. 기기 사용은 요청 범위 밖이며 실제 SDK와 OS 동작 통과로 기록하지 않는다. 기존 기반 기능 경로가 넓어 생기는 하한만 낮춘다."
+    },
+    {
+      "rule": "foundation",
+      "featureId": "ad-consent",
+      "reason": "이번 변경의 순수 로직과 상태 연결을 개발 런타임 및 플랫폼 경계 대체 구현으로 확인한다. 기기 사용은 요청 범위 밖이며 실제 SDK와 OS 동작 통과로 기록하지 않는다. 기존 기반 기능 경로가 넓어 생기는 하한만 낮춘다."
+    },
+    {
+      "rule": "foundation",
+      "featureId": "notifications",
+      "reason": "이번 변경의 순수 로직과 상태 연결을 개발 런타임 및 플랫폼 경계 대체 구현으로 확인한다. 기기 사용은 요청 범위 밖이며 실제 SDK와 OS 동작 통과로 기록하지 않는다. 기존 기반 기능 경로가 넓어 생기는 하한만 낮춘다."
+    },
+    {
+      "rule": "foundation",
+      "featureId": "firebase-auth-analytics",
+      "reason": "이번 변경의 순수 로직과 상태 연결을 개발 런타임 및 플랫폼 경계 대체 구현으로 확인한다. 기기 사용은 요청 범위 밖이며 실제 SDK와 OS 동작 통과로 기록하지 않는다. 기존 기반 기능 경로가 넓어 생기는 하한만 낮춘다."
+    },
+    {
+      "rule": "foundation",
+      "featureId": "platform-session-events",
+      "reason": "이번 변경의 순수 로직과 상태 연결을 개발 런타임 및 플랫폼 경계 대체 구현으로 확인한다. 기기 사용은 요청 범위 밖이며 실제 SDK와 OS 동작 통과로 기록하지 않는다. 기존 기반 기능 경로가 넓어 생기는 하한만 낮춘다."
+    }
+  ],
+  "release": {
+    "markets": [
+      "google-play",
+      "app-store",
+      "apps-in-toss"
+    ],
+    "until": "test-track"
+  }
+}

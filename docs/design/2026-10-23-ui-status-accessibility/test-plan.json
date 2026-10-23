@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "level": "L1",
+  "baseline": "v1.12.2",
+  "changedFeatures": [
+    "growth-harvest",
+    "hud-goals-status",
+    "planting",
+    "settings"
+  ],
+  "environments": [
+    "dev"
+  ],
+  "redesign": false,
+  "foundationRerun": false,
+  "floorOverrides": [],
+  "release": {
+    "markets": [
+      "google-play",
+      "app-store",
+      "apps-in-toss"
+    ],
+    "until": "test-track"
+  }
+}
