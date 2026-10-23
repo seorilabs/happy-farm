@@ -231,6 +231,16 @@
         "apps/mobile/android/app/build.gradle",
         "apps/mobile/android/app/src/main/AndroidManifest.xml"
       ]
+    },
+    {
+      "id": "release-observability",
+      "core": false,
+      "paths": [
+        "scripts/deploy-drift.js",
+        "scripts/deploy-drift-run.js",
+        "scripts/__tests__/deploy-drift*.test.ts",
+        ".github/workflows/deploy-drift-check.yml"
+      ]
     }
   ]
 }
