@@ -4,30 +4,11 @@
 
 완료 지점은 PR 병합이다. 배포, 업로드, 심사, 운영 설정과 기기 사용은 제외한다. 공식 사이트 #520은 병합 즉시 배포되므로 Ready PR에서 멈춘다.
 
-## 현재 상태
+## 승인과 실행 결과
 
-| 이슈 | 재확인 결과와 다음 조건 |
-|---|---|
-| [#573](https://github.com/seorilabs/happy-farm/issues/573) | 공개 1.12.2 확인. 공개 실행은 미확인, 열린 상태 |
-| [#488](https://github.com/seorilabs/happy-farm/issues/488) | 동일 SHA 후속 빌드 복구 확인. 종료 대상 |
-| [#494](https://github.com/seorilabs/happy-farm/issues/494) | critical 1, high 22. 설계 승인 대기 |
-| [#482](https://github.com/seorilabs/happy-farm/issues/482) | 상한과 저장 안전장치 설계 승인 대기 |
-| [#479](https://github.com/seorilabs/happy-farm/issues/479) | Android 이벤트 처리 설계 승인 대기 |
-| [#478](https://github.com/seorilabs/happy-farm/issues/478) | 태그 미발행 감시 설계 승인 대기 |
-| [#483](https://github.com/seorilabs/happy-farm/issues/483) | 공개 버전 감시 설계 승인 대기 |
-| [#480](https://github.com/seorilabs/happy-farm/issues/480) | RC 요구는 현행 구조와 불일치. #512 연결과 남은 debug 계측 유지 |
-| [#512](https://github.com/seorilabs/happy-farm/issues/512) | SDK 0.6.0 연결 설계 승인 대기 |
-| [#575](https://github.com/seorilabs/happy-farm/issues/575) | 세 수정 묶음 설계 승인 대기. TCF는 조사 보류 |
-| [#520](https://github.com/seorilabs/happy-farm/issues/520) | 공식 사이트 Ready PR까지만. 공개 및 URL 교체 제외 |
-| [#559](https://github.com/seorilabs/happy-farm/issues/559) | 수정 병합과 과거 QR 통과. 현재 공개 및 운영 지표 별도 조사 |
-| [#564](https://github.com/seorilabs/happy-farm/issues/564) | 10월 22일 감시는 AIT와 Play v1.12.0. iOS 제외가 남음 |
-| [#580](https://github.com/seorilabs/happy-farm/issues/580) | 동일 첫 세션 순서 및 버전 계약 조사 |
-| [#74](https://github.com/seorilabs/happy-farm/issues/74) | 공식 문서의 리텐션 푸시 제한. 허용 용도와 템플릿 필요 |
-| [#147](https://github.com/seorilabs/happy-farm/issues/147) | 보상 중복과 재고 정책, 계측 승인 필요 |
-| [#320](https://github.com/seorilabs/happy-farm/issues/320) | 콤보 노출과 RP 사용 비율 및 보상 상한 근거 필요 |
-| [#322](https://github.com/seorilabs/happy-farm/issues/322) | 동물 수집 원장과 확률 및 재현 정책 근거 필요 |
+설계 10건과 test-plan.json의 승인 커밋, 사용자 응답 및 중앙 보완 승인은 [공통 실행 범위](execution-scope.md)에 기록한다. 이번 18개 이슈별 처리 결과, PR과 남은 조건은 [처리 기록](../../04-work/open-issues-execution-2026-10-23.md)에 모았다. 개인정보 처리방침의 실제 SDK 및 운영 확인 공백은 [근거 문서](../../04-work/privacy-policy-evidence-2026-10-23.md)에 기록했다.
 
-## 구현 전 검토할 설계
+## 승인된 설계
 
 - [#494 공식 의존성 업데이트로 보안 감사 차단 줄이기](../2026-10-23-dependency-audit/design.md)
 - [#482 경제 오버플로와 저장 손상 차단](../2026-10-23-economy-safety/design.md)
@@ -40,9 +21,9 @@
 - [#575 시트와 알림 겹침 및 스크롤 상태 수정](../2026-10-23-ui-overlay-lifecycle/design.md)
 - [#520 제품별 개인정보 처리방침 근거와 Ready PR 준비](../2026-10-23-privacy-preparation/design.md)
 
-승인 상태는 사람 검토 대기다. 정확한 문서 커밋과 위 설계 및 test-plan.json의 구현, 검증, 병합 범위를 한 번에 확인한 뒤 한 PR씩 진행한다. release 필드의 스키마 제약과 이번 요청에서 실행 권한을 제외하는 조건은 각 설계에 명시했다. 설계 승인 대기를 코드 구현 완료로 표시하지 않는다.
+위 설계 및 같은 승인 커밋의 test-plan.json을 구현, 검증, 병합 범위로 승인받아 한 PR씩 처리했다. release 필드의 스키마 제약과 이번 요청에서 실행 권한을 제외하는 조건은 그대로 유지한다. 아래 확인 근거와 audit.md는 구현 전 최초 조회 기록이며 현재 상태는 위 처리 기록을 따른다.
 
-## 확인 근거
+## 설계 시점의 확인 근거
 
 - [iOS 제출과 기존 검수](https://github.com/seorilabs/happy-farm/issues/573#issuecomment-6167232168), [기존 E2E](../../qa/2026-10-13-ios-no-tracking-consent/e2e-app-store-before-build-v1.12.2.md)
 - 공개 Lookup: bundleId com.seorilabs.happyfarm, 한국 storefront, App ID 6775451733, version 1.12.2, 공개일 2026-10-15T02:35:00Z. 공개 정보 조회만 했고 설치와 실행은 하지 않았다.
