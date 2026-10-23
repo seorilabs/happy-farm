@@ -642,6 +642,24 @@ describe('farm analytics adapter contract', () => {
     );
   });
 
+  test('Android 실패 진단은 정제한 SDK 코드와 닫힘 시간만 보내고 25개 한도를 지킨다', () => {
+    const track = jest.fn();
+    const analytics = createFarmAnalytics(track);
+    const context = getGameAnalyticsContext(createInitialState(), 0, 5_000);
+    const metadata = {
+      attemptId: 'attempt', adReady: true, eligible: true, adSupported: true,
+      rewardKind: 'gold', rewardKey: 'gold', rewardValue: 5, ctaPosition: 'shop', retryCount: 1,
+      durationMs: 2_345, sdkCode: 'googleMobileAds/no-fill',
+    };
+    analytics.trackAdRewardFailed('rewardedGold', 'shop_gold_reward', 'no-fill', context, metadata);
+    const params = track.mock.calls[0][1];
+    expect(params).toMatchObject({ duration_ms: 2_345, sdk_code: 'googleMobileAds/no-fill', failure_family: 'no_fill', gold_exponent: context.gold_exponent });
+    expect(Object.keys(params).length + 5).toBeLessThanOrEqual(25);
+    analytics.trackAdRewardFailed('rewardedGold', 'shop_gold_reward', 'dismissed', context, { durationMs: NaN, sdkCode: 'private-user-id' });
+    expect(track.mock.calls[1][1]).not.toHaveProperty('duration_ms');
+    expect(track.mock.calls[1][1]).not.toHaveProperty('sdk_code');
+  });
+
   test('rewarded-ad failed는 metadata가 없어도 reason에서 failure_family를 자동 파생한다', () => {
     const track = jest.fn();
     const analytics = createFarmAnalytics(track);

@@ -982,3 +982,11 @@ describe('getUpgradeBatchPurchase — 배치(일괄) 업그레이드 구매 (#42
     expect(oneMore).toBeGreaterThan(gold);
   });
 });
+
+
+test('광고 claim ID는 legacy 저장의 빈 목록과 새 저장의 중복 없는 목록으로 복원한다 (#479)', () => {
+  const base = createInitialState();
+  expect(migrateLoadedState({}, base).rewardedAdClaimIds).toEqual([]);
+  const restored = migrateLoadedState(JSON.parse(JSON.stringify({ ...base, rewardedAdClaimIds: ['claim-1', 'claim-1', '', null, 2, 'claim-2'] })), base);
+  expect(restored.rewardedAdClaimIds).toEqual(['claim-1', 'claim-2']);
+});

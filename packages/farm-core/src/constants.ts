@@ -1052,6 +1052,7 @@ export function createInitialState(): GameState {
     harvestedCropKeys: [],
     claimedCollectionRewards: [],
     adUsage: createInitialAdUsage(),
+    rewardedAdClaimIds: [],
     upgrades: { speed: 1, profit: 1 },
     harvestCounts: {},
     mutationsDiscovered: {},
@@ -1191,6 +1192,9 @@ export function migrateLoadedState(loaded: Partial<GameState>, base: GameState):
       base.claimedCollectionRewards
     ),
     adUsage: normalizeAdUsage(loaded.adUsage),
+    rewardedAdClaimIds: Array.isArray(loaded.rewardedAdClaimIds)
+      ? [...new Set(loaded.rewardedAdClaimIds.filter((id): id is string => typeof id === 'string' && id.length > 0))]
+      : [],
     upgrades: {
       speed: normalizeUpgradeLevel(loadedUpgrades.speed, base.upgrades.speed),
       profit: normalizeUpgradeLevel(loadedUpgrades.profit, base.upgrades.profit),

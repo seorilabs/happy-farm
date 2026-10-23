@@ -5,6 +5,7 @@ import { AdEventType, RewardedAd, RewardedAdEventType } from 'react-native-googl
 import {
   logDevWarning,
   normalizeAdFailureReason,
+  sanitizeAdSdkCode,
   type RewardedAdRequest,
   type RewardedAdReward,
   type RewardedAdShowResult,
@@ -19,6 +20,13 @@ export const MOBILE_REWARDED_AD_LOAD_TIMEOUT_MS = 10_000;
 // settling earlier let the game close the sheet under the ad, which left an empty sheet
 // that swallowed every touch (E2E E7, 2026-10-14).
 export const MOBILE_REWARDED_AD_SHOW_TIMEOUT_MS = 120_000;
+export const ANDROID_REWARDED_AD_CLOSE_GRACE_MS = 500;
+
+function sdkFailure(error: unknown): RewardedAdShowResult {
+  if (Platform.OS !== 'android') return { status: 'failed', error: normalizeAdFailureReason(error) };
+  const sdkCode = sanitizeAdSdkCode(typeof error === 'object' && error != null && 'code' in error ? error.code : undefined);
+  return { status: 'failed', error: sdkCode ?? 'sdk_error', ...(sdkCode == null ? {} : { sdkCode }) };
+}
 
 function requestId() {
   return `hf-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
@@ -26,10 +34,14 @@ function requestId() {
 
 export function createPlatformAdMobAdapter(adUnitId: string): PlatformAdMobAdapter {
   let current: RewardedAd | null = null;
+  let loaded = false;
+  let cancel = () => {};
+  let disposed = false;
 
   return {
+    dispose() { disposed = true; cancel(); current = null; loaded = false; },
     async load(ssv) {
-      if (!(await ensureAdMobReady())) {
+      if (!(await ensureAdMobReady()) || disposed) {
         return false;
       }
       const ad = RewardedAd.createForAdRequest(adUnitId, {
@@ -37,6 +49,7 @@ export function createPlatformAdMobAdapter(adUnitId: string): PlatformAdMobAdapt
         serverSideVerificationOptions: { customData: ssv.customData, userId: ssv.userId },
       });
       current = ad;
+      loaded = false;
       return new Promise<boolean>((resolve) => {
         let settled = false;
         const timeout = setTimeout(() => finish(false), MOBILE_REWARDED_AD_LOAD_TIMEOUT_MS);
@@ -49,33 +62,61 @@ export function createPlatformAdMobAdapter(adUnitId: string): PlatformAdMobAdapt
           settled = true;
           clearTimeout(timeout);
           unsubscribe();
+          cancel = () => {};
+          loaded = ready;
+          if (!ready) current = null;
           resolve(ready);
         }
-        ad.load();
+        cancel = () => finish(false);
+        try { ad.load(); } catch { finish(false); }
       });
     },
     async show() {
       const ad = current;
-      if (ad == null) return { status: 'notReady' };
+      if (ad == null || !loaded) return { status: 'notReady' };
+      loaded = false;
       return new Promise<RewardedAdShowResult>((resolve) => {
         let settled = false;
         let reward: RewardedAdReward | undefined;
+        let earned = false;
+        let closedAt: number | null = null;
+        let closeTimer: ReturnType<typeof setTimeout> | undefined;
+        const startedAt = Date.now();
         const timeout = setTimeout(() => finish({ status: 'failed', error: 'show_timeout' }), MOBILE_REWARDED_AD_SHOW_TIMEOUT_MS);
         const unsubscribe = ad.addAdEventsListener(({ type, payload }) => {
           if (type === AdEventType.OPENED) clearTimeout(timeout);
-          if (type === RewardedAdEventType.EARNED_REWARD) reward = normalizeReward(payload);
-          if (type === AdEventType.CLOSED) finish(reward == null ? { status: 'dismissed' } : { status: 'earned', reward });
-          if (type === AdEventType.ERROR) finish({ status: 'failed', error: normalizeAdFailureReason(payload) });
+          if (settled) return;
+          if (type === RewardedAdEventType.EARNED_REWARD) {
+            if (Platform.OS === 'android' && closedAt != null && Date.now() - closedAt >= ANDROID_REWARDED_AD_CLOSE_GRACE_MS) {
+              finish({ status: 'dismissed' });
+              return;
+            }
+            reward = normalizeReward(payload);
+            earned = Platform.OS === 'android' || reward != null;
+            if (closedAt != null) finish({ status: 'earned', reward });
+          }
+          if (type === AdEventType.CLOSED && closedAt == null) {
+            closedAt = Date.now();
+            clearTimeout(timeout);
+            if (earned || Platform.OS !== 'android') finish(earned ? { status: 'earned', reward } : { status: 'dismissed' });
+            else closeTimer = setTimeout(() => finish({ status: 'dismissed' }), ANDROID_REWARDED_AD_CLOSE_GRACE_MS);
+          }
+          if (type === AdEventType.ERROR) finish(sdkFailure(payload));
         });
         function finish(result: RewardedAdShowResult) {
           if (settled) return;
           settled = true;
           clearTimeout(timeout);
+          clearTimeout(closeTimer);
           unsubscribe();
           current = null;
-          resolve(result);
+          cancel = () => {};
+          resolve(Platform.OS === 'android' && closedAt != null ? { ...result, durationMs: Math.max(0, closedAt - startedAt) } : result);
         }
-        void ad.show().catch((error: unknown) => finish({ status: 'failed', error: normalizeAdFailureReason(error) }));
+        cancel = () => finish({ status: 'dismissed' });
+        try {
+          void ad.show().catch((error: unknown) => finish(sdkFailure(error)));
+        } catch (error) { finish(sdkFailure(error)); }
       });
     },
   };
@@ -93,6 +134,9 @@ type PendingShow = {
   instanceToken: symbol;
   settled: boolean;
   rewardEarned: boolean;
+  startedAt: number;
+  closedAt: number | null;
+  closeTimer: ReturnType<typeof setTimeout> | null;
   reward?: RewardedAdReward;
   resolve: (result: RewardedAdShowResult) => void;
   timeoutId: ReturnType<typeof setTimeout> | null;
@@ -166,6 +210,9 @@ export function useAdMobRewardedAd() {
   const pendingLoadRef = useRef<PendingLoad | null>(null);
   const pendingShowRef = useRef<PendingShow | null>(null);
   const isAdReadyRef = useRef(false);
+  const productionInFlightRef = useRef(false);
+  const productionAdapterRef = useRef<PlatformAdMobAdapter | null>(null);
+  const productionGenerationRef = useRef<symbol | null>(null);
   const [isAdReady, setIsAdReady] = useState(false);
   const [isAdSupported, setIsAdSupported] = useState(adUnitId != null);
 
@@ -280,7 +327,10 @@ export function useAdMobRewardedAd() {
       if (pendingShow.timeoutId != null) {
         clearTimeout(pendingShow.timeoutId);
       }
-      pendingShow.resolve(result);
+      if (pendingShow.closeTimer != null) clearTimeout(pendingShow.closeTimer);
+      pendingShow.resolve(Platform.OS === 'android' && pendingShow.closedAt != null
+        ? { ...result, durationMs: Math.max(0, pendingShow.closedAt - pendingShow.startedAt) }
+        : result);
       pendingShowRef.current = null;
       if (options.reload !== false) {
         rotateAdInstanceRef.current?.(instanceToken);
@@ -305,11 +355,18 @@ export function useAdMobRewardedAd() {
 
     if (!__DEV__) {
       // Production AdMob은 placement별 claim을 SSV custom data에 넣어야 하므로
-      // 사용자 요청 전에 익명 preload하지 않는다. 정책 통과는 준비 상태지만
-      // 실제 load와 노출 직전 정책은 showAd에서 다시 확인한다.
+      // 사용자 요청 전에 익명 preload하지 않는다. CTA는 요청 가능 여부를 표시하고
+      // claim 준비부터 SDK 종료까지 비활성화한다. 실제 load 후에만 show한다.
       setIsAdSupported(true);
       updateReady(true);
-      return () => updateReady(false);
+      const generation = Symbol('production-ad');
+      productionGenerationRef.current = generation;
+      return () => {
+        productionGenerationRef.current = null;
+        productionAdapterRef.current?.dispose();
+        productionAdapterRef.current = null;
+        isAdReadyRef.current = false;
+      };
     }
 
     let cancelled = false;
@@ -354,8 +411,13 @@ export function useAdMobRewardedAd() {
             pendingShow.instanceToken === token &&
             !pendingShow.settled
           ) {
+            if (Platform.OS === 'android' && pendingShow.closedAt != null && Date.now() - pendingShow.closedAt >= ANDROID_REWARDED_AD_CLOSE_GRACE_MS) {
+              finishPendingShow(token, { status: 'dismissed' });
+              return;
+            }
             pendingShow.rewardEarned = true;
             pendingShow.reward = normalizeReward(payload);
+            if (pendingShow.closedAt != null) finishPendingShow(token, { status: 'earned', reward: pendingShow.reward });
           }
           return;
         }
@@ -363,23 +425,24 @@ export function useAdMobRewardedAd() {
         if (type === AdEventType.CLOSED) {
           updateReady(false);
           const pendingShow = pendingShowRef.current;
-          if (pendingShow?.instanceToken === token) {
-            finishPendingShow(
-              token,
-              pendingShow.rewardEarned
-                ? { status: 'earned', reward: pendingShow.reward }
-                : { status: 'dismissed' }
-            );
+          if (pendingShow?.instanceToken === token && pendingShow.closedAt == null) {
+            pendingShow.closedAt = Date.now();
+            if (pendingShow.timeoutId != null) clearTimeout(pendingShow.timeoutId);
+            if (pendingShow.rewardEarned || Platform.OS !== 'android') {
+              finishPendingShow(token, pendingShow.rewardEarned ? { status: 'earned', reward: pendingShow.reward } : { status: 'dismissed' });
+            } else {
+              pendingShow.closeTimer = setTimeout(() => finishPendingShow(token, { status: 'dismissed' }), ANDROID_REWARDED_AD_CLOSE_GRACE_MS);
+            }
           }
           return;
         }
 
         if (type === AdEventType.ERROR) {
-          const reason = normalizeAdFailureReason(payload);
-          logDevWarning('[ads] rewarded error', reason);
+          const failure = sdkFailure(payload);
+          logDevWarning('[ads] rewarded error', failure.status === 'failed' ? failure.error : 'sdk_error');
           updateReady(false);
           finishPendingLoad(token, false);
-          finishPendingShow(token, { status: 'failed', error: reason });
+          finishPendingShow(token, failure);
         }
       });
 
@@ -438,12 +501,24 @@ export function useAdMobRewardedAd() {
       if (request == null) {
         return Promise.resolve<RewardedAdShowResult>({ status: 'unsupported' });
       }
+      if (productionInFlightRef.current) return Promise.resolve<RewardedAdShowResult>({ status: 'notReady' });
+      const generation = productionGenerationRef.current;
+      if (generation == null) return Promise.resolve<RewardedAdShowResult>({ status: 'notReady' });
+      productionInFlightRef.current = true;
+      updateReady(false);
+      const adapter = createPlatformAdMobAdapter(adUnitId);
+      productionAdapterRef.current = adapter;
       return showPlatformAdMobReward(request, {
         ensureSession: ensureMobilePlatformSession,
         ads: mobilePlatformAds,
-        adapter: createPlatformAdMobAdapter(adUnitId),
+        adapter,
         clientPlatform: Platform.OS === 'ios' ? 'ios' : 'android',
         requestId,
+        isActive: () => productionGenerationRef.current === generation,
+      }).finally(() => {
+        if (productionAdapterRef.current === adapter) productionAdapterRef.current = null;
+        productionInFlightRef.current = false;
+        if (productionGenerationRef.current === generation) updateReady(true);
       });
     }
     if (pendingShowRef.current != null && !pendingShowRef.current.settled) {
@@ -461,6 +536,9 @@ export function useAdMobRewardedAd() {
         instanceToken: adInstance.token,
         settled: false,
         rewardEarned: false,
+        startedAt: Date.now(),
+        closedAt: null,
+        closeTimer: null,
         resolve,
         timeoutId: null,
       };
@@ -474,12 +552,13 @@ export function useAdMobRewardedAd() {
         );
       }, MOBILE_REWARDED_AD_SHOW_TIMEOUT_MS);
 
-      void adInstance.ad.show().catch((error: unknown) => {
-        finishPendingShow(pendingShow.instanceToken, {
-          status: 'failed',
-          error: normalizeAdFailureReason(error),
+      try {
+        void adInstance.ad.show().catch((error: unknown) => {
+          finishPendingShow(pendingShow.instanceToken, sdkFailure(error));
         });
-      });
+      } catch (error) {
+        finishPendingShow(pendingShow.instanceToken, sdkFailure(error));
+      }
     });
   }, [adUnitId, finishPendingShow, updateReady]);
 

@@ -4368,6 +4368,33 @@ describe('FarmGame UI flow', () => {
     expect(screen.getByText('현재 7칸 · 작물을 심을 공간을 1칸 늘려요')).toBeTruthy();
   }, 30_000);
 
+  test('저장 복원한 동일 claim은 보상과 사용량을 다시 지급하지 않는다 (#479)', async () => {
+    const state = { ...createInitialState(), rewardedAdClaimIds: ['already-paid'] };
+    const track = jest.fn();
+    const rewardedAd = { ...createRewardedAd({ status: 'earned', claimId: 'already-paid' }), acknowledgeReward: jest.fn(async () => {}) };
+    const screen = await renderGame(state, { analytics: createFarmAnalytics(track), useRewardedAd: () => rewardedAd });
+    await waitFor(() => expect(screen.getByText('50G')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('boost-nav-button'));
+    fireEvent.press(screen.getByText(HARVEST_BONUS_CTA));
+    await waitFor(() => expect(rewardedAd.showAd).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(track).toHaveBeenCalledWith('ad_reward_failed', expect.objectContaining({ reason: 'claim_already_applied' })));
+    expect(track.mock.calls.filter(([event]) => event === 'ad_reward_completed')).toHaveLength(0);
+    expect(getLatestPersistedState().adUsage.harvestBonusAd.dailyCount).toBe(0);
+    expect(getLatestPersistedState().rewardedAdClaimIds).toEqual(['already-paid']);
+    expect(rewardedAd.acknowledgeReward).toHaveBeenCalledTimes(1);
+  });
+
+  test('확인된 새 claim ID는 지급 상태와 함께 한 번 저장한다 (#479)', async () => {
+    const rewardedAd = { ...createRewardedAd({ status: 'earned', claimId: 'new-claim' }), acknowledgeReward: jest.fn(async () => {}) };
+    const screen = await renderGame(null, { useRewardedAd: () => rewardedAd });
+    await waitFor(() => expect(screen.getByText('50G')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('boost-nav-button'));
+    fireEvent.press(screen.getByText(HARVEST_BONUS_CTA));
+    await waitFor(() => expect(rewardedAd.acknowledgeReward).toHaveBeenCalledTimes(1));
+    expect(getLatestPersistedState().adUsage.harvestBonusAd.dailyCount).toBe(1);
+    expect(getLatestPersistedState().rewardedAdClaimIds).toEqual(['new-claim']);
+  });
+
   test('closes the current sheet when a rewarded ad is dismissed without reward', async () => {
     const rewardedAd = createRewardedAd({ status: 'dismissed' });
     const screen = await renderGame(null, { useRewardedAd: () => rewardedAd });
@@ -5829,7 +5856,7 @@ describe('FarmGame UI flow', () => {
         wheelState: { ...base.wheelState, lastFreeSpinAt: NOW },
       };
       const track = jest.fn();
-      const rewardedAd = createRewardedAd({ status: 'dismissed' });
+      const rewardedAd = createRewardedAd({ status: 'dismissed', durationMs: 3_210 });
       const screen = await renderGame(state, {
         analytics: createFarmAnalytics(track),
         useRewardedAd: () => rewardedAd,
@@ -5849,6 +5876,8 @@ describe('FarmGame UI flow', () => {
           placement: 'wheel_bonus_spin',
           reward_kind: 'wheel_bonus_spin',
           reason: 'dismissed',
+          duration_ms: 3_210,
+          failure_family: 'dismissed',
         })
       );
       expect(

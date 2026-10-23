@@ -155,6 +155,7 @@ export type GameState = {
   harvestedCropKeys: CropKey[];
   claimedCollectionRewards: CollectionRewardKey[];
   adUsage: AdUsage;
+  rewardedAdClaimIds: string[];
   upgrades: { speed: number; profit: number };
   harvestCounts: Partial<Record<CropKey, number>>;
   mutationsDiscovered: Partial<Record<CropKey, MutationKey[]>>;
@@ -244,6 +245,7 @@ export const META_LAYER_KEYS = [
   'harvestedCropKeys',
   'claimedCollectionRewards',
   'adUsage',
+  'rewardedAdClaimIds',
   'harvestCounts',
   'mutationsDiscovered',
   'lifetimeStats',

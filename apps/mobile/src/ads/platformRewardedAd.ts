@@ -6,6 +6,7 @@ export type AdMobSSV = { customData: string; userId: string };
 export type PlatformAdMobAdapter = {
   load(ssv: AdMobSSV): Promise<boolean>;
   show(): Promise<RewardedAdShowResult>;
+  dispose(): void;
 };
 
 export type PlatformRewardedAdDependencies = {
@@ -16,6 +17,7 @@ export type PlatformRewardedAdDependencies = {
   requestId: () => string;
   wait?: (milliseconds: number) => Promise<void>;
   maxPolls?: number;
+  isActive?: () => boolean;
 };
 
 /** AdMob은 SSV가 server_verified가 되기 전에는 절대로 earned를 반환하지 않는다. */
@@ -27,21 +29,24 @@ export async function showPlatformAdMobReward(
     if (!(await dependencies.ensureSession())) {
       return { status: 'unsupported' };
     }
+    if (dependencies.isActive?.() === false) return { status: 'notReady' };
     const beforeLoad = await dependencies.ads.policy();
     if (!beforeLoad.appUsesAds || !beforeLoad.adsEnabled) {
       return { status: 'unsupported' };
     }
+    if (dependencies.isActive?.() === false) return { status: 'notReady' };
     const claim = await dependencies.ads.createClaim({
       requestId: dependencies.requestId(),
       placement: request.placement,
       provider: 'admob',
       clientPlatform: dependencies.clientPlatform,
     });
-    if (claim.admobSsv == null || !(await dependencies.adapter.load(claim.admobSsv))) {
+    if (dependencies.isActive?.() === false || claim.admobSsv == null || !(await dependencies.adapter.load(claim.admobSsv))) {
       return { status: 'notReady' };
     }
     const beforeShow = await dependencies.ads.policy();
-    if (!beforeShow.adsEnabled) {
+    if (dependencies.isActive?.() === false) return { status: 'notReady' };
+    if (!beforeShow.appUsesAds || !beforeShow.adsEnabled) {
       return { status: 'unsupported' };
     }
     const shown = await dependencies.adapter.show();
@@ -63,12 +68,14 @@ export async function showPlatformAdMobReward(
       await wait(2_000);
     }
     if (verified == null) {
-      return { status: 'failed', error: 'server_verification_pending' };
+      return { status: 'failed', error: 'server_verification_pending', ...(shown.durationMs == null ? {} : { durationMs: shown.durationMs }) };
     }
-    return { status: 'earned', reward: shown.reward as RewardedAdReward | undefined, claimId: claim.claimId };
+    return { ...shown, status: 'earned', reward: shown.reward as RewardedAdReward | undefined, claimId: claim.claimId };
   } catch {
     // 정책·세션·claim 조회 실패는 fail-closed다. SDK load/show 호출은 위 단계가
     // 통과한 뒤에만 일어난다.
     return { status: 'failed', error: 'platform_ads_unavailable' };
+  } finally {
+    dependencies.adapter.dispose();
   }
 }
