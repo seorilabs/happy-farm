@@ -328,7 +328,7 @@ describe('farm save migration', () => {
       base
     );
 
-    expect(migrated.gold).toBe(base.gold);
+    expect(migrated.gold).toBe(1e300);
     expect(migrated.unlockedPlotCount).toBe(INITIAL_PLOTS);
     expect(migrated.upgrades).toEqual({ speed: 1, profit: 1 });
   });

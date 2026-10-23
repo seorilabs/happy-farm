@@ -1,3 +1,4 @@
+import { creditEconomyValue } from './economy';
 import balance from './balance.json';
 import type { CropKey, GameState, ProductionRecipeKey } from './types';
 import { recordMissionProgressEvent } from './missionEvents';
@@ -295,7 +296,7 @@ export function collectCraft(state: GameState, key: ProductionRecipeKey, now: nu
   delete crafting[key];
   const next: GameState = {
     ...state,
-    gold: state.gold + recipe.sellPrice,
+    gold: creditEconomyValue(state.gold, recipe.sellPrice).balance,
     production: {
       inventory: state.production.inventory,
       crafting,
@@ -331,7 +332,7 @@ export function collectAllReadyCrafts(
     if (next == null) {
       continue;
     }
-    totalGold += next.gold - state.gold;
+    totalGold = creditEconomyValue(totalGold, next.gold - state.gold).balance;
     state = next;
     collectedKeys.push(status.key);
   }

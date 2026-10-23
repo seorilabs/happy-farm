@@ -1,3 +1,4 @@
+import { normalizeEconomyValue } from './economy';
 import balance from './balance.json';
 import type { AchievementTrackKey, GameState, LifetimeStats, TitleKey } from './types';
 
@@ -246,10 +247,10 @@ export function normalizeLifetimeStats(value: unknown): LifetimeStats {
   const loaded = (typeof value === 'object' && value != null ? value : {}) as Partial<LifetimeStats>;
   return {
     totalHarvests: normalizeStat(loaded.totalHarvests),
-    totalGoldEarned: normalizeStat(loaded.totalGoldEarned),
+    totalGoldEarned: Math.floor(normalizeEconomyValue(loaded.totalGoldEarned)),
     mutationsFound: normalizeStat(loaded.mutationsFound),
     prestigeCount: normalizeStat(loaded.prestigeCount),
-    researchPointsEarned: normalizeStat(loaded.researchPointsEarned),
+    researchPointsEarned: Math.floor(normalizeEconomyValue(loaded.researchPointsEarned)),
     breedsUnlocked: normalizeStat(loaded.breedsUnlocked),
   };
 }

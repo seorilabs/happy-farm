@@ -1,3 +1,4 @@
+import { creditEconomyValue, normalizeEconomyValue } from './economy';
 import balance from './balance.json';
 import type {
   ChainFarm,
@@ -131,7 +132,7 @@ export function getPrestigeRequirementStatus(gameState: GameState): PrestigeRequ
   const cost = getPrestigeCost(gameState.prestige.level);
   const missingCropKeys = GRADUATION_CROP_KEYS.filter((cropKey) => !gameState.harvestedCropKeys.includes(cropKey));
   const collectionComplete = GRADUATION_CROP_KEYS.length > 0 && missingCropKeys.length === 0;
-  const goldSufficient = gameState.gold >= cost;
+  const goldSufficient = Number.isFinite(cost) && normalizeEconomyValue(gameState.gold) >= cost;
   return {
     requiredAreaKey: balance.regions.graduation.requiredAreaCollection as AreaKey,
     requiredCropKeys: [...GRADUATION_CROP_KEYS],
@@ -161,7 +162,7 @@ export type PrestigePreview = {
 };
 
 function getPrestigeStartingGold(gameState: GameState): number {
-  return createInitialState().gold + getSkillEffect(gameState, 'starting_capital');
+  return creditEconomyValue(createInitialState().gold, getSkillEffect(gameState, 'starting_capital')).balance;
 }
 
 function getChainYieldMultiplier(gameState: GameState): number {
@@ -173,10 +174,10 @@ function getChainYieldMultiplier(gameState: GameState): number {
 // persisted chain-farm value when balance or modifier formulas change.
 export function getPrestigePreview(gameState: GameState, now = Date.now()): PrestigePreview {
   const productivity = getFarmHourlyProductivity(gameState, now);
-  const baseChainGoldPerHour = Math.max(0, Math.floor(productivity.netProfitPerHour * CHAIN_INCOME_RATIO));
+  const baseChainGoldPerHour = normalizeEconomyValue(Math.floor(productivity.netProfitPerHour * CHAIN_INCOME_RATIO));
   return {
     baseChainGoldPerHour,
-    effectiveChainGoldPerHour: Math.floor(baseChainGoldPerHour * getChainYieldMultiplier(gameState)),
+    effectiveChainGoldPerHour: normalizeEconomyValue(Math.floor(baseChainGoldPerHour * getChainYieldMultiplier(gameState))),
     startingGold: getPrestigeStartingGold(gameState),
   };
 }
@@ -259,10 +260,10 @@ export function getChainIncome(gameState: GameState, now = Date.now()): ChainInc
   let accruedGold = 0;
 
   for (const farm of gameState.chainFarms) {
-    const hourly = farm.goldPerHour * yieldMultiplier;
-    totalGoldPerHour += hourly;
+    const hourly = normalizeEconomyValue(farm.goldPerHour * yieldMultiplier);
+    totalGoldPerHour = creditEconomyValue(totalGoldPerHour, hourly).balance;
     const elapsedMs = Math.min(Math.max(0, now - farm.lastCollectedAt), capMs);
-    accruedGold += Math.floor((hourly * elapsedMs) / MS_PER_HOUR);
+    accruedGold = creditEconomyValue(accruedGold, Math.floor((hourly * elapsedMs) / MS_PER_HOUR)).balance;
   }
 
   return {
@@ -281,17 +282,18 @@ export function collectChainIncome(
     return null;
   }
 
+  const credit = creditEconomyValue(gameState.gold, accruedGold);
   return {
     state: {
       ...gameState,
-      gold: gameState.gold + accruedGold,
+      gold: credit.balance,
       chainFarms: gameState.chainFarms.map((farm) => ({ ...farm, lastCollectedAt: now })),
       lifetimeStats: {
         ...gameState.lifetimeStats,
-        totalGoldEarned: gameState.lifetimeStats.totalGoldEarned + accruedGold,
+        totalGoldEarned: creditEconomyValue(gameState.lifetimeStats.totalGoldEarned, credit.credited).balance,
       },
     },
-    collectedGold: accruedGold,
+    collectedGold: credit.credited,
   };
 }
 
@@ -349,7 +351,7 @@ export function normalizeChainFarms(value: unknown, now = Date.now()): ChainFarm
     .map((entry, index) => ({
       id: normalizeCount(entry.id ?? index),
       archetype: isKnownArchetypeKey(entry.archetype) ? entry.archetype : DEFAULT_ARCHETYPE_KEY,
-      goldPerHour: normalizeCount(entry.goldPerHour),
+      goldPerHour: Math.floor(normalizeEconomyValue(entry.goldPerHour)),
       // Clamp future timestamps so a rolled-back clock can't bank extra time.
       lastCollectedAt:
         typeof entry.lastCollectedAt === 'number' && Number.isFinite(entry.lastCollectedAt)

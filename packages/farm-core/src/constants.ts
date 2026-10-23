@@ -1,3 +1,4 @@
+import { creditEconomyValue, normalizeEconomyValue } from './economy';
 import type {
   AreaKey,
   CollectionRewardKey,
@@ -239,11 +240,11 @@ export function getRewardedGoldAmount(gameState: GameState): number {
       ? scaling.productivityMinutes
       : 0;
   if (minutes <= 0) {
-    return floorAmount;
+    return normalizeEconomyValue(floorAmount);
   }
   const productivityAmount = Math.floor((getPlantedFarmGoldPerHour(gameState) * minutes) / 60);
   if (!Number.isFinite(productivityAmount) || productivityAmount <= floorAmount) {
-    return floorAmount;
+    return normalizeEconomyValue(floorAmount);
   }
 
   const capRatio =
@@ -251,7 +252,7 @@ export function getRewardedGoldAmount(gameState: GameState): number {
       ? scaling.nextGoalCapRatio
       : 0;
   const cap = capRatio > 0 ? Math.max(floorAmount, Math.floor(nextGoalCost * capRatio)) : floorAmount;
-  return Math.min(productivityAmount, cap);
+  return normalizeEconomyValue(Math.min(productivityAmount, cap));
 }
 
 export type ShopRewardedAdOffer =
@@ -267,7 +268,7 @@ export function getShopRewardedAdOffer(gameState: GameState): ShopRewardedAdOffe
       amount: LANDMARK_REWARDED_AD_FESTIVAL_POINTS,
     };
   }
-  return { kind: 'gold', amount: getRewardedGoldAmount(gameState) };
+  return { kind: 'gold', amount: creditEconomyValue(gameState.gold, getRewardedGoldAmount(gameState)).credited };
 }
 
 export const INITIAL_AREA_KEYS = FARM_AREAS.filter(
@@ -382,10 +383,10 @@ export function claimCollectionReward(
     return {
       state: {
         ...gameState,
-        gold: gameState.gold + summary.fullReward,
+        gold: creditEconomyValue(gameState.gold, summary.fullReward).balance,
         claimedCollectionRewards: [...gameState.claimedCollectionRewards, rewardKey],
       },
-      awardedGold: summary.fullReward,
+      awardedGold: creditEconomyValue(gameState.gold, summary.fullReward).credited,
     };
   }
 
@@ -395,10 +396,10 @@ export function claimCollectionReward(
   return {
     state: {
       ...gameState,
-      gold: gameState.gold + area.reward,
+      gold: creditEconomyValue(gameState.gold, area.reward).balance,
       claimedCollectionRewards: [...gameState.claimedCollectionRewards, rewardKey],
     },
-    awardedGold: area.reward,
+    awardedGold: creditEconomyValue(gameState.gold, area.reward).credited,
   };
 }
 
@@ -912,19 +913,27 @@ export function extendHarvestBonusBoost(
 // 룰렛 스핀 결과를 GameState에 적용한다(#209). 타입별 분기(골드 가산 / RP 가산 —
 // 누적치 totalPointsEarned 포함 / 수확 부스트 연장)를 순수 함수로 모아, UI(FarmGame)는
 // 스핀 가드만 담당하고 보상 적용 규칙은 core 테스트로 고정한다.
+export function getCreditedWheelReward(gameState: GameState, reward: WheelSpinResult['reward']): WheelSpinResult['reward'] {
+  if (reward.type === 'gold') return { ...reward, gold: creditEconomyValue(gameState.gold, reward.gold).credited };
+  if (reward.type === 'rp') return { ...reward, rp: creditEconomyValue(gameState.research.points, reward.rp).credited };
+  return reward;
+}
+
 export function applyWheelReward(gameState: GameState, result: WheelSpinResult, now = Date.now()): GameState {
   const reward = result.reward;
   switch (reward.type) {
-    case 'rp':
+    case 'rp': {
+      const credit = creditEconomyValue(gameState.research.points, reward.rp);
       return {
         ...gameState,
         research: {
           ...gameState.research,
-          points: gameState.research.points + reward.rp,
-          totalPointsEarned: gameState.research.totalPointsEarned + reward.rp,
+          points: credit.balance,
+          totalPointsEarned: creditEconomyValue(gameState.research.totalPointsEarned, credit.credited).balance,
         },
         wheelState: result.newState,
       };
+    }
     case 'harvest_boost':
       return {
         ...gameState,
@@ -933,7 +942,7 @@ export function applyWheelReward(gameState: GameState, result: WheelSpinResult, 
       };
     case 'gold':
     default:
-      return { ...gameState, gold: gameState.gold + reward.gold, wheelState: result.newState };
+      return { ...gameState, gold: creditEconomyValue(gameState.gold, reward.gold).balance, wheelState: result.newState };
   }
 }
 
@@ -1109,10 +1118,6 @@ function uniqueKnownCollectionRewards(value: unknown, fallback: CollectionReward
     .filter((rewardKey, index, items) => items.indexOf(rewardKey) === index);
 }
 
-function normalizeGold(value: unknown, fallback: number) {
-  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : fallback;
-}
-
 function normalizeUpgradeLevel(value: unknown, fallback: number) {
   if (typeof value !== 'number' || !Number.isFinite(value)) {
     return fallback;
@@ -1177,7 +1182,7 @@ export function migrateLoadedState(loaded: Partial<GameState>, base: GameState):
   const merged: GameState = {
     ...base,
     ...loaded,
-    gold: normalizeGold(loaded.gold, base.gold),
+    gold: normalizeEconomyValue(loaded.gold === undefined ? base.gold : loaded.gold),
     unlockedPlotCount: normalizeUnlockedPlotCount(loaded.unlockedPlotCount, base.unlockedPlotCount),
     unlockedAreas: uniqueKnownAreas(loaded.unlockedAreas, base.unlockedAreas),
     harvestedCropKeys: uniqueKnownCrops(loaded.harvestedCropKeys, base.harvestedCropKeys),

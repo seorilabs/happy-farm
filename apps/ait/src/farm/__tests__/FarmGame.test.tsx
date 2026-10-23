@@ -2561,6 +2561,32 @@ describe('FarmGame UI flow', () => {
       );
     });
 
+    test('caps offline ad payout and reports only the actual credited gold (#482)', async () => {
+      const limit = 1e300;
+      const state = {
+        ...createInitialState(),
+        gold: limit * (1 - 1e-14),
+        chainFarms: [{ id: 1, archetype: 'plains' as const, goldPerHour: limit, lastCollectedAt: NOW - TWO_HOURS_MS }],
+      };
+      mockPersistence.readLastSeenAt.mockResolvedValueOnce(NOW - TWO_HOURS_MS);
+      const track = jest.fn();
+      const screen = await renderGame(state, {
+        analytics: createFarmAnalytics(track),
+        useRewardedAd: () => createRewardedAd({ status: 'earned' }),
+      });
+      const credited = limit - state.gold;
+      const action = await waitFor(() => screen.getByTestId('welcome-back-double-ad-action'));
+      expect(screen.getByText(messages.welcomeBackDoubleAdAction(formatMoney(credited, DEFAULT_LOCALE)))).toBeTruthy();
+      fireEvent.press(action);
+      await waitFor(() => expect(getLatestPersistedState().gold).toBe(limit));
+      expect(getLatestPersistedState().lifetimeStats.totalGoldEarned).toBe(credited);
+      expect(screen.getByText(messages.receivedGoldToast(formatMoney(credited, DEFAULT_LOCALE)))).toBeTruthy();
+      expect(track).toHaveBeenCalledWith('ad_reward_completed', expect.objectContaining({
+        ad_type: 'offlineBonusAd', reward_value: Number.MAX_SAFE_INTEGER,
+      }));
+      expect(track.mock.calls.filter(([event]) => event === 'ad_reward_completed')).toHaveLength(1);
+    });
+
     test.each([
       ['dismissed', { status: 'dismissed' } as RewardedAdShowResult],
       ['failed', { status: 'failed', error: 'network' } as RewardedAdShowResult],

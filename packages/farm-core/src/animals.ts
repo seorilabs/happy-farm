@@ -1,3 +1,4 @@
+import { creditEconomyValue, normalizeEconomyValue } from './economy';
 import balance from './balance.json';
 import type { AnimalKey, GameState } from './types';
 import { recordMissionProgressEvent } from './missionEvents';
@@ -265,7 +266,7 @@ export function collectProduceWithOutcome(
   delete nextFeeding[key];
   const next: GameState = {
     ...state,
-    gold: state.gold + animal.producePrice,
+    gold: creditEconomyValue(state.gold, animal.producePrice).balance,
     animals: {
       owned: state.animals.owned,
       feeding: nextFeeding,
@@ -276,7 +277,7 @@ export function collectProduceWithOutcome(
     outcome: {
       animalKey: key,
       baseRevenue: animal.producePrice,
-      finalRevenue: animal.producePrice,
+      finalRevenue: next.gold - normalizeEconomyValue(state.gold),
       isRare: false,
       rareMultiplier: 1,
       readyWaitMs: Math.max(0, safeNow - readyAt),
@@ -321,7 +322,7 @@ export function collectAllReadyProduce(
     if (result == null) {
       continue;
     }
-    totalGold += result.outcome.finalRevenue;
+    totalGold = creditEconomyValue(totalGold, result.outcome.finalRevenue).balance;
     state = result.state;
     collectedKeys.push(status.key);
     outcomes.push(result.outcome);
