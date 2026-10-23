@@ -7,6 +7,8 @@
 // github-script 가 require 로 로드하므로 CommonJS 로 둔다.
 
 const path = require('path');
+const fs = require('fs');
+const { lookupAppStoreVersion, appStoreLookupUrl, isVersionAhead, normalizeVersion } = require('./app-store-lookup');
 
 // 채널별 배포 잡 이름 매칭(단독 워크플로우 파일 + deploy-all 내 채널 잡).
 const CHANNELS = [
@@ -30,12 +32,15 @@ const CHANNELS = [
  * @param {any} ctx.core    actions/github-script core
  * @param {any} ctx.exec    actions/github-script exec
  * @param {typeof import('./deploy-drift')} [ctx.drift] 순수 로직(테스트 주입용, 기본은 require)
+ * @param {NonNullable<Parameters<typeof lookupAppStoreVersion>[1]>['fetchImpl']} [ctx.fetchImpl] 공개 조회 경계
+ * @param {() => number} [ctx.now] 점검 시각(ms)
  */
-async function run({ github, context, core, exec, drift }) {
+async function run({ github, context, core, exec, drift, fetchImpl, now = Date.now }) {
   const driftLib =
     drift ?? require(path.resolve(process.env.GITHUB_WORKSPACE || process.cwd(), 'scripts/deploy-drift.js'));
 
   const { owner, repo } = context.repo;
+  const checkedAtMs = now();
 
   // --- 1) v태그 목록(최신순)과 최신 태그 시각 수집 --------------------
   const tagsOut = await exec.getExecOutput(
@@ -43,7 +48,7 @@ async function run({ github, context, core, exec, drift }) {
     ['tag', '--list', 'v[0-9]*.[0-9]*.[0-9]*', '--sort=-v:refname'],
     { silent: true },
   );
-  const sortedTags = tagsOut.stdout.split('\n').map((s) => s.trim()).filter(Boolean);
+  const sortedTags = tagsOut.stdout.split('\n').map((s) => s.trim()).filter((tag) => normalizeVersion(tag) != null);
   const latestTag = sortedTags[0] ?? null;
 
   if (!latestTag) {
@@ -68,12 +73,12 @@ async function run({ github, context, core, exec, drift }) {
       ['tag', '--points-at', sha, '--list', 'v[0-9]*.[0-9]*.[0-9]*', '--sort=-v:refname'],
       { silent: true, ignoreReturnCode: true },
     );
-    const found = out.stdout.split('\n').map((s) => s.trim()).filter(Boolean);
+    const found = out.stdout.split('\n').map((s) => s.trim()).filter((tag) => normalizeVersion(tag) != null);
     return found[0] ?? null;
   }
 
   const latestTagDate = await tagDate(latestTag);
-  const referenceMs = (latestTagDate ?? new Date()).getTime();
+  const referenceMs = latestTagDate != null && Number.isFinite(latestTagDate.getTime()) ? latestTagDate.getTime() : checkedAtMs;
 
   // --- 2) 채널별 최근 성공 배포 run 수집 ------------------------------
   // 단독 workflow_dispatch run 은 해당 워크플로우 파일 run 목록에서,
@@ -128,28 +133,48 @@ async function run({ github, context, core, exec, drift }) {
 
   const channelRows = await Promise.all(CHANNELS.map((c) => resolveChannel(c)));
 
-  // iOS는 Xcode Cloud(GH Actions 밖)라 판정 제외, 표에만 명시(오탐 방지).
+  let bundleId;
+  let appStore = null;
+  try {
+    const configPath = path.resolve(process.env.GITHUB_WORKSPACE || process.cwd(), 'app-store/app-store.config.json');
+    ({ bundleId } = JSON.parse(fs.readFileSync(configPath, 'utf8')));
+    appStore = await lookupAppStoreVersion(bundleId, { fetchImpl });
+  } catch {
+    // 설정과 공개 조회 실패는 최신으로 바꾸지 않고 확인 불가로 남긴다.
+  }
+  const publicTag = appStore ? `v${appStore.version}` : null;
+  const comparable = publicTag != null && sortedTags.includes(publicTag);
+  const iosNote = !appStore ? 'App Store 공개 버전 조회 실패 또는 유효한 결과 없음'
+    : comparable ? undefined : isVersionAhead(appStore.version, latestTag)
+      ? '공개 버전이 최신 태그보다 앞서 비교할 수 없음' : '공개 버전에 대응하는 태그 없음';
   const iosRow = driftLib.buildChannelRow({
     channel: 'iOS (App Store)',
     run: null,
-    deployedTag: null,
+    deployedTag: publicTag,
     referenceMs,
     sortedTagsDesc: sortedTags,
     latestTag,
-    external: true,
-    note: 'Xcode Cloud 경로 — GH Actions 밖',
+    external: !comparable,
+    note: iosNote,
+    publicVersion: appStore?.version,
+    releasedAt: appStore?.releasedAt,
+    sourceUrl: appStore ? appStoreLookupUrl(bundleId) : undefined,
   });
 
   const rows = [...channelRows, iosRow];
   const table = driftLib.renderDriftTable(latestTag, rows);
-  const driftedChannels = channelRows.filter((r) => r.eval.drift);
+  const driftedChannels = rows.filter((r) => r.eval.drift);
 
   // 채널별 수집·비교 결과 요약(테스트/후속 처리에서 채널→배포태그·뒤처짐을 확인).
-  const channels = channelRows.map((r) => ({
+  const channels = rows.map((r) => ({
     channel: r.channel,
     deployedTag: r.deployedTag,
     gap: r.eval.gap,
     drift: r.eval.drift,
+    external: r.eval.external,
+    publicVersion: r.publicVersion,
+    releasedAt: r.releasedAt,
+    sourceUrl: r.sourceUrl,
   }));
 
   // --- 3) step summary 출력 ------------------------------------------
@@ -157,7 +182,7 @@ async function run({ github, context, core, exec, drift }) {
   if (driftedChannels.length > 0) {
     core.summary.addRaw(`\n\n⚠️ 드리프트 감지: ${driftedChannels.map((r) => r.channel).join(', ')}`, true);
   } else {
-    core.summary.addRaw('\n\n✅ 모든 채널이 최신 릴리즈 태그를 따라가고 있습니다.', true);
+    core.summary.addRaw(rows.some((r) => r.eval.external) ? '\n\n비교 가능한 채널은 드리프트가 없으며 일부 채널은 확인 불가입니다.' : '\n\n✅ 모든 채널이 최신 릴리즈 태그를 따라가고 있습니다.', true);
   }
   await core.summary.write();
 
@@ -175,16 +200,11 @@ async function run({ github, context, core, exec, drift }) {
   });
   const decision = driftLib.chooseIssueAction(openIssues);
 
-  const body = [
-    driftLib.buildIssueBody({
+  const body = driftLib.buildIssueBody({
       table,
       runUrl: `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`,
-      checkedAtIso: new Date().toISOString(),
-    }),
-    '',
-    '---',
-    '_Generated by [Claude Code](https://claude.ai/code)_',
-  ].join('\n');
+      checkedAtIso: new Date(checkedAtMs).toISOString(),
+    });
 
   if (decision.action === 'comment') {
     await github.rest.issues.createComment({

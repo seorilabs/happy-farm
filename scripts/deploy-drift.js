@@ -33,7 +33,7 @@ function tagGap(sortedTagsDesc, deployedTag) {
  * @param {string} params.latestTag 최신 릴리즈 태그
  * @param {string|null} params.deployedTag 채널 최종 배포 태그(불명이면 null)
  * @param {number|null} params.ageHours 최신 태그 시각과 채널 최종 배포 시각의 차(시간). 불명이면 null
- * @param {boolean} [params.external] GH Actions 밖 채널(iOS/Xcode Cloud)이면 판정 제외
+ * @param {boolean} [params.external] 비교할 공개 정보가 없으면 판정 제외
  * @returns {{drift: boolean, gap: number|null, external: boolean, reasons: string[]}}
  */
 function evaluateChannel({ sortedTagsDesc, latestTag, deployedTag, ageHours, external = false }) {
@@ -81,7 +81,7 @@ function formatAge(ageHours) {
 /**
  * 채널별 판정 결과를 step summary용 마크다운 표로 렌더링한다.
  * @param {string} latestTag
- * @param {Array<{channel: string, deployedTag: string|null, deployRunUrl: string|null, ageHours: number|null, eval: ReturnType<typeof evaluateChannel>, note?: string}>} rows
+ * @param {Array<{channel: string, deployedTag: string|null, deployRunUrl: string|null, ageHours: number|null, eval: ReturnType<typeof evaluateChannel>, note?: string, publicVersion?: string, releasedAt?: string, sourceUrl?: string}>} rows
  * @returns {string}
  */
 function renderDriftTable(latestTag, rows) {
@@ -96,20 +96,22 @@ function renderDriftTable(latestTag, rows) {
     const result = row.eval;
     let status;
     if (result.external) {
-      status = `➖ GH Actions 밖 (Xcode Cloud)`;
+      status = '➖ 확인 불가';
     } else if (result.drift) {
       status = `⚠️ 드리프트 (${result.reasons.join(', ')})`;
     } else {
       status = '✅ 최신';
     }
 
-    const tagLabel = row.deployedTag ?? '불명';
-    const tagCell = row.deployRunUrl ? `[${tagLabel}](${row.deployRunUrl})` : tagLabel;
+    const tagLabel = row.publicVersion ?? row.deployedTag ?? '불명';
+    const sourceUrl = row.sourceUrl ?? row.deployRunUrl;
+    const tagCell = sourceUrl ? `[${tagLabel}](${sourceUrl})` : tagLabel;
     const gapCell = result.external ? '—' : result.gap == null ? '불명' : `${result.gap}개`;
     const ageCell = result.external ? '—' : formatAge(row.ageHours);
     const noteSuffix = row.note ? ` <br>${row.note}` : '';
+    const releaseSuffix = row.releasedAt ? ` <br>공개일: ${row.releasedAt}` : '';
 
-    lines.push(`| ${row.channel} | ${tagCell}${noteSuffix} | ${gapCell} | ${ageCell} | ${status} |`);
+    lines.push(`| ${row.channel} | ${tagCell}${releaseSuffix}${noteSuffix} | ${gapCell} | ${ageCell} | ${status} |`);
   }
 
   return lines.join('\n');
@@ -157,10 +159,13 @@ function channelAgeHours(referenceMs, deployMs) {
  * @param {string} params.latestTag
  * @param {boolean} [params.external]
  * @param {string} [params.note]
- * @returns {{channel: string, deployedTag: string|null, deployRunUrl: string|null, ageHours: number|null, eval: ReturnType<typeof evaluateChannel>, note?: string}}
+ * @param {string} [params.publicVersion]
+ * @param {string} [params.releasedAt]
+ * @param {string} [params.sourceUrl]
+ * @returns {{channel: string, deployedTag: string|null, deployRunUrl: string|null, ageHours: number|null, eval: ReturnType<typeof evaluateChannel>, note?: string, publicVersion?: string, releasedAt?: string, sourceUrl?: string}}
  */
-function buildChannelRow({ channel, run, deployedTag, referenceMs, sortedTagsDesc, latestTag, external = false, note }) {
-  const deployMs = run ? new Date(run.created_at).getTime() : null;
+function buildChannelRow({ channel, run, deployedTag, referenceMs, sortedTagsDesc, latestTag, external = false, note, publicVersion, releasedAt, sourceUrl }) {
+  const deployMs = releasedAt ? new Date(releasedAt).getTime() : run ? new Date(run.created_at).getTime() : null;
   const ageHours = external ? null : channelAgeHours(referenceMs, deployMs);
   const evalResult = evaluateChannel({
     sortedTagsDesc,
@@ -179,6 +184,9 @@ function buildChannelRow({ channel, run, deployedTag, referenceMs, sortedTagsDes
   if (note) {
     row.note = note;
   }
+  if (publicVersion) row.publicVersion = publicVersion;
+  if (releasedAt) row.releasedAt = releasedAt;
+  if (sourceUrl) row.sourceUrl = sourceUrl;
   return row;
 }
 
