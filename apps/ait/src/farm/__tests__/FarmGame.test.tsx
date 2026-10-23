@@ -1,7 +1,7 @@
 /// <reference types="jest" />
 
 import React from 'react';
-import { AppState, Animated, Dimensions, Modal, Platform, StyleSheet, Vibration, type AppStateStatus } from 'react-native';
+import { AppState, Animated, Dimensions, Modal, Platform, StyleSheet, Text, Vibration, type AppStateStatus } from 'react-native';
 import { act, cleanup, fireEvent, render, waitFor, within } from '@testing-library/react-native';
 import {
   ACHIEVEMENT_TRACKS,
@@ -481,6 +481,59 @@ describe('FarmGame UI flow', () => {
     __setMutationFlashTestHook(undefined);
     cleanup();
     jest.useRealTimers();
+  });
+
+  test('업데이트 안내는 다른 게임 모달이 없을 때 한 창으로 표시한다', async () => {
+    const gate = { node: <Text>Update notice</Text>, onRequestClose: jest.fn() };
+    const view = await renderGame(createInitialState(), { updateGate: gate });
+    expect(await view.findByText('Update notice')).toBeTruthy();
+    expect(view.UNSAFE_getAllByType(Modal).filter((modal) => modal.props.visible)).toHaveLength(1);
+  });
+
+  test('열린 시트 안에 업데이트 안내를 넣고 뒤로 동작과 시트 상태를 유지한다', async () => {
+    const view = await renderGame(createInitialState());
+    fireEvent.press(view.getByText(getFarmMessages(DEFAULT_LOCALE).shopButton));
+    const close = jest.fn();
+    view.rerender(<FarmGame persistence={mockPersistence} updateGate={{ node: <Text>Update notice</Text>, onRequestClose: close }} />);
+    expect(within(getSheetModal(view)).getByText('Update notice')).toBeTruthy();
+    expect(view.UNSAFE_getAllByType(Modal).filter((modal) => modal.props.visible)).toHaveLength(1);
+    act(() => getSheetModal(view).props.onRequestClose());
+    expect(close).toHaveBeenCalledTimes(1);
+    expect(getSheetModal(view).props.visible).toBe(true);
+    view.rerender(<FarmGame persistence={mockPersistence} />);
+    expect(getSheetModal(view).props.visible).toBe(true);
+  });
+
+  test('업데이트 창이 닫힌 뒤 iOS onDismiss까지 다음 시트를 기다린다', async () => {
+    const gate = { node: <Text>Update notice</Text>, onRequestClose: jest.fn() };
+    const view = await renderGame(createInitialState(), { updateGate: gate }, null, { preserveDailyBonus: true });
+    const modal = view.UNSAFE_getAllByType(Modal).find((item) => item.props.testID === 'farm-update-gate-modal');
+    expect(modal?.props.visible).toBe(true);
+    expect(getSheetModal(view).props.visible).toBe(false);
+    view.rerender(<FarmGame persistence={mockPersistence} />);
+    expect(getSheetModal(view).props.visible).toBe(false);
+    act(() => modal?.props.onDismiss());
+    expect(getSheetModal(view).props.visible).toBe(true);
+  });
+
+  test('업데이트 창 표시 중 취소와 닫힘 중 새 안내는 네이티브 전환을 기다린다', async () => {
+    mockModalControl.autoShow = false;
+    try {
+      const gate = { node: <Text>First update</Text>, onRequestClose: jest.fn() };
+      const view = await renderGame(createInitialState(), { updateGate: gate });
+      const native = () => view.UNSAFE_getAllByType(Modal).find((item) => item.props.testID === 'farm-update-gate-modal')!;
+      view.rerender(<FarmGame persistence={mockPersistence} />);
+      expect(native().props.visible).toBe(true);
+      act(() => native().props.onShow());
+      expect(native().props.visible).toBe(false);
+      view.rerender(<FarmGame persistence={mockPersistence} updateGate={{ node: <Text>New update</Text>, onRequestClose: jest.fn() }} />);
+      expect(native().props.visible).toBe(false);
+      act(() => native().props.onDismiss());
+      expect(native().props.visible).toBe(true);
+      expect(view.getByText('New update')).toBeTruthy();
+    } finally {
+      mockModalControl.autoShow = true;
+    }
   });
 
   test('enters with the prepared save and settings without reading them a second time', async () => {

@@ -1,6 +1,9 @@
 import { createRoute } from '@granite-js/react-native';
-import React, { useMemo } from 'react';
-import { FarmGame, FarmStartup, detectRuntimeLocale, type FarmGameAdGroupIds } from '../../../../packages/farm-ui/src';
+import React, { useCallback, useMemo, useState } from 'react';
+import { Linking } from 'react-native';
+import { FarmGame, FarmStartup, FarmUpdateGate, detectRuntimeLocale, type FarmGameAdGroupIds, type FarmUpdateNotice } from '../../../../packages/farm-ui/src';
+import { RELEASE_INFO, type SupportedLocale } from '../../../../packages/farm-core/src';
+import { appsInTossUpdateGate } from '../platformEvents';
 import { appsInTossFarmAnalytics } from '../firebaseWeb';
 import { trackAppsInTossAnalyticsEvent } from '../firebaseWeb/analytics';
 import { appsInTossFarmArt } from '../farm/platform/appsInTossArt';
@@ -54,9 +57,17 @@ const appsInTossPersistence = {
   writeLastSeenAt,
 };
 
+function updateGateAnalytics(state: FarmUpdateNotice) {
+  return { buildNumber: RELEASE_INFO.buildNumber, platform: 'ait', gateKind: state.kind, recommendedVersion: state.kind === 'maintenance' ? undefined : state.recommendedVersion };
+}
+
 function Page() {
   const { audio, audioElement } = useAppsInTossFarmAudio();
   useAppsInTossScreenAwake();
+  const [isFarmStarted, setIsFarmStarted] = useState(false);
+  const [gateLocale, setGateLocale] = useState<SupportedLocale>(detectRuntimeLocale);
+  const [gateReady, setGateReady] = useState(false);
+  const handleSettingsReady = useCallback((locale: SupportedLocale) => { setGateLocale(locale); setGateReady(true); }, []);
   const adGroupIds = useMemo<FarmGameAdGroupIds>(
     () => ({
       rewarded: APPS_IN_TOSS_REWARDED_AD_GROUP_ID,
@@ -67,10 +78,17 @@ function Page() {
 
   return (
     <>
-      <FarmStartup persistence={appsInTossPersistence} preferredLocale={detectRuntimeLocale()} art={appsInTossTitleArt}>
+      <FarmUpdateGate controller={appsInTossUpdateGate} locale={gateLocale} enabled={gateReady} hosted={isFarmStarted}
+        openUrl={(url) => Linking.openURL(url)}
+        onShown={(state) => appsInTossFarmAnalytics.trackUpdateGateShown(updateGateAnalytics(state))}
+        onStoreClick={(state) => appsInTossFarmAnalytics.trackUpdateGateStoreClick(updateGateAnalytics(state))}>
+      {(updateGate) => (
+      <FarmStartup persistence={appsInTossPersistence} preferredLocale={detectRuntimeLocale()} art={appsInTossTitleArt} onSettingsReady={handleSettingsReady} onStart={() => setIsFarmStarted(true)}>
         {(startupSnapshot) => (
           <FarmGame
             startupSnapshot={startupSnapshot}
+            updateGate={updateGate}
+            onLocaleChange={setGateLocale}
             analytics={appsInTossFarmAnalytics}
             adGroupIds={adGroupIds}
             art={appsInTossFarmArt}
@@ -87,6 +105,8 @@ function Page() {
           />
         )}
       </FarmStartup>
+      )}
+      </FarmUpdateGate>
       {audioElement}
     </>
   );

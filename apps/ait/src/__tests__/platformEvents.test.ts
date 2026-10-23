@@ -8,6 +8,7 @@ type MockPlatformOptions = {
   presenceEnabled?: boolean;
   presenceContext?: () => Record<string, string>;
   sessionStore?: unknown;
+  gateStore?: { load: () => Promise<unknown>; save: (log: { version: string; promptedAt: number }) => Promise<void> };
 };
 
 const mockAppLogin = jest.fn(async () => ({
@@ -25,6 +26,7 @@ const mockGetAnonymousKey = jest.fn<
 jest.mock('@apps-in-toss/framework', () => ({
   appLogin: () => mockAppLogin(),
   getAnonymousKey: () => mockGetAnonymousKey(),
+  Storage: { getItem: jest.fn(async () => null), setItem: jest.fn(async () => undefined), removeItem: jest.fn(async () => undefined) },
 }));
 
 jest.mock('../firebaseWeb/analyticsIdentity', () => ({
@@ -45,6 +47,13 @@ jest.mock('@seorilabs/platform-sdk', () => {
       start: jest.fn(),
       stop: jest.fn(),
       resume: jest.fn(),
+    },
+    config: {
+      fetch: jest.fn(async () => undefined),
+      gate: jest.fn(() => ({ kind: 'recommended', message: 'Server message', recommendedVersion: '1.13.0' })),
+      current: jest.fn(() => ({ sdk: { message: 'Server message' } })),
+      shouldPrompt: jest.fn(async () => true),
+      markPrompted: jest.fn(async () => undefined),
     },
     session: {
       token: jest.fn(() => Promise.resolve('platform-token')),
@@ -67,6 +76,7 @@ import {
   shutdownAppsInTossPlatformEvents,
   startAppsInTossPlatformEvents,
   trackAppsInTossPlatformEvent,
+  appsInTossUpdateGate,
 } from '../platformEvents';
 
 const platformSdkMock = jest.requireMock('@seorilabs/platform-sdk') as {
@@ -77,12 +87,26 @@ const platformSdkMock = jest.requireMock('@seorilabs/platform-sdk') as {
     signIn: jest.Mock;
     start: jest.Mock;
     shutdown: jest.Mock;
+    config: { fetch: jest.Mock; gate: jest.Mock; current: jest.Mock; shouldPrompt: jest.Mock; markPrompted: jest.Mock };
   }>;
 };
 const mockCreatePlatform = platformSdkMock.createPlatform;
 const mockPlatform = mockCreatePlatform.mock.results[0]?.value;
 
 describe('AppsInToss Platform events', () => {
+  test('AIT 설정 판정과 이력을 SDK에 위임하고 실제 Storage 어댑터를 주입한다', async () => {
+    const state = await appsInTossUpdateGate.load('en-US');
+    expect(mockPlatform.config.fetch).toHaveBeenCalledWith({ appVersion: RELEASE_INFO.versionName, platform: 'ait', locale: 'en-US' });
+    expect(state).toEqual({ kind: 'recommended', message: 'Server message', recommendedVersion: '1.13.0' });
+    expect(await appsInTossUpdateGate.shouldPrompt(state)).toBe(true);
+    await appsInTossUpdateGate.markPrompted(state);
+    expect(mockPlatform.config.shouldPrompt).toHaveBeenCalledWith(state);
+    expect(mockPlatform.config.markPrompted).toHaveBeenCalledWith(state);
+    const store = mockCreatePlatform.mock.calls[0]?.[0]?.gateStore;
+    await store?.save({ version: '1.13.0', promptedAt: 42 });
+    const framework = jest.requireMock('@apps-in-toss/framework');
+    expect(framework.Storage.setItem).toHaveBeenCalledWith('happy_farm.update_gate_prompt.v1', JSON.stringify({ version: '1.13.0', promptedAt: 42 }));
+  });
   test('익명 AIT context와 GA4 relay client ID로 SDK를 생성한다', () => {
     expect(mockCreatePlatform).toHaveBeenCalledTimes(1);
     const options = mockCreatePlatform.mock.calls[0]?.[0];
