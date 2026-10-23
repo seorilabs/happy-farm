@@ -9,9 +9,15 @@ export const MAIN_HORIZONTAL_PADDING = 16;
 export const MAIN_CONTENT_TOP_PADDING = 48;
 export const ONBOARDING_MAIN_CONTENT_TOP_PADDING = 16;
 
-export function getPlotTileSize(windowWidth: number): number {
-  const availableWidth = windowWidth - MAIN_HORIZONTAL_PADDING * 2 - PLOT_GAP * (PLOT_COLUMNS - 1);
-  return Math.max(48, Math.floor(availableWidth / PLOT_COLUMNS));
+export function getPlotColumnCount(windowWidth: number, fontScale = 1): number {
+  const availableWidth = windowWidth - MAIN_HORIZONTAL_PADDING * 2;
+  return Math.min(PLOT_COLUMNS, Math.max(1, Math.floor((availableWidth + PLOT_GAP) / (64 * fontScale + PLOT_GAP))));
+}
+
+export function getPlotTileSize(windowWidth: number, fontScale = 1): number {
+  const columns = getPlotColumnCount(windowWidth, fontScale);
+  const availableWidth = windowWidth - MAIN_HORIZONTAL_PADDING * 2 - PLOT_GAP * (columns - 1);
+  return Math.max(48, Math.floor(availableWidth / columns));
 }
 
 export const SHEET_DRAG_HIT_TARGET_HEIGHT = 36;

@@ -288,6 +288,7 @@ import { AdRewardCard, SettingToggle, SheetAction, ShopCard, sheetPartStyles } f
 import {
   DISCOVERY_BANNER_BASE_BOTTOM,
   getPlotTileSize,
+  getPlotColumnCount,
   PLOT_COLUMNS,
   PLOT_GAP,
   SHEET_CONTENT_BASE_PADDING_BOTTOM,
@@ -538,7 +539,7 @@ type ActiveSheet =
   | { type: 'map' }
   | { type: 'prestigeConfirm' }
   | { type: 'settings' }
-  | { type: 'growthAd'; plotIndex: number; cropKey: CropKey; remainingMs: number }
+  | { type: 'growthAd'; plotIndex: number }
   | { type: 'harvestBonus' }
   | { type: 'welcomeBack'; summary: ReturnSummary }
   | DailyBonusSheet
@@ -717,7 +718,7 @@ function getManualHarvestComboTier(count: number): HarvestComboTier {
 }
 
 type PendingFarmCommandEffect =
-  | { id: number; type: 'plantBlocked'; reason: FarmGameCommandBlockedReason }
+  | { id: number; type: 'plantBlocked'; reason: FarmGameCommandBlockedReason; missingGold: number; affordableCropKey: CropKey | null }
   | { id: number; type: 'cropPlanted'; event: CropPlantedGameEvent }
   | {
       id: number;
@@ -1095,7 +1096,10 @@ function FarmGameBody({
   // 확보 인셋으로 보정해 하단 스트립/시트/토스트가 시스템 백버튼·제스처 바와
   // 겹치지 않게 한다(#236). 모바일의 실제 측정값이 더 크면 그대로 유지된다.
   const bottomSafeInset = resolveBottomSafeInset(insets.bottom);
-  const { width: windowWidth } = useWindowDimensions();
+  const { width: windowWidth, height: windowHeight, fontScale } = useWindowDimensions();
+  const useLargeTextLayout = fontScale >= 1.3;
+  const useScrollableLayout = useLargeTextLayout || windowHeight < 700;
+  const useStackedStats = useLargeTextLayout || windowWidth < 360;
   const [activeSheet, setActiveSheet] = useState<ActiveSheet>(null);
   const previousActiveSheetRef = useRef<ActiveSheet>(null);
   // iOS presents every RN Modal from one root view controller and refuses a new one while
@@ -1394,7 +1398,8 @@ function FarmGameBody({
     REGION_ARCHETYPES[0]?.key ?? 'plains'
   );
   const [tick, setTick] = useState(0);
-  const plotTileSize = useMemo(() => getPlotTileSize(windowWidth), [windowWidth]);
+  const plotColumns = getPlotColumnCount(windowWidth, fontScale);
+  const plotTileSize = useMemo(() => getPlotTileSize(windowWidth, fontScale), [windowWidth, fontScale]);
 
   const toast = useCallback((message: string) => {
     if (toastTimerRef.current != null) {
@@ -1914,7 +1919,12 @@ function FarmGameBody({
         } else if (effect.reason === 'cropLocked') {
           toast(messages.breedRequiredToast);
         } else if (effect.reason === 'insufficientGold') {
-          toast(messages.insufficientGoldToast);
+          toast(
+            messages.plantGoldShortfall(formatMoney(effect.missingGold, locale)) + ' ' +
+            (effect.affordableCropKey != null
+              ? messages.plantAffordableSeed(getLocalizedCropName(effect.affordableCropKey))
+              : messages.plantWaitForHarvest)
+          );
         }
         continue;
       }
@@ -2956,7 +2966,8 @@ function FarmGameBody({
       const limit = getRewardedAdLimitStatus(state, 'growthAd', Date.now(), locale);
       const eligible =
         rewardedAd.isAdSupported &&
-        transitionedSheet.remainingMs >= GROWTH_AD_MIN_REMAINING_MS &&
+        state.plots[transitionedSheet.plotIndex]?.state === 1 &&
+        getPlotRemainingGrowthMs(state, state.plots[transitionedSheet.plotIndex]!) >= GROWTH_AD_MIN_REMAINING_MS &&
         limit.allowed;
       // The sheet can also be opened for the gold fertilizer. Count an ad
       // impression only when the rewarded CTA itself is actually eligible.
@@ -5277,7 +5288,14 @@ function FarmGameBody({
       );
 
       if (result.status === 'blocked') {
-        pendingCommandEffectsRef.current.push({ id: effectId, type: 'plantBlocked', reason: result.reason });
+        const cheapestCrop = getOnboardingCropKey(state, now);
+        const affordableCropKey = cheapestCrop != null && getCropPurchaseCost(state, cheapestCrop, now) <= state.gold
+          ? cheapestCrop : null;
+        pendingCommandEffectsRef.current.push({
+          id: effectId, type: 'plantBlocked', reason: result.reason,
+          missingGold: Math.max(0, getCropPurchaseCost(state, cropKey, now) - state.gold),
+          affordableCropKey,
+        });
         return state;
       }
       const event = result.events[0];
@@ -5549,8 +5567,6 @@ function FarmGameBody({
           setActiveSheet({
             type: 'growthAd',
             plotIndex: index,
-            cropKey: plot.cropType,
-            remainingMs,
           });
         } else if (adLimitBlocked) {
           // 시트가 열리지 않는 광고 전용 경로에서만 한도 사유를 토스트로 안내한다
@@ -5571,8 +5587,12 @@ function FarmGameBody({
   async function completeGrowthWithAd(plotIndex: number) {
     // Preview the tier from the committed state so the toast can name the amount;
     // the actual mutation runs inside the updater on live state (StrictMode-safe).
-    const previewPlot = gameState.plots[plotIndex];
-    const previewRemaining = previewPlot != null ? getPlotRemainingGrowthMs(gameState, previewPlot) : 0;
+    const currentState = gameStateRef.current;
+    const previewPlot = currentState.plots[plotIndex];
+    const previewRemaining = previewPlot != null ? getPlotRemainingGrowthMs(currentState, previewPlot) : 0;
+    if (previewPlot?.state !== 1 || previewRemaining < GROWTH_AD_MIN_REMAINING_MS) {
+      return;
+    }
     const previewSkip = getGrowthAdSkipMs(previewRemaining);
     const willComplete = previewSkip >= previewRemaining;
     await showRewardedAd(
@@ -5918,16 +5938,21 @@ function FarmGameBody({
 
   return (
     <View testID="farm-root" style={[styles.root, { backgroundColor: environmentTone.backgroundColor }]}>
+      <ScrollView
+        testID="farm-page-scroll"
+        scrollEnabled={useScrollableLayout}
+        contentContainerStyle={useScrollableLayout ? styles.scrollablePageContent : styles.viewportPageContent}
+      >
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         {/* 헤더 밀도 완화(#355)로 제목 행 상시 요소를 줄였으므로, mobile 전용 줄바꿈
             fallback(mobileHeaderTop/mobileTitleGroup)에 더는 의존하지 않는다. 핵심 행은
             market와 무관하게 동일 레이아웃으로 렌더한다. */}
-        <View testID="header-top" style={styles.headerTop}>
-          <View testID="title-group" style={styles.titleGroup}>
+        <View testID="header-top" style={[styles.headerTop, useLargeTextLayout && styles.wrappedHeaderTop]}>
+          <View testID="title-group" style={[styles.titleGroup, useLargeTextLayout && styles.fullWidthTitleGroup]}>
             <Text style={styles.homeIcon}>🏡</Text>
             <View style={styles.titleTextGroup}>
               <Text style={styles.title}>{messages.appTitle}</Text>
-              <View style={styles.subtitleRow}>
+              <View style={[styles.subtitleRow, useLargeTextLayout && styles.stackedSubtitleRow]}>
                 <Text style={styles.subtitle}>{messages.appSubtitle}</Text>
                 {/* 헤더 밀도 완화(#355): 활성 칭호 배지와 오늘의 작물 배수 상세는 이
                     단일 요약 chip 탭(openStats) 뒤 '농장 현황' 시트로 강등했다. 헤더에는
@@ -5973,7 +5998,7 @@ function FarmGameBody({
           </View>
         </View>
 
-        <View style={styles.statsPanel}>
+        <View style={[styles.statsPanel, useStackedStats && styles.stackedStatsPanel]}>
           <View style={styles.assetRow}>
             {/* The whole asset block scales as one unit (anchored left so it
                 grows into its own space, not into the panel border) for a
@@ -5982,17 +6007,23 @@ function FarmGameBody({
               <Text style={styles.coinIcon}>💰</Text>
               <View style={styles.assetTextGroup}>
                 <Text style={styles.label}>{messages.assetLabel}</Text>
-                <Text style={styles.money} numberOfLines={1}>
+                <Text style={styles.money}>
                   {formatMoney(gameState.gold, locale)}G
                 </Text>
               </View>
             </Animated.View>
           </View>
-          <View style={styles.summaryColumn}>
-            <Text style={styles.productivityText} numberOfLines={1}>
-              {messages.productivity(formatHourlyGold(farmProductivity.netProfitPerHour, locale))}
+          <Pressable
+            testID="productivity-summary"
+            accessibilityRole="button"
+            accessibilityLabel={messages.productivity(formatHourlyGold(farmProductivity.netProfitPerHour, locale))}
+            onPress={openStats}
+            style={[styles.summaryColumn, useStackedStats && styles.fullWidthSummary]}
+          >
+            <Text style={styles.productivityText}>
+              {messages.productivity(formatHourlyGold(farmProductivity.netProfitPerHour, locale))} ⓘ
             </Text>
-          </View>
+          </Pressable>
         </View>
 
         {nextFarmGoal != null ? (
@@ -6061,7 +6092,7 @@ function FarmGameBody({
         />
       ) : null}
 
-      <View testID="farm-stage" style={styles.farmStage}>
+      <View testID="farm-stage" style={[styles.farmStage, useScrollableLayout && { flex: 0, minHeight: Math.max(360, windowHeight * 0.65) }]}>
         <EnvironmentBackdrop
           phase={environmentTone.phase}
           minutesOfDay={minutesOfDay}
@@ -6075,6 +6106,7 @@ function FarmGameBody({
         />
         <ScrollView
           testID="farm-scroll"
+          nestedScrollEnabled={useScrollableLayout}
           contentContainerStyle={[styles.mainContent, onboardingStep != null && styles.mainContentOnboarding]}
           style={styles.main}
         >
@@ -6114,7 +6146,7 @@ function FarmGameBody({
                   />
                 );
               })}
-              <HarvestFxOverlay ref={harvestFxRef} tileSize={plotTileSize} />
+              <HarvestFxOverlay ref={harvestFxRef} tileSize={plotTileSize} columns={plotColumns} />
             </View>
             {onboardingPlotHighlight ? (
               <View
@@ -6153,7 +6185,7 @@ function FarmGameBody({
         {batchActionCount > 0 ? (
           // 밭 일괄 액션은 종류가 동시에 늘어나도 하나의 행만 사용한다. 3개일 때는 각
           // 버튼을 같은 폭으로 축소해 하단 도구 영역이 두 행으로 커지지 않게 한다.
-          <View testID="farm-batch-action-row" style={styles.toolActionRow}>
+          <View testID="farm-batch-action-row" style={[styles.toolActionRow, useLargeTextLayout && styles.stackedActionRow]}>
             {showHarvestBatchActions ? (
               <>
                 <HarvestAllButton
@@ -6231,8 +6263,8 @@ function FarmGameBody({
 
         {/* 선택 도구 안내와 정렬을 같은 행에 두어 정렬 버튼 왼쪽의 빈 면을 정보로 활용한다.
             잠긴 구역/작물 1종인 구역은 정렬 버튼만 숨기고 안내가 전체 폭을 쓴다. */}
-        <View testID="seed-meta-row" style={styles.seedMetaRow}>
-          <Text style={styles.toolHint} numberOfLines={1}>
+        <View testID="seed-meta-row" style={[styles.seedMetaRow, useLargeTextLayout && styles.wrappedSeedMetaRow]}>
+          <Text style={styles.toolHint}>
             {toolHint}
           </Text>
           {visibleCropKeys.length > 1 ? (
@@ -6355,6 +6387,8 @@ function FarmGameBody({
         </View>
       </View>
 
+      </ScrollView>
+
       {/* 시트가 열려 있으면 토스트는 Sheet의 overlay 슬롯에서만 렌더한다. 양쪽에 두면
           Modal에 가려 보이지 않는 사본이 접근성 트리에 하나 더 남는다. */}
       {activeSheet == null ? toastNode : null}
@@ -6376,8 +6410,9 @@ function FarmGameBody({
 
       <Sheet
         activeSheet={activeSheet}
-        description={getSheetDescription(activeSheet, messages, locale, getLocalizedCropName, collectionSummary, dailyBonusDisplay.streak)}
-        title={getSheetTitle(activeSheet, messages)}
+        description={getSheetDescription(activeSheet, messages, locale, getLocalizedCropName, collectionSummary, dailyBonusDisplay.streak, gameState)}
+        title={activeSheet?.type === 'growthAd' && gameState.plots[activeSheet.plotIndex]?.state === 2
+          ? messages.harvestTool : getSheetTitle(activeSheet, messages)}
         closeLabel={messages.sheetCloseAccessibilityLabel}
         bottomInset={bottomSafeInset}
         overlay={toastNode}
@@ -6605,6 +6640,12 @@ function FarmGameBody({
         ) : null}
 
         {activeSheet?.type === 'stats' ? (
+          <View>
+          {farmProductivity.bestCropKey != null ? (
+            <Text testID="productivity-basis" style={styles.productivityBasis}>
+              {messages.productivityBasis(getLocalizedCropName(farmProductivity.bestCropKey), farmProductivity.plotCount)}
+            </Text>
+          ) : null}
           <StatsSheet
             messages={messages}
             locale={locale}
@@ -6637,6 +6678,7 @@ function FarmGameBody({
             purchasableSkillCount={purchasablePrestigeSkillCount}
             farmRecords={farmRecordStats}
           />
+          </View>
         ) : null}
 
         {activeSheet?.type === 'collection' ? (
@@ -6800,8 +6842,11 @@ function FarmGameBody({
           ? (() => {
               // A short crop is fully skipped (existing label); a long crop only
               // gets a partial cut, so name the amount the ad removes.
-              const skipMs = getGrowthAdSkipMs(activeSheet.remainingMs);
-              const fullSkip = skipMs >= activeSheet.remainingMs;
+              const plot = gameState.plots[activeSheet.plotIndex];
+              const remainingMs = plot != null ? getPlotRemainingGrowthMs(gameState, plot) : 0;
+              const ready = plot?.state === 2;
+              const skipMs = getGrowthAdSkipMs(remainingMs);
+              const fullSkip = skipMs >= remainingMs;
               const actionLabel = growthAdLimit.allowed
                 ? fullSkip
                   ? messages.growthAdAction
@@ -6810,12 +6855,19 @@ function FarmGameBody({
               // 광고 경로는 광고 지원 + 최소 남은 성장 조건을 만족할 때만 노출한다
               // (비료 단독으로 시트가 열린 경우 광고 버튼은 숨긴다).
               const adPathAvailable =
-                rewardedAd.isAdSupported && activeSheet.remainingMs >= GROWTH_AD_MIN_REMAINING_MS;
+                plot?.state === 1 && rewardedAd.isAdSupported && remainingMs >= GROWTH_AD_MIN_REMAINING_MS;
               // 골드 비료(#227): 성장 중 플롯이면 항상 노출, 가격 표시. 골드 부족 시 비활성.
               const fertilizerPlot = gameState.plots[activeSheet.plotIndex];
               const fertilizerCost = fertilizerPlot != null ? getFertilizerCost(gameState, fertilizerPlot) : 0;
               return (
                 <View>
+                  {ready ? (
+                    <SheetAction
+                      testID="growth-harvest-action"
+                      label={messages.harvestTool}
+                      onPress={() => { harvestCrop(activeSheet.plotIndex); setActiveSheet(null); }}
+                    />
+                  ) : null}
                   {adPathAvailable ? (
                     <SheetAction
                       testID="growth-ad-action"
@@ -6832,15 +6884,15 @@ function FarmGameBody({
                       onPress={() => applyFertilizerNow(activeSheet.plotIndex)}
                     />
                   ) : null}
-                  {!adPathAvailable && fertilizerCost <= 0 ? (
+                  {!ready && !adPathAvailable && fertilizerCost <= 0 ? (
                     // 시트가 열린 뒤 tick으로 남은 성장이 0이 되고 광고 경로도 없어
                     // 가속 옵션이 사라진 경우, 빈 시트 대신 완료 안내를 보여준다(대기
                     // 버튼으로 닫을 수 있음).
                     <Text testID="growth-sheet-empty-note" style={styles.sheetSectionTitle}>
-                      {messages.alreadyGrownToast}
+                      {plot?.state === 1 ? messages.alreadyGrownToast : messages.selectSeedToast}
                     </Text>
                   ) : null}
-                  <SheetAction label={messages.waitAction} secondary onPress={() => setActiveSheet(null)} />
+                  <SheetAction label={ready ? messages.sheetCloseAccessibilityLabel : messages.waitAction} secondary onPress={() => setActiveSheet(null)} />
                 </View>
               );
             })()
@@ -7388,10 +7440,7 @@ function HarvestAllButton({
         ]}
       >
         <Text
-          adjustsFontSizeToFit={compact}
-          minimumFontScale={compact ? 0.8 : undefined}
           style={[styles.harvestAllButtonText, compact && styles.harvestAllButtonTextCompact]}
-          numberOfLines={1}
         >
           {label}
         </Text>
@@ -8005,7 +8054,7 @@ function NextGoalBar({
         style={styles.nextGoalBar}
         onPress={onPress}
       >
-        <Text style={styles.nextGoalReadyText} numberOfLines={1}>
+        <Text style={styles.nextGoalReadyText}>
           {messages.nextGoalGraduationReady}
         </Text>
       </Pressable>
@@ -8021,7 +8070,7 @@ function NextGoalBar({
         style={styles.nextGoalBar}
         onPress={onPress}
       >
-        <Text style={styles.nextGoalReadyText} numberOfLines={1}>
+        <Text style={styles.nextGoalReadyText}>
           {label}
         </Text>
       </Pressable>
@@ -8074,7 +8123,7 @@ function NextGoalBar({
       style={styles.nextGoalBar}
       onPress={onPress}
     >
-      <Text style={styles.nextGoalLabel} numberOfLines={1}>
+      <Text style={styles.nextGoalLabel}>
         {label}
       </Text>
       <View style={styles.nextGoalTrack}>
@@ -8595,8 +8644,8 @@ function GrowingCropIcon({
   );
 }
 
-export const HarvestFxOverlay = React.forwardRef<HarvestFxHandle, { tileSize: number }>(function HarvestFxOverlay(
-  { tileSize },
+export const HarvestFxOverlay = React.forwardRef<HarvestFxHandle, { tileSize: number; columns?: number }>(function HarvestFxOverlay(
+  { tileSize, columns = PLOT_COLUMNS },
   ref
 ) {
   const [pops, setPops] = useState<HarvestPop[]>([]);
@@ -8628,7 +8677,7 @@ export const HarvestFxOverlay = React.forwardRef<HarvestFxHandle, { tileSize: nu
   return (
     <>
       {pops.map((pop) => (
-        <HarvestPopText key={pop.id} pop={pop} tileSize={tileSize} onDone={remove} />
+        <HarvestPopText key={pop.id} pop={pop} tileSize={tileSize} columns={columns} onDone={remove} />
       ))}
     </>
   );
@@ -8637,10 +8686,12 @@ export const HarvestFxOverlay = React.forwardRef<HarvestFxHandle, { tileSize: nu
 function HarvestPopText({
   pop,
   tileSize,
+  columns,
   onDone,
 }: {
   pop: HarvestPop;
   tileSize: number;
+  columns: number;
   onDone: (id: number) => void;
 }) {
   const progressRef = useRef<Animated.Value | null>(null);
@@ -8682,8 +8733,8 @@ function HarvestPopText({
     return () => animation.stop();
   }, [burstProgress, mutationConfig?.popDurationMs, pop.id, progress]);
 
-  const col = pop.index % PLOT_COLUMNS;
-  const row = Math.floor(pop.index / PLOT_COLUMNS);
+  const col = pop.index % columns;
+  const row = Math.floor(pop.index / columns);
   const left = col * (tileSize + PLOT_GAP);
   const top = row * (tileSize + PLOT_GAP);
 
@@ -9085,7 +9136,8 @@ function getSheetDescription(
   locale: SupportedLocale,
   getLocalizedCropName: (cropKey: CropKey) => string,
   collectionSummary: CollectionSummary,
-  dailyBonusStreak: number
+  dailyBonusStreak: number,
+  gameState: GameState
 ) {
   if (activeSheet?.type === 'collection') {
     return messages.sheetDescriptionCollection(collectionSummary.discoveredCount, collectionSummary.totalCount);
@@ -9112,9 +9164,12 @@ function getSheetDescription(
     return messages.sheetDescriptionPrestigeConfirm;
   }
   if (activeSheet?.type === 'growthAd') {
+    const plot = gameState.plots[activeSheet.plotIndex];
+    if (plot?.cropType == null || plot.state === 0) return messages.selectSeedToast;
+    if (plot.state === 2) return messages.growthReadyDescription(getLocalizedCropName(plot.cropType));
     return messages.sheetDescriptionGrowthAd(
-      getLocalizedCropName(activeSheet.cropKey),
-      formatRemainingTime(activeSheet.remainingMs, locale)
+      getLocalizedCropName(plot.cropType),
+      formatRemainingTime(getPlotRemainingGrowthMs(gameState, plot), locale)
     );
   }
   if (activeSheet?.type === 'harvestBonus') {
@@ -9193,6 +9248,7 @@ const ToolButton = React.memo(function ToolButton({
   testID?: string;
   onSelect: (toolKey: ToolKey) => void;
 }) {
+  const { fontScale } = useWindowDimensions();
   const baseA11yLabel = cost != null ? `${name}, ${cost}` : name;
   return (
     <Pressable
@@ -9202,13 +9258,14 @@ const ToolButton = React.memo(function ToolButton({
       accessibilityState={{ selected: active }}
       style={({ pressed }) => [
         styles.toolButton,
+        { width: Math.max(100, 84 * fontScale) },
         active && styles.activeToolButton,
         pressed && styles.toolButtonPressed,
       ]}
       onPress={() => onSelect(toolKey)}
     >
       <CropGlyph cropKey={cropKey} emoji={icon} size={24} textStyle={styles.toolIcon} />
-      <Text style={styles.toolName} numberOfLines={1}>
+      <Text style={styles.toolName}>
         {name}
       </Text>
       {cost != null ? (

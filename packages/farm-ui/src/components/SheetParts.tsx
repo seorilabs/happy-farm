@@ -155,6 +155,10 @@ export function SettingToggle({
   return (
     <Pressable
       disabled={disabled}
+      accessibilityRole="switch"
+      accessibilityLabel={label}
+      accessibilityHint={desc}
+      accessibilityState={{ checked: value, disabled: disabled === true }}
       style={[sheetPartStyles.settingRow, disabled && sheetPartStyles.disabledCard]}
       onPress={onPress}
     >

@@ -463,6 +463,7 @@ describe('FarmGame UI flow', () => {
   beforeEach(() => {
     jest.useFakeTimers();
     jest.setSystemTime(NOW);
+    Dimensions.set({ window: { ...Dimensions.get('window'), fontScale: 1 } });
     mockPersistence.readPersistedGameState.mockReset();
     mockPersistence.writePersistedGameState.mockReset();
     mockPersistence.writePersistedGameState.mockResolvedValue(undefined);
@@ -964,7 +965,7 @@ describe('FarmGame UI flow', () => {
     expect(headerTopStyle.justifyContent).toBe('flex-start');
     expect(headerTopStyle.justifyContent).not.toBe('space-between');
     // 핵심 행은 줄바꿈(wrap)으로 넘치지 않는다.
-    expect(headerTopStyle.flexWrap).not.toBe('wrap');
+    expect(headerTopStyle.flexWrap).toBe(Dimensions.get('window').fontScale >= 1.3 ? 'wrap' : undefined);
     // 제거한 mobileTitleGroup fallback 없이 title-group이 기본 flex 레이아웃을 유지한다.
     const titleGroupStyle = StyleSheet.flatten(screen.getByTestId('title-group').props.style);
     expect(titleGroupStyle.flex).toBe(1);
@@ -1344,7 +1345,7 @@ describe('FarmGame UI flow', () => {
 
       expect(screen.getAllByTestId('farm-batch-action-row')).toHaveLength(1);
       expect(StyleSheet.flatten(actionRow.props.style)).toEqual(
-        expect.objectContaining({ flexDirection: 'row', flexWrap: 'nowrap' })
+        expect.objectContaining({ flexDirection: Dimensions.get('window').fontScale >= 1.3 ? 'column' : 'row', flexWrap: 'nowrap' })
       );
       for (const button of [harvestButton, replantButton, fertilizerButton]) {
         expect(StyleSheet.flatten(button.props.style)).toEqual(
@@ -3714,7 +3715,7 @@ describe('FarmGame UI flow', () => {
     const screen = await renderGame(null, {}, { locale: 'en-US' });
 
     await waitFor(() => expect(screen.getByText('Happy Farm')).toBeTruthy());
-    expect(screen.getByText(/About /)).toBeTruthy();
+    expect(screen.getByText(/Potential /)).toBeTruthy();
     expect(screen.getAllByText('Empty')).toHaveLength(6);
     expect(screen.getByText('Carrot')).toBeTruthy();
 
@@ -3732,14 +3733,14 @@ describe('FarmGame UI flow', () => {
     const screen = await renderGame(null, { preferredLocale: 'en-US' }, null);
 
     await waitFor(() => expect(screen.getByText('Happy Farm')).toBeTruthy());
-    expect(screen.getByText(/About /)).toBeTruthy();
+    expect(screen.getByText(/Potential /)).toBeTruthy();
   });
 
   test('uses the preferred locale when legacy settings do not include a locale', async () => {
     const screen = await renderGame(null, { preferredLocale: 'en-US' }, { soundEffectsEnabled: false });
 
     await waitFor(() => expect(screen.getByText('Happy Farm')).toBeTruthy());
-    expect(screen.getByText(/About /)).toBeTruthy();
+    expect(screen.getByText(/Potential /)).toBeTruthy();
   });
 
   test('renders a late-game save without overflowing critical one-line UI text', async () => {
@@ -3749,7 +3750,7 @@ describe('FarmGame UI flow', () => {
 
     await waitFor(() => expect(screen.getByText(lateMoney)).toBeTruthy());
 
-    expect(screen.getByText(lateMoney).props.numberOfLines).toBe(1);
+    expect(screen.getByText(lateMoney).props.numberOfLines).toBeUndefined();
     expect(screen.getAllByText('GET')).toHaveLength(MAX_PLOTS);
     expect(screen.getByText('전설 구역')).toBeTruthy();
 
@@ -4620,6 +4621,33 @@ describe('FarmGame UI flow', () => {
     await waitFor(() => expect(screen.queryByText('즉시 성장')).toBeNull());
     await waitFor(() => expect(screen.getByText('GET')).toBeTruthy());
   }, 30_000);
+
+  test('#575 열린 성장 시트는 완료 뒤 광고 없이 수확으로 전환한다', async () => {
+    const rewardedAd = createReadyRewardedAd();
+    const screen = await renderGame(createGrowingCropState(), { useRewardedAd: () => rewardedAd });
+    fireEvent.press(screen.getByText('당근'));
+    fireEvent.press(screen.getByText('🌱'));
+    const oldAdAction = screen.UNSAFE_root.findAll((node) => node.props.testID === 'growth-ad-action' && typeof node.props.onPress === 'function')[0]!.props.onPress;
+    await act(async () => { jest.advanceTimersByTime(120_000); });
+    expect(screen.queryByTestId('growth-ad-action')).toBeNull();
+    expect(screen.queryByTestId('fertilizer-action')).toBeNull();
+    expect(screen.getByTestId('growth-harvest-action')).toBeTruthy();
+    await act(async () => { await oldAdAction(); });
+    expect(rewardedAd.showAd).not.toHaveBeenCalled();
+    fireEvent.press(screen.getByTestId('growth-harvest-action'));
+    expect(screen.queryByTestId('growth-harvest-action')).toBeNull();
+    await act(async () => { jest.advanceTimersByTime(1000); });
+    expect(getLatestPersistedState().harvestCounts.wheat).toBe(1);
+  });
+
+  test('#575 부족 골드는 부족액과 살 수 있는 씨앗을 안내한다', async () => {
+    const screen = await renderGame({ ...createInitialState(), gold: 115 });
+    fireEvent.press(screen.getByTestId('seed-tool-sweet_potato'));
+    fireEvent.press(screen.getAllByText('빈 밭')[0]!);
+    expect(screen.getByText(/20G.*당근/)).toBeTruthy();
+    expect(screen.getByTestId('seed-tool-sweet_potato').props.accessibilityState.selected).toBe(true);
+    expect(screen.getByText('115G')).toBeTruthy();
+  });
 
   describe('crop-ready analytics batching', () => {
     test('flushes one summary per crop bucket after the rolling window', async () => {

@@ -1440,7 +1440,7 @@ describe('WheelSheet', () => {
     );
   }
 
-  test('WHEEL_SLOTS 6종이 아이콘+보상 골드와 함께 항상 표시된다', () => {
+  test('WHEEL_SLOTS 8종이 아이콘+보상 골드와 함께 항상 표시된다', () => {
     const state = createInitialState();
     const screen = renderWheel(state, jest.fn(), jest.fn());
     for (const slot of WHEEL_SLOTS) {
@@ -1660,16 +1660,25 @@ describe('WheelSheet', () => {
     expect(screen.getByText(messages.wheelRewardRpToast(formatMoney(42, LOCALE)))).toBeTruthy();
   });
 
-  test('릴은 한 줄 고정(nowrap)이라 줄바꿈으로 강조 인덱스가 어긋나지 않는다', () => {
-    // 좁은 화면에서 셀이 줄바꿈되면 감속 하이라이트가 멈추는 셀의 시각 위치가 당첨
-    // 슬롯과 어긋난다. nowrap + 균등 flex 분배 계약을 스타일 회귀로 고정한다.
-    const screen = renderWheel(createInitialState(), jest.fn(), jest.fn());
-    const row = StyleSheet.flatten(screen.getByTestId('wheel-reel').props.style);
-    expect(row.flexWrap).toBe('nowrap');
-    const cell = StyleSheet.flatten(screen.getByTestId(`wheel-slot-${WHEEL_SLOTS[0]!.key}`).props.style);
-    expect(cell.flexBasis).toBe(0);
-    expect(cell.flexShrink).toBe(1);
-    expect(cell.minWidth).toBe(0);
+  test.each(WHEEL_SLOTS)('#575 줄바꿈된 릴에서도 $key 당첨 슬롯과 보상을 유지한다', (winner) => {
+    const state = createInitialState();
+    const reward = getWheelSlotReward(winner, getRewardedGoldAmount(state));
+    const onSpin = jest.fn(() => reward);
+    const onRevealed = jest.fn();
+    const screen = renderWheel(state, onSpin, onRevealed);
+    const keys = () => screen.getAllByTestId(/^wheel-slot-/).map((cell) => cell.props.testID);
+    const originalOrder = WHEEL_SLOTS.map((slot) => `wheel-slot-${slot.key}`);
+    expect(keys()).toEqual(originalOrder);
+    fireEvent.press(screen.getByText(messages.wheelSpinAction));
+    act(() => { jest.advanceTimersByTime(SPIN_SETTLE_MS); });
+    expect(onSpin).toHaveBeenCalledTimes(1);
+    expect(onRevealed).toHaveBeenCalledTimes(1);
+    expect(onRevealed).toHaveBeenCalledWith(reward);
+    expect(keys()).toEqual(originalOrder);
+    const highlighted = screen.getAllByTestId(/^wheel-slot-/).filter(
+      (cell) => StyleSheet.flatten(cell.props.style).backgroundColor === '#fff7e6'
+    );
+    expect(highlighted.map((cell) => cell.props.testID)).toEqual([`wheel-slot-${winner.key}`]);
   });
 
   test('시계 역전(미래 lastFreeSpinAt) 시에도 카운트다운은 24시간 이하로 표시되고 버튼이 없다', () => {
