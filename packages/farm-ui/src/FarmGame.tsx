@@ -1984,7 +1984,7 @@ function FarmGameBody({
             });
           }
           const first = effect.rankUps[0];
-          if (first != null) {
+          if (first != null && !prioritizeRewardGuide) {
             const crop = getCrop(first.cropKey);
             showMasteryRankUpCelebration({
               cropIcon: crop.icon,
@@ -2299,7 +2299,7 @@ function FarmGameBody({
           goldFormatted: formatMoney(event.goldGained, locale),
         });
       }
-      if (event.newMasteryRank != null) {
+      if (event.newMasteryRank != null && !prioritizeRewardGuide) {
         const crop = getCrop(event.cropKey);
         showMasteryRankUpCelebration({
           cropIcon: crop.icon,
@@ -6423,7 +6423,7 @@ function FarmGameBody({
         bottomInset={bottomSafeInset}
       />
 
-      {harvestCombo >= 2 ? (
+      {harvestCombo >= 2 && onboardingStep !== 'reward' ? (
         <View pointerEvents="none" style={styles.comboOverlay}>
           <ComboDisplay count={harvestCombo} messages={messages} />
         </View>

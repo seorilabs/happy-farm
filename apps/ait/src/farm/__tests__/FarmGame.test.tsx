@@ -2979,6 +2979,30 @@ describe('FarmGame UI flow', () => {
       expect(track.mock.calls.filter(([event]) => event === 'onboarding_complete')).toHaveLength(1);
     });
 
+    test('keeps the reward guide in front when the first batch also earns mastery', async () => {
+      const state = createInitialState();
+      state.unlockedPlotCount = 10;
+      state.dailyBonusState = { lastClaimedAt: NOW, streak: 1 };
+      state.plots = createEmptyPlots().map((plot) => plot.id < 10
+        ? { ...plot, state: 2 as const, cropType: 'carrot' as const, startTime: NOW - 10_000 }
+        : plot);
+      const track = jest.fn();
+      const screen = await renderOnboardingGame(state, { analytics: createFarmAnalytics(track) });
+      fireEvent.press(screen.getByLabelText('🧺 모두 수확 10'));
+      await waitFor(() => expect(screen.getByTestId('onboarding-reward-confirm')).toBeTruthy());
+      expect(screen.queryByText(`⚡ ${messages.comboLabel(10)}`)).toBeNull();
+      expect(screen.queryByTestId('mastery-rank-up-overlay')).toBeNull();
+      expect(screen.queryByTestId('first-harvest-overlay')).toBeNull();
+      const saved = getLatestPersistedState();
+      expect(saved.harvestCounts.carrot).toBe(10);
+      expect(saved.gold).toBe(state.gold + CROPS.carrot!.sell * 10);
+      fireEvent.press(screen.getByTestId('onboarding-reward-confirm'));
+      await waitFor(() => expect(getLatestPersistedState().onboardingCompleted).toBe(true));
+      expect(getLatestPersistedState().gold).toBe(saved.gold);
+      expect(track.mock.calls.filter(([event]) => event === 'first_meaningful_harvest')).toHaveLength(1);
+      expect(track.mock.calls.filter(([event]) => event === 'onboarding_complete')).toHaveLength(1);
+    });
+
     test('guides a brand-new player from the auto-planted harvest through reward without a competing sheet', async () => {
       const track = jest.fn();
       const notifications: FarmGameNotifications = {
