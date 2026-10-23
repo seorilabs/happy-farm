@@ -155,7 +155,7 @@ describe('renderDriftTable', () => {
     expect(table).toContain('AIT (WEB)');
     expect(table).toContain('[v1.7.0](https://example.com/run/1)');
     expect(table).toContain('⚠️ 드리프트');
-    expect(table).toContain('GH Actions 밖');
+    expect(table).toContain('확인 불가');
   });
 });
 

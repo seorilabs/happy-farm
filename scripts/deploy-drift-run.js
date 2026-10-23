@@ -7,6 +7,8 @@
 // github-script 가 require 로 로드하므로 CommonJS 로 둔다.
 
 const path = require('path');
+const fs = require('fs');
+const { lookupAppStoreVersion, appStoreLookupUrl, isVersionAhead, normalizeVersion } = require('./app-store-lookup');
 
 // 채널별 배포 잡 이름 매칭(단독 워크플로우 파일 + deploy-all 내 채널 잡).
 const CHANNELS = [
@@ -30,9 +32,10 @@ const CHANNELS = [
  * @param {any} ctx.core    actions/github-script core
  * @param {any} ctx.exec    actions/github-script exec
  * @param {typeof import('./deploy-drift')} [ctx.drift] 순수 로직(테스트 주입용, 기본은 require)
+ * @param {NonNullable<Parameters<typeof lookupAppStoreVersion>[1]>['fetchImpl']} [ctx.fetchImpl] 공개 조회 경계
  * @param {() => number} [ctx.now] 점검 시각(ms), 한 실행에서 같은 기준을 사용
  */
-async function run({ github, context, core, exec, drift, now = Date.now }) {
+async function run({ github, context, core, exec, drift, fetchImpl, now = Date.now }) {
   const driftLib =
     drift ?? require(path.resolve(process.env.GITHUB_WORKSPACE || process.cwd(), 'scripts/deploy-drift.js'));
 
@@ -163,28 +166,48 @@ async function run({ github, context, core, exec, drift, now = Date.now }) {
 
   const channelRows = await Promise.all(CHANNELS.map((c) => resolveChannel(c)));
 
-  // iOS는 Xcode Cloud(GH Actions 밖)라 판정 제외, 표에만 명시(오탐 방지).
+  let bundleId;
+  let appStore = null;
+  try {
+    const configPath = path.resolve(process.env.GITHUB_WORKSPACE || process.cwd(), 'app-store/app-store.config.json');
+    ({ bundleId } = JSON.parse(fs.readFileSync(configPath, 'utf8')));
+    appStore = await lookupAppStoreVersion(bundleId, { fetchImpl });
+  } catch {
+    // 설정과 공개 조회 실패는 최신으로 바꾸지 않고 확인 불가로 남긴다.
+  }
+  const publicTag = appStore ? `v${appStore.version}` : null;
+  const comparable = publicTag != null && sortedTags.includes(publicTag);
+  const iosNote = !appStore ? 'App Store 공개 버전 조회 실패 또는 유효한 결과 없음'
+    : comparable ? undefined : isVersionAhead(appStore.version, latestTag)
+      ? '공개 버전이 최신 태그보다 앞서 비교할 수 없음' : '공개 버전에 대응하는 태그 없음';
   const iosRow = driftLib.buildChannelRow({
     channel: 'iOS (App Store)',
     run: null,
-    deployedTag: null,
+    deployedTag: publicTag,
     referenceMs,
     sortedTagsDesc: sortedTags,
     latestTag,
-    external: true,
-    note: 'Xcode Cloud 경로 — GH Actions 밖',
+    external: !comparable,
+    note: iosNote,
+    publicVersion: appStore?.version,
+    releasedAt: appStore?.releasedAt,
+    sourceUrl: appStore ? appStoreLookupUrl(bundleId) : undefined,
   });
 
   const rows = [...channelRows, iosRow];
   const table = driftLib.renderDriftTable(latestTag, rows, releaseLag);
-  const driftedChannels = channelRows.filter((r) => r.eval.drift);
+  const driftedChannels = rows.filter((r) => r.eval.drift);
 
   // 채널별 수집·비교 결과 요약(테스트/후속 처리에서 채널→배포태그·뒤처짐을 확인).
-  const channels = channelRows.map((r) => ({
+  const channels = rows.map((r) => ({
     channel: r.channel,
     deployedTag: r.deployedTag,
     gap: r.eval.gap,
     drift: r.eval.drift,
+    external: r.eval.external,
+    publicVersion: r.publicVersion,
+    releasedAt: r.releasedAt,
+    sourceUrl: r.sourceUrl,
   }));
 
   // --- 3) step summary 출력 ------------------------------------------
@@ -194,7 +217,11 @@ async function run({ github, context, core, exec, drift, now = Date.now }) {
   }
   if (releaseLag.lag) core.summary.addRaw('\n\n⚠️ 릴리스 태그 발행 지연을 감지했습니다.', true);
   if (driftedChannels.length === 0 && !releaseLag.lag) {
-    core.summary.addRaw(releaseLag.unknown ? '\n\n채널 드리프트 없음, 릴리스 지연은 확인 불가입니다.' : '\n\n채널이 최신 릴리스 태그를 따라가고 있으며 태그 발행 지연도 없습니다.', true);
+    core.summary.addRaw(rows.some((row) => row.eval.external)
+      ? '\n\n비교 가능한 채널은 드리프트가 없으며 일부 채널은 확인 불가입니다.'
+      : releaseLag.unknown
+        ? '\n\n채널 드리프트 없음, 릴리스 지연은 확인 불가입니다.'
+        : '\n\n채널이 최신 릴리스 태그를 따라가고 있으며 태그 발행 지연도 없습니다.', true);
   }
   await core.summary.write();
 

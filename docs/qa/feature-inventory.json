@@ -253,7 +253,10 @@
         "scripts/deploy-drift.js",
         "scripts/deploy-drift-run.js",
         "scripts/__tests__/deploy-drift*.test.ts",
-        ".github/workflows/deploy-drift-check.yml"
+        ".github/workflows/deploy-drift-check.yml",
+        "scripts/app-store-lookup.js",
+        "scripts/__tests__/app-store-lookup.test.ts",
+        "app-store/app-store.config.json"
       ],
       "runtimeKind": "service"
     }
