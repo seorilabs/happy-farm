@@ -15,6 +15,11 @@ jest.mock('@react-native-async-storage/async-storage', () => ({
   setItem: jest.fn(async () => undefined),
 }));
 
+jest.mock('react-native/Libraries/Settings/Settings', () => ({
+  __esModule: true,
+  default: { get: jest.fn(), set: jest.fn() },
+}));
+
 jest.mock('@seorilabs/platform-sdk', () => {
   const platform = {
     events: {
@@ -49,7 +54,7 @@ jest.mock('../firebase/auth', () => ({
   getMobileFirebaseIdToken: jest.fn(() => Promise.resolve('firebase-id-token')),
 }));
 
-import { Platform } from 'react-native';
+import { Platform, Settings } from 'react-native';
 import { PLATFORM_EVENT_ALLOWLIST, RELEASE_INFO } from '../../../../packages/farm-core/src';
 import {
   flushMobilePlatformEvents,
@@ -73,6 +78,18 @@ const mockCreatePlatform = platformSdkMock.createPlatform;
 const mockPlatform = mockCreatePlatform.mock.results[0]?.value;
 
 describe('Mobile Platform events', () => {
+  test('이벤트 OS 언어는 저장된 UI 언어로 요청한 config locale와 별도로 유지한다', async () => {
+    const os = jest.replaceProperty(Platform, 'OS', 'ios');
+    const setting = jest.spyOn(Settings, 'get').mockImplementation((key: string) => key === 'AppleLanguages' ? ['ko-KR'] : undefined);
+    try {
+      await mobileUpdateGate.load('en-US');
+      expect(mockCreatePlatform.mock.calls[0]?.[0]?.eventContext?.().locale).toBe('ko-KR');
+      expect(mockPlatform.config.fetch).toHaveBeenLastCalledWith(expect.objectContaining({ locale: 'en-US' }));
+    } finally {
+      setting.mockRestore();
+      os.restore();
+    }
+  });
   test('설정 조회와 노출 이력 판단을 실제 SDK 계약에 위임하고 빈 메시지는 현지화용으로 남긴다', async () => {
     const state = await mobileUpdateGate.load('en-US');
     expect(mockPlatform.config.fetch).toHaveBeenCalledWith({ appVersion: RELEASE_INFO.versionName, platform: Platform.OS === 'ios' ? 'ios' : 'android', locale: 'en-US' });

@@ -6,7 +6,6 @@ import {
   FarmGame,
   FarmStartup,
   FarmUpdateGate,
-  detectRuntimeLocale,
   type FarmUpdateNotice,
 } from '../../packages/farm-ui/src';
 import { RELEASE_INFO, type SupportedLocale } from '../../packages/farm-core/src';
@@ -29,6 +28,7 @@ import {
   registerHarvestNotificationOpenTracking,
 } from './src/notifications/harvestNotifications';
 import { mobileFarmPersistence } from './src/storage/farmPersistence';
+import { detectMobileRuntimeLocale } from './src/locale';
 import {
   ensureMobilePlatformSession,
   handleMobilePlatformAppStateChange,
@@ -45,7 +45,7 @@ function App() {
   const farmAudio = useMobileFarmAudio();
   const [adPrivacyOptionsRequired, setAdPrivacyOptionsRequired] = useState(false);
   const [isFarmStarted, setIsFarmStarted] = useState(false);
-  const [gateLocale, setGateLocale] = useState<SupportedLocale>(detectRuntimeLocale);
+  const [gateLocale, setGateLocale] = useState<SupportedLocale>(detectMobileRuntimeLocale);
   const [gateReady, setGateReady] = useState(false);
   const handleSettingsReady = useCallback((locale: SupportedLocale) => { setGateLocale(locale); setGateReady(true); }, []);
 
@@ -105,7 +105,7 @@ function App() {
       {(updateGate) => (
       <FarmStartup
         persistence={mobileFarmPersistence}
-        preferredLocale={detectRuntimeLocale()}
+        preferredLocale={detectMobileRuntimeLocale()}
         art={mobileTitleArt}
         onStart={() => setIsFarmStarted(true)}
         onSettingsReady={handleSettingsReady}
@@ -122,7 +122,7 @@ function App() {
             notifications={mobileHarvestNotifications}
             persistence={mobileFarmPersistence}
             privacySettings={shouldShowAdInfoSettings(Platform.OS) ? privacySettings : undefined}
-            preferredLocale={detectRuntimeLocale()}
+            preferredLocale={detectMobileRuntimeLocale()}
             // 세 지면 모두 연다. 프로덕션 전면 ad unit 이 아직 비어 있어
             // getInterstitialAdUnitId 가 null 을 돌려주는 동안에는 컨트롤러가
             // 미지원으로 동작해 아무것도 뜨지 않는다. 중앙 원장에 단위가 등록되고
