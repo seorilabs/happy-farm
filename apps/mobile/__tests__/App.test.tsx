@@ -3,6 +3,7 @@
  */
 
 import React from 'react';
+import { Platform } from 'react-native';
 import ReactTestRenderer from 'react-test-renderer';
 import {
   AdEventType,
@@ -684,4 +685,188 @@ test('AC-16 waits for an opened interstitial to close even past the show timeout
   await expect(resultPromise).resolves.toEqual({ status: 'dismissed' });
 
   await ReactTestRenderer.act(async () => { renderer?.unmount(); });
+});
+
+describe('Android rewarded event ordering (#479)', () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+    jest.replaceProperty(Platform, 'OS', 'android');
+  });
+  afterEach(() => jest.restoreAllMocks());
+
+  async function loadedAdapter() {
+    const adapter = createPlatformAdMobAdapter('android-rewarded');
+    const loading = adapter.load({ customData: 'claim', userId: 'player' });
+    for (let index = 0; index < 10; index += 1) await Promise.resolve();
+    const ad = getLatestRewardedAdMock();
+    const loadEvent = getRewardedAdEventListener(ad);
+    loadEvent({ type: RewardedAdEventType.LOADED });
+    await expect(loading).resolves.toBe(true);
+    return { adapter, ad };
+  }
+  function showListener(ad: ReturnType<typeof getLatestRewardedAdMock>) {
+    return ad.addAdEventsListener.mock.calls[1]?.[0] as (event: { type: string; payload?: unknown }) => void;
+  }
+
+  test.each([0, 499])('accepts reward %d ms after close, preserving close duration', async (delay) => {
+    const { adapter, ad } = await loadedAdapter();
+    const shown = adapter.show();
+    const emit = showListener(ad);
+    emit({ type: AdEventType.OPENED });
+    jest.advanceTimersByTime(2_000);
+    emit({ type: AdEventType.CLOSED });
+    jest.advanceTimersByTime(delay);
+    emit({ type: RewardedAdEventType.EARNED_REWARD, payload: { type: 'coin', amount: 1 } });
+    await expect(shown).resolves.toEqual({ status: 'earned', reward: { type: 'coin', amount: 1 }, durationMs: 2_000 });
+    emit({ type: AdEventType.CLOSED });
+    emit({ type: RewardedAdEventType.EARNED_REWARD, payload: { type: 'coin', amount: 99 } });
+    expect(ad.show).toHaveBeenCalledTimes(1);
+  });
+
+  test('dismisses at 500 ms, ignores late reward and duplicate close without extending grace', async () => {
+    const { adapter, ad } = await loadedAdapter();
+    const shown = adapter.show();
+    const emit = showListener(ad);
+    let settled = false;
+    void shown.then(() => { settled = true; });
+    jest.advanceTimersByTime(1_000);
+    emit({ type: AdEventType.CLOSED });
+    jest.advanceTimersByTime(499);
+    emit({ type: AdEventType.CLOSED });
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    jest.advanceTimersByTime(1);
+    emit({ type: RewardedAdEventType.EARNED_REWARD, payload: { type: 'coin', amount: 1 } });
+    await expect(shown).resolves.toEqual({ status: 'dismissed', durationMs: 1_000 });
+    await expect(adapter.show()).resolves.toEqual({ status: 'notReady' });
+  });
+
+  test('reward before close still waits, opened ads have no total show deadline', async () => {
+    const { adapter, ad } = await loadedAdapter();
+    const shown = adapter.show();
+    const emit = showListener(ad);
+    let settled = false;
+    void shown.then(() => { settled = true; });
+    emit({ type: AdEventType.OPENED });
+    emit({ type: RewardedAdEventType.EARNED_REWARD, payload: { type: 'coin', amount: 1 } });
+    jest.advanceTimersByTime(MOBILE_REWARDED_AD_SHOW_TIMEOUT_MS * 2);
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    emit({ type: AdEventType.CLOSED });
+    await expect(shown).resolves.toMatchObject({ status: 'earned', durationMs: MOBILE_REWARDED_AD_SHOW_TIMEOUT_MS * 2 });
+  });
+
+  test('cannot show until SDK loaded or while already showing', async () => {
+    const adapter = createPlatformAdMobAdapter('android-rewarded');
+    const loading = adapter.load({ customData: 'claim', userId: 'player' });
+    for (let index = 0; index < 10; index += 1) await Promise.resolve();
+    const ad = getLatestRewardedAdMock();
+    await expect(adapter.show()).resolves.toEqual({ status: 'notReady' });
+    expect(ad.show).not.toHaveBeenCalled();
+    getRewardedAdEventListener(ad)({ type: RewardedAdEventType.LOADED });
+    await loading;
+    const shown = adapter.show();
+    await expect(adapter.show()).resolves.toEqual({ status: 'notReady' });
+    showListener(ad)({ type: AdEventType.ERROR, payload: { code: 'googleMobileAds/no-fill', message: 'private raw message' } });
+    await expect(shown).resolves.toEqual({ status: 'failed', error: 'googleMobileAds/no-fill', sdkCode: 'googleMobileAds/no-fill' });
+  });
+
+  test('show rejection drops raw messages and clears listeners', async () => {
+    const { adapter, ad } = await loadedAdapter();
+    ad.show.mockRejectedValueOnce({ code: 'googleMobileAds/network-error', message: 'private raw message' });
+    await expect(adapter.show()).resolves.toEqual({ status: 'failed', error: 'googleMobileAds/network-error', sdkCode: 'googleMobileAds/network-error' });
+    await expect(adapter.show()).resolves.toEqual({ status: 'notReady' });
+  });
+});
+
+test('Android 개발 경로도 닫힘 유예 뒤 보상, 다음 요청과 unmount를 처리한다', async () => {
+  jest.useFakeTimers();
+  jest.replaceProperty(Platform, 'OS', 'android');
+  let controller!: MobileRewardedAdController;
+  let renderer!: ReactTestRenderer.ReactTestRenderer;
+  function Harness() { controller = useAdMobRewardedAd(); return null; }
+  try {
+    await ReactTestRenderer.act(async () => { renderer = ReactTestRenderer.create(<Harness />); });
+    const emitA = getRewardedAdEventListener(getLatestRewardedAdMock());
+    await ReactTestRenderer.act(async () => { emitA({ type: RewardedAdEventType.LOADED }); });
+    let shown!: Promise<Awaited<ReturnType<MobileRewardedAdController['showAd']>>>;
+    ReactTestRenderer.act(() => { shown = controller.showAd(); });
+    await ReactTestRenderer.act(async () => {
+      jest.advanceTimersByTime(1_000);
+      emitA({ type: AdEventType.CLOSED });
+      jest.advanceTimersByTime(499);
+      emitA({ type: RewardedAdEventType.EARNED_REWARD, payload: { type: 'coin', amount: 1 } });
+    });
+    await expect(shown).resolves.toMatchObject({ status: 'earned', durationMs: 1_000 });
+    const emitB = getRewardedAdEventListener(getLatestRewardedAdMock());
+    await ReactTestRenderer.act(async () => { emitB({ type: RewardedAdEventType.LOADED }); });
+    ReactTestRenderer.act(() => { shown = controller.showAd(); });
+    await ReactTestRenderer.act(async () => {
+      emitB({ type: AdEventType.CLOSED });
+      emitA({ type: RewardedAdEventType.EARNED_REWARD, payload: { type: 'coin', amount: 99 } });
+      renderer.unmount();
+    });
+    await expect(shown).resolves.toMatchObject({ status: 'dismissed' });
+    jest.advanceTimersByTime(500);
+    expect(jest.getTimerCount()).toBe(0);
+  } finally { jest.restoreAllMocks(); }
+});
+
+test('production은 claim과 load 중 CTA를 막고 종료 후 재시도를 허용한다', async () => {
+  jest.useFakeTimers();
+  jest.replaceProperty(globalThis as typeof globalThis & { __DEV__: boolean }, '__DEV__', false);
+  const platform = jest.requireMock('../src/platformEvents');
+  platform.ensureMobilePlatformSession.mockResolvedValue(true);
+  platform.mobilePlatformAds.policy.mockResolvedValue({ appUsesAds: true, adsEnabled: true });
+  let resolveClaim!: (claim: unknown) => void;
+  platform.mobilePlatformAds.createClaim.mockImplementation(() => new Promise((resolve) => { resolveClaim = resolve; }));
+  let controller!: MobileRewardedAdController;
+  let renderer!: ReactTestRenderer.ReactTestRenderer;
+  function Harness() { controller = useAdMobRewardedAd(); return null; }
+  try {
+    await ReactTestRenderer.act(async () => { renderer = ReactTestRenderer.create(<Harness />); });
+    expect(controller.isAdReady).toBe(true);
+    expect(RewardedAd.createForAdRequest).not.toHaveBeenCalled();
+    let shown!: ReturnType<MobileRewardedAdController['showAd']>;
+    await ReactTestRenderer.act(async () => { shown = controller.showAd({ type: 'rewardedGold', placement: 'shop_gold_reward' }); });
+    expect(controller.isAdReady).toBe(false);
+    await expect(controller.showAd({ type: 'rewardedGold', placement: 'shop_gold_reward' })).resolves.toEqual({ status: 'notReady' });
+    await ReactTestRenderer.act(async () => {
+      resolveClaim({ claimId: 'claim', admobSsv: { customData: 'claim', userId: 'player' } });
+    });
+    const ad = getLatestRewardedAdMock();
+    expect(ad.show).not.toHaveBeenCalled();
+    await ReactTestRenderer.act(async () => {
+      getRewardedAdEventListener(ad)({ type: AdEventType.ERROR });
+      await shown;
+    });
+    await expect(shown).resolves.toEqual({ status: 'notReady' });
+    expect(ad.show).not.toHaveBeenCalled();
+    expect(controller.isAdReady).toBe(true);
+    await ReactTestRenderer.act(async () => { renderer.unmount(); });
+  } finally {
+    jest.restoreAllMocks();
+    platform.ensureMobilePlatformSession.mockResolvedValue(false);
+  }
+});
+
+test('adapter dispose는 닫힘 대기 타이머와 SDK listener를 해제한다', async () => {
+  jest.useFakeTimers();
+  jest.replaceProperty(Platform, 'OS', 'android');
+  try {
+    const adapter = createPlatformAdMobAdapter('android-rewarded');
+    const loading = adapter.load({ customData: 'claim', userId: 'player' });
+    for (let index = 0; index < 10; index += 1) await Promise.resolve();
+    const ad = getLatestRewardedAdMock();
+    getRewardedAdEventListener(ad)({ type: RewardedAdEventType.LOADED });
+    await loading;
+    const shown = adapter.show();
+    const emit = ad.addAdEventsListener.mock.calls[1][0];
+    emit({ type: AdEventType.CLOSED });
+    adapter.dispose();
+    await expect(shown).resolves.toMatchObject({ status: 'dismissed' });
+    expect(jest.getTimerCount()).toBe(0);
+    emit({ type: RewardedAdEventType.EARNED_REWARD, payload: { type: 'coin', amount: 99 } });
+    await expect(adapter.show()).resolves.toEqual({ status: 'notReady' });
+  } finally { jest.restoreAllMocks(); }
 });

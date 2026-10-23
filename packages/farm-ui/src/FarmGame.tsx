@@ -4882,8 +4882,15 @@ function FarmGameBody({
       }
 
       const terminalMetadata = { ...baseMetadata, retryCount };
+      if (result.status === 'earned' && result.claimId != null && gameStateRef.current.rewardedAdClaimIds.includes(result.claimId)) {
+        // 지급 상태와 함께 저장된 ID는 재진입해도 다시 지급하지 않는다.
+        // 이전 ack만 실패했을 수 있으므로 서버 전달은 다시 시도한다.
+        try { await rewardedAd.acknowledgeReward?.(result.claimId); } catch { /* 다음 재처리에서 재시도한다. */ }
+        result = { status: 'failed', error: 'claim_already_applied' };
+      }
       if (result.status === 'earned') {
         const rewardedAt = Date.now();
+        const claimId = result.claimId;
         if (!options.keepSheetOnSuccess) {
           setActiveSheet(null);
         }
@@ -4896,6 +4903,7 @@ function FarmGameBody({
           const rewardedState = options.applyRewardState?.(state, rewardedAt) ?? state;
           const next = {
             ...rewardedState,
+            rewardedAdClaimIds: claimId == null ? rewardedState.rewardedAdClaimIds : [...rewardedState.rewardedAdClaimIds, claimId],
             adUsage: recordRewardedAdUsage(rewardedState, type, rewardedAt),
             dailyMissionState: recordAdWatchProgress(
               rewardedState.dailyMissionState,
@@ -4946,7 +4954,7 @@ function FarmGameBody({
         placement,
         reason,
         analyticsContext(attemptState),
-        { ...terminalMetadata, failureFamily: normalizeAdFailureFamily(result) }
+        { ...terminalMetadata, failureFamily: normalizeAdFailureFamily(result), durationMs: result.durationMs, sdkCode: result.sdkCode }
       );
       toast(result.status === 'dismissed' ? messages.adDismissedToast : messages.adFailedToast);
 

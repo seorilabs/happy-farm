@@ -14,7 +14,7 @@ import type {
 } from './types';
 import type { CookingDishKey, CookingGradeKey, CookingPhase } from './cooking';
 import type { RewardedAdType } from './constants';
-import { normalizeAdFailureFamily, type AdFailureFamily } from './ads';
+import { normalizeAdFailureFamily, sanitizeAdSdkCode, type AdFailureFamily } from './ads';
 
 export type AnalyticsValue = string | number | boolean;
 
@@ -182,6 +182,8 @@ export type RewardedAdAnalyticsMetadata = {
   ctaPosition?: string;
   retryCount?: number;
   failureFamily?: AdFailureFamily;
+  durationMs?: number;
+  sdkCode?: string;
 };
 
 /**
@@ -233,6 +235,9 @@ function getRewardedAdAnalyticsParams(
   if (metadata.ctaPosition != null) params.cta_position = metadata.ctaPosition;
   if (metadata.retryCount != null) params.retry_count = Math.max(0, toSafeAnalyticsInteger(metadata.retryCount));
   if (metadata.failureFamily != null) params.failure_family = metadata.failureFamily;
+  if (metadata.durationMs != null && Number.isFinite(metadata.durationMs) && metadata.durationMs >= 0) params.duration_ms = toSafeAnalyticsInteger(metadata.durationMs);
+  const sdkCode = sanitizeAdSdkCode(metadata.sdkCode);
+  if (sdkCode != null) params.sdk_code = sdkCode;
   return params;
 }
 
@@ -693,16 +698,15 @@ export function createFarmAnalytics(emit: TrackGameEvent = noopTrackGameEvent) {
       context: GameAnalyticsContext,
       metadata: RewardedAdAnalyticsMetadata = {}
     ) => {
-      track('ad_reward_failed', {
-        ad_type: type,
-        placement,
-        reason,
-        ...getRewardedAdAnalyticsParams({
-          ...metadata,
-          failureFamily: metadata.failureFamily ?? normalizeAdFailureFamily(reason),
-        }),
-        ...getRewardedAdGameAnalyticsContext(context),
+      const diagnostics = getRewardedAdAnalyticsParams({
+        ...metadata,
+        failureFamily: metadata.failureFamily ?? normalizeAdFailureFamily(reason),
       });
+      const gameContext: Record<string, AnalyticsValue> = { ...getRewardedAdGameAnalyticsContext(context) };
+      // 시장과 세션 필드 5개를 더해도 GA4 한도 25개를 지킨다. 크기 구간은 유지한다.
+      if ('duration_ms' in diagnostics) delete gameContext.gold_mantissa;
+      if ('sdk_code' in diagnostics) delete gameContext.gold;
+      track('ad_reward_failed', { ad_type: type, placement, reason, ...diagnostics, ...gameContext });
     },
 
     trackAdLimitBlocked: (

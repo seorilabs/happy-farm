@@ -34,12 +34,21 @@ export type RewardedAdReward = {
   amount: number;
 };
 
-export type RewardedAdShowResult =
+export type RewardedAdDiagnostics = { durationMs?: number; sdkCode?: string };
+
+export type RewardedAdShowResult = RewardedAdDiagnostics & (
   | { status: 'earned'; reward?: RewardedAdReward; claimId?: string }
   | { status: 'dismissed' }
   | { status: 'notReady' }
   | { status: 'unsupported' }
-  | { status: 'failed'; error?: string };
+  | { status: 'failed'; error?: string }
+);
+
+// SDK가 정의한 코드만 계측한다. 임의 message, 식별자와 SSV payload는 제외한다.
+export function sanitizeAdSdkCode(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  return /^(?:googleMobileAds\/)?(?:error-code-)?(?:app-id-missing|internal-error|invalid-ad-string|invalid-request|mediation-no-fill|network-error|no-fill|request-id-mismatch|unknown)$/.test(value) ? value : undefined;
+}
 
 export type RewardedAdRequest = {
   type: RewardedAdType;

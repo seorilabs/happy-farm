@@ -10,7 +10,7 @@ function dependencies(): PlatformRewardedAdDependencies {
       createClaim: jest.fn(async () => ({ claimId: 'cl_1', admobSsv: { customData: 'cl_1', userId: 'pu_1' } } as never)),
       claim: jest.fn(async () => ({ claimId: 'cl_1', state: 'confirmed', assurance: 'server_verified' } as never)),
     },
-    adapter: { load: jest.fn(async () => true), show: jest.fn(async () => ({ status: 'earned' as const })) },
+    adapter: { dispose: jest.fn(), load: jest.fn(async () => true), show: jest.fn(async () => ({ status: 'earned' as const })) },
     clientPlatform: 'android',
     requestId: () => 'req-1',
     wait: async () => undefined,
@@ -48,4 +48,28 @@ describe('showPlatformAdMobReward', () => {
     (deps.ads.claim as jest.Mock).mockResolvedValue({ claimId: 'cl_1', state: 'confirmed', assurance: 'client_confirmed' });
     await expect(showPlatformAdMobReward(request, deps)).resolves.toEqual({ status: 'failed', error: 'server_verification_pending' });
   });
+});
+
+test('load 실패에는 SDK show와 서버 보상 확인을 호출하지 않는다', async () => {
+  const deps = dependencies();
+  (deps.adapter.load as jest.Mock).mockResolvedValue(false);
+  await expect(showPlatformAdMobReward(request, deps)).resolves.toEqual({ status: 'notReady' });
+  expect(deps.adapter.show).not.toHaveBeenCalled();
+  expect(deps.ads.claim).not.toHaveBeenCalled();
+});
+
+test('load 중 화면이 해제되면 SDK show를 호출하지 않는다', async () => {
+  const deps = dependencies();
+  let active = true;
+  deps.isActive = () => active;
+  (deps.adapter.load as jest.Mock).mockImplementation(async () => { active = false; return true; });
+  await expect(showPlatformAdMobReward(request, deps)).resolves.toEqual({ status: 'notReady' });
+  expect(deps.adapter.show).not.toHaveBeenCalled();
+});
+
+test('SSV 미확인 결과에도 SDK 닫힘 시간 진단을 보존한다', async () => {
+  const deps = dependencies();
+  (deps.adapter.show as jest.Mock).mockResolvedValue({ status: 'earned', durationMs: 8_000 });
+  (deps.ads.claim as jest.Mock).mockResolvedValue({ state: 'pending' });
+  await expect(showPlatformAdMobReward(request, deps)).resolves.toMatchObject({ status: 'failed', error: 'server_verification_pending', durationMs: 8_000 });
 });
