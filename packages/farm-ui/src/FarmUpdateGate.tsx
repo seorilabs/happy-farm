@@ -139,7 +139,7 @@ export function FarmUpdateGate({ controller, locale, enabled, onShown, onStoreCl
 
   const node = (
       <View style={[styles.backdrop, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 16 }]}>
-        <Pressable testID="update-gate-backdrop" accessible={false} style={StyleSheet.absoluteFill} onPress={dismiss} />
+        <View testID="update-gate-backdrop" accessible={false} style={StyleSheet.absoluteFill} onStartShouldSetResponder={() => true} onResponderRelease={dismiss} />
         <View testID="update-gate-card" onLayout={() => recordPresentation(notice)} accessibilityViewIsModal style={[styles.card, { maxHeight: Math.max(100, height - insets.top - insets.bottom - 32), padding: fontScale >= 1.5 ? 12 : 20 }]}>
           <Text accessibilityRole="header" style={styles.title}>{title}</Text>
           <ScrollView testID="update-gate-message" style={styles.scroll} contentContainerStyle={styles.content}>

@@ -49,13 +49,21 @@ test.each(['required', 'maintenance'] as const)('%s 안내는 뒤로와 배경�
   fireEvent(screen.getByTestId('update-gate-modal'), 'show');
   expect(screen.queryByTestId('update-gate-later')).toBeNull();
   expect(screen.queryByTestId('update-gate-open')).toBeNull();
-  fireEvent.press(screen.getByTestId('update-gate-backdrop', { includeHiddenElements: true }));
+  fireEvent(screen.getByTestId('update-gate-backdrop', { includeHiddenElements: true }), 'responderRelease');
   fireEvent(screen.getByTestId('update-gate-modal'), 'requestClose');
   expect(screen.getByText('Blocked')).toBeTruthy();
   h.controller.load.mockResolvedValue({ kind: 'ok' });
   fireEvent.press(screen.getByTestId('update-gate-retry'));
   await waitFor(() => expect(h.controller.load).toHaveBeenCalledTimes(2));
   await waitFor(() => expect(screen.queryByText('Blocked')).toBeNull());
+});
+
+test('권장 안내는 배경 터치로 닫힌다', async () => {
+  const h = host(); render(<FarmUpdateGate {...h} locale="en-US" enabled />);
+  await screen.findByText('Server message');
+  fireEvent(screen.getByTestId('update-gate-modal'), 'show');
+  fireEvent(screen.getByTestId('update-gate-backdrop', { includeHiddenElements: true }), 'responderRelease');
+  expect(screen.queryByText('Server message')).toBeNull();
 });
 
 test('노출 이력이 억제한 권장 안내와 ok는 렌더하거나 기록하지 않는다', async () => {
