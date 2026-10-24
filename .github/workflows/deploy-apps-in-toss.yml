@@ -8,9 +8,14 @@ on:
         required: false
         type: string
       memo:
-        description: '앱인토스 배포 메모 (선택, 최대 1000자)'
+        description: 'canonical memo 뒤에 붙일 운영 메모 (선택)'
         required: false
         type: string
+      upload:
+        description: 'false면 검증과 빌드만 수행합니다.'
+        required: false
+        default: true
+        type: boolean
   workflow_call:
     inputs:
       release_tag:
@@ -18,9 +23,14 @@ on:
         required: false
         type: string
       memo:
-        description: '앱인토스 배포 메모 (선택, 최대 1000자)'
+        description: 'canonical memo 뒤에 붙일 운영 메모 (선택)'
         required: false
         type: string
+      upload:
+        description: 'false면 검증과 빌드만 수행합니다.'
+        required: false
+        default: true
+        type: boolean
     secrets:
       APPS_IN_TOSS_API_KEY:
         required: true
@@ -34,105 +44,26 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  resolve:
-    name: Bind exact release tag
-    uses: seorilabs/.github/.github/workflows/resolve-release-version.yml@main
-    with:
-      release_tag: ${{ inputs.release_tag }}
-
   deploy:
     name: AIT artifact deploy
-    needs: resolve
-    # 저장소가 public 이라 ARC(self-hosted)를 쓸 수 없다. org 러너 그룹이 모두
-    # allows_public_repositories=false 라, seorilabs-rpi-arm64 로 보내면 job 이
-    # 영원히 queued 로 남는다. 이 잡은 pnpm 빌드와 AIT 업로드뿐이라 hosted 로 충분하다.
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
-    environment: apps-in-toss
-
-    env:
+    uses: seorilabs/.github/.github/workflows/rn-deploy-ait.yml@main
+    with:
+      release_tag: ${{ inputs.release_tag }}
+      memo: ${{ inputs.memo }}
+      upload: ${{ inputs.upload }}
+      ait_dir: apps/ait
+      package_manager: pnpm
+      pnpm_version: '11.3.0'
+      node_version: '24.16.0'
+      install_command: pnpm --filter . --filter @happy-farm/ait... install --frozen-lockfile
+      build_command: |
+        node scripts/write-release-info.mjs
+        pnpm --dir apps/ait lint
+        pnpm --dir apps/ait typecheck
+        pnpm check:core
+        pnpm --dir apps/ait test
+        pnpm check:admob-analytics
+        pnpm --dir apps/ait build
+      artifact_path: apps/ait/*.ait
+    secrets:
       APPS_IN_TOSS_API_KEY: ${{ secrets.APPS_IN_TOSS_API_KEY }}
-      APPS_IN_TOSS_INPUT_MEMO: ${{ inputs.memo || '' }}
-      APPS_IN_TOSS_RELEASE_REF: ${{ needs.resolve.outputs.tag }}
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ needs.resolve.outputs.tag }}
-          fetch-depth: 0
-          fetch-tags: true
-
-      - name: Check required config
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          if [ -z "$APPS_IN_TOSS_API_KEY" ]; then
-            echo "APPS_IN_TOSS_API_KEY secret is required." >&2
-            exit 1
-          fi
-
-          if [ -z "$APPS_IN_TOSS_RELEASE_REF" ]; then
-            echo "release_tag input or release tag ref is required." >&2
-            exit 1
-          fi
-
-      - name: Setup pnpm workspace
-        uses: ./.github/actions/setup-pnpm-workspace
-        with:
-          install-command: pnpm --filter . --filter @happy-farm/ait... install --frozen-lockfile
-
-      - name: Project central release binding into runtime metadata
-        env:
-          SEORI_RELEASE_TAG: ${{ needs.resolve.outputs.tag }}
-          SEORI_RELEASE_VERSION: ${{ needs.resolve.outputs.version_name }}
-          SEORI_RELEASE_VERSION_CODE: ${{ needs.resolve.outputs.android_version_code }}
-          SEORI_RELEASE_SOURCE_SHA: ${{ needs.resolve.outputs.source_sha }}
-        run: |
-          test "$(git rev-parse HEAD)" = "$SEORI_RELEASE_SOURCE_SHA"
-          node scripts/write-release-info.mjs
-
-      - name: Lint
-        run: pnpm --dir apps/ait lint
-
-      - name: Typecheck
-        run: pnpm --dir apps/ait typecheck
-
-      - name: Test shared core
-        run: pnpm check:core
-
-      - name: Test AIT app
-        run: pnpm --dir apps/ait test
-
-      - name: Check AdMob and Analytics contract
-        run: pnpm check:admob-analytics
-
-      - name: Build AIT artifact
-        run: pnpm --dir apps/ait build
-
-      - name: Upload build artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: happy-farm-ait-v${{ needs.resolve.outputs.version_name }}-${{ needs.resolve.outputs.source_sha }}
-          if-no-files-found: error
-          retention-days: 7
-          path: 'apps/ait/*.ait'
-
-      - name: Deploy to Apps in Toss
-        shell: bash
-        env:
-          RELEASE_VERSION_NAME: ${{ needs.resolve.outputs.version_name }}
-        run: |
-          set -euo pipefail
-
-          memo="$APPS_IN_TOSS_INPUT_MEMO"
-
-          if [ -z "$memo" ]; then
-            source_sha="$(git rev-parse --short HEAD)"
-            memo="v${RELEASE_VERSION_NAME} GitHub Actions ${APPS_IN_TOSS_RELEASE_REF}@${source_sha}"
-          else
-            memo="v${RELEASE_VERSION_NAME} ${memo}"
-          fi
-
-          pnpm --dir apps/ait run deploy --api-key "$APPS_IN_TOSS_API_KEY" --memo "$memo"
