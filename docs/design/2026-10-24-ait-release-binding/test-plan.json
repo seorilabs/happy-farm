@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "level": "L1",
+  "baseline": "v1.13.0",
+  "changedFeatures": ["release-observability"],
+  "environments": ["dev"],
+  "redesign": false,
+  "foundationRerun": false,
+  "floorOverrides": [],
+  "release": null
+}
