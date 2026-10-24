@@ -257,7 +257,8 @@
         ".github/workflows/deploy-drift-check.yml",
         "scripts/app-store-lookup.js",
         "scripts/__tests__/app-store-lookup.test.ts",
-        "app-store/app-store.config.json"
+        "app-store/app-store.config.json",
+        ".github/workflows/deploy-apps-in-toss.yml"
       ],
       "runtimeKind": "service"
     }
