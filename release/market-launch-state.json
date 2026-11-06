@@ -262,7 +262,7 @@
   "markets": {
     "google_play": {
       "objective": "public_live",
-      "state": "submission",
+      "state": "release",
       "identity": {
         "applicationId": "com.seorilabs.happyfarm",
         "version": "1.13.1",
@@ -339,36 +339,46 @@
           "status": "pass",
           "evidence": [
             "https://github.com/seorilabs/happy-farm/actions/runs/42191336968",
-            "Console submission ID 35, 2026-11-06 17:57 KST, production in review; fast checks completed."
+            "Console submission ID 35, submitted 2026-11-06 17:57 KST; latest readback 출시됨."
           ],
-          "checkedAt": "2026-11-06T09:20:57.799Z",
+          "checkedAt": "2026-11-06T09:37:49.784Z",
           "blocker": null
         },
         "approval": {
-          "status": "pending",
-          "evidence": [],
-          "checkedAt": "2026-11-06T09:27:20.994Z",
+          "status": "pass",
+          "evidence": [
+            "Console submission ID 35 changed to 출시됨; managed publishing remains off."
+          ],
+          "checkedAt": "2026-11-06T09:37:49.784Z",
           "blocker": null
         },
         "release": {
-          "status": "pending",
-          "evidence": [],
-          "checkedAt": "2026-11-06T09:27:20.994Z",
+          "status": "pass",
+          "evidence": [
+            "https://play.google.com/console/u/0/developers/7593567020638200144/app/4973229988023852564/tracks/4698219900712393643/releases/28/details",
+            "Console v1.13.1 / 1001011014, Google Play에 제공됨, 100%, 178/178 countries; release displayed 2026-11-06 18:28 KST.",
+            "Publisher production completed 1001011014; 177 explicit countries plus restOfWorld unchanged. Public KR listing HTTP 200 and app name verified."
+          ],
+          "checkedAt": "2026-11-06T09:44:37.879Z",
           "blocker": null
         },
         "live_smoke": {
           "status": "pending",
-          "evidence": [],
-          "checkedAt": "2026-11-06T09:27:20.994Z",
+          "evidence": [
+            "Public version, full rollout and country scope verified; actual public-channel SDK ad reward delivery and new-version effect remain unobserved."
+          ],
+          "checkedAt": "2026-11-06T09:44:37.879Z",
           "blocker": null
         }
       },
       "providerState": {
-        "checkedAt": "2026-11-06T09:20:57.799Z",
-        "status": "IN_REVIEW",
-        "latestPublicVersionLastRead": "1.13.0",
+        "checkedAt": "2026-11-06T09:44:37.879Z",
+        "status": "PUBLIC",
+        "publicVersion": "1.13.1",
+        "publicVersionCode": "1001011014",
+        "releasedAtDisplayed": "2026-11-06 18:28 KST",
         "managedPublishing": false,
-        "nextTransition": "Provider approval then automatic 100% publication; verify public version."
+        "nextTransition": "Observe live ad/reward effect after real usage; no original-user compensation or root-cause claim."
       },
       "operationHistory": [
         "First promotion with rollout=1 rejected userFraction=1 (HTTP 400), production readback remained 1001011013.",
@@ -456,7 +466,7 @@
           "evidence": [
             "ASC review submission 2db4ea6b-6716-4f50-b4c7-a7c3cd453c90 and version both WAITING_FOR_REVIEW, exact selected build retained."
           ],
-          "checkedAt": "2026-11-06T09:20:59.466Z",
+          "checkedAt": "2026-11-06T09:37:47.514Z",
           "blocker": null
         },
         "approval": {
@@ -479,7 +489,7 @@
         }
       },
       "providerState": {
-        "checkedAt": "2026-11-06T09:20:59.466Z",
+        "checkedAt": "2026-11-06T09:37:47.514Z",
         "status": "WAITING_FOR_REVIEW",
         "publicVersion": "1.13.0",
         "nextTransition": "Apple review approval, AFTER_APPROVAL publication, storefront version readback."
@@ -605,7 +615,7 @@
     "originalIncident": "2026-11-05 10:37 KST, AIT 20261024-55; no customer identifier copied into release records.",
     "confirmed": "Development reproduction of earned-then-error result loss; AIT #598 and mobile #601 fixed.",
     "unconfirmed": "Original customer event sequence and actual cause; user-level log read 403.",
-    "effect": "New public AIT version effect not yet observed; missing GA4 AIT export is not zero."
+    "effect": "New public AIT and Google Play version effects not yet observed; missing GA4 AIT export is not zero."
   },
   "notifications": {
     "releaseOps": "failed HTTP 403; registered webhook reused; no alternative credential/channel or permission change.",

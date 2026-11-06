@@ -1,11 +1,11 @@
 # v1.13.1 광고 보상 수정과 출시 기록
 
-2026-11-06 18:23 KST 기준 앱인토스는 **공개 완료**, Google Play와 App Store는 **심사 중**이다. [출시 원장](../../../release/market-launch-state.json)은 `complete=false`, 구조 오류 0건이며 공개 승인과 운영 확인을 통과로 바꾸지 않았다.
+2026-11-06 18:44 KST 기준 앱인토스와 Google Play는 **공개 완료**, App Store는 **심사 대기**다. [출시 원장](../../../release/market-launch-state.json)은 `complete=false`, 구조 오류 0건이며 App Store 승인·공개와 운영 확인은 아직 통과하지 않았다.
 
 | 마켓 | 후보와 식별자 | 현재 확인 | 다음 gate |
 |---|---|---|---|
 | AppsInToss | `20261106-56`, deployment `01a1b001-7cbf-70c0-87bc-cd215406b775` | 18:22 KST 출시. Console 현재 공개 버전·소스·전체 번들 해시 일치 | 운영 광고 보상과 효과 관측 |
-| Google Play | `1.13.1`, `1001011014`, 제출 `35` | 내부 배포 완료, 프로덕션 전체 출시 요청 검토 중 | 승인 후 자동 공개, 공개 버전 확인 |
+| Google Play | `1.13.1`, `1001011014`, 제출 `35` | 18:28 KST 출시. Console Google Play에 제공됨·100%·178/178곳과 Publisher completed 확인 | 운영 광고 보상과 효과 관측 |
 | App Store | `1.13.1(1013001)`, 제출 `2db4ea6b-6716-4f50-b4c7-a7c3cd453c90` | VALID, 내부 TestFlight 제공, WAITING_FOR_REVIEW | 승인 후 AFTER_APPROVAL 공개, storefront 확인 |
 
 [GitHub Release](https://github.com/seorilabs/happy-farm/releases/tag/v1.13.1)의 태그 소스는 `a8fb296b20c48be3501b7879ef8a85c6cc86e034`이다. 이 기록을 추가하는 문서 커밋으로 태그를 이동하지 않는다. 기존 국가·지역과 무료·광고 지원 방식을 유지했다. Play는 177개 명시 국가와 restOfWorld(Console 178곳), App Store는 175개 지역이다.
@@ -44,8 +44,10 @@ Play 첫 승격의 rollout=1은 API가 userFraction=1을 거절했다. 기존 �
 
 원 문의의 실제 이벤트 순서는 개별 로그 조회 403 때문에 미확정이다. AIT GA4 미도착은 0건이 아니다. Console의 문의 당일 광고 요청 169건·노출 25건은 사전 로드가 섞여 있어 오류율로 해석하지 않는다. 새 버전의 운영 광고 보상과 효과는 아직 관측하지 못했다.
 
-등록된 release-ops 웹훅은 HTTP 403으로 알림 전송에 실패했다. 다른 키·권한·채널을 사용하지 않았고 반복 모니터를 설정하지 않았다. Google Play·App Store 승인·공개와 live 확인이 남았다. 기존 공개 승인은 그 끝 지점까지 유지된다.
+등록된 release-ops 웹훅은 HTTP 403으로 알림 전송에 실패했다. 다른 키·권한·채널을 사용하지 않았고 반복 모니터를 설정하지 않았다. App Store 승인·공개와 세 마켓의 live 확인이 남았다. 기존 공개 승인은 그 끝 지점까지 유지된다.
 
 QA 원본: `/Volumes/Data/Backup/agent-artifacts/happy-farm/2026-11-06/a8fb296b20c48be3501b7879ef8a85c6cc86e034/release-v1.13.1-qa-083400Z-4e9239e1` (`manifest.json`, 14개 파일 직접 검증).
 
 운영 원본: `/Volumes/Data/Backup/agent-artifacts/happy-farm/2026-11-06/a8fb296b20c48be3501b7879ef8a85c6cc86e034/release-v1.13.1-ops-093129Z-81a7e31c`. 직접 스트림 복사 후 366개 파일과 기존 QA 14개 참조의 크기·SHA-256을 검증했다. manifest SHA-256: `fe0b23766624a9217fc60d1ea7206a2c0b0de96636244cc0f60e6f7261129ed0`.
+
+그 뒤 확인한 Google Play 공개·App Store 심사 상태와 원장 검사 원본 5개는 같은 운영 경로의 `public-readback-0944Z`에 별도 보존했다. manifest SHA-256: `be2ced54d45000b37e0b63857e8fda00df04656fe4fb10912191097b9f2db36b`. 앞선 원본은 덮어쓰지 않았다.
