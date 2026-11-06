@@ -3,7 +3,7 @@
  */
 
 import React from 'react';
-import { Platform, Settings } from 'react-native';
+import { Platform, Settings, Text } from 'react-native';
 import ReactTestRenderer from 'react-test-renderer';
 import {
   AdEventType,
@@ -13,7 +13,7 @@ import {
   RewardedAdEventType,
 } from 'react-native-google-mobile-ads';
 import App from '../App';
-import { FarmStartup, getFarmMessages } from '../../../packages/farm-ui/src';
+import { FarmGame, FarmStartup, getFarmMessages } from '../../../packages/farm-ui/src';
 import {
   MOBILE_REWARDED_AD_LOAD_TIMEOUT_MS,
   MOBILE_REWARDED_AD_SHOW_TIMEOUT_MS,
@@ -21,6 +21,8 @@ import {
   useAdMobRewardedAd,
 } from '../src/ads/adMobRewardedAd';
 import { MOBILE_INTERSTITIAL_SHOW_TIMEOUT_MS, useAdMobInterstitialAd } from '../src/ads/adMobInterstitialAd';
+import { createInitialState, HARVEST_BONUS_BOOST_DURATION_MS, type GameState } from '../../../packages/farm-core/src';
+import { showPlatformAdMobReward } from '../src/ads/platformRewardedAd';
 import { resetAdMobConsentStateForTests } from '../src/ads/adMobConsent';
 
 jest.mock('../src/audio/assets/harvest_coin.wav', () => 1);
@@ -148,6 +150,16 @@ jest.mock('react-native-google-mobile-ads', () => {
     RewardedAdEventType: { EARNED_REWARD: 'earned_reward', LOADED: 'loaded' },
     TestIds: { INTERSTITIAL: 'test-interstitial', REWARDED: 'test-rewarded' },
   };
+});
+
+jest.mock('react-native/Libraries/Modal/Modal', () => {
+  const ReactModule = jest.requireActual<typeof import('react')>('react');
+  function MockModal(props: { visible?: boolean; onShow?: () => void; children?: React.ReactNode }) {
+    const visible = props.visible !== false;
+    ReactModule.useEffect(() => { if (visible) props.onShow?.(); }, [visible]);
+    return visible ? ReactModule.createElement('Modal', props, props.children) : null;
+  }
+  return { __esModule: true, default: MockModal };
 });
 
 jest.mock('react-native-safe-area-context', () => ({
@@ -898,4 +910,199 @@ test('adapter dispose는 닫힘 대기 타이머와 SDK listener를 해제한다
     emit({ type: RewardedAdEventType.EARNED_REWARD, payload: { type: 'coin', amount: 99 } });
     await expect(adapter.show()).resolves.toEqual({ status: 'notReady' });
   } finally { jest.restoreAllMocks(); }
+});
+
+
+describe.each(['android', 'ios'] as const)('#599 %s earned reward preservation', (os) => {
+  const reward = { type: 'coin', amount: 1 };
+  const request = { type: 'harvestBonusAd' as const, placement: 'harvest_bonus_sheet' as const };
+  beforeEach(() => {
+    jest.useFakeTimers();
+    jest.replaceProperty(Platform, 'OS', os);
+  });
+  afterEach(() => jest.restoreAllMocks());
+
+  async function flush() {
+    for (let index = 0; index < 20; index += 1) await Promise.resolve();
+  }
+  function showListener(ad: MockRewardedAd) {
+    return ad.addAdEventsListener.mock.calls[1][0] as (event: { type: string; payload?: unknown }) => void;
+  }
+  async function loadedAdapter() {
+    const adapter = createPlatformAdMobAdapter('reward-preservation-test');
+    const loading = adapter.load({ customData: 'original-claim', userId: 'player' });
+    await flush();
+    const ad = getLatestRewardedAdMock();
+    getRewardedAdEventListener(ad)({ type: RewardedAdEventType.LOADED });
+    await expect(loading).resolves.toBe(true);
+    return { adapter, ad };
+  }
+
+  test.each(['error', 'show-rejection', 'timeout'] as const)('production adapter preserves earned after %s', async (terminal) => {
+    const { adapter, ad } = await loadedAdapter();
+    let rejectShow!: (error: Error) => void;
+    if (terminal === 'show-rejection') ad.show.mockImplementation(() => new Promise((_, reject) => { rejectShow = reject; }));
+    const shown = adapter.show();
+    let settled = false;
+    void shown.then(() => { settled = true; });
+    const emit = showListener(ad);
+    emit({ type: RewardedAdEventType.EARNED_REWARD, payload: reward });
+    await flush();
+    expect(settled).toBe(false);
+    if (terminal === 'error') emit({ type: AdEventType.ERROR, payload: { code: 'network-error' } });
+    if (terminal === 'show-rejection') rejectShow(new Error('show failed'));
+    if (terminal === 'timeout') jest.advanceTimersByTime(MOBILE_REWARDED_AD_SHOW_TIMEOUT_MS);
+    await expect(shown).resolves.toEqual({ status: 'earned', reward });
+    emit({ type: RewardedAdEventType.EARNED_REWARD, payload: { type: 'coin', amount: 99 } });
+    emit({ type: AdEventType.CLOSED });
+    await expect(shown).resolves.toEqual({ status: 'earned', reward });
+    expect(jest.getTimerCount()).toBe(0);
+    await expect(adapter.show()).resolves.toEqual({ status: 'notReady' });
+  });
+
+  test('explicit dispose after earned still cancels and ignores late errors', async () => {
+    const { adapter, ad } = await loadedAdapter();
+    const shown = adapter.show();
+    const emit = showListener(ad);
+    emit({ type: RewardedAdEventType.EARNED_REWARD, payload: reward });
+    adapter.dispose();
+    emit({ type: AdEventType.ERROR });
+    await expect(shown).resolves.toEqual({ status: 'dismissed' });
+    expect(jest.getTimerCount()).toBe(0);
+  });
+
+  test.each(['error', 'show-rejection', 'timeout'] as const)('dev hook preserves earned after %s', async (terminal) => {
+    let controller!: MobileRewardedAdController;
+    let renderer!: ReactTestRenderer.ReactTestRenderer;
+    function Harness() { controller = useAdMobRewardedAd(); return null; }
+    await ReactTestRenderer.act(async () => { renderer = ReactTestRenderer.create(<Harness />); await flush(); });
+    const ad = getLatestRewardedAdMock();
+    const emit = getRewardedAdEventListener(ad);
+    await ReactTestRenderer.act(async () => { emit({ type: RewardedAdEventType.LOADED }); });
+    let rejectShow!: (error: Error) => void;
+    if (terminal === 'show-rejection') ad.show.mockImplementation(() => new Promise((_, reject) => { rejectShow = reject; }));
+    let shown!: ReturnType<MobileRewardedAdController['showAd']>;
+    await ReactTestRenderer.act(async () => { shown = controller.showAd(request); });
+    await ReactTestRenderer.act(async () => {
+      emit({ type: RewardedAdEventType.EARNED_REWARD, payload: reward });
+      if (terminal === 'error') emit({ type: AdEventType.ERROR, payload: { code: 'network-error' } });
+      if (terminal === 'show-rejection') rejectShow(new Error('show failed'));
+      if (terminal === 'timeout') jest.advanceTimersByTime(MOBILE_REWARDED_AD_SHOW_TIMEOUT_MS);
+    });
+    await expect(shown).resolves.toEqual({ status: 'earned', reward });
+    const nextAd = getLatestRewardedAdMock();
+    await ReactTestRenderer.act(async () => { renderer.unmount(); });
+    expect(nextAd.removeAllListeners).toHaveBeenCalled();
+  });
+
+  test.each([
+    ['confirmed', 'server_verified', 'earned'],
+    ['delivered', 'server_verified', 'earned'],
+    ['pending', 'none', 'failed'],
+    ['expired', 'none', 'failed'],
+    ['confirmed', 'client_confirmed', 'failed'],
+    ['query-error', 'none', 'failed'],
+  ])('real adapter + server wrapper: %s/%s => %s', async (state, assurance, status) => {
+    const claim = jest.fn(async () => {
+      if (state === 'query-error') throw new Error('unavailable');
+      return { claimId: 'original-claim', state, assurance } as never;
+    });
+    const createClaim = jest.fn(async () => ({ claimId: 'original-claim', admobSsv: { customData: 'original-claim', userId: 'player' } } as never));
+    const shown = showPlatformAdMobReward(request, {
+      ensureSession: async () => true,
+      ads: { policy: async () => ({ appUsesAds: true, adsEnabled: true } as never), createClaim, claim },
+      adapter: createPlatformAdMobAdapter('reward-preservation-test'),
+      clientPlatform: os, requestId: () => 'original-request', maxPolls: 1, wait: async () => {},
+    });
+    await flush();
+    const ad = getLatestRewardedAdMock();
+    getRewardedAdEventListener(ad)({ type: RewardedAdEventType.LOADED });
+    await flush();
+    const emit = showListener(ad);
+    emit({ type: RewardedAdEventType.EARNED_REWARD, payload: reward });
+    expect(claim).not.toHaveBeenCalled();
+    emit({ type: AdEventType.ERROR, payload: { code: 'network-error' } });
+    await expect(shown).resolves.toMatchObject(status === 'earned' ? { status, reward, claimId: 'original-claim' } : { status, error: state === 'query-error' ? 'platform_ads_unavailable' : 'server_verification_pending' });
+    expect(claim).toHaveBeenCalledTimes(1);
+    expect(claim).toHaveBeenCalledWith('original-claim');
+    expect(createClaim).toHaveBeenCalledTimes(1);
+    expect(RewardedAd.createForAdRequest).toHaveBeenCalledTimes(1);
+    expect(RewardedAd.createForAdRequest).toHaveBeenCalledWith('reward-preservation-test', expect.objectContaining({ serverSideVerificationOptions: { customData: 'original-claim', userId: 'player' } }));
+  });
+
+  test.each([false, true])('real FarmGame production hook verifies, saves, restores; existing claim=%s', async (alreadyApplied) => {
+    jest.replaceProperty(globalThis as typeof globalThis & { __DEV__: boolean }, '__DEV__', false);
+    jest.setSystemTime(Date.parse('2026-11-06T03:00:00.000Z'));
+    const platform = jest.requireMock('../src/platformEvents');
+    platform.ensureMobilePlatformSession.mockResolvedValue(true);
+    platform.mobilePlatformAds.policy.mockResolvedValue({ appUsesAds: true, adsEnabled: true });
+    platform.mobilePlatformAds.createClaim.mockResolvedValue({ claimId: 'original-claim', admobSsv: { customData: 'original-claim', userId: 'player' } });
+    let verify!: (claim: unknown) => void;
+    platform.mobilePlatformAds.claim.mockImplementation(() => new Promise((resolve) => { verify = resolve; }));
+    const initial = createInitialState();
+    let saved: GameState = { ...initial, onboardingCompleted: true, dailyBonusState: { lastClaimedAt: Date.now(), streak: 1 }, rewardedAdClaimIds: alreadyApplied ? ['original-claim'] : [] };
+    const saves: Array<() => void> = [];
+    let blockRewardSaves = !alreadyApplied;
+    const persistence = {
+      readPersistedGameState: async () => saved,
+      removePersistedGameState: async () => { saved = createInitialState(); },
+      writePersistedGameState: async (state: GameState) => {
+        if (blockRewardSaves && state.rewardedAdClaimIds.includes('original-claim')) await new Promise<void>((resolve) => { saves.push(resolve); });
+        saved = JSON.parse(JSON.stringify(state)) as GameState;
+      },
+    };
+    platform.mobilePlatformAds.ack.mockImplementation(async () => {
+      expect(saved.rewardedAdClaimIds).toContain('original-claim');
+      expect(saved.adUsage.harvestBonusAd.dailyCount).toBe(alreadyApplied ? 0 : 1);
+    });
+    let renderer!: ReactTestRenderer.ReactTestRenderer;
+    const mount = async () => {
+      await ReactTestRenderer.act(async () => { renderer = ReactTestRenderer.create(<FarmGame market="mobile" preferredLocale="en-US" persistence={persistence} useRewardedAd={useAdMobRewardedAd} />); await flush(); });
+    };
+    try {
+      await mount();
+      const press = async (predicate: (node: ReactTestRenderer.ReactTestInstance) => boolean) => {
+        const button = renderer.root.findAll((node) => typeof node.props.onPress === 'function' && predicate(node))[0];
+        if (!button) throw new Error('button missing');
+        expect(button.props.disabled).not.toBe(true);
+        await ReactTestRenderer.act(async () => { button.props.onPress(); await flush(); });
+      };
+      await press((node) => node.props.testID === 'boost-nav-button');
+      await press((node) => node.findAllByType(Text).some((text) => typeof text.props.children === 'string' && text.props.children.startsWith('Watch ad for')));
+      const ad = getLatestRewardedAdMock();
+      await ReactTestRenderer.act(async () => { getRewardedAdEventListener(ad)({ type: RewardedAdEventType.LOADED }); await flush(); });
+      const emit = showListener(ad);
+      await ReactTestRenderer.act(async () => {
+        emit({ type: RewardedAdEventType.EARNED_REWARD, payload: reward });
+        emit({ type: AdEventType.ERROR, payload: { code: 'network-error' } });
+        await flush();
+      });
+      expect(saved.adUsage.harvestBonusAd.dailyCount).toBe(0);
+      expect(platform.mobilePlatformAds.ack).not.toHaveBeenCalled();
+      expect(platform.mobilePlatformAds.claim).toHaveBeenCalledWith('original-claim');
+      await ReactTestRenderer.act(async () => { verify({ state: 'confirmed', assurance: 'server_verified' }); await flush(); });
+      if (!alreadyApplied) {
+        expect(saves.length).toBeGreaterThan(0);
+        expect(platform.mobilePlatformAds.ack).not.toHaveBeenCalled();
+        await ReactTestRenderer.act(async () => { blockRewardSaves = false; saves.forEach((resolve) => resolve()); await flush(); });
+      }
+      expect(platform.mobilePlatformAds.ack).toHaveBeenCalledTimes(1);
+      expect(saved.adUsage.harvestBonusAd.dailyCount).toBe(alreadyApplied ? 0 : 1);
+      expect(saved.adUsage.harvestBonusAd.boostEndsAt).toBe(alreadyApplied ? null : Date.now() + HARVEST_BONUS_BOOST_DURATION_MS);
+      expect(saved.rewardedAdClaimIds).toEqual(['original-claim']);
+      const paidState = JSON.parse(JSON.stringify(saved));
+      await ReactTestRenderer.act(async () => { emit({ type: RewardedAdEventType.EARNED_REWARD, payload: reward }); emit({ type: AdEventType.CLOSED }); emit({ type: AdEventType.ERROR }); });
+      expect(saved.adUsage.harvestBonusAd).toEqual(paidState.adUsage.harvestBonusAd);
+      expect(platform.mobilePlatformAds.ack).toHaveBeenCalledTimes(1);
+      expect(platform.mobilePlatformAds.createClaim).toHaveBeenCalledTimes(1);
+      await ReactTestRenderer.act(async () => { renderer.unmount(); });
+      await mount();
+      expect(saved.adUsage.harvestBonusAd).toEqual(paidState.adUsage.harvestBonusAd);
+      expect(saved.rewardedAdClaimIds).toEqual(['original-claim']);
+      expect(RewardedAd.createForAdRequest).toHaveBeenCalledTimes(1);
+    } finally {
+      await ReactTestRenderer.act(async () => { renderer?.unmount(); });
+      platform.ensureMobilePlatformSession.mockResolvedValue(false);
+    }
+  });
 });
