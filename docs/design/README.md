@@ -13,3 +13,7 @@
 ## 2026-10-24
 
 - [최신 main의 3개 마켓 공개 출시](2026-10-24-main-release/design.md): 사용자 새 출시 지시에 따라 별도 출시용 L3 전체 회귀와 마켓별 공개 끝 지점을 기록한다. 게임 코드는 변경하지 않으며 이전 검수의 SHA와 판정을 보존한다. 실행 티켓은 [#592](https://github.com/seorilabs/happy-farm/issues/592)다.
+
+## 2026-11-06
+
+- [앱인토스 광고 보상 획득 후 오류 처리](2026-11-06-ait-earned-reward/design.md): `e726658`의 v1 설계·테스트 계획을 사용자가 승인했다. L1 개발 환경에서 보상 보존을 검증하고 PR 병합까지 진행한다. 출시 범위는 없으며 실행 티켓은 [#597](https://github.com/seorilabs/happy-farm/issues/597)다.

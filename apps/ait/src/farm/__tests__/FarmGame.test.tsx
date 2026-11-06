@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { AppState, Animated, Dimensions, Modal, Platform, StyleSheet, Text, Vibration, type AppStateStatus } from 'react-native';
-import { act, cleanup, fireEvent, render, waitFor, within } from '@testing-library/react-native';
+import { act, cleanup, cleanupAsync, fireEvent, render, waitFor, within } from '@testing-library/react-native';
 import {
   ACHIEVEMENT_TRACKS,
   ANIMALS,
@@ -94,6 +94,24 @@ const NOW = Date.parse('2026-05-27T03:00:00.000Z');
 // 검증하는 진입점이 이쪽으로 옮겨졌다(메인 네비의 부스트 버튼 → 시트 → CTA).
 const HARVEST_BONUS_SHEET_TITLE = '수확 보너스';
 const HARVEST_BONUS_CTA = `광고 보고 30분 동안 수확 ${HARVEST_BONUS_MULTIPLIER}배`;
+
+type AitAdRequest = {
+  onEvent: (event: { type: 'loaded' | 'userEarnedReward' | 'dismissed' | 'failedToShow' }) => void;
+  onError: (error: unknown) => void;
+};
+const mockAitLoadAd = Object.assign(jest.fn<() => void, [AitAdRequest]>(() => () => {}), {
+  isSupported: () => true,
+});
+const mockAitShowAd = Object.assign(jest.fn<() => void, [AitAdRequest]>(() => () => {}), {
+  isSupported: () => true,
+});
+jest.mock('@apps-in-toss/framework', () => ({
+  loadFullScreenAd: mockAitLoadAd,
+  showFullScreenAd: mockAitShowAd,
+}));
+const { useFullScreenAd } = jest.requireActual<typeof import('../platform/fullScreenAd')>(
+  '../platform/fullScreenAd'
+);
 
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
@@ -4419,6 +4437,64 @@ describe('FarmGame UI flow', () => {
     // 투자효율 수치는 부스트 적용 여부에 따라 달라지므로 값을 박지 않는다.
     await waitFor(() => expect(screen.getByText(/당근 심기 · 10G/)).toBeTruthy());
   }, 30_000);
+
+  test.each(['onError', 'failedToShow'] as const)(
+    '#597 실제 AIT 훅에서 획득 뒤 %s가 와도 수확 보상을 한 번 저장하고 재시청시키지 않는다',
+    async (terminal) => {
+      mockAitLoadAd.mockClear();
+      mockAitShowAd.mockClear();
+      mockAitLoadAd.mockImplementation((request) => {
+        request.onEvent({ type: 'loaded' });
+        return () => {};
+      });
+      const track = jest.fn();
+      const screen = await renderGame(null, {
+        analytics: createFarmAnalytics(track),
+        useRewardedAd: useFullScreenAd,
+        adGroupIds: { rewarded: 'ait.rewarded.test' },
+      });
+      await waitFor(() => expect(screen.getByText('50G')).toBeTruthy());
+      fireEvent.press(screen.getByTestId('boost-nav-button'));
+      fireEvent.press(screen.getByText(HARVEST_BONUS_CTA));
+      expect(mockAitShowAd).toHaveBeenCalledTimes(1);
+      const request = mockAitShowAd.mock.calls[0]![0];
+
+      await act(async () => { request.onEvent({ type: 'userEarnedReward' }); });
+      expect(getLatestPersistedState().adUsage.harvestBonusAd.dailyCount).toBe(0);
+      expect(track.mock.calls.filter(([event]) => event === 'ad_reward_completed')).toHaveLength(0);
+      await act(async () => {
+        if (terminal === 'onError') request.onError({ code: 'network-error' });
+        else request.onEvent({ type: 'failedToShow' });
+      });
+      expect(mockAitShowAd).toHaveBeenCalledTimes(1);
+      await waitFor(() => expect(getLatestPersistedState().adUsage.harvestBonusAd.dailyCount).toBe(1));
+      const rewardedState = getLatestPersistedState();
+      expect(rewardedState.adUsage.harvestBonusAd.boostEndsAt).toBe(NOW + HARVEST_BONUS_BOOST_DURATION_MS);
+      expect(track.mock.calls.filter(([event]) => event === 'ad_reward_completed')).toHaveLength(1);
+      expect(track.mock.calls.filter(([event]) => event === 'ad_reward_failed')).toHaveLength(0);
+
+      await act(async () => {
+        request.onEvent({ type: 'userEarnedReward' });
+        request.onEvent({ type: 'dismissed' });
+        request.onError({ code: 'network-error' });
+      });
+      expect(getLatestPersistedState().adUsage.harvestBonusAd).toEqual(rewardedState.adUsage.harvestBonusAd);
+      expect(track.mock.calls.filter(([event]) => event === 'ad_reward_completed')).toHaveLength(1);
+      expect(mockAitShowAd).toHaveBeenCalledTimes(1);
+      await cleanupAsync();
+
+      const restored = await renderGame(rewardedState, {
+        analytics: createFarmAnalytics(track),
+        useRewardedAd: useFullScreenAd,
+        adGroupIds: { rewarded: 'ait.rewarded.test' },
+      });
+      expect(getLatestPersistedState().adUsage.harvestBonusAd).toEqual(rewardedState.adUsage.harvestBonusAd);
+      await act(async () => { fireEvent.press(restored.getByTestId('boost-nav-button')); });
+      expect(restored.queryByText(HARVEST_BONUS_CTA)).toBeNull();
+      expect(mockAitShowAd).toHaveBeenCalledTimes(1);
+      await cleanupAsync();
+    }
+  );
 
   test('첫 졸업 이후 상점 보상 광고는 골드 대신 랜드마크 축제 포인트를 지급한다', async () => {
     const base = createInitialState();

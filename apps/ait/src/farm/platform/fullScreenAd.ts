@@ -259,7 +259,9 @@ export function useFullScreenAd(
       pendingShowRef.current = null;
       safeUnregister(pendingShow.unregister);
       pendingShow.unregister = null;
-      pendingShow.resolve(result);
+      // SDK가 이미 확인한 보상은 뒤따른 표시 오류에도 보존한다.
+      // 오류 진단과 다음 광고 로드는 유지하되 불필요한 재시청을 막는다.
+      pendingShow.resolve(pendingShow.rewardGranted ? { status: 'earned' } : result);
       if (options.reload !== false) {
         void loadAd();
       }
