@@ -382,6 +382,73 @@ describe('useFullScreenAd', () => {
     expect(controllerRef.current?.acknowledgeReward).toBeUndefined();
   });
 
+  test.each(['onError', 'failedToShow'] as const)(
+    '#597 보상 획득 뒤 %s가 와도 종료까지 기다린 뒤 한 번만 earned를 반환한다',
+    async (terminal) => {
+      let controller!: RewardedAdController;
+      render(<Harness onController={(value) => { controller = value; }} />);
+      act(() => { latestLoadRequest?.onEvent({ type: 'loaded' }); });
+
+      let result!: Promise<RewardedAdShowResult>;
+      act(() => { result = controller.showAd(); });
+      const request = latestShowRequest!;
+      const settled = jest.fn();
+      void result.then(settled);
+      act(() => { request.onEvent({ type: 'userEarnedReward' }); });
+      await flushSdkCallbacks();
+      expect(settled).not.toHaveBeenCalled();
+
+      act(() => {
+        if (terminal === 'onError') request.onError({ code: 'network-error' });
+        else request.onEvent({ type: 'failedToShow' });
+      });
+      await expect(result).resolves.toEqual({ status: 'earned' });
+      expect(settled).toHaveBeenCalledTimes(1);
+      expect(mockUnregisterShow).toHaveBeenCalledTimes(1);
+      expect(mockLoadFullScreenAd).toHaveBeenCalledTimes(2);
+      // SDK 오류는 진단하되 이미 획득한 보상 결과를 뒤집지 않는다.
+      expect(mockTrack).toHaveBeenCalledWith('ad_load_result', expect.objectContaining({
+        result: 'sdk_error', attempt_stage: 'show',
+      }));
+
+      act(() => { latestLoadRequest?.onEvent({ type: 'loaded' }); });
+      let nextResult!: Promise<RewardedAdShowResult>;
+      act(() => { nextResult = controller.showAd(); });
+      const nextRequest = latestShowRequest!;
+      const nextSettled = jest.fn();
+      void nextResult.then(nextSettled);
+      act(() => {
+        request.onEvent({ type: 'userEarnedReward' });
+        request.onEvent({ type: 'dismissed' });
+        request.onError({ code: 'network-error' });
+      });
+      await flushSdkCallbacks();
+      expect(settled).toHaveBeenCalledTimes(1);
+      expect(nextSettled).not.toHaveBeenCalled();
+      act(() => { nextRequest.onEvent({ type: 'dismissed' }); });
+      await expect(nextResult).resolves.toEqual({ status: 'dismissed' });
+    }
+  );
+
+  test.each([
+    ['rewarded', 'onError'], ['rewarded', 'failedToShow'],
+    ['interstitial', 'onError'], ['interstitial', 'failedToShow'],
+  ] as const)('#597 %s는 보상 획득 없는 %s를 실패로 유지한다', async (adFormat, terminal) => {
+    let controller!: RewardedAdController;
+    render(<Harness adFormat={adFormat} onController={(value) => { controller = value; }} />);
+    act(() => { latestLoadRequest?.onEvent({ type: 'loaded' }); });
+    let result!: Promise<RewardedAdShowResult>;
+    act(() => { result = controller.showAd(); });
+    act(() => {
+      if (terminal === 'onError') latestShowRequest?.onError({ code: 'network-error' });
+      else latestShowRequest?.onEvent({ type: 'failedToShow' });
+    });
+    await expect(result).resolves.toEqual({
+      status: 'failed', error: terminal === 'onError' ? 'network-error' : 'failed_to_show',
+    });
+    expect(mockLoadFullScreenAd).toHaveBeenCalledTimes(2);
+  });
+
   test('ensureAdReady resolves false when loading times out', async () => {
     jest.useFakeTimers();
     const controllerRef: { current?: RewardedAdController } = {};

@@ -1,6 +1,8 @@
 # 앱인토스 광고 보상 획득 후 오류 처리
 
-- 설계: `2026-11-06-ait-earned-reward`, v1, 승인 대기
+- 설계: `2026-11-06-ait-earned-reward`, v1, 승인 완료
+- 승인 커밋: `e726658b5fac4f73245055b9ff68fa9d2529b59f`의 설계와 테스트 계획. 2026-11-06 대화에서 사용자가 구현·개발 검증·PR·병합 제안에 “진행해라”라고 승인했다.
+- 실행 티켓: [#597](https://github.com/seorilabs/happy-farm/issues/597)
 - 조사 기준: `origin/main` 및 HEAD `cd9cb9a631a49aa1da2bd3421f96302305272a80`
 - 제품 비교 기준: `v1.13.0`, `c75ccddd82e883dd12c71b32a07f56ebae1a7046`
 - 실행 계획: [test-plan.json](test-plan.json), L1, 개발 환경, 출시 범위 없음
