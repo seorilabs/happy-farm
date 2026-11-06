@@ -1,0 +1,28 @@
+{
+  "sourceSha": "a8fb296b20c48be3501b7879ef8a85c6cc86e034",
+  "tag": "v1.13.1",
+  "googlePlay": {
+    "versionCode": 1001011014,
+    "aabSha256": "69084212a6ee85920b330245f9581620f5cf2057934f0c2dbf55a0374c9110bc",
+    "verifiedBy": "CI full AAB digest + Publisher API bundle sha256 readback",
+    "rawAabRetention": "Existing upload=true workflow does not expose an AAB artifact; no local AAB claimed"
+  },
+  "appStore": {
+    "version": "1.13.1",
+    "build": "1013001",
+    "buildId": "3a34b56d-9b84-472a-9c7d-5aee3e8cd6e0",
+    "digest": "390b11c0edce5d94eb891a7c2ed4b7035785de767672e73dad2dc7fbb9f0f38b",
+    "digestScope": "Normalized .app Info.plist JSON, not full archive/IPA bytes",
+    "verifiedBy": "CI tag/version/bundle/signing and Info.plist recheck + ASC VALID build 1.13.1(1013001)",
+    "rawArchiveRetention": "Existing upload=true workflow does not expose archive/IPA artifact; full binary checksum not claimed"
+  },
+  "appsInToss": {
+    "sourceSha": "a8fb296b20c48be3501b7879ef8a85c6cc86e034",
+    "tag": "v1.13.1",
+    "zipSha256": "cffc2d7ac625d671eb207bbe6bbb926c839053f103dd7583adb14c34b2c0a0e5",
+    "aitPath": "happy-farm.ait",
+    "aitSha256": "595da8c706563d191b4eaeb4c28fafe49dc08afac3ff3ccee559e8cc27b6bb83",
+    "size": 9440754,
+    "deploymentId": "01a1b001-7cbf-70c0-87bc-cd215406b775"
+  }
+}

@@ -1,0 +1,46 @@
+{
+  "schema": "seorilabs.release-notes/v2",
+  "version": "v1.13.1",
+  "notes": {
+    "ko-KR": "- 광고 보상을 얻은 뒤 오류가 나면 보상을 받지 못하던 문제를 수정했어요.",
+    "en-US": "- Fixed an issue that could drop an earned ad reward after an error.",
+    "ja-JP": "- 広告報酬の獲得後にエラーが起きると、報酬を受け取れないことがある問題を修正しました。",
+    "zh-CN": "- 修复了获得广告奖励后发生错误时可能无法领取奖励的问题。",
+    "zh-TW": "- 修正了獲得廣告獎勵後發生錯誤時可能無法領取獎勵的問題。",
+    "de-DE": "- Ein Fehler konnte verdiente Werbebelohnungen verhindern. Das wurde behoben.",
+    "fr-FR": "- Correction des récompenses publicitaires parfois perdues après une erreur.",
+    "es-ES": "- Se corrigió un error que podía impedir recibir una recompensa de anuncio ya ganada."
+  },
+  "markets": {
+    "googlePlay": {
+      "ko-KR": "- 광고 보상을 얻은 뒤 오류가 나면 보상을 받지 못하던 문제를 수정했어요.",
+      "en-US": "- Fixed an issue that could drop an earned ad reward after an error.",
+      "ja-JP": "- 広告報酬の獲得後にエラーが起きると、報酬を受け取れないことがある問題を修正しました。",
+      "zh-CN": "- 修复了获得广告奖励后发生错误时可能无法领取奖励的问题。",
+      "zh-TW": "- 修正了獲得廣告獎勵後發生錯誤時可能無法領取獎勵的問題。",
+      "de-DE": "- Ein Fehler konnte verdiente Werbebelohnungen verhindern. Das wurde behoben.",
+      "fr-FR": "- Correction des récompenses publicitaires parfois perdues après une erreur.",
+      "es-ES": "- Se corrigió un error que podía impedir recibir una recompensa de anuncio ya ganada."
+    },
+    "appStore": {
+      "ko-KR": "- 광고 보상을 얻은 뒤 오류가 나면 보상을 받지 못하던 문제를 수정했어요.",
+      "en-US": "- Fixed an issue that could drop an earned ad reward after an error.",
+      "ja-JP": "- 広告報酬の獲得後にエラーが起きると、報酬を受け取れないことがある問題を修正しました。",
+      "zh-CN": "- 修复了获得广告奖励后发生错误时可能无法领取奖励的问题。",
+      "zh-TW": "- 修正了獲得廣告獎勵後發生錯誤時可能無法領取獎勵的問題。",
+      "de-DE": "- Ein Fehler konnte verdiente Werbebelohnungen verhindern. Das wurde behoben.",
+      "fr-FR": "- Correction des récompenses publicitaires parfois perdues après une erreur.",
+      "es-ES": "- Se corrigió un error que podía impedir recibir una recompensa de anuncio ya ganada."
+    },
+    "appsInToss": {
+      "ko-KR": "- 광고 보상을 얻은 뒤 오류가 나면 보상을 받지 못하던 문제를 수정했어요.",
+      "en-US": "- Fixed an issue that could drop an earned ad reward after an error.",
+      "ja-JP": "- 広告報酬の獲得後にエラーが起きると、報酬を受け取れないことがある問題を修正しました。",
+      "zh-CN": "- 修复了获得广告奖励后发生错误时可能无法领取奖励的问题。",
+      "zh-TW": "- 修正了獲得廣告獎勵後發生錯誤時可能無法領取獎勵的問題。",
+      "de-DE": "- Ein Fehler konnte verdiente Werbebelohnungen verhindern. Das wurde behoben.",
+      "fr-FR": "- Correction des récompenses publicitaires parfois perdues après une erreur.",
+      "es-ES": "- Se corrigió un error que podía impedir recibir una recompensa de anuncio ya ganada."
+    }
+  }
+}
