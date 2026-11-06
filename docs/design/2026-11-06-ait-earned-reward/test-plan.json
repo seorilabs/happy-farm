@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "level": "L1",
+  "baseline": "v1.13.0",
+  "changedFeatures": ["rewarded-ads", "interstitial-ads"],
+  "environments": ["dev"],
+  "redesign": false,
+  "foundationRerun": false,
+  "floorOverrides": [
+    {
+      "rule": "foundation",
+      "featureId": "rewarded-ads",
+      "reason": "이미 수신한 SDK 이벤트의 결과 우선순위만 수정한다. SDK 연결·광고 ID·권한·네이티브 설정은 유지하고 React Native 개발 환경에서 실제 훅과 FarmGame UI, 저장을 실행해 순서별 보상 1회 및 실패 시 미지급을 검증한다. 실제 토스 SDK·기기 성공은 주장하지 않는다."
+    },
+    {
+      "rule": "foundation",
+      "featureId": "interstitial-ads",
+      "reason": "보상형과 공유하는 최종 결과 확정 함수의 변경 영향만 확인한다. 전면 광고 SDK·지면·호출 순서·권한을 바꾸지 않으며 개발 환경의 기존 전면 광고 종료·실패·재로드 테스트로 회귀를 확인한다."
+    }
+  ],
+  "release": null
+}
