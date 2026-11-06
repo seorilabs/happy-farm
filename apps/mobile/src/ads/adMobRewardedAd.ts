@@ -111,7 +111,10 @@ export function createPlatformAdMobAdapter(adUnitId: string): PlatformAdMobAdapt
           unsubscribe();
           current = null;
           cancel = () => {};
-          resolve(Platform.OS === 'android' && closedAt != null ? { ...result, durationMs: Math.max(0, closedAt - startedAt) } : result);
+          const finalResult: RewardedAdShowResult = earned && result.status === 'failed'
+            ? { status: 'earned', reward }
+            : result;
+          resolve(Platform.OS === 'android' && closedAt != null ? { ...finalResult, durationMs: Math.max(0, closedAt - startedAt) } : finalResult);
         }
         cancel = () => finish({ status: 'dismissed' });
         try {
@@ -328,9 +331,12 @@ export function useAdMobRewardedAd() {
         clearTimeout(pendingShow.timeoutId);
       }
       if (pendingShow.closeTimer != null) clearTimeout(pendingShow.closeTimer);
+      const finalResult: RewardedAdShowResult = pendingShow.rewardEarned && result.status === 'failed'
+        ? { status: 'earned', reward: pendingShow.reward }
+        : result;
       pendingShow.resolve(Platform.OS === 'android' && pendingShow.closedAt != null
-        ? { ...result, durationMs: Math.max(0, pendingShow.closedAt - pendingShow.startedAt) }
-        : result);
+        ? { ...finalResult, durationMs: Math.max(0, pendingShow.closedAt - pendingShow.startedAt) }
+        : finalResult);
       pendingShowRef.current = null;
       if (options.reload !== false) {
         rotateAdInstanceRef.current?.(instanceToken);
