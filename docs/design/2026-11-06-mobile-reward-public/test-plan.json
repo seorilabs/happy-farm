@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "level": "L1",
+  "baseline": "v1.13.0",
+  "changedFeatures": ["rewarded-ads", "interstitial-ads", "release-observability"],
+  "environments": ["dev"],
+  "redesign": false,
+  "foundationRerun": false,
+  "floorOverrides": [
+    {
+      "rule": "foundation",
+      "featureId": "rewarded-ads",
+      "reason": "이미 수신한 보상과 오류 이벤트의 결과 확정만 수정한다. SDK·광고 단위·SSV 연결·권한·네이티브 설정은 유지한다. Android·iOS 조건별 실제 출시용 어댑터와 wrapper, FarmGame UI를 개발 환경에서 실행하고 서버 검증 미완료 시 미지급, 1회 지급·저장·재시작을 검증한다. 앱인토스 수정도 같은 후보에서 재실행한다. 실제 SDK·기기·운영 서버 전달 통과로 기록하지 않는다."
+    },
+    {
+      "rule": "foundation",
+      "featureId": "interstitial-ads",
+      "reason": "기능 목록 v1의 apps/mobile/src/ads/**가 공유하는 기반 기능 하한을 낮춘다. 전면 광고 SDK·지면·권한·호출 순서를 바꾸지 않으며 기존 종료·실패·재로드와 공통 화면 점유 가드를 개발 환경에서 회귀 확인한다."
+    }
+  ],
+  "release": {
+    "markets": ["google-play", "app-store", "apps-in-toss"],
+    "until": "public",
+    "rollout": 1
+  }
+}
