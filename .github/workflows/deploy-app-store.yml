@@ -77,6 +77,8 @@ jobs:
       # 찾다가 죽는다(첫 검증 실행 35446435100 이 여기서 실패했다).
       # GoogleService-Info.plist 는 저장소에 추적돼 있어 복원 자체가 필요 없다.
       firebase_restore_script: ''
+      prepare_script: scripts/write-release-info.mjs
+      verify_runtime_release_script: scripts/verify-runtime-release.mjs
     secrets:
       APPLE_DISTRIBUTION_CERTIFICATE_BASE64: ${{ secrets.APPLE_DISTRIBUTION_CERTIFICATE_BASE64 }}
       APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD }}

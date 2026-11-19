@@ -49,6 +49,12 @@ describe('중앙 릴리즈 binding 런타임 투영', () => {
     expect(fs.existsSync(path.join(root, 'packages/farm-core/src/releaseInfo.ts'))).toBe(false);
   });
 
+  test('0.0.0 개발 기본값을 마켓 버전으로 생성하지 않는다', () => {
+    const { root, result } = run({ SEORI_RELEASE_TAG: 'v0.0.0', SEORI_RELEASE_VERSION: '0.0.0' });
+    expect(result.status).not.toBe(0);
+    expect(fs.existsSync(path.join(root, 'packages/farm-core/src/releaseInfo.ts'))).toBe(false);
+  });
+
   test('중앙 source SHA와 version code가 없으면 로컬 값으로 대체하지 않는다', () => {
     const missingSha = run({ SEORI_RELEASE_SOURCE_SHA: '' });
     const invalidCode = run({ SEORI_RELEASE_VERSION_CODE: '0' });
