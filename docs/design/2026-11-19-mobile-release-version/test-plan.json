@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "level": "L3",
+  "baseline": "v1.13.1",
+  "changedFeatures": [
+    "firebase-auth-analytics",
+    "platform-session-events",
+    "update-gate",
+    "release-observability"
+  ],
+  "environments": ["dev"],
+  "redesign": false,
+  "foundationRerun": true,
+  "floorOverrides": [
+    {
+      "rule": "foundation",
+      "featureId": "firebase-auth-analytics",
+      "reason": "검증된 태그의 버전 메타데이터를 기존 JS 번들에 넣는다. 변경 범위는 커스텀 이벤트에 전달하는 값과 빌드 결속이며, 개발 환경에서 기존 Firebase 어댑터를 실행하고 태그와 패키지의 Android·iOS 네이티브 및 JS 버전을 대조한다."
+    },
+    {
+      "rule": "foundation",
+      "featureId": "platform-session-events",
+      "reason": "기존 SDK에 동일 버전 context를 전달한다. 개발 환경에서 두 네이티브 플랫폼의 조합 지점과 실제 SDK 요청을 모의 HTTP 경계에 연결해 헤더, 동시 로그인, 최초 계정 이벤트와 실패 경로를 검증한다."
+    },
+    {
+      "rule": "foundation",
+      "featureId": "rewarded-ads",
+      "reason": "기능 목록 v1에서 공통으로 쓰는 platformEvents.ts를 변경한다. 기존 광고 SDK·SSV·보상 정책 경계에 대체 구현을 연결해 광고 세션의 버전 전달, 요청 실패, 1회 보상 처리와 저장 복원을 확인한다."
+    },
+    {
+      "rule": "foundation",
+      "featureId": "interstitial-ads",
+      "reason": "기능 목록 v1에서 공통으로 쓰는 platformEvents.ts를 변경한다. 기존 광고 SDK와 지면을 사용한 개발 테스트에서 시작 경합, 종료·실패 상태, 재로드 및 공통 화면 점유 회귀를 확인한다."
+    }
+  ],
+  "release": {
+    "markets": ["google-play", "app-store"],
+    "until": "test-track"
+  }
+}

@@ -18,3 +18,7 @@
 
 - [앱인토스 광고 보상 획득 후 오류 처리](2026-11-06-ait-earned-reward/design.md): `e726658`의 v1 설계·테스트 계획을 사용자가 승인했다. L1 개발 환경에서 보상 보존을 검증하고 PR 병합까지 진행한다. 출시 범위는 없으며 실행 티켓은 [#597](https://github.com/seorilabs/happy-farm/issues/597)다.
 - [모바일 광고 보상 보존과 3개 마켓 공개](2026-11-06-mobile-reward-public/design.md): `4e12c55`의 v1과 테스트 계획을 사용자가 승인했다. [승인 기록](2026-11-06-mobile-reward-public/approval.md), [실행 티켓 #599](https://github.com/seorilabs/happy-farm/issues/599). Android·iOS의 획득 상태와 서버 검증을 보존하며 v1.13.1을 L1 개발 환경 검증부터 세 마켓 공개까지 진행한다.
+
+## 2026-11-19
+
+- [모바일 가입과 분석 이벤트의 출시 버전 전달](2026-11-19-mobile-release-version/design.md) v1은 검토 대기다. [L3 테스트 계획](2026-11-19-mobile-release-version/test-plan.json)은 Play 내부 테스트와 TestFlight 내부 그룹까지 포함한다.
