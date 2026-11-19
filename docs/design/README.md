@@ -21,4 +21,4 @@
 
 ## 2026-11-19
 
-- [모바일 가입과 분석 이벤트의 출시 버전 전달](2026-11-19-mobile-release-version/design.md) v1은 검토 대기다. [L3 테스트 계획](2026-11-19-mobile-release-version/test-plan.json)은 Play 내부 테스트와 TestFlight 내부 그룹까지 포함한다.
+- [모바일 가입과 분석 이벤트의 출시 버전 전달](2026-11-19-mobile-release-version/design.md) v1을 11월 20일 승인했다. [승인 기록](2026-11-19-mobile-release-version/approval.md)과 [L3 테스트 계획](2026-11-19-mobile-release-version/test-plan.json)은 Play 내부 테스트와 TestFlight 내부 그룹까지 적용한다.
