@@ -4,6 +4,7 @@ type MockPlatformOptions = {
   ingestBaseUrl?: string;
   eventAllowlist?: readonly string[];
   eventContext?: () => Record<string, string>;
+  clientContext?: () => { appVersion: string };
   presenceEnabled?: boolean;
   presenceContext?: () => Record<string, string>;
   sessionStore?: unknown;
@@ -78,6 +79,13 @@ const mockCreatePlatform = platformSdkMock.createPlatform;
 const mockPlatform = mockCreatePlatform.mock.results[0]?.value;
 
 describe('Mobile Platform events', () => {
+  test('일반 세션과 광고 세션에 같은 출시 버전을 전달한다', () => {
+    expect(mockCreatePlatform.mock.calls.map(([options]) => options.clientContext?.())).toEqual([
+      { appVersion: RELEASE_INFO.versionName },
+      { appVersion: RELEASE_INFO.versionName },
+    ]);
+  });
+
   test('이벤트 OS 언어는 저장된 UI 언어로 요청한 config locale와 별도로 유지한다', async () => {
     const os = jest.replaceProperty(Platform, 'OS', 'ios');
     const setting = jest.spyOn(Settings, 'get').mockImplementation((key: string) => key === 'AppleLanguages' ? ['ko-KR'] : undefined);

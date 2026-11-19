@@ -17,11 +17,14 @@ const PLATFORM_API_URL = 'https://platform-api-306278488979.asia-northeast3.run.
 const PLATFORM_INGEST_URL = 'https://platform-ingest-306278488979.asia-northeast3.run.app';
 export const PLATFORM_ADS_URL = 'https://platform-ads-306278488979.asia-northeast3.run.app';
 
+const mobileClientContext = () => ({ appVersion: RELEASE_INFO.versionName });
+
 // SDK client는 debugBuild를 생략해 Metro `__DEV__`를 따른다. 출시 번들은 false다.
 const mobilePlatform = createPlatform({
   appId: 'happy-farm',
   baseUrl: PLATFORM_API_URL,
   ingestBaseUrl: PLATFORM_INGEST_URL,
+  clientContext: mobileClientContext,
   eventAllowlist: PLATFORM_EVENT_ALLOWLIST,
   eventContext: () => ({
     platform: Platform.OS === 'ios' ? 'ios' : 'android',
@@ -41,6 +44,7 @@ const mobilePlatform = createPlatform({
 const mobileAdsPlatform = createPlatform({
   appId: 'happy-farm',
   baseUrl: PLATFORM_ADS_URL,
+  clientContext: mobileClientContext,
 });
 
 export const mobilePlatformAds = new PlatformAdsClient({
