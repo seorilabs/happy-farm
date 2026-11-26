@@ -1,8 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Easing, Pressable, StyleSheet, View } from 'react-native';
 
 import { ONBOARDING_STEPS, type OnboardingStep } from '../../../farm-core/src';
 import type { FarmMessages } from '../i18n';
+import { Text } from './GameUi';
 
 // Keep existing farm-ui imports working while farm-core remains the canonical
 // owner of the persisted onboarding step contract.

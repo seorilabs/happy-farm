@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
 import {
   CROPS,
@@ -16,6 +16,7 @@ import {
 
 import type { FarmMessages } from '../i18n';
 import { SheetAction } from './SheetParts';
+import { Text } from './GameUi';
 
 // 생산 가공 공방 시트(#250). '더보기' 시트 한 뎁스 뒤에서 진입한다.
 //

@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
 import {
   formatGold,
@@ -15,7 +15,7 @@ import {
 } from '../../../farm-core/src';
 
 import type { FarmMessages } from '../i18n';
-import { CoinText } from './GameUi';
+import { Text } from './GameUi';
 import { SheetAction } from './SheetParts';
 
 function getMissionLabel(mission: DailyMissionView, locale: SupportedLocale, messages: FarmMessages): string {
@@ -103,7 +103,7 @@ function MissionCard({
         <Text style={styles.missionTitle} numberOfLines={2}>
           {label}
         </Text>
-        <CoinText style={styles.missionReward}>{`+${formatGold(rewardGold, locale)}`}</CoinText>
+        <Text style={styles.missionReward}>{`+${formatGold(rewardGold, locale)}`}</Text>
       </View>
       <Text style={styles.missionProgress} numberOfLines={1}>
         {messages.missionProgressLabel(shownProgress, target)}

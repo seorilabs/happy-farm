@@ -1,11 +1,11 @@
 /// <reference types="jest" />
 
 import React from 'react';
-import { Image, StyleSheet, Text } from 'react-native';
+import { Image, StyleSheet, Text as NativeText } from 'react-native';
 import { render } from '@testing-library/react-native';
 
 import { FarmArtProvider, type FarmArt } from '../farmArt';
-import { CoinText, GameText, SkinFrame, UiIcon } from '../components/GameUi';
+import { GameText, SkinFrame, Text, UiIcon } from '../components/GameUi';
 
 const ART: FarmArt = {
   ui: {
@@ -20,7 +20,7 @@ describe('GameUi (#606)', () => {
     const view = render(
       <FarmArtProvider art={ART}>
         <SkinFrame testID="frame" skin="primary" height={56} fallbackStyle={{ backgroundColor: 'green' }}>
-          <Text>Go</Text>
+          <NativeText>Go</NativeText>
         </SkinFrame>
       </FarmArtProvider>
     );
@@ -97,14 +97,55 @@ describe('GameUi (#606)', () => {
   test('코인 아이콘이 있으면 금액 뒤 코인 이모지를 그림 코인으로 바꾼다 (1회차 #9)', () => {
     const withArt = render(
       <FarmArtProvider art={ART}>
-        <CoinText testID="price">300 🪙</CoinText>
+        <Text testID="price">300 🪙</Text>
       </FarmArtProvider>
     );
     expect(withArt.queryByText('300 🪙')).toBeNull();
     expect(withArt.UNSAFE_getAllByType(Image)).toHaveLength(1);
     // 스크린리더는 그림 코인 대신 원래 문구(🪙 포함)를 읽어 화폐 단위를 잃지 않는다.
     expect(withArt.getByTestId('price').props.accessibilityLabel).toBe('300 🪙');
-    const withoutArt = render(<CoinText testID="price">300 🪙</CoinText>);
+    const withoutArt = render(<Text testID="price">300 🪙</Text>);
     expect(withoutArt.getByText('300 🪙')).toBeTruthy();
+  });
+
+  // 2회차 #9 잔여: 모두 심기 버튼, 복귀 시트, 미션 받기 버튼처럼 GameText나 숫자를 섞어 쓰는 글자에도
+  // 은색 이모지가 남았다. 공통 Text와 GameText 모두 섞인 자식까지 바꾼다.
+  test('숫자와 문구를 섞은 자식과 GameText에서도 코인 이모지를 그림 코인으로 바꾼다 (2회차 #9)', () => {
+    const view = render(
+      <FarmArtProvider art={ART}>
+        <Text testID="mixed">
+          {'Plant All '}
+          {6}
+          {' · 60 🪙'}
+        </Text>
+        <GameText testID="game">🌱 Plant All 6 · 60 🪙</GameText>
+      </FarmArtProvider>
+    );
+    expect(view.UNSAFE_getAllByType(Image)).toHaveLength(2);
+    expect(view.getByTestId('mixed').props.accessibilityLabel).toBe('Plant All 6 · 60 🪙');
+    expect(view.getByTestId('game').props.accessibilityLabel).toBe('🌱 Plant All 6 · 60 🪙');
+    expect(view.queryAllByText(/🪙/)).toHaveLength(0);
+  });
+
+  // 2회차 #7 잔여: HUD 큰 금액처럼 디스플레이 서체를 직접 얹은 글자도 "만/억"을 굵게 그린다.
+  test('디스플레이 서체를 얹은 공통 Text도 한중일 글자를 시스템 굵은 글씨로 그린다 (2회차 #7)', () => {
+    const view = render(
+      <FarmArtProvider art={ART}>
+        <Text testID="hud" style={{ fontFamily: 'Baloo2-ExtraBold', fontSize: 22 }}>
+          74억
+        </Text>
+        <Text testID="plain" style={{ fontSize: 22 }}>
+          74억
+        </Text>
+      </FarmArtProvider>
+    );
+    const unit = view.getByText('억');
+    expect(StyleSheet.flatten(unit.props.style).fontWeight).toBe('900');
+    expect(view.getByTestId('plain').props.children).toBe('74억');
+  });
+
+  test('공통 Text는 한국어 줄바꿈을 단어 단위로 한다', () => {
+    const view = render(<Text testID="label">상점에서 열기</Text>);
+    expect(view.getByTestId('label').props.lineBreakStrategyIOS).toBe('hangul-word');
   });
 });

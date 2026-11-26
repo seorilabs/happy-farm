@@ -3,10 +3,10 @@ import {
   Image,
   Platform,
   StyleSheet,
-  Text,
+  Text as NativeText,
   View,
+  type ImageSourcePropType,
   type StyleProp,
-  type TextProps,
   type TextStyle,
   type ViewStyle,
 } from 'react-native';
@@ -136,27 +136,56 @@ const CJK_RUN =
   /[\u1100-\u11ff\u3000-\u30ff\u3130-\u318f\u3400-\u4dbf\u4e00-\u9fff\uac00-\ud7af\uf900-\ufaff\uff00-\uffef]+(?:\s+[\u1100-\u11ff\u3000-\u30ff\u3130-\u318f\u3400-\u4dbf\u4e00-\u9fff\uac00-\ud7af\uf900-\ufaff\uff00-\uffef]+)*/g;
 const CJK_SYSTEM_FONT = Platform.select({ ios: 'System', android: 'sans-serif', default: undefined });
 
-// 디스플레이 서체에는 한중일 글자가 없어 플랫폼이 보통 굵기의 시스템 글꼴로 대신 그린다(1회차 #7).
-// 사용자 결정("한중일은 시스템 굵은 글씨와 외곽선")대로 그 구간만 시스템 굵은 글씨로 따로 그린다.
-function splitCjkRuns(children: React.ReactNode, cjkStyle: TextStyle): React.ReactNode {
-  let found = false;
+const CJK_INK_STYLE: TextStyle = { fontFamily: CJK_SYSTEM_FONT, fontWeight: '900', ...SYSTEM_OUTLINE_STYLE };
+// 초록 버튼 위 흰 글자나 그림자를 직접 정한 글자는 부모의 그림자를 그대로 물려받는다.
+const CJK_BOLD_STYLE: TextStyle = { fontFamily: CJK_SYSTEM_FONT, fontWeight: '900' };
+
+type TextDecoration = {
+  // 금액 뒤 코인 이모지(🪙) 자리에 그릴 그림 코인. 없으면(아이콘 실패, 테스트) 이모지를 그대로 둔다.
+  coin: ImageSourcePropType | null;
+  coinSize: number;
+  // 디스플레이 서체에는 한중일 글자가 없어 플랫폼이 보통 굵기의 시스템 글꼴로 대신 그린다(1회차 #7).
+  // 사용자 결정("한중일은 시스템 굵은 글씨와 외곽선")대로 그 구간만 이 스타일로 따로 그린다.
+  cjkStyle: TextStyle | null;
+};
+
+// 글자 자식의 문자열 부분만 바꾼다. 숫자와 요소는 그대로 두고, 바꿀 것이 없으면 원래 자식을 돌려준다.
+function decorateText(children: React.ReactNode, { coin, coinSize, cjkStyle }: TextDecoration): React.ReactNode {
+  if (coin == null && cjkStyle == null) return children;
+  let changed = false;
   let key = 0;
   const parts: React.ReactNode[] = [];
+  const pushRuns = (text: string) => {
+    if (cjkStyle == null) {
+      if (text.length > 0) parts.push(text);
+      return;
+    }
+    let last = 0;
+    for (const match of text.matchAll(CJK_RUN)) {
+      const start = match.index ?? 0;
+      if (start > last) parts.push(text.slice(last, start));
+      parts.push(
+        <NativeText key={`cjk-${key++}`} style={cjkStyle}>
+          {match[0]}
+        </NativeText>
+      );
+      changed = true;
+      last = start + match[0].length;
+    }
+    if (last < text.length) parts.push(text.slice(last));
+  };
   const visit = (node: React.ReactNode) => {
     if (typeof node === 'string') {
-      let last = 0;
-      for (const match of node.matchAll(CJK_RUN)) {
-        const start = match.index ?? 0;
-        if (start > last) parts.push(node.slice(last, start));
-        parts.push(
-          <Text key={`cjk-${key++}`} style={cjkStyle}>
-            {match[0]}
-          </Text>
-        );
-        found = true;
-        last = start + match[0].length;
-      }
-      if (last < node.length) parts.push(node.slice(last));
+      const segments = coin != null ? node.split(GOLD_UNIT) : [node];
+      segments.forEach((segment, index) => {
+        if (index > 0 && coin != null) {
+          parts.push(
+            <Image key={`coin-${key++}`} accessible={false} source={coin} style={{ width: coinSize, height: coinSize }} />
+          );
+          changed = true;
+        }
+        pushRuns(segment);
+      });
       return;
     }
     if (Array.isArray(node)) {
@@ -166,70 +195,82 @@ function splitCjkRuns(children: React.ReactNode, cjkStyle: TextStyle): React.Rea
     parts.push(React.isValidElement(node) ? React.cloneElement(node, { key: `node-${key++}` }) : node);
   };
   visit(children);
-  return found ? parts : children;
+  return changed ? parts : children;
 }
 
-const CJK_INK_STYLE: TextStyle = { fontFamily: CJK_SYSTEM_FONT, fontWeight: '900', ...SYSTEM_OUTLINE_STYLE };
-// 초록 버튼 위 흰 글자는 부모의 짙은 초록 그림자를 그대로 물려받는다.
-const CJK_ON_PRIMARY_STYLE: TextStyle = { fontFamily: CJK_SYSTEM_FONT, fontWeight: '900' };
+// 그림 코인으로 바꾼 글자도 스크린리더는 원래 문구(🪙 포함)를 읽어 화폐 단위를 잃지 않는다.
+function plainText(node: React.ReactNode): string {
+  if (typeof node === 'string' || typeof node === 'number') return String(node);
+  if (Array.isArray(node)) return node.map(plainText).join('');
+  if (React.isValidElement<{ children?: React.ReactNode }>(node)) return plainText(node.props.children);
+  return '';
+}
+
+function containsCoin(node: React.ReactNode): boolean {
+  if (typeof node === 'string') return node.includes(GOLD_UNIT);
+  if (Array.isArray(node)) return node.some(containsCoin);
+  return false;
+}
+
+type NativeTextProps = React.ComponentPropsWithRef<typeof NativeText>;
+// 글자 위치를 재는 곳(시트 골드 칩)이 ref 타입으로 쓴다.
+export type TextHandle = React.ComponentRef<typeof NativeText>;
+
+function useTextDecoration(style: StyleProp<TextStyle>, cjkStyle: (displayFontFamily: string) => TextStyle | null) {
+  const art = useFarmArt();
+  const flat = StyleSheet.flatten(style);
+  return {
+    coin: art.ui?.icons.coin ?? null,
+    coinSize: Math.round((flat?.fontSize ?? 14) * 1.1),
+    cjkStyle: art.displayFontFamily != null ? cjkStyle(art.displayFontFamily) : null,
+  };
+}
+
+function renderDecorated(
+  { children, accessibilityLabel, ...rest }: NativeTextProps,
+  decoration: TextDecoration
+): React.ReactElement {
+  const label = accessibilityLabel ?? (decoration.coin != null && containsCoin(children) ? plainText(children) : undefined);
+  return (
+    <NativeText
+      // 한국어가 "상/점에서"처럼 낱자 사이에서 줄을 바꾸지 않게 한다(1회차 #21, iOS).
+      lineBreakStrategyIOS="hangul-word"
+      accessibilityLabel={label}
+      {...rest}
+    >
+      {decorateText(children, decoration)}
+    </NativeText>
+  );
+}
+
+// farm-ui의 모든 화면 글자가 쓰는 공통 Text(2회차 #9). 금액 뒤 코인 이모지(🪙)를 그림 코인으로 바꾼다.
+// iOS의 🪙는 은색 동전이라 HUD의 금색 새싹 코인과 다른 재화로 읽힌다. 디스플레이 서체를 직접 얹은
+// 글자(HUD 금액, 카운트업)는 한중일 글자를 시스템 굵은 글씨로 그린다(2회차 #7).
+export function Text(props: NativeTextProps) {
+  const decoration = useTextDecoration(props.style, (displayFontFamily) =>
+    StyleSheet.flatten(props.style)?.fontFamily === displayFontFamily ? CJK_BOLD_STYLE : null
+  );
+  return renderDecorated(props, decoration);
+}
 
 // 숫자와 라틴 문자는 디스플레이 서체로, 없으면 시스템 굵은 글씨에 옅은 갈색 아래 띠를 준다.
 // 한중일 글자는 서체가 있어도 시스템 굵은 글씨와 아래 띠로 그린다.
-export function GameText({
-  tone = 'ink',
-  style,
-  children,
-  ...rest
-}: TextProps & { tone?: GameTextTone; style?: StyleProp<TextStyle> }) {
+export function GameText({ tone = 'ink', style, ...rest }: NativeTextProps & { tone?: GameTextTone }) {
   const fontStyle = useDisplayFontStyle();
-  const hasDisplayFont = fontStyle.fontFamily != null;
-  return (
-    <Text
-      maxFontSizeMultiplier={GAME_UI_MAX_FONT_SCALE}
-      // 한국어가 "상/점에서"처럼 낱자 사이에서 줄을 바꾸지 않게 한다(1회차 #21, iOS).
-      lineBreakStrategyIOS="hangul-word"
-      {...rest}
-      style={[
+  const decoration = useTextDecoration(style, () => (tone === 'onPrimary' ? CJK_BOLD_STYLE : CJK_INK_STYLE));
+  return renderDecorated(
+    {
+      maxFontSizeMultiplier: GAME_UI_MAX_FONT_SCALE,
+      ...rest,
+      style: [
         styles.text,
         fontStyle,
         // 초록 버튼 위 흰 글자는 서체와 관계없이 짙은 초록 그림자로 읽힘을 지킨다.
         tone === 'onPrimary' ? styles.onPrimary : tone === 'muted' ? styles.muted : styles.ink,
         style,
-      ]}
-    >
-      {hasDisplayFont ? splitCjkRuns(children, tone === 'onPrimary' ? CJK_ON_PRIMARY_STYLE : CJK_INK_STYLE) : children}
-    </Text>
-  );
-}
-
-// 금액 뒤 코인 이모지(🪙)를 그림 코인으로 바꿔 그린다(1회차 #9). iOS의 🪙는 은색 동전이라 HUD의
-// 금색 새싹 코인과 다른 재화로 읽힌다. 그림이 없으면(아이콘 실패, 테스트) 이모지를 그대로 둔다.
-export function CoinText({
-  children,
-  style,
-  iconSize,
-  ...rest
-}: Omit<TextProps, 'children'> & { children: string; iconSize?: number }) {
-  const coin = useFarmArt().ui?.icons.coin;
-  if (coin == null || !children.includes(GOLD_UNIT)) {
-    return (
-      <Text lineBreakStrategyIOS="hangul-word" {...rest} style={style}>
-        {children}
-      </Text>
-    );
-  }
-  const fontSize = StyleSheet.flatten(style)?.fontSize ?? 14;
-  const size = iconSize ?? Math.round(fontSize * 1.1);
-  const segments = children.split(GOLD_UNIT);
-  return (
-    // 스크린리더는 원래 문구를 읽어 코인 단위("🪙")를 잃지 않는다.
-    <Text lineBreakStrategyIOS="hangul-word" accessibilityLabel={children} {...rest} style={style}>
-      {segments.flatMap((segment, index) =>
-        index === 0
-          ? [segment]
-          : [<Image key={`coin-${index}`} accessible={false} source={coin} style={{ width: size, height: size }} />, segment]
-      )}
-    </Text>
+      ],
+    },
+    decoration
   );
 }
 

@@ -43,10 +43,12 @@ export function RewardPopup({
 }) {
   const popIn = usePopInStyle();
   const displayFont = useDisplayFontStyle();
-  // 팝업이 뜬 순간부터 0에서 받은 금액까지 올린다. 한 번 정한 시작 시각은 다시 그려도 바꾸지 않는다.
-  const [countUp] = useState<CountUpRun | null>(() =>
-    motionEnabled && amount != null ? { from: 0, to: amount.value, startedAt: Date.now() } : null
-  );
+  // 금액이 처음 보이는 순간부터 0에서 받은 금액까지 올린다. 한 번 정한 시작 시각은 다시 그려도 바꾸지
+  // 않는다. 첫 수확 보상은 팝업이 수확과 같은 프레임에 뜨고 금액은 한 박자 뒤에 들어온다(2회차 N3).
+  const [countUp, setCountUp] = useState<CountUpRun | null>(null);
+  if (countUp == null && motionEnabled && amount != null) {
+    setCountUp({ from: 0, to: amount.value, startedAt: Date.now() });
+  }
   return (
     <View testID={testID} style={styles.root}>
       <GamePressable

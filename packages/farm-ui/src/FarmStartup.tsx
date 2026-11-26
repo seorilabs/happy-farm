@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Image, Pressable, StyleSheet, Text, View, useWindowDimensions, type ImageSourcePropType } from 'react-native';
+import { Image, Pressable, StyleSheet, View, useWindowDimensions, type ImageSourcePropType } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { DEFAULT_LOCALE, type GameState, type SupportedLocale } from '../../farm-core/src';
@@ -7,6 +7,7 @@ import type { FarmGamePersistence } from './FarmGame';
 import { normalizeFarmGameSettings, type FarmGameSettings } from './gameSettings';
 import { getFarmMessages } from './i18n';
 import { resolveBottomSafeInset } from './safeArea';
+import { Text } from './components/GameUi';
 
 export type FarmStartupSnapshot = {
   gameState: GameState;

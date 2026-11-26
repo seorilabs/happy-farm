@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import {
   COOKING_DISHES,
@@ -25,6 +25,7 @@ import {
 
 import type { FarmMessages } from '../i18n';
 import { SheetAction } from './SheetParts';
+import { Text } from './GameUi';
 
 // 요리 솥 + 요리 도감 시트(#442). '더보기' 시트 한 뎁스 뒤에서 진입한다.
 //

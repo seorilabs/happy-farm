@@ -11,9 +11,14 @@ export function isFirstSessionPopupHoldActive(gameState: GameState, firstSession
   );
 }
 
-// 자동 팝업끼리의 최소 간격(1회차 #4). 첫 밭을 늘린 직후 출석, 알림 안내, 광고 제안, 기능 안내가 3분 안에
-// 연달아 떴다. 광고 제안은 다른 자동 팝업이 뜬 뒤 이만큼 지나야 연다.
+// 자동 팝업끼리의 최소 간격(1회차 #4, 2회차 N9). 첫 밭을 늘린 직후 출석, 알림 안내, 광고 제안, 기능 안내가
+// 연달아 떴다. 광고 제안과 기능 안내는 다른 자동 팝업이 뜬 뒤 이만큼 지나야 연다. 출석 다음의 알림 안내는
+// 설계(AC-4)대로 출석을 닫으면 바로 하나씩 이어진다.
 export const AUTO_POPUP_MIN_GAP_MS = 60_000;
+
+export function getAutoPopupGapRemainingMs(lastAutoPopupAt: number | null, now: number): number {
+  return lastAutoPopupAt == null ? 0 : Math.max(0, lastAutoPopupAt + AUTO_POPUP_MIN_GAP_MS - now);
+}
 
 // 수확 뒤 수확 보너스 광고 제안을 자동으로 열지 정한다(1회차 #4). 첫 세션에서 첫 밭을 늘리기 전에는
 // 출석 보너스, 알림 안내와 같이 미룬다. GA4에서 첫 1분 안의 광고 제안(중앙값 48초)이 첫 목표를 가렸다.
@@ -29,5 +34,5 @@ export function canAutoOpenHarvestBonusOffer(input: {
   if (!input.nudgeEligible || !input.onboardingCompleted || input.firstMeaningfulHarvest || input.firstSessionHold) {
     return false;
   }
-  return input.lastAutoPopupAt == null || input.now - input.lastAutoPopupAt >= AUTO_POPUP_MIN_GAP_MS;
+  return getAutoPopupGapRemainingMs(input.lastAutoPopupAt, input.now) === 0;
 }

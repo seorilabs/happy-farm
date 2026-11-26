@@ -1,5 +1,5 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import {
   PRESTIGE_SKILLS,
@@ -28,6 +28,7 @@ import {
 import type { FarmMessages } from '../i18n';
 import { LandmarkProjectSection } from './LandmarkProjectSection';
 import { SheetAction, ShopCard, sheetPartStyles } from './SheetParts';
+import { Text } from './GameUi';
 
 function formatMultiplier(value: number): string {
   return `×${Number(value.toFixed(2))}`;

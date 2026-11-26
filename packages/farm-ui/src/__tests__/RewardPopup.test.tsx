@@ -49,6 +49,23 @@ describe('RewardPopup (1회차 #2, #6)', () => {
     }
   });
 
+  // 2회차 N3 수정으로 보상 팝업이 수확과 같은 프레임에 뜨고, 받은 금액은 한 박자 뒤에 들어온다.
+  test('금액이 팝업보다 늦게 들어와도 0부터 올라간다', () => {
+    jest.useFakeTimers();
+    try {
+      const props = { title: 'First harvest complete!', confirmLabel: 'Continue', motionEnabled: true, onConfirm: () => undefined };
+      const view = render(<RewardPopup {...props} amount={null} />);
+      view.rerender(<RewardPopup {...props} amount={{ value: 14, format: (value) => `+${value}` }} />);
+      expect(view.queryByText('+14')).toBeNull();
+      act(() => {
+        jest.advanceTimersByTime(2_000);
+      });
+      expect(view.getByText('+14')).toBeTruthy();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   test('금액을 모르면(이어 하기) 코인만 보인다', () => {
     const view = render(
       <RewardPopup title="First harvest complete!" confirmLabel="Continue" motionEnabled={false} onConfirm={() => undefined} />

@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
 import {
   formatDuration,
@@ -15,6 +15,7 @@ import {
 
 import type { FarmMessages } from '../i18n';
 import { getWeeklyEventPresentation } from '../weeklyEventPresentation';
+import { Text } from './GameUi';
 
 // 헤더 HUD에서 옮겨온 보조 지표 배수 포맷터. 지역 스케일링이 배수를 업그레이드 범위보다
 // 훨씬 크게 밀어올릴 수 있어, 소수 표기가 의미 없어지는 100배 이상은 정수+천단위 구분으로,

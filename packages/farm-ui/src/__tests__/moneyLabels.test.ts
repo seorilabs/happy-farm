@@ -9,7 +9,10 @@ import { getFarmMessages } from '../i18n';
 // #606 AC-10: 금액 뒤에 붙던 "G"가 K, M과 만나 "48.5KG"처럼 무게로 읽혔다. 금액 단위는 코인(🪙)으로 쓴다.
 // 템플릿 문자열(`${amount}G`)과 JSX 글자({formatMoney(...)}G, {notice.goldFormatted}G)를 모두 잡도록
 // 보간을 닫는 중괄호 바로 뒤의 G 단위를 찾는다.
-const MONEY_G_AFTER_INTERPOLATION = /\}\s?G(?![A-Za-z0-9_])/;
+// 2회차 N5: 문구에 직접 쓴 금액("10만G", "10万G", "10 萬G")도 같은 규칙으로 잡는다.
+const MONEY_G_AFTER_INTERPOLATION = /(?:\}|[0-9](?:\s?[KMBT만억조万萬億亿])?)\s?G(?![A-Za-z0-9_])/;
+// 주석은 사용자에게 보이지 않으므로 뺀다.
+const isMoneyGLine = (line: string) => !/^\s*(\/\/|\*|\/\*)/.test(line) && MONEY_G_AFTER_INTERPOLATION.test(line);
 
 describe('금액 표기 (#606 AC-10)', () => {
   test('문구 카탈로그 8개 언어에 금액 뒤 G 단위가 없다', () => {
@@ -17,7 +20,7 @@ describe('금액 표기 (#606 AC-10)', () => {
     for (const file of readdirSync(dir).filter((name) => name.endsWith('.ts'))) {
       const offending = readFileSync(path.join(dir, file), 'utf8')
         .split('\n')
-        .filter((line) => MONEY_G_AFTER_INTERPOLATION.test(line));
+        .filter(isMoneyGLine);
       expect({ file, offending }).toEqual({ file, offending: [] });
     }
   });
@@ -37,9 +40,36 @@ describe('금액 표기 (#606 AC-10)', () => {
     const offending = files.flatMap((file) =>
       readFileSync(file, 'utf8')
         .split('\n')
-        .filter((line) => MONEY_G_AFTER_INTERPOLATION.test(line))
+        .filter(isMoneyGLine)
         .map((line) => `${path.basename(file)}: ${line.trim()}`)
     );
+    expect(offending).toEqual([]);
+  });
+
+  // 2회차 #9 잔여: 화면마다 CoinText를 골라 쓰다 보니 주 버튼, 복귀 시트, 미션 버튼에 은색 🪙가 남았다.
+  // 화면 글자는 모두 코인을 그림으로 바꾸는 공통 Text(components/GameUi)를 거친다.
+  test('화면 코드는 react-native의 Text를 직접 쓰지 않는다', () => {
+    const root = path.join(__dirname, '..');
+    // GameUi는 공통 Text를 만드는 곳이고, farmArt는 GameUi가 읽는 아트 계약이라 순환을 피한다.
+    const allowed = new Set(['components/GameUi.tsx', 'farmArt.tsx']);
+    const files: string[] = [];
+    const walk = (dir: string) => {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        if (entry.name === '__tests__') continue;
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) walk(full);
+        else if (/\.tsx$/.test(entry.name)) files.push(full);
+      }
+    };
+    walk(root);
+    const offending = files
+      .filter((file) => !allowed.has(path.relative(root, file)))
+      .filter((file) =>
+        [...readFileSync(file, 'utf8').matchAll(/import\s*\{([^}]*)\}\s*from\s*'react-native'/g)].some((match) =>
+          /(^|[\s,])Text(\s*,|\s*$)/.test(match[1] ?? '')
+        )
+      )
+      .map((file) => path.relative(root, file));
     expect(offending).toEqual([]);
   });
 
