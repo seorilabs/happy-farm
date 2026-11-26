@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
 import {
   formatMoney,
@@ -14,6 +14,7 @@ import {
 
 import type { FarmMessages } from '../i18n';
 import { SheetAction } from './SheetParts';
+import { Text } from './GameUi';
 
 // 동물 사육/생산 시트(#249). '더보기' 시트 한 뎁스 뒤에서 진입한다.
 //

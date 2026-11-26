@@ -1,10 +1,11 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { AppState, BackHandler, Keyboard, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { AppState, BackHandler, Keyboard, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { SupportedLocale } from '../../farm-core/src';
 import { getFarmMessages } from './i18n';
 import type { FarmUpdateGateController, FarmUpdateGatePresentation, FarmUpdateNotice } from './updateGate';
 import { FarmUpdateGateModal } from './FarmUpdateGateModal';
+import { Text } from './components/GameUi';
 
 type VisibleNotice = { state: FarmUpdateNotice; id: number };
 

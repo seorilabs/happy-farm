@@ -91,6 +91,7 @@ import {
   PLOT_GAP,
 } from '../../../../../packages/farm-ui/src/farmGameLayout';
 import { REWARD_BURST_TOTAL_MS } from '../../../../../packages/farm-ui/src/rewardBurst';
+import { AUTO_POPUP_MIN_GAP_MS } from '../../../../../packages/farm-ui/src/firstSessionPopups';
 
 const NOW = Date.parse('2026-05-27T03:00:00.000Z');
 
@@ -3879,6 +3880,11 @@ describe('FarmGame UI flow', () => {
       expect(screen.queryByTestId('ftue-spotlight-pulse')).toBeNull();
     });
 
+    test('온보딩을 마친 농장 기록을 불러오면 불러왔다는 토스트를 띄운다 (2회차 N4의 반대 경우)', async () => {
+      const screen = await renderGame(createInitialState());
+      await waitFor(() => expect(screen.getByText(messages.saveLoadedToast)).toBeTruthy());
+    });
+
     test('#606 AC-1 새 세이브는 다 자란 칸만 밝히고 메뉴 배지를 숨기며, 밝힌 칸 밖 탭은 아무것도 열지 않는다', async () => {
       const track = jest.fn();
       const screen = await renderOnboardingGame(null, {
@@ -3887,6 +3893,8 @@ describe('FarmGame UI flow', () => {
       });
       await waitFor(() => expect(screen.getByText(messages.onboardingHarvestTitle)).toBeTruthy());
       await waitFor(() => expect(screen.getByTestId('ftue-spotlight-pointer')).toBeTruthy());
+      // 2회차 N4: 불러올 기록이 없는 새 사용자에게 "기록을 불러왔어요"를 띄우지 않는다.
+      expect(screen.queryByText(messages.saveLoadedToast)).toBeNull();
 
       // 막 네 장이 화면을 덮고 각각 터치를 받아 삼킨다.
       const blockers = [0, 1, 2, 3].map((index) => screen.getByTestId(`ftue-spotlight-blocker-${index}`));
@@ -7897,6 +7905,11 @@ describe('NextGoalBar', () => {
     const shortfall = formatMoney(getPlotCost(fresh.unlockedPlotCount) - fresh.gold, DEFAULT_LOCALE);
     await waitFor(() => expect(screen.getAllByText(messages.plantGoldShortfall(shortfall)).length).toBeGreaterThan(0));
     expect(getLatestPersistedState().unlockedPlotCount).toBe(fresh.unlockedPlotCount);
+    // 2회차 N6: 시트 위 토스트는 HUD 줄 아래에 떠서 골드 칩을 가리지 않는다.
+    act(() => {
+      fireEvent(screen.getByTestId('hud-row'), 'layout', { nativeEvent: { layout: { x: 0, y: 8, width: 390, height: 56 } } });
+    });
+    expect(StyleSheet.flatten(screen.getByTestId('toast-sheet').props.style).top).toBe(72);
     // 살 수 없는 가격표는 초록이 아니라 무채색이다.
     expect(StyleSheet.flatten(within(row).getByText(`${formatMoney(getPlotCost(fresh.unlockedPlotCount), DEFAULT_LOCALE)} 🪙`).props.style).backgroundColor).toBe('#b5ab98');
   });
@@ -8108,15 +8121,28 @@ describe('NextGoalBar', () => {
     // UI 검수 1회차 R1-2 root cause: the coachmark mounted for one render before the prompt
     // effect ran, then got swapped out mid-presentation and iOS refused the prompt.
     test('R1-2 never mounts the feature coachmark while the notification prompt is due', async () => {
-      mockModalControl.renders = [];
-      const notifications = createNotificationsMock();
-      const screen = await renderGame({ ...createPostAhaState(), gold: 600 }, { notifications });
+      jest.useFakeTimers();
+      try {
+        mockModalControl.renders = [];
+        const notifications = createNotificationsMock();
+        const screen = await renderGame({ ...createPostAhaState(), gold: 600 }, { notifications });
 
-      await waitFor(() => expect(screen.getByTestId('notification-prompt-card')).toBeTruthy());
-      expect(mockModalControl.renders).not.toContain('feature-coachmark-overlay');
+        await waitFor(() => expect(screen.getByTestId('notification-prompt-card')).toBeTruthy());
+        expect(mockModalControl.renders).not.toContain('feature-coachmark-overlay');
 
-      fireEvent.press(screen.getByTestId('notification-prompt-decline'));
-      await waitFor(() => expect(screen.getByTestId('feature-coachmark-card')).toBeTruthy());
+        fireEvent.press(screen.getByTestId('notification-prompt-decline'));
+        // 2회차 N9: 기능 안내는 알림 안내를 닫자마자 뜨지 않고, 알림 안내가 뜬 뒤 최소 간격을 둔다.
+        await act(async () => {
+          jest.advanceTimersByTime(AUTO_POPUP_MIN_GAP_MS - 1_000);
+        });
+        expect(screen.queryByTestId('feature-coachmark-card')).toBeNull();
+        await act(async () => {
+          jest.advanceTimersByTime(1_000);
+        });
+        await waitFor(() => expect(screen.getByTestId('feature-coachmark-card')).toBeTruthy());
+      } finally {
+        jest.useRealTimers();
+      }
     });
 
     test('R1-2 waits for the closing sheet to report onDismiss on iOS before showing the prompt', async () => {
@@ -8544,6 +8570,11 @@ describe('하단 safe-area 인셋 적용 (#236)', () => {
       jest.useFakeTimers();
       try {
         const screen = await renderGameWithDailyBonusSheet(animalsUnlockedState());
+        // 2회차 N9: 기능 안내는 출석 자동 팝업이 뜬 뒤 최소 간격을 둔다. 시트가 열린 채로 간격을 먼저
+        // 지나 보내 onDismiss를 기다리는지만 본다.
+        await act(async () => {
+          jest.advanceTimersByTime(AUTO_POPUP_MIN_GAP_MS);
+        });
 
         await closeOpenSheet(screen);
         expect(screen.queryByTestId('feature-coachmark-card')).toBeNull();

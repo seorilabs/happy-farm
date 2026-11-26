@@ -1,5 +1,5 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import {
   getAnimalStates,
@@ -14,6 +14,7 @@ import {
 import type { FarmMessages } from '../i18n';
 import { AnimalsSheet } from './AnimalsSheet';
 import { WorkshopSheet } from './WorkshopSheet';
+import { Text } from './GameUi';
 
 export type ProductionTabKey = 'animals' | 'workshop';
 

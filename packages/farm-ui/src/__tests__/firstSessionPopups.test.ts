@@ -3,6 +3,7 @@
 import { createInitialState, type GameState } from '../../../farm-core/src';
 import {
   AUTO_POPUP_MIN_GAP_MS,
+  getAutoPopupGapRemainingMs,
   canAutoOpenHarvestBonusOffer,
   isFirstSessionPopupHoldActive,
 } from '../firstSessionPopups';
@@ -58,5 +59,18 @@ describe('canAutoOpenHarvestBonusOffer (1회차 #4)', () => {
     expect(canAutoOpenHarvestBonusOffer({ ...eligible, onboardingCompleted: false })).toBe(false);
     expect(canAutoOpenHarvestBonusOffer({ ...eligible, firstMeaningfulHarvest: true })).toBe(false);
     expect(canAutoOpenHarvestBonusOffer({ ...eligible, nudgeEligible: false })).toBe(false);
+  });
+});
+
+// 2회차 N9: 첫 밭 해금 직후 출석, 알림 안내, 기능 안내가 20초 안에 연달아 떴다. 계획대로 기능 안내도
+// 다른 자동 팝업이 뜬 뒤 간격을 두고 띄운다.
+describe('getAutoPopupGapRemainingMs (2회차 N9)', () => {
+  test('직전 자동 팝업이 없으면 기다리지 않는다', () => {
+    expect(getAutoPopupGapRemainingMs(null, 1_000)).toBe(0);
+  });
+
+  test('직전 자동 팝업이 뜬 뒤 최소 간격이 지날 때까지 남은 시간을 준다', () => {
+    expect(getAutoPopupGapRemainingMs(1_000, 1_000 + 20_000)).toBe(AUTO_POPUP_MIN_GAP_MS - 20_000);
+    expect(getAutoPopupGapRemainingMs(1_000, 1_000 + AUTO_POPUP_MIN_GAP_MS)).toBe(0);
   });
 });

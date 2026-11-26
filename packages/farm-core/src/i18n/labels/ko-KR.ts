@@ -281,7 +281,7 @@ export const koKRLabels: LabelBundle = {
     volcano: { name: '화산섬' },
   },
   prestigeSkill: {
-    starting_capital: { name: '시작 자금', description: '개척 후 시작 골드가 레벨당 10만G 늘어나요.' },
+    starting_capital: { name: '시작 자금', description: '개척 후 시작 골드가 레벨당 10만 늘어나요.' },
     global_profit: { name: '전역 판로', description: '모든 판매 수익이 레벨당 10% 늘어나요.' },
     global_speed: { name: '전역 성장', description: '모든 작물이 레벨당 5% 더 빨리 자라요.' },
     chain_yield: { name: '체인 운영', description: '운영 농장 수익이 레벨당 20% 늘어나요.' },

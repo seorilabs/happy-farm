@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
 import {
   LANDMARK_STAGES,
@@ -14,6 +14,7 @@ import {
 
 import type { FarmMessages } from '../i18n';
 import { SheetAction, sheetPartStyles } from './SheetParts';
+import { Text } from './GameUi';
 
 export const LANDMARK_FUND_CONFIRM_WINDOW_MS = 4000;
 

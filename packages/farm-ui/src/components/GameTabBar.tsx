@@ -48,8 +48,10 @@ export function GameTabBar({
           style={styles.tab}
           onPress={tab.onPress}
         >
-          {tab.current === true ? (
-            <View style={styles.currentDisc}>
+          {/* 막혀 있으면(스포트라이트) 솟은 원을 그리지 않는다. 원의 머리가 탭 바 위로 나와 막 밖에서
+              밝게 남았다(2회차 N1). 화면 전체가 어두워 다른 탭과 같은 모양이어도 구분할 일이 없다. */}
+          {tab.current === true && !blocked ? (
+            <View testID="game-tab-current-disc" style={styles.currentDisc}>
               <UiIcon name={tab.icon} size={40} fallback={tab.fallback} />
             </View>
           ) : (

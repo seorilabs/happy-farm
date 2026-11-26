@@ -579,6 +579,13 @@ export const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingBottom: 4,
   },
+  // 글자가 오른쪽 끝 곡선(끝 조각 폭 약 29pt)에 닿지 않게 오른쪽을 더 비운다. 왼쪽은 둥근 아이콘이
+  // 곡선 안에 들어가도 어색하지 않아 그만큼 줄여 글자 폭을 지킨다(2회차 N8).
+  batchActionContentLabeled: {
+    gap: 4,
+    paddingLeft: 10,
+    paddingRight: 20,
+  },
   batchActionEmoji: {
     fontSize: 22,
   },
@@ -782,6 +789,9 @@ export const styles = StyleSheet.create({
   // 상단의 마스터리·NEW 배지(절대 배치)와 겹치지 않게 한다.
   toolBonusBadgeRow: {
     flexDirection: 'row',
+    // 배수와 배지 둘이 다 붙어 폭이 모자라면 다음 줄로 넘긴다.
+    flexWrap: 'wrap',
+    alignItems: 'center',
     justifyContent: 'center',
     gap: 3,
   },

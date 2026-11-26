@@ -1,7 +1,7 @@
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
-import { CoinText } from './GameUi';
+import { Text } from './GameUi';
 import { GamePressable, PRESSED_DEPTH_STYLE } from './GamePressable';
 
 export function SheetAction({
@@ -101,11 +101,11 @@ export function ShopCard({
           <Text style={sheetPartStyles.shopTitle} lineBreakStrategyIOS="hangul-word">
             {title}
           </Text>
-          <CoinText style={sheetPartStyles.shopDesc} textBreakStrategy="balanced">
+          <Text style={sheetPartStyles.shopDesc} textBreakStrategy="balanced">
             {desc}
-          </CoinText>
+          </Text>
         </View>
-        <CoinText
+        <Text
           style={[
             sheetPartStyles.shopPrice,
             priceTone === 'speed' && sheetPartStyles.speedPrice,
@@ -115,7 +115,7 @@ export function ShopCard({
           ]}
         >
           {price}
-        </CoinText>
+        </Text>
       </View>
       {showProgress ? (
         <View style={sheetPartStyles.upgradeTrack}>
@@ -154,9 +154,9 @@ export function AdRewardCard({
       <View style={sheetPartStyles.shopCardRow}>
         <View style={sheetPartStyles.shopTextGroup}>
           <Text style={sheetPartStyles.shopTitle}>{title}</Text>
-          <CoinText style={sheetPartStyles.shopDesc} textBreakStrategy="balanced">
+          <Text style={sheetPartStyles.shopDesc} textBreakStrategy="balanced">
             {desc}
-          </CoinText>
+          </Text>
         </View>
         <Text style={sheetPartStyles.shopPrice}>{cta}</Text>
       </View>

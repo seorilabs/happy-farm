@@ -1,5 +1,5 @@
 import React from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { CropGlyph } from '../farmArt';
 import {
@@ -30,6 +30,7 @@ import {
 
 import type { FarmMessages } from '../i18n';
 import { SheetAction, sheetPartStyles } from './SheetParts';
+import { Text } from './GameUi';
 
 function getKnownCrop(cropKey: CropKey) {
   const crop = CROPS[cropKey];

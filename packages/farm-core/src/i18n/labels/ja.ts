@@ -281,7 +281,7 @@ export const jaLabels: LabelBundle = {
     volcano: { name: '火山島' },
   },
   prestigeSkill: {
-    starting_capital: { name: '開拓資金', description: '開拓後の開始ゴールドがレベルごとに10万G増えます。' },
+    starting_capital: { name: '開拓資金', description: '開拓後の開始ゴールドがレベルごとに10万増えます。' },
     global_profit: { name: '世界市場', description: 'すべての販売利益がレベルごとに10%増えます。' },
     global_speed: { name: '世界成長', description: 'すべての作物がレベルごとに5%速く育ちます。' },
     chain_yield: { name: 'チェーン運営', description: '運営農場の収益がレベルごとに20%増えます。' },

@@ -1,5 +1,5 @@
 import React, { memo } from 'react';
-import { StyleSheet, Text, View, type ViewStyle } from 'react-native';
+import { StyleSheet, View, type ViewStyle } from 'react-native';
 
 import {
   DEFAULT_AREA_ENVIRONMENT_THEME,
@@ -10,6 +10,7 @@ import {
   type SeasonalAmbienceParticle,
   type WeatherKey,
 } from '../../../farm-core/src';
+import { Text } from './GameUi';
 
 type EnvironmentBackdropProps = {
   phase: EnvironmentPhase;

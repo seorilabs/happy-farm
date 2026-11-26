@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
+import { Animated, Easing, StyleSheet, View } from 'react-native';
 
 import { ABSOLUTE_FILL } from '../absoluteFill';
 import {
@@ -9,11 +9,12 @@ import {
   getSpotlightBubbleFrame,
   type Rect,
 } from '../ftueSpotlight';
-import { GAME_UI_MAX_FONT_SCALE, GameText, UiIcon } from './GameUi';
+import { GAME_UI_MAX_FONT_SCALE, GameText, Text, UiIcon } from './GameUi';
 import { GamePressable, PRESSED_SINK_STYLE } from './GamePressable';
 import { usePopInStyle } from './popIn';
 
 const POINTER_SIZE = 44;
+const PENDING_SKIP_DELAY_MS = 1_000;
 
 // 첫 수확 스포트라이트(#606 AC-1). 부모(페이지 내용) 전체를 어둡게 덮고 hole 자리만 비운다.
 // 막 네 장이 터치를 받아 삼키므로 밝힌 칸 밖을 눌러도 아무것도 열리지 않는다. 구멍에는 막이 없어
@@ -63,6 +64,17 @@ export function FtueSpotlight({
   }
   const bob = bobRef.current;
   const visible = hole != null && size != null;
+  // 칸을 재기 전 한두 프레임은 건너뛰기 위치(밭 바로 위)도 몰라 화면 맨 위에 그려졌다. 재는 데 1초가 넘게
+  // 걸릴 때만 그 자리에 보여, 칸을 끝내 재지 못해도 어두운 화면에 갇히지 않게 한다.
+  const [measureSlow, setMeasureSlow] = useState(false);
+  useEffect(() => {
+    if (visible) {
+      setMeasureSlow(false);
+      return;
+    }
+    const timer = setTimeout(() => setMeasureSlow(true), PENDING_SKIP_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [visible]);
 
   useEffect(() => {
     if (!visible || !motionEnabled) {
@@ -81,6 +93,16 @@ export function FtueSpotlight({
 
   return (
     <View ref={layerRef} testID="ftue-spotlight" pointerEvents="box-none" style={styles.layer} onLayout={onLayout}>
+      {/* 밝힐 칸을 재기 전(진입 직후 몇 프레임)에도 화면을 먼저 어둡게 덮는다. 그 사이 딤 없는 메인과
+          배지가 비치고 메뉴가 눌렸다(2회차 N2). */}
+      {!visible ? (
+        <View
+          testID="ftue-spotlight-pending"
+          style={[styles.dim, ABSOLUTE_FILL]}
+          onStartShouldSetResponder={() => true}
+          onResponderRelease={onBlockedTap}
+        />
+      ) : null}
       {visible
         ? getSpotlightBlockers(size, hole).map((rect, index) => (
             <View
@@ -150,29 +172,31 @@ export function FtueSpotlight({
           >
             <GameText style={styles.bubbleText}>{hint}</GameText>
           </View>
-          <GamePressable
-            testID="onboarding-skip"
-            accessibilityRole="button"
-            accessibilityLabel={skip.label}
-            hitSlop={10}
-            style={[styles.skipLink, { top: Math.max(4, skipTop) }]}
-            onPress={() => setSkipConfirmOpen(true)}
-          >
-            <Text style={styles.skipLinkText} maxFontSizeMultiplier={GAME_UI_MAX_FONT_SCALE}>
-              {skip.label}
-            </Text>
-          </GamePressable>
-          {skipConfirmOpen ? (
-            <SkipConfirm
-              copy={skip}
-              onCancel={() => setSkipConfirmOpen(false)}
-              onConfirm={() => {
-                setSkipConfirmOpen(false);
-                onSkip();
-              }}
-            />
-          ) : null}
         </>
+      ) : null}
+      {visible || measureSlow ? (
+        <GamePressable
+          testID="onboarding-skip"
+          accessibilityRole="button"
+          accessibilityLabel={skip.label}
+          hitSlop={10}
+          style={[styles.skipLink, { top: Math.max(4, skipTop) }]}
+          onPress={() => setSkipConfirmOpen(true)}
+        >
+          <Text style={styles.skipLinkText} maxFontSizeMultiplier={GAME_UI_MAX_FONT_SCALE}>
+            {skip.label}
+          </Text>
+        </GamePressable>
+      ) : null}
+      {skipConfirmOpen ? (
+        <SkipConfirm
+          copy={skip}
+          onCancel={() => setSkipConfirmOpen(false)}
+          onConfirm={() => {
+            setSkipConfirmOpen(false);
+            onSkip();
+          }}
+        />
       ) : null}
     </View>
   );

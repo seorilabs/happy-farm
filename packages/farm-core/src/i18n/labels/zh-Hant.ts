@@ -281,7 +281,7 @@ export const zhHantLabels: LabelBundle = {
     volcano: { name: '火山島' },
   },
   prestigeSkill: {
-    starting_capital: { name: '起始資金', description: '開拓後每級起始金幣增加 10 萬G。' },
+    starting_capital: { name: '起始資金', description: '開拓後每級起始金幣增加 10 萬。' },
     global_profit: { name: '全域市場', description: '每級全區域販售收益增加 10%。' },
     global_speed: { name: '全域成長', description: '每級所有作物成長速度加快 5%。' },
     chain_yield: { name: '連鎖經營', description: '每級連鎖農場收益增加 20%。' },

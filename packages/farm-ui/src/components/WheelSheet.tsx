@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
+import { Animated, Easing, StyleSheet, View } from 'react-native';
 
 import {
   HARVEST_BONUS_MULTIPLIER,
@@ -17,6 +17,7 @@ import {
 
 import type { FarmMessages } from '../i18n';
 import { SheetAction } from './SheetParts';
+import { Text } from './GameUi';
 
 // 데일리 룰렛 시트(#208).
 //

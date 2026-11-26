@@ -1,5 +1,5 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import {
   BREEDING_RECIPES,
@@ -25,6 +25,7 @@ import {
 
 import type { FarmMessages } from '../i18n';
 import { SettingToggle, ShopCard, sheetPartStyles } from './SheetParts';
+import { Text } from './GameUi';
 
 function getKnownCrop(cropKey: CropKey) {
   const crop = CROPS[cropKey];

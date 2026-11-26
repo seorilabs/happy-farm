@@ -1,5 +1,5 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import {
   ACHIEVEMENT_TITLES,
@@ -18,6 +18,7 @@ import {
 
 import type { FarmMessages } from '../i18n';
 import { SheetAction, sheetPartStyles } from './SheetParts';
+import { Text } from './GameUi';
 
 export function AchievementsSheet({
   gameState,

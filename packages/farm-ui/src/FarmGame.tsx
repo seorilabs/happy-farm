@@ -12,7 +12,6 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   TextInput,
   Vibration,
   View,
@@ -293,20 +292,22 @@ import {
   type PendingSheetSource,
   type SheetDwell,
 } from './sheetAnalytics';
-import { canAutoOpenHarvestBonusOffer, isFirstSessionPopupHoldActive } from './firstSessionPopups';
+import { AUTO_POPUP_MIN_GAP_MS, canAutoOpenHarvestBonusOffer, isFirstSessionPopupHoldActive } from './firstSessionPopups';
 import type { FarmUiIconKey } from './farmArt';
 import { findSpotlightPlotIndex, getPlotCellRect } from './ftueSpotlight';
+import { shouldDismissSheetDrag } from './sheetDrag';
 import { FtueSpotlight } from './components/FtueSpotlight';
 import {
-  CoinText,
   GAME_UI_MAX_FONT_SCALE,
   GameBadge,
   GameText,
   HudIconButton,
   SkinFrame,
+  Text,
   UiIcon,
   useDisplayFontStyle,
   type BadgeValue,
+  type TextHandle,
 } from './components/GameUi';
 import { GameTabBar } from './components/GameTabBar';
 import { measureNodeInWindow } from './measureInWindow';
@@ -424,8 +425,6 @@ export const ONBOARDING_STALL_MS = 15_000;
 // 남아 실제 활성화를 완료로 기록하지 못하므로, 다음 조작이 없더라도 8초 뒤 걷는다.
 // reward 정체는 이 종료 시점보다 긴 15초 stall 대신 completion_source로 구분한다.
 export const ONBOARDING_REWARD_AUTO_DISMISS_MS = 8_000;
-const SHEET_DISMISS_DRAG_DISTANCE = 96;
-const SHEET_DISMISS_VELOCITY = 1.1;
 const SHEET_DISMISS_TRANSLATE_Y = 520;
 const SHEET_ANIMATION_DURATION_MS = 180;
 // 시트가 열릴 때 살짝 튕긴다(#606). 튕겨 올라간 만큼 아래가 비지 않도록 시트를 화면 아래로 더 늘린다.
@@ -1192,9 +1191,24 @@ function FarmGameBody({
   const [isReturnAdPending, setReturnAdPending] = useState(false);
   // 마지막으로 자동 팝업(출석 자동 팝업, 알림 안내, 기능 안내 같은 오버레이)이 뜬 시각(1회차 #4).
   const lastAutoPopupAtRef = useRef<number | null>(null);
+  // 다음 기능 안내를 띄울 수 있는 시각(2회차 N9). 지나면 null로 돌아가 다시 그린다.
+  const [featureCoachmarkGapUntil, setFeatureCoachmarkGapUntil] = useState<number | null>(null);
+  const stampAutoPopup = useCallback(() => {
+    const now = Date.now();
+    lastAutoPopupAtRef.current = now;
+    setFeatureCoachmarkGapUntil(now + AUTO_POPUP_MIN_GAP_MS);
+  }, []);
   useEffect(() => {
-    if (overlaySlot != null) lastAutoPopupAtRef.current = Date.now();
-  }, [overlaySlot]);
+    if (overlaySlot != null) stampAutoPopup();
+  }, [overlaySlot, stampAutoPopup]);
+  useEffect(() => {
+    if (featureCoachmarkGapUntil == null) return;
+    const timer = setTimeout(
+      () => setFeatureCoachmarkGapUntil((current) => (current === featureCoachmarkGapUntil ? null : current)),
+      Math.max(0, featureCoachmarkGapUntil - Date.now())
+    );
+    return () => clearTimeout(timer);
+  }, [featureCoachmarkGapUntil]);
   // The ads SDK presents over the top-most controller. If the sheet were dismissed while
   // an ad sat on top of it, UIKit would remove only the ad and leave an empty sheet that
   // swallows every touch (UI 검수 2회차 R2-1, react-native#54858). So while a full-screen
@@ -1417,6 +1431,9 @@ function FarmGameBody({
   const [toolStripHeight, setToolStripHeight] = useState<number | null>(null);
   const [tabBarHeight, setTabBarHeight] = useState<number | null>(null);
   const bottomStackHeight = toolStripHeight != null && tabBarHeight != null ? toolStripHeight + tabBarHeight : null;
+  // 시트 위 토스트는 HUD 줄 아래(목표 칩 높이)에 띄운다. 화면 맨 위에 띄우면 보상 코인이 날아드는 골드
+  // 칩을 가렸다(2회차 N6). HUD 줄의 아래 끝을 헤더 기준 좌표로 잰다.
+  const [hudRowBottom, setHudRowBottom] = useState<number | null>(null);
   const ftuePointerTrackedRef = useRef(false);
   // Guards each stall-triggered nudge to at most once per step and session. A
   // resumed plant step and the following harvest step may each guide once.
@@ -2021,7 +2038,7 @@ function FarmGameBody({
     }
     const source = activeSheet.source;
     if (source === 'auto_popup') {
-      lastAutoPopupAtRef.current = Date.now();
+      stampAutoPopup();
     }
     // source-transition 가드로 이 블록은 열람 전이당 정확히 1회만 실행된다.
     // (StrictMode 이중 마운트/리렌더에도 ref가 유지돼 중복 실행되지 않음)
@@ -2972,7 +2989,18 @@ function FarmGameBody({
     ]).start();
   }, [plotNudgeBurst]);
 
-  const spotlightPlotIndex = onboardingStep === 'harvest' ? findSpotlightPlotIndex(gameState) : null;
+  // 화면에 그리는 온보딩 단계(2회차 N2, N3). onboardingStep은 effect가 한 박자 늦게 바꾼다. 그래서 농장에
+  // 들어온 첫 프레임에는 딤과 배지 숨김이 빠졌고, 첫 수확 직후에는 딤이 풀리며 예전 안내 카드가 한순간
+  // 보였다. 화면은 저장 상태에서 바로 계산한 단계를 쓰고, 광고와 팝업 판정은 그대로 onboardingStep을 쓴다.
+  const onboardingViewStep: OnboardingStep | null = (() => {
+    const step =
+      onboardingStep ??
+      (isSaveLoaded && !gameState.onboardingCompleted
+        ? resolveOnboardingStep(gameState, gameState.onboardingStep)
+        : null);
+    return step === 'harvest' && gameState.harvestedCropKeys.length > 0 ? 'reward' : step;
+  })();
+  const spotlightPlotIndex = onboardingViewStep === 'harvest' ? findSpotlightPlotIndex(gameState) : null;
   const isSpotlightActive = spotlightPlotIndex != null;
   const measureSpotlight = useCallback(() => {
     const layer = spotlightLayerRef.current;
@@ -3346,10 +3374,12 @@ function FarmGameBody({
     const context = analyticsContext();
     farmAnalytics.trackGameStart(context);
     farmAnalytics.trackFarmScreen(context);
-    if (activeSheet?.type !== 'welcomeBack') {
+    // 온보딩 중인 농장(새로 설치한 사용자 포함)은 불러올 기록이 없거나 스포트라이트 안내가 먼저라
+    // "기록을 불러왔어요"를 띄우지 않는다(2회차 N4).
+    if (activeSheet?.type !== 'welcomeBack' && gameState.onboardingCompleted) {
       toast(messages.saveLoadedToast);
     }
-  }, [activeSheet, analyticsContext, isSaveLoaded, messages.saveLoadedToast, toast]);
+  }, [activeSheet, analyticsContext, gameState.onboardingCompleted, isSaveLoaded, messages.saveLoadedToast, toast]);
 
   useEffect(() => {
     if (activeSheet?.type !== 'resetConfirm') {
@@ -3895,7 +3925,8 @@ function FarmGameBody({
   const showPlantAllAction =
     !showHarvestBatchActions &&
     selectedTool !== 'harvest' &&
-    onboardingStep == null &&
+    // 화면에 그리는 단계로 판정해 온보딩 진입 첫 프레임에도 숨긴다(2회차 N2와 같은 이유).
+    onboardingViewStep == null &&
     plantAllPreview.plantableCount > 0 &&
     plantAllPreview.emptyPlotCount >= PLANT_ALL_MIN_COUNT;
   const showFertilizeAllAction = fertilizeAllPreview.affordableCount >= FERTILIZE_ALL_MIN_COUNT;
@@ -6391,9 +6422,9 @@ function FarmGameBody({
 
   // Outline the target the current onboarding step points at to draw the eye.
   // #427: selectSeed 제거 후 씨앗 강조는 plant(직접 파종) 단계로 옮겨졌다.
-  const onboardingSeedHighlight = onboardingStep === 'plant';
+  const onboardingSeedHighlight = onboardingViewStep === 'plant';
   // harvest 단계는 격자 전체 대신 다 자란 칸 하나를 스포트라이트로 밝힌다(#606 AC-1).
-  const onboardingPlotHighlight = onboardingStep === 'plant';
+  const onboardingPlotHighlight = onboardingViewStep === 'plant';
 
   // #367: 기본 온보딩을 마친 뒤, 다른 오버레이/시트가 떠 있지 않은 메인 화면에서만 딥 기능
   // 코치마크를 1개 노출한다. 가용 판정은 core의 순수 함수라 now에 의존하지 않아 틱마다
@@ -6406,10 +6437,13 @@ function FarmGameBody({
     notifications.isSupported &&
     !gameState.harvestNotificationPromptSeen &&
     gameState.harvestedCropKeys.length > 0;
+  // 이미 떠 있는 기능 안내는 간격과 관계없이 닫힐 때까지 둔다. 요청이 사라지면 슬롯이 바로 닫힌다.
+  const isFeatureCoachmarkShown = overlaySlot?.overlay.kind === 'featureCoachmark';
   const pendingFeatureCoachmark =
     gameState.onboardingCompleted &&
     onboardingStep == null &&
     !firstSessionPopupHold &&
+    (featureCoachmarkGapUntil == null || isFeatureCoachmarkShown) &&
     firstHarvestNotice == null &&
     notificationPromptGeneration == null &&
     !isNotificationPromptOwed &&
@@ -6454,15 +6488,16 @@ function FarmGameBody({
   const renderToast = (placement: 'main' | 'sheet') =>
     toastMessage != null ? (
       <View
+        testID={`toast-${placement}`}
         pointerEvents="none"
         style={[
           styles.toast,
           placement === 'sheet'
-            ? { top: insets.top + 12 }
+            ? { top: hudRowBottom != null ? hudRowBottom + 8 : insets.top + 64 }
             : { bottom: bottomStackHeight != null ? bottomStackHeight + 10 : bottomSafeInset + 142 },
         ]}
       >
-        <CoinText style={styles.toastText}>{toastMessage}</CoinText>
+        <Text style={styles.toastText}>{toastMessage}</Text>
       </View>
     ) : null;
   const toastNode = renderToast('main');
@@ -6482,7 +6517,14 @@ function FarmGameBody({
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         {/* #606 B안: 재화 칩(골드, 별)과 더보기, 그 아래 다음 목표 칩과 출석, 부스트. 제목과 설정은
             타이틀 화면과 더보기로 옮기고, 메뉴는 하단 탭 바로 내렸다. */}
-        <View testID="hud-row" style={styles.hudRow}>
+        <View
+          testID="hud-row"
+          style={styles.hudRow}
+          onLayout={(event) => {
+            const { y, height } = event.nativeEvent.layout;
+            setHudRowBottom(Math.round(y + height));
+          }}
+        >
           <GamePressable
             testID="gold-chip"
             accessibilityRole="button"
@@ -6549,7 +6591,7 @@ function FarmGameBody({
             testID="more-nav-button"
             icon="more"
             fallback="📂"
-            badge={onboardingStep != null ? 0 : moreRollupBadge}
+            badge={onboardingViewStep != null ? 0 : moreRollupBadge}
             accessibilityLabel={messages.moreButtonAccessibilityLabel}
             onPress={() => {
               trackNavTap('more', 'hud');
@@ -6572,7 +6614,7 @@ function FarmGameBody({
             ) : null}
           </View>
           {/* 첫 세션 팝업 미루기(#606 AC-4) 동안에는 출석 버튼도 숨겨 첫 밭 목표에 집중시킨다. */}
-          {dailyBonusAvailable && onboardingStep == null && !firstSessionPopupHold ? (
+          {dailyBonusAvailable && onboardingViewStep == null && !firstSessionPopupHold ? (
             <HudIconButton
               testID="daily-hud-button"
               icon="daily"
@@ -6611,9 +6653,9 @@ function FarmGameBody({
 
       {/* 레이아웃 안 안내 카드는 직접 파종과, 밝힐 다 자란 칸이 없는 수확 단계에만 쓴다. 다 자란 칸이
           있으면 스포트라이트 말풍선이, 보상 단계는 보상 팝업이 안내한다(1회차 #2, #3). */}
-      {onboardingStep === 'plant' || (onboardingStep === 'harvest' && !isSpotlightActive) ? (
+      {onboardingViewStep === 'plant' || (onboardingViewStep === 'harvest' && !isSpotlightActive) ? (
         <FarmOnboarding
-          step={onboardingStep}
+          step={onboardingViewStep}
           messages={messages}
           onSkip={skipOnboarding}
           onQuickStart={quickStartCropKey != null ? quickStartOnboarding : undefined}
@@ -6637,7 +6679,7 @@ function FarmGameBody({
           scrollEventThrottle={32}
           onScroll={isSpotlightActive ? measureSpotlight : undefined}
           nestedScrollEnabled={useScrollableLayout}
-          contentContainerStyle={[styles.mainContent, onboardingStep != null && styles.mainContentOnboarding]}
+          contentContainerStyle={[styles.mainContent, onboardingViewStep != null && styles.mainContentOnboarding]}
           style={styles.main}
         >
           <View
@@ -6894,7 +6936,7 @@ function FarmGameBody({
           size={spotlightSize}
           pulse={plotNudgeBurst}
           hint={messages.onboardingHarvestTitle}
-          skipTop={(spotlightGridOrigin?.y ?? 40) - 36}
+          skipTop={spotlightGridOrigin != null ? spotlightGridOrigin.y - 36 : insets.top + 8}
           skip={{
             label: messages.onboardingSkip,
             confirmTitle: messages.onboardingSkipConfirmTitle,
@@ -6923,7 +6965,7 @@ function FarmGameBody({
               label: messages.tabShop,
               icon: 'shop',
               fallback: '🏪',
-              badge: onboardingStep != null ? 0 : shopBadgeCount,
+              badge: onboardingViewStep != null ? 0 : shopBadgeCount,
               onPress: () => {
                 trackNavTap('shop', 'tab_bar');
                 openShop();
@@ -6936,7 +6978,7 @@ function FarmGameBody({
               accessibilityLabel: messages.missionsButtonAccessibilityLabel,
               icon: 'missions',
               fallback: '📋',
-              badge: onboardingStep != null ? 0 : missionClaimableCount,
+              badge: onboardingViewStep != null ? 0 : missionClaimableCount,
               onPress: () => {
                 trackNavTap('missions', 'tab_bar');
                 openMissions();
@@ -6959,7 +7001,7 @@ function FarmGameBody({
               label: messages.sheetTitleProduction,
               icon: 'ranch',
               fallback: '🐄',
-              badge: onboardingStep != null ? 0 : animalsReadyCount + workshopReadyCount,
+              badge: onboardingViewStep != null ? 0 : animalsReadyCount + workshopReadyCount,
               onPress: () => {
                 trackNavTap('production', 'tab_bar');
                 setActiveSheet({ type: 'production', tab: 'animals', source: 'tab_bar' });
@@ -6971,7 +7013,7 @@ function FarmGameBody({
               label: messages.tabCooking,
               icon: 'kitchen',
               fallback: '🍲',
-              badge: onboardingStep != null ? 0 : cookingReadyBadge,
+              badge: onboardingViewStep != null ? 0 : cookingReadyBadge,
               onPress: () => {
                 trackNavTap('cooking', 'tab_bar');
                 openCooking();
@@ -7026,7 +7068,6 @@ function FarmGameBody({
         updateGate={!isFullScreenAdInFlight && isSheetModalVisible ? updateGate : null}
         goldLabel={
           <CountUpText
-            coin
             value={gameState.gold}
             run={goldCountUp}
             format={(value) => messages.sheetGoldLabel(formatMoney(value, locale))}
@@ -7908,7 +7949,7 @@ function FarmGameBody({
           onDismiss={dismissFirstHarvestCelebration}
         />
       ) : null}
-      {onboardingStep === 'reward' ? (
+      {onboardingViewStep === 'reward' ? (
         // 온보딩 첫 수확 보상(1회차 #2). 코인은 수확한 칸에서 골드 칩으로 이미 날아가고, 팝업은 받은 금액을
         // 크게 세어 올린 뒤 확인 한 번으로 안내를 마친다.
         <RewardPopup
@@ -8158,7 +8199,7 @@ function HarvestAllButton({
             pressed={pressed}
             style={variant === 'icon' ? styles.batchIconFrame : undefined}
             fallbackStyle={variant === 'primary' ? styles.harvestAllButton : styles.batchSecondaryFallback}
-            contentStyle={styles.batchActionContent}
+            contentStyle={[styles.batchActionContent, variant !== 'icon' && styles.batchActionContentLabeled]}
           >
             {icon != null ? (
               icon.name != null ? (
@@ -8764,7 +8805,7 @@ function NextGoalBar({
         >
           <UiIcon name="goal" size={30} fallback="🚩" />
           <View style={styles.nextGoalBody}>
-            <CoinText
+            <Text
               style={ready ? styles.nextGoalReadyText : styles.nextGoalLabel}
               numberOfLines={2}
               adjustsFontSizeToFit
@@ -8772,7 +8813,7 @@ function NextGoalBar({
               maxFontSizeMultiplier={GAME_UI_MAX_FONT_SCALE}
             >
               {label}
-            </CoinText>
+            </Text>
             {ratio != null ? (
               <View style={styles.nextGoalTrack}>
                 <View style={[styles.nextGoalFill, { width: `${Math.round(ratio * 100)}%` }]} />
@@ -9708,7 +9749,7 @@ function Sheet({
   const dragY = dragYRef.current;
   // 보상 연출 목표(#606). 시트는 네이티브 드라이버로 움직여서 화면 좌표 측정에는 시작 위치(아래로 520)가
   // 남는다. 시트 안 상대 위치와 변형이 빠진 시트 레이아웃 위치를 더해 자리 잡은 뒤의 좌표를 구한다.
-  const goldTextRef = useRef<Text | null>(null);
+  const goldTextRef = useRef<TextHandle | null>(null);
   const sheetViewRef = useRef<View | null>(null);
   const sheetLayoutYRef = useRef<number | null>(null);
   useEffect(() => {
@@ -9798,6 +9839,7 @@ function Sheet({
       }
     });
   }, [canClose, dragY, fadeDim, onClose, restoreSheetPosition]);
+  const dragStartPageYRef = useRef<number | null>(null);
   const panResponder = useMemo(
     () =>
       PanResponder.create({
@@ -9807,7 +9849,8 @@ function Sheet({
         onMoveShouldSetPanResponderCapture: (_, gestureState) =>
           shouldHandleSheetDrag(gestureState.dy, gestureState.dx),
         onPanResponderTerminationRequest: () => false,
-        onPanResponderGrant: () => {
+        onPanResponderGrant: (event) => {
+          dragStartPageYRef.current = event.nativeEvent.pageY ?? null;
           dragY.stopAnimation();
         },
         onPanResponderMove: (_, gestureState) => {
@@ -9817,8 +9860,15 @@ function Sheet({
           dimTargetRef.current = -1;
           dimOpacity.setValue(Math.max(0, 1 - dy / SHEET_DISMISS_TRANSLATE_Y));
         },
-        onPanResponderRelease: (_, gestureState) => {
-          if (gestureState.dy > SHEET_DISMISS_DRAG_DISTANCE || gestureState.vy > SHEET_DISMISS_VELOCITY) {
+        onPanResponderRelease: (event, gestureState) => {
+          const dismiss = shouldDismissSheetDrag({
+            dy: gestureState.dy,
+            vy: gestureState.vy,
+            startPageY: dragStartPageYRef.current,
+            releasePageY: event.nativeEvent.pageY ?? null,
+          });
+          dragStartPageYRef.current = null;
+          if (dismiss) {
             closeSheetWithAnimation();
             return;
           }
@@ -10164,7 +10214,6 @@ const ToolButton = React.memo(function ToolButton({
           <GameText style={[styles.toolCost, affordable === false && styles.toolCostUnaffordable]}>{cost}</GameText>
         </View>
       ) : null}
-      {multiplier != null ? <GameText style={styles.toolRoi}>{multiplier}</GameText> : null}
       {masteryIcon != null ? (
         <View pointerEvents="none" style={styles.toolMasteryBadge}>
           <Text style={styles.toolMasteryBadgeText}>{masteryIcon}</Text>
@@ -10175,8 +10224,11 @@ const ToolButton = React.memo(function ToolButton({
           <Text style={styles.toolNewBadgeText}>{newLabel}</Text>
         </View>
       ) : null}
-      {cotdBadge != null || weeklyBadge != null ? (
+      {/* 배수와 판매 보너스 배지를 한 줄에 둔다. 배지가 따로 한 줄을 차지하면 모든 씨앗 카드가 그 높이로
+          늘어나 작은 화면에서 밭이 덜 보였다(2회차 N7). */}
+      {multiplier != null || cotdBadge != null || weeklyBadge != null ? (
         <View pointerEvents="none" style={styles.toolBonusBadgeRow}>
+          {multiplier != null ? <GameText style={styles.toolRoi}>{multiplier}</GameText> : null}
           {cotdBadge != null ? (
             <View testID={`seed-bonus-cotd-${toolKey}`} style={styles.toolBonusBadge}>
               <Text style={styles.toolBonusBadgeText}>{cotdBadge}</Text>
@@ -10598,7 +10650,7 @@ function ShopUpgradeRow({
           onPress={() => buyBatch(batchTen)}
         >
           <Text style={styles.upgradeBatchLabel}>{`+${UPGRADE_BATCH_STEP}`}</Text>
-          <CoinText style={styles.upgradeBatchSub}>{formatGold(batchTen.totalCost, locale)}</CoinText>
+          <Text style={styles.upgradeBatchSub}>{formatGold(batchTen.totalCost, locale)}</Text>
         </GamePressable>
         <GamePressable
           accessibilityRole="button"
@@ -10613,7 +10665,7 @@ function ShopUpgradeRow({
             {canBuyMax ? `${messages.upgradeBuyMax} +${batchMax.levels}` : messages.upgradeBuyMax}
           </Text>
           {canBuyMax ? (
-            <CoinText style={styles.upgradeBatchSub}>{formatGold(batchMax.totalCost, locale)}</CoinText>
+            <Text style={styles.upgradeBatchSub}>{formatGold(batchMax.totalCost, locale)}</Text>
           ) : null}
         </GamePressable>
       </View>

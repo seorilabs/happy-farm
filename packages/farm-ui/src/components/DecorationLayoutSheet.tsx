@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import {
   DECORATION_GRID_SLOT_COUNT,
@@ -12,6 +12,7 @@ import {
 
 import type { FarmMessages } from '../i18n';
 import { SheetAction } from './SheetParts';
+import { Text } from './GameUi';
 
 export function DecorationLayoutSheet({
   gameState,
