@@ -17,6 +17,7 @@
 		A17C99000000000000000004 /* sfx_plant.wav in Resources */ = {isa = PBXBuildFile; fileRef = A17C99000000000000000009 /* sfx_plant.wav */; };
 		A17C99000000000000000005 /* sfx_wheel_spin.wav in Resources */ = {isa = PBXBuildFile; fileRef = A17C9900000000000000000A /* sfx_wheel_spin.wav */; };
 		A17C9900000000000000000E /* sfx_tap.wav in Resources */ = {isa = PBXBuildFile; fileRef = A17C9900000000000000000F /* sfx_tap.wav */; };
+		A17C99000000000000000010 /* Baloo2-ExtraBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = A17C99000000000000000011 /* Baloo2-ExtraBold.ttf */; };
 		A17C99000000000000000006 /* sting_mutation.wav in Resources */ = {isa = PBXBuildFile; fileRef = A17C9900000000000000000B /* sting_mutation.wav */; };
 		A17C99000000000000000007 /* sting_reward.wav in Resources */ = {isa = PBXBuildFile; fileRef = A17C9900000000000000000C /* sting_reward.wav */; };
 		A17C99000000000000000008 /* sting_unlock.wav in Resources */ = {isa = PBXBuildFile; fileRef = A17C9900000000000000000D /* sting_unlock.wav */; };
@@ -38,6 +39,7 @@
 		A17C99000000000000000009 /* sfx_plant.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; name = sfx_plant.wav; path = ../src/audio/assets/sfx_plant.wav; sourceTree = SOURCE_ROOT; };
 		A17C9900000000000000000A /* sfx_wheel_spin.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; name = sfx_wheel_spin.wav; path = ../src/audio/assets/sfx_wheel_spin.wav; sourceTree = SOURCE_ROOT; };
 		A17C9900000000000000000F /* sfx_tap.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; name = sfx_tap.wav; path = ../src/audio/assets/sfx_tap.wav; sourceTree = SOURCE_ROOT; };
+		A17C99000000000000000011 /* Baloo2-ExtraBold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; name = "Baloo2-ExtraBold.ttf"; path = "../src/fonts/Baloo2-ExtraBold.ttf"; sourceTree = SOURCE_ROOT; };
 		A17C9900000000000000000B /* sting_mutation.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; name = sting_mutation.wav; path = ../src/audio/assets/sting_mutation.wav; sourceTree = SOURCE_ROOT; };
 		A17C9900000000000000000C /* sting_reward.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; name = sting_reward.wav; path = ../src/audio/assets/sting_reward.wav; sourceTree = SOURCE_ROOT; };
 		A17C9900000000000000000D /* sting_unlock.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; name = sting_unlock.wav; path = ../src/audio/assets/sting_unlock.wav; sourceTree = SOURCE_ROOT; };
@@ -68,6 +70,7 @@
 				A17C99000000000000000009 /* sfx_plant.wav */,
 				A17C9900000000000000000A /* sfx_wheel_spin.wav */,
 				A17C9900000000000000000F /* sfx_tap.wav */,
+				A17C99000000000000000011 /* Baloo2-ExtraBold.ttf */,
 				A17C9900000000000000000B /* sting_mutation.wav */,
 				A17C9900000000000000000C /* sting_reward.wav */,
 				A17C9900000000000000000D /* sting_unlock.wav */,
@@ -198,6 +201,7 @@
 				A17C99000000000000000004 /* sfx_plant.wav in Resources */,
 				A17C99000000000000000005 /* sfx_wheel_spin.wav in Resources */,
 				A17C9900000000000000000E /* sfx_tap.wav in Resources */,
+				A17C99000000000000000010 /* Baloo2-ExtraBold.ttf in Resources */,
 				A17C99000000000000000006 /* sting_mutation.wav in Resources */,
 				A17C99000000000000000007 /* sting_reward.wav in Resources */,
 				A17C99000000000000000008 /* sting_unlock.wav in Resources */,

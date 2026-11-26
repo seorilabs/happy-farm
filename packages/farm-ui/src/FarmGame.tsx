@@ -295,6 +295,7 @@ import {
 import { isFirstSessionPopupHoldActive } from './firstSessionPopups';
 import { findSpotlightPlotIndex, getPlotCellRect } from './ftueSpotlight';
 import { FtueSpotlight } from './components/FtueSpotlight';
+import { useDisplayFontStyle } from './components/GameUi';
 import { measureNodeInWindow } from './measureInWindow';
 import { useReduceMotion } from './useReduceMotion';
 import { LabSheet } from './components/LabSheet';
@@ -1293,6 +1294,7 @@ function FarmGameBody({
   const hudGoldRef = useRef<View | null>(null);
   const sheetGoldTargetRef = useRef<GoldTargetMeasurer | null>(null);
   const reduceMotion = useReduceMotion();
+  const displayFontStyle = useDisplayFontStyle();
   const reduceMotionRef = useRef(reduceMotion);
   reduceMotionRef.current = reduceMotion;
   const activeSheetRef = useRef<ActiveSheet>(null);
@@ -6400,7 +6402,7 @@ function FarmGameBody({
               <View style={styles.assetTextGroup}>
                 <Text style={styles.label}>{messages.assetLabel}</Text>
                 <CountUpText
-                  style={styles.money}
+                  style={[styles.money, displayFontStyle]}
                   value={gameState.gold}
                   run={goldCountUp}
                   format={(value) => `${formatMoney(value, locale)}G`}

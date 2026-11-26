@@ -6,6 +6,10 @@
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
+	<key>UIAppFonts</key>
+	<array>
+		<string>Baloo2-ExtraBold.ttf</string>
+	</array>
 	<key>CFBundleDisplayName</key>
 	<string>행복 농장 타이쿤</string>
 	<key>CFBundleExecutable</key>

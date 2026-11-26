@@ -3,8 +3,9 @@ import { Animated, Easing, StyleSheet, View } from 'react-native';
 
 import { ABSOLUTE_FILL } from '../absoluteFill';
 import { FTUE_SPOTLIGHT_PADDING, getSpotlightBlockers, type Rect } from '../ftueSpotlight';
+import { UiIcon } from './GameUi';
 
-const POINTER_SIZE = 40;
+const POINTER_SIZE = 44;
 
 // 첫 수확 스포트라이트(#606 AC-1). 부모(페이지 내용) 전체를 어둡게 덮고 hole 자리만 비운다.
 // 막 네 장이 터치를 받아 삼키므로 밝힌 칸 밖을 눌러도 아무것도 열리지 않는다. 구멍에는 막이 없어
@@ -95,21 +96,25 @@ export function FtueSpotlight({
               },
             ]}
           />
-          <Animated.Text
+          <Animated.View
             testID="ftue-spotlight-pointer"
             pointerEvents="none"
             style={[
               styles.pointer,
               {
-                // 작물 그림을 가리지 않도록 칸의 오른쪽 아래 모서리를 가리킨다.
-                left: hole.x + hole.width * 0.62,
-                top: hole.y + hole.height * 0.7,
-                transform: [{ translateY: bob.interpolate({ inputRange: [0, 1], outputRange: [6, -2] }) }],
+                // 칸 위쪽은 온보딩 카드가 차지하므로, 아래를 가리키는 손 그림을 뒤집어 칸 아래에서
+                // 위로 가리키게 하고 칸 쪽으로 흔든다. 작물 그림은 가리지 않는다.
+                left: hole.x + hole.width / 2 - POINTER_SIZE / 2,
+                top: hole.y + hole.height - POINTER_SIZE * 0.2,
+                transform: [
+                  { translateY: bob.interpolate({ inputRange: [0, 1], outputRange: [4, -4] }) },
+                  { rotate: '180deg' },
+                ],
               },
             ]}
           >
-            👆
-          </Animated.Text>
+            <UiIcon name="pointer" size={POINTER_SIZE} fallback="👇" />
+          </Animated.View>
         </>
       ) : null}
     </View>
@@ -128,23 +133,20 @@ const styles = StyleSheet.create({
   },
   ring: {
     position: 'absolute',
-    borderRadius: 16,
+    // 구멍은 네모라 고리를 많이 둥글리면 모서리 바깥이 밝게 남는다.
+    borderRadius: 6,
     borderWidth: 3,
     borderColor: '#ffd23f',
   },
   pulseRing: {
     position: 'absolute',
-    borderRadius: 18,
+    borderRadius: 8,
     borderWidth: 4,
     borderColor: '#ffb300',
   },
   pointer: {
     position: 'absolute',
     width: POINTER_SIZE,
-    fontSize: 34,
-    textAlign: 'center',
-    textShadowColor: 'rgba(0, 0, 0, 0.35)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 3,
+    height: POINTER_SIZE,
   },
 });

@@ -1,0 +1,33 @@
+{
+  "skins": {
+    "primary": {
+      "capRatio": 0.5583
+    },
+    "secondary": {
+      "capRatio": 0.5583
+    },
+    "chip": {
+      "capRatio": 0.5583
+    },
+    "panel": {
+      "capRatio": 0.2167
+    }
+  },
+  "icons": [
+    "coin",
+    "star",
+    "more",
+    "daily",
+    "goal",
+    "shop",
+    "missions",
+    "harvest",
+    "ranch",
+    "kitchen",
+    "settings",
+    "wheel",
+    "pointer"
+  ],
+  "skinHeight": 120,
+  "iconSize": 96
+}

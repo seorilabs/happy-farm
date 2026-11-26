@@ -1,5 +1,6 @@
 import type { CropKey } from '../../../../packages/farm-core/src';
 import type { FarmArt } from '../../../../packages/farm-ui/src';
+import { mobileUiArt } from './uiArt.generated';
 
 // Metro resolves static asset imports at build time, so the crop map is
 // spelled out. Regenerate after adding crops: keys mirror balance.json
@@ -117,4 +118,7 @@ const stageArt = {
 export const mobileFarmArt: FarmArt = {
   cropIcon: (cropKey) => cropArt[cropKey] ?? null,
   stageIcon: (stage) => stageArt[stage],
+  ui: mobileUiArt,
+  // iOS UIAppFonts와 Android assets/fonts에 등록한 이름(scripts/generate-ui-art.mjs).
+  displayFontFamily: 'Baloo2-ExtraBold',
 };
