@@ -2225,6 +2225,9 @@ function FarmGameBody({
           const prioritizeRewardGuide = effect.firstHarvest != null && !gameStateRef.current.onboardingCompleted;
           if (prioritizeRewardGuide) {
             clearToast();
+            // #606 AC-2: 온보딩 첫 수확은 이번에 받은 골드로 보상 연출을 낸다(상태는 이미 지급 후).
+            const batchGold = effect.fx.reduce((sum, fx) => sum + Math.max(0, fx.goldGained), 0);
+            celebrateGold(batchGold, gameStateRef.current.gold - batchGold);
           } else if (effect.firstHarvest != null) {
             showFirstHarvestCelebration({
               cropIcon: effect.firstHarvest.cropIcon,
@@ -2541,6 +2544,8 @@ function FarmGameBody({
       const prioritizeRewardGuide = event.isFirstMeaningfulHarvest && !gameStateRef.current.onboardingCompleted;
       if (prioritizeRewardGuide) {
         clearToast();
+        // #606 AC-2: 온보딩 첫 수확은 이번에 받은 골드로 보상 연출을 낸다(상태는 이미 지급 후).
+        celebrateGold(event.goldGained, gameStateRef.current.gold - event.goldGained);
       } else if (event.isFirstMeaningfulHarvest) {
         showFirstHarvestCelebration({
           cropIcon: getCrop(event.cropKey).icon,
@@ -2644,6 +2649,7 @@ function FarmGameBody({
   }, [
     analyticsContext,
     audio,
+    celebrateGold,
     commandEffectVersion,
     completeOnboarding,
     farmAnalytics,
@@ -2829,13 +2835,8 @@ function FarmGameBody({
     }
     if (onboardingStep === 'harvest' && gameState.harvestedCropKeys.length > 0) {
       advanceOnboarding('reward');
-      // #606 AC-2: 첫 수확 골드를 보상 연출로 보여 준다. 새 세이브라 지금까지 번 골드가 곧 첫 수확분이다.
-      const earned = gameState.lifetimeStats.totalGoldEarned;
-      if (earned > 0 && earned <= gameState.gold) {
-        celebrateGold(earned, gameState.gold - earned);
-      }
     }
-  }, [onboardingStep, gameState, advanceOnboarding, celebrateGold]);
+  }, [onboardingStep, gameState, advanceOnboarding]);
 
   // Emit the onboarding funnel step-view once per step entry. Guarded by a ref so
   // it fires only when the step actually changes, not on every render tick (the
@@ -4709,8 +4710,10 @@ function FarmGameBody({
   function openNextFarmGoal() {
     const goal = getNextFarmGoal(gameStateRef.current);
     if (goal == null) return;
-    // #606 AC-11: 목표 칩 탭과 이어서 열릴 시트의 출처를 남긴다.
-    pendingSheetSourceRef.current = { source: 'goal_chip', at: Date.now() };
+    // #606 AC-11: 목표 칩 탭을 남기고, 시트를 여는 목표면 그 시트의 출처를 goal_chip으로 둔다.
+    if (goal.kind !== 'prestige_crops') {
+      pendingSheetSourceRef.current = { source: 'goal_chip', at: Date.now() };
+    }
     farmAnalytics.trackGoalChipTapped({
       goalKind: goal.kind,
       ready: isNextFarmGoalReady(goal),
@@ -6787,7 +6790,7 @@ function FarmGameBody({
       {isSpotlightActive ? (
         <FtueSpotlight
           layerRef={spotlightLayerRef}
-          bobEnabled={!reduceMotion}
+          motionEnabled={!reduceMotion}
           hole={spotlightHole}
           size={spotlightSize}
           pulse={plotNudgeBurst}

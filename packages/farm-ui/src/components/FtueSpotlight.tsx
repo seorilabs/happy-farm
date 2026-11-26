@@ -11,7 +11,7 @@ const POINTER_SIZE = 40;
 // 아래의 실제 밭 칸이 탭을 받는다. 같은 부모에서 zIndex가 더 높은 온보딩 카드는 밝게 남는다.
 export function FtueSpotlight({
   layerRef,
-  bobEnabled,
+  motionEnabled,
   hole,
   size,
   pulse,
@@ -19,7 +19,8 @@ export function FtueSpotlight({
   onBlockedTap,
 }: {
   layerRef: React.Ref<View>;
-  bobEnabled: boolean;
+  // 동작 줄이기면 손가락 흔들림과 고리 확대를 끄고 고리 밝기만 바꾼다.
+  motionEnabled: boolean;
   hole: Rect | null;
   size: { width: number; height: number } | null;
   // 15초 무행동 넛지(stall)에 맞춰 고리를 한 번 크게 깜빡인다.
@@ -35,7 +36,7 @@ export function FtueSpotlight({
   const visible = hole != null && size != null;
 
   useEffect(() => {
-    if (!visible || !bobEnabled) {
+    if (!visible || !motionEnabled) {
       bob.setValue(0);
       return;
     }
@@ -47,7 +48,7 @@ export function FtueSpotlight({
     );
     loop.start();
     return () => loop.stop();
-  }, [bob, bobEnabled, visible]);
+  }, [bob, motionEnabled, visible]);
 
   return (
     <View ref={layerRef} testID="ftue-spotlight" pointerEvents="box-none" style={styles.layer} onLayout={onLayout}>
@@ -88,7 +89,9 @@ export function FtueSpotlight({
                 width: hole.width + FTUE_SPOTLIGHT_PADDING * 2,
                 height: hole.height + FTUE_SPOTLIGHT_PADDING * 2,
                 opacity: pulse,
-                transform: [{ scale: pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.12] }) }],
+                transform: motionEnabled
+                  ? [{ scale: pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.12] }) }]
+                  : [],
               },
             ]}
           />
