@@ -1,6 +1,7 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
+import { CoinText } from './GameUi';
 import { GamePressable, PRESSED_DEPTH_STYLE } from './GamePressable';
 
 export function SheetAction({
@@ -57,6 +58,7 @@ export function ShopCard({
   desc,
   price,
   disabled,
+  unaffordable,
   priceTone,
   goldProgress,
   onPress,
@@ -68,11 +70,15 @@ export function ShopCard({
   desc: string;
   price: string;
   disabled?: boolean;
+  // 골드가 모자라 지금은 살 수 없지만 누르면 남은 금액을 알려 주는 줄(1회차 #11). 무채색으로 그리되
+  // 누름은 받는다. 목표 칩이 강조해 연 줄이 막다른 탭이 되지 않게 한다.
+  unaffordable?: boolean;
   priceTone?: 'speed' | 'profit';
   goldProgress?: number;
   onPress: () => void;
 }) {
-  const showProgress = disabled === true && goldProgress != null && goldProgress > 0 && goldProgress < 1;
+  const dimmed = disabled === true || unaffordable === true;
+  const showProgress = dimmed && goldProgress != null && goldProgress > 0 && goldProgress < 1;
   const fillColor = priceTone === 'speed' ? '#9a63e0' : priceTone === 'profit' ? '#bf7a00' : '#2f8747';
 
   return (
@@ -85,27 +91,31 @@ export function ShopCard({
       testID={testID}
       style={[
         sheetPartStyles.shopCard,
-        disabled && sheetPartStyles.disabledCard,
+        dimmed && sheetPartStyles.disabledCard,
         highlighted === true && sheetPartStyles.highlightedCard,
       ]}
       onPress={onPress}
     >
       <View style={sheetPartStyles.shopCardRow}>
         <View style={sheetPartStyles.shopTextGroup}>
-          <Text style={sheetPartStyles.shopTitle}>{title}</Text>
-          <Text style={sheetPartStyles.shopDesc} textBreakStrategy="balanced">
+          <Text style={sheetPartStyles.shopTitle} lineBreakStrategyIOS="hangul-word">
+            {title}
+          </Text>
+          <Text style={sheetPartStyles.shopDesc} textBreakStrategy="balanced" lineBreakStrategyIOS="hangul-word">
             {desc}
           </Text>
         </View>
-        <Text
+        <CoinText
           style={[
             sheetPartStyles.shopPrice,
             priceTone === 'speed' && sheetPartStyles.speedPrice,
             priceTone === 'profit' && sheetPartStyles.profitPrice,
+            // 살 수 없는 가격표는 무채색으로 둔다(설계: 비활성은 무채색, 1회차 #11).
+            dimmed && sheetPartStyles.dimmedPrice,
           ]}
         >
           {price}
-        </Text>
+        </CoinText>
       </View>
       {showProgress ? (
         <View style={sheetPartStyles.upgradeTrack}>
@@ -238,6 +248,9 @@ export const sheetPartStyles = StyleSheet.create({
   },
   // 구매 불가를 투명도만으로 알리지 않는다. 배경과 테두리를 무채색으로 내려
   // 형태로도 전달한다. 가격 배지는 카드에 걸린 opacity를 함께 받는다.
+  dimmedPrice: {
+    backgroundColor: '#b5ab98',
+  },
   disabledCard: {
     opacity: 0.7,
     backgroundColor: '#f0ece2',

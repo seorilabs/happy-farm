@@ -9,23 +9,23 @@ import type { FarmMessages } from '../i18n';
 export { ONBOARDING_STEPS };
 export type { OnboardingStep };
 
-// Directional hint of the coachmark. Action steps point up at the plots and the
-// final reward uses a gift. (#427: selectSeed 단계 제거 — 첫 밭이 자동 파종되어
-// 온보딩은 harvest부터 시작한다.)
-const STEP_ARROW: Record<OnboardingStep, string> = {
+// 레이아웃 안에 끼는 안내 카드는 직접 파종(plant)과, 밝힐 다 자란 칸이 아직 없는 수확(harvest) 단계에만
+// 쓴다. 다 자란 칸이 있으면 스포트라이트 말풍선이, 보상 단계는 보상 팝업이 안내한다(1회차 #2, #3).
+export type CoachmarkStep = Exclude<OnboardingStep, 'reward'>;
+
+// Directional hint of the coachmark. Action steps point up at the plots.
+// (#427: selectSeed 단계 제거 — 첫 밭이 자동 파종되어 온보딩은 harvest부터 시작한다.)
+const STEP_ARROW: Record<CoachmarkStep, string> = {
   plant: '👆',
   harvest: '👆',
-  reward: '🎁',
 };
 
-function getStepText(step: OnboardingStep, messages: FarmMessages): { title: string; description: string } {
+function getStepText(step: CoachmarkStep, messages: FarmMessages): { title: string; description: string } {
   switch (step) {
     case 'plant':
       return { title: messages.onboardingPlantTitle, description: messages.onboardingPlantDesc };
     case 'harvest':
       return { title: messages.onboardingHarvestTitle, description: messages.onboardingHarvestDesc };
-    case 'reward':
-      return { title: messages.onboardingRewardTitle, description: messages.onboardingRewardDesc };
   }
 }
 
@@ -36,27 +36,23 @@ export function FarmOnboarding({
   step,
   messages,
   onSkip,
-  onRewardConfirm,
   onQuickStart,
 }: {
-  step: OnboardingStep;
+  step: CoachmarkStep;
   messages: FarmMessages;
   onSkip: () => void;
-  onRewardConfirm: () => void;
   // #274/#427: plant(직접 파종) 단계에서 노출되는 "바로 시작" CTA. 탭 시 감당 가능한
   // 대표 씨앗을 자동 선택해 빈 밭만 탭하면 되도록 만든다(직접 선택도 여전히 가능).
   onQuickStart?: () => void;
 }) {
   const { title, description } = getStepText(step, messages);
   const stepIndex = ONBOARDING_STEPS.indexOf(step);
-  const [skipConfirmationStep, setSkipConfirmationStep] = useState<OnboardingStep | null>(null);
+  const [skipConfirmationStep, setSkipConfirmationStep] = useState<CoachmarkStep | null>(null);
   const isSkipConfirmationOpen = skipConfirmationStep === step;
-  // Skip is limited to the action stage. The reward guide can finish through
-  // its main action, elapsed time, or the player's next real interaction.
+  // Skip is limited to the action stage.
   const canSkip = step === 'harvest';
   // "바로 시작"은 직접 파종을 안내하는 plant 단계에서만 제공한다(#274/#427).
   const canQuickStart = step === 'plant' && onQuickStart != null;
-  const canConfirmReward = step === 'reward';
 
   useEffect(() => {
     setSkipConfirmationStep(null);
@@ -129,17 +125,6 @@ export function FarmOnboarding({
             ) : null}
           </View>
         </View>
-        {canConfirmReward ? (
-          <Pressable
-            testID="onboarding-reward-confirm"
-            accessibilityLabel={messages.onboardingRewardContinue}
-            hitSlop={8}
-            style={[styles.primaryButton, styles.rewardPrimaryButton]}
-            onPress={onRewardConfirm}
-          >
-            <Text style={styles.primaryButtonText}>{messages.onboardingRewardContinue}</Text>
-          </Pressable>
-        ) : null}
         {isSkipConfirmationOpen ? (
           <View testID="onboarding-skip-confirm" style={styles.skipConfirmation}>
             <Text style={styles.skipConfirmationTitle}>{messages.onboardingSkipConfirmTitle}</Text>
@@ -233,12 +218,6 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
     borderRadius: 999,
     backgroundColor: '#2e9e52',
-  },
-  rewardPrimaryButton: {
-    alignSelf: 'stretch',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 10,
   },
   primaryButtonText: {
     color: '#ffffff',

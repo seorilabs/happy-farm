@@ -15,6 +15,7 @@ import {
 } from '../../../farm-core/src';
 
 import type { FarmMessages } from '../i18n';
+import { CoinText } from './GameUi';
 import { SheetAction } from './SheetParts';
 
 function getMissionLabel(mission: DailyMissionView, locale: SupportedLocale, messages: FarmMessages): string {
@@ -102,7 +103,7 @@ function MissionCard({
         <Text style={styles.missionTitle} numberOfLines={2}>
           {label}
         </Text>
-        <Text style={styles.missionReward}>{`+${formatGold(rewardGold, locale)}`}</Text>
+        <CoinText style={styles.missionReward}>{`+${formatGold(rewardGold, locale)}`}</CoinText>
       </View>
       <Text style={styles.missionProgress} numberOfLines={1}>
         {messages.missionProgressLabel(shownProgress, target)}

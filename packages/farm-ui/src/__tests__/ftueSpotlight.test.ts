@@ -6,6 +6,7 @@ import {
   findSpotlightPlotIndex,
   getPlotCellRect,
   getSpotlightBlockers,
+  getSpotlightBubbleFrame,
 } from '../ftueSpotlight';
 
 describe('ftueSpotlight (#606 AC-1)', () => {
@@ -50,5 +51,20 @@ describe('ftueSpotlight (#606 AC-1)', () => {
     expect(findSpotlightPlotIndex(ready)).toBe(1);
     const empty: GameState = { ...fresh, plots: fresh.plots.map((plot) => ({ ...plot, state: 0, cropType: null })) };
     expect(findSpotlightPlotIndex(empty)).toBeNull();
+  });
+
+  test('말풍선은 밝힌 칸 옆의 넓은 쪽에 두고, 양옆이 좁으면 손가락 아래에 둔다 (1회차 #3)', () => {
+    const screen = { width: 390, height: 800 };
+    const leftCell = getSpotlightBubbleFrame(screen, { x: 16, y: 300, width: 84, height: 84 });
+    expect(leftCell.side).toBe('right');
+    expect(leftCell.left).toBe(16 + 84 + FTUE_SPOTLIGHT_PADDING + 10);
+    expect(leftCell.maxWidth).toBe(390 - leftCell.left! - 12);
+    const rightCell = getSpotlightBubbleFrame(screen, { x: 290, y: 300, width: 84, height: 84 });
+    expect(rightCell.side).toBe('left');
+    expect(rightCell.right).toBe(390 - (290 - FTUE_SPOTLIGHT_PADDING - 10));
+    const wideCell = getSpotlightBubbleFrame({ width: 320, height: 800 }, { x: 60, y: 300, width: 200, height: 200 });
+    expect(wideCell.side).toBe('below');
+    expect(wideCell.left).toBe(12);
+    expect(wideCell.top).toBeGreaterThan(300 + 200);
   });
 });

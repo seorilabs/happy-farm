@@ -1,11 +1,11 @@
 /// <reference types="jest" />
 
 import React from 'react';
-import { StyleSheet, Text } from 'react-native';
+import { Image, StyleSheet, Text } from 'react-native';
 import { render } from '@testing-library/react-native';
 
 import { FarmArtProvider, type FarmArt } from '../farmArt';
-import { GameText, SkinFrame, UiIcon } from '../components/GameUi';
+import { CoinText, GameText, SkinFrame, UiIcon } from '../components/GameUi';
 
 const ART: FarmArt = {
   ui: {
@@ -61,5 +61,49 @@ describe('GameUi (#606)', () => {
     expect(style.fontFamily).toBeUndefined();
     expect(style.fontWeight).toBe('900');
     expect(style.textShadowColor).toBeDefined();
+  });
+
+  test('가운데 조각은 끝 조각 아래로 1pt씩 겹쳐 이음매 틈이 보이지 않게 한다 (1회차 #14)', () => {
+    const view = render(
+      <FarmArtProvider art={ART}>
+        <SkinFrame testID="frame" skin="primary" height={56} />
+      </FarmArtProvider>
+    );
+    const center = StyleSheet.flatten(view.getByTestId('frame-skin-center').props.style);
+    expect(center.left).toBe(27);
+    expect(center.right).toBe(27);
+  });
+
+  test('디스플레이 서체가 있어도 한중일 글자는 시스템 굵은 글씨와 외곽선으로 그린다 (1회차 #7)', () => {
+    const view = render(
+      <FarmArtProvider art={ART}>
+        <GameText testID="label">모두 수확 12</GameText>
+      </FarmArtProvider>
+    );
+    const cjk = view.getByText('모두 수확');
+    const style = StyleSheet.flatten(cjk.props.style);
+    expect(style.fontFamily).not.toBe('Baloo2-ExtraBold');
+    expect(style.fontWeight).toBe('900');
+    expect(style.textShadowColor).toBeDefined();
+    // 숫자는 부모의 디스플레이 서체를 그대로 쓴다.
+    expect(StyleSheet.flatten(view.getByTestId('label').props.style).fontFamily).toBe('Baloo2-ExtraBold');
+  });
+
+  test('한국어 줄바꿈은 단어 단위로 한다 (1회차 #21)', () => {
+    const view = render(<GameText testID="label">상점에서 열기</GameText>);
+    expect(view.getByTestId('label').props.lineBreakStrategyIOS).toBe('hangul-word');
+  });
+
+  test('코인 아이콘이 있으면 금액 뒤 코인 이모지를 그림 코인으로 바꾼다 (1회차 #9)', () => {
+    const withArt = render(
+      <FarmArtProvider art={ART}>
+        <CoinText testID="price">300 🪙</CoinText>
+      </FarmArtProvider>
+    );
+    expect(withArt.queryByText('300 🪙')).toBeNull();
+    expect(withArt.UNSAFE_getAllByType(Image)).toHaveLength(1);
+    expect(withArt.getByTestId('price').props.accessibilityLabel).toBe('300');
+    const withoutArt = render(<CoinText testID="price">300 🪙</CoinText>);
+    expect(withoutArt.getByText('300 🪙')).toBeTruthy();
   });
 });

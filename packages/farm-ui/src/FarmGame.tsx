@@ -135,7 +135,6 @@ import {
   formatDuration,
   formatHourlyGold,
   formatGold,
-  GOLD_UNIT,
   formatMoney,
   formatRemainingTime,
   formatMultiplier,
@@ -294,11 +293,12 @@ import {
   type PendingSheetSource,
   type SheetDwell,
 } from './sheetAnalytics';
-import { isFirstSessionPopupHoldActive } from './firstSessionPopups';
+import { canAutoOpenHarvestBonusOffer, isFirstSessionPopupHoldActive } from './firstSessionPopups';
 import type { FarmUiIconKey } from './farmArt';
 import { findSpotlightPlotIndex, getPlotCellRect } from './ftueSpotlight';
 import { FtueSpotlight } from './components/FtueSpotlight';
 import {
+  CoinText,
   GAME_UI_MAX_FONT_SCALE,
   GameBadge,
   GameText,
@@ -306,6 +306,7 @@ import {
   SkinFrame,
   UiIcon,
   useDisplayFontStyle,
+  type BadgeValue,
 } from './components/GameUi';
 import { GameTabBar } from './components/GameTabBar';
 import { measureNodeInWindow } from './measureInWindow';
@@ -319,12 +320,14 @@ import { AdRewardCard, SettingToggle, SheetAction, ShopCard, sheetPartStyles } f
 import { GameFeedbackContext, GamePressable, PRESSED_DEPTH_STYLE, PRESSED_SINK_STYLE } from './components/GamePressable';
 import { usePopInStyle } from './components/popIn';
 import { RewardBurstLayer, type RewardBurstSpec } from './components/RewardBurstLayer';
+import { RewardPopup } from './components/RewardPopup';
 import { CountUpText } from './components/CountUpText';
 import {
   REWARD_COUNT_UP_DELAY_MS,
   resolveBurstOrigin,
   type CountUpRun,
   type Point,
+  REWARD_BURST_TOTAL_MS,
 } from './rewardBurst';
 import {
   EMPTY_TOAST_QUEUE,
@@ -440,6 +443,8 @@ const REWARD_MEASURE_TIMEOUT_MS = 200;
 const SHEET_SETTLE_MS = 450;
 const SHEET_SETTLE_POLL_MS = 100;
 const SHEET_SETTLE_MAX_TRIES = 20;
+// 복귀 전면 광고 전에 시트가 다 닫히기를 기다리는 횟수(100ms 간격).
+const RETURN_AD_SHEET_WAIT_TRIES = 20;
 // 시트 딤 색(#606): Warm Wood의 짙은 갈색.
 const SHEET_DIM_COLOR = 'rgba(46, 28, 8, 0.5)';
 const SHEET_DIM_TRANSPARENT = 'rgba(46, 28, 8, 0)';
@@ -811,7 +816,7 @@ type PendingFarmCommandEffect =
       // Carries the lifetime-first-harvest signal when the batch contains it, so
       // the "aha" celebration fires even if the very first harvest came through
       // Harvest All (e.g. a new player whose starter plots ripen together).
-      firstHarvest: { cropIcon: string; goldGained: number } | null;
+      firstHarvest: { goldGained: number } | null;
       totalGoldGained: number;
       totalRpGained: number;
       harvestedCount: number;
@@ -926,8 +931,7 @@ type PrestigeGraduationNotice = {
 
 type FirstHarvestNotice = {
   id: number;
-  cropIcon: string;
-  goldFormatted: string;
+  gold: number;
 };
 
 // One-shot floating "+gold" feedback spawned at the tapped plot on a manual
@@ -1184,6 +1188,13 @@ function FarmGameBody({
   // calls onDismiss and has no such limit, so there a closed sheet is gone at once.
   // A requested sheet also waits while an overlay Modal holds the screen (see overlayModalSlot).
   const [overlaySlot, setOverlaySlot] = useState<OverlayModalSlot>(null);
+  // 복귀 보상 연출이 끝나기를 기다리는 복귀 전면 광고가 있는지(1회차 #5).
+  const [isReturnAdPending, setReturnAdPending] = useState(false);
+  // 마지막으로 자동 팝업(출석 자동 팝업, 알림 안내, 기능 안내 같은 오버레이)이 뜬 시각(1회차 #4).
+  const lastAutoPopupAtRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (overlaySlot != null) lastAutoPopupAtRef.current = Date.now();
+  }, [overlaySlot]);
   // The ads SDK presents over the top-most controller. If the sheet were dismissed while
   // an ad sat on top of it, UIKit would remove only the ad and leave an empty sheet that
   // swallows every touch (UI 검수 2회차 R2-1, react-native#54858). So while a full-screen
@@ -1244,7 +1255,8 @@ function FarmGameBody({
   // #372 상점 시트 내부 활성 탭. 상점 진입 시 항상 첫 탭(확장)부터 보도록 초기화한다.
   const [shopTab, setShopTab] = useState<ShopTabKey>('expand');
   // 다음 목표 칩으로 상점에 들어오면 강조할 줄(#606 AC-5). 상점이 닫히면 지운다.
-  const [shopFocus, setShopFocus] = useState<'plot' | null>(null);
+  // 목표 칩에서 상점을 열 때 강조할 줄. 밭 개간 줄이나 구역 해금 줄이다(#606 AC-5, 1회차 #20).
+  const [shopFocus, setShopFocus] = useState<'plot' | { area: AreaKey } | null>(null);
   // #376 데일리 보너스는 열람 즉시 자동 수령되므로, 방금 지급된 streak·골드를
   // 시트 "수령 완료" 표시용으로 고정한다. 수령 후 dailyBonusState가 다음 회차 기준으로
   // 갱신돼 previewDailyBonus 값이 바뀌어도, 화면엔 방금 받은 값이 그대로 남는다.
@@ -1344,6 +1356,8 @@ function FarmGameBody({
   const [prestigeGuide, setPrestigeGuide] = useState(false);
   const prestigeGuidePendingRef = useRef(false);
   const [firstHarvestNotice, setFirstHarvestNotice] = useState<FirstHarvestNotice | null>(null);
+  // 온보딩 첫 수확에서 받은 골드. 보상 팝업의 카운트업 금액이다(이어 하기로 들어오면 모른다).
+  const [onboardingRewardGold, setOnboardingRewardGold] = useState<number | null>(null);
   const firstHarvestTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const firstHarvestNoticeIdRef = useRef(0);
   // One-time harvest-notification permission prompt, shown after the first
@@ -1399,6 +1413,10 @@ function FarmGameBody({
   const plotGridRef = useRef<View | null>(null);
   const [spotlightGridOrigin, setSpotlightGridOrigin] = useState<Point | null>(null);
   const [spotlightSize, setSpotlightSize] = useState<{ width: number; height: number } | null>(null);
+  // 토스트를 도구 줄 바로 위에 띄우려고 하단 도구 줄과 탭 바 높이를 잰다(1회차 #15).
+  const [toolStripHeight, setToolStripHeight] = useState<number | null>(null);
+  const [tabBarHeight, setTabBarHeight] = useState<number | null>(null);
+  const bottomStackHeight = toolStripHeight != null && tabBarHeight != null ? toolStripHeight + tabBarHeight : null;
   const ftuePointerTrackedRef = useRef(false);
   // Guards each stall-triggered nudge to at most once per step and session. A
   // resumed plant step and the following harvest step may each guide once.
@@ -1801,7 +1819,8 @@ function FarmGameBody({
     rewardPulseTimersRef.current.push(handle);
   }, []);
   const celebrateGold = useCallback(
-    (amount: number, goldBefore: number, options: { sound?: boolean } = {}) => {
+    // target 'hud': 시트를 닫으면서 주는 보상(복귀, 출석)은 닫히는 시트 대신 HUD 골드 칩으로 날린다.
+    (amount: number, goldBefore: number, options: { sound?: boolean; target?: 'hud' } = {}) => {
       if (!(amount > 0) || !Number.isFinite(amount)) return;
       // 동작 줄이기가 켜져 있으면 코인 연출과 카운트업 없이 효과음과 숫자 변화만 남긴다.
       if (reduceMotionRef.current) {
@@ -1828,8 +1847,9 @@ function FarmGameBody({
       // 시트가 열려 있는데 아직 화면에 올라오지 않았거나 막 올라와 움직이는 중이면 골드 칩이 화면 밖에 있다
       // (출석 보너스는 열리는 순간 지급된다). 자리 잡을 때까지 짧게 다시 확인한다.
       let settleTries = 0;
+      const toHud = options.target === 'hud';
       const launch = () => {
-        const sheetOpen = activeSheetRef.current != null;
+        const sheetOpen = !toHud && activeSheetRef.current != null;
         const shownAt = sheetShownAtRef.current;
         const settling =
           sheetOpen && (!isSheetModalOnScreenRef.current || shownAt == null || Date.now() - shownAt < SHEET_SETTLE_MS);
@@ -1844,7 +1864,7 @@ function FarmGameBody({
         const onScreen = (to: Point | null): to is Point =>
           to != null && to.y >= 0 && to.y <= windowHeight && to.x >= 0 && to.x <= windowWidth;
         scheduleRewardTimer(() => start(fallbackTarget), REWARD_MEASURE_TIMEOUT_MS);
-        const sheetMeasurer = isSheetModalOnScreenRef.current ? sheetGoldTargetRef.current : null;
+        const sheetMeasurer = !toHud && isSheetModalOnScreenRef.current ? sheetGoldTargetRef.current : null;
         const hud = hudGoldRef.current;
         if (sheetMeasurer != null) {
           sheetMeasurer((to) => start(onScreen(to) ? to : fallbackTarget));
@@ -1866,6 +1886,25 @@ function FarmGameBody({
     },
     [insets.top, locale, playSoundEffect, pulseGold, scheduleRewardTimer, windowHeight, windowWidth]
   );
+  const wheelRevealHoldRef = useRef<{ amount: number; goldBefore: number } | null>(null);
+  const wheelBonusGoldBeforeRef = useRef<number | null>(null);
+  // 바퀴가 멈추기 전에 시트를 닫으면 붙잡아 둔 금액을 바로 연출한다.
+  useEffect(() => {
+    if (activeSheet?.type === 'wheel') return;
+    const hold = wheelRevealHoldRef.current;
+    if (hold == null) return;
+    wheelRevealHoldRef.current = null;
+    celebrateGold(hold.amount, hold.goldBefore, { target: 'hud' });
+  }, [activeSheet, celebrateGold]);
+  // 출석 보상은 시트가 닫힐 때 연출한다(1회차 #6). 지급은 열릴 때 이미 끝났다(#376).
+  const pendingDailyCelebrationRef = useRef<{ amount: number; goldBefore: number } | null>(null);
+  useEffect(() => {
+    if (activeSheet?.type === 'dailyBonus') return;
+    const pending = pendingDailyCelebrationRef.current;
+    if (pending == null) return;
+    pendingDailyCelebrationRef.current = null;
+    celebrateGold(pending.amount, pending.goldBefore, { target: 'hud' });
+  }, [activeSheet, celebrateGold]);
   // 숙련 등급 상승과 졸업 축하에도 보상 효과음을 낸다(#606 AC-7). 축하마다 한 번만 낸다.
   const masteryNoticeId = masteryRankUpNotice?.id ?? null;
   const prestigeNoticeId = prestigeGraduationNotice?.id ?? null;
@@ -1979,6 +2018,9 @@ function FarmGameBody({
       return;
     }
     const source = activeSheet.source;
+    if (source === 'auto_popup') {
+      lastAutoPopupAtRef.current = Date.now();
+    }
     // source-transition 가드로 이 블록은 열람 전이당 정확히 1회만 실행된다.
     // (StrictMode 이중 마운트/리렌더에도 ref가 유지돼 중복 실행되지 않음)
     dailyBonusOpenedSourceRef.current = source;
@@ -2011,7 +2053,14 @@ function FarmGameBody({
       };
     });
     setDailyBonusClaim({ streak: result.streak, goldAwarded: result.goldAwarded });
-    celebrateGold(result.goldAwarded, gameState.gold);
+    // 1회차 #6: 열리는 순간 딤 아래에서 연출이 끝나 보상이 흐렸다. 지급 전 값을 붙잡아 두고, 확인을 눌러
+    // 시트가 닫힐 때 코인을 골드 칩으로 날린다.
+    pendingDailyCelebrationRef.current = { amount: result.goldAwarded, goldBefore: gameState.gold };
+    setGoldCountUp({
+      from: gameState.gold,
+      to: gameState.gold + result.goldAwarded,
+      startedAt: Number.POSITIVE_INFINITY,
+    });
     farmAnalytics.trackDailyBonusClaimed({
       streak: result.streak,
       rewardValue: result.goldAwarded,
@@ -2249,12 +2298,10 @@ function FarmGameBody({
             clearToast();
             // #606 AC-2: 온보딩 첫 수확은 이번에 받은 골드로 보상 연출을 낸다(상태는 이미 지급 후).
             const batchGold = effect.fx.reduce((sum, fx) => sum + Math.max(0, fx.goldGained), 0);
+            setOnboardingRewardGold(batchGold);
             celebrateGold(batchGold, gameStateRef.current.gold - batchGold);
           } else if (effect.firstHarvest != null) {
-            showFirstHarvestCelebration({
-              cropIcon: effect.firstHarvest.cropIcon,
-              goldFormatted: formatMoney(effect.firstHarvest.goldGained, locale),
-            });
+            showFirstHarvestCelebration({ gold: effect.firstHarvest.goldGained });
           }
           const first = effect.rankUps[0];
           if (first != null && !prioritizeRewardGuide) {
@@ -2567,12 +2614,10 @@ function FarmGameBody({
       if (prioritizeRewardGuide) {
         clearToast();
         // #606 AC-2: 온보딩 첫 수확은 이번에 받은 골드로 보상 연출을 낸다(상태는 이미 지급 후).
+        setOnboardingRewardGold(event.goldGained);
         celebrateGold(event.goldGained, gameStateRef.current.gold - event.goldGained);
       } else if (event.isFirstMeaningfulHarvest) {
-        showFirstHarvestCelebration({
-          cropIcon: getCrop(event.cropKey).icon,
-          goldFormatted: formatMoney(event.goldGained, locale),
-        });
+        showFirstHarvestCelebration({ gold: event.goldGained });
       }
       if (event.newMasteryRank != null && !prioritizeRewardGuide) {
         const crop = getCrop(event.cropKey);
@@ -2603,9 +2648,14 @@ function FarmGameBody({
         );
       }
       if (
-        effect.shouldShowHarvestBonusNudge &&
-        gameStateRef.current.onboardingCompleted &&
-        !event.isFirstMeaningfulHarvest
+        canAutoOpenHarvestBonusOffer({
+          nudgeEligible: effect.shouldShowHarvestBonusNudge,
+          onboardingCompleted: gameStateRef.current.onboardingCompleted,
+          firstMeaningfulHarvest: event.isFirstMeaningfulHarvest,
+          firstSessionHold: isFirstSessionPopupHoldActive(gameStateRef.current, firstSessionStartedAtRef.current),
+          lastAutoPopupAt: lastAutoPopupAtRef.current,
+          now: effect.now,
+        })
       ) {
         setGameState((state) => ({ ...state, adUsage: recordHarvestBonusAdPrompt(state, effect.now) }));
         setActiveSheet({ type: 'harvestBonus' });
@@ -3852,6 +3902,7 @@ function FarmGameBody({
     (showFertilizeAllAction ? 1 : 0);
   // 구역 선택 칩과 같은 줄이라 행동이 둘 이상이면 글자를 줄인다.
   const useCompactBatchActions = batchActionCount >= 2;
+  const fertilizeAllAsIcon = showHarvestBatchActions || showPlantAllAction;
   // 초보 밭은 2초마다 익어 이 행의 구성이 수시로 교체된다. 교체되는 순간 같은 좌표의
   // 탭이 다른 액션으로 실행돼, 전체 비료를 누르려던 탭이 "수확 후 재심기"로 실행되는
   // 것을 실기기에서 재현했다. 행 구성이 바뀐 직후 짧게 탭을 무시해, 손가락이 향하던
@@ -3919,10 +3970,10 @@ function FarmGameBody({
   useEffect(() => {
     if (activeSheetType !== 'shop') setShopFocus(null);
   }, [activeSheetType]);
-  // 강조한 밭 줄을 사면 목표를 이룬 것이라 강조를 거둔다.
+  // 강조한 밭이나 구역 줄을 사면 목표를 이룬 것이라 강조를 거둔다.
   useEffect(() => {
     setShopFocus(null);
-  }, [gameState.unlockedPlotCount]);
+  }, [gameState.unlockedPlotCount, gameState.unlockedAreas.length]);
   const shopRewardedAdOffer = useMemo(() => getShopRewardedAdOffer(gameState), [gameState]);
 
   useEffect(() => {
@@ -4093,6 +4144,24 @@ function FarmGameBody({
     setActiveSheet({ type: 'wheel' });
   }
 
+  // 룰렛 골드는 돌리는 순간 지급되지만(#208), 바퀴가 멈추기 전에 숫자가 바뀌면 결과가 먼저 드러난다
+  // (1회차 #13). 지급 전 값을 붙잡아 두고 멈출 때 코인 연출로 올린다.
+  function holdWheelGoldUntilReveal(amount: number, goldBefore: number) {
+    if (!(amount > 0)) return;
+    wheelRevealHoldRef.current = { amount, goldBefore };
+    setGoldCountUp({ from: goldBefore, to: goldBefore + amount, startedAt: Number.POSITIVE_INFINITY });
+  }
+
+  function revealWheelGold() {
+    const hold = wheelRevealHoldRef.current;
+    wheelRevealHoldRef.current = null;
+    if (hold == null) {
+      pulseGold();
+      return;
+    }
+    celebrateGold(hold.amount, hold.goldBefore);
+  }
+
   async function spinWheelWithAd(): Promise<WheelReward | null> {
     if (wheelBonusSpinInFlightRef.current) {
       return null;
@@ -4127,7 +4196,10 @@ function FarmGameBody({
         rewardKind: 'wheel_bonus_spin',
         rewardKey: preview.reward.type,
         ctaPosition: 'wheel_sheet_bonus',
-        onRewardApplied: (before) => { creditedReward = getCreditedWheelReward(before, preview.reward); },
+        onRewardApplied: (before) => {
+          creditedReward = getCreditedWheelReward(before, preview.reward);
+          wheelBonusGoldBeforeRef.current = before.gold;
+        },
         applyRewardState: (state, rewardedAt) => {
           const committedResult = {
             reward: preview.reward,
@@ -4144,6 +4216,9 @@ function FarmGameBody({
       });
       if (!earned) {
         return null;
+      }
+      if (creditedReward.type === 'gold') {
+        holdWheelGoldUntilReveal(creditedReward.gold, wheelBonusGoldBeforeRef.current ?? gameStateRef.current.gold);
       }
       playSoundEffect('wheelSpin');
       return creditedReward;
@@ -4754,6 +4829,7 @@ function FarmGameBody({
       goal.kind === 'ready'
     ) {
       openShop();
+      setShopFocus({ area: goal.areaKey });
       return;
     }
     if (goal.kind === 'prestige_crops') {
@@ -4938,15 +5014,48 @@ function FarmGameBody({
     return true;
   }
 
-  function dismissWelcomeBack(summary: ReturnSummary) {
+  // 복귀 1배 수령은 시트를 닫으며 HUD 골드 칩으로 코인을 날린다. 바깥을 눌러 닫아도 같다(1회차 #5).
+  function celebrateWelcomeBackCollect(summary: ReturnSummary): boolean {
     const goldBefore = gameStateRef.current.gold;
     const collectedGold = collectReturnSummaryOfflineGold(gameStateRef.current, summary).collectedGold;
     if (!collectReturnSummaryOffline(summary)) {
+      return false;
+    }
+    celebrateGold(collectedGold, goldBefore, { target: 'hud' });
+    return true;
+  }
+
+  function dismissWelcomeBack(summary: ReturnSummary) {
+    if (!celebrateWelcomeBackCollect(summary)) {
       return;
     }
-    celebrateGold(collectedGold, goldBefore);
     setActiveSheet(null);
-    void maybeShowReturnAd();
+    scheduleReturnAdAfterCeremony();
+  }
+
+  // 복귀 전면 광고는 보상 연출이 끝나고 시트가 다 닫힌 뒤에 띄운다(1회차 #5). 받는 순간 광고가 덮어 코인
+  // 연출이 보이지 않았다. 시트가 닫히기 전에 광고를 올리면 닫히는 시트 위에 광고가 올라간다(UI 검수 2회차
+  // R2-1). 그사이 다른 시트가 열렸으면 그 시트를 가리지 않도록 이번 광고는 건너뛴다.
+  // 기다리는 동안에는 기능 안내 같은 오버레이가 먼저 화면을 차지하지 않도록 광고 자리를 잡아 둔다.
+  function scheduleReturnAdAfterCeremony() {
+    if (!isReturnAdEligible(Date.now())) return;
+    setReturnAdPending(true);
+    let waits = 0;
+    const run = () => {
+      if (activeSheetRef.current != null) {
+        setReturnAdPending(false);
+        return;
+      }
+      if (isSheetModalOnScreenRef.current && waits < RETURN_AD_SHEET_WAIT_TRIES) {
+        waits += 1;
+        scheduleRewardTimer(run, SHEET_SETTLE_POLL_MS);
+        return;
+      }
+      // 광고 표시가 같은 렌더에서 전면 광고 진행 상태를 켜므로 오버레이는 계속 기다린다.
+      setReturnAdPending(false);
+      void maybeShowReturnAd();
+    };
+    scheduleRewardTimer(run, reduceMotionRef.current ? 0 : REWARD_BURST_TOTAL_MS);
   }
 
   // The return timestamp is committed as soon as the saved game loads. Settle
@@ -5446,28 +5555,32 @@ function FarmGameBody({
   // collected their welcome-back recap. Skipped during the first session /
   // onboarding, when no ad is ready, or while the persisted return cooldown is
   // still active, so returning players see it at most once per cooldown window.
-  async function maybeShowReturnAd() {
+  // 복귀 전면 광고를 지금 띄울 수 있는지. 연출을 기다리기 전에도 같은 조건으로 미리 본다(1회차 #5).
+  function isReturnAdEligible(now: number): boolean {
     if (
       !interstitialPlacements.returnWelcomeBack ||
       onboardingStep != null ||
       fullScreenAdInFlightRef.current ||
       updateGateRef.current != null ||
-      overlaySlotRef.current != null
+      overlaySlotRef.current != null ||
+      !interstitialAd.isAdReady
     ) {
-      return;
+      return false;
     }
-    if (!interstitialAd.isAdReady) {
-      return;
-    }
+    const state = gameStateRef.current;
+    return (
+      state.onboardingCompleted &&
+      canShowReturnInterstitial(state, now) &&
+      !isFirstSessionInterstitialGraceActive(state, firstSessionStartedAtRef.current, now)
+    );
+  }
+
+  async function maybeShowReturnAd() {
     const now = Date.now();
-    const stateBeforeShow = gameStateRef.current;
-    if (
-      !stateBeforeShow.onboardingCompleted ||
-      !canShowReturnInterstitial(stateBeforeShow, now) ||
-      isFirstSessionInterstitialGraceActive(stateBeforeShow, firstSessionStartedAtRef.current, now)
-    ) {
+    if (!isReturnAdEligible(now)) {
       return;
     }
+    const stateBeforeShow = gameStateRef.current;
 
     setFullScreenAdInFlight(true);
     try {
@@ -5783,13 +5896,13 @@ function FarmGameBody({
       return;
     }
     let firstMutationFlash: MutationCelebrationKey | null = null;
-    let firstHarvest: { cropIcon: string; goldGained: number } | null = null;
+    let firstHarvest: { goldGained: number } | null = null;
     const rankUps: { cropKey: CropKey; rankKey: MasteryRankKey; rankIcon: string }[] = [];
     for (const { outcome } of result.harvests) {
       const mk = outcome.mutation?.key;
       firstMutationFlash = selectRarestMutationFlash(firstMutationFlash, mk);
       if (outcome.isFirstMeaningfulHarvest) {
-        firstHarvest = { cropIcon: getCrop(outcome.cropKey).icon, goldGained: outcome.goldGained };
+        firstHarvest = { goldGained: outcome.goldGained };
       }
       if (outcome.newMasteryRank != null) {
         rankUps.push({
@@ -6078,6 +6191,10 @@ function FarmGameBody({
         clearTimeout(fertilizeAllDisarmTimerRef.current);
       }
       fertilizeAllDisarmTimerRef.current = setTimeout(disarmFertilizeAll, FERTILIZE_ALL_CONFIRM_WINDOW_MS);
+      // 아이콘 버튼에는 확인 문구를 쓸 자리가 없어 토스트로 알린다.
+      if (fertilizeAllAsIcon) {
+        toast(messages.fertilizeAllConfirmButton(preview.affordableCount, formatMoney(preview.totalCost, locale)));
+      }
       return;
     }
     disarmFertilizeAll();
@@ -6302,7 +6419,12 @@ function FarmGameBody({
   const nextOverlaySlot = updateGate != null && overlaySlot != null ? overlaySlot : resolveOverlayModalSlot(
     overlaySlot,
     requestedOverlay,
-    activeSheet == null && !isSheetModalOnScreen && !isFullScreenAdInFlight && updateGate == null && !isUpdateGateModalOnScreen
+    activeSheet == null &&
+      !isSheetModalOnScreen &&
+      !isFullScreenAdInFlight &&
+      !isReturnAdPending &&
+      updateGate == null &&
+      !isUpdateGateModalOnScreen
   );
   if (nextOverlaySlot !== overlaySlot) {
     setOverlaySlot(nextOverlaySlot);
@@ -6315,16 +6437,27 @@ function FarmGameBody({
     rewardBursts.length > 0 ? (
       <RewardBurstLayer
         bursts={rewardBursts}
-        renderCoin={() => <Text style={styles.rewardBurstCoin}>💰</Text>}
+        renderCoin={() => <UiIcon name="coin" size={30} fallback="💰" />}
         onDone={finishRewardBurst}
       />
     ) : null;
-  const toastNode =
+  // 토스트는 메인에서는 도구 줄과 씨앗 카드 바로 위에, 시트 위에서는 화면 위쪽에 띄워 방금 누른 조작과
+  // 다음 버튼을 덮지 않는다(1회차 #15).
+  const renderToast = (placement: 'main' | 'sheet') =>
     toastMessage != null ? (
-      <View pointerEvents="none" style={[styles.toast, { bottom: bottomSafeInset + 142 }]}>
-        <Text style={styles.toastText}>{toastMessage}</Text>
+      <View
+        pointerEvents="none"
+        style={[
+          styles.toast,
+          placement === 'sheet'
+            ? { top: insets.top + 12 }
+            : { bottom: bottomStackHeight != null ? bottomStackHeight + 10 : bottomSafeInset + 142 },
+        ]}
+      >
+        <CoinText style={styles.toastText}>{toastMessage}</CoinText>
       </View>
     ) : null;
+  const toastNode = renderToast('main');
 
   return (
     <GameFeedbackContext.Provider value={gameFeedback}>
@@ -6375,9 +6508,12 @@ function FarmGameBody({
                   format={(value) => formatMoney(value, locale)}
                 />
               </Animated.View>
-              <Text style={styles.hudIncome} numberOfLines={1} maxFontSizeMultiplier={GAME_UI_MAX_FONT_SCALE}>
-                {messages.hudIncomePerHour(formatMoney(Math.max(0, farmProductivity.netProfitPerHour), locale))}
-              </Text>
+              {/* 큰 글자에서는 칩 폭이 모자라 "+2..."로 잘린다(1회차 #22). 접근성 이름에 생산성을 남기고 숨긴다. */}
+              {!useLargeTextLayout ? (
+                <Text style={styles.hudIncome} numberOfLines={1} maxFontSizeMultiplier={GAME_UI_MAX_FONT_SCALE}>
+                  {messages.hudIncomePerHour(formatMoney(Math.max(0, farmProductivity.netProfitPerHour), locale))}
+                </Text>
+              ) : null}
             </SkinFrame>
           </GamePressable>
           <GamePressable
@@ -6465,12 +6601,13 @@ function FarmGameBody({
         </View>
       </View>
 
-      {onboardingStep != null ? (
+      {/* 레이아웃 안 안내 카드는 직접 파종과, 밝힐 다 자란 칸이 없는 수확 단계에만 쓴다. 다 자란 칸이
+          있으면 스포트라이트 말풍선이, 보상 단계는 보상 팝업이 안내한다(1회차 #2, #3). */}
+      {onboardingStep === 'plant' || (onboardingStep === 'harvest' && !isSpotlightActive) ? (
         <FarmOnboarding
           step={onboardingStep}
           messages={messages}
           onSkip={skipOnboarding}
-          onRewardConfirm={confirmOnboardingReward}
           onQuickStart={quickStartCropKey != null ? quickStartOnboarding : undefined}
         />
       ) : null}
@@ -6556,7 +6693,11 @@ function FarmGameBody({
         </ScrollView>
       </View>
 
-      <View testID="tool-strip" style={styles.toolStrip}>
+      <View
+        testID="tool-strip"
+        style={styles.toolStrip}
+        onLayout={(event) => setToolStripHeight(Math.round(event.nativeEvent.layout.height))}
+      >
         {/* #606 B안: 구역 선택 칩(정렬 아이콘 포함)과 밭 일괄 액션을 한 줄에 둔다. 구역 탭 줄과 안내
             문구 줄은 없앴다(사용자 결정 2026-11-26). */}
         <View
@@ -6614,7 +6755,10 @@ function FarmGameBody({
                 나타난다. 1탭 확인 → 2탭 실행으로 큰 골드 지출을 방어한다. */}
             {showFertilizeAllAction ? (
               <HarvestAllButton
-                variant={showHarvestBatchActions || showPlantAllAction ? 'secondary' : 'primary'}
+                // 다른 일괄 행동과 함께면 아이콘 버튼으로 내려 모두 수확이 한 줄을 지키게 한다(1회차 #1).
+                variant={fertilizeAllAsIcon ? 'icon' : 'primary'}
+                icon={fertilizeAllAsIcon ? { fallback: '🌾' } : undefined}
+                badge={fertilizeAllAsIcon && fertilizeAllArmed ? '!' : undefined}
                 compact={useCompactBatchActions}
                 testID="fertilize-all-button"
                 label={
@@ -6657,7 +6801,8 @@ function FarmGameBody({
               // (cropOfTheDay/weeklyEvent)를 그대로 재사용해 배지 배수를 만든다.
               // memo(ToolButton) 얕은 비교가 깨지지 않도록 배열이 아닌 문자열
               // 프리미티브로 넘긴다. 보너스가 없는 작물은 undefined → 동등 비교.
-              const cotdBadge = key === cropOfTheDay.cropKey ? `⭐×${cropOfTheDay.multiplier}` : undefined;
+              // 별은 HUD의 명성 별과 같아 별을 두 배로 주는 것처럼 읽혀 "오늘"을 뜻하는 달력으로 바꿨다(1회차 #24).
+              const cotdBadge = key === cropOfTheDay.cropKey ? `📅×${cropOfTheDay.multiplier}` : undefined;
               // 기본 판매 축제는 🎉, 황금 변이 축제는 ✨, 수확 축제는 ⚡ 배지로
               // 같은 axis 안의 typeKey 플레이버까지 구분한다.
               const weeklyBadge =
@@ -6740,6 +6885,16 @@ function FarmGameBody({
           hole={spotlightHole}
           size={spotlightSize}
           pulse={plotNudgeBurst}
+          hint={messages.onboardingHarvestTitle}
+          skipTop={(spotlightGridOrigin?.y ?? 40) - 36}
+          skip={{
+            label: messages.onboardingSkip,
+            confirmTitle: messages.onboardingSkipConfirmTitle,
+            confirmDescription: messages.onboardingSkipConfirmDesc,
+            cancelLabel: messages.onboardingSkipConfirmCancel,
+            confirmLabel: messages.onboardingSkipConfirmAction,
+          }}
+          onSkip={skipOnboarding}
           onLayout={measureSpotlight}
           onBlockedTap={playPlotNudgeBurst}
         />
@@ -6748,72 +6903,75 @@ function FarmGameBody({
 
       {/* 탭 바는 페이지 스크롤 밖에 두어 작은 화면이나 큰 글자에서 페이지가 스크롤돼도 화면 아래에
           고정된다(#606 B안). 첫 수확 스포트라이트 동안에는 같은 어둡기로 덮고 탭을 막는다. */}
-      <GameTabBar
-        blocked={isSpotlightActive}
-        onBlockedTap={playPlotNudgeBurst}
-        bottomInset={bottomSafeInset}
-        tabs={[
-          {
-            key: 'shop',
-            testID: 'shop-nav-button',
-            label: messages.tabShop,
-            icon: 'shop',
-            fallback: '🏪',
-            badge: onboardingStep != null ? 0 : shopBadgeCount,
-            onPress: () => {
-              trackNavTap('shop', 'tab_bar');
-              openShop();
+      <View onLayout={(event) => setTabBarHeight(Math.round(event.nativeEvent.layout.height))}>
+        <GameTabBar
+          blocked={isSpotlightActive}
+          onBlockedTap={playPlotNudgeBurst}
+          bottomInset={bottomSafeInset}
+          tabs={[
+            {
+              key: 'shop',
+              testID: 'shop-nav-button',
+              label: messages.tabShop,
+              icon: 'shop',
+              fallback: '🏪',
+              badge: onboardingStep != null ? 0 : shopBadgeCount,
+              onPress: () => {
+                trackNavTap('shop', 'tab_bar');
+                openShop();
+              },
             },
-          },
-          {
-            key: 'missions',
-            testID: 'missions-nav-button',
-            label: messages.tabMissions,
-            accessibilityLabel: messages.missionsButtonAccessibilityLabel,
-            icon: 'missions',
-            fallback: '📋',
-            badge: onboardingStep != null ? 0 : missionClaimableCount,
-            onPress: () => {
-              trackNavTap('missions', 'tab_bar');
-              openMissions();
+            {
+              key: 'missions',
+              testID: 'missions-nav-button',
+              label: messages.tabMissions,
+              accessibilityLabel: messages.missionsButtonAccessibilityLabel,
+              icon: 'missions',
+              fallback: '📋',
+              badge: onboardingStep != null ? 0 : missionClaimableCount,
+              onPress: () => {
+                trackNavTap('missions', 'tab_bar');
+                openMissions();
+              },
             },
-          },
-          {
-            key: 'farm',
-            testID: 'farm-nav-button',
-            label: messages.tabFarm,
-            icon: 'harvest',
-            fallback: '🌾',
-            current: true,
-            // 지금 보고 있는 농장 화면이라 누를 것이 없다(GameTabBar가 탭음도 내지 않는다).
-            onPress: () => undefined,
-          },
-          {
-            key: 'ranch',
-            testID: 'ranch-nav-button',
-            label: messages.tabRanch,
-            icon: 'ranch',
-            fallback: '🐄',
-            badge: onboardingStep != null ? 0 : animalsReadyCount + workshopReadyCount,
-            onPress: () => {
-              trackNavTap('production', 'tab_bar');
-              setActiveSheet({ type: 'production', tab: 'animals', source: 'tab_bar' });
+            {
+              key: 'farm',
+              testID: 'farm-nav-button',
+              label: messages.tabFarm,
+              icon: 'harvest',
+              fallback: '🌾',
+              current: true,
+              // 지금 보고 있는 농장 화면이라 누를 것이 없다(GameTabBar가 탭음도 내지 않는다).
+              onPress: () => undefined,
             },
-          },
-          {
-            key: 'cooking',
-            testID: 'cooking-nav-button',
-            label: messages.tabCooking,
-            icon: 'kitchen',
-            fallback: '🍲',
-            badge: onboardingStep != null ? 0 : cookingReadyBadge,
-            onPress: () => {
-              trackNavTap('cooking', 'tab_bar');
-              openCooking();
+            {
+              key: 'ranch',
+              testID: 'ranch-nav-button',
+              // 탭 이름을 여는 시트 제목과 맞춘다(1회차 #19: "목장" 탭이 "생산" 시트를 열었다).
+              label: messages.sheetTitleProduction,
+              icon: 'ranch',
+              fallback: '🐄',
+              badge: onboardingStep != null ? 0 : animalsReadyCount + workshopReadyCount,
+              onPress: () => {
+                trackNavTap('production', 'tab_bar');
+                setActiveSheet({ type: 'production', tab: 'animals', source: 'tab_bar' });
+              },
             },
-          },
-        ]}
-      />
+            {
+              key: 'cooking',
+              testID: 'cooking-nav-button',
+              label: messages.tabCooking,
+              icon: 'kitchen',
+              fallback: '🍲',
+              badge: onboardingStep != null ? 0 : cookingReadyBadge,
+              onPress: () => {
+                trackNavTap('cooking', 'tab_bar');
+                openCooking();
+              },
+            },
+          ]}
+        />
+      </View>
 
       {/* 시트가 열려 있으면 토스트는 Sheet의 overlay 슬롯에서만 렌더한다. 양쪽에 두면
           Modal에 가려 보이지 않는 사본이 접근성 트리에 하나 더 남는다. */}
@@ -6853,25 +7011,27 @@ function FarmGameBody({
           rewardBurstNode != null || toastNode != null ? (
             <>
               {rewardBurstNode}
-              {toastNode}
+              {renderToast('sheet')}
             </>
           ) : null
         }
         updateGate={!isFullScreenAdInFlight && isSheetModalVisible ? updateGate : null}
         goldLabel={
           <CountUpText
+            coin
             value={gameState.gold}
             run={goldCountUp}
             format={(value) => messages.sheetGoldLabel(formatMoney(value, locale))}
           />
         }
         goldTargetRef={sheetGoldTargetRef}
+        fixedHeight={shouldRenderShopTabBar(activeSheet?.type)}
         onTouchStart={recordTouch}
         canClose={() => activeSheet?.type !== 'welcomeBack' || !offlineBonusAdInFlightRef.current}
         isModalVisible={isSheetModalVisible}
         onDismiss={handleSheetModalDismissed}
         onClose={() => {
-          if (activeSheet?.type === 'welcomeBack' && !collectReturnSummaryOffline(activeSheet.summary)) {
+          if (activeSheet?.type === 'welcomeBack' && !celebrateWelcomeBackCollect(activeSheet.summary)) {
             return false;
           }
           closeSheet();
@@ -6940,6 +7100,7 @@ function FarmGameBody({
 
                     <Text style={styles.sheetSectionTitle}>{messages.areaUnlockSection}</Text>
                     <ShopAreaUnlockRows
+                      highlightedAreaKey={shopFocus != null && shopFocus !== 'plot' ? shopFocus.area : null}
                       gameState={gameState}
                       locale={locale}
                       messages={messages}
@@ -7404,16 +7565,15 @@ function FarmGameBody({
             {/* #376 열람 즉시 자동 수령: 탭-수령 버튼을 없애고 "수령 완료" 표시(streak +
                 획득 골드)와 확인(닫기) 버튼 1개만 남긴다. 실제 지급·계측은 열람 시점의
                 자동 수령 effect가 처리한다. */}
-            <View style={styles.welcomeBackRow}>
-              <Text style={styles.welcomeBackIcon}>🎁</Text>
-              <View style={styles.welcomeBackRowText}>
-                <Text style={styles.welcomeBackRowLabel}>
-                  {getDailyBonusLabel(dailyBonusDisplay.streak, dailyBonusDisplay.goldAwarded, locale).streakLabel}
-                </Text>
-                <Text style={styles.welcomeBackRowValue}>
-                  +{formatGold(dailyBonusDisplay.goldAwarded, locale)}
-                </Text>
-              </View>
+            {/* 1회차 #6: 받은 보상을 큰 코인과 금액으로 보이고, 확인을 누르면 코인이 골드 칩으로 날아간다. */}
+            <View testID="daily-bonus-reward" style={styles.dailyRewardHero}>
+              <UiIcon name="coin" size={72} fallback="💰" />
+              <GameText style={styles.dailyRewardAmount}>
+                +{formatMoney(dailyBonusDisplay.goldAwarded, locale)}
+              </GameText>
+              <GameText tone="muted" style={styles.dailyRewardStreak}>
+                {getDailyBonusLabel(dailyBonusDisplay.streak, dailyBonusDisplay.goldAwarded, locale).streakLabel}
+              </GameText>
             </View>
             <SheetAction label={messages.dailyBonusConfirmAction} onPress={() => setActiveSheet(null)} />
           </View>
@@ -7453,6 +7613,9 @@ function FarmGameBody({
               setGameState((prev) =>
                 getWheelStatus(prev.wheelState, now).canSpin ? applyWheelReward(prev, result, now) : prev
               );
+              if (displayReward.type === 'gold') {
+                holdWheelGoldUntilReveal(displayReward.gold, gameStateRef.current.gold);
+              }
               // 스핀 연출 시작과 동시에 감속 틱 사운드를 깐다(2000ms, WheelSheet의
               // ease-out 커브와 같은 길이로 구운 트랙 — scripts/synth-audio-sfx.py).
               playSoundEffect('wheelSpin');
@@ -7495,7 +7658,7 @@ function FarmGameBody({
                   break;
                 case 'gold':
                 default:
-                  pulseGold();
+                  revealWheelGold();
                   toast(messages.wheelRewardToast(formatMoney(reward.gold, locale)));
                   break;
               }
@@ -7640,7 +7803,7 @@ function FarmGameBody({
                   if (!collectReturnSummaryOffline(activeSheet.summary)) return;
                   setActiveSheet(null);
                   harvestAllCrops();
-                  void maybeShowReturnAd();
+                  scheduleReturnAdAfterCeremony();
                 }}
               />
             ) : null}
@@ -7732,7 +7895,27 @@ function FarmGameBody({
           key={firstHarvestNotice.id}
           notice={firstHarvestNotice}
           messages={messages}
+          locale={locale}
+          motionEnabled={!reduceMotion}
           onDismiss={dismissFirstHarvestCelebration}
+        />
+      ) : null}
+      {onboardingStep === 'reward' ? (
+        // 온보딩 첫 수확 보상(1회차 #2). 코인은 수확한 칸에서 골드 칩으로 이미 날아가고, 팝업은 받은 금액을
+        // 크게 세어 올린 뒤 확인 한 번으로 안내를 마친다.
+        <RewardPopup
+          testID="onboarding-reward-popup"
+          title={messages.onboardingRewardTitle}
+          subtitle={messages.onboardingRewardDesc}
+          amount={
+            onboardingRewardGold != null
+              ? { value: onboardingRewardGold, format: (value) => `+${formatMoney(value, locale)}` }
+              : null
+          }
+          confirmLabel={messages.onboardingRewardContinue}
+          confirmTestID="onboarding-reward-confirm"
+          motionEnabled={!reduceMotion}
+          onConfirm={confirmOnboardingReward}
         />
       ) : null}
       {overlaySlot?.overlay.kind === 'notificationPrompt'
@@ -7824,10 +8007,12 @@ function AreaPickerChip({
             fallbackStyle={styles.batchSecondaryFallback}
             contentStyle={[styles.areaPickerContent, sortAccessibilityLabel != null && styles.areaPickerContentWithSort]}
           >
+            {/* 펼침 표시는 이름과 따로 두어 긴 이름(Campo Inicial)에서도 잘리지 않는다(Android AC-13). */}
             <GameText style={styles.areaPickerLabel} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
               {locked ? '🔒 ' : ''}
-              {areaName} ▾
+              {areaName}
             </GameText>
+            <GameText style={styles.areaPickerCaret}>▾</GameText>
           </SkinFrame>
         )}
       </GamePressable>
@@ -7882,6 +8067,7 @@ function HarvestAllButton({
   variant = 'primary',
   icon,
   label,
+  badge,
   onPress,
   testID,
 }: {
@@ -7891,6 +8077,8 @@ function HarvestAllButton({
   variant?: 'primary' | 'secondary' | 'icon';
   icon?: { name?: FarmUiIconKey; fallback: string };
   label: string;
+  // 아이콘 버튼으로 내린 행동의 확인 대기 같은 상태 표시.
+  badge?: BadgeValue;
   onPress: () => void;
   testID?: string;
 }) {
@@ -7972,17 +8160,19 @@ function HarvestAllButton({
               )
             ) : null}
             {variant !== 'icon' ? (
+              // 한 줄로 두고 글자를 줄인다. 두 줄을 허용하면 좁은 화면에서 "모두 수 / 확"처럼 낱말이 끊겼다(1회차 #1).
               <GameText
                 tone={variant === 'primary' ? 'onPrimary' : 'ink'}
                 style={[styles.harvestAllButtonText, compact && styles.harvestAllButtonTextCompact]}
-                numberOfLines={2}
+                numberOfLines={1}
                 adjustsFontSizeToFit
-                minimumFontScale={0.75}
+                minimumFontScale={0.7}
               >
                 {label}
               </GameText>
             ) : null}
           </SkinFrame>
+          <GameBadge value={badge} />
         </Animated.View>
       )}
     </GamePressable>
@@ -8188,74 +8378,30 @@ function PrestigeGraduationOverlay({
 function FirstHarvestOverlay({
   notice,
   messages,
+  locale,
+  motionEnabled,
   onDismiss,
 }: {
   notice: FirstHarvestNotice;
   messages: FarmMessages;
+  locale: SupportedLocale;
+  motionEnabled: boolean;
   onDismiss: () => void;
 }) {
-  const cardScale = useRef(new Animated.Value(0.5)).current;
-  const cropScale = useRef(new Animated.Value(0.1)).current;
-  const goldEntrance = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    const anim = Animated.parallel([
-      Animated.spring(cardScale, {
-        toValue: 1,
-        damping: 13,
-        stiffness: 270,
-        mass: 0.8,
-        useNativeDriver: true,
-      }),
-      Animated.sequence([
-        Animated.delay(60),
-        Animated.spring(cropScale, {
-          toValue: 1,
-          damping: 7,
-          stiffness: 200,
-          mass: 0.5,
-          useNativeDriver: true,
-        }),
-      ]),
-      Animated.sequence([
-        Animated.delay(280),
-        Animated.spring(goldEntrance, {
-          toValue: 1,
-          damping: 12,
-          stiffness: 260,
-          useNativeDriver: true,
-        }),
-      ]),
-    ]);
-    anim.start();
-    return () => anim.stop();
-  }, [cardScale, cropScale, goldEntrance]);
-
-  const goldTranslateY = goldEntrance.interpolate({ inputRange: [0, 1], outputRange: [12, 0] });
-
+  // 온보딩을 건너뛴 사용자의 첫 수확도 같은 보상 팝업으로 알린다(1회차 #2). 시간이 지나면 저절로 닫히고,
+  // 바깥이나 확인을 눌러도 닫힌다.
   return (
-    <GamePressable silent pressedStyle={null} testID="first-harvest-overlay" style={StyleSheet.absoluteFill} onPress={onDismiss}>
-      <View style={styles.firstHarvestCenter} pointerEvents="none">
-        <Animated.View
-          testID="first-harvest-card"
-          style={[styles.firstHarvestCard, { transform: [{ scale: cardScale }] }]}
-        >
-          <Text style={styles.firstHarvestTitle}>{messages.firstHarvestTitle}</Text>
-          <Animated.Text style={[styles.firstHarvestCropIcon, { transform: [{ scale: cropScale }] }]}>
-            {notice.cropIcon}
-          </Animated.Text>
-          <Animated.Text
-            style={[
-              styles.firstHarvestGold,
-              { opacity: goldEntrance, transform: [{ translateY: goldTranslateY }] },
-            ]}
-          >
-            +{notice.goldFormatted} {GOLD_UNIT}
-          </Animated.Text>
-          <Text style={styles.firstHarvestSubtitle}>{messages.firstHarvestSubtitle}</Text>
-        </Animated.View>
-      </View>
-    </GamePressable>
+    <RewardPopup
+      testID="first-harvest-overlay"
+      panelTestID="first-harvest-card"
+      title={messages.firstHarvestTitle}
+      subtitle={messages.firstHarvestSubtitle}
+      amount={{ value: notice.gold, format: (value) => `+${formatMoney(value, locale)}` }}
+      confirmLabel={messages.onboardingRewardContinue}
+      motionEnabled={motionEnabled}
+      onConfirm={onDismiss}
+      onBackdropPress={onDismiss}
+    />
   );
 }
 
@@ -8610,13 +8756,15 @@ function NextGoalBar({
         >
           <UiIcon name="goal" size={30} fallback="🚩" />
           <View style={styles.nextGoalBody}>
-            <Text
+            <CoinText
               style={ready ? styles.nextGoalReadyText : styles.nextGoalLabel}
               numberOfLines={2}
+              adjustsFontSizeToFit
+              minimumFontScale={0.8}
               maxFontSizeMultiplier={GAME_UI_MAX_FONT_SCALE}
             >
               {label}
-            </Text>
+            </CoinText>
             {ratio != null ? (
               <View style={styles.nextGoalTrack}>
                 <View style={[styles.nextGoalFill, { width: `${Math.round(ratio * 100)}%` }]} />
@@ -8690,14 +8838,15 @@ function describeNextFarmGoal(
   getAreaName: (areaKey: AreaKey) => string
 ): { label: string; ratio: number | null; ready: boolean } {
   const toRatio = (current: number, total: number) => (total > 0 ? Math.max(0, Math.min(current / total, 1)) : 0);
+  // 준비 완료도 가득 찬 막대를 보여 진행 상태와 같은 모양을 지킨다(1회차 #10, 시안 B).
   switch (goal.kind) {
     case 'prestige_ready':
-      return { label: messages.nextGoalGraduationReady, ratio: null, ready: true };
+      return { label: messages.nextGoalGraduationReady, ratio: 1, ready: true };
     case 'ready':
-      return { label: messages.nextGoalReady(getAreaName(goal.areaKey)), ratio: null, ready: true };
+      return { label: messages.nextGoalReady(getAreaName(goal.areaKey)), ratio: 1, ready: true };
     case 'plot': {
       return isNextFarmGoalReady(goal)
-        ? { label: messages.nextGoalPlotReady, ratio: null, ready: true }
+        ? { label: messages.nextGoalPlotReady, ratio: 1, ready: true }
         : {
             label: messages.nextGoalPlot(formatMoney(goal.total - goal.current, locale)),
             ratio: toRatio(goal.current, goal.total),
@@ -8707,7 +8856,7 @@ function describeNextFarmGoal(
     case 'landmark': {
       const stageName = getLandmarkStageName(goal.stageKey, messages);
       return goal.ready
-        ? { label: messages.nextGoalLandmarkReady(stageName), ratio: null, ready: true }
+        ? { label: messages.nextGoalLandmarkReady(stageName), ratio: 1, ready: true }
         : {
             label: messages.nextGoalLandmark(stageName, goal.completedStages, goal.totalStages),
             ratio: toRatio(goal.completedStages, goal.totalStages),
@@ -9510,9 +9659,13 @@ function Sheet({
   goldTargetRef,
   onTouchStart,
   updateGate,
+  fixedHeight = false,
 }: {
   activeSheet: ActiveSheet;
   contentKey: string;
+  // 탭이 있는 시트(상점)는 탭마다 내용 길이가 달라 높이가 바뀌면 탭 줄이 위아래로 움직인다(1회차 #18).
+  // 이런 시트는 최대 높이로 고정한다.
+  fixedHeight?: boolean;
   children: React.ReactNode;
   description: string;
   title: string;
@@ -9738,11 +9891,13 @@ function Sheet({
         />
         <Animated.View
           ref={sheetViewRef}
+          testID="sheet-panel"
           onLayout={(event) => {
             sheetLayoutYRef.current = event.nativeEvent.layout.y;
           }}
           style={[
             styles.sheet,
+            fixedHeight && styles.sheetFixedHeight,
             { marginBottom: -SHEET_OVERSHOOT_GUTTER, paddingBottom: SHEET_OVERSHOOT_GUTTER },
             { transform: [{ translateY: dragY }] },
             updateGate != null && { display: 'none' },
@@ -9963,7 +10118,7 @@ const ToolButton = React.memo(function ToolButton({
   masteryIcon?: string;
   isNew?: boolean;
   newLabel?: string;
-  // 판매 보너스 배지 텍스트(예: '⭐×2' / '🎉×1.5'). 없으면 미노출(#226).
+  // 판매 보너스 배지 텍스트(예: '📅×2' / '🎉×1.5'). 없으면 미노출(#226).
   cotdBadge?: string;
   weeklyBadge?: string;
   bonusA11yLabel?: string;
@@ -9988,16 +10143,16 @@ const ToolButton = React.memo(function ToolButton({
       onPress={() => onSelect(toolKey)}
     >
       {toolKey === 'harvest' ? (
-        <UiIcon name="harvest" size={30} fallback={icon} />
+        <UiIcon name="harvest" size={36} fallback={icon} />
       ) : (
-        <CropGlyph cropKey={cropKey} emoji={icon} size={28} textStyle={styles.toolIcon} />
+        <CropGlyph cropKey={cropKey} emoji={icon} size={34} textStyle={styles.toolIcon} />
       )}
-      <Text style={styles.toolName}>
+      <GameText style={styles.toolName} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>
         {name}
-      </Text>
+      </GameText>
       {cost != null ? (
         <View style={styles.toolCostRow}>
-          <UiIcon name="coin" size={14} fallback="💰" />
+          <UiIcon name="coin" size={15} fallback="💰" />
           <GameText style={[styles.toolCost, affordable === false && styles.toolCostUnaffordable]}>{cost}</GameText>
         </View>
       ) : null}
@@ -10062,14 +10217,16 @@ function ShopPlotRow({
       title={messages.shopPlotTitle}
       desc={messages.shopPlotDesc(gameState.unlockedPlotCount)}
       price={isMax ? messages.completePrice : formatGold(cost, locale)}
-      disabled={isMax || !canBuy}
+      disabled={isMax}
+      unaffordable={!isMax && !canBuy}
       onPress={() => {
         if (isMax) {
           onDone(messages.noMoreExpansionToast);
           return;
         }
         if (gameState.gold < cost) {
-          onDone(messages.insufficientGoldToast);
+          // 목표 칩이 강조해 연 줄이 막다른 탭이 되지 않게 남은 금액을 알린다(1회차 #11).
+          onDone(messages.plantGoldShortfall(formatMoney(cost - gameState.gold, locale)));
           return;
         }
         setGameState((state) =>
@@ -10096,6 +10253,7 @@ function ShopPlotRow({
 }
 
 function ShopAreaUnlockRows({
+  highlightedAreaKey,
   gameState,
   locale,
   messages,
@@ -10116,6 +10274,8 @@ function ShopAreaUnlockRows({
   onMilestone: () => void;
   // Fired after a successful unlock commit (SFX hook; host owns the guard).
   onUnlocked: () => void;
+  // 구역 목표 칩에서 들어왔을 때 강조할 구역(1회차 #20).
+  highlightedAreaKey?: AreaKey | null;
 }) {
   const lockedAreas = FARM_AREAS.filter((area) => !isAreaUnlocked(gameState, area.key));
   // Gated areas (research-unlocked) sit outside the sequential progression.
@@ -10142,10 +10302,13 @@ function ShopAreaUnlockRows({
     return (
       <ShopCard
         key={area.key}
+        testID={`shop-area-row-${area.key}`}
+        highlighted={highlightedAreaKey === area.key}
         title={messages.areaOpenTitle(areaLabel.name)}
         desc={`${areaLabel.target} · ${requirementText}`}
         price={formatGold(area.unlock.cost, locale)}
-        disabled={!canBuy}
+        // 지금 열 수 없어도 누르면 무엇이 모자란지 알린다(1회차 #11).
+        unaffordable={!canBuy}
         onPress={() => {
           analytics.trackAreaUnlockClicked(area.key, getAnalyticsContext(gameState));
           if (!isNextArea) {
@@ -10153,7 +10316,15 @@ function ShopAreaUnlockRows({
             return;
           }
           if (!canUnlockArea(gameState, area.key)) {
-            onDone(messages.areaRequirementsMissingToast);
+            // 골드만 모자라면 남은 금액을, 아니면 남은 조건을 알린다.
+            const onlyGoldMissing =
+              gameState.gold < area.unlock.cost &&
+              canUnlockArea({ ...gameState, gold: area.unlock.cost }, area.key);
+            onDone(
+              onlyGoldMissing
+                ? messages.plantGoldShortfall(formatMoney(area.unlock.cost - gameState.gold, locale))
+                : messages.areaRequirementsMissingToast
+            );
             return;
           }
 
