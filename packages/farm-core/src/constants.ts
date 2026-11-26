@@ -45,6 +45,7 @@ import { getAdLimits } from './adLimits';
 import {
   DEFAULT_LOCALE,
   formatDuration,
+  formatGold,
   formatMoney as formatMoneyForLocale,
   getCoreMessages,
   getResearchNodeLabel,
@@ -591,7 +592,7 @@ export function getAreaUnlockRequirementText(
 
   const messages = getCoreMessages(locale);
   const parts = [
-    `${formatMoney(area.unlock.cost, locale)}G`,
+    formatGold(area.unlock.cost, locale),
     messages.harvestedCropRequirement(gameState.harvestedCropKeys.length, area.unlock.requiredHarvestedCropCount),
     messages.researchLevelRequired(area.unlock.requiredUpgradeLevel),
   ];

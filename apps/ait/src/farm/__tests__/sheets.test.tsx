@@ -16,6 +16,7 @@ import {
   PRODUCTION_RECIPES,
   claimAllAchievements,
   createInitialState,
+  formatGold,
   formatMoney,
   formatHourlyGold,
   formatRemainingTime,
@@ -96,7 +97,7 @@ describe('diversified mission availability (#378)', () => {
     const base = createInitialState();
     const screen = render(renderMissions(base));
 
-    expect(screen.getAllByText(/골드 .*G 사용하기/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/골드 .* 🪙 사용하기/).length).toBeGreaterThan(0);
     expect(screen.queryByText(/동물 산출물/)).toBeNull();
     expect(screen.queryByText(/가공품/)).toBeNull();
     expect(screen.queryByText(/새 품종/)).toBeNull();
@@ -679,7 +680,7 @@ describe('StatsSheet', () => {
     expect(screen.getByTestId('farm-records-section')).toBeTruthy();
     expect(screen.getByText(messages.statsRecordsSection).props.accessibilityRole).toBe('header');
     expect(screen.getByTestId('stats-record-total-harvests')).toHaveTextContent('0');
-    expect(screen.getByTestId('stats-record-crop-idle-gold')).toHaveTextContent('0G');
+    expect(screen.getByTestId('stats-record-crop-idle-gold')).toHaveTextContent('0 🪙');
     expect(screen.getByTestId('stats-record-mutation-harvests')).toHaveTextContent('0');
     expect(screen.getByTestId('stats-record-prestige-count')).toHaveTextContent('0');
     expect(screen.getByTestId('stats-record-research-points')).toHaveTextContent('0 RP');
@@ -929,7 +930,7 @@ describe('StatsSheet', () => {
       formatMoney(lifetimeStats.totalHarvests, 'en-US')
     );
     expect(screen.getByTestId('stats-record-crop-idle-gold')).toHaveTextContent(
-      `${formatMoney(lifetimeStats.totalGoldEarned, 'en-US')}G`
+      `${formatGold(lifetimeStats.totalGoldEarned, 'en-US')}`
     );
     expect(screen.getByTestId('stats-record-mutation-harvests')).toHaveTextContent(
       formatMoney(lifetimeStats.mutationsFound, 'en-US')
@@ -1348,7 +1349,7 @@ describe('PrestigeConfirmSheet', () => {
     expect(
       screen.getByText(formatHourlyGold(getChainIncome(result!.state, NOW).totalGoldPerHour, LOCALE))
     ).toBeTruthy();
-    expect(screen.getByText(`${formatMoney(result!.state.gold, LOCALE)}G`)).toBeTruthy();
+    expect(screen.getByText(`${formatGold(result!.state.gold, LOCALE)}`)).toBeTruthy();
     expect(screen.getByText(messages.prestigeChainIncomePreviewHint)).toBeTruthy();
     fireEvent.press(screen.getByText(messages.prestigeConfirmAction(PRESTIGE_STARS_BASE)));
     expect(onConfirm).toHaveBeenCalledWith(NOW);
@@ -1366,7 +1367,7 @@ describe('PrestigeConfirmSheet', () => {
       />
     );
     expect(screen.getByText(formatHourlyGold(result!.chainFarm.goldPerHour, LOCALE))).toBeTruthy();
-    expect(screen.getByText(`${formatMoney(result!.state.gold, LOCALE)}G`)).toBeTruthy();
+    expect(screen.getByText(`${formatGold(result!.state.gold, LOCALE)}`)).toBeTruthy();
   });
 
   test('renders the full English preview copy', () => {
@@ -1450,7 +1451,7 @@ describe('WheelSheet', () => {
     // 진행도 스케일 기준 금액(초기 광고 보상)에 슬롯 배수를 곱한 값이 표기된다.
     const adGold = getRewardedGoldAmount(state);
     expect(
-      screen.getByText(`${formatMoney(getWheelSlotGold(WHEEL_SLOTS[0]!, adGold), LOCALE)}G`)
+      screen.getByText(`${formatGold(getWheelSlotGold(WHEEL_SLOTS[0]!, adGold), LOCALE)}`)
     ).toBeTruthy();
   });
 
@@ -1475,7 +1476,7 @@ describe('WheelSheet', () => {
     expect(onRevealed).toHaveBeenCalledTimes(1);
     expect(onRevealed).toHaveBeenCalledWith({ type: 'gold', slotKey: winner.key, gold: 12345 });
     expect(screen.getByTestId('wheel-result')).toBeTruthy();
-    expect(screen.getByText(`+${formatMoney(12345, LOCALE)}G`)).toBeTruthy();
+    expect(screen.getByText(`+${formatGold(12345, LOCALE)}`)).toBeTruthy();
   });
 
   test('연출 중 재탭해도 스핀 커밋은 1회다(이중 지급 없음)', () => {

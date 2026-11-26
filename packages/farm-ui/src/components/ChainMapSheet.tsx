@@ -7,6 +7,7 @@ import {
   canPrestige,
   formatDuration,
   formatHourlyGold,
+  formatGold,
   formatMoney,
   getChainIncome,
   getPrestigeStarsAward,
@@ -184,7 +185,7 @@ export function PrestigeConfirmSheet({
         <View style={[styles.prestigePreviewRow, styles.prestigePreviewRowDivider]}>
           <Text style={styles.prestigePreviewLabel}>{messages.prestigeStartingGoldPreviewLabel}</Text>
           <Text testID="prestige-preview-starting-gold" numberOfLines={1} style={styles.prestigePreviewValue}>
-            {formatMoney(preview.startingGold, locale)}G
+            {formatGold(preview.startingGold, locale)}
           </Text>
         </View>
         <Text style={styles.prestigePreviewHint}>{messages.prestigeChainIncomePreviewHint}</Text>

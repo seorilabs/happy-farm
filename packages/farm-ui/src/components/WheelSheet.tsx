@@ -4,6 +4,7 @@ import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
 import {
   HARVEST_BONUS_MULTIPLIER,
   WHEEL_SLOTS,
+  formatGold,
   formatMoney,
   formatRemainingTime,
   getRewardedGoldAmount,
@@ -246,7 +247,7 @@ export function WheelSheet({
         );
       case 'gold':
       default:
-        return `${formatMoney(reward.gold, locale)}G`;
+        return formatGold(reward.gold, locale);
     }
   }
 

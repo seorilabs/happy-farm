@@ -77,49 +77,49 @@ const DURATION_LABELS: Record<SupportedLocale, DurationLabels> = {
     seconds: (value) => `${value}초`,
     minutes: (value) => `${value}분`,
     hours: (hours, minutes) => (minutes === 0 ? `${hours}시간` : `${hours}시간 ${minutes}분`),
-    hourlyGoldSuffix: 'G/시간',
+    hourlyGoldSuffix: ' 🪙/시간',
   },
   'en-US': {
     seconds: (value) => `${value}s`,
     minutes: (value) => `${value}m`,
     hours: (hours, minutes) => (minutes === 0 ? `${hours}h` : `${hours}h ${minutes}m`),
-    hourlyGoldSuffix: ' G/hr',
+    hourlyGoldSuffix: ' 🪙/hr',
   },
   ja: {
     seconds: (value) => `${value}秒`,
     minutes: (value) => `${value}分`,
     hours: (hours, minutes) => (minutes === 0 ? `${hours}時間` : `${hours}時間${minutes}分`),
-    hourlyGoldSuffix: 'G/時間',
+    hourlyGoldSuffix: ' 🪙/時間',
   },
   'zh-Hans': {
     seconds: (value) => `${value}秒`,
     minutes: (value) => `${value}分`,
     hours: (hours, minutes) => (minutes === 0 ? `${hours}小时` : `${hours}小时${minutes}分`),
-    hourlyGoldSuffix: 'G/小时',
+    hourlyGoldSuffix: ' 🪙/小时',
   },
   'zh-Hant': {
     seconds: (value) => `${value}秒`,
     minutes: (value) => `${value}分`,
     hours: (hours, minutes) => (minutes === 0 ? `${hours}小時` : `${hours}小時${minutes}分`),
-    hourlyGoldSuffix: 'G/小時',
+    hourlyGoldSuffix: ' 🪙/小時',
   },
   de: {
     seconds: (value) => `${value}s`,
     minutes: (value) => `${value}min`,
     hours: (hours, minutes) => (minutes === 0 ? `${hours}h` : `${hours}h ${minutes}min`),
-    hourlyGoldSuffix: ' G/Std',
+    hourlyGoldSuffix: ' 🪙/Std.',
   },
   fr: {
     seconds: (value) => `${value}s`,
     minutes: (value) => `${value}min`,
     hours: (hours, minutes) => (minutes === 0 ? `${hours}h` : `${hours}h ${minutes}min`),
-    hourlyGoldSuffix: ' G/h',
+    hourlyGoldSuffix: ' 🪙/h',
   },
   es: {
     seconds: (value) => `${value}s`,
     minutes: (value) => `${value}min`,
     hours: (hours, minutes) => (minutes === 0 ? `${hours}h` : `${hours}h ${minutes}min`),
-    hourlyGoldSuffix: ' G/h',
+    hourlyGoldSuffix: ' 🪙/h',
   },
 };
 
@@ -190,6 +190,14 @@ export function formatMultiplier(value: number): string {
   if (!Number.isFinite(value)) return '×0.0';
   // 1.45가 이진 소수로 1.4499…가 되어 내려가지 않게 아주 작은 값을 더해 반올림한다.
   return `×${(Math.round((value + 1e-9) * 10) / 10).toFixed(1)}`;
+}
+
+// 금액 단위(#606 AC-10). 예전 "G"는 K, M과 붙어 "48.5KG"처럼 무게로 읽혔다. 글 안에서는 이미지를 둘 수
+// 없어 같은 자리에 코인 글리프를 쓴다. 칩과 카드처럼 그림을 둘 수 있는 곳은 코인 아이콘 이미지를 쓴다.
+export const GOLD_UNIT = '🪙';
+
+export function formatGold(amount: number, locale: SupportedLocale = DEFAULT_LOCALE): string {
+  return `${formatMoney(amount, locale)} ${GOLD_UNIT}`;
 }
 
 export function formatHourlyGold(value: number, locale: SupportedLocale = DEFAULT_LOCALE) {
