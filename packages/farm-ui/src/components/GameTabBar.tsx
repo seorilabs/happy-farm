@@ -78,6 +78,8 @@ export function GameTabBar({
 const styles = StyleSheet.create({
   blocker: {
     ...ABSOLUTE_FILL,
+    // 위 테두리(3pt)까지 덮어 딤 위로 밝은 선이 남지 않게 한다(1회차 #16).
+    top: -3,
     // 스포트라이트 막과 같은 색(FtueSpotlight dim).
     backgroundColor: 'rgba(36, 22, 8, 0.62)',
   },

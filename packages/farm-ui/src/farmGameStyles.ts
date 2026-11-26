@@ -480,17 +480,25 @@ export const styles = StyleSheet.create({
     flexShrink: 0,
   },
   areaPickerPressable: {
-    width: 112,
+    width: 120,
   },
   areaPickerContent: {
     paddingHorizontal: 12,
     paddingBottom: 4,
   },
+  // 정렬 버튼(오른쪽 6pt, 폭 26pt) 자리를 비워 이름 뒤 ▾가 그 아래에 가려지지 않게 한다(1회차 확인).
   areaPickerContentWithSort: {
-    paddingRight: 26,
+    paddingLeft: 10,
+    paddingRight: 34,
   },
   areaPickerLabel: {
+    flexShrink: 1,
     fontSize: 14,
+  },
+  areaPickerCaret: {
+    flexShrink: 0,
+    marginLeft: 3,
+    fontSize: 12,
   },
   areaSortButton: {
     position: 'absolute',
@@ -689,17 +697,18 @@ export const styles = StyleSheet.create({
     paddingTop: 8,
     paddingBottom: 4,
   },
+  // 씨앗 카드(1회차 #8). 시안 B처럼 두꺼운 나무 테두리 카드에 큰 작물 그림과 굵은 이름을 둔다.
   toolButton: {
     width: 84,
-    minHeight: 94,
+    minHeight: 100,
     borderRadius: 16,
-    borderWidth: 2,
-    borderColor: '#dcc189',
+    borderWidth: 3,
+    borderColor: '#d39a55',
     // overflow:'hidden'이라 그림자가 잘리므로, 두꺼운 아래 테두리로 같은
     // 입체감을 낸다. 상단 버튼들의 오프셋 그림자와 방향을 맞춘다.
-    borderBottomWidth: 5,
-    borderBottomColor: '#cbae72',
-    backgroundColor: '#fff9e8',
+    borderBottomWidth: 6,
+    borderBottomColor: '#a8692a',
+    backgroundColor: '#fff6e2',
     alignItems: 'center',
     justifyContent: 'center',
     // 아이콘/이름/가격 주변 여백 확보 + 작물 이모지가 박스 밖으로 튀어나오지
@@ -710,15 +719,15 @@ export const styles = StyleSheet.create({
     gap: 2,
   },
   activeToolButton: {
-    borderColor: '#7fb844',
-    borderBottomColor: '#6ba036',
-    backgroundColor: '#d8f2b8',
+    borderColor: '#6fb43c',
+    borderBottomColor: '#4d8a22',
+    backgroundColor: '#e9f7d6',
   },
   // toolButton은 그림자 대신 두꺼운 아래 테두리로 입체감을 내므로, 눌림도
   // 테두리를 얇게 만들고 그만큼 내려 높이를 유지한다.
   toolButtonPressed: {
     transform: [{ translateY: 3 }],
-    borderBottomWidth: 2,
+    borderBottomWidth: 3,
     marginBottom: 3,
   },
   toolIcon: {
@@ -730,14 +739,12 @@ export const styles = StyleSheet.create({
   },
   toolName: {
     maxWidth: '100%',
-    color: '#6b4a22',
-    fontSize: 12,
-    fontWeight: '900',
+    fontSize: 14,
     textAlign: 'center',
   },
   toolCost: {
     color: '#c07a12',
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '900',
   },
   toolCostRow: {
@@ -750,7 +757,7 @@ export const styles = StyleSheet.create({
   },
   toolRoi: {
     color: '#2f8a4a',
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '900',
   },
   toolMasteryBadge: {
@@ -828,13 +835,22 @@ export const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'flex-end',
   },
-  // 보상 연출 코인(#606). 클레이 코인 아이콘이 들어오기 전까지 HUD와 같은 글리프를 쓴다.
-  rewardBurstCoin: {
-    fontSize: 24,
-    lineHeight: 30,
-  },
   // 시트 위 오버레이(토스트, 보상 연출). iOS 실행 화면에서 zIndex가 없는 자식이 시트 뒤로 그려져 보이지
   // 않았다(#606). 시트보다 위에 쌓는다.
+  // 출석 보상(1회차 #6). 큰 코인과 받은 금액.
+  dailyRewardHero: {
+    alignItems: 'center',
+    gap: 2,
+    paddingVertical: 12,
+    marginBottom: 8,
+  },
+  dailyRewardAmount: {
+    color: '#d98a12',
+    fontSize: 34,
+  },
+  dailyRewardStreak: {
+    fontSize: 15,
+  },
   sheetOverlay: {
     ...ABSOLUTE_FILL,
     zIndex: 30,
@@ -846,6 +862,9 @@ export const styles = StyleSheet.create({
   },
   sheetBackdropFill: {
     flex: 1,
+  },
+  sheetFixedHeight: {
+    height: '86%',
   },
   sheet: {
     maxHeight: '86%',
@@ -1375,50 +1394,6 @@ export const styles = StyleSheet.create({
     fontWeight: '900',
     color: '#c07a12',
     marginTop: 6,
-  },
-  firstHarvestCenter: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingBottom: 60,
-  },
-  firstHarvestCard: {
-    width: 260,
-    paddingHorizontal: 24,
-    paddingVertical: 24,
-    borderRadius: 20,
-    backgroundColor: '#fff9e8',
-    borderWidth: 2,
-    borderColor: '#e8c976',
-    alignItems: 'center',
-    gap: 4,
-    shadowColor: '#5c3a16',
-    shadowOpacity: 0.22,
-    shadowRadius: 24,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 12,
-  },
-  firstHarvestTitle: {
-    fontSize: 17,
-    fontWeight: '900',
-    color: '#6b4a22',
-    letterSpacing: 0.2,
-  },
-  firstHarvestCropIcon: {
-    fontSize: 72,
-    lineHeight: 80,
-    marginVertical: 4,
-  },
-  firstHarvestGold: {
-    fontSize: 26,
-    fontWeight: '900',
-    color: '#c07a12',
-  },
-  firstHarvestSubtitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#a98a4e',
-    marginTop: 2,
   },
   notificationPromptBackdrop: {
     // flex:1 (not absoluteFill) so the backdrop fills the Modal host: as a direct

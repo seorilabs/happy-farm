@@ -106,7 +106,7 @@ baseline을 잡는다. 수동 행동 전환을 볼 때는 `harvest_source=manual
 
 구역×일자 집계 지표:
 
-- **unlock_clicked** = `count(area_unlock_clicked)`
+- **unlock_clicked** = `count(area_unlock_clicked)`. 2026-11-27(#617)부터 상점의 구역 줄은 골드나 조건이 모자라도 눌리고 남은 금액이나 조건을 알려 준다. 그 시도도 이 이벤트로 세므로, 이 날짜 앞뒤로 `unlocked / unlock_clicked` 전환율을 바로 비교하지 않는다
 - **unlocked** = `count(area_unlocked)`
 - **unlock_cost_sum** = `sum(area_unlocked.cost)`
 - **planted** = `count(crop_planted)` (해당 area)

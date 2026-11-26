@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import {
   Image,
+  Platform,
   StyleSheet,
   Text,
   View,
@@ -10,6 +11,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 
+import { GOLD_UNIT } from '../../../farm-core/src';
 import { useFarmArt, type FarmSkinKey, type FarmUiIconKey } from '../farmArt';
 import { GamePressable, PRESSED_SINK_STYLE } from './GamePressable';
 
@@ -48,6 +50,7 @@ export function UiIcon({ name, size, fallback }: { name: FarmUiIconKey; size: nu
 // 눌림과 비활성은 별도 이미지 없이 덮개로 만든다. 눌리면 살짝 어둡고, 비활성은 회색 막을 씌운다.
 export const SKIN_PRESSED_SHADE = 'rgba(40, 20, 0, 0.12)';
 export const SKIN_DISABLED_SHADE = 'rgba(150, 140, 125, 0.5)';
+const SKIN_SEAM_OVERLAP = 1;
 
 export function SkinFrame({
   skin,
@@ -81,12 +84,17 @@ export function SkinFrame({
       {useSkin ? (
         // 정적 이미지는 원본 픽셀 크기를 기본 크기로 받아 top/bottom 지정을 무시한다(iOS 실행 화면에서
         // 끝 조각이 120pt 높이로 그려졌다). 자리는 View가 잡고 이미지는 그 안을 100%로 채운다.
+        // 늘린 이미지는 가장자리 한 줄이 반투명하게 번져 조각 경계에 옅은 세로선이 생긴다(1회차 #14).
+        // 가운데 조각을 끝 조각 아래로 1pt씩 넣고 끝 조각을 위에 그려 틈을 덮는다.
         <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+          <View
+            testID={testID != null ? `${testID}-skin-center` : undefined}
+            style={[styles.slice, { left: cap - SKIN_SEAM_OVERLAP, right: cap - SKIN_SEAM_OVERLAP }]}
+          >
+            <Image source={art.center} onError={() => setFailed(true)} resizeMode="stretch" style={styles.sliceImage} />
+          </View>
           <View testID={testID != null ? `${testID}-skin-left` : undefined} style={[styles.slice, { left: 0, width: cap }]}>
             <Image source={art.left} onError={() => setFailed(true)} resizeMode="stretch" style={styles.sliceImage} />
-          </View>
-          <View style={[styles.slice, { left: cap, right: cap }]}>
-            <Image source={art.center} onError={() => setFailed(true)} resizeMode="stretch" style={styles.sliceImage} />
           </View>
           <View style={[styles.slice, { right: 0, width: cap }]}>
             <Image source={art.right} onError={() => setFailed(true)} resizeMode="stretch" style={styles.sliceImage} />
@@ -123,8 +131,50 @@ const SYSTEM_OUTLINE_STYLE: TextStyle = {
   textShadowRadius: 0,
 };
 
+// 한중일 글자(한글, 가나, 한자, 전각 기호) 구간. 사이의 띄어쓰기는 같은 구간으로 묶는다.
+const CJK_RUN =
+  /[\u1100-\u11ff\u3000-\u30ff\u3130-\u318f\u3400-\u4dbf\u4e00-\u9fff\uac00-\ud7af\uf900-\ufaff\uff00-\uffef]+(?:\s+[\u1100-\u11ff\u3000-\u30ff\u3130-\u318f\u3400-\u4dbf\u4e00-\u9fff\uac00-\ud7af\uf900-\ufaff\uff00-\uffef]+)*/g;
+const CJK_SYSTEM_FONT = Platform.select({ ios: 'System', android: 'sans-serif', default: undefined });
+
+// 디스플레이 서체에는 한중일 글자가 없어 플랫폼이 보통 굵기의 시스템 글꼴로 대신 그린다(1회차 #7).
+// 사용자 결정("한중일은 시스템 굵은 글씨와 외곽선")대로 그 구간만 시스템 굵은 글씨로 따로 그린다.
+function splitCjkRuns(children: React.ReactNode, cjkStyle: TextStyle): React.ReactNode {
+  let found = false;
+  let key = 0;
+  const parts: React.ReactNode[] = [];
+  const visit = (node: React.ReactNode) => {
+    if (typeof node === 'string') {
+      let last = 0;
+      for (const match of node.matchAll(CJK_RUN)) {
+        const start = match.index ?? 0;
+        if (start > last) parts.push(node.slice(last, start));
+        parts.push(
+          <Text key={`cjk-${key++}`} style={cjkStyle}>
+            {match[0]}
+          </Text>
+        );
+        found = true;
+        last = start + match[0].length;
+      }
+      if (last < node.length) parts.push(node.slice(last));
+      return;
+    }
+    if (Array.isArray(node)) {
+      node.forEach(visit);
+      return;
+    }
+    parts.push(React.isValidElement(node) ? React.cloneElement(node, { key: `node-${key++}` }) : node);
+  };
+  visit(children);
+  return found ? parts : children;
+}
+
+const CJK_INK_STYLE: TextStyle = { fontFamily: CJK_SYSTEM_FONT, fontWeight: '900', ...SYSTEM_OUTLINE_STYLE };
+// 초록 버튼 위 흰 글자는 부모의 짙은 초록 그림자를 그대로 물려받는다.
+const CJK_ON_PRIMARY_STYLE: TextStyle = { fontFamily: CJK_SYSTEM_FONT, fontWeight: '900' };
+
 // 숫자와 라틴 문자는 디스플레이 서체로, 없으면 시스템 굵은 글씨에 옅은 갈색 아래 띠를 준다.
-// 한중일 글자는 서체에 없어 플랫폼이 시스템 글꼴로 자동 대체한다.
+// 한중일 글자는 서체가 있어도 시스템 굵은 글씨와 아래 띠로 그린다.
 export function GameText({
   tone = 'ink',
   style,
@@ -132,9 +182,12 @@ export function GameText({
   ...rest
 }: TextProps & { tone?: GameTextTone; style?: StyleProp<TextStyle> }) {
   const fontStyle = useDisplayFontStyle();
+  const hasDisplayFont = fontStyle.fontFamily != null;
   return (
     <Text
       maxFontSizeMultiplier={GAME_UI_MAX_FONT_SCALE}
+      // 한국어가 "상/점에서"처럼 낱자 사이에서 줄을 바꾸지 않게 한다(1회차 #21, iOS).
+      lineBreakStrategyIOS="hangul-word"
       {...rest}
       style={[
         styles.text,
@@ -144,7 +197,38 @@ export function GameText({
         style,
       ]}
     >
-      {children}
+      {hasDisplayFont ? splitCjkRuns(children, tone === 'onPrimary' ? CJK_ON_PRIMARY_STYLE : CJK_INK_STYLE) : children}
+    </Text>
+  );
+}
+
+// 금액 뒤 코인 이모지(🪙)를 그림 코인으로 바꿔 그린다(1회차 #9). iOS의 🪙는 은색 동전이라 HUD의
+// 금색 새싹 코인과 다른 재화로 읽힌다. 그림이 없으면(아이콘 실패, 테스트) 이모지를 그대로 둔다.
+export function CoinText({
+  children,
+  style,
+  iconSize,
+  ...rest
+}: Omit<TextProps, 'children'> & { children: string; iconSize?: number }) {
+  const coin = useFarmArt().ui?.icons.coin;
+  if (coin == null || !children.includes(GOLD_UNIT)) {
+    return (
+      <Text lineBreakStrategyIOS="hangul-word" {...rest} style={style}>
+        {children}
+      </Text>
+    );
+  }
+  const fontSize = StyleSheet.flatten(style)?.fontSize ?? 14;
+  const size = iconSize ?? Math.round(fontSize * 1.1);
+  const segments = children.split(GOLD_UNIT);
+  return (
+    // 스크린리더는 원래 문구를 읽어 코인 단위("🪙")를 잃지 않는다.
+    <Text lineBreakStrategyIOS="hangul-word" accessibilityLabel={children} {...rest} style={style}>
+      {segments.flatMap((segment, index) =>
+        index === 0
+          ? [segment]
+          : [<Image key={`coin-${index}`} accessible={false} source={coin} style={{ width: size, height: size }} />, segment]
+      )}
     </Text>
   );
 }

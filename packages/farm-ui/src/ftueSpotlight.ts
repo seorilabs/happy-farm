@@ -34,6 +34,42 @@ export function getSpotlightBlockers(screen: { width: number; height: number }, 
   ];
 }
 
+// 말풍선 자리(1회차 #3). 시안처럼 밝힌 칸 옆에 한 줄 안내를 둔다. 레이아웃 흐름 밖(절대 위치)이라 밭을
+// 밀어내지 않는다. 양옆 모두 좁으면 손가락 아래에 화면 폭으로 둔다.
+export const FTUE_BUBBLE_MIN_HEIGHT = 56;
+const FTUE_BUBBLE_GAP = 10;
+const FTUE_BUBBLE_MARGIN = 12;
+const FTUE_BUBBLE_MIN_WIDTH = 140;
+const FTUE_POINTER_ROOM = 48;
+
+export type SpotlightBubbleFrame = {
+  side: 'left' | 'right' | 'below';
+  left?: number;
+  right?: number;
+  top: number;
+  maxWidth: number;
+};
+
+export function getSpotlightBubbleFrame(screen: { width: number; height: number }, hole: Rect): SpotlightBubbleFrame {
+  const p = FTUE_SPOTLIGHT_PADDING;
+  const rightStart = hole.x + hole.width + p + FTUE_BUBBLE_GAP;
+  const leftEnd = hole.x - p - FTUE_BUBBLE_GAP;
+  const rightRoom = screen.width - rightStart - FTUE_BUBBLE_MARGIN;
+  const leftRoom = leftEnd - FTUE_BUBBLE_MARGIN;
+  const top = Math.max(0, hole.y + hole.height / 2 - FTUE_BUBBLE_MIN_HEIGHT / 2);
+  if (Math.max(rightRoom, leftRoom) >= FTUE_BUBBLE_MIN_WIDTH) {
+    return rightRoom >= leftRoom
+      ? { side: 'right', left: rightStart, top, maxWidth: rightRoom }
+      : { side: 'left', right: screen.width - leftEnd, top, maxWidth: leftRoom };
+  }
+  return {
+    side: 'below',
+    left: FTUE_BUBBLE_MARGIN,
+    top: hole.y + hole.height + p + FTUE_POINTER_ROOM,
+    maxWidth: screen.width - FTUE_BUBBLE_MARGIN * 2,
+  };
+}
+
 export function findSpotlightPlotIndex(gameState: GameState): number | null {
   const index = gameState.plots.findIndex(
     (plot) => plot.id < gameState.unlockedPlotCount && plot.state === 2 && plot.cropType != null

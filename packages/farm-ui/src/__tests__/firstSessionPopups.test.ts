@@ -1,7 +1,11 @@
 /// <reference types="jest" />
 
 import { createInitialState, type GameState } from '../../../farm-core/src';
-import { isFirstSessionPopupHoldActive } from '../firstSessionPopups';
+import {
+  AUTO_POPUP_MIN_GAP_MS,
+  canAutoOpenHarvestBonusOffer,
+  isFirstSessionPopupHoldActive,
+} from '../firstSessionPopups';
 
 describe('isFirstSessionPopupHoldActive (#606 AC-4)', () => {
   const fresh = createInitialState();
@@ -23,5 +27,36 @@ describe('isFirstSessionPopupHoldActive (#606 AC-4)', () => {
   test('졸업해 밭 수가 초기값으로 돌아간 사용자는 미루지 않는다', () => {
     const graduated: GameState = { ...fresh, prestige: { ...fresh.prestige, level: 1 } };
     expect(isFirstSessionPopupHoldActive(graduated, SESSION_START)).toBe(false);
+  });
+});
+
+describe('canAutoOpenHarvestBonusOffer (1회차 #4)', () => {
+  const NOW = 1_700_000_000_000;
+  const eligible = {
+    nudgeEligible: true,
+    onboardingCompleted: true,
+    firstMeaningfulHarvest: false,
+    firstSessionHold: false,
+    lastAutoPopupAt: null,
+    now: NOW,
+  };
+
+  test('조건을 모두 채우면 수확 보너스 광고 제안을 자동으로 연다', () => {
+    expect(canAutoOpenHarvestBonusOffer(eligible)).toBe(true);
+  });
+
+  test('첫 세션에서 첫 밭을 늘리기 전에는 광고 제안도 미룬다', () => {
+    expect(canAutoOpenHarvestBonusOffer({ ...eligible, firstSessionHold: true })).toBe(false);
+  });
+
+  test('다른 자동 팝업 직후에는 간격을 두고 연다', () => {
+    expect(canAutoOpenHarvestBonusOffer({ ...eligible, lastAutoPopupAt: NOW - AUTO_POPUP_MIN_GAP_MS + 1 })).toBe(false);
+    expect(canAutoOpenHarvestBonusOffer({ ...eligible, lastAutoPopupAt: NOW - AUTO_POPUP_MIN_GAP_MS })).toBe(true);
+  });
+
+  test('온보딩 중이거나 첫 수확이면 열지 않는다', () => {
+    expect(canAutoOpenHarvestBonusOffer({ ...eligible, onboardingCompleted: false })).toBe(false);
+    expect(canAutoOpenHarvestBonusOffer({ ...eligible, firstMeaningfulHarvest: true })).toBe(false);
+    expect(canAutoOpenHarvestBonusOffer({ ...eligible, nudgeEligible: false })).toBe(false);
   });
 });

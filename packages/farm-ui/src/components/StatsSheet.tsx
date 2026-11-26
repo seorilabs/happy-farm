@@ -161,7 +161,7 @@ export function StatsSheet({
       <StatRow
         label={messages.cropOfTheDayLabel}
         value={`${cropOfTheDayIcon} ${cropOfTheDayName}`}
-        sub={`⭐×${cropOfTheDayMultiplier}`}
+        sub={`📅×${cropOfTheDayMultiplier}`}
         valueTestID="stats-crop-of-the-day"
         subTestID="stats-crop-of-the-day-bonus"
       />

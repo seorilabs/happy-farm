@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Text, type StyleProp, type TextStyle } from 'react-native';
 
 import { REWARD_COUNT_UP_DELAY_MS, REWARD_COUNT_UP_DURATION_MS, getCountUpValue, type CountUpRun } from '../rewardBurst';
+import { CoinText } from './GameUi';
 
 const FRAME_MS = 33;
 
@@ -15,6 +16,7 @@ export function CountUpText({
   testID,
   numberOfLines,
   maxFontSizeMultiplier,
+  coin = false,
 }: {
   value: number;
   run: CountUpRun | null;
@@ -23,6 +25,8 @@ export function CountUpText({
   testID?: string;
   numberOfLines?: number;
   maxFontSizeMultiplier?: number;
+  // 문구 속 코인 이모지를 그림 코인으로 바꿔 그린다(1회차 #9).
+  coin?: boolean;
 }) {
   const [, setFrame] = useState(0);
   const active = run != null && run.to === value;
@@ -39,6 +43,13 @@ export function CountUpText({
   }, [active, run]);
 
   const shown = active && run != null ? getCountUpValue(run, Date.now()) : value;
+  if (coin) {
+    return (
+      <CoinText testID={testID} style={style} numberOfLines={numberOfLines} maxFontSizeMultiplier={maxFontSizeMultiplier}>
+        {format(shown)}
+      </CoinText>
+    );
+  }
   return (
     <Text testID={testID} style={style} numberOfLines={numberOfLines} maxFontSizeMultiplier={maxFontSizeMultiplier}>
       {format(shown)}
