@@ -544,6 +544,10 @@ export const jaFarmMessages: FarmMessages = {
   nextGoalHarvest: (areaName, current, total) => `🌾 ${areaName}を解放: 作物の種類を${current}/${total}収穫`,
   nextGoalUpgrade: (areaName, current, total) => `🧪 ${areaName}を解放: 研究 Lv.${current}/${total}が必要`,
   nextGoalReady: (areaName) => `🔓 ${areaName}を解放する準備完了！ショップで開く`,
+  // #606 첫 밭 개간 목표 칩
+  nextGoalPlot: (needed) => `🌱 畑の開墾まであと${needed}G`,
+  nextGoalPlotReady: '🌱 新しい畑を開墾できます！',
+  nextGoalGo: '進む',
   nextGoalLandmark: (stageName, current, total) => `🏗️ ランドマーク ${stageName} · 建設 ${current}/${total}段階`,
   nextGoalLandmarkReady: (stageName) => `🏗️ ${stageName}を建設できます！`,
   nextGoalGraduationCrops: (current, total) => `🌟 農場卒業 · 伝説作物 ${current}/${total}`,

@@ -51,6 +51,8 @@ export function SheetAction({
 }
 
 export function ShopCard({
+  testID,
+  highlighted,
   title,
   desc,
   price,
@@ -59,6 +61,9 @@ export function ShopCard({
   goldProgress,
   onPress,
 }: {
+  testID?: string;
+  // 다음 목표 칩에서 들어왔을 때 이 줄을 금색 테두리로 강조한다(#606 AC-5).
+  highlighted?: boolean;
   title: string;
   desc: string;
   price: string;
@@ -77,7 +82,12 @@ export function ShopCard({
       accessibilityRole="button"
       accessibilityLabel={`${title}, ${desc}, ${price}`}
       accessibilityState={{ disabled: disabled === true }}
-      style={[sheetPartStyles.shopCard, disabled && sheetPartStyles.disabledCard]}
+      testID={testID}
+      style={[
+        sheetPartStyles.shopCard,
+        disabled && sheetPartStyles.disabledCard,
+        highlighted === true && sheetPartStyles.highlightedCard,
+      ]}
       onPress={onPress}
     >
       <View style={sheetPartStyles.shopCardRow}>
@@ -186,6 +196,11 @@ export const sheetPartStyles = StyleSheet.create({
     color: '#a98a4e',
     fontSize: 13,
     fontWeight: '900',
+  },
+  highlightedCard: {
+    borderColor: '#f2b33d',
+    borderBottomColor: '#d08a1a',
+    backgroundColor: '#fff3d0',
   },
   shopCard: {
     minHeight: 72,

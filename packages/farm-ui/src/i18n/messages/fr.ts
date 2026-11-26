@@ -545,6 +545,10 @@ export const frFarmMessages: FarmMessages = {
   nextGoalHarvest: (areaName, current, total) => `🌾 Débloquer ${areaName} : récolte ${current}/${total} types de cultures`,
   nextGoalUpgrade: (areaName, current, total) => `🧪 Débloquer ${areaName} : Recherche Lv.${current}/${total} requis`,
   nextGoalReady: (areaName) => `🔓 ${areaName} est prête à débloquer ! Ouvre la boutique`,
+  // #606 첫 밭 개간 목표 칩
+  nextGoalPlot: (needed) => `🌱 Encore ${needed}G pour défricher une parcelle`,
+  nextGoalPlotReady: '🌱 Une nouvelle parcelle peut être défrichée !',
+  nextGoalGo: 'Go',
   nextGoalLandmark: (stageName, current, total) => `🏗️ Monument ${stageName} · construction ${current}/${total}`,
   nextGoalLandmarkReady: (stageName) => `🏗️ ${stageName} est prêt à construire ! Ouvre la carte`,
   nextGoalGraduationCrops: (current, total) => `🌾 Diplôme de ferme · Champ légendaire ${current}/${total}`,

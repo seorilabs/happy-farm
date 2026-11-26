@@ -545,6 +545,10 @@ export const enFarmMessages: FarmMessages = {
   nextGoalHarvest: (areaName, current, total) => `🌾 Unlock ${areaName}: harvest ${current}/${total} crop types`,
   nextGoalUpgrade: (areaName, current, total) => `🧪 Unlock ${areaName}: Research Lv.${current}/${total} required`,
   nextGoalReady: (areaName) => `🔓 ${areaName} is ready to unlock! Open Shop`,
+  // #606 첫 밭 개간 목표 칩
+  nextGoalPlot: (needed) => `🌱 ${needed}G more to clear a new plot`,
+  nextGoalPlotReady: '🌱 Ready to clear a new plot!',
+  nextGoalGo: 'Go',
   nextGoalLandmark: (stageName, current, total) => `🏗️ Landmark ${stageName} · stage ${current}/${total}`,
   nextGoalLandmarkReady: (stageName) => `🏗️ Ready to build ${stageName}!`,
   nextGoalGraduationCrops: (current, total) => `🌟 Farm graduation · Legend crops ${current}/${total}`,
