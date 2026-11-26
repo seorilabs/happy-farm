@@ -221,5 +221,7 @@ flowchart LR
 | Android 실기기 1회(약 30분, 폰트와 스킨 렌더링, 앱인토스 런타임) | "승인" |
 | Maestro CLI 설치 | "설치 허용" |
 
-- 승인 대상은 이 문서 v1과 같은 커밋의 [test-plan.json](test-plan.json)이다. 승인 커밋과 실행 티켓은 커밋 뒤 이 절에 덧붙인다.
+- 승인 대상은 이 문서 v1과 같은 커밋의 [test-plan.json](test-plan.json)이다.
+- 승인 커밋: `5bf45a8f43cf7ba2ca66c72d51803adafc082d91`
+- 실행 티켓: [#606](https://github.com/seorilabs/happy-farm/issues/606)
 - 기기 사용은 구현과 개발 환경 검수가 끝난 뒤 한 번에 묶어 실행한다. 승인 범위를 넘으면 다시 소명한다.

@@ -25,4 +25,4 @@
 
 ## 2026-11-26
 
-- [첫 세션 개선과 게임다운 메인 화면](2026-11-26-game-ui-first-session/design.md) v1은 2026-11-26 승인됐다(B안 하단 탭 바). GA4 첫 세션 분석(신규 76명)을 근거로 첫 수확 스포트라이트, 다음 목표 칩, 보상 연출, 아이콘 메뉴와 그린 스킨을 넣는다. [L3 테스트 계획](2026-11-26-game-ui-first-session/test-plan.json)의 끝 지점은 세 마켓 공개다.
+- [첫 세션 개선과 게임다운 메인 화면](2026-11-26-game-ui-first-session/design.md) v1은 2026-11-26 승인됐다(B안 하단 탭 바, 승인 커밋 `5bf45a8`, 실행 티켓 [#606](https://github.com/seorilabs/happy-farm/issues/606)). GA4 첫 세션 분석(신규 76명)을 근거로 첫 수확 스포트라이트, 다음 목표 칩, 보상 연출, 아이콘 메뉴와 그린 스킨을 넣는다. [L3 테스트 계획](2026-11-26-game-ui-first-session/test-plan.json)의 끝 지점은 세 마켓 공개다.
