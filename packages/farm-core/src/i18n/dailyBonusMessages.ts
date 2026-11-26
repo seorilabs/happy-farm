@@ -2,7 +2,7 @@ import { DEFAULT_LOCALE, type SupportedLocale } from './locales';
 
 const KO_DAILY_BONUS_MESSAGES = {
   dailyBonusTitle: '오늘의 출석 보너스',
-  dailyBonusMessage: (gold: number) => `+${gold} 🪙 받았어요!`,
+  dailyBonusMessage: (gold: string) => `+${gold} 🪙 받았어요!`,
   dailyBonusStreak: (streak: number) => `연속 ${streak}일 출석 🔥`,
 };
 

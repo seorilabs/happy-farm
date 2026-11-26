@@ -7,8 +7,9 @@ import { SUPPORTED_LOCALES, formatGold, formatHourlyGold } from '../../../farm-c
 import { getFarmMessages } from '../i18n';
 
 // #606 AC-10: 금액 뒤에 붙던 "G"가 K, M과 만나 "48.5KG"처럼 무게로 읽혔다. 금액 단위는 코인(🪙)으로 쓴다.
-// 템플릿 문자열(`${amount}G`)과 JSX 글자({formatMoney(...)}G) 둘 다 잡는다.
-const MONEY_G_AFTER_INTERPOLATION = /(\$\{[^}]+\}|\{formatMoney\([^)]*\)\})\s?G(?![a-zA-Z])/;
+// 템플릿 문자열(`${amount}G`)과 JSX 글자({formatMoney(...)}G, {notice.goldFormatted}G)를 모두 잡도록
+// 보간을 닫는 중괄호 바로 뒤의 G 단위를 찾는다.
+const MONEY_G_AFTER_INTERPOLATION = /\}\s?G(?![A-Za-z0-9_])/;
 
 describe('금액 표기 (#606 AC-10)', () => {
   test('문구 카탈로그 8개 언어에 금액 뒤 G 단위가 없다', () => {

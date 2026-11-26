@@ -6,7 +6,7 @@ import { creditEconomyValue } from './economy';
 // 앱을 방문하더라도 수령하지 않으면 streak 유지로 간주하지 않습니다.
 
 import balance from './balance.json';
-import { DEFAULT_LOCALE, type SupportedLocale } from './i18n';
+import { DEFAULT_LOCALE, formatMoney, type SupportedLocale } from './i18n';
 import { getDailyBonusMessages } from './i18n/dailyBonusMessages';
 
 export const DAILY_BONUS_COOLDOWN_MS = 24 * 60 * 60 * 1000; // 24시간
@@ -235,7 +235,7 @@ export function getDailyBonusLabel(
   const msgs = getDailyBonusMessages(locale);
   return {
     title: msgs.dailyBonusTitle,
-    message: msgs.dailyBonusMessage(goldAwarded),
+    message: msgs.dailyBonusMessage(formatMoney(goldAwarded, locale)),
     streakLabel: msgs.dailyBonusStreak(streak),
   };
 }

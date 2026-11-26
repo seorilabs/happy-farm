@@ -135,6 +135,7 @@ import {
   formatDuration,
   formatHourlyGold,
   formatGold,
+  GOLD_UNIT,
   formatMoney,
   formatRemainingTime,
   formatMultiplier,
@@ -7557,7 +7558,7 @@ function FarmGameBody({
                 <View style={styles.welcomeBackRowText}>
                   <Text style={styles.welcomeBackRowLabel}>{messages.welcomeBackOfflineLabel}</Text>
                   <Text style={styles.welcomeBackRowValue}>
-                    +{formatMoney(collectReturnSummaryOfflineGold(gameState, activeSheet.summary).collectedGold, locale)}G
+                    +{formatGold(collectReturnSummaryOfflineGold(gameState, activeSheet.summary).collectedGold, locale)}
                   </Text>
                 </View>
               </View>
@@ -8249,7 +8250,7 @@ function FirstHarvestOverlay({
               { opacity: goldEntrance, transform: [{ translateY: goldTranslateY }] },
             ]}
           >
-            +{notice.goldFormatted}G
+            +{notice.goldFormatted} {GOLD_UNIT}
           </Animated.Text>
           <Text style={styles.firstHarvestSubtitle}>{messages.firstHarvestSubtitle}</Text>
         </Animated.View>
