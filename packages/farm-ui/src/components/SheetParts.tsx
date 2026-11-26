@@ -101,9 +101,9 @@ export function ShopCard({
           <Text style={sheetPartStyles.shopTitle} lineBreakStrategyIOS="hangul-word">
             {title}
           </Text>
-          <Text style={sheetPartStyles.shopDesc} textBreakStrategy="balanced" lineBreakStrategyIOS="hangul-word">
+          <CoinText style={sheetPartStyles.shopDesc} textBreakStrategy="balanced">
             {desc}
-          </Text>
+          </CoinText>
         </View>
         <CoinText
           style={[
@@ -154,9 +154,9 @@ export function AdRewardCard({
       <View style={sheetPartStyles.shopCardRow}>
         <View style={sheetPartStyles.shopTextGroup}>
           <Text style={sheetPartStyles.shopTitle}>{title}</Text>
-          <Text style={sheetPartStyles.shopDesc} textBreakStrategy="balanced">
+          <CoinText style={sheetPartStyles.shopDesc} textBreakStrategy="balanced">
             {desc}
-          </Text>
+          </CoinText>
         </View>
         <Text style={sheetPartStyles.shopPrice}>{cta}</Text>
       </View>

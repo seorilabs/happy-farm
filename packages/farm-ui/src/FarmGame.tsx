@@ -10590,7 +10590,7 @@ function ShopUpgradeRow({
           onPress={() => buyBatch(batchTen)}
         >
           <Text style={styles.upgradeBatchLabel}>{`+${UPGRADE_BATCH_STEP}`}</Text>
-          <Text style={styles.upgradeBatchSub}>{formatGold(batchTen.totalCost, locale)}</Text>
+          <CoinText style={styles.upgradeBatchSub}>{formatGold(batchTen.totalCost, locale)}</CoinText>
         </GamePressable>
         <GamePressable
           accessibilityRole="button"
@@ -10605,7 +10605,7 @@ function ShopUpgradeRow({
             {canBuyMax ? `${messages.upgradeBuyMax} +${batchMax.levels}` : messages.upgradeBuyMax}
           </Text>
           {canBuyMax ? (
-            <Text style={styles.upgradeBatchSub}>{formatGold(batchMax.totalCost, locale)}</Text>
+            <CoinText style={styles.upgradeBatchSub}>{formatGold(batchMax.totalCost, locale)}</CoinText>
           ) : null}
         </GamePressable>
       </View>
