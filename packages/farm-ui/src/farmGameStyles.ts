@@ -89,20 +89,6 @@ export const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
   },
-  titleTextGroup: {
-    minWidth: 0,
-    flex: 1,
-  },
-  title: {
-    color: '#6b4a22',
-    fontSize: 20,
-    fontWeight: '800',
-  },
-  label: {
-    color: '#a98a4e',
-    fontSize: 11,
-    fontWeight: '700',
-  },
   main: {
     flex: 1,
     backgroundColor: 'transparent',
@@ -601,7 +587,7 @@ export const styles = StyleSheet.create({
     elevation: 3,
   },
   harvestAllButtonText: {
-    color: '#ffffff',
+    // 글자색은 GameText tone(초록 위 흰색, 크림 위 갈색)이 정한다.
     fontSize: 18,
     fontWeight: '900',
   },

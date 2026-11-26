@@ -6783,7 +6783,7 @@ function FarmGameBody({
             icon: 'harvest',
             fallback: '🌾',
             current: true,
-            // 지금 보고 있는 농장 화면이라 탭은 아무 시트도 열지 않는다.
+            // 지금 보고 있는 농장 화면이라 비활성 탭이다(GameTabBar가 current 탭을 막는다).
             onPress: () => undefined,
           },
           {

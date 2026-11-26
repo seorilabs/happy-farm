@@ -14,5 +14,7 @@ describe('formatMultiplier (#606)', () => {
     expect(formatMultiplier(1.44)).toBe('×1.4');
     expect(formatMultiplier(12.36)).toBe('×12.4');
     expect(formatMultiplier(0.8)).toBe('×0.8');
+    // 1.45는 이진 소수 오차로 1.4499…지만 ×1.5로 올린다.
+    expect(formatMultiplier(roiPercentToMultiplier(45))).toBe('×1.5');
   });
 });

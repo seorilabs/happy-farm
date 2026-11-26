@@ -188,7 +188,8 @@ export function roiPercentToMultiplier(roiPercent: number): number {
 
 export function formatMultiplier(value: number): string {
   if (!Number.isFinite(value)) return '×0.0';
-  return `×${(Math.round(value * 10) / 10).toFixed(1)}`;
+  // 1.45가 이진 소수로 1.4499…가 되어 내려가지 않게 아주 작은 값을 더해 반올림한다.
+  return `×${(Math.round((value + 1e-9) * 10) / 10).toFixed(1)}`;
 }
 
 export function formatHourlyGold(value: number, locale: SupportedLocale = DEFAULT_LOCALE) {

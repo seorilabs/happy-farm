@@ -1401,6 +1401,9 @@ describe('FarmGame UI flow', () => {
       expect(StyleSheet.flatten(harvestButton.props.style)).toEqual(expect.objectContaining({ flex: 1, minWidth: 0 }));
       expect(StyleSheet.flatten(replantButton.props.style)).toEqual(expect.objectContaining({ flexShrink: 0 }));
       expect(StyleSheet.flatten(fertilizerButton.props.style)).toEqual(expect.objectContaining({ maxWidth: 150 }));
+      // 크림 스킨 위 글자는 흰색이 아니라 짙은 갈색이라 읽힌다.
+      expect(StyleSheet.flatten(within(fertilizerButton).getByText(/^🌾/).props.style).color).toBe('#5c3a16');
+      expect(StyleSheet.flatten(within(harvestButton).getByText(/2/).props.style).color).toBe('#ffffff');
     });
 
     test('한 번 탭만으로는 실행되지 않는다(확인 게이트)', async () => {
