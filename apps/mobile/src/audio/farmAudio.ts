@@ -17,6 +17,8 @@ const soundEffectSpecs: Record<FarmSoundEffectKey, { asset: string; volume: numb
   unlock: { asset: 'sting_unlock.wav', volume: 0.8 },
   mutation: { asset: 'sting_mutation.wav', volume: 0.75 },
   wheelSpin: { asset: 'sfx_wheel_spin.wav', volume: 0.55 },
+  // 모든 게임 버튼이 내므로 가장 작게 둔다(#606).
+  tap: { asset: 'sfx_tap.wav', volume: 0.35 },
 };
 
 const SOUND_EFFECT_KEYS = Object.keys(soundEffectSpecs) as FarmSoundEffectKey[];

@@ -336,6 +336,11 @@ function stripPristineStarterFarm(plots: GameState['plots']): GameState['plots']
   return isPristineStarter ? createEmptyPlots() : plots;
 }
 
+// #606: 공통 버튼 탭음(tap)을 뺀 효과음 호출. 기능별 효과음 횟수를 볼 때 쓴다.
+function nonTapEffectCalls(playEffect: jest.Mock) {
+  return playEffect.mock.calls.filter(([key]) => key !== 'tap');
+}
+
 async function renderGame(
   savedState: GameState | null,
   props: Partial<React.ComponentProps<typeof FarmGame>> = {},
@@ -2233,7 +2238,7 @@ describe('FarmGame UI flow', () => {
       await waitFor(() =>
         expect(screen.getByText(`${formatMoney(state.gold + totalGold, DEFAULT_LOCALE)}G`)).toBeTruthy()
       );
-      expect(screen.getByText(messages.animalsCollectedAllToast(formatMoney(totalGold, DEFAULT_LOCALE), 2))).toBeTruthy();
+      expect(await screen.findByText(messages.animalsCollectedAllToast(formatMoney(totalGold, DEFAULT_LOCALE), 2))).toBeTruthy();
       expect(screen.queryByTestId('animals-collect-all-action')).toBeNull();
       expect(screen.getAllByText(messages.animalsIdleLabel)).toHaveLength(2);
       expect(onGoldPulse).toHaveBeenCalledTimes(1);
@@ -2299,7 +2304,7 @@ describe('FarmGame UI flow', () => {
       await waitFor(() =>
         expect(screen.getByText(`${formatMoney(state.gold + totalGold, 'en-US')}G`)).toBeTruthy()
       );
-      expect(screen.getByText(messages.workshopCollectedAllToast(formatMoney(totalGold, 'en-US'), 2))).toBeTruthy();
+      expect(await screen.findByText(messages.workshopCollectedAllToast(formatMoney(totalGold, 'en-US'), 2))).toBeTruthy();
       expect(screen.queryByTestId('workshop-collect-all-action')).toBeNull();
       for (const recipe of ready) {
         expect(within(screen.getByTestId(`recipe-card-${recipe.key}`)).getByText(messages.workshopNeedIngredientsLabel)).toBeTruthy();
@@ -2348,7 +2353,7 @@ describe('FarmGame UI flow', () => {
         expect(persisted.gold).toBe(afterStart.gold);
       });
       expect(
-        screen.getByText(messages.workshopCanceledToast(getProductionRecipeLabel(recipe.key, 'en-US').name))
+        await screen.findByText(messages.workshopCanceledToast(getProductionRecipeLabel(recipe.key, 'en-US').name))
       ).toBeTruthy();
       expect(screen.queryByTestId(`workshop-cancel-${recipe.key}`)).toBeNull();
       expect(within(screen.getByTestId(`recipe-card-${recipe.key}`)).getByText(messages.workshopReadyToCraftLabel)).toBeTruthy();
@@ -2654,7 +2659,7 @@ describe('FarmGame UI flow', () => {
       fireEvent.press(action);
       await waitFor(() => expect(getLatestPersistedState().gold).toBe(limit));
       expect(getLatestPersistedState().lifetimeStats.totalGoldEarned).toBe(credited);
-      expect(screen.getByText(messages.receivedGoldToast(formatMoney(credited, DEFAULT_LOCALE)))).toBeTruthy();
+      expect(await screen.findByText(messages.receivedGoldToast(formatMoney(credited, DEFAULT_LOCALE)))).toBeTruthy();
       expect(track).toHaveBeenCalledWith('ad_reward_completed', expect.objectContaining({
         ad_type: 'offlineBonusAd', reward_value: Number.MAX_SAFE_INTEGER,
       }));
@@ -3598,7 +3603,7 @@ describe('FarmGame UI flow', () => {
       fireEvent.press(screen.getByTestId('seed-tool-onion'));
 
       expect(screen.getByText(messages.onboardingPlantTitle)).toBeTruthy();
-      expect(screen.getByText(messages.insufficientGoldToast)).toBeTruthy();
+      expect(await screen.findByText(messages.insufficientGoldToast)).toBeTruthy();
     });
 
     test('emits onboarding_stall once when the player lingers on a resumed plant step (#274)', async () => {
@@ -3935,7 +3940,8 @@ describe('FarmGame UI flow', () => {
       await Promise.resolve();
     });
     expect(screen.getByTestId('upgrade-burst-speed', { includeHiddenElements: true })).toBeTruthy();
-    expect(screen.getByText(messages.researchCompletedToast)).toBeTruthy();
+    // 앞선 밭 개간·미션 토스트 뒤에 차례로 나온다(#606 토스트 큐).
+    expect(await screen.findByText(messages.researchCompletedToast, {}, { timeout: 4000 })).toBeTruthy();
     expect(
       screen.getByText(
         `${formatMoney(
@@ -4821,7 +4827,7 @@ describe('FarmGame UI flow', () => {
     const screen = await renderGame({ ...createInitialState(), gold: 115 });
     fireEvent.press(screen.getByTestId('seed-tool-sweet_potato'));
     fireEvent.press(screen.getAllByText('빈 밭')[0]!);
-    expect(screen.getByText(/20G.*당근/)).toBeTruthy();
+    expect(await screen.findByText(/20G.*당근/)).toBeTruthy();
     expect(screen.getByTestId('seed-tool-sweet_potato').props.accessibilityState.selected).toBe(true);
     expect(screen.getByText('115G')).toBeTruthy();
   });
@@ -5223,7 +5229,7 @@ describe('FarmGame UI flow', () => {
 
     // Both plots collected at once: +14G each, with a single batch toast.
     await waitFor(() => expect(screen.getByText('78G')).toBeTruthy());
-    expect(screen.getByText(/한 번에 수확했어요/)).toBeTruthy();
+    expect(await screen.findByText(/한 번에 수확했어요/)).toBeTruthy();
     // No ripe plots remain, so neither the GET badge nor the shortcut shows.
     expect(screen.queryByText('GET')).toBeNull();
     expect(screen.queryByText(/모두 수확/)).toBeNull();
@@ -5275,7 +5281,7 @@ describe('FarmGame UI flow', () => {
     // 없어 수확 단축 버튼도 사라진다.
     await waitFor(() => expect(screen.getByText('18G')).toBeTruthy());
     // 결과 토스트가 수확·재심 수를 함께 알린다(부분/전체 인지).
-    expect(screen.getByText(/2곳 수확하고 6곳 다시 심었어요/)).toBeTruthy();
+    expect(await screen.findByText(/2곳 수확하고 6곳 다시 심었어요/)).toBeTruthy();
     expect(screen.queryByText('GET')).toBeNull();
     expect(screen.queryByText(/모두 수확/)).toBeNull();
     expect(screen.queryAllByText('빈 밭')).toHaveLength(0);
@@ -5691,7 +5697,7 @@ describe('FarmGame UI flow', () => {
     test('plays the reward sting, pulses gold, and vibrates when sound effects are enabled', async () => {
       const playEffect = jest.fn();
       const screen = await renderAndClaim(playEffect, { soundEffectsEnabled: true });
-      await waitFor(() => expect(playEffect).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(nonTapEffectCalls(playEffect)).toHaveLength(1));
       expect(playEffect).toHaveBeenCalledWith('reward');
       await waitFor(() => expect(onGoldPulse).toHaveBeenCalledTimes(1));
       await waitFor(() => {
@@ -5827,7 +5833,7 @@ describe('FarmGame UI flow', () => {
     test('plays the reward sting and vibrates when an achievement tier is claimed', async () => {
       const playEffect = jest.fn();
       await renderAndClaimAchievement(playEffect, { soundEffectsEnabled: true });
-      await waitFor(() => expect(playEffect).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(nonTapEffectCalls(playEffect)).toHaveLength(1));
       expect(playEffect).toHaveBeenCalledWith('reward');
       await waitFor(() => {
         expect(vibrateSpy).toHaveBeenCalledTimes(1);
@@ -5891,8 +5897,8 @@ describe('FarmGame UI flow', () => {
         expect(persisted.prestige.stars).toBe(expected.state.prestige.stars);
         expect(persisted.prestige.totalStarsEarned).toBe(expected.state.prestige.totalStarsEarned);
       });
-      expect(screen.getByText(claimMessages.achievementClaimedAllToast(expected.totalStars))).toBeTruthy();
-      await waitFor(() => expect(playEffect).toHaveBeenCalledTimes(1));
+      expect(await screen.findByText(claimMessages.achievementClaimedAllToast(expected.totalStars))).toBeTruthy();
+      await waitFor(() => expect(nonTapEffectCalls(playEffect)).toHaveLength(1));
       expect(playEffect).toHaveBeenCalledWith('reward');
       expect(vibrateSpy).toHaveBeenCalledTimes(1);
       expect(vibrateSpy).toHaveBeenCalledWith(50);
@@ -5946,9 +5952,9 @@ describe('FarmGame UI flow', () => {
         expect(persisted.claimedAchievements).toEqual([`${harvestTrack.key}:1`]);
         expect(persisted.prestige.stars).toBe(state.prestige.stars + harvestTrack.starsPerTier);
       });
-      expect(screen.getByText(claimMessages.achievementClaimedToast(harvestTrack.starsPerTier))).toBeTruthy();
+      expect(await screen.findByText(claimMessages.achievementClaimedToast(harvestTrack.starsPerTier))).toBeTruthy();
       expect(track.mock.calls.filter(([event]) => event === 'achievement_claimed')).toHaveLength(1);
-      expect(playEffect).toHaveBeenCalledTimes(1);
+      expect(nonTapEffectCalls(playEffect)).toHaveLength(1);
       expect(vibrateSpy).toHaveBeenCalledTimes(1);
       expect(screen.getByTestId('achievement-claim-all-action').props.accessibilityState.disabled).toBe(false);
     });
@@ -5981,7 +5987,7 @@ describe('FarmGame UI flow', () => {
       fireEvent.press(screen.getByTestId('plot-cell-0'));
 
       await waitFor(() => expect(playEffect).toHaveBeenCalledWith('plant'));
-      expect(playEffect).toHaveBeenCalledTimes(1);
+      expect(nonTapEffectCalls(playEffect)).toHaveLength(1);
     });
 
     test('planting stays silent when sound effects are disabled', async () => {
@@ -6023,7 +6029,7 @@ describe('FarmGame UI flow', () => {
       fireEvent.press(screen.getByText(messages.wheelSpinAction));
 
       await waitFor(() => expect(playEffect).toHaveBeenCalledWith('wheelSpin'));
-      expect(playEffect).toHaveBeenCalledTimes(1);
+      expect(nonTapEffectCalls(playEffect)).toHaveLength(1);
     });
 
     test('무료 스핀 후 광고 earned에서만 보너스 스핀을 1회 지급하고 placement를 계측한다 (#298)', async () => {
@@ -6223,8 +6229,9 @@ describe('FarmGame UI flow', () => {
       await waitFor(() => expect(playEffect).toHaveBeenCalledWith('mutation'));
       expect(onMutationFlash).toHaveBeenCalledTimes(1);
       expect(onMutationFlash).toHaveBeenCalledWith(mutationKey);
-      expect(screen.getByText(new RegExp(`${label} 변이 수확`))).toBeTruthy();
+      // 수확 팝은 순간 연출이라 토스트 대기열을 기다리기 전에 확인한다(#606 토스트 큐).
       expect(screen.getByTestId(`harvest-pop-${mutationKey}`)).toBeTruthy();
+      expect(await screen.findByText(new RegExp(`${label} 변이 수확`), {}, { timeout: 4000 })).toBeTruthy();
     });
 
     test('수동 수확의 프리즘 천장 발견을 저빈도 분석 이벤트로 기록한다 (#464)', async () => {
@@ -6339,7 +6346,7 @@ describe('FarmGame UI flow', () => {
       });
 
       await waitFor(() => expect(playEffect).toHaveBeenCalledWith('unlock'));
-      expect(playEffect).toHaveBeenCalledTimes(1);
+      expect(nonTapEffectCalls(playEffect)).toHaveLength(1);
       expect(track.mock.calls.filter(([name]) => name === 'research_node_unlocked')).toEqual([
         [
           'research_node_unlocked',

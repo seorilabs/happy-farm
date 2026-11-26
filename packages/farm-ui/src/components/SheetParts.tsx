@@ -1,5 +1,7 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+
+import { GamePressable, PRESSED_DEPTH_STYLE } from './GamePressable';
 
 export function SheetAction({
   label,
@@ -19,7 +21,8 @@ export function SheetAction({
   testID?: string;
 }) {
   return (
-    <Pressable
+    <GamePressable
+      pressedStyle={PRESSED_DEPTH_STYLE}
       testID={testID}
       disabled={disabled}
       accessibilityRole="button"
@@ -43,7 +46,7 @@ export function SheetAction({
       >
         {label}
       </Text>
-    </Pressable>
+    </GamePressable>
   );
 }
 
@@ -68,7 +71,8 @@ export function ShopCard({
   const fillColor = priceTone === 'speed' ? '#9a63e0' : priceTone === 'profit' ? '#bf7a00' : '#2f8747';
 
   return (
-    <Pressable
+    <GamePressable
+      pressedStyle={PRESSED_DEPTH_STYLE}
       disabled={disabled}
       accessibilityRole="button"
       accessibilityLabel={`${title}, ${desc}, ${price}`}
@@ -103,7 +107,7 @@ export function ShopCard({
           />
         </View>
       ) : null}
-    </Pressable>
+    </GamePressable>
   );
 }
 
@@ -121,7 +125,8 @@ export function AdRewardCard({
   onPress: () => void;
 }) {
   return (
-    <Pressable
+    <GamePressable
+      pressedStyle={PRESSED_DEPTH_STYLE}
       disabled={disabled}
       style={[sheetPartStyles.shopCard, sheetPartStyles.adCard, disabled && sheetPartStyles.disabledCard]}
       onPress={onPress}
@@ -135,7 +140,7 @@ export function AdRewardCard({
         </View>
         <Text style={sheetPartStyles.shopPrice}>{cta}</Text>
       </View>
-    </Pressable>
+    </GamePressable>
   );
 }
 
@@ -153,7 +158,8 @@ export function SettingToggle({
   onPress: () => void;
 }) {
   return (
-    <Pressable
+    <GamePressable
+      pressedStyle={PRESSED_DEPTH_STYLE}
       disabled={disabled}
       accessibilityRole="switch"
       accessibilityLabel={label}
@@ -169,7 +175,7 @@ export function SettingToggle({
       <View style={[sheetPartStyles.toggleTrack, value && sheetPartStyles.activeToggleTrack]}>
         <View style={[sheetPartStyles.toggleThumb, value && sheetPartStyles.activeToggleThumb]} />
       </View>
-    </Pressable>
+    </GamePressable>
   );
 }
 

@@ -26,6 +26,7 @@ export const FARM_AUDIO_SOURCES = {
   unlock: farmAudioUri('sting_unlock.wav'),
   mutation: farmAudioUri('sting_mutation.wav'),
   wheelSpin: farmAudioUri('sfx_wheel_spin.wav'),
+  tap: farmAudioUri('sfx_tap.wav'),
 } as const;
 
 const FARM_AUDIO_VIDEO_SOURCES = {
@@ -50,6 +51,7 @@ const SOUND_EFFECT_PLAYERS: readonly { key: FarmSoundEffectKey; volume: number }
   { key: 'unlock', volume: 0.8 },
   { key: 'mutation', volume: 0.75 },
   { key: 'wheelSpin', volume: 0.55 },
+  { key: 'tap', volume: 0.35 },
 ];
 
 // disableFocus is the public Granite Video API. It is best-effort on the AIT
