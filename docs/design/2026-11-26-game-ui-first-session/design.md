@@ -1,6 +1,6 @@
 # 첫 세션 개선과 게임다운 메인 화면
 
-- 설계 `game-ui-first-session` v1, 승인 2026-11-26 (B안 선택)
+- 설계 `game-ui-first-session` v2, 승인 2026-11-26 (B안 선택). v1의 테스트 계획 환경을 `dev`만으로 고쳤다(아래 승인 기록)
 - 조사 기준 Happy Farm `7a6004b25703085c31e876f449908cb61802b91e`(main), 기준 릴리스 `v1.13.3`
 - 계획 승인 2026-11-26. `/plan` 승인은 구현 승인이 아니다. 이 문서, 시안 선택과 [test-plan.json](test-plan.json)을 함께 승인받은 뒤 착수한다.
 - 관련 방향 [Warm Wood 메인 화면](../../ui/main-screen-direction.md), [타이틀](../../ui/title/title-direction.md), [오버레이 생명주기](../2026-10-23-ui-overlay-lifecycle/design.md)
@@ -122,6 +122,7 @@ flowchart LR
 ```
 
 - 재사용: 수확 입자(`FarmGame.tsx:8808`), `HarvestPopText`(8714), `pulseGold`(1423), 외곽선 글자(`FarmStartup.tsx:130-155`), 타이틀 아트 base64 패턴(`titleArt.generated.ts`, `pnpm check:title-art`), stall 넛지(2646), `ui-overlay-lifecycle`의 오버레이 규칙.
+- `apps/mobile/App.tsx`는 수정하지 않는다. 광고, 알림, 분석 기반 기능의 경로라 바뀌면 실기기 하한이 생긴다. 스킨, 아이콘, 서체 이름은 기존 아트 공급 경로(`apps/mobile/src/art/farmArt.ts`, `apps/ait/src/farm/platform/appsInTossArt.ts`)로 넘긴다.
 - 새 네이티브 의존성은 넣지 않는다. 그라데이션과 9분할 라이브러리 대신 PNG 3분할을 View 세 개로 조립한다. RN `Image`의 `capInsets`는 iOS 전용이라 쓰지 않는다.
 - `scripts/check-architecture.mjs`의 farm-ui import 규칙과 `scripts/check-ait-runtime-compat.mjs`를 지킨다.
 
@@ -179,12 +180,14 @@ flowchart LR
 | 항목 | 값 |
 |---|---|
 | 등급 | L3 |
-| 실행 환경 | 개발 환경(iOS 시뮬레이터, Jest), Android 실기기 1회 |
+| 실행 환경 | 개발 환경(iOS 시뮬레이터와 Maestro, Jest). 전체 회귀와 독립 검수 3회를 여기서 한다. Android 실기기 1회는 AC-13 추가 확인이며 검증기 환경에 넣지 않는다 |
 | 하한 조정 | ad-consent 기반 기능 경로(`FarmGame.tsx`)가 바뀌지만 동의 로직은 바꾸지 않는다. interstitial-ads는 노출 조건만 바꾸고 SDK 호출은 그대로라 단위 테스트로 확인한다. 두 항목의 실기기 하한을 사유와 함께 낮춘다 |
 | 새 화면, UI 개편 | 예. L3와 독립 검수 3회 |
 | 출시 | Google Play, App Store, 앱인토스 공개 |
 
-### 기기 사용 소명 (이 설계 승인 때 함께 승인 요청)
+### 기기 사용 소명 (승인됨, AC-13 추가 확인)
+
+중앙 규칙상 계획 환경에 `android`를 넣으면 Android에서 제품 기능 전체 회귀가 필요하다. 승인 범위는 아래 두 항목 30분이므로 계획 환경은 `dev`로 두고 이 실행은 AC-13의 추가 근거로만 기록한다.
 
 | 항목 | 내용 |
 |---|---|
@@ -221,7 +224,7 @@ flowchart LR
 | Android 실기기 1회(약 30분, 폰트와 스킨 렌더링, 앱인토스 런타임) | "승인" |
 | Maestro CLI 설치 | "설치 허용" |
 
-- 승인 대상은 이 문서 v1과 같은 커밋의 [test-plan.json](test-plan.json)이다.
-- 승인 커밋: `5bf45a8f43cf7ba2ca66c72d51803adafc082d91`
+- v1 승인 커밋: `5bf45a8f43cf7ba2ca66c72d51803adafc082d91`
+- v2: v1 계획의 `environments`가 `["dev", "android"]`여서 L3에서 Android 전체 회귀가 요구되는 것을 확인했다. 사용자가 "dev만, 기기는 추가 확인 (권장)"을 골라 `["dev"]`로 고친 v2를 승인했다. 승인 커밋은 이 v2 커밋이다.
 - 실행 티켓: [#606](https://github.com/seorilabs/happy-farm/issues/606)
 - 기기 사용은 구현과 개발 환경 검수가 끝난 뒤 한 번에 묶어 실행한다. 승인 범위를 넘으면 다시 소명한다.

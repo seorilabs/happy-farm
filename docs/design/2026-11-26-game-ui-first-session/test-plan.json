@@ -14,8 +14,7 @@
     "interstitial-ads"
   ],
   "environments": [
-    "dev",
-    "android"
+    "dev"
   ],
   "redesign": true,
   "foundationRerun": false,
