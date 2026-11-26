@@ -717,6 +717,24 @@ export function recordBatchHarvest(gameState: GameState, now = Date.now()): Game
 
 // 일괄 수확 전면 광고의 진행도 게이트. 온보딩을 마쳤고 유예 횟수를 채운
 // 세이브에서만 열린다. 시간 기준 간격은 getInterstitialCooldownMs가 따로 본다.
+// 첫 세션 전면 광고 유예(#606). GA4에서 신규 사용자 3분의 1이 첫날 약 3분 만에 전면 광고를
+// 봤다. 첫 밭 해금 전이면 언제든, 해금 뒤라도 첫 세션 시작부터 유예 시간 안이면 어떤 전면 지면도
+// 띄우지 않는다. firstSessionStartedAt은 온보딩을 마치지 않은 상태로 시작한 세션의 시작 시각이며,
+// 그 밖의 세션에서는 null이다(새 저장 필드 없이 호출부가 마운트 시점에 판정한다).
+export function isFirstSessionInterstitialGraceActive(
+  gameState: GameState,
+  firstSessionStartedAt: number | null,
+  now = Date.now()
+): boolean {
+  if (gameState.unlockedPlotCount <= INITIAL_PLOTS) {
+    return true;
+  }
+  if (firstSessionStartedAt == null) {
+    return false;
+  }
+  return now - firstSessionStartedAt < getAdLimits().interstitialFirstSessionGraceMs;
+}
+
 export function canShowHarvestInterstitial(gameState: GameState, now = Date.now()): boolean {
   if (!gameState.onboardingCompleted) {
     return false;

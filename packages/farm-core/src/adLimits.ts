@@ -38,6 +38,11 @@ export type AdLimitsConfig = {
   cookingSpeedAdCooldownMs: number;
   /** 전면 광고: 이 횟수만큼 일괄 수확할 때까지는 띄우지 않는다(신규 플레이어 첫인상 보호) */
   interstitialHarvestGraceCount: number;
+  /**
+   * 전면 광고: 첫 세션 시작부터 이 시간 안이면 띄우지 않는다(ms). 첫 밭 해금 전에도 띄우지 않는다.
+   * 0이면 시간 유예를 끈다(해금 전 유예는 유지). #606
+   */
+  interstitialFirstSessionGraceMs: number;
   /** 전면 광고: 세션 내 n번째 노출의 최소 간격(ms). 마지막 값이 이후 전부에 적용된다 */
   interstitialBackoffMs: number[];
   /** 전면 광고: 이 시간 이상 백그라운드에 있다 돌아오면 백오프 단계를 처음으로 되돌린다(ms) */
@@ -62,6 +67,7 @@ export const DEFAULT_AD_LIMITS: AdLimitsConfig = {
   cookingSpeedAdDailyLimit: balance.ads.cookingSpeedAdDailyLimit,
   cookingSpeedAdCooldownMs: balance.ads.cookingSpeedAdCooldownMs,
   interstitialHarvestGraceCount: balance.ads.interstitialHarvestGraceCount,
+  interstitialFirstSessionGraceMs: balance.ads.interstitialFirstSessionGraceMs,
   interstitialBackoffMs: balance.ads.interstitialBackoffMs,
   interstitialSessionResetMs: balance.ads.interstitialSessionResetMs,
   returnInterstitialCooldownMs: balance.ads.returnInterstitialCooldownMs,

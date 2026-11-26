@@ -13,6 +13,7 @@ import {
   PLOT_DISCOUNT_AD_PERCENT,
   RETURN_INTERSTITIAL_COOLDOWN_MS,
   canShowHarvestInterstitial,
+  isFirstSessionInterstitialGraceActive,
   canShowReturnInterstitial,
   getDiscountedPlotCost,
   getInterstitialCooldownMs,
@@ -611,6 +612,29 @@ describe('farm ad limits', () => {
 
     // Once the cooldown elapses → allowed again.
     expect(canShowReturnInterstitial(afterShow, NOW + RETURN_INTERSTITIAL_COOLDOWN_MS)).toBe(true);
+  });
+
+  // #606: GA4에서 신규 76명 중 26명이 첫날 약 3분 만에 전면 광고를 봤다. 첫 밭 해금
+  // 전이거나 첫 세션 10분 안이면 어떤 전면 지면도 띄우지 않는다.
+  test('첫 밭 해금 전이거나 첫 세션 유예 시간 안이면 전면 광고 유예가 켜진다 (#606)', () => {
+    const graceMs = getAdLimits().interstitialFirstSessionGraceMs;
+    expect(graceMs).toBe(10 * 60 * 1000);
+
+    const fresh: GameState = { ...createInitialState(), onboardingCompleted: true };
+    const unlocked: GameState = { ...fresh, unlockedPlotCount: INITIAL_PLOTS + 1 };
+    const sessionStart = NOW;
+
+    // 밭을 하나도 해금하지 않았으면 세션과 무관하게 유예한다.
+    expect(isFirstSessionInterstitialGraceActive(fresh, null, NOW)).toBe(true);
+    expect(isFirstSessionInterstitialGraceActive(fresh, sessionStart, NOW + graceMs * 5)).toBe(true);
+
+    // 해금했어도 첫 세션 시작부터 유예 시간 안이면 유예한다(첫 해금 순간의 지면 포함).
+    expect(isFirstSessionInterstitialGraceActive(unlocked, sessionStart, NOW + graceMs - 1)).toBe(true);
+
+    // 두 조건을 모두 지나야 기존 규칙으로 돌아간다.
+    expect(isFirstSessionInterstitialGraceActive(unlocked, sessionStart, NOW + graceMs)).toBe(false);
+    // 첫 세션이 아니면(시작 시각 없음) 해금 여부만 본다.
+    expect(isFirstSessionInterstitialGraceActive(unlocked, null, NOW)).toBe(false);
   });
 
   test('일괄 수확 전면광고는 진행도 유예를 채운 뒤에만 열린다', () => {

@@ -39,27 +39,28 @@ happy-farm 활성화·리텐션 퍼널 측정의 단일 기준 문서. 이벤트
 |---|---|---|
 | 신규 설치 | `first_open` (GA4 자동 수집) | GA4 기본 파라미터 |
 | 게임 시작 | `game_start` | context |
-| 씨앗 선택 안내 | `onboarding_step_view` (`step` = `selectSeed`, `step_index` = 1) | `step`, `step_index`, context |
 | 온보딩 이탈 | `onboarding_skip` | `skipped_step`, `step_index`, context |
 | 첫 씨앗 선택 | `first_seed_selected` (이후는 `seed_selected`) | `crop`, `area`, context |
-| 심기 안내 | `onboarding_step_view` (`step` = `plant`, `step_index` = 2) | `step`, `step_index`, context |
+| 심기 안내 | `onboarding_step_view` (`step` = `plant`, `step_index` = 1). #427 이후 새 세이브는 당근이 자동 파종돼 이 단계를 건너뛴다 | `step`, `step_index`, context |
 | 심기 | `crop_planted` | `crop`, `area`, `crop_tier`, `crop_cost`, context |
-| 수확 안내 | `onboarding_step_view` (`step` = `harvest`, `step_index` = 3) | `step`, `step_index`, context |
+| 수확 안내 | `onboarding_step_view` (`step` = `harvest`, `step_index` = 2). 새 사용자의 첫 단계 | `step`, `step_index`, context |
+| 수확 단계 정체 | `onboarding_stall` (15초 무행동, 단계당 1회) | `step`, `step_index`, `dwell_seconds`, `nudge_fired`, context |
 | 수확 준비 집계 | `crop_ready_summary` | `crop`, `area`, `crop_tier`, `ready_count`, `window_seconds`, `schema_version`, context |
 | 수확 | `crop_harvested` | `crop`, `area`, `crop_tier`, `revenue`, `research_points_gained`, `reward_type`, `harvest_source`, `is_first_crop_harvest`, `is_first_meaningful_harvest`, `schema_version`, context |
 | 자동수확 집계 | `auto_harvest_summary` | `crop`, `area`, `crop_tier`, `harvested_count`, `replanted_count`, `total_gold`, `total_research_points`, `window_seconds`, `schema_version`, context |
 | **첫 유의미 수확** | `first_meaningful_harvest` | `crop`, `area`, `crop_tier`, `revenue`, `research_points_gained`, `reward_type`, `harvest_source`, context |
-| 첫 수확 보상 확인 | `onboarding_step_view` (`step` = `reward`, `step_index` = 4) | `step`, `step_index`, context |
+| 첫 수확 보상 확인 | `onboarding_step_view` (`step` = `reward`, `step_index` = 3) | `step`, `step_index`, context |
 | 온보딩 완료 | `onboarding_complete` | `completion_source` (`confirm` / `auto` / `interaction`), context |
 | 데일리 보너스 노출 | `daily_bonus_opened` | `source` (`auto_popup` / `more` / `welcome_back`), context |
 | 데일리 보너스 수령 | `daily_bonus_claimed` | `streak`, `reward_value`, `is_first_claim`, `source`, context |
 | **첫 데일리 클레임** | `first_daily_bonus_claimed` | `streak`, `reward_value`, `source`, context |
 
-> **온보딩 "시작"**은 별도 이벤트가 아니라 `onboarding_step_view`의 `step_index = 1` 발화로
-> 정의한다. "완료"는 마지막 단계 노출과 구분되는 별도 종료 시점이므로 전용
+> **온보딩 "시작"**은 별도 이벤트가 아니라 사용자의 첫 `onboarding_step_view` 발화로
+> 정의한다(새 사용자는 `harvest`, `step_index = 2`). "완료"는 마지막 단계 노출과 구분되는 별도 종료 시점이므로 전용
 > `onboarding_complete`를 둔다(건너뛰기로 끝나면 `onboarding_skip`만 발화).
 >
-> 단계 stable key는 `selectSeed` → `plant` → `harvest` → `reward`다. 미완료 세이브는
+> 단계 stable key는 `plant` → `harvest` → `reward`다(`packages/farm-core/src/constants.ts`의 `ONBOARDING_STEPS`).
+> `selectSeed`는 #427 이전 데이터에만 있는 legacy key다. 미완료 세이브는
 > 현재 단계를 저장하고 재진입 시 이어서 보여 준다. 따라서 세션을 넘긴 재노출로 같은 사용자의
 > `onboarding_step_view`가 중복될 수 있으므로 전환율은 이벤트 수가 아니라 고유 사용자로 집계한다.
 > 성장 완료 수는 배칭 배포 이후 `sum(crop_ready_summary.ready_count)`, 이전 기간은
@@ -72,18 +73,28 @@ happy-farm 활성화·리텐션 퍼널 측정의 단일 기준 문서. 이벤트
 ```mermaid
 flowchart LR
   A[first_open] --> B[game_start]
-  B --> C[selectSeed view #35;1]
-  C --> D[first_seed_selected]
-  D --> E[plant view #35;2]
-  E --> F[crop_planted]
-  F --> G[harvest view #35;3]
+  B --> G[harvest view #35;2]
+  G -. 15초 무행동 .-> T[onboarding_stall]
   G --> H[first_meaningful_harvest]
-  H --> I[reward view #35;4]
+  H --> I[reward view #35;3]
   I --> J[onboarding_complete]
   J --> K[daily_bonus_opened]
   K --> L[first_daily_bonus_claimed]
   G -. 명시적 확인 후 이탈 .-> S[onboarding_skip]
 ```
+
+## 개편 효과 계측 (#606)
+2026-11 첫 세션 개선과 게임다운 메인 화면 개편([설계](../design/2026-11-26-game-ui-first-session/design.md))의 전후를 비교하려고 추가했다. 모두 context를 함께 싣는다.
+
+| 이벤트 | 파라미터 | 뜻 |
+|---|---|---|
+| `sheet_opened` | `sheet`(시트 종류), `source`(`nav` / `more_menu` / `tab_bar` / `hud` / `goal_chip` / `auto_popup` / `other`) | 시트가 열린 경로 |
+| `sheet_closed` | `sheet`, `dwell_ms` | 시트 체류 시간. 생산 시트 안의 탭 전환은 같은 시트로 본다 |
+| `nav_tapped` | `target`, `location`(`header` / `more_menu` / `tab_bar` / `hud`) | 메뉴 버튼 탭 |
+| `ftue_pointer_shown` | `step` | 첫 수확 스포트라이트 포인터 노출 |
+| `goal_chip_tapped` | `goal_kind`, `ready` | 다음 목표 칩 탭 |
+
+첫날 행동별 복귀, 온보딩 이탈 단계, 시트 경로 집계는 `analytics/queries/first-session-funnel.sql`에 있다. 스토어 설치만 남기고 비정상 버전을 빼는 표본 보정 조건이 쿼리 머리말에 있다.
 
 ## 리텐션 · 복귀 퍼널
 복귀 넛지(알림) → 앱 오픈 → 복귀 요약 → 첫 행동 경로.
