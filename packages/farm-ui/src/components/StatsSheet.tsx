@@ -4,6 +4,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import {
   formatDuration,
   formatHourlyGold,
+  formatGold,
   formatMoney,
   formatRemainingTime,
   type SupportedLocale,
@@ -252,7 +253,7 @@ export function StatsSheet({
         />
         <StatRow
           label={messages.statsCropIdleGoldLabel}
-          value={`${formatMoney(farmRecords.cropAndIdleGoldEarned, locale)}G`}
+          value={formatGold(farmRecords.cropAndIdleGoldEarned, locale)}
           valueTestID="stats-record-crop-idle-gold"
         />
         <StatRow

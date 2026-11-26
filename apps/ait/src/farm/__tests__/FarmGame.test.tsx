@@ -32,6 +32,7 @@ import {
   getRewardedGoldAmount,
   formatDuration,
   formatHourlyGold,
+  formatGold,
   formatMoney,
   getProductionRecipeLabel,
   getActiveFarmOfflineGold,
@@ -837,13 +838,13 @@ describe('FarmGame UI flow', () => {
 
     fireEvent.press(screen.getByText('당근'));
     // 50G ÷ 10G ⇒ 5 of the 6 empty plots are affordable.
-    fireEvent.press(screen.getByText('🌱 모두 심기 5 · 50G'));
+    fireEvent.press(screen.getByText('🌱 모두 심기 5 · 50 🪙'));
 
     // Gold is fully spent and only the one unaffordable plot remains empty.
     expect(screen.getByTestId('hud-gold')).toHaveTextContent('0');
     expect(screen.getAllByText('빈 밭')).toHaveLength(1);
     // With no gold left to fill the last plot, the shortcut disappears.
-    expect(screen.queryByText('🌱 모두 심기 5 · 50G')).toBeNull();
+    expect(screen.queryByText('🌱 모두 심기 5 · 50 🪙')).toBeNull();
   });
 
   test('plot-discount reward desc shows the original price before the discounted one', () => {
@@ -1054,7 +1055,7 @@ describe('FarmGame UI flow', () => {
     await waitFor(() => expect(screen.getByTestId('farm-records-section')).toBeTruthy());
     expect(screen.getByTestId('stats-record-total-harvests')).toHaveTextContent('1,234');
     expect(screen.getByTestId('stats-record-crop-idle-gold')).toHaveTextContent(
-      `${formatMoney(state.lifetimeStats.totalGoldEarned, DEFAULT_LOCALE)}G`
+      `${formatGold(state.lifetimeStats.totalGoldEarned, DEFAULT_LOCALE)}`
     );
     expect(screen.getByTestId('stats-record-mutation-harvests')).toHaveTextContent('45');
     expect(screen.getByTestId('stats-record-prestige-count')).toHaveTextContent('6');
@@ -1087,7 +1088,7 @@ describe('FarmGame UI flow', () => {
 
     await waitFor(() => expect(screen.getByTestId('stats-record-total-harvests')).toHaveTextContent('11'));
     expect(screen.getByTestId('stats-record-crop-idle-gold')).toHaveTextContent(
-      `${formatMoney(100 + carrot.sell, DEFAULT_LOCALE)}G`
+      `${formatGold(100 + carrot.sell, DEFAULT_LOCALE)}`
     );
     expect(screen.getByTestId('stats-record-collection-discovered')).toHaveTextContent(
       `2 / ${getCropKeys().length}`
@@ -1289,7 +1290,7 @@ describe('FarmGame UI flow', () => {
       // fertilizer cost, and the plot transitioned to ripe (state 2 renders GET).
       await waitFor(() => expect(screen.getByText(/비료로 바로 키웠어요/)).toBeTruthy());
       expect(screen.getByTestId('hud-gold')).toHaveTextContent(formatMoney(100_000 - expectedCost, 'ko-KR'));
-      expect(screen.queryByText('100,000G')).toBeNull();
+      expect(screen.queryByText('100,000 🪙')).toBeNull();
       expect(screen.getByText('GET')).toBeTruthy();
     });
 
@@ -4254,12 +4255,12 @@ describe('FarmGame UI flow', () => {
       const tenButton = screen.getByTestId('upgrade-batch-ten-speed');
       // +10: 목표 수량(+10)과 10레벨 전액 총비용을 계산해 표시한다.
       expect(within(tenButton).getByText(`+${UPGRADE_BATCH_STEP}`)).toBeTruthy();
-      expect(within(tenButton).getByText(`${formatMoney(ten.totalCost)}G`)).toBeTruthy();
+      expect(within(tenButton).getByText(`${formatGold(ten.totalCost)}`)).toBeTruthy();
 
       const maxButton = screen.getByTestId('upgrade-batch-max-speed');
       // 최대: 감당 가능한 레벨 수(+N)와 그 총비용을 계산해 표시한다.
       expect(within(maxButton).getByText(`${messages.upgradeBuyMax} +${max.levels}`)).toBeTruthy();
-      expect(within(maxButton).getByText(`${formatMoney(max.totalCost)}G`)).toBeTruthy();
+      expect(within(maxButton).getByText(`${formatGold(max.totalCost)}`)).toBeTruthy();
     });
 
     test('+10 배치가 10레벨을 한 번의 상태 갱신으로 사고 전용 계측을 emit한다', async () => {
@@ -5007,7 +5008,7 @@ describe('FarmGame UI flow', () => {
     const screen = await renderGame({ ...createInitialState(), gold: 115 });
     fireEvent.press(screen.getByTestId('seed-tool-sweet_potato'));
     fireEvent.press(screen.getAllByText('빈 밭')[0]!);
-    expect(await screen.findByText(/20G.*당근/)).toBeTruthy();
+    expect(await screen.findByText(/20 🪙.*당근/)).toBeTruthy();
     expect(screen.getByTestId('seed-tool-sweet_potato').props.accessibilityState.selected).toBe(true);
     expect(screen.getByTestId('hud-gold')).toHaveTextContent('115');
   });
@@ -8521,7 +8522,7 @@ describe('E2E 실기기 플레이에서 드러난 결함 회귀', () => {
       fireEvent.press(screen.getByText(messages.harvestAllButton(readyCount)));
     });
     await waitFor(() =>
-      expect(screen.queryByText(`${formatMoney(state.gold, DEFAULT_LOCALE)}G`)).toBeNull()
+      expect(screen.queryByText(`${formatGold(state.gold, DEFAULT_LOCALE)}`)).toBeNull()
     );
   });
 });

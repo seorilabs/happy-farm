@@ -134,6 +134,7 @@ import {
   executeFarmGameCommand,
   formatDuration,
   formatHourlyGold,
+  formatGold,
   formatMoney,
   formatRemainingTime,
   formatMultiplier,
@@ -7409,7 +7410,7 @@ function FarmGameBody({
                   {getDailyBonusLabel(dailyBonusDisplay.streak, dailyBonusDisplay.goldAwarded, locale).streakLabel}
                 </Text>
                 <Text style={styles.welcomeBackRowValue}>
-                  +{formatMoney(dailyBonusDisplay.goldAwarded, locale)}G
+                  +{formatGold(dailyBonusDisplay.goldAwarded, locale)}
                 </Text>
               </View>
             </View>
@@ -10059,7 +10060,7 @@ function ShopPlotRow({
       highlighted={highlighted === true && !isMax}
       title={messages.shopPlotTitle}
       desc={messages.shopPlotDesc(gameState.unlockedPlotCount)}
-      price={isMax ? messages.completePrice : `${formatMoney(cost, locale)}G`}
+      price={isMax ? messages.completePrice : formatGold(cost, locale)}
       disabled={isMax || !canBuy}
       onPress={() => {
         if (isMax) {
@@ -10142,7 +10143,7 @@ function ShopAreaUnlockRows({
         key={area.key}
         title={messages.areaOpenTitle(areaLabel.name)}
         desc={`${areaLabel.target} · ${requirementText}`}
-        price={`${formatMoney(area.unlock.cost, locale)}G`}
+        price={formatGold(area.unlock.cost, locale)}
         disabled={!canBuy}
         onPress={() => {
           analytics.trackAreaUnlockClicked(area.key, getAnalyticsContext(gameState));
@@ -10295,7 +10296,7 @@ function ShopDecorationRows({
             key={decoration.key}
             title={`${decoration.icon} ${label.name}`}
             desc={owned ? messages.decorationOwnedDesc(label.description) : label.description}
-            price={owned ? messages.decorationOwnedBadge : `${formatMoney(decoration.price, locale)}G`}
+            price={owned ? messages.decorationOwnedBadge : formatGold(decoration.price, locale)}
             disabled={owned || !affordable}
             goldProgress={goldProgress}
             onPress={() => {
@@ -10379,7 +10380,7 @@ function ShopUpgradeRow({
       <ShopCard
         title={title}
         desc={messages.upgradeDescWithLevel(desc, level)}
-        price={`${formatMoney(cost, locale)}G`}
+        price={formatGold(cost, locale)}
         priceTone={kind}
         disabled={disabled}
         goldProgress={goldProgress}
@@ -10410,19 +10411,19 @@ function ShopUpgradeRow({
         <GamePressable
           accessibilityRole="button"
           accessibilityState={{ disabled: !canBuyTen }}
-          accessibilityLabel={`${title} +${UPGRADE_BATCH_STEP}, ${formatMoney(batchTen.totalCost, locale)}G`}
+          accessibilityLabel={`${title} +${UPGRADE_BATCH_STEP}, ${formatGold(batchTen.totalCost, locale)}`}
           disabled={!canBuyTen}
           style={[styles.upgradeBatchButton, !canBuyTen && styles.upgradeBatchButtonDisabled]}
           testID={`upgrade-batch-ten-${kind}`}
           onPress={() => buyBatch(batchTen)}
         >
           <Text style={styles.upgradeBatchLabel}>{`+${UPGRADE_BATCH_STEP}`}</Text>
-          <Text style={styles.upgradeBatchSub}>{`${formatMoney(batchTen.totalCost, locale)}G`}</Text>
+          <Text style={styles.upgradeBatchSub}>{formatGold(batchTen.totalCost, locale)}</Text>
         </GamePressable>
         <GamePressable
           accessibilityRole="button"
           accessibilityState={{ disabled: !canBuyMax }}
-          accessibilityLabel={`${title} ${messages.upgradeBuyMax} +${batchMax.levels}, ${formatMoney(batchMax.totalCost, locale)}G`}
+          accessibilityLabel={`${title} ${messages.upgradeBuyMax} +${batchMax.levels}, ${formatGold(batchMax.totalCost, locale)}`}
           disabled={!canBuyMax}
           style={[styles.upgradeBatchButton, !canBuyMax && styles.upgradeBatchButtonDisabled]}
           testID={`upgrade-batch-max-${kind}`}
@@ -10432,7 +10433,7 @@ function ShopUpgradeRow({
             {canBuyMax ? `${messages.upgradeBuyMax} +${batchMax.levels}` : messages.upgradeBuyMax}
           </Text>
           {canBuyMax ? (
-            <Text style={styles.upgradeBatchSub}>{`${formatMoney(batchMax.totalCost, locale)}G`}</Text>
+            <Text style={styles.upgradeBatchSub}>{formatGold(batchMax.totalCost, locale)}</Text>
           ) : null}
         </GamePressable>
       </View>

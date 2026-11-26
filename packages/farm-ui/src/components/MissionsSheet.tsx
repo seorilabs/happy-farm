@@ -2,6 +2,7 @@ import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import {
+  formatGold,
   formatMoney,
   getAreaLabel,
   getDailyMissionsSnapshot,
@@ -101,7 +102,7 @@ function MissionCard({
         <Text style={styles.missionTitle} numberOfLines={2}>
           {label}
         </Text>
-        <Text style={styles.missionReward}>{`+${formatMoney(rewardGold, locale)}G`}</Text>
+        <Text style={styles.missionReward}>{`+${formatGold(rewardGold, locale)}`}</Text>
       </View>
       <Text style={styles.missionProgress} numberOfLines={1}>
         {messages.missionProgressLabel(shownProgress, target)}

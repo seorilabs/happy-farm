@@ -7,6 +7,7 @@ import {
   CROPS,
   MASTERY_RANKS,
   MUTATION_KINDS,
+  formatGold,
   formatMoney,
   formatSignedPercent,
   getAreaLabel,
@@ -262,7 +263,7 @@ export function CollectionSheet({
                     {discovered ? (
                       <>
                         <Text style={styles.collectionCellValue} numberOfLines={1}>
-                          {formatMoney(crop.sell, locale)}G
+                          {formatGold(crop.sell, locale)}
                         </Text>
                         <MasteryBadge gameState={gameState} cropKey={cropKey} />
                         <MutationBadges gameState={gameState} cropKey={cropKey} />
@@ -328,7 +329,7 @@ export function CollectionSheet({
               >
                 <CropGlyph cropKey={detailCropKey} emoji={detailCrop.icon} size={52} textStyle={styles.detailIcon} />
                 <Text style={styles.detailName}>{detailLabel.name}</Text>
-                <Text style={styles.detailValue}>{formatMoney(detailCrop.sell, locale)}G</Text>
+                <Text style={styles.detailValue}>{formatGold(detailCrop.sell, locale)}</Text>
                 <Text style={styles.detailDescription}>{detailLabel.description}</Text>
                 <MasteryDetails
                   gameState={gameState}
