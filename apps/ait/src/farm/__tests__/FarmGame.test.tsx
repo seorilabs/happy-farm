@@ -1978,6 +1978,25 @@ describe('FarmGame UI flow', () => {
       expect(within(mapEntry).getByText('3')).toBeTruthy();
     });
 
+    test('동작 줄이기가 켜져 있어도 출석 보상을 닫으면 HUD 골드가 실제 잔액으로 바뀐다 (1회차 수정 리뷰)', async () => {
+      const reduceMotionSpy = jest.spyOn(AccessibilityInfo, 'isReduceMotionEnabled').mockResolvedValue(true);
+      try {
+        const screen = await renderGame(completedState(), {}, null, { preserveDailyBonus: true });
+        await waitFor(() => expect(screen.getByText(messages.sheetTitleDailyBonus)).toBeTruthy());
+        await waitFor(() => expect(getLatestPersistedState().gold).toBeGreaterThan(completedState().gold));
+        const claimedGold = getLatestPersistedState().gold;
+
+        fireEvent.press(screen.getByText(messages.dailyBonusConfirmAction));
+        await act(async () => {
+          jest.advanceTimersByTime(250);
+        });
+        expect(screen.queryByTestId('reward-burst-layer')).toBeNull();
+        expect(screen.getByTestId('hud-gold')).toHaveTextContent(formatMoney(claimedGold, DEFAULT_LOCALE));
+      } finally {
+        reduceMotionSpy.mockRestore();
+      }
+    });
+
     test('auto_popup 열람 즉시 자동 수령되고 배지가 정리된다 (#294/#376)', async () => {
       const track = jest.fn();
       const screen = await renderGame(completedState(), { analytics: createFarmAnalytics(track) }, null, {

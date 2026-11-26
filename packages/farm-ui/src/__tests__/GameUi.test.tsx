@@ -102,7 +102,8 @@ describe('GameUi (#606)', () => {
     );
     expect(withArt.queryByText('300 🪙')).toBeNull();
     expect(withArt.UNSAFE_getAllByType(Image)).toHaveLength(1);
-    expect(withArt.getByTestId('price').props.accessibilityLabel).toBe('300');
+    // 스크린리더는 그림 코인 대신 원래 문구(🪙 포함)를 읽어 화폐 단위를 잃지 않는다.
+    expect(withArt.getByTestId('price').props.accessibilityLabel).toBe('300 🪙');
     const withoutArt = render(<CoinText testID="price">300 🪙</CoinText>);
     expect(withoutArt.getByText('300 🪙')).toBeTruthy();
   });

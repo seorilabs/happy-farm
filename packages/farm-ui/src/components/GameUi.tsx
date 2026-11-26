@@ -222,12 +222,8 @@ export function CoinText({
   const size = iconSize ?? Math.round(fontSize * 1.1);
   const segments = children.split(GOLD_UNIT);
   return (
-    <Text
-      lineBreakStrategyIOS="hangul-word"
-      accessibilityLabel={segments.join('').replace(/\s+/g, ' ').trim()}
-      {...rest}
-      style={style}
-    >
+    // 스크린리더는 원래 문구를 읽어 코인 단위("🪙")를 잃지 않는다.
+    <Text lineBreakStrategyIOS="hangul-word" accessibilityLabel={children} {...rest} style={style}>
       {segments.flatMap((segment, index) =>
         index === 0
           ? [segment]

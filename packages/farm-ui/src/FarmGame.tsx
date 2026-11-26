@@ -1822,8 +1822,10 @@ function FarmGameBody({
     // target 'hud': 시트를 닫으면서 주는 보상(복귀, 출석)은 닫히는 시트 대신 HUD 골드 칩으로 날린다.
     (amount: number, goldBefore: number, options: { sound?: boolean; target?: 'hud' } = {}) => {
       if (!(amount > 0) || !Number.isFinite(amount)) return;
-      // 동작 줄이기가 켜져 있으면 코인 연출과 카운트업 없이 효과음과 숫자 변화만 남긴다.
+      // 동작 줄이기가 켜져 있으면 코인 연출과 카운트업 없이 효과음과 숫자 변화만 남긴다. 출석과 룰렛처럼
+      // 지급 전 값을 붙잡아 둔 보상도 여기서 풀어 실제 잔액을 바로 보인다.
       if (reduceMotionRef.current) {
+        setGoldCountUp(null);
         if (options.sound !== false) playSoundEffect('reward');
         return;
       }
@@ -5046,7 +5048,13 @@ function FarmGameBody({
         setReturnAdPending(false);
         return;
       }
-      if (isSheetModalOnScreenRef.current && waits < RETURN_AD_SHEET_WAIT_TRIES) {
+      if (isSheetModalOnScreenRef.current) {
+        // 시트가 끝내 다 내려가지 않으면 이번 광고는 건너뛴다. 닫히는 시트 위에 광고를 올리지 않는다.
+        // 쿨다운은 실제로 광고가 뜬 뒤에만 기록되므로 다음 복귀에 다시 시도한다.
+        if (waits >= RETURN_AD_SHEET_WAIT_TRIES) {
+          setReturnAdPending(false);
+          return;
+        }
         waits += 1;
         scheduleRewardTimer(run, SHEET_SETTLE_POLL_MS);
         return;
