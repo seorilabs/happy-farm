@@ -89,10 +89,12 @@ flowchart LR
 | 이벤트 | 파라미터 | 뜻 |
 |---|---|---|
 | `sheet_opened` | `sheet`(시트 종류), `source`(`nav` / `more_menu` / `tab_bar` / `hud` / `goal_chip` / `auto_popup` / `other`) | 시트가 열린 경로 |
-| `sheet_closed` | `sheet`, `dwell_ms` | 시트 체류 시간. 생산 시트 안의 탭 전환은 같은 시트로 본다 |
+| `sheet_closed` | `sheet`, `dwell_ms` | 시트 체류 시간. 앱이 백그라운드에 있던 시간은 뺀다. 생산 시트 안의 탭 전환은 같은 시트로 본다 |
 | `nav_tapped` | `target`, `location`(`header` / `more_menu` / `tab_bar` / `hud`) | 메뉴 버튼 탭 |
-| `ftue_pointer_shown` | `step` | 첫 수확 스포트라이트 포인터 노출 |
-| `goal_chip_tapped` | `goal_kind`, `ready` | 다음 목표 칩 탭 |
+| `ftue_pointer_shown` | `step` | 첫 수확 스포트라이트 포인터 노출. 스포트라이트가 들어오는 PR부터 발화한다 |
+| `goal_chip_tapped` | `goal_kind`, `ready` | 다음 목표 칩 탭. 목표 칩이 들어오는 PR부터 발화한다 |
+
+`source`의 `tab_bar`, `hud`, `goal_chip`과 `location`의 `tab_bar`, `hud`는 하단 탭 바와 재화 칩이 들어오는 PR부터 쓰인다. 그 전에는 `nav`, `more_menu`, `auto_popup`, `other`만 나온다.
 
 첫날 행동별 복귀, 온보딩 이탈 단계, 시트 경로 집계는 `analytics/queries/first-session-funnel.sql`에 있다. 스토어 설치만 남기고 비정상 버전을 빼는 표본 보정 조건이 쿼리 머리말에 있다.
 

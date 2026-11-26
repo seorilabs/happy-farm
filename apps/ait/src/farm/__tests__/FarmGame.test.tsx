@@ -8370,6 +8370,39 @@ describe('#606 첫 세션 계측과 전면 광고 유예', () => {
     expect(track.mock.calls.filter(([name]) => name === 'sheet_closed')).toHaveLength(1);
   });
 
+  test('시트 체류 시간에서 앱이 백그라운드에 있던 시간을 뺀다', async () => {
+    const track = jest.fn();
+    const listeners: ((state: AppStateStatus) => void)[] = [];
+    const addEventListenerMock = AppState.addEventListener as jest.MockedFunction<typeof AppState.addEventListener>;
+    const originalImplementation = addEventListenerMock.getMockImplementation();
+    addEventListenerMock.mockImplementation((_event, listener) => {
+      listeners.push(listener);
+      return { remove: jest.fn() };
+    });
+    try {
+      const screen = await renderGame(createInitialState(), { analytics: createFarmAnalytics(track) });
+      const messages = getFarmMessages(DEFAULT_LOCALE);
+      fireEvent.press(screen.getByTestId('shop-nav-button'));
+      await waitFor(() => expect(track).toHaveBeenCalledWith('sheet_opened', expect.objectContaining({ sheet: 'shop' })));
+
+      await act(async () => {
+        jest.setSystemTime(NOW + 3_000);
+        listeners.forEach((listener) => listener('background'));
+        jest.setSystemTime(NOW + 303_000);
+        listeners.forEach((listener) => listener('active'));
+        jest.setSystemTime(NOW + 305_000);
+      });
+      fireEvent.press(screen.getByLabelText(messages.sheetCloseAccessibilityLabel));
+      await waitFor(() => expect(track).toHaveBeenCalledWith('sheet_closed', expect.objectContaining({ sheet: 'shop' })));
+      // 닫기 애니메이션만큼 더해질 수 있지만 백그라운드 5분은 들어가지 않는다.
+      const closed = track.mock.calls.find(([name]) => name === 'sheet_closed')?.[1] as { dwell_ms: number };
+      expect(closed.dwell_ms).toBeGreaterThanOrEqual(5_000);
+      expect(closed.dwell_ms).toBeLessThan(10_000);
+    } finally {
+      addEventListenerMock.mockImplementation(originalImplementation);
+    }
+  });
+
   test('더보기 항목으로 옮겨 가면 더보기를 닫고 새 시트를 more_menu 출처로 연다', async () => {
     const track = jest.fn();
     const screen = await renderGame(createInitialState(), { analytics: createFarmAnalytics(track) });

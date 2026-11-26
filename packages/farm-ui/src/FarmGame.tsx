@@ -281,7 +281,15 @@ import { CookingSheet } from './components/CookingSheet';
 import { DecorationLayoutSheet } from './components/DecorationLayoutSheet';
 import { EnvironmentBackdrop } from './components/EnvironmentBackdrop';
 import { FarmOnboarding, ONBOARDING_STEPS, type OnboardingStep } from './components/FarmOnboarding';
-import { resolveSheetOpenSource, type PendingSheetSource } from './sheetAnalytics';
+import {
+  finishSheetDwell,
+  pauseSheetDwell,
+  resolveSheetOpenSource,
+  resumeSheetDwell,
+  startSheetDwell,
+  type PendingSheetSource,
+  type SheetDwell,
+} from './sheetAnalytics';
 import { LabSheet } from './components/LabSheet';
 import { MissionsSheet } from './components/MissionsSheet';
 import { ProductionSheet, type ProductionTabKey } from './components/ProductionSheet';
@@ -1333,7 +1341,7 @@ function FarmGameBody({
   const firstSessionStartedAtRef = useRef<number | null>(null);
   // 시트 진입 경로와 체류 계측(#606). 내비 탭이 시트를 여는 순간 출처를 잠깐 기억한다.
   const pendingSheetSourceRef = useRef<PendingSheetSource | null>(null);
-  const openSheetAnalyticsRef = useRef<{ sheet: string; openedAt: number } | null>(null);
+  const openSheetAnalyticsRef = useRef<SheetDwell | null>(null);
   // Target time of the last scheduled harvest reminder. This effect re-runs
   // every tick, so we only emit notification_scheduled when that target
   // actually changes — otherwise the analytics would be flooded with noise.
@@ -1726,7 +1734,7 @@ function FarmGameBody({
     if (buildContext != null) {
       const context = buildContext();
       if (previous != null) {
-        farmAnalytics.trackSheetClosed({ sheet: previous.sheet, dwellMs: now - previous.openedAt, context });
+        farmAnalytics.trackSheetClosed({ sheet: previous.sheet, dwellMs: finishSheetDwell(previous, now), context });
       }
       if (activeSheet != null) {
         farmAnalytics.trackSheetOpened({
@@ -1736,7 +1744,7 @@ function FarmGameBody({
         });
       }
     }
-    openSheetAnalyticsRef.current = activeSheet == null ? null : { sheet: activeSheet.type, openedAt: now };
+    openSheetAnalyticsRef.current = activeSheet == null ? null : startSheetDwell(activeSheet.type, now);
     pendingSheetSourceRef.current = null;
   }, [activeSheet, farmAnalytics]);
 
@@ -2821,12 +2829,19 @@ function FarmGameBody({
       if (nextState === 'background' || nextState === 'inactive') {
         manualHarvestComboPendingEndReasonRef.current = 'background';
         interstitialBackgroundedAtRef.current = Date.now();
+        // 시트 체류에서 백그라운드 시간을 뺀다(#606).
+        if (openSheetAnalyticsRef.current != null) {
+          openSheetAnalyticsRef.current = pauseSheetDwell(openSheetAnalyticsRef.current, Date.now());
+        }
         markSeen();
         flushAutoHarvestSummary();
         flushCropReadySummary();
         flushManualHarvestCombo('background');
       } else if (nextState === 'active') {
         manualHarvestComboPendingEndReasonRef.current = null;
+        if (openSheetAnalyticsRef.current != null) {
+          openSheetAnalyticsRef.current = resumeSheetDwell(openSheetAnalyticsRef.current, Date.now());
+        }
         // 충분히 오래 비웠다 돌아오면 새 세션으로 보고 전면 광고 백오프를
         // 처음 단계로 되돌린다. 잠깐 앱을 전환한 정도로는 리셋되지 않으므로
         // 백오프를 우회하려고 앱을 껐다 켜는 것이 이득이 되지 않는다.

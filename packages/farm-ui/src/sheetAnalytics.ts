@@ -27,3 +27,25 @@ export function resolveSheetOpenSource(
   }
   return 'other';
 }
+
+// 시트 체류 시간(#606). 앱이 백그라운드에 있던 시간은 빼고 화면에 떠 있던 시간만 센다.
+// activeSince가 null이면 일시정지(백그라운드) 상태다.
+export type SheetDwell = { sheet: string; accumulatedMs: number; activeSince: number | null };
+
+export function startSheetDwell(sheet: string, now: number): SheetDwell {
+  return { sheet, accumulatedMs: 0, activeSince: now };
+}
+
+export function pauseSheetDwell(dwell: SheetDwell, now: number): SheetDwell {
+  if (dwell.activeSince == null) return dwell;
+  return { ...dwell, accumulatedMs: dwell.accumulatedMs + Math.max(0, now - dwell.activeSince), activeSince: null };
+}
+
+export function resumeSheetDwell(dwell: SheetDwell, now: number): SheetDwell {
+  if (dwell.activeSince != null) return dwell;
+  return { ...dwell, activeSince: now };
+}
+
+export function finishSheetDwell(dwell: SheetDwell, now: number): number {
+  return pauseSheetDwell(dwell, now).accumulatedMs;
+}

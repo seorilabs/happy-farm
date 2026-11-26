@@ -743,7 +743,8 @@ export function createFarmAnalytics(emit: TrackGameEvent = noopTrackGameEvent) {
 
     // === 개편 효과 계측 (#606) ===
     // 시트 닫힘과 상점·랩·설정·룰렛 진입이 측정되지 않아 메뉴를 열고 아무것도 고르지 않는
-    // 경로를 볼 수 없었다. 시트 키는 FarmGame의 시트 종류(생산은 탭까지)를 그대로 쓴다.
+    // 경로를 볼 수 없었다. 시트 키는 FarmGame의 시트 종류이고, 생산 시트 안의 탭 전환은 같은 시트로
+    // 본다. 체류 시간에는 앱이 백그라운드에 있던 시간을 넣지 않는다.
     trackSheetOpened: (params: { sheet: string; source: SheetOpenSource; context: GameAnalyticsContext }) => {
       track('sheet_opened', { sheet: params.sheet, source: params.source, ...params.context });
     },

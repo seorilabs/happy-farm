@@ -1,6 +1,13 @@
 /// <reference types="jest" />
 
-import { PENDING_SHEET_SOURCE_TTL_MS, resolveSheetOpenSource } from '../sheetAnalytics';
+import {
+  PENDING_SHEET_SOURCE_TTL_MS,
+  finishSheetDwell,
+  pauseSheetDwell,
+  resolveSheetOpenSource,
+  resumeSheetDwell,
+  startSheetDwell,
+} from '../sheetAnalytics';
 
 const NOW = 1_700_000_000_000;
 
@@ -27,5 +34,29 @@ describe('resolveSheetOpenSource (#606)', () => {
   test('복귀 요약은 자동 팝업으로, 그 밖에는 other로 둔다', () => {
     expect(resolveSheetOpenSource({ type: 'welcomeBack' }, null, NOW)).toBe('auto_popup');
     expect(resolveSheetOpenSource({ type: 'growthAd' }, null, NOW)).toBe('other');
+  });
+});
+
+describe('시트 체류 시간 누적 (#606)', () => {
+  test('앱이 백그라운드에 있던 시간은 체류에서 뺀다', () => {
+    let dwell = startSheetDwell('shop', NOW);
+    dwell = pauseSheetDwell(dwell, NOW + 3_000);
+    // 10분 동안 다른 앱에 있다 돌아온다.
+    dwell = resumeSheetDwell(dwell, NOW + 603_000);
+    expect(finishSheetDwell(dwell, NOW + 605_000)).toBe(5_000);
+  });
+
+  test('일시정지와 재개가 중복으로 와도 한 번만 센다', () => {
+    let dwell = startSheetDwell('shop', NOW);
+    dwell = pauseSheetDwell(dwell, NOW + 1_000);
+    dwell = pauseSheetDwell(dwell, NOW + 2_000);
+    dwell = resumeSheetDwell(dwell, NOW + 10_000);
+    dwell = resumeSheetDwell(dwell, NOW + 11_000);
+    expect(finishSheetDwell(dwell, NOW + 12_000)).toBe(3_000);
+  });
+
+  test('일시정지 상태에서 닫히면 누적값만 돌려준다', () => {
+    const dwell = pauseSheetDwell(startSheetDwell('more', NOW), NOW + 4_000);
+    expect(finishSheetDwell(dwell, NOW + 90_000)).toBe(4_000);
   });
 });
