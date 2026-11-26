@@ -60,3 +60,11 @@ describe('시트 체류 시간 누적 (#606)', () => {
     expect(finishSheetDwell(dwell, NOW + 90_000)).toBe(4_000);
   });
 });
+
+describe('백그라운드에서 열린 시트 (#606)', () => {
+  test('앱이 활성이 아닐 때 열린 시트는 복귀한 뒤부터 센다', () => {
+    let dwell = startSheetDwell('welcomeBack', NOW, false);
+    dwell = resumeSheetDwell(dwell, NOW + 120_000);
+    expect(finishSheetDwell(dwell, NOW + 125_000)).toBe(5_000);
+  });
+});

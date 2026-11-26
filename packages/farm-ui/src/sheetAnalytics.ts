@@ -32,8 +32,10 @@ export function resolveSheetOpenSource(
 // activeSince가 null이면 일시정지(백그라운드) 상태다.
 export type SheetDwell = { sheet: string; accumulatedMs: number; activeSince: number | null };
 
-export function startSheetDwell(sheet: string, now: number): SheetDwell {
-  return { sheet, accumulatedMs: 0, activeSince: now };
+// 앱이 활성이 아닐 때(로드가 백그라운드에서 끝나 자동 시트가 열린 경우) 열리면 일시정지 상태로 시작해
+// 복귀 이벤트부터 센다.
+export function startSheetDwell(sheet: string, now: number, appActive = true): SheetDwell {
+  return { sheet, accumulatedMs: 0, activeSince: appActive ? now : null };
 }
 
 export function pauseSheetDwell(dwell: SheetDwell, now: number): SheetDwell {

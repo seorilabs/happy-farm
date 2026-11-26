@@ -1744,7 +1744,15 @@ function FarmGameBody({
         });
       }
     }
-    openSheetAnalyticsRef.current = activeSheet == null ? null : startSheetDwell(activeSheet.type, now);
+    openSheetAnalyticsRef.current =
+      activeSheet == null
+        ? null
+        : // 시작 직후 'unknown'일 수 있어 확실히 비활성일 때만 일시정지로 시작한다.
+          startSheetDwell(
+            activeSheet.type,
+            now,
+            AppState.currentState !== 'background' && AppState.currentState !== 'inactive'
+          );
     pendingSheetSourceRef.current = null;
   }, [activeSheet, farmAnalytics]);
 

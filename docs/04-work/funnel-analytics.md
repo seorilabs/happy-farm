@@ -89,7 +89,7 @@ flowchart LR
 | 이벤트 | 파라미터 | 뜻 |
 |---|---|---|
 | `sheet_opened` | `sheet`(시트 종류), `source`(`nav` / `more_menu` / `tab_bar` / `hud` / `goal_chip` / `auto_popup` / `other`) | 시트가 열린 경로 |
-| `sheet_closed` | `sheet`, `dwell_ms` | 시트 체류 시간. 앱이 백그라운드에 있던 시간은 뺀다. 생산 시트 안의 탭 전환은 같은 시트로 본다 |
+| `sheet_closed` | `sheet`, `dwell_ms` | 시트 체류 시간. 앱이 백그라운드에 있던 시간은 뺀다. 생산 시트는 탭 구분 없이 `production`으로 기록하고, 탭별 진입은 기존 `animals_screen`, `production_screen`으로 본다 |
 | `nav_tapped` | `target`, `location`(`header` / `more_menu` / `tab_bar` / `hud`) | 메뉴 버튼 탭 |
 | `ftue_pointer_shown` | `step` | 첫 수확 스포트라이트 포인터 노출. 스포트라이트가 들어오는 PR부터 발화한다 |
 | `goal_chip_tapped` | `goal_kind`, `ready` | 다음 목표 칩 탭. 목표 칩이 들어오는 PR부터 발화한다 |
