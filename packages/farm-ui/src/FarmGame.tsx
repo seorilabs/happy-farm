@@ -410,7 +410,7 @@ const SHEET_ANIMATION_DURATION_MS = 180;
 const SHEET_OVERSHOOT_GUTTER = 24;
 type GoldTargetMeasurer = (callback: (point: Point | null) => void) => void;
 // 보상 연출 목표(골드 칩) 측정을 기다리는 최대 시간(#606).
-const REWARD_MEASURE_TIMEOUT_MS = 60;
+const REWARD_MEASURE_TIMEOUT_MS = 200;
 // 시트가 열린 뒤 자리 잡기까지의 시간(스프링). 보상 연출의 목표 측정을 이만큼 기다린다(#606).
 const SHEET_SETTLE_MS = 450;
 const SHEET_SETTLE_POLL_MS = 100;
@@ -1742,6 +1742,14 @@ function FarmGameBody({
 
   // 보상 연출(#606 AC-3). goldBefore는 지급 전 잔액이고, 실제 잔액이 goldBefore + amount와 같을 때만 숫자를
   // 카운트업한다(그사이 수확 등으로 잔액이 바뀌면 바로 실제 값을 보인다).
+  // 보상 연출 타이머(#606). 실행된 핸들은 바로 빼서 세션 내내 쌓이지 않게 하고, 언마운트 때 남은 것만 지운다.
+  const scheduleRewardTimer = useCallback((run: () => void, delayMs: number) => {
+    const handle = setTimeout(() => {
+      rewardPulseTimersRef.current = rewardPulseTimersRef.current.filter((pending) => pending !== handle);
+      run();
+    }, delayMs);
+    rewardPulseTimersRef.current.push(handle);
+  }, []);
   const celebrateGold = useCallback(
     (amount: number, goldBefore: number, options: { sound?: boolean } = {}) => {
       if (!(amount > 0) || !Number.isFinite(amount)) return;
@@ -1772,18 +1780,15 @@ function FarmGameBody({
           sheetOpen && (!isSheetModalOnScreenRef.current || shownAt == null || Date.now() - shownAt < SHEET_SETTLE_MS);
         if (settling && settleTries < SHEET_SETTLE_MAX_TRIES) {
           settleTries += 1;
-          const retry = setTimeout(launch, SHEET_SETTLE_POLL_MS);
-          rewardPulseTimersRef.current.push(retry);
+          scheduleRewardTimer(launch, SHEET_SETTLE_POLL_MS);
           return;
         }
         const startedAt = Date.now();
         setGoldCountUp({ from: goldBefore, to: goldBefore + amount, startedAt });
-        const pulseTimer = setTimeout(() => pulseGold(), REWARD_COUNT_UP_DELAY_MS);
-        rewardPulseTimersRef.current.push(pulseTimer);
+        scheduleRewardTimer(pulseGold, REWARD_COUNT_UP_DELAY_MS);
         const onScreen = (to: Point | null): to is Point =>
           to != null && to.y >= 0 && to.y <= windowHeight && to.x >= 0 && to.x <= windowWidth;
-        const measureTimer = setTimeout(() => start(fallbackTarget), REWARD_MEASURE_TIMEOUT_MS);
-        rewardPulseTimersRef.current.push(measureTimer);
+        scheduleRewardTimer(() => start(fallbackTarget), REWARD_MEASURE_TIMEOUT_MS);
         const sheetMeasurer = isSheetModalOnScreenRef.current ? sheetGoldTargetRef.current : null;
         const hud = hudGoldRef.current;
         if (sheetMeasurer != null) {
@@ -1804,7 +1809,7 @@ function FarmGameBody({
         playSoundEffect('reward');
       }
     },
-    [insets.top, locale, playSoundEffect, pulseGold, windowHeight, windowWidth]
+    [insets.top, locale, playSoundEffect, pulseGold, scheduleRewardTimer, windowHeight, windowWidth]
   );
   // 숙련 등급 상승과 졸업 축하에도 보상 효과음을 낸다(#606 AC-7). 축하마다 한 번만 낸다.
   const masteryNoticeId = masteryRankUpNotice?.id ?? null;

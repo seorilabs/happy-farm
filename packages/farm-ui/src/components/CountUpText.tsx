@@ -26,7 +26,8 @@ export function CountUpText({
   const active = run != null && run.to === value;
 
   useEffect(() => {
-    if (!active || run == null) return;
+    // 연출 시작 전(startedAt이 정해지지 않음)에는 지급 전 값을 붙잡기만 하고 다시 그리지 않는다.
+    if (!active || run == null || !Number.isFinite(run.startedAt)) return;
     const endAt = run.startedAt + REWARD_COUNT_UP_DELAY_MS + REWARD_COUNT_UP_DURATION_MS;
     const interval = setInterval(() => {
       setFrame((frame) => frame + 1);
