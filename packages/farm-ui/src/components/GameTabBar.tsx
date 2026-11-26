@@ -41,8 +41,9 @@ export function GameTabBar({
           accessibilityRole="tab"
           accessibilityLabel={tab.accessibilityLabel ?? tab.label}
           accessibilityState={{ selected: tab.current === true }}
-          // 지금 보고 있는 화면의 탭은 누를 것이 없어 탭음도 내지 않는다.
-          disabled={tab.current === true}
+          // 지금 보고 있는 화면의 탭은 누를 것이 없어 탭음을 내지 않는다. 비활성으로 두면 스크린리더가
+          // "선택됨, 흐리게"로 읽어 선택 상태만 남긴다.
+          silent={tab.current === true}
           pressedStyle={PRESSED_SINK_STYLE}
           style={styles.tab}
           onPress={tab.onPress}
