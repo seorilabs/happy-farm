@@ -562,6 +562,10 @@ export const koFarmMessages = {
   nextGoalUpgrade: (areaName: string, current: number, total: number) =>
     `🧪 ${areaName} 해금: 연구 Lv.${current}/${total} 필요`,
   nextGoalReady: (areaName: string) => `🔓 ${areaName} 해금 준비 완료! 상점에서 열기`,
+  // #606 첫 밭 개간 목표 칩
+  nextGoalPlot: (needed: string) => `🌱 밭 개간까지 ${needed}G 더`,
+  nextGoalPlotReady: '🌱 새 밭을 개간할 수 있어요!',
+  nextGoalGo: '가기',
   nextGoalLandmark: (stageName: string, current: number, total: number) =>
     `🏗️ 랜드마크 ${stageName} · 건설 진행 ${current}/${total}단계`,
   nextGoalLandmarkReady: (stageName: string) => `🏗️ ${stageName} 건설 준비 완료!`,

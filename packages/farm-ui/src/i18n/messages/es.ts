@@ -545,6 +545,10 @@ export const esFarmMessages: FarmMessages = {
   nextGoalHarvest: (areaName, current, total) => `🌾 Desbloquear ${areaName}: cosecha ${current}/${total} tipos de cultivo`,
   nextGoalUpgrade: (areaName, current, total) => `🧪 Desbloquear ${areaName}: se requiere Investigación Nv.${current}/${total}`,
   nextGoalReady: (areaName) => `🔓 ¡${areaName} lista para desbloquear! Abre la Tienda`,
+  // #606 첫 밭 개간 목표 칩
+  nextGoalPlot: (needed) => `🌱 ${needed}G más para despejar una parcela`,
+  nextGoalPlotReady: '🌱 ¡Ya puedes despejar una nueva parcela!',
+  nextGoalGo: 'Ir',
   nextGoalLandmark: (stageName, current, total) => `🏗️ Monumento ${stageName} · construcción ${current}/${total}`,
   nextGoalLandmarkReady: (stageName) => `🏗️ ¡${stageName} listo para construir! Abre el mapa`,
   nextGoalGraduationCrops: (current, total) => `🌾 Graduación de granja · Campo Legendario ${current}/${total}`,

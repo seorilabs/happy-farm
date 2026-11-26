@@ -220,6 +220,7 @@ import {
   isAutoHarvestSummaryDue,
   getDiscountedPlotCost,
   getPlotCost,
+  INITIAL_PLOTS,
   getPlotGrowthDisplay,
   getPlotRemainingGrowthMs,
   getPlotRemainingWallClockMs,
@@ -291,6 +292,11 @@ import {
   type PendingSheetSource,
   type SheetDwell,
 } from './sheetAnalytics';
+import { isFirstSessionPopupHoldActive } from './firstSessionPopups';
+import { findSpotlightPlotIndex, getPlotCellRect } from './ftueSpotlight';
+import { FtueSpotlight } from './components/FtueSpotlight';
+import { measureNodeInWindow } from './measureInWindow';
+import { useReduceMotion } from './useReduceMotion';
 import { LabSheet } from './components/LabSheet';
 import { MissionsSheet } from './components/MissionsSheet';
 import { ProductionSheet, type ProductionTabKey } from './components/ProductionSheet';
@@ -511,6 +517,8 @@ export function getNextAreaGoal(gameState: GameState): NextAreaGoal {
 // the current farm. Area goals keep their existing shape for compatibility.
 export type NextFarmGoal =
   | NonNullable<NextAreaGoal>
+  // #606: 첫 밭 개간. 첫날 밭을 해금한 사용자의 복귀율이 크게 높아 가장 먼저 가리킨다.
+  | { kind: 'plot'; current: number; total: number }
   | {
       kind: 'landmark';
       tier: number;
@@ -524,6 +532,10 @@ export type NextFarmGoal =
   | { kind: 'prestige_ready' };
 
 export function getNextFarmGoal(gameState: GameState): NextFarmGoal | null {
+  // 졸업하면 밭 수가 초기값으로 돌아간다. 이미 개간을 해 본 졸업 사용자에게는 랜드마크가 먼저다.
+  if (gameState.prestige.level === 0 && gameState.unlockedPlotCount <= INITIAL_PLOTS) {
+    return { kind: 'plot', current: gameState.gold, total: getPlotCost(gameState.unlockedPlotCount) };
+  }
   const areaGoal = getNextAreaGoal(gameState);
   if (areaGoal != null) {
     return areaGoal;
@@ -1210,6 +1222,8 @@ function FarmGameBody({
   }, [overlaySlot]);
   // #372 상점 시트 내부 활성 탭. 상점 진입 시 항상 첫 탭(확장)부터 보도록 초기화한다.
   const [shopTab, setShopTab] = useState<ShopTabKey>('expand');
+  // 다음 목표 칩으로 상점에 들어오면 강조할 줄(#606 AC-5). 상점이 닫히면 지운다.
+  const [shopFocus, setShopFocus] = useState<'plot' | null>(null);
   // #376 데일리 보너스는 열람 즉시 자동 수령되므로, 방금 지급된 streak·골드를
   // 시트 "수령 완료" 표시용으로 고정한다. 수령 후 dailyBonusState가 다음 회차 기준으로
   // 갱신돼 previewDailyBonus 값이 바뀌어도, 화면엔 방금 받은 값이 그대로 남는다.
@@ -1278,6 +1292,9 @@ function FarmGameBody({
   const lastTouchRef = useRef<(Point & { at: number }) | null>(null);
   const hudGoldRef = useRef<View | null>(null);
   const sheetGoldTargetRef = useRef<GoldTargetMeasurer | null>(null);
+  const reduceMotion = useReduceMotion();
+  const reduceMotionRef = useRef(reduceMotion);
+  reduceMotionRef.current = reduceMotion;
   const activeSheetRef = useRef<ActiveSheet>(null);
   activeSheetRef.current = activeSheet;
   const [goldCountUp, setGoldCountUp] = useState<CountUpRun | null>(null);
@@ -1355,6 +1372,12 @@ function FarmGameBody({
     plotNudgeBurstRef.current = new Animated.Value(0);
   }
   const plotNudgeBurst = plotNudgeBurstRef.current;
+  // 첫 수확 스포트라이트(#606 AC-1). 격자 원점은 스포트라이트 레이어 기준 좌표다.
+  const spotlightLayerRef = useRef<View | null>(null);
+  const plotGridRef = useRef<View | null>(null);
+  const [spotlightGridOrigin, setSpotlightGridOrigin] = useState<Point | null>(null);
+  const [spotlightSize, setSpotlightSize] = useState<{ width: number; height: number } | null>(null);
+  const ftuePointerTrackedRef = useRef(false);
   // Guards each stall-triggered nudge to at most once per step and session. A
   // resumed plant step and the following harvest step may each guide once.
   const stallNudgePlayedStepsRef = useRef<Set<OnboardingStep>>(new Set());
@@ -1596,6 +1619,10 @@ function FarmGameBody({
     if (deferred == null) {
       return;
     }
+    // #606 AC-4: 첫 세션에서는 첫 밭을 늘린 뒤 시트를 닫을 때까지 출석 보너스를 미룬다.
+    if (isFirstSessionPopupHoldActive(gameStateRef.current, firstSessionStartedAtRef.current)) {
+      return;
+    }
     deferredOnboardingSheetRef.current = null;
     setActiveSheet(deferred);
   }, []);
@@ -1681,7 +1708,8 @@ function FarmGameBody({
       activeSheet == null &&
       onboardingStepRef.current == null &&
       gameState.onboardingCompleted &&
-      deferredOnboardingSheetRef.current != null
+      deferredOnboardingSheetRef.current != null &&
+      !isFirstSessionPopupHoldActive(gameStateRef.current, firstSessionStartedAtRef.current)
     ) {
       const timer = setTimeout(revealDeferredOnboardingSheet, 0);
       return () => clearTimeout(timer);
@@ -1753,6 +1781,11 @@ function FarmGameBody({
   const celebrateGold = useCallback(
     (amount: number, goldBefore: number, options: { sound?: boolean } = {}) => {
       if (!(amount > 0) || !Number.isFinite(amount)) return;
+      // 동작 줄이기가 켜져 있으면 코인 연출과 카운트업 없이 효과음과 숫자 변화만 남긴다.
+      if (reduceMotionRef.current) {
+        if (options.sound !== false) playSoundEffect('reward');
+        return;
+      }
       const now = Date.now();
       const from = resolveBurstOrigin(lastTouchRef.current, now, { width: windowWidth, height: windowHeight });
 
@@ -2796,8 +2829,13 @@ function FarmGameBody({
     }
     if (onboardingStep === 'harvest' && gameState.harvestedCropKeys.length > 0) {
       advanceOnboarding('reward');
+      // #606 AC-2: 첫 수확 골드를 보상 연출로 보여 준다. 새 세이브라 지금까지 번 골드가 곧 첫 수확분이다.
+      const earned = gameState.lifetimeStats.totalGoldEarned;
+      if (earned > 0 && earned <= gameState.gold) {
+        celebrateGold(earned, gameState.gold - earned);
+      }
     }
-  }, [onboardingStep, gameState, advanceOnboarding]);
+  }, [onboardingStep, gameState, advanceOnboarding, celebrateGold]);
 
   // Emit the onboarding funnel step-view once per step entry. Guarded by a ref so
   // it fires only when the step actually changes, not on every render tick (the
@@ -2858,6 +2896,49 @@ function FarmGameBody({
       }),
     ]).start();
   }, [plotNudgeBurst]);
+
+  const spotlightPlotIndex = onboardingStep === 'harvest' ? findSpotlightPlotIndex(gameState) : null;
+  const isSpotlightActive = spotlightPlotIndex != null;
+  const measureSpotlight = useCallback(() => {
+    const layer = spotlightLayerRef.current;
+    const grid = plotGridRef.current;
+    measureNodeInWindow(layer, (layerX, layerY, layerWidth, layerHeight) => {
+      setSpotlightSize((previous) =>
+        previous != null && previous.width === layerWidth && previous.height === layerHeight
+          ? previous
+          : { width: layerWidth, height: layerHeight }
+      );
+      measureNodeInWindow(grid, (gridX, gridY) => {
+        const next = { x: Math.round(gridX - layerX), y: Math.round(gridY - layerY) };
+        setSpotlightGridOrigin((previous) =>
+          previous != null && previous.x === next.x && previous.y === next.y ? previous : next
+        );
+      });
+    });
+  }, []);
+  // 온보딩 카드가 자리 잡거나 글자 크기에 따라 격자가 움직일 수 있어 몇 번 다시 잰다.
+  useEffect(() => {
+    if (!isSpotlightActive) {
+      setSpotlightGridOrigin(null);
+      ftuePointerTrackedRef.current = false;
+      return;
+    }
+    const timers = [0, 150, 500].map((delay) => setTimeout(measureSpotlight, delay));
+    return () => timers.forEach(clearTimeout);
+  }, [isSpotlightActive, measureSpotlight, plotColumns, plotTileSize]);
+  const spotlightHole =
+    isSpotlightActive && spotlightGridOrigin != null
+      ? getPlotCellRect(spotlightGridOrigin, spotlightPlotIndex, plotColumns, plotTileSize, PLOT_GAP)
+      : null;
+  const isSpotlightPointerShown = spotlightHole != null && spotlightSize != null;
+  useEffect(() => {
+    if (!isSpotlightPointerShown || ftuePointerTrackedRef.current) return;
+    ftuePointerTrackedRef.current = true;
+    const buildContext = analyticsContextRef.current;
+    if (buildContext != null) {
+      farmAnalytics.trackFtuePointerShown({ step: 'harvest', context: buildContext() });
+    }
+  }, [farmAnalytics, isSpotlightPointerShown]);
 
   // Fire onboarding_stall once per step entry if the player lingers without
   // acting for ONBOARDING_STALL_MS (#274). The step changes the instant the
@@ -2951,6 +3032,9 @@ function FarmGameBody({
     if (!notifications.isSupported) return;
     if (gameState.harvestNotificationPromptSeen) return;
     if (!gameState.onboardingCompleted || gameState.harvestedCropKeys.length === 0) return;
+    // #606 AC-4: 첫 세션에서는 첫 밭을 늘린 뒤, 미뤄 둔 출석 보너스를 먼저 보이고 나서 묻는다.
+    if (isFirstSessionPopupHoldActive(gameState, firstSessionStartedAtRef.current)) return;
+    if (deferredOnboardingSheetRef.current != null) return;
     // The permission education modal is the last post-activation surface. Let
     // the first-harvest celebration and any deferred daily/return sheet finish
     // first so two foreground modals are never mounted together.
@@ -2971,6 +3055,8 @@ function FarmGameBody({
     gameState.harvestNotificationPromptSeen,
     gameState.onboardingCompleted,
     gameState.harvestedCropKeys.length,
+    gameState.unlockedPlotCount,
+    gameState.prestige.level,
     gameSettings.harvestNotificationsEnabled,
     firstHarvestNotice,
     activeSheet,
@@ -3806,6 +3892,14 @@ function FarmGameBody({
     [chainIncome.accruedGold, gameState, landmarkStageQuote?.canFund, purchasablePrestigeSkillCount]
   );
   const nextFarmGoal = useMemo(() => getNextFarmGoal(gameState), [gameState]);
+  const activeSheetType = activeSheet?.type;
+  useEffect(() => {
+    if (activeSheetType !== 'shop') setShopFocus(null);
+  }, [activeSheetType]);
+  // 강조한 밭 줄을 사면 목표를 이룬 것이라 강조를 거둔다.
+  useEffect(() => {
+    setShopFocus(null);
+  }, [gameState.unlockedPlotCount]);
   const shopRewardedAdOffer = useMemo(() => getShopRewardedAdOffer(gameState), [gameState]);
 
   useEffect(() => {
@@ -3897,6 +3991,7 @@ function FarmGameBody({
 
   function openShop() {
     setShopTab('expand');
+    setShopFocus(null);
     setActiveSheet({ type: 'shop' });
   }
 
@@ -4614,7 +4709,25 @@ function FarmGameBody({
   function openNextFarmGoal() {
     const goal = getNextFarmGoal(gameStateRef.current);
     if (goal == null) return;
-    if (goal.kind === 'gold' || goal.kind === 'harvest' || goal.kind === 'upgrade' || goal.kind === 'ready') {
+    // #606 AC-11: 목표 칩 탭과 이어서 열릴 시트의 출처를 남긴다.
+    pendingSheetSourceRef.current = { source: 'goal_chip', at: Date.now() };
+    farmAnalytics.trackGoalChipTapped({
+      goalKind: goal.kind,
+      ready: isNextFarmGoalReady(goal),
+      context: analyticsContext(),
+    });
+    if (goal.kind === 'plot') {
+      openShop();
+      // 상점 확장 탭의 맨 위가 밭 개간 줄이다. 그 줄을 강조해 바로 살 곳을 보여 준다(AC-5).
+      setShopFocus('plot');
+      return;
+    }
+    if (
+      goal.kind === 'gold' ||
+      goal.kind === 'harvest' ||
+      goal.kind === 'upgrade' ||
+      goal.kind === 'ready'
+    ) {
       openShop();
       return;
     }
@@ -6146,7 +6259,8 @@ function FarmGameBody({
   // Outline the target the current onboarding step points at to draw the eye.
   // #427: selectSeed 제거 후 씨앗 강조는 plant(직접 파종) 단계로 옮겨졌다.
   const onboardingSeedHighlight = onboardingStep === 'plant';
-  const onboardingPlotHighlight = onboardingStep === 'plant' || onboardingStep === 'harvest';
+  // harvest 단계는 격자 전체 대신 다 자란 칸 하나를 스포트라이트로 밝힌다(#606 AC-1).
+  const onboardingPlotHighlight = onboardingStep === 'plant';
 
   // #367: 기본 온보딩을 마친 뒤, 다른 오버레이/시트가 떠 있지 않은 메인 화면에서만 딥 기능
   // 코치마크를 1개 노출한다. 가용 판정은 core의 순수 함수라 now에 의존하지 않아 틱마다
@@ -6162,6 +6276,7 @@ function FarmGameBody({
   const pendingFeatureCoachmark =
     gameState.onboardingCompleted &&
     onboardingStep == null &&
+    !isFirstSessionPopupHoldActive(gameState, firstSessionStartedAtRef.current) &&
     firstHarvestNotice == null &&
     notificationPromptGeneration == null &&
     !isNotificationPromptOwed &&
@@ -6305,6 +6420,7 @@ function FarmGameBody({
 
         {nextFarmGoal != null ? (
           <NextGoalBar
+            reduceMotion={reduceMotion}
             goal={nextFarmGoal}
             messages={messages}
             locale={locale}
@@ -6322,7 +6438,7 @@ function FarmGameBody({
           <NavButton
             testID="shop-nav-button"
             label={messages.shopButton}
-            badge={shopBadgeCount}
+            badge={onboardingStep != null ? 0 : shopBadgeCount}
             onPress={() => {
               trackNavTap('shop', 'header');
               openShop();
@@ -6330,7 +6446,7 @@ function FarmGameBody({
           />
           <NavButton
             label={messages.missionsButton}
-            badge={missionClaimableCount}
+            badge={onboardingStep != null ? 0 : missionClaimableCount}
             accessibilityLabel={messages.missionsButtonAccessibilityLabel}
             onPress={() => {
               trackNavTap('missions', 'header');
@@ -6340,7 +6456,7 @@ function FarmGameBody({
           <NavButton
             testID="more-nav-button"
             label={messages.moreButton}
-            badge={moreRollupBadge}
+            badge={onboardingStep != null ? 0 : moreRollupBadge}
             accessibilityLabel={messages.moreButtonAccessibilityLabel}
             onPress={() => {
               trackNavTap('more', 'header');
@@ -6395,6 +6511,8 @@ function FarmGameBody({
         />
         <ScrollView
           testID="farm-scroll"
+          scrollEventThrottle={32}
+          onScroll={isSpotlightActive ? measureSpotlight : undefined}
           nestedScrollEnabled={useScrollableLayout}
           contentContainerStyle={[styles.mainContent, onboardingStep != null && styles.mainContentOnboarding]}
           style={styles.main}
@@ -6403,7 +6521,12 @@ function FarmGameBody({
             testID="plot-grid-container"
             style={[styles.plotGridContainer, onboardingPlotHighlight && styles.onboardingPlotTint]}
           >
-            <View testID="plot-grid" style={styles.plotGrid}>
+            <View
+              ref={plotGridRef}
+              testID="plot-grid"
+              style={styles.plotGrid}
+              onLayout={isSpotlightActive ? measureSpotlight : undefined}
+            >
               {gameState.plots.map((plot, index) => {
                 // Resolve growth ratio and countdown together so the crop modifiers
                 // are computed once per tile per tick instead of once for each.
@@ -6442,21 +6565,6 @@ function FarmGameBody({
                 testID="onboarding-plot-highlight"
                 pointerEvents="none"
                 style={styles.onboardingPlotHighlight}
-              />
-            ) : null}
-            {onboardingStep === 'harvest' ? (
-              <Animated.View
-                testID="onboarding-plot-nudge-burst"
-                pointerEvents="none"
-                style={[
-                  styles.onboardingPlotNudgeRing,
-                  {
-                    opacity: plotNudgeBurst,
-                    transform: [
-                      { scale: plotNudgeBurst.interpolate({ inputRange: [0, 1], outputRange: [1, 1.04] }) },
-                    ],
-                  },
-                ]}
               />
             ) : null}
           </View>
@@ -6676,6 +6784,17 @@ function FarmGameBody({
         </View>
       </View>
 
+      {isSpotlightActive ? (
+        <FtueSpotlight
+          layerRef={spotlightLayerRef}
+          bobEnabled={!reduceMotion}
+          hole={spotlightHole}
+          size={spotlightSize}
+          pulse={plotNudgeBurst}
+          onLayout={measureSpotlight}
+          onBlockedTap={playPlotNudgeBurst}
+        />
+      ) : null}
       </ScrollView>
 
       {/* 시트가 열려 있으면 토스트는 Sheet의 overlay 슬롯에서만 렌더한다. 양쪽에 두면
@@ -6790,6 +6909,7 @@ function FarmGameBody({
                   <View testID="shop-tab-panel-expand">
                     <Text style={styles.sheetSectionTitle}>{messages.territorySection}</Text>
                     <ShopPlotRow
+                      highlighted={shopFocus === 'plot'}
                       gameState={gameState}
                       locale={locale}
                       messages={messages}
@@ -8352,104 +8472,159 @@ function ComboDisplay({ count, messages }: { count: number; messages: FarmMessag
 // Compact progress bar shown in the header. It follows the progression chain
 // from area unlocks to the current landmark stage and finally farm graduation.
 function NextGoalBar({
+  reduceMotion,
   goal,
   messages,
   locale,
   getAreaName,
   onPress,
 }: {
+  reduceMotion: boolean;
   goal: NextFarmGoal;
   messages: FarmMessages;
   locale: SupportedLocale;
   getAreaName: (areaKey: AreaKey) => string;
   onPress: () => void;
 }) {
-  if (goal.kind === 'prestige_ready') {
-    return (
-      <GamePressable
-        testID="next-goal-bar"
-        accessibilityRole="button"
-        accessibilityLabel={messages.nextGoalGraduationReady}
-        style={styles.nextGoalBar}
-        onPress={onPress}
-      >
-        <Text style={styles.nextGoalReadyText}>
-          {messages.nextGoalGraduationReady}
-        </Text>
-      </GamePressable>
-    );
-  }
-  if (goal.kind === 'ready') {
-    const label = messages.nextGoalReady(getAreaName(goal.areaKey));
-    return (
-      <GamePressable
-        testID="next-goal-bar"
-        accessibilityRole="button"
-        accessibilityLabel={label}
-        style={styles.nextGoalBar}
-        onPress={onPress}
-      >
-        <Text style={styles.nextGoalReadyText}>
-          {label}
-        </Text>
-      </GamePressable>
-    );
-  }
-
-  let label: string;
-  let current: number;
-  let total: number;
-  if (goal.kind === 'landmark') {
-    const stageName = getLandmarkStageName(goal.stageKey, messages);
-    if (goal.ready) {
-      label = messages.nextGoalLandmarkReady(stageName);
-    } else {
-      label = messages.nextGoalLandmark(stageName, goal.completedStages, goal.totalStages);
-    }
-    current = goal.completedStages;
-    total = goal.totalStages;
-  } else if (goal.kind === 'prestige_crops') {
-    label = messages.nextGoalGraduationCrops(goal.current, goal.total);
-    current = goal.current;
-    total = goal.total;
-  } else if (goal.kind === 'prestige_gold') {
-    label = messages.nextGoalGraduationGold(formatMoney(Math.max(0, goal.total - goal.current), locale));
-    current = goal.current;
-    total = goal.total;
-  } else {
-    const areaName = getAreaName(goal.areaKey);
-    if (goal.kind === 'gold') {
-      label = messages.nextGoalGold(areaName, formatMoney(goal.total - goal.current, locale));
-      current = goal.current;
-      total = goal.total;
-    } else if (goal.kind === 'harvest') {
-      label = messages.nextGoalHarvest(areaName, goal.current, goal.total);
-      current = goal.current;
-      total = goal.total;
-    } else {
-      label = messages.nextGoalUpgrade(areaName, goal.current, goal.total);
-      current = goal.current;
-      total = goal.total;
-    }
-  }
-  const ratio = total > 0 ? Math.max(0, Math.min(current / total, 1)) : 0;
-
+  const { label, ratio, ready } = describeNextFarmGoal(goal, messages, locale, getAreaName);
+  // 다음 목표 칩(#606). 문구와 두꺼운 진행 막대를 두고, 바로 할 수 있으면 튕기는 가기 버튼으로 시선을 끈다.
   return (
     <GamePressable
       testID="next-goal-bar"
       accessibilityRole="button"
       accessibilityLabel={label}
-      style={styles.nextGoalBar}
+      style={[styles.nextGoalBar, ready && styles.nextGoalBarReady]}
+      pressedStyle={PRESSED_DEPTH_STYLE}
       onPress={onPress}
     >
-      <Text style={styles.nextGoalLabel}>
-        {label}
-      </Text>
-      <View style={styles.nextGoalTrack}>
-        <View style={[styles.nextGoalFill, { width: `${Math.round(ratio * 100)}%` }]} />
+      <View style={styles.nextGoalBody}>
+        <Text style={ready ? styles.nextGoalReadyText : styles.nextGoalLabel} numberOfLines={2}>
+          {label}
+        </Text>
+        {ratio != null ? (
+          <View style={styles.nextGoalTrack}>
+            <View style={[styles.nextGoalFill, { width: `${Math.round(ratio * 100)}%` }]} />
+          </View>
+        ) : null}
       </View>
+      {ready ? <NextGoalGoButton label={messages.nextGoalGo} bounceEnabled={!reduceMotion} /> : null}
     </GamePressable>
   );
+}
+
+function NextGoalGoButton({ label, bounceEnabled }: { label: string; bounceEnabled: boolean }) {
+  const bounceRef = useRef<Animated.Value | null>(null);
+  if (bounceRef.current == null) {
+    bounceRef.current = new Animated.Value(0);
+  }
+  const bounce = bounceRef.current;
+  useEffect(() => {
+    if (!bounceEnabled) {
+      bounce.setValue(0);
+      return;
+    }
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(bounce, { toValue: 1, duration: 260, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+        Animated.timing(bounce, { toValue: 0, duration: 260, easing: Easing.in(Easing.quad), useNativeDriver: true }),
+        Animated.delay(900),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [bounce, bounceEnabled]);
+  return (
+    <Animated.View
+      testID="next-goal-go"
+      style={[
+        styles.nextGoalGo,
+        { transform: [{ translateY: bounce.interpolate({ inputRange: [0, 1], outputRange: [0, -4] }) }] },
+      ]}
+    >
+      <Text style={styles.nextGoalGoText}>{label}</Text>
+      <View style={styles.nextGoalGoBadge}>
+        <Text style={styles.nextGoalGoBadgeText}>!</Text>
+      </View>
+    </Animated.View>
+  );
+}
+
+export function isNextFarmGoalReady(goal: NextFarmGoal): boolean {
+  switch (goal.kind) {
+    case 'prestige_ready':
+    case 'ready':
+      return true;
+    case 'plot':
+      return goal.current >= goal.total;
+    case 'landmark':
+      return goal.ready;
+    default:
+      return false;
+  }
+}
+
+function describeNextFarmGoal(
+  goal: NextFarmGoal,
+  messages: FarmMessages,
+  locale: SupportedLocale,
+  getAreaName: (areaKey: AreaKey) => string
+): { label: string; ratio: number | null; ready: boolean } {
+  const toRatio = (current: number, total: number) => (total > 0 ? Math.max(0, Math.min(current / total, 1)) : 0);
+  switch (goal.kind) {
+    case 'prestige_ready':
+      return { label: messages.nextGoalGraduationReady, ratio: null, ready: true };
+    case 'ready':
+      return { label: messages.nextGoalReady(getAreaName(goal.areaKey)), ratio: null, ready: true };
+    case 'plot': {
+      return isNextFarmGoalReady(goal)
+        ? { label: messages.nextGoalPlotReady, ratio: null, ready: true }
+        : {
+            label: messages.nextGoalPlot(formatMoney(goal.total - goal.current, locale)),
+            ratio: toRatio(goal.current, goal.total),
+            ready: false,
+          };
+    }
+    case 'landmark': {
+      const stageName = getLandmarkStageName(goal.stageKey, messages);
+      return goal.ready
+        ? { label: messages.nextGoalLandmarkReady(stageName), ratio: null, ready: true }
+        : {
+            label: messages.nextGoalLandmark(stageName, goal.completedStages, goal.totalStages),
+            ratio: toRatio(goal.completedStages, goal.totalStages),
+            ready: false,
+          };
+    }
+    case 'prestige_crops':
+      return {
+        label: messages.nextGoalGraduationCrops(goal.current, goal.total),
+        ratio: toRatio(goal.current, goal.total),
+        ready: false,
+      };
+    case 'prestige_gold':
+      return {
+        label: messages.nextGoalGraduationGold(formatMoney(Math.max(0, goal.total - goal.current), locale)),
+        ratio: toRatio(goal.current, goal.total),
+        ready: false,
+      };
+    case 'gold':
+      return {
+        label: messages.nextGoalGold(getAreaName(goal.areaKey), formatMoney(goal.total - goal.current, locale)),
+        ratio: toRatio(goal.current, goal.total),
+        ready: false,
+      };
+    case 'harvest':
+      return {
+        label: messages.nextGoalHarvest(getAreaName(goal.areaKey), goal.current, goal.total),
+        ratio: toRatio(goal.current, goal.total),
+        ready: false,
+      };
+    default:
+      return {
+        label: messages.nextGoalUpgrade(getAreaName(goal.areaKey), goal.current, goal.total),
+        ratio: toRatio(goal.current, goal.total),
+        ready: false,
+      };
+  }
 }
 
 // Slide-up banner that celebrates the first harvest of a new crop type.
@@ -9722,6 +9897,7 @@ const ToolButton = React.memo(function ToolButton({
 });
 
 function ShopPlotRow({
+  highlighted,
   gameState,
   locale,
   messages,
@@ -9731,6 +9907,7 @@ function ShopPlotRow({
   onDone,
   onMilestone,
 }: {
+  highlighted?: boolean;
   gameState: GameState;
   locale: SupportedLocale;
   messages: FarmMessages;
@@ -9746,6 +9923,8 @@ function ShopPlotRow({
 
   return (
     <ShopCard
+      testID="shop-plot-row"
+      highlighted={highlighted === true && !isMax}
       title={messages.shopPlotTitle}
       desc={messages.shopPlotDesc(gameState.unlockedPlotCount)}
       price={isMax ? messages.completePrice : `${formatMoney(cost, locale)}G`}

@@ -545,6 +545,10 @@ export const deFarmMessages: FarmMessages = {
   nextGoalHarvest: (areaName, current, total) => `🌾 ${areaName} frei: ${current}/${total} Pflanzenarten ernten`,
   nextGoalUpgrade: (areaName, current, total) => `🧪 ${areaName} frei: Forschung Lv.${current}/${total} nötig`,
   nextGoalReady: (areaName) => `🔓 ${areaName} kann freigeschaltet werden! Shop öffnen`,
+  // #606 첫 밭 개간 목표 칩
+  nextGoalPlot: (needed) => `🌱 Noch ${needed}G für ein neues Feld`,
+  nextGoalPlotReady: '🌱 Ein neues Feld kann gerodet werden!',
+  nextGoalGo: 'Los',
   nextGoalLandmark: (stageName, current, total) => `🏗️ Wahrzeichen ${stageName} · Bau ${current}/${total}`,
   nextGoalLandmarkReady: (stageName) => `🏗️ ${stageName} ist baubereit! Pionierkarte öffnen`,
   nextGoalGraduationCrops: (current, total) => `🌾 Farmabschluss · Legendenfeld ${current}/${total}`,

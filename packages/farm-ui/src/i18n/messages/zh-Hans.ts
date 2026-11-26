@@ -541,6 +541,10 @@ export const zhHansFarmMessages: FarmMessages = {
   nextGoalHarvest: (areaName, current, total) => `🌾 解锁${areaName}：需收获 ${current}/${total} 种作物`,
   nextGoalUpgrade: (areaName, current, total) => `🧪 解锁${areaName}：需研究 Lv.${current}/${total}`,
   nextGoalReady: (areaName) => `🔓 ${areaName}已可解锁！打开商店`,
+  // #606 첫 밭 개간 목표 칩
+  nextGoalPlot: (needed) => `🌱 距开垦新田还差 ${needed}G`,
+  nextGoalPlotReady: '🌱 可以开垦新田了！',
+  nextGoalGo: '前往',
   nextGoalLandmark: (stageName, current, total) => `🏗️ 地标${stageName}：建设 ${current}/${total} 阶段`,
   nextGoalLandmarkReady: (stageName) => `🏗️ ${stageName}已可建设！打开开拓地图`,
   nextGoalGraduationCrops: (current, total) => `🌾 农场毕业：完成传说区域图鉴 ${current}/${total}`,

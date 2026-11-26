@@ -176,6 +176,9 @@ const styles = StyleSheet.create({
   container: {
     paddingHorizontal: 16,
     paddingTop: 8,
+    // 첫 수확 스포트라이트(zIndex 20)보다 위에 두어 안내와 건너뛰기가 밝게 남는다(#606).
+    zIndex: 21,
+    elevation: 21,
   },
   card: {
     gap: 12,
