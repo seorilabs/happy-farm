@@ -2,6 +2,7 @@ const REQUIRED_AUDIO_RESOURCE_NAMES = Object.freeze([
   'farm_bgm_loop',
   'harvest_coin',
   'sfx_plant',
+  'sfx_tap',
   'sfx_wheel_spin',
   'sting_mutation',
   'sting_reward',

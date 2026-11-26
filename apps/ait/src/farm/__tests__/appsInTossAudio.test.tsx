@@ -203,6 +203,7 @@ describe('useAppsInTossFarmAudio', () => {
     unlock: FARM_AUDIO_SOURCES.unlock,
     mutation: FARM_AUDIO_SOURCES.mutation,
     wheelSpin: FARM_AUDIO_SOURCES.wheelSpin,
+    tap: FARM_AUDIO_SOURCES.tap,
   } as const;
 
   test('mounts one paused, cached remote player per one-shot effect', () => {

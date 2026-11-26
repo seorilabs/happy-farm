@@ -94,6 +94,7 @@ const EFFECT_ASSETS = {
   unlock: 'sting_unlock.wav',
   mutation: 'sting_mutation.wav',
   wheelSpin: 'sfx_wheel_spin.wav',
+  tap: 'sfx_tap.wav',
 } as const;
 
 describe('useMobileFarmAudio', () => {

@@ -6,6 +6,7 @@ Generates the short mechanical SFX that don't warrant a Stable Audio API call
 
   assets/audio/sfx_plant.wav       - soft dirt "pop" when planting a crop
   assets/audio/sfx_wheel_spin.wav  - ratchet ticks matching WheelSheet's spin
+  assets/audio/sfx_tap.wav         - short wooden tap for every game button (#606)
 
 The wheel tick timing mirrors packages/farm-ui/src/components/WheelSheet.tsx:
 SPIN_TOTAL_MS=2000 with an ease-out cubic delay curve. stepCount varies with
@@ -113,10 +114,29 @@ def wheel_spin():
     return out
 
 
+def ui_tap():
+    """Soft wooden tap (~35ms): damped 880Hz + 1320Hz body and a 1.5ms click.
+
+    Every button plays it, so it stays short and quiet to avoid fatigue.
+    """
+    rng = random.Random(20261126)
+    tap_len = int(SAMPLE_RATE * 0.035)
+    out = []
+    for i in range(tap_len):
+        t = i / tap_len
+        env = (1.0 - t) ** 4.0
+        body = math.sin(2 * math.pi * 880 * i / SAMPLE_RATE) * 0.7 + math.sin(2 * math.pi * 1320 * i / SAMPLE_RATE) * 0.3
+        click = rng.uniform(-1.0, 1.0) * (1.0 if i < SAMPLE_RATE * 0.0015 else 0.0)
+        out.append((body * 0.8 + click * 0.35) * env)
+    out.extend(silence(0.01))
+    return out
+
+
 def main():
     os.makedirs(OUT_DIR, exist_ok=True)
     write_wav(os.path.join(OUT_DIR, "sfx_plant.wav"), plant_pop())
     write_wav(os.path.join(OUT_DIR, "sfx_wheel_spin.wav"), wheel_spin())
+    write_wav(os.path.join(OUT_DIR, "sfx_tap.wav"), ui_tap())
 
 
 if __name__ == "__main__":

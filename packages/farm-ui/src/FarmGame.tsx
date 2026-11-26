@@ -296,6 +296,15 @@ import { ProductionSheet, type ProductionTabKey } from './components/ProductionS
 import { StatsSheet, type FarmRecordStats } from './components/StatsSheet';
 import { WheelSheet } from './components/WheelSheet';
 import { AdRewardCard, SettingToggle, SheetAction, ShopCard, sheetPartStyles } from './components/SheetParts';
+import { GameFeedbackContext, GamePressable, PRESSED_DEPTH_STYLE } from './components/GamePressable';
+import { usePopInStyle } from './components/popIn';
+import {
+  EMPTY_TOAST_QUEUE,
+  advanceToast,
+  enqueueToast,
+  getToastDismissAt,
+  type ToastQueueState,
+} from './toastQueue';
 import {
   DISCOVERY_BANNER_BASE_BOTTOM,
   getPlotTileSize,
@@ -388,6 +397,11 @@ const SHEET_DISMISS_DRAG_DISTANCE = 96;
 const SHEET_DISMISS_VELOCITY = 1.1;
 const SHEET_DISMISS_TRANSLATE_Y = 520;
 const SHEET_ANIMATION_DURATION_MS = 180;
+// 시트가 열릴 때 살짝 튕긴다(#606). 튕겨 올라간 만큼 아래가 비지 않도록 시트를 화면 아래로 더 늘린다.
+const SHEET_OVERSHOOT_GUTTER = 24;
+// 시트 딤 색(#606): Warm Wood의 짙은 갈색.
+const SHEET_DIM_COLOR = 'rgba(46, 28, 8, 0.5)';
+const SHEET_DIM_TRANSPARENT = 'rgba(46, 28, 8, 0)';
 const EMPTY_SAFE_AREA_INSETS = { top: 0, right: 0, bottom: 0, left: 0 };
 
 import { _callGoldPulseHook } from './farmGoldPulse';
@@ -650,8 +664,9 @@ const DEFAULT_INTERSTITIAL_PLACEMENTS: FarmGameInterstitialPlacements = {
 
 // One-shot SFX beyond the base harvest coin. Adapters map each key to a
 // bundled/streamed asset: plant(심기 팝), reward(도감/업적 보상 팡파레),
-// unlock(구역 해금/연구 완료), mutation(돌연변이 발견 반짝), wheelSpin(룰렛 틱).
-export type FarmSoundEffectKey = 'plant' | 'reward' | 'unlock' | 'mutation' | 'wheelSpin';
+// unlock(구역 해금/연구 완료), mutation(돌연변이 발견 반짝), wheelSpin(룰렛 틱),
+// tap(게임 버튼 공통 탭음, #606).
+export type FarmSoundEffectKey = 'plant' | 'reward' | 'unlock' | 'mutation' | 'wheelSpin' | 'tap';
 
 export type FarmGameAudio = {
   isSupported: boolean;
@@ -1232,7 +1247,9 @@ function FarmGameBody({
       /* non-critical haptic */
     }
   }, []);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [toastQueue, setToastQueue] = useState<ToastQueueState>(EMPTY_TOAST_QUEUE);
+  const toastQueueRef = useRef<ToastQueueState>(EMPTY_TOAST_QUEUE);
+  const toastMessage = toastQueue.current?.message ?? null;
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [harvestCombo, setHarvestCombo] = useState(0);
   const comboTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1418,23 +1435,31 @@ function FarmGameBody({
   const plotColumns = getPlotColumnCount(windowWidth, fontScale);
   const plotTileSize = useMemo(() => getPlotTileSize(windowWidth, fontScale), [windowWidth, fontScale]);
 
-  const toast = useCallback((message: string) => {
+  // 토스트 큐(#606 AC-9): 덮어쓰지 않고 차례로 보여 준다. 다음 토스트로 넘기는 타이머는 지금 보이는
+  // 토스트와 대기 수로 정한다.
+  const commitToastQueue = useCallback((next: ToastQueueState) => {
+    toastQueueRef.current = next;
+    setToastQueue(next);
     if (toastTimerRef.current != null) {
       clearTimeout(toastTimerRef.current);
+      toastTimerRef.current = null;
     }
-    setToastMessage(message);
+    const dismissAt = getToastDismissAt(next);
+    if (dismissAt == null) {
+      return;
+    }
     toastTimerRef.current = setTimeout(() => {
-      setToastMessage(null);
       toastTimerRef.current = null;
-    }, 1800);
+      commitToastQueueRef.current(advanceToast(toastQueueRef.current, Date.now()));
+    }, Math.max(0, dismissAt - Date.now()));
   }, []);
-  const clearToast = useCallback(() => {
-    if (toastTimerRef.current != null) {
-      clearTimeout(toastTimerRef.current);
-      toastTimerRef.current = null;
-    }
-    setToastMessage(null);
-  }, []);
+  const commitToastQueueRef = useRef(commitToastQueue);
+  commitToastQueueRef.current = commitToastQueue;
+  const toast = useCallback(
+    (message: string) => commitToastQueue(enqueueToast(toastQueueRef.current, message, Date.now())),
+    [commitToastQueue]
+  );
+  const clearToast = useCallback(() => commitToastQueue(EMPTY_TOAST_QUEUE), [commitToastQueue]);
   // A quick "cha-ching" bump on the gold HUD when a harvest lands, so the eye
   // links the floating "+gold" at the plot to the balance actually rising.
   const pulseGold = useCallback(() => {
@@ -1680,6 +1705,8 @@ function FarmGameBody({
     },
     [audio, gameSettings.soundEffectsEnabled]
   );
+  // 게임 버튼 공통 탭음(#606 AC-8). 효과음 설정과 지원 여부는 playSoundEffect가 판단한다.
+  const gameFeedback = useMemo(() => ({ playTap: () => playSoundEffect('tap') }), [playSoundEffect]);
 
   useEffect(() => {
     const prev = prevComboRef.current;
@@ -6037,6 +6064,7 @@ function FarmGameBody({
     ) : null;
 
   return (
+    <GameFeedbackContext.Provider value={gameFeedback}>
     <View testID="farm-root" style={[styles.root, { backgroundColor: environmentTone.backgroundColor }]}>
       <ScrollView
         testID="farm-page-scroll"
@@ -6057,7 +6085,7 @@ function FarmGameBody({
                 {/* 헤더 밀도 완화(#355): 활성 칭호 배지와 오늘의 작물 배수 상세는 이
                     단일 요약 chip 탭(openStats) 뒤 '농장 현황' 시트로 강등했다. 헤더에는
                     어떤 작물이 featured인지 알리는 compact teaser + 진입 화살표만 남긴다. */}
-                <Pressable
+                <GamePressable
                   testID="cotd-chip"
                   accessibilityRole="button"
                   accessibilityLabel={`${messages.cropOfTheDayLabel}, ${getLocalizedCropName(cropOfTheDay.cropKey)}`}
@@ -6068,13 +6096,13 @@ function FarmGameBody({
                   <Text style={styles.cotdChipText} numberOfLines={1}>
                     🌱 {getCrop(cropOfTheDay.cropKey).icon} {getLocalizedCropName(cropOfTheDay.cropKey)} ›
                   </Text>
-                </Pressable>
+                </GamePressable>
               </View>
             </View>
           </View>
 
           <View style={styles.headerActions}>
-            <Pressable
+            <GamePressable
               testID="prestige-stars-chip"
               accessibilityRole="button"
               accessibilityLabel={messages.prestigeStarsChipAccessibilityLabel(
@@ -6086,15 +6114,15 @@ function FarmGameBody({
               onPress={openMap}
             >
               <Text style={styles.starsChipText}>★ {gameState.prestige.stars}</Text>
-            </Pressable>
-            <Pressable
+            </GamePressable>
+            <GamePressable pressedStyle={null}
               accessibilityLabel={messages.settingsAccessibilityLabel}
               hitSlop={8}
               style={({ pressed }) => [styles.settingsButton, pressed && styles.settingsButtonPressed]}
               onPress={openSettings}
             >
               <Text style={styles.settingsButtonText}>⚙</Text>
-            </Pressable>
+            </GamePressable>
           </View>
         </View>
 
@@ -6113,7 +6141,7 @@ function FarmGameBody({
               </View>
             </Animated.View>
           </View>
-          <Pressable
+          <GamePressable
             testID="productivity-summary"
             accessibilityRole="button"
             accessibilityLabel={messages.productivity(formatHourlyGold(farmProductivity.netProfitPerHour, locale))}
@@ -6123,7 +6151,7 @@ function FarmGameBody({
             <Text style={styles.productivityText}>
               {messages.productivity(formatHourlyGold(farmProductivity.netProfitPerHour, locale))} ⓘ
             </Text>
-          </Pressable>
+          </GamePressable>
         </View>
 
         {nextFarmGoal != null ? (
@@ -6352,7 +6380,7 @@ function FarmGameBody({
             const active = selectedArea === area.key;
             const areaLabel = getLocalizedAreaLabel(area.key);
             return (
-              <Pressable
+              <GamePressable pressedStyle={null}
                 key={area.key}
                 testID={`area-tab-${area.key}`}
                 style={({ pressed }) => [
@@ -6368,7 +6396,7 @@ function FarmGameBody({
                   {areaLabel.name}
                 </Text>
                 <Text style={styles.areaTabCount}>{messages.areaCropCount(areaCropCounts[area.key] ?? 0)}</Text>
-              </Pressable>
+              </GamePressable>
             );
           })}
         </ScrollView>
@@ -6380,7 +6408,7 @@ function FarmGameBody({
             {toolHint}
           </Text>
           {visibleCropKeys.length > 1 ? (
-            <Pressable
+            <GamePressable
               testID="seed-sort-toggle"
               style={styles.seedSortToggle}
               onPress={() => setSeedSortMode((mode) => nextSeedSortMode(mode))}
@@ -6396,7 +6424,7 @@ function FarmGameBody({
                       : messages.seedSortDefault
                 )}
               </Text>
-            </Pressable>
+            </GamePressable>
           ) : null}
         </View>
 
@@ -6461,12 +6489,12 @@ function FarmGameBody({
               );
             })}
             {!selectedAreaUnlocked ? (
-              <Pressable style={styles.lockedNotice} onPress={openShop}>
+              <GamePressable style={styles.lockedNotice} onPress={openShop}>
                 <Text style={styles.lockedNoticeTitle}>{messages.lockedAreaTitle(selectedAreaLabel.name)}</Text>
                 <Text style={styles.lockedNoticeDesc} numberOfLines={2}>
                   {getAreaUnlockRequirementText(gameState, selectedArea, locale)}
                 </Text>
-              </Pressable>
+              </GamePressable>
             ) : null}
           </ScrollView>
           {onboardingSeedHighlight ? (
@@ -6571,7 +6599,7 @@ function FarmGameBody({
                   {visibleShopTabs.map((key) => {
                     const active = key === activeShopTab;
                     return (
-                      <Pressable
+                      <GamePressable
                         key={key}
                         testID={`shop-tab-${key}`}
                         accessibilityRole="tab"
@@ -6588,7 +6616,7 @@ function FarmGameBody({
                             <Text style={styles.shopTabBadgeText}>{getShopTabBadge(key, shopTabBadgeCounts)}</Text>
                           </View>
                         ) : null}
-                      </Pressable>
+                      </GamePressable>
                     );
                   })}
                 </View>
@@ -6914,7 +6942,7 @@ function FarmGameBody({
               {SUPPORTED_LOCALES.map((option) => {
                 const active = locale === option;
                 return (
-                  <Pressable
+                  <GamePressable pressedStyle={PRESSED_DEPTH_STYLE}
                     key={option}
                     testID={`language-option-${option}`}
                     accessibilityRole="button"
@@ -6926,7 +6954,7 @@ function FarmGameBody({
                     <Text style={[styles.languageOptionText, active && styles.activeLanguageOptionText]}>
                       {languageOptionLabels[option]}
                     </Text>
-                  </Pressable>
+                  </GamePressable>
                 );
               })}
             </View>
@@ -7214,7 +7242,7 @@ function FarmGameBody({
               </View>
             ) : null}
             {activeSheet.summary.readyAnimalCount > 0 ? (
-              <Pressable
+              <GamePressable pressedStyle={null}
                 testID="welcome-back-animal-row"
                 accessibilityRole="button"
                 accessibilityLabel={`${messages.welcomeBackAnimalLabel}, ${messages.welcomeBackAnimalValue(
@@ -7234,10 +7262,10 @@ function FarmGameBody({
                   </Text>
                 </View>
                 <Text style={styles.welcomeBackRowChevron}>›</Text>
-              </Pressable>
+              </GamePressable>
             ) : null}
             {activeSheet.summary.readyCraftCount > 0 ? (
-              <Pressable
+              <GamePressable pressedStyle={null}
                 testID="welcome-back-craft-row"
                 accessibilityRole="button"
                 accessibilityLabel={`${messages.welcomeBackCraftLabel}, ${messages.welcomeBackCraftValue(
@@ -7257,7 +7285,7 @@ function FarmGameBody({
                   </Text>
                 </View>
                 <Text style={styles.welcomeBackRowChevron}>›</Text>
-              </Pressable>
+              </GamePressable>
             ) : null}
             {activeSheet.summary.dailyBonusAvailable ? (
               <View style={styles.welcomeBackRow}>
@@ -7421,6 +7449,7 @@ function FarmGameBody({
         : null}
       <FarmUpdateGateModal testID="farm-update-gate-modal" presentation={isUpdateGateModalVisible ? updateGate : null} onScreenChange={setIsUpdateGateModalOnScreen} />
     </View>
+    </GameFeedbackContext.Provider>
   );
 }
 
@@ -7438,7 +7467,7 @@ function NavButton({
   onPress: () => void;
 }) {
   return (
-    <Pressable
+    <GamePressable pressedStyle={null}
       testID={testID}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
@@ -7451,7 +7480,7 @@ function NavButton({
           <Text style={styles.collectionBadgeText}>{badge}</Text>
         </View>
       ) : null}
-    </Pressable>
+    </GamePressable>
   );
 }
 
@@ -7469,7 +7498,7 @@ function MoreMenuButton({
   onPress: () => void;
 }) {
   return (
-    <Pressable
+    <GamePressable pressedStyle={PRESSED_DEPTH_STYLE}
       accessibilityLabel={accessibilityLabel}
       style={styles.moreMenuButton}
       onPress={onPress}
@@ -7480,7 +7509,7 @@ function MoreMenuButton({
           <Text style={styles.moreMenuBadgeText}>{badge}</Text>
         </View>
       ) : null}
-    </Pressable>
+    </GamePressable>
   );
 }
 
@@ -7544,7 +7573,7 @@ function HarvestAllButton({
   );
 
   return (
-    <Pressable
+    <GamePressable silent pressedStyle={null}
       testID={testID}
       accessibilityLabel={label}
       hitSlop={6}
@@ -7567,7 +7596,7 @@ function HarvestAllButton({
           {label}
         </Text>
       </Animated.View>
-    </Pressable>
+    </GamePressable>
   );
 }
 
@@ -7651,7 +7680,7 @@ function MasteryRankUpOverlay({
   const rankEntranceScale = rankEntrance.interpolate({ inputRange: [0, 1], outputRange: [0.4, 1] });
 
   return (
-    <Pressable testID="mastery-rank-up-overlay" style={StyleSheet.absoluteFill} onPress={onDismiss}>
+    <GamePressable silent pressedStyle={null} testID="mastery-rank-up-overlay" style={StyleSheet.absoluteFill} onPress={onDismiss}>
       <Animated.View style={[styles.masteryBackdrop, { opacity: backdrop }]} />
       <View style={styles.masteryCenter} pointerEvents="none">
         <Animated.View testID="mastery-rank-up-card" style={[styles.masteryCard, { transform: [{ scale: cardScale }] }]}>
@@ -7670,7 +7699,7 @@ function MasteryRankUpOverlay({
           <Text style={styles.masteryCropName}>{notice.cropName}</Text>
         </Animated.View>
       </View>
-    </Pressable>
+    </GamePressable>
   );
 }
 
@@ -7736,7 +7765,7 @@ function PrestigeGraduationOverlay({
   const starsTranslateY = starsEntrance.interpolate({ inputRange: [0, 1], outputRange: [20, 0] });
 
   return (
-    <Pressable testID="prestige-graduation-overlay" style={StyleSheet.absoluteFill} onPress={onDismiss}>
+    <GamePressable silent pressedStyle={null} testID="prestige-graduation-overlay" style={StyleSheet.absoluteFill} onPress={onDismiss}>
       <Animated.View style={[styles.prestigeBackdrop, { opacity: backdrop }]} />
       <View style={styles.prestigeCenter} pointerEvents="none">
         <Animated.View
@@ -7758,7 +7787,7 @@ function PrestigeGraduationOverlay({
           </Animated.Text>
         </Animated.View>
       </View>
-    </Pressable>
+    </GamePressable>
   );
 }
 
@@ -7816,7 +7845,7 @@ function FirstHarvestOverlay({
   const goldTranslateY = goldEntrance.interpolate({ inputRange: [0, 1], outputRange: [12, 0] });
 
   return (
-    <Pressable testID="first-harvest-overlay" style={StyleSheet.absoluteFill} onPress={onDismiss}>
+    <GamePressable silent pressedStyle={null} testID="first-harvest-overlay" style={StyleSheet.absoluteFill} onPress={onDismiss}>
       <View style={styles.firstHarvestCenter} pointerEvents="none">
         <Animated.View
           testID="first-harvest-card"
@@ -7837,7 +7866,7 @@ function FirstHarvestOverlay({
           <Text style={styles.firstHarvestSubtitle}>{messages.firstHarvestSubtitle}</Text>
         </Animated.View>
       </View>
-    </Pressable>
+    </GamePressable>
   );
 }
 
@@ -7857,18 +7886,19 @@ function NotificationPromptOverlay({
   onAccept: () => void;
   onDecline: () => void;
 }) {
+  const popInStyle = usePopInStyle();
   return (
     // Fabric renders this absoluteFill overlay in normal flow — pushing the game
     // UI up with no dim backdrop — when it mounts as a plain View child. Hosting
     // it in a Modal (the pattern Sheet already uses) restores the true overlay.
     <Modal transparent visible animationType="fade" onShow={onShow} onRequestClose={updateGate?.onRequestClose ?? onDecline}>
       <View testID="notification-prompt-overlay" style={[styles.notificationPromptBackdrop, updateGate != null && { backgroundColor: 'transparent' }]}>
-        <View testID="notification-prompt-card" style={[styles.notificationPromptCard, updateGate != null && { display: 'none' }]}>
+        <Animated.View testID="notification-prompt-card" style={[styles.notificationPromptCard, popInStyle, updateGate != null && { display: 'none' }]}>
           <Text style={styles.notificationPromptIcon}>🔔</Text>
           <Text style={styles.notificationPromptTitle}>{messages.notificationPromptTitle}</Text>
           <Text style={styles.notificationPromptDesc}>{messages.notificationPromptDesc}</Text>
           <View style={styles.notificationPromptActions}>
-            <Pressable
+            <GamePressable
               testID="notification-prompt-decline"
               style={[styles.notificationPromptButton, styles.notificationPromptDeclineButton]}
               onPress={onDecline}
@@ -7876,8 +7906,8 @@ function NotificationPromptOverlay({
               accessibilityLabel={messages.notificationPromptDecline}
             >
               <Text style={styles.notificationPromptDeclineText}>{messages.notificationPromptDecline}</Text>
-            </Pressable>
-            <Pressable
+            </GamePressable>
+            <GamePressable
               testID="notification-prompt-accept"
               style={[styles.notificationPromptButton, styles.notificationPromptAcceptButton]}
               onPress={onAccept}
@@ -7885,9 +7915,9 @@ function NotificationPromptOverlay({
               accessibilityLabel={messages.notificationPromptAccept}
             >
               <Text style={styles.notificationPromptAcceptText}>{messages.notificationPromptAccept}</Text>
-            </Pressable>
+            </GamePressable>
           </View>
-        </View>
+        </Animated.View>
         {updateGate != null ? <UpdateGateSurface presentation={updateGate} /> : null}
       </View>
     </Modal>
@@ -7908,17 +7938,18 @@ function PrestigeGuideOverlay({
   updateGate?: FarmUpdateGatePresentation | null;
   onDismiss: () => void;
 }) {
+  const popInStyle = usePopInStyle();
   return (
     // See NotificationPromptOverlay: Fabric mis-renders this absoluteFill overlay
     // as normal flow unless it is hosted in a Modal.
     <Modal transparent visible animationType="fade" onShow={onShow} onRequestClose={updateGate?.onRequestClose ?? onDismiss}>
       <View testID="prestige-guide-overlay" style={[styles.notificationPromptBackdrop, updateGate != null && { backgroundColor: 'transparent' }]}>
-        <View testID="prestige-guide-card" style={[styles.notificationPromptCard, updateGate != null && { display: 'none' }]}>
+        <Animated.View testID="prestige-guide-card" style={[styles.notificationPromptCard, popInStyle, updateGate != null && { display: 'none' }]}>
           <Text style={styles.notificationPromptIcon}>🔗</Text>
           <Text style={styles.notificationPromptTitle}>{messages.prestigeGuideTitle}</Text>
           <Text style={styles.notificationPromptDesc}>{messages.prestigeGuideBody}</Text>
           <View style={styles.notificationPromptActions}>
-            <Pressable
+            <GamePressable
               testID="prestige-guide-confirm"
               style={[styles.notificationPromptButton, styles.notificationPromptAcceptButton]}
               onPress={onDismiss}
@@ -7926,9 +7957,9 @@ function PrestigeGuideOverlay({
               accessibilityLabel={messages.prestigeGuideConfirm}
             >
               <Text style={styles.notificationPromptAcceptText}>{messages.prestigeGuideConfirm}</Text>
-            </Pressable>
+            </GamePressable>
           </View>
-        </View>
+        </Animated.View>
         {updateGate != null ? <UpdateGateSurface presentation={updateGate} /> : null}
       </View>
     </Modal>
@@ -7983,19 +8014,20 @@ function FeatureCoachmarkOverlay({
   onOpen: () => void;
   onDismiss: () => void;
 }) {
+  const popInStyle = usePopInStyle();
   const { title, description } = getFeatureCoachmarkText(featureKey, messages);
   return (
     // PrestigeGuideOverlay와 동일하게 Modal에 호스팅해야 Fabric이 absoluteFill 오버레이를
     // 정상 렌더한다.
     <Modal transparent visible animationType="fade" onShow={onShow} onRequestClose={updateGate?.onRequestClose ?? onDismiss}>
       <View testID="feature-coachmark-overlay" style={[styles.notificationPromptBackdrop, updateGate != null && { backgroundColor: 'transparent' }]}>
-        <View testID="feature-coachmark-card" style={[styles.notificationPromptCard, updateGate != null && { display: 'none' }]}>
+        <Animated.View testID="feature-coachmark-card" style={[styles.notificationPromptCard, popInStyle, updateGate != null && { display: 'none' }]}>
           <Text style={styles.featureCoachmarkEyebrow}>{messages.featureCoachmarkEyebrow}</Text>
           <Text style={styles.notificationPromptIcon}>{FEATURE_COACHMARK_ICON[featureKey]}</Text>
           <Text style={styles.notificationPromptTitle}>{title}</Text>
           <Text style={styles.notificationPromptDesc}>{description}</Text>
           <View style={styles.notificationPromptActions}>
-            <Pressable
+            <GamePressable
               testID="feature-coachmark-dismiss"
               style={[styles.notificationPromptButton, styles.notificationPromptDeclineButton]}
               onPress={onDismiss}
@@ -8003,8 +8035,8 @@ function FeatureCoachmarkOverlay({
               accessibilityLabel={messages.featureCoachmarkDismiss}
             >
               <Text style={styles.notificationPromptDeclineText}>{messages.featureCoachmarkDismiss}</Text>
-            </Pressable>
-            <Pressable
+            </GamePressable>
+            <GamePressable
               testID="feature-coachmark-open"
               style={[styles.notificationPromptButton, styles.notificationPromptAcceptButton]}
               onPress={onOpen}
@@ -8012,9 +8044,9 @@ function FeatureCoachmarkOverlay({
               accessibilityLabel={messages.featureCoachmarkOpen}
             >
               <Text style={styles.notificationPromptAcceptText}>{messages.featureCoachmarkOpen}</Text>
-            </Pressable>
+            </GamePressable>
           </View>
-        </View>
+        </Animated.View>
         {updateGate != null ? <UpdateGateSurface presentation={updateGate} /> : null}
       </View>
     </Modal>
@@ -8169,7 +8201,7 @@ function NextGoalBar({
 }) {
   if (goal.kind === 'prestige_ready') {
     return (
-      <Pressable
+      <GamePressable
         testID="next-goal-bar"
         accessibilityRole="button"
         accessibilityLabel={messages.nextGoalGraduationReady}
@@ -8179,13 +8211,13 @@ function NextGoalBar({
         <Text style={styles.nextGoalReadyText}>
           {messages.nextGoalGraduationReady}
         </Text>
-      </Pressable>
+      </GamePressable>
     );
   }
   if (goal.kind === 'ready') {
     const label = messages.nextGoalReady(getAreaName(goal.areaKey));
     return (
-      <Pressable
+      <GamePressable
         testID="next-goal-bar"
         accessibilityRole="button"
         accessibilityLabel={label}
@@ -8195,7 +8227,7 @@ function NextGoalBar({
         <Text style={styles.nextGoalReadyText}>
           {label}
         </Text>
-      </Pressable>
+      </GamePressable>
     );
   }
 
@@ -8238,7 +8270,7 @@ function NextGoalBar({
   const ratio = total > 0 ? Math.max(0, Math.min(current / total, 1)) : 0;
 
   return (
-    <Pressable
+    <GamePressable
       testID="next-goal-bar"
       accessibilityRole="button"
       accessibilityLabel={label}
@@ -8251,7 +8283,7 @@ function NextGoalBar({
       <View style={styles.nextGoalTrack}>
         <View style={[styles.nextGoalFill, { width: `${Math.round(ratio * 100)}%` }]} />
       </View>
-    </Pressable>
+    </GamePressable>
   );
 }
 
@@ -9047,12 +9079,38 @@ function Sheet({
     dragYRef.current = new Animated.Value(SHEET_DISMISS_TRANSLATE_Y);
   }
   const dragY = dragYRef.current;
+  // 딤 투명도(#606). 시트 위치(네이티브 드라이버)에서 보간하면 Modal 내용이 애니메이션 뒤에 붙을 때 JS 값이
+  // 닫힘 위치에 머물러 딤이 사라졌다(실행 화면 재현). 별도 값을 JS 드라이버로 움직여 늦게 붙어도 현재 값을 읽는다.
+  const dimOpacityRef = useRef<Animated.Value | null>(null);
+  if (dimOpacityRef.current == null) {
+    dimOpacityRef.current = new Animated.Value(0);
+  }
+  const dimOpacity = dimOpacityRef.current;
+  // 이미 같은 목표로 가고 있으면 새 애니메이션을 만들지 않는다(닫기가 거부돼 제자리로 돌아갈 때 등).
+  const dimTargetRef = useRef(0);
+  const fadeDim = useCallback(
+    (toValue: number) => {
+      if (dimTargetRef.current === toValue) {
+        return;
+      }
+      dimTargetRef.current = toValue;
+      dimOpacity.stopAnimation();
+      Animated.timing(dimOpacity, {
+        toValue,
+        duration: SHEET_ANIMATION_DURATION_MS,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: false,
+      }).start();
+    },
+    [dimOpacity]
+  );
   const wasVisibleRef = useRef(false);
   const isClosingRef = useRef(false);
   const shouldHandleSheetDrag = useCallback((dy: number, dx: number) => dy > 4 && Math.abs(dy) > Math.abs(dx), []);
   // 시트 위치만 되돌린다. dim은 열림/닫힘에만 반응하므로, 드래그를 놓거나 닫기가
   // 거부된 경우처럼 시트가 계속 열려 있는 경로에서는 이미 1이라 건드리지 않는다.
   const restoreSheetPosition = useCallback(() => {
+    fadeDim(1);
     dragY.stopAnimation();
     Animated.spring(dragY, {
       toValue: 0,
@@ -9061,7 +9119,7 @@ function Sheet({
       mass: 0.8,
       useNativeDriver: true,
     }).start();
-  }, [dragY]);
+  }, [dragY, fadeDim]);
   const closeSheetWithAnimation = useCallback(() => {
     if (isClosingRef.current) {
       return;
@@ -9072,6 +9130,7 @@ function Sheet({
     }
 
     isClosingRef.current = true;
+    fadeDim(0);
     dragY.stopAnimation();
     Animated.timing(dragY, {
       toValue: SHEET_DISMISS_TRANSLATE_Y,
@@ -9086,7 +9145,7 @@ function Sheet({
         restoreSheetPosition();
       }
     });
-  }, [canClose, dragY, onClose, restoreSheetPosition]);
+  }, [canClose, dragY, fadeDim, onClose, restoreSheetPosition]);
   const panResponder = useMemo(
     () =>
       PanResponder.create({
@@ -9100,7 +9159,11 @@ function Sheet({
           dragY.stopAnimation();
         },
         onPanResponderMove: (_, gestureState) => {
-          dragY.setValue(Math.max(0, gestureState.dy));
+          const dy = Math.max(0, gestureState.dy);
+          dragY.setValue(dy);
+          // 드래그 중에는 손가락을 따라 옅어진다. 놓으면 닫힘(0) 또는 복귀(1)로 다시 맞춘다.
+          dimTargetRef.current = -1;
+          dimOpacity.setValue(Math.max(0, 1 - dy / SHEET_DISMISS_TRANSLATE_Y));
         },
         onPanResponderRelease: (_, gestureState) => {
           if (gestureState.dy > SHEET_DISMISS_DRAG_DISTANCE || gestureState.vy > SHEET_DISMISS_VELOCITY) {
@@ -9114,7 +9177,7 @@ function Sheet({
           restoreSheetPosition();
         },
       }),
-    [closeSheetWithAnimation, dragY, restoreSheetPosition, shouldHandleSheetDrag]
+    [closeSheetWithAnimation, dimOpacity, dragY, restoreSheetPosition, shouldHandleSheetDrag]
   );
 
   useEffect(() => {
@@ -9124,10 +9187,14 @@ function Sheet({
       isClosingRef.current = false;
       dragY.stopAnimation();
       dragY.setValue(SHEET_DISMISS_TRANSLATE_Y);
-      Animated.timing(dragY, {
+      dimOpacity.setValue(0);
+      dimTargetRef.current = 0;
+      fadeDim(1);
+      Animated.spring(dragY, {
         toValue: 0,
-        duration: SHEET_ANIMATION_DURATION_MS,
-        easing: Easing.out(Easing.cubic),
+        damping: 16,
+        stiffness: 200,
+        mass: 0.9,
         useNativeDriver: true,
       }).start();
     }
@@ -9136,10 +9203,13 @@ function Sheet({
       isClosingRef.current = false;
       dragY.stopAnimation();
       dragY.setValue(SHEET_DISMISS_TRANSLATE_Y);
+      dimOpacity.stopAnimation();
+      dimOpacity.setValue(0);
+      dimTargetRef.current = 0;
     }
 
     wasVisibleRef.current = isVisible;
-  }, [activeSheet, dragY]);
+  }, [activeSheet, dimOpacity, dragY, fadeDim]);
 
   return (
     <Modal
@@ -9149,18 +9219,39 @@ function Sheet({
       onRequestClose={updateGate?.onRequestClose ?? closeSheetWithAnimation}
       onDismiss={onDismiss}
     >
+      {/* 딤은 시트 루트의 배경으로 그리고 열고 닫을 때 페이드한다(#606). 드래그로 내리는 동안에도 함께
+          옅어진다. 절대 위치 자식으로 두었을 때는 iOS 실행 화면에서 그려지지 않았다. */}
+      <Animated.View
+        testID="sheet-dim"
+        style={[
+          styles.sheetDimRoot,
+          {
+            backgroundColor:
+              updateGate != null
+                ? SHEET_DIM_COLOR
+                : dimOpacity.interpolate({ inputRange: [0, 1], outputRange: [SHEET_DIM_TRANSPARENT, SHEET_DIM_COLOR] }),
+          },
+        ]}
+      >
       <KeyboardAvoidingView behavior="padding" style={styles.modalRoot}>
         {/* 시트 위 남는 공간을 그대로 차지하는 닫기 영역. absoluteFill Pressable로
             두었을 때는 Android Modal 안에서 탭이 전혀 전달되지 않아, 배경을 눌러도
             시트가 닫히지 않았다(실기기 재현). 레이아웃 흐름에 넣어 hit test를 보장한다. */}
-        <Pressable
+        <GamePressable silent pressedStyle={null}
           testID="sheet-backdrop"
           accessibilityRole="button"
           accessibilityLabel={closeLabel}
           style={[styles.sheetBackdropFill, updateGate != null && { display: 'none' }]}
           onPress={closeSheetWithAnimation}
         />
-        <Animated.View style={[styles.sheet, { transform: [{ translateY: dragY }] }, updateGate != null && { display: 'none' }]}>
+        <Animated.View
+          style={[
+            styles.sheet,
+            { marginBottom: -SHEET_OVERSHOOT_GUTTER, paddingBottom: SHEET_OVERSHOOT_GUTTER },
+            { transform: [{ translateY: dragY }] },
+            updateGate != null && { display: 'none' },
+          ]}
+        >
           <View testID="sheet-drag-handle" style={styles.sheetDragArea} {...panResponder.panHandlers}>
             <View style={styles.sheetHandle} />
           </View>
@@ -9194,6 +9285,7 @@ function Sheet({
         ) : null}
         {updateGate != null ? <UpdateGateSurface presentation={updateGate} /> : null}
       </KeyboardAvoidingView>
+      </Animated.View>
     </Modal>
   );
 }
@@ -9377,7 +9469,7 @@ const ToolButton = React.memo(function ToolButton({
   const { fontScale } = useWindowDimensions();
   const baseA11yLabel = cost != null ? `${name}, ${cost}` : name;
   return (
-    <Pressable
+    <GamePressable pressedStyle={null}
       testID={testID}
       accessibilityRole="button"
       accessibilityLabel={bonusA11yLabel != null ? `${baseA11yLabel}, ${bonusA11yLabel}` : baseA11yLabel}
@@ -9422,7 +9514,7 @@ const ToolButton = React.memo(function ToolButton({
           ) : null}
         </View>
       ) : null}
-    </Pressable>
+    </GamePressable>
   );
 });
 
@@ -9610,7 +9702,7 @@ function FarmAnimalStrip({
   }
   const readyCount = owned.filter((status) => status.phase === 'ready').length;
   return (
-    <Pressable
+    <GamePressable
       testID="animal-strip"
       style={styles.animalStrip}
       onPress={onPress}
@@ -9628,7 +9720,7 @@ function FarmAnimalStrip({
           </View>
         );
       })}
-    </Pressable>
+    </GamePressable>
   );
 }
 
@@ -9801,7 +9893,7 @@ function ShopUpgradeRow({
         }}
       />
       <View style={styles.upgradeBatchRow}>
-        <Pressable
+        <GamePressable
           accessibilityRole="button"
           accessibilityState={{ disabled: !canBuyTen }}
           accessibilityLabel={`${title} +${UPGRADE_BATCH_STEP}, ${formatMoney(batchTen.totalCost, locale)}G`}
@@ -9812,8 +9904,8 @@ function ShopUpgradeRow({
         >
           <Text style={styles.upgradeBatchLabel}>{`+${UPGRADE_BATCH_STEP}`}</Text>
           <Text style={styles.upgradeBatchSub}>{`${formatMoney(batchTen.totalCost, locale)}G`}</Text>
-        </Pressable>
-        <Pressable
+        </GamePressable>
+        <GamePressable
           accessibilityRole="button"
           accessibilityState={{ disabled: !canBuyMax }}
           accessibilityLabel={`${title} ${messages.upgradeBuyMax} +${batchMax.levels}, ${formatMoney(batchMax.totalCost, locale)}G`}
@@ -9828,7 +9920,7 @@ function ShopUpgradeRow({
           {canBuyMax ? (
             <Text style={styles.upgradeBatchSub}>{`${formatMoney(batchMax.totalCost, locale)}G`}</Text>
           ) : null}
-        </Pressable>
+        </GamePressable>
       </View>
       {burstGeneration > 0 ? (
         <UpgradeBurst

@@ -86,8 +86,18 @@ describe('Google Play release 무결성 검사', () => {
     const completeKeepFile = `<resources xmlns:tools="http://schemas.android.com/tools"
       tools:keep="${REQUIRED_AUDIO_RESOURCE_NAMES.map((name: string) => `@raw/${name}`).join(',\n        ')}" />`;
 
-    it('순서와 줄바꿈에 관계없이 7개 음원을 모두 인식한다', () => {
+    it('순서와 줄바꿈에 관계없이 필수 음원을 모두 인식한다', () => {
       expect(validateAudioKeepFile(completeKeepFile)).toEqual([]);
+    });
+
+    // #606: 공통 버튼 탭음도 Sound.MAIN_BUNDLE로 동적 로드되므로 축소에서 보존해야 한다.
+    it('공통 버튼 탭음을 필수 음원에 포함하고 저장소 keep 파일이 모두 보존한다', () => {
+      expect(REQUIRED_AUDIO_RESOURCE_NAMES).toContain('sfx_tap');
+      const repoKeepFile = fs.readFileSync(
+        path.resolve(__dirname, '../../apps/mobile/android/app/src/main/res/raw/com_seorilabs_happyfarm_audio_keep.xml'),
+        'utf8'
+      );
+      expect(validateAudioKeepFile(repoKeepFile)).toEqual([]);
     });
 
     it('음원이 하나라도 빠지면 실패한다', () => {
