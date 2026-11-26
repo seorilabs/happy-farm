@@ -22,3 +22,7 @@
 ## 2026-11-19
 
 - [모바일 가입과 분석 이벤트의 출시 버전 전달](2026-11-19-mobile-release-version/design.md) v1은 검토 대기다. [L3 테스트 계획](2026-11-19-mobile-release-version/test-plan.json)은 Play 내부 테스트와 TestFlight 내부 그룹까지 포함한다.
+
+## 2026-11-26
+
+- [첫 세션 개선과 게임다운 메인 화면](2026-11-26-game-ui-first-session/design.md) v2가 2026-11-26 승인됐다(B안 하단 탭 바, 승인 커밋 `29a63dd`, 실행 티켓 [#606](https://github.com/seorilabs/happy-farm/issues/606)). GA4 첫 세션 분석(신규 76명)을 근거로 첫 수확 스포트라이트, 다음 목표 칩, 보상 연출, 아이콘 메뉴와 그린 스킨을 넣는다. [L3 테스트 계획](2026-11-26-game-ui-first-session/test-plan.json)의 끝 지점은 세 마켓 공개다.

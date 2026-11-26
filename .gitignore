@@ -42,6 +42,7 @@ google-services.json
 
 # game-asset-pipeline raw generations & QA sheet (regenerate via assets/art/asset-manifest.json)
 assets/art/raw/
+assets/art/ui/raw/
 assets/art/qa_sheet.png
 
 # game-sound-pipeline raw generations (regenerate via assets/audio/sound-manifest.json)

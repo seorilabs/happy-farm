@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mock</title>
+<link rel="stylesheet" href="mock.css">
+</head>
+<body>
+<div id="root"></div>
+<script>
+// 쿼리: opt=A|B, scene=main|ftue|reward, lang=en|ko, size=pro|se, marks=1
+const q = new URLSearchParams(location.search);
+const opt = q.get('opt') || 'A';
+const scene = q.get('scene') || 'main';
+const lang = q.get('lang') || 'en';
+const size = q.get('size') || 'pro';
+const marks = q.get('marks') === '1';
+const W = size === 'se' ? 375 : 440;
+const H = size === 'se' ? 667 : 956;
+document.documentElement.style.setProperty('--w', W + 'px');
+document.documentElement.style.setProperty('--h', H + 'px');
+document.documentElement.lang = lang === 'ko' ? 'ko' : 'en';
+
+// 기존 catalog 문구를 쓰고, 새 문구는 NEW로 표시해 설계 문서의 i18n 목록과 맞춘다.
+const T = {
+  en: {
+    shop: 'Shop', missions: 'Missions', ranch: 'Ranch', kitchen: 'Cooking', daily: 'Daily', more: 'More', farm: 'Farm',
+    perHour: '+2.24M/h', gold: '48.5K', stars: '0',
+    goalReady: 'Bloom Field is ready!', goalGo: 'Go',
+    goalPlot: 'Clear a plot',
+    harvestAll: (n) => `Harvest All ${n}`, replant: 'Harvest & Replant', replantShort: 'Replant',
+    area1: 'Starter Field', area1n: '5 crops', area2: 'Vegetable Field', area2n: '5 crops', area3: 'Bloom Field',
+    hand: 'Harvest', carrot: 'Carrot', wheat: 'Wheat', potato: 'Potato', onion: 'Onion',
+    ftue: 'Tap the ripe carrot!', skip: 'Skip',
+    rewardTitle: 'First harvest complete!', rewardDesc: 'Your farm is up and running.', cont: 'Continue',
+    locked: 'Lv.4',
+  },
+  ko: {
+    shop: '상점', missions: '미션', ranch: '목장', kitchen: '요리', daily: '출석', more: '더보기', farm: '농장',
+    perHour: '+224만/시', gold: '4.85만', stars: '0',
+    goalReady: '과수원을 열 수 있어요!', goalGo: '가기',
+    goalPlot: '밭 개간하기',
+    harvestAll: (n) => `모두 수확 ${n}`, replant: '수확 후 재심기', replantShort: '재심기',
+    area1: '초보 밭', area1n: '5종', area2: '채소 밭', area2n: '5종', area3: '과수원',
+    hand: '수확', carrot: '당근', wheat: '밀', potato: '감자', onion: '양파',
+    ftue: '다 자란 당근을 눌러요!', skip: '건너뛰기',
+    rewardTitle: '첫 수확 완료!', rewardDesc: '농장 운영을 시작해요.', cont: '계속하기',
+    locked: 'Lv.4',
+  },
+}[lang];
+
+const img = (n, cls = '') => `<img class="${cls}" src="../images/${n}.png" alt="">`;
+const badge = (v) => v == null ? '' : v === '' ? '<span class="badge dot"></span>' : `<span class="badge">${v}</span>`;
+const mark = (n, x, y) => marks ? `<div class="mark" style="left:${x}px;top:${y}px">${n}</div>` : '';
+const ftue = scene === 'ftue';
+const hideBadges = ftue; // 온보딩 중에는 배지를 숨긴다
+
+function hud() {
+  const right = opt === 'A'
+    ? `<div class="icon-btn skin-chip" style="--cap:24px">${img('icon-settings')}</div>`
+    : `<div class="icon-btn skin-chip" style="--cap:24px">${img('icon-more')}${badge(hideBadges ? null : '')}</div>`;
+  const gold = ftue ? '50' : scene === 'reward' ? '64' : T.gold;
+  const ph = scene === 'main' ? `<span class="sub">${T.perHour}</span>` : '';
+  const lift = scene === 'reward' ? ' style="position:relative;z-index:20"' : '';
+  return `<div class="hud"${lift}>
+    <div class="chip gold skin-chip">${img('icon-coin', 'ico')}<span class="val t-num">${gold}</span>${ph}</div>
+    <div class="chip star skin-chip" style="width:92px">${img('icon-star', 'ico')}<span class="val t-num">${scene === 'main' ? T.stars : 0}</span></div>
+    ${right}
+  </div>`;
+}
+
+function goal() {
+  const ready = scene === 'main';
+  const label = ready ? T.goalReady : T.goalPlot;
+  const have = ftue ? 50 : 64;
+  const pct = ready ? 100 : Math.round(have / 300 * 100);
+  const extra = opt === 'B'
+    ? `<div class="icon-btn skin-chip" style="--cap:24px;flex:0 0 48px">${img('icon-daily')}${badge('!')}</div>` : '';
+  return `<div style="display:flex;gap:8px;align-items:center;margin:8px 12px 0">
+    <div class="goal skin-panel" style="margin:0;flex:1">${img('icon-goal', 'gico')}
+      <div class="gtxt"><div class="glabel">${label}</div><div class="gbar"><i style="width:${pct}%"></i></div></div>
+      ${ready ? `<div class="ggo skin-primary t-outline-white" style="position:relative">${T.goalGo}${badge('!')}</div>` : `<div class="t-num" style="font-size:14px;color:var(--ink-sub);display:flex;align-items:center;gap:3px"><img src="../images/icon-coin.png" style="width:16px;height:16px">${have} / 300</div>`}
+    </div>${extra}</div>`;
+}
+
+function dock() {
+  if (opt !== 'A') return '';
+  const items = [
+    ['icon-shop', T.shop, hideBadges ? null : 3],
+    ['icon-missions', T.missions, hideBadges ? null : 1],
+    ['icon-ranch', T.ranch, hideBadges ? null : ''],
+    ['icon-kitchen', T.kitchen, null, true],
+    ['icon-daily', T.daily, hideBadges ? null : '!'],
+    ['icon-more', T.more, null],
+  ];
+  return `<div class="dock">${items.map(([ic, lb, b, locked]) => `
+    <div class="item" style="${locked ? 'filter:grayscale(.85);opacity:.7' : ''}">
+      <div class="tile skin-card">${img(ic)}${badge(b)}${locked ? `<span class="badge" style="background:#8a6a3c;box-shadow:0 2px 0 #5a4320,0 0 0 2px #fff">🔒</span>` : ''}</div>
+      <div class="lbl">${lb}</div></div>`).join('')}</div>`;
+}
+
+function seeds() {
+  const list = [['crop-carrot', T.carrot, '10', '×2.0'], ['crop-wheat', T.wheat, '25', '×2.2'], ['crop-potato', T.potato, '55', '×2.2'], ['crop-onion', T.onion, '120', '×2.4']];
+  return `<div class="seeds">
+    <div class="seed hand skin-card ${ftue ? '' : 'on'}">${img('icon-harvest')}<div class="nm">${T.hand}</div></div>
+    ${list.map(([c, n, p, e]) => `<div class="seed skin-card">${img(c)}<div class="nm">${n}</div><div class="pr">${img('icon-coin')}${p}</div><div class="eff">${e}</div></div>`).join('')}
+  </div>`;
+}
+
+function tools() {
+  if (opt === 'A') {
+    return `<div class="tools" style="padding-bottom:${size === 'se' ? 4 : 22}px">
+      <div class="cta-row">
+        <div class="cta primary skin-primary t-outline-white">${img('icon-harvest')}${T.harvestAll(scene === 'main' ? 12 : ftue ? 3 : 2)}</div>
+        <div class="cta secondary skin-secondary">🔁 ${T.replantShort}</div>
+      </div>
+      <div class="areas">
+        <div class="area skin-primary on" style="padding:0 6px">${T.area1} <small>${T.area1n}</small></div>
+        <div class="area skin-secondary" style="padding:0 6px">${T.area2} <small>${T.area2n}</small></div>
+        <div class="area skin-secondary" style="padding:0 6px;filter:grayscale(.7);opacity:.75">🔒 ${T.area3}</div>
+      </div>
+      ${seeds()}
+    </div>`;
+  }
+  return `<div class="tools">
+    <div class="cta-row">
+      <div class="area pick skin-secondary" style="height:56px;--cap:18px;padding:0 0 4px;font-size:14px">${T.area1} ▾</div>
+      <div class="cta primary skin-primary t-outline-white">${img('icon-harvest')}${T.harvestAll(scene === 'main' ? 12 : ftue ? 3 : 2)}</div>
+      <div class="icon-btn skin-secondary" style="width:48px;height:56px;font-size:22px">🔁</div>
+    </div>
+    ${seeds()}
+    <div class="tabbar">
+      <div class="tab">${img('icon-shop')}<div class="lbl">${T.shop}</div>${badge(hideBadges ? null : 3)}</div>
+      <div class="tab">${img('icon-missions')}<div class="lbl">${T.missions}</div>${badge(hideBadges ? null : 1)}</div>
+      <div class="tab center"><div class="disc">${img('icon-harvest')}</div><div class="lbl">${T.farm}</div></div>
+      <div class="tab">${img('icon-ranch')}<div class="lbl">${T.ranch}</div>${badge(hideBadges ? null : '')}</div>
+      <div class="tab" style="filter:grayscale(.85);opacity:.7">${img('icon-kitchen')}<div class="lbl">${T.kitchen}</div></div>
+    </div>
+  </div>`;
+}
+
+function topHeight() {
+  const status = size === 'se' ? 22 : 54;
+  const hudH = 52, goalH = 58;
+  const dockH = opt === 'A' ? 94 : 0;
+  return status + hudH + goalH + dockH;
+}
+function bottomHeight() {
+  const pad = size === 'se' ? 4 : 22;
+  return opt === 'A' ? 72 + 44 + 116 + pad : 72 + 116 + 90;
+}
+
+function field() {
+  const top = topHeight();
+  const h = H - top - bottomHeight();
+  const grid = ftue ? 'grid-ftue' : 'grid-main';
+  return `<div class="field" style="position:absolute;left:0;right:0;top:${top}px;height:${h}px">${img(grid, 'grid')}</div>`;
+}
+
+function overlays() {
+  const top = topHeight();
+  if (scene === 'ftue') {
+    // 첫 칸(왼쪽 위)의 다 자란 당근을 밝힌다. 격자 좌표는 캡처의 첫 칸 위치에서 가져온다.
+    const cell = { x: 17, y: 48, w: 93, h: 93 }; // grid-ftue.png 첫 칸(당근) 위치, CSS px
+    const sx = cell.x - 6, sy = top + cell.y - 6;
+    return `<div class="spot" style="left:${sx}px;top:${sy}px;width:${cell.w + 12}px;height:${cell.h + 12}px"></div>
+      <img class="pointer" src="../images/icon-pointer.png" style="left:${sx + cell.w * 0.45}px;top:${sy + cell.h * 0.55}px">
+      <div class="bubble skin-panel" style="left:${sx + cell.w + 30}px;top:${sy + 18}px">${T.ftue}</div>
+      <div class="skip" style="right:18px;top:${top + 14}px">${T.skip}</div>`;
+  }
+  if (scene === 'reward') {
+    const popTop = size === 'se' ? 150 : 250;
+    const fly = [[30, 74], [24, 118], [26, 162], [36, 206]];
+    return `<div class="dim"></div>
+      <div class="popup skin-panel" style="top:${popTop}px">
+        <div class="title skin-primary t-outline-white">${T.rewardTitle}</div>
+        <div class="burst">${img('icon-coin')}</div>
+        <div class="amount t-num">+14</div>
+        <div class="desc">${T.rewardDesc}</div>
+        <div class="btns"><div class="cta primary skin-primary t-outline-white">${T.cont}</div></div>
+      </div>
+      ${fly.map(([x, y], i) => `<img class="fly" src="../images/icon-coin.png" style="left:${x}px;top:${(size === 'se' ? 22 : 54) + y}px;opacity:${1 - i * 0.18};transform:scale(${1 - i * 0.12})">`).join('')}
+      <div class="t-num" style="position:absolute;z-index:30;left:96px;top:${(size === 'se' ? 22 : 54) - 22}px;font-size:22px;color:#fff;text-shadow:0 2px 0 #a35517,1px 0 0 #a35517,-1px 0 0 #a35517">+14</div>`;
+  }
+  return '';
+}
+
+function marksLayer() {
+  if (!marks) return '';
+  const st = size === 'se' ? 22 : 54;
+  const a = [
+    mark(1, 4, st + 2), mark(2, 4, st + 56), opt === 'A' ? mark(3, 4, st + 118) : '',
+    mark(4, 4, H - bottomHeight() + 4), opt === 'B' ? mark(5, 4, H - 80) : '',
+  ];
+  return a.join('');
+}
+
+document.getElementById('root').innerHTML = `<div class="phone ${size} opt-${opt.toLowerCase()}">
+  <div class="status"><span>9:41</span><span class="island"></span><span class="icons">▮▮▮ ◔</span></div>
+  ${hud()}${goal()}${dock()}${field()}${tools()}${overlays()}${marksLayer()}
+</div>`;
+</script>
+</body>
+</html>

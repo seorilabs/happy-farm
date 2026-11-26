@@ -1,0 +1,21 @@
+{
+  "style": "../style/style-guide.md",
+  "anchor": {"path": "../style/anchor.png", "prompt": "a plump ripe orange carrot with three lush green leaves sprouting from its top"},
+  "model": "gemini-3-pro-image",
+  "out_dir": ".",
+  "assets": [
+    {"name": "ui_icon_coin", "size": 256, "prompt": "a single thick shiny gold coin seen slightly from the front, with a small embossed green sprout emblem in its center"},
+    {"name": "ui_icon_star", "size": 256, "prompt": "a single plump golden five-pointed star with softly rounded tips"},
+    {"name": "ui_icon_shop", "size": 256, "prompt": "a tiny wooden farm market stall with a red and cream striped awning and a few vegetables on its counter"},
+    {"name": "ui_icon_missions", "size": 256, "prompt": "a small wooden clipboard holding a cream paper checklist with three green check marks, no letters"},
+    {"name": "ui_icon_ranch", "size": 256, "prompt": "a small cute red barn with white trim and a rounded roof"},
+    {"name": "ui_icon_kitchen", "size": 256, "prompt": "a round terracotta cooking pot with a lid and a soft white puff of steam above it"},
+    {"name": "ui_icon_daily", "size": 256, "prompt": "a cute cream gift box wrapped with a green ribbon and a big bow on top"},
+    {"name": "ui_icon_wheel", "size": 256, "prompt": "a small colorful prize spin wheel with six rounded segments in green, orange and cream, and a little red pointer on top"},
+    {"name": "ui_icon_settings", "size": 256, "prompt": "a single chunky cream-colored gear cog with rounded teeth"},
+    {"name": "ui_icon_goal", "size": 256, "prompt": "a small red pennant flag on a short wooden pole stuck in a tiny mound of soil"},
+    {"name": "ui_icon_harvest", "size": 256, "prompt": "a woven wicker basket overflowing with a carrot, a tomato and a head of lettuce"},
+    {"name": "ui_icon_pointer", "size": 256, "prompt": "a cute chubby cartoon hand in a white glove with the index finger pointing straight down"},
+    {"name": "ui_icon_more", "size": 256, "prompt": "a small round wooden tray holding three plump cream balls in a row"}
+  ]
+}
