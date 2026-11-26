@@ -322,6 +322,11 @@ const noopTrackGameEvent: TrackGameEvent = (_name, _params = {}) => {
   void _params;
 };
 
+// 시트가 열린 경로(#606). 메뉴·탭 바·목표 칩처럼 사용자가 고른 경로와 자동 팝업을 나눈다.
+export type SheetOpenSource = 'nav' | 'more_menu' | 'tab_bar' | 'hud' | 'goal_chip' | 'auto_popup' | 'other';
+// 내비 탭이 일어난 화면 위치(#606).
+export type NavTapLocation = 'header' | 'more_menu' | 'tab_bar' | 'hud';
+
 export function createFarmAnalytics(emit: TrackGameEvent = noopTrackGameEvent) {
   const track: TrackGameEvent = (name, params = {}) => {
     emit(name, applyEventContextParameterBudget(name, params));
@@ -734,6 +739,31 @@ export function createFarmAnalytics(emit: TrackGameEvent = noopTrackGameEvent) {
 
     trackCollectionScreen: (context: GameAnalyticsContext) => {
       track('collection_screen', context);
+    },
+
+    // === 개편 효과 계측 (#606) ===
+    // 시트 닫힘과 상점·랩·설정·룰렛 진입이 측정되지 않아 메뉴를 열고 아무것도 고르지 않는
+    // 경로를 볼 수 없었다. 시트 키는 FarmGame의 시트 종류이고, 생산 시트 안의 탭 전환은 같은 시트로
+    // 본다. 체류 시간에는 앱이 백그라운드에 있던 시간을 넣지 않는다.
+    trackSheetOpened: (params: { sheet: string; source: SheetOpenSource; context: GameAnalyticsContext }) => {
+      track('sheet_opened', { sheet: params.sheet, source: params.source, ...params.context });
+    },
+
+    trackSheetClosed: (params: { sheet: string; dwellMs: number; context: GameAnalyticsContext }) => {
+      const dwellMs = Number.isFinite(params.dwellMs) ? Math.max(0, Math.round(params.dwellMs)) : 0;
+      track('sheet_closed', { sheet: params.sheet, dwell_ms: dwellMs, ...params.context });
+    },
+
+    trackNavTapped: (params: { target: string; location: NavTapLocation; context: GameAnalyticsContext }) => {
+      track('nav_tapped', { target: params.target, location: params.location, ...params.context });
+    },
+
+    trackFtuePointerShown: (params: { step: string; context: GameAnalyticsContext }) => {
+      track('ftue_pointer_shown', { step: params.step, ...params.context });
+    },
+
+    trackGoalChipTapped: (params: { goalKind: string; ready: boolean; context: GameAnalyticsContext }) => {
+      track('goal_chip_tapped', { goal_kind: params.goalKind, ready: params.ready, ...params.context });
     },
 
     // === 일일·주간 미션 퍼널 (#475) ===

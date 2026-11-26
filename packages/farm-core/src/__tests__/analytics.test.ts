@@ -730,6 +730,40 @@ describe('farm analytics adapter contract', () => {
     expect(track).toHaveBeenCalledWith('notification_opened', { notification_kind: 'harvest' });
   });
 
+  // #606: 개편 전후를 비교할 진입 경로·체류 계측. 시트 닫힘과 상점·랩·설정·룰렛 진입이
+  // 측정되지 않아 More 메뉴를 열고 아무것도 고르지 않는 경로를 볼 수 없었다.
+  test('시트 진입·닫힘, 내비 탭, 첫 수확 포인터, 목표 칩 탭을 계약대로 emit한다 (#606)', () => {
+    const track = jest.fn();
+    const analytics = createFarmAnalytics(track);
+    const context = getGameAnalyticsContext(createInitialState(), 0, 5_000);
+
+    analytics.trackSheetOpened({ sheet: 'production_animals', source: 'tab_bar', context });
+    analytics.trackSheetClosed({ sheet: 'shop', dwellMs: 4_250.7, context });
+    analytics.trackNavTapped({ target: 'missions', location: 'tab_bar', context });
+    analytics.trackFtuePointerShown({ step: 'harvest', context });
+    analytics.trackGoalChipTapped({ goalKind: 'plot', ready: true, context });
+    const legacy = getLegacyEventContext(context);
+
+
+    expect(track).toHaveBeenCalledWith('sheet_opened', { sheet: 'production_animals', source: 'tab_bar', ...legacy });
+    expect(track).toHaveBeenCalledWith('sheet_closed', { sheet: 'shop', dwell_ms: 4251, ...legacy });
+    expect(track).toHaveBeenCalledWith('nav_tapped', { target: 'missions', location: 'tab_bar', ...legacy });
+    expect(track).toHaveBeenCalledWith('ftue_pointer_shown', { step: 'harvest', ...legacy });
+    expect(track).toHaveBeenCalledWith('goal_chip_tapped', { goal_kind: 'plot', ready: true, ...legacy });
+  });
+
+  test('시트 체류 시간은 음수나 비정상 값을 0으로 고정한다 (#606)', () => {
+    const track = jest.fn();
+    const analytics = createFarmAnalytics(track);
+    const context = getGameAnalyticsContext(createInitialState(), 0, 5_000);
+
+    analytics.trackSheetClosed({ sheet: 'more', dwellMs: -20, context });
+    analytics.trackSheetClosed({ sheet: 'more', dwellMs: Number.NaN, context });
+
+    expect(track).toHaveBeenNthCalledWith(1, 'sheet_closed', expect.objectContaining({ dwell_ms: 0 }));
+    expect(track).toHaveBeenNthCalledWith(2, 'sheet_closed', expect.objectContaining({ dwell_ms: 0 }));
+  });
+
   test('업데이트 안내 노출과 스토어 탭을 서버 판정 종류로 구분한다', () => {
     const track = jest.fn();
     const analytics = createFarmAnalytics(track);

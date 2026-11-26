@@ -690,6 +690,7 @@ for (const key of [
   'growthAdMinRemainingMs',
   'growthAdSkipMs',
   'interstitialSessionResetMs',
+  'interstitialFirstSessionGraceMs',
   'returnInterstitialCooldownMs',
 ]) {
   check(isFiniteNumber(ads[key]) && ads[key] >= 0, `ads.${key}(${ads[key]})는 0 이상의 유한 값이어야 합니다.`);

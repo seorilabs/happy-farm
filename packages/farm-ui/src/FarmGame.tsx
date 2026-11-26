@@ -116,6 +116,8 @@ import {
   type LandmarkStageKey,
   canShowHarvestInterstitial,
   canShowReturnInterstitial,
+  isFirstSessionInterstitialGraceActive,
+  type NavTapLocation,
   canUnlockArea,
   claimCollectionReward,
   createFarmAnalytics,
@@ -279,6 +281,15 @@ import { CookingSheet } from './components/CookingSheet';
 import { DecorationLayoutSheet } from './components/DecorationLayoutSheet';
 import { EnvironmentBackdrop } from './components/EnvironmentBackdrop';
 import { FarmOnboarding, ONBOARDING_STEPS, type OnboardingStep } from './components/FarmOnboarding';
+import {
+  finishSheetDwell,
+  pauseSheetDwell,
+  resolveSheetOpenSource,
+  resumeSheetDwell,
+  startSheetDwell,
+  type PendingSheetSource,
+  type SheetDwell,
+} from './sheetAnalytics';
 import { LabSheet } from './components/LabSheet';
 import { MissionsSheet } from './components/MissionsSheet';
 import { ProductionSheet, type ProductionTabKey } from './components/ProductionSheet';
@@ -1325,6 +1336,12 @@ function FarmGameBody({
   // 카운터를 초기화해 새 세션으로 본다.
   const interstitialBackgroundedAtRef = useRef<number | null>(null);
   const sessionStartedAtRef = useRef(Date.now());
+  // 온보딩을 마치지 않은 세이브로 시작한 세션(첫 세션)의 시작 시각. 첫 세션 전면 광고 유예에
+  // 쓰며 그 밖의 세션에서는 null이다(#606). 저장하지 않는다.
+  const firstSessionStartedAtRef = useRef<number | null>(null);
+  // 시트 진입 경로와 체류 계측(#606). 내비 탭이 시트를 여는 순간 출처를 잠깐 기억한다.
+  const pendingSheetSourceRef = useRef<PendingSheetSource | null>(null);
+  const openSheetAnalyticsRef = useRef<SheetDwell | null>(null);
   // Target time of the last scheduled harvest reminder. This effect re-runs
   // every tick, so we only emit notification_scheduled when that target
   // actually changes — otherwise the analytics would be flooded with noise.
@@ -1694,6 +1711,50 @@ function FarmGameBody({
   // analyticsContext so timers can build a fresh context without depending on
   // gameState.
   analyticsContextRef.current = analyticsContext;
+
+  // #606: 내비 탭을 계측하고, 이어서 열릴 시트의 출처를 잠깐 기억한다.
+  const trackNavTap = useCallback(
+    (target: string, location: NavTapLocation) => {
+      pendingSheetSourceRef.current = { source: location === 'header' ? 'nav' : location, at: Date.now() };
+      farmAnalytics.trackNavTapped({ target, location, context: analyticsContext() });
+    },
+    [analyticsContext, farmAnalytics]
+  );
+
+  // #606: 시트가 바뀔 때마다 이전 시트의 체류 시간과 새 시트의 진입 경로를 남긴다. 같은 시트 안의
+  // 탭 전환(생산의 동물·공방)은 같은 시트로 본다.
+  useEffect(() => {
+    const sheet = activeSheet?.type ?? null;
+    const previous = openSheetAnalyticsRef.current;
+    if (previous?.sheet === sheet) {
+      return;
+    }
+    const now = Date.now();
+    const buildContext = analyticsContextRef.current;
+    if (buildContext != null) {
+      const context = buildContext();
+      if (previous != null) {
+        farmAnalytics.trackSheetClosed({ sheet: previous.sheet, dwellMs: finishSheetDwell(previous, now), context });
+      }
+      if (activeSheet != null) {
+        farmAnalytics.trackSheetOpened({
+          sheet: activeSheet.type,
+          source: resolveSheetOpenSource(activeSheet, pendingSheetSourceRef.current, now),
+          context,
+        });
+      }
+    }
+    openSheetAnalyticsRef.current =
+      activeSheet == null
+        ? null
+        : // 시작 직후 'unknown'일 수 있어 확실히 비활성일 때만 일시정지로 시작한다.
+          startSheetDwell(
+            activeSheet.type,
+            now,
+            AppState.currentState !== 'background' && AppState.currentState !== 'inactive'
+          );
+    pendingSheetSourceRef.current = null;
+  }, [activeSheet, farmAnalytics]);
 
   useEffect(() => {
     if (activeSheet?.type !== 'dailyBonus') {
@@ -2425,6 +2486,7 @@ function FarmGameBody({
         return;
       }
       const onboardingPending = savedState.onboardingCompleted === false;
+      firstSessionStartedAtRef.current = onboardingPending ? sessionStartedAtRef.current : null;
       let normalizedSavedState: GameState = {
         ...savedState,
         onboardingCompleted: !onboardingPending,
@@ -2775,12 +2837,19 @@ function FarmGameBody({
       if (nextState === 'background' || nextState === 'inactive') {
         manualHarvestComboPendingEndReasonRef.current = 'background';
         interstitialBackgroundedAtRef.current = Date.now();
+        // 시트 체류에서 백그라운드 시간을 뺀다(#606).
+        if (openSheetAnalyticsRef.current != null) {
+          openSheetAnalyticsRef.current = pauseSheetDwell(openSheetAnalyticsRef.current, Date.now());
+        }
         markSeen();
         flushAutoHarvestSummary();
         flushCropReadySummary();
         flushManualHarvestCombo('background');
       } else if (nextState === 'active') {
         manualHarvestComboPendingEndReasonRef.current = null;
+        if (openSheetAnalyticsRef.current != null) {
+          openSheetAnalyticsRef.current = resumeSheetDwell(openSheetAnalyticsRef.current, Date.now());
+        }
         // 충분히 오래 비웠다 돌아오면 새 세션으로 보고 전면 광고 백오프를
         // 처음 단계로 되돌린다. 잠깐 앱을 전환한 정도로는 리셋되지 않으므로
         // 백오프를 우회하려고 앱을 껐다 켜는 것이 이득이 되지 않는다.
@@ -5043,12 +5112,15 @@ function FarmGameBody({
   }
 
   async function maybeShowMilestoneAd(placement: string) {
+    // 마일스톤 콜백은 구매를 setGameState로 넘긴 직후, 반영 전에 불린다. 그래서 유예 판정은 구매 전
+    // 상태를 보고, 첫 밭 해금 순간 자체도 '해금 전' 유예로 광고 없이 지나간다(#606).
     // 온보딩 중에는 띄우지 않는다. 복귀 지면에는 원래 이 가드가 있었는데
     // 마일스톤에는 빠져 있어, 튜토리얼 중 첫 밭 해금에 광고가 뜰 수 있었다.
     if (
       !interstitialPlacements.progressionMilestone ||
       onboardingStep != null ||
-      !gameStateRef.current.onboardingCompleted
+      !gameStateRef.current.onboardingCompleted ||
+      isFirstSessionInterstitialGraceActive(gameStateRef.current, firstSessionStartedAtRef.current, Date.now())
     ) {
       return;
     }
@@ -5064,7 +5136,10 @@ function FarmGameBody({
     }
     const now = Date.now();
     const stateBeforeShow = gameStateRef.current;
-    if (!canShowHarvestInterstitial(stateBeforeShow, now)) {
+    if (
+      !canShowHarvestInterstitial(stateBeforeShow, now) ||
+      isFirstSessionInterstitialGraceActive(stateBeforeShow, firstSessionStartedAtRef.current, now)
+    ) {
       return;
     }
     await showInterstitial('harvest_batch');
@@ -5089,7 +5164,11 @@ function FarmGameBody({
     }
     const now = Date.now();
     const stateBeforeShow = gameStateRef.current;
-    if (!stateBeforeShow.onboardingCompleted || !canShowReturnInterstitial(stateBeforeShow, now)) {
+    if (
+      !stateBeforeShow.onboardingCompleted ||
+      !canShowReturnInterstitial(stateBeforeShow, now) ||
+      isFirstSessionInterstitialGraceActive(stateBeforeShow, firstSessionStartedAtRef.current, now)
+    ) {
       return;
     }
 
@@ -6067,20 +6146,29 @@ function FarmGameBody({
             testID="shop-nav-button"
             label={messages.shopButton}
             badge={shopBadgeCount}
-            onPress={openShop}
+            onPress={() => {
+              trackNavTap('shop', 'header');
+              openShop();
+            }}
           />
           <NavButton
             label={messages.missionsButton}
             badge={missionClaimableCount}
             accessibilityLabel={messages.missionsButtonAccessibilityLabel}
-            onPress={openMissions}
+            onPress={() => {
+              trackNavTap('missions', 'header');
+              openMissions();
+            }}
           />
           <NavButton
             testID="more-nav-button"
             label={messages.moreButton}
             badge={moreRollupBadge}
             accessibilityLabel={messages.moreButtonAccessibilityLabel}
-            onPress={openMore}
+            onPress={() => {
+              trackNavTap('more', 'header');
+              openMore();
+            }}
           />
           {/* 수확 부스트. 광고 보상 중 유일하게 "기다려서는 얻을 수 없는" 것이라
               상점 안에 묻어두지 않고 메인에 꺼내 둔다. 부스트 중에는 남은 시간을
@@ -6098,7 +6186,10 @@ function FarmGameBody({
                 : messages.boostNavLabel(HARVEST_BONUS_MULTIPLIER)
             }
             accessibilityLabel={messages.boostNavAccessibilityLabel}
-            onPress={() => setActiveSheet({ type: 'harvestBonus' })}
+            onPress={() => {
+              trackNavTap('harvest_bonus', 'header');
+              setActiveSheet({ type: 'harvestBonus' });
+            }}
           />
         </ScrollView>
       </View>
@@ -6658,7 +6749,10 @@ function FarmGameBody({
                       label={entry.label}
                       badge={entry.badge}
                       accessibilityLabel={entry.accessibilityLabel}
-                      onPress={entry.onPress}
+                      onPress={() => {
+                        trackNavTap(entry.key, 'more_menu');
+                        entry.onPress();
+                      }}
                     />
                   );
                 })}

@@ -80,6 +80,7 @@
     "cookingSpeedAdDailyLimit": 3,
     "cookingSpeedAdCooldownMs": 600000,
     "interstitialHarvestGraceCount": 3,
+    "interstitialFirstSessionGraceMs": 600000,
     "interstitialBackoffMs": [120000, 180000, 300000],
     "interstitialSessionResetMs": 1800000,
     "returnInterstitialCooldownMs": 21600000

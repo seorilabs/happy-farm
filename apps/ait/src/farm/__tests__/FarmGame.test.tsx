@@ -74,6 +74,7 @@ import {
   type MutationKey,
   type RewardedAdController,
   type RewardedAdShowResult,
+  INITIAL_PLOTS,
 } from '../../../../../packages/farm-core/src';
 import {
   getFarmMessages,
@@ -2761,9 +2762,35 @@ describe('FarmGame UI flow', () => {
       expect(getLatestPersistedState().adUsage.returnInterstitialAt).toBe(state.adUsage.returnInterstitialAt);
     });
 
+    // #606: 첫 밭을 해금하기 전에는 복귀 전면 광고도 띄우지 않는다.
+    test('#606 첫 밭 해금 전에는 복귀 전면 광고 유예가 걸린다', async () => {
+      const state = withGrowingPlot('wheat' as CropKey, createInitialState());
+      expect(state.unlockedPlotCount).toBe(INITIAL_PLOTS);
+      mockPersistence.readLastSeenAt.mockResolvedValueOnce(NOW - TWO_HOURS_MS);
+      const offlineGold = getActiveFarmOfflineGold(state, TWO_HOURS_MS);
+      const interstitial = {
+        isAdReady: true,
+        isAdSupported: true,
+        showAd: jest.fn(async () => ({ status: 'dismissed' as const })),
+      };
+      const screen = await renderGame(state, {
+        interstitialPlacements: { returnWelcomeBack: true, progressionMilestone: false, harvestBatch: false },
+        useInterstitialAd: () => interstitial,
+      });
+
+      const collectLabel = messages.welcomeBackCollectAction(formatMoney(offlineGold, DEFAULT_LOCALE));
+      fireEvent.press(await waitFor(() => screen.getByText(collectLabel)));
+      await waitFor(() => expect(screen.queryByText(messages.sheetTitleWelcomeBack)).toBeNull());
+      await act(async () => {
+        await Promise.resolve();
+      });
+      expect(interstitial.showAd).not.toHaveBeenCalled();
+    });
+
     test('shows the opted-in return interstitial and records cooldown only after a real display', async () => {
       const track = jest.fn();
-      const state = withGrowingPlot('wheat' as CropKey, createInitialState());
+      // #606: 첫 밭 해금 전에는 전면 광고 유예가 걸리므로 밭 1칸을 해금한 세이브로 시작한다.
+      const state = { ...withGrowingPlot('wheat' as CropKey, createInitialState()), unlockedPlotCount: INITIAL_PLOTS + 1 };
       mockPersistence.readLastSeenAt.mockResolvedValueOnce(NOW - TWO_HOURS_MS);
       const offlineGold = getActiveFarmOfflineGold(state, TWO_HOURS_MS);
       const interstitial = {
@@ -2796,7 +2823,8 @@ describe('FarmGame UI flow', () => {
     // closes in the same tap as the return interstitial would have the ad presented on it.
     // Dismissing that sheet then removed only the ad and left an empty sheet swallowing touches.
     test('R2-1 keeps the closing welcome-back sheet presented until the return interstitial ends', async () => {
-      const state = withGrowingPlot('wheat' as CropKey, createInitialState());
+      // #606: 첫 밭 해금 전에는 전면 광고 유예가 걸리므로 밭 1칸을 해금한 세이브로 시작한다.
+      const state = { ...withGrowingPlot('wheat' as CropKey, createInitialState()), unlockedPlotCount: INITIAL_PLOTS + 1 };
       mockPersistence.readLastSeenAt.mockResolvedValueOnce(NOW - TWO_HOURS_MS);
       const offlineGold = getActiveFarmOfflineGold(state, TWO_HOURS_MS);
       let finishAd!: (result: { status: 'dismissed' }) => void;
@@ -2833,7 +2861,8 @@ describe('FarmGame UI flow', () => {
 
     test('does not consume the return cooldown when the interstitial fails to display', async () => {
       const track = jest.fn();
-      const state = withGrowingPlot('wheat' as CropKey, createInitialState());
+      // #606: 첫 밭 해금 전에는 전면 광고 유예가 걸리므로 밭 1칸을 해금한 세이브로 시작한다.
+      const state = { ...withGrowingPlot('wheat' as CropKey, createInitialState()), unlockedPlotCount: INITIAL_PLOTS + 1 };
       mockPersistence.readLastSeenAt.mockResolvedValueOnce(NOW - TWO_HOURS_MS);
       const offlineGold = getActiveFarmOfflineGold(state, TWO_HOURS_MS);
       const interstitial = {
@@ -8298,5 +8327,172 @@ describe('E2E 실기기 플레이에서 드러난 결함 회귀', () => {
     await waitFor(() =>
       expect(screen.queryByText(`${formatMoney(state.gold, DEFAULT_LOCALE)}G`)).toBeNull()
     );
+  });
+});
+
+describe('#606 첫 세션 계측과 전면 광고 유예', () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+    jest.setSystemTime(NOW);
+    mockPersistence.readPersistedGameState.mockReset();
+    mockPersistence.writePersistedGameState.mockReset();
+    mockPersistence.writePersistedGameState.mockResolvedValue(undefined);
+    mockPersistence.readPersistedGameSettings.mockReset();
+    mockPersistence.writePersistedGameSettings.mockReset();
+    mockPersistence.writePersistedGameSettings.mockResolvedValue(undefined);
+    mockPersistence.readLastSeenAt.mockReset();
+    mockPersistence.readLastSeenAt.mockResolvedValue(null);
+    mockPersistence.writeLastSeenAt.mockReset();
+    mockPersistence.writeLastSeenAt.mockResolvedValue(undefined);
+  });
+  afterEach(() => {
+    cleanup();
+    jest.clearAllTimers();
+    jest.useRealTimers();
+  });
+
+  test('상점 내비 탭은 nav_tapped와 sheet_opened(nav)를, 닫기는 sheet_closed를 남긴다', async () => {
+    const track = jest.fn();
+    const screen = await renderGame(createInitialState(), { analytics: createFarmAnalytics(track) });
+    const messages = getFarmMessages(DEFAULT_LOCALE);
+
+    fireEvent.press(screen.getByTestId('shop-nav-button'));
+    expect(track).toHaveBeenCalledWith('nav_tapped', expect.objectContaining({ target: 'shop', location: 'header' }));
+    await waitFor(() =>
+      expect(track).toHaveBeenCalledWith('sheet_opened', expect.objectContaining({ sheet: 'shop', source: 'nav' }))
+    );
+
+    fireEvent.press(screen.getByLabelText(messages.sheetCloseAccessibilityLabel));
+    await waitFor(() =>
+      expect(track).toHaveBeenCalledWith('sheet_closed', expect.objectContaining({ sheet: 'shop', dwell_ms: expect.any(Number) }))
+    );
+    expect(track.mock.calls.filter(([name]) => name === 'sheet_opened')).toHaveLength(1);
+    expect(track.mock.calls.filter(([name]) => name === 'sheet_closed')).toHaveLength(1);
+  });
+
+  test('시트 체류 시간에서 앱이 백그라운드에 있던 시간을 뺀다', async () => {
+    const track = jest.fn();
+    const listeners: ((state: AppStateStatus) => void)[] = [];
+    const addEventListenerMock = AppState.addEventListener as jest.MockedFunction<typeof AppState.addEventListener>;
+    const originalImplementation = addEventListenerMock.getMockImplementation();
+    addEventListenerMock.mockImplementation((_event, listener) => {
+      listeners.push(listener);
+      return { remove: jest.fn() };
+    });
+    try {
+      const screen = await renderGame(createInitialState(), { analytics: createFarmAnalytics(track) });
+      const messages = getFarmMessages(DEFAULT_LOCALE);
+      fireEvent.press(screen.getByTestId('shop-nav-button'));
+      await waitFor(() => expect(track).toHaveBeenCalledWith('sheet_opened', expect.objectContaining({ sheet: 'shop' })));
+
+      await act(async () => {
+        jest.setSystemTime(NOW + 3_000);
+        listeners.forEach((listener) => listener('background'));
+        jest.setSystemTime(NOW + 303_000);
+        listeners.forEach((listener) => listener('active'));
+        jest.setSystemTime(NOW + 305_000);
+      });
+      fireEvent.press(screen.getByLabelText(messages.sheetCloseAccessibilityLabel));
+      await waitFor(() => expect(track).toHaveBeenCalledWith('sheet_closed', expect.objectContaining({ sheet: 'shop' })));
+      // 닫기 애니메이션만큼 더해질 수 있지만 백그라운드 5분은 들어가지 않는다.
+      const closed = track.mock.calls.find(([name]) => name === 'sheet_closed')?.[1] as { dwell_ms: number };
+      expect(closed.dwell_ms).toBeGreaterThanOrEqual(5_000);
+      expect(closed.dwell_ms).toBeLessThan(10_000);
+    } finally {
+      addEventListenerMock.mockImplementation(originalImplementation);
+    }
+  });
+
+  test('더보기 항목으로 옮겨 가면 더보기를 닫고 새 시트를 more_menu 출처로 연다', async () => {
+    const track = jest.fn();
+    const screen = await renderGame(createInitialState(), { analytics: createFarmAnalytics(track) });
+    const messages = getFarmMessages(DEFAULT_LOCALE);
+
+    fireEvent.press(screen.getByTestId('more-nav-button'));
+    await waitFor(() =>
+      expect(track).toHaveBeenCalledWith('sheet_opened', expect.objectContaining({ sheet: 'more', source: 'nav' }))
+    );
+
+    fireEvent.press(screen.getByLabelText(messages.wheelButtonAccessibilityLabel));
+    expect(track).toHaveBeenCalledWith('nav_tapped', expect.objectContaining({ target: 'wheel', location: 'more_menu' }));
+    await waitFor(() =>
+      expect(track).toHaveBeenCalledWith('sheet_opened', expect.objectContaining({ sheet: 'wheel', source: 'more_menu' }))
+    );
+    expect(track).toHaveBeenCalledWith('sheet_closed', expect.objectContaining({ sheet: 'more' }));
+  });
+  test('첫 밭을 사는 순간에는 띄우지 않고, 첫 세션이 아니면 다음 해금부터 띄운다', async () => {
+    const state: GameState = { ...createShopReadyState(), gold: 1_000_000 };
+    expect(state.unlockedPlotCount).toBe(INITIAL_PLOTS);
+    const interstitial = {
+      isAdReady: true,
+      isAdSupported: true,
+      showAd: jest.fn(async () => ({ status: 'dismissed' as const })),
+    };
+    const screen = await renderGame(state, {
+      interstitialPlacements: { returnWelcomeBack: false, progressionMilestone: true, harvestBatch: false },
+      useInterstitialAd: () => interstitial,
+    });
+
+    fireEvent.press(screen.getByTestId('shop-nav-button'));
+    fireEvent.press(screen.getByTestId('shop-tab-expand'));
+    fireEvent.press(screen.getByText('밭 개간하기'));
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(interstitial.showAd).not.toHaveBeenCalled();
+
+    fireEvent.press(screen.getByText('밭 개간하기'));
+    await waitFor(() => expect(interstitial.showAd).toHaveBeenCalledTimes(1));
+  });
+  test('첫 세션(온보딩 미완료로 시작)은 해금 뒤에도 10분 동안 진행 전면 광고를 띄우지 않는다', async () => {
+    const messages = getFarmMessages(DEFAULT_LOCALE);
+    const state: GameState = {
+      ...createInitialState(),
+      gold: 1_000_000,
+      unlockedPlotCount: INITIAL_PLOTS + 1,
+    };
+    expect(state.onboardingCompleted).toBe(false);
+    const interstitial = {
+      isAdReady: true,
+      isAdSupported: true,
+      showAd: jest.fn(async () => ({ status: 'dismissed' as const })),
+    };
+    const screen = await renderGame(
+      state,
+      {
+        interstitialPlacements: { returnWelcomeBack: false, progressionMilestone: true, harvestBatch: false },
+        useInterstitialAd: () => interstitial,
+      },
+      null,
+      { preserveOnboarding: true }
+    );
+
+    // 첫 세션의 온보딩을 건너뛴다.
+    fireEvent.press(await waitFor(() => screen.getByText(messages.onboardingSkip)));
+    await waitFor(() => expect(screen.getByText(messages.onboardingSkipConfirmTitle)).toBeTruthy());
+    const confirmButtons = screen.getAllByText(messages.onboardingSkipConfirmAction);
+    const confirmButton = confirmButtons[confirmButtons.length - 1];
+    if (confirmButton == null) throw new Error('skip confirm button missing');
+    fireEvent.press(confirmButton);
+    await waitFor(() => expect(screen.queryByText(messages.onboardingSkipConfirmTitle)).toBeNull());
+
+    // 9분 59초 시점: 이미 해금한 밭이 있어도 첫 세션 유예로 띄우지 않는다.
+    act(() => {
+      jest.setSystemTime(NOW + 10 * 60 * 1000 - 1_000);
+    });
+    fireEvent.press(screen.getByTestId('shop-nav-button'));
+    fireEvent.press(screen.getByTestId('shop-tab-expand'));
+    fireEvent.press(screen.getByText('밭 개간하기'));
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(interstitial.showAd).not.toHaveBeenCalled();
+
+    // 10분이 지나면 기존 규칙대로 띄운다.
+    act(() => {
+      jest.setSystemTime(NOW + 10 * 60 * 1000 + 1_000);
+    });
+    fireEvent.press(screen.getByText('밭 개간하기'));
+    await waitFor(() => expect(interstitial.showAd).toHaveBeenCalledTimes(1));
   });
 });
