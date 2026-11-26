@@ -1,3 +1,4 @@
+import { ABSOLUTE_FILL } from './absoluteFill';
 import { StyleSheet } from 'react-native';
 
 import {
@@ -332,7 +333,7 @@ export const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   harvestBurst: {
-    ...StyleSheet.absoluteFillObject,
+    ...ABSOLUTE_FILL,
   },
   harvestParticle: {
     position: 'absolute',
@@ -709,7 +710,7 @@ export const styles = StyleSheet.create({
     marginTop: 1,
   },
   upgradeBurstOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...ABSOLUTE_FILL,
     zIndex: 4,
   },
   upgradeBurstCenter: {
@@ -962,6 +963,18 @@ export const styles = StyleSheet.create({
   modalRoot: {
     flex: 1,
     justifyContent: 'flex-end',
+  },
+  // 보상 연출 코인(#606). 클레이 코인 아이콘이 들어오기 전까지 HUD와 같은 글리프를 쓴다.
+  rewardBurstCoin: {
+    fontSize: 24,
+    lineHeight: 30,
+  },
+  // 시트 위 오버레이(토스트, 보상 연출). iOS 실행 화면에서 zIndex가 없는 자식이 시트 뒤로 그려져 보이지
+  // 않았다(#606). 시트보다 위에 쌓는다.
+  sheetOverlay: {
+    ...ABSOLUTE_FILL,
+    zIndex: 30,
+    elevation: 30,
   },
   // 시트 딤 루트(#606). 배경색은 FarmGame의 Sheet가 열림 정도에 맞춰 바꾼다.
   sheetDimRoot: {
@@ -1390,7 +1403,7 @@ export const styles = StyleSheet.create({
     backgroundColor: '#4caf6a',
   },
   masteryBackdrop: {
-    ...StyleSheet.absoluteFillObject,
+    ...ABSOLUTE_FILL,
     backgroundColor: 'rgba(46, 28, 8, 0.6)',
   },
   masteryCenter: {
@@ -1440,7 +1453,7 @@ export const styles = StyleSheet.create({
     marginTop: 4,
   },
   prestigeBackdrop: {
-    ...StyleSheet.absoluteFillObject,
+    ...ABSOLUTE_FILL,
     backgroundColor: 'rgba(46, 28, 8, 0.68)',
   },
   prestigeCenter: {

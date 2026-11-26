@@ -17,6 +17,7 @@ import {
   Vibration,
   View,
   useWindowDimensions,
+  type GestureResponderEvent,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -298,6 +299,14 @@ import { WheelSheet } from './components/WheelSheet';
 import { AdRewardCard, SettingToggle, SheetAction, ShopCard, sheetPartStyles } from './components/SheetParts';
 import { GameFeedbackContext, GamePressable, PRESSED_DEPTH_STYLE } from './components/GamePressable';
 import { usePopInStyle } from './components/popIn';
+import { RewardBurstLayer, type RewardBurstSpec } from './components/RewardBurstLayer';
+import { CountUpText } from './components/CountUpText';
+import {
+  REWARD_COUNT_UP_DELAY_MS,
+  resolveBurstOrigin,
+  type CountUpRun,
+  type Point,
+} from './rewardBurst';
 import {
   EMPTY_TOAST_QUEUE,
   advanceToast,
@@ -399,6 +408,13 @@ const SHEET_DISMISS_TRANSLATE_Y = 520;
 const SHEET_ANIMATION_DURATION_MS = 180;
 // 시트가 열릴 때 살짝 튕긴다(#606). 튕겨 올라간 만큼 아래가 비지 않도록 시트를 화면 아래로 더 늘린다.
 const SHEET_OVERSHOOT_GUTTER = 24;
+type GoldTargetMeasurer = (callback: (point: Point | null) => void) => void;
+// 보상 연출 목표(골드 칩) 측정을 기다리는 최대 시간(#606).
+const REWARD_MEASURE_TIMEOUT_MS = 60;
+// 시트가 열린 뒤 자리 잡기까지의 시간(스프링). 보상 연출의 목표 측정을 이만큼 기다린다(#606).
+const SHEET_SETTLE_MS = 450;
+const SHEET_SETTLE_POLL_MS = 100;
+const SHEET_SETTLE_MAX_TRIES = 20;
 // 시트 딤 색(#606): Warm Wood의 짙은 갈색.
 const SHEET_DIM_COLOR = 'rgba(46, 28, 8, 0.5)';
 const SHEET_DIM_TRANSPARENT = 'rgba(46, 28, 8, 0)';
@@ -1142,6 +1158,10 @@ function FarmGameBody({
   const [isFullScreenAdInFlight, setIsFullScreenAdInFlight] = useState(false);
   const [heldSheetModalVisible, setHeldSheetModalVisible] = useState(false);
   const [isSheetModalOnScreen, setIsSheetModalOnScreen] = useState(false);
+  const isSheetModalOnScreenRef = useRef(false);
+  isSheetModalOnScreenRef.current = isSheetModalOnScreen;
+  // 시트 Modal이 화면에 올라온 시각(#606). 보상 연출이 시트가 자리 잡은 뒤 목표를 재도록 쓴다.
+  const sheetShownAtRef = useRef<number | null>(null);
   const [isUpdateGateModalOnScreen, setIsUpdateGateModalOnScreen] = useState(false);
   const isSheetModalVisible = isFullScreenAdInFlight
     ? heldSheetModalVisible
@@ -1151,6 +1171,8 @@ function FarmGameBody({
   }
   if (isSheetModalVisible && !isSheetModalOnScreen) {
     setIsSheetModalOnScreen(true);
+    // 보상 연출이 시트가 실제로 올라온 뒤 자리 잡을 때까지 기다리는 기준 시각(#606).
+    sheetShownAtRef.current = Date.now();
   } else if (!isSheetModalVisible && isSheetModalOnScreen && Platform.OS !== 'ios') {
     setIsSheetModalOnScreen(false);
   }
@@ -1250,6 +1272,16 @@ function FarmGameBody({
   const [toastQueue, setToastQueue] = useState<ToastQueueState>(EMPTY_TOAST_QUEUE);
   const toastQueueRef = useRef<ToastQueueState>(EMPTY_TOAST_QUEUE);
   const toastMessage = toastQueue.current?.message ?? null;
+  // 보상 연출(#606 AC-3). 최근 터치 지점에서 코인이 터져 보이는 골드 칩으로 날아가고 숫자가 올라간다.
+  const [rewardBursts, setRewardBursts] = useState<RewardBurstSpec[]>([]);
+  const rewardBurstIdRef = useRef(0);
+  const lastTouchRef = useRef<(Point & { at: number }) | null>(null);
+  const hudGoldRef = useRef<View | null>(null);
+  const sheetGoldTargetRef = useRef<GoldTargetMeasurer | null>(null);
+  const activeSheetRef = useRef<ActiveSheet>(null);
+  activeSheetRef.current = activeSheet;
+  const [goldCountUp, setGoldCountUp] = useState<CountUpRun | null>(null);
+  const rewardPulseTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [harvestCombo, setHarvestCombo] = useState(0);
   const comboTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1708,6 +1740,95 @@ function FarmGameBody({
   // 게임 버튼 공통 탭음(#606 AC-8). 효과음 설정과 지원 여부는 playSoundEffect가 판단한다.
   const gameFeedback = useMemo(() => ({ playTap: () => playSoundEffect('tap') }), [playSoundEffect]);
 
+  // 보상 연출(#606 AC-3). goldBefore는 지급 전 잔액이고, 실제 잔액이 goldBefore + amount와 같을 때만 숫자를
+  // 카운트업한다(그사이 수확 등으로 잔액이 바뀌면 바로 실제 값을 보인다).
+  const celebrateGold = useCallback(
+    (amount: number, goldBefore: number, options: { sound?: boolean } = {}) => {
+      if (!(amount > 0) || !Number.isFinite(amount)) return;
+      const now = Date.now();
+      const from = resolveBurstOrigin(lastTouchRef.current, now, { width: windowWidth, height: windowHeight });
+
+      const amountLabel = `+${formatMoney(amount, locale)}`;
+      const addBurst = (to: Point) => {
+        rewardBurstIdRef.current += 1;
+        const id = rewardBurstIdRef.current;
+        setRewardBursts((current) => [...current, { id, amountLabel, from, to }]);
+      };
+      const fallbackTarget = { x: 64, y: insets.top + 92 };
+      // 측정 콜백이 오지 않으면(측정 실패, 테스트 환경) 기본 목표로 바로 시작한다. 화면 밖 값도 버린다.
+      let started = false;
+      const start = (to: Point) => {
+        if (started) return;
+        started = true;
+        addBurst(to);
+      };
+      // 시트가 열려 있는데 아직 화면에 올라오지 않았거나 막 올라와 움직이는 중이면 골드 칩이 화면 밖에 있다
+      // (출석 보너스는 열리는 순간 지급된다). 자리 잡을 때까지 짧게 다시 확인한다.
+      let settleTries = 0;
+      const launch = () => {
+        const sheetOpen = activeSheetRef.current != null;
+        const shownAt = sheetShownAtRef.current;
+        const settling =
+          sheetOpen && (!isSheetModalOnScreenRef.current || shownAt == null || Date.now() - shownAt < SHEET_SETTLE_MS);
+        if (settling && settleTries < SHEET_SETTLE_MAX_TRIES) {
+          settleTries += 1;
+          const retry = setTimeout(launch, SHEET_SETTLE_POLL_MS);
+          rewardPulseTimersRef.current.push(retry);
+          return;
+        }
+        const startedAt = Date.now();
+        setGoldCountUp({ from: goldBefore, to: goldBefore + amount, startedAt });
+        const pulseTimer = setTimeout(() => pulseGold(), REWARD_COUNT_UP_DELAY_MS);
+        rewardPulseTimersRef.current.push(pulseTimer);
+        const onScreen = (to: Point | null): to is Point =>
+          to != null && to.y >= 0 && to.y <= windowHeight && to.x >= 0 && to.x <= windowWidth;
+        const measureTimer = setTimeout(() => start(fallbackTarget), REWARD_MEASURE_TIMEOUT_MS);
+        rewardPulseTimersRef.current.push(measureTimer);
+        const sheetMeasurer = isSheetModalOnScreenRef.current ? sheetGoldTargetRef.current : null;
+        const hud = hudGoldRef.current;
+        if (sheetMeasurer != null) {
+          sheetMeasurer((to) => start(onScreen(to) ? to : fallbackTarget));
+        } else if (hud != null && typeof hud.measureInWindow === 'function') {
+          hud.measureInWindow((x, y, width, height) => {
+            const to = width > 0 && height > 0 ? { x: x + Math.min(28, width / 2), y: y + height / 2 } : null;
+            start(onScreen(to) ? to : fallbackTarget);
+          });
+        } else {
+          start(fallbackTarget);
+        }
+      };
+      // 연출이 시작될 때까지 지급 전 값을 붙잡아 숫자가 먼저 바뀌었다 되돌아가지 않게 한다.
+      setGoldCountUp({ from: goldBefore, to: goldBefore + amount, startedAt: Number.POSITIVE_INFINITY });
+      launch();
+      if (options.sound !== false) {
+        playSoundEffect('reward');
+      }
+    },
+    [insets.top, locale, playSoundEffect, pulseGold, windowHeight, windowWidth]
+  );
+  // 숙련 등급 상승과 졸업 축하에도 보상 효과음을 낸다(#606 AC-7). 축하마다 한 번만 낸다.
+  const masteryNoticeId = masteryRankUpNotice?.id ?? null;
+  const prestigeNoticeId = prestigeGraduationNotice?.id ?? null;
+  useEffect(() => {
+    if (masteryNoticeId != null) playSoundEffect('reward');
+    // playSoundEffect는 설정이 바뀔 때만 달라지며, 그때 다시 울리지 않도록 id만 본다.
+  }, [masteryNoticeId]);
+  useEffect(() => {
+    if (prestigeNoticeId != null) playSoundEffect('reward');
+  }, [prestigeNoticeId]);
+  const finishRewardBurst = useCallback((id: number) => {
+    setRewardBursts((current) => current.filter((burst) => burst.id !== id));
+  }, []);
+  const recordTouch = useCallback((event: GestureResponderEvent) => {
+    lastTouchRef.current = { x: event.nativeEvent.pageX, y: event.nativeEvent.pageY, at: Date.now() };
+  }, []);
+  useEffect(
+    () => () => {
+      rewardPulseTimersRef.current.forEach((timer) => clearTimeout(timer));
+    },
+    []
+  );
+
   useEffect(() => {
     const prev = prevComboRef.current;
     prevComboRef.current = harvestCombo;
@@ -1830,6 +1951,7 @@ function FarmGameBody({
       };
     });
     setDailyBonusClaim({ streak: result.streak, goldAwarded: result.goldAwarded });
+    celebrateGold(result.goldAwarded, gameState.gold);
     farmAnalytics.trackDailyBonusClaimed({
       streak: result.streak,
       rewardValue: result.goldAwarded,
@@ -4236,6 +4358,7 @@ function FarmGameBody({
       (prev) => claimMission(prev, slot, now, getRewardedGoldAmount(prev), rewardedAd.isAdSupported) ?? prev
     );
     toast(messages.missionClaimedToast(formatMoney(rewardGold, locale)));
+    celebrateGold(rewardGold, gameState.gold);
     const buildContext = analyticsContextRef.current;
     if (buildContext != null && missionType != null) {
       farmAnalytics.trackMissionRewardClaimed({
@@ -4284,6 +4407,7 @@ function FarmGameBody({
       (prev) => claimWeeklyMission(prev, slot, now, getRewardedGoldAmount(prev), rewardedAd.isAdSupported) ?? prev
     );
     toast(messages.missionClaimedToast(formatMoney(rewardGold, locale)));
+    celebrateGold(rewardGold, gameState.gold);
     const buildContext = analyticsContextRef.current;
     if (buildContext != null && missionType != null) {
       farmAnalytics.trackMissionRewardClaimed({
@@ -4672,9 +4796,12 @@ function FarmGameBody({
   }
 
   function dismissWelcomeBack(summary: ReturnSummary) {
+    const goldBefore = gameStateRef.current.gold;
+    const collectedGold = collectReturnSummaryOfflineGold(gameStateRef.current, summary).collectedGold;
     if (!collectReturnSummaryOffline(summary)) {
       return;
     }
+    celebrateGold(collectedGold, goldBefore);
     setActiveSheet(null);
     void maybeShowReturnAd();
   }
@@ -5250,8 +5377,8 @@ function FarmGameBody({
         {
           onRewardApplied: (before, after) => {
             if (!rewardReserved) return;
-            pulseGold();
             const credited = Math.max(0, after.gold - before.gold);
+            celebrateGold(credited, before.gold);
             toast(credited === summary.offlineGold * OFFLINE_BONUS_MULTIPLIER
               ? messages.welcomeBackDoubleAdToast(formatMoney(summary.offlineGold, locale))
               : messages.receivedGoldToast(formatMoney(credited, locale)));
@@ -5297,7 +5424,7 @@ function FarmGameBody({
             landmarkStage: landmarkStatus.currentStageKey ?? undefined,
           });
           if (offer.kind === 'gold') {
-            pulseGold();
+            celebrateGold(amount, balanceBefore);
             toast(messages.receivedGoldToast(formatMoney(amount, locale)));
           } else {
             toast(messages.landmarkAdMaterialClaimedToast(amount));
@@ -6056,6 +6183,14 @@ function FarmGameBody({
   // 시트(RN Modal)는 별도 네이티브 윈도우라 같은 트리의 토스트를 덮어버린다. 같은
   // 노드를 메인 트리와 Sheet의 overlay 슬롯 양쪽에 넘겨, 시트가 열린 동안에도
   // 광고 실패·조건 부족·구매 성공 같은 피드백이 보이게 한다.
+  const rewardBurstNode =
+    rewardBursts.length > 0 ? (
+      <RewardBurstLayer
+        bursts={rewardBursts}
+        renderCoin={() => <Text style={styles.rewardBurstCoin}>💰</Text>}
+        onDone={finishRewardBurst}
+      />
+    ) : null;
   const toastNode =
     toastMessage != null ? (
       <View pointerEvents="none" style={[styles.toast, { bottom: bottomSafeInset + 142 }]}>
@@ -6065,7 +6200,11 @@ function FarmGameBody({
 
   return (
     <GameFeedbackContext.Provider value={gameFeedback}>
-    <View testID="farm-root" style={[styles.root, { backgroundColor: environmentTone.backgroundColor }]}>
+    <View
+      testID="farm-root"
+      style={[styles.root, { backgroundColor: environmentTone.backgroundColor }]}
+      onTouchStart={recordTouch}
+    >
       <ScrollView
         testID="farm-page-scroll"
         scrollEnabled={useScrollableLayout}
@@ -6132,12 +6271,17 @@ function FarmGameBody({
                 grows into its own space, not into the panel border) for a
                 consistent "cha-ching" on harvest. */}
             <Animated.View style={[styles.assetPulse, { transform: [{ scale: goldPulseScale }] }]}>
-              <Text style={styles.coinIcon}>💰</Text>
+              <View ref={hudGoldRef} collapsable={false}>
+                <Text style={styles.coinIcon}>💰</Text>
+              </View>
               <View style={styles.assetTextGroup}>
                 <Text style={styles.label}>{messages.assetLabel}</Text>
-                <Text style={styles.money}>
-                  {formatMoney(gameState.gold, locale)}G
-                </Text>
+                <CountUpText
+                  style={styles.money}
+                  value={gameState.gold}
+                  run={goldCountUp}
+                  format={(value) => `${formatMoney(value, locale)}G`}
+                />
               </View>
             </Animated.View>
           </View>
@@ -6531,6 +6675,7 @@ function FarmGameBody({
 
       {/* 시트가 열려 있으면 토스트는 Sheet의 overlay 슬롯에서만 렌더한다. 양쪽에 두면
           Modal에 가려 보이지 않는 사본이 접근성 트리에 하나 더 남는다. */}
+      {activeSheet == null ? rewardBurstNode : null}
       {activeSheet == null ? toastNode : null}
 
       <MutationFlashOverlay ref={mutationFlashRef} />
@@ -6562,9 +6707,24 @@ function FarmGameBody({
           ? messages.harvestTool : getSheetTitle(activeSheet, messages)}
         closeLabel={messages.sheetCloseAccessibilityLabel}
         bottomInset={bottomSafeInset}
-        overlay={toastNode}
+        overlay={
+          rewardBurstNode != null || toastNode != null ? (
+            <>
+              {rewardBurstNode}
+              {toastNode}
+            </>
+          ) : null
+        }
         updateGate={!isFullScreenAdInFlight && isSheetModalVisible ? updateGate : null}
-        goldLabel={messages.sheetGoldLabel(formatMoney(gameState.gold, locale))}
+        goldLabel={
+          <CountUpText
+            value={gameState.gold}
+            run={goldCountUp}
+            format={(value) => messages.sheetGoldLabel(formatMoney(value, locale))}
+          />
+        }
+        goldTargetRef={sheetGoldTargetRef}
+        onTouchStart={recordTouch}
         canClose={() => activeSheet?.type !== 'welcomeBack' || !offlineBonusAdInFlightRef.current}
         isModalVisible={isSheetModalVisible}
         onDismiss={handleSheetModalDismissed}
@@ -9047,6 +9207,8 @@ function Sheet({
   onDismiss,
   overlay,
   goldLabel,
+  goldTargetRef,
+  onTouchStart,
   updateGate,
 }: {
   activeSheet: ActiveSheet;
@@ -9056,7 +9218,11 @@ function Sheet({
   title: string;
   closeLabel: string;
   // 시트 제목 옆에 보여 줄 현재 보유 골드. 시트가 헤더를 덮기 때문에 필요하다.
-  goldLabel?: string;
+  goldLabel?: React.ReactNode;
+  // 보상 연출의 코인이 날아갈 목표(#606). 시트가 열려 있으면 시트 머리의 골드 칩 위치를 알려 준다.
+  goldTargetRef?: React.MutableRefObject<GoldTargetMeasurer | null>;
+  // 보상 연출의 출발점이 되는 최근 터치를 기록한다(#606).
+  onTouchStart?: (event: GestureResponderEvent) => void;
   updateGate?: FarmUpdateGatePresentation | null;
   // 시트가 열린 동안에도 보여야 하는 오버레이(현재는 토스트). 시트는 RN Modal이라
   // 별도 네이티브 윈도우에 그려지고, 같은 트리의 토스트는 그 뒤에 가려 보이지 않는다.
@@ -9079,6 +9245,31 @@ function Sheet({
     dragYRef.current = new Animated.Value(SHEET_DISMISS_TRANSLATE_Y);
   }
   const dragY = dragYRef.current;
+  // 보상 연출 목표(#606). 시트는 네이티브 드라이버로 움직여서 화면 좌표 측정에는 시작 위치(아래로 520)가
+  // 남는다. 시트 안 상대 위치와 변형이 빠진 시트 레이아웃 위치를 더해 자리 잡은 뒤의 좌표를 구한다.
+  const goldTextRef = useRef<Text | null>(null);
+  const sheetViewRef = useRef<View | null>(null);
+  const sheetLayoutYRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (goldTargetRef == null) return;
+    goldTargetRef.current = (callback) => {
+      const chip = goldTextRef.current;
+      const sheetNode = sheetViewRef.current;
+      const sheetY = sheetLayoutYRef.current;
+      if (chip == null || sheetNode == null || sheetY == null) {
+        callback(null);
+        return;
+      }
+      chip.measureLayout(
+        sheetNode,
+        (x, y, width, height) => callback({ x: x + Math.min(28, width / 2), y: sheetY + y + height / 2 }),
+        () => callback(null)
+      );
+    };
+    return () => {
+      goldTargetRef.current = null;
+    };
+  }, [goldTargetRef]);
   // 딤 투명도(#606). 시트 위치(네이티브 드라이버)에서 보간하면 Modal 내용이 애니메이션 뒤에 붙을 때 JS 값이
   // 닫힘 위치에 머물러 딤이 사라졌다(실행 화면 재현). 별도 값을 JS 드라이버로 움직여 늦게 붙어도 현재 값을 읽는다.
   const dimOpacityRef = useRef<Animated.Value | null>(null);
@@ -9223,6 +9414,7 @@ function Sheet({
           옅어진다. 절대 위치 자식으로 두었을 때는 iOS 실행 화면에서 그려지지 않았다. */}
       <Animated.View
         testID="sheet-dim"
+        onTouchStart={onTouchStart}
         style={[
           styles.sheetDimRoot,
           {
@@ -9245,6 +9437,10 @@ function Sheet({
           onPress={closeSheetWithAnimation}
         />
         <Animated.View
+          ref={sheetViewRef}
+          onLayout={(event) => {
+            sheetLayoutYRef.current = event.nativeEvent.layout.y;
+          }}
           style={[
             styles.sheet,
             { marginBottom: -SHEET_OVERSHOOT_GUTTER, paddingBottom: SHEET_OVERSHOOT_GUTTER },
@@ -9260,7 +9456,7 @@ function Sheet({
             {/* 시트가 헤더 골드 카드를 덮어, 구매를 결정하는 순간 정작 보유 골드를
                 읽을 수 없었다(실기기 재현). 시트 자체에 현재 보유액을 둔다. */}
             {goldLabel != null ? (
-              <Text testID="sheet-gold" style={styles.sheetGold} numberOfLines={1}>
+              <Text ref={goldTextRef} testID="sheet-gold" style={styles.sheetGold} numberOfLines={1}>
                 {goldLabel}
               </Text>
             ) : null}
@@ -9278,13 +9474,15 @@ function Sheet({
             {children}
           </ScrollView>
         </Animated.View>
-        {overlay != null && updateGate == null ? (
-          <View testID="sheet-overlay" pointerEvents="box-none" style={StyleSheet.absoluteFillObject}>
-            {overlay}
-          </View>
-        ) : null}
         {updateGate != null ? <UpdateGateSurface presentation={updateGate} /> : null}
       </KeyboardAvoidingView>
+      {/* 오버레이(토스트, 보상 연출)는 KeyboardAvoidingView 밖에 둔다. 그 안의 전체 채우기 자식은 iOS 실행
+          화면에서 화면 크기를 받지 못해 위 기준 좌표의 보상 연출이 화면 밖으로 나갔다(#606). */}
+      {overlay != null && updateGate == null ? (
+        <View testID="sheet-overlay" pointerEvents="box-none" style={styles.sheetOverlay}>
+          {overlay}
+        </View>
+      ) : null}
       </Animated.View>
     </Modal>
   );

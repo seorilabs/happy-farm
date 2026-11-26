@@ -88,6 +88,7 @@ import {
   PLOT_COLUMNS,
   PLOT_GAP,
 } from '../../../../../packages/farm-ui/src/farmGameLayout';
+import { REWARD_BURST_TOTAL_MS } from '../../../../../packages/farm-ui/src/rewardBurst';
 
 const NOW = Date.parse('2026-05-27T03:00:00.000Z');
 
@@ -2790,6 +2791,41 @@ describe('FarmGame UI flow', () => {
         await Promise.resolve();
       });
       expect(interstitial.showAd).not.toHaveBeenCalled();
+    });
+
+    // #606 AC-3, AC-7: 복귀 수익 수령은 보상 효과음과 코인 연출을 내고, 숫자는 실제 잔액에서 끝난다.
+    test('#606 복귀 수익 수령은 보상 연출을 내고 골드 숫자가 실제 잔액에서 끝난다', async () => {
+      const playEffect = jest.fn();
+      const state = withGrowingPlot('wheat' as CropKey, createInitialState());
+      mockPersistence.readLastSeenAt.mockResolvedValueOnce(NOW - TWO_HOURS_MS);
+      const offlineGold = getActiveFarmOfflineGold(state, TWO_HOURS_MS);
+      const screen = await renderGame(state, {
+        audio: {
+          isSupported: true,
+          playHarvest: jest.fn(),
+          playComboMilestone: jest.fn(),
+          playEffect,
+          setBackgroundMusicEnabled: jest.fn(),
+        },
+      }, { soundEffectsEnabled: true });
+
+      const collectLabel = messages.welcomeBackCollectAction(formatMoney(offlineGold, DEFAULT_LOCALE));
+      fireEvent.press(await waitFor(() => screen.getByText(collectLabel)));
+
+      expect(playEffect).toHaveBeenCalledWith('reward');
+      // 골드 칩 측정을 기다린 뒤 연출이 시작된다.
+      act(() => {
+        jest.advanceTimersByTime(100);
+      });
+      expect(screen.getByTestId('reward-burst-layer')).toBeTruthy();
+      expect(screen.getByText(`+${formatMoney(offlineGold, DEFAULT_LOCALE)}`)).toBeTruthy();
+
+      // 연출이 끝나면 골드 숫자가 실제 잔액과 같고 연출 레이어는 사라진다.
+      act(() => {
+        jest.advanceTimersByTime(REWARD_BURST_TOTAL_MS);
+      });
+      expect(screen.getByText(`${formatMoney(state.gold + offlineGold, DEFAULT_LOCALE)}G`)).toBeTruthy();
+      expect(screen.queryByTestId('reward-burst-layer')).toBeNull();
     });
 
     test('shows the opted-in return interstitial and records cooldown only after a real display', async () => {
