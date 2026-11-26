@@ -91,52 +91,52 @@
 
 모든 증거는 아래 폴더에 있다. 저장소에는 넣지 않았다. 원본 Maestro 출력은 같은 폴더의 `maestro/`, 흐름 파일은 `flows/`, 보조 스크립트는 `tools/`에 있다.
 
-`/private/tmp/claude-501/-Users-syous-Repositories-seorilabs-happy-farm/d34816eb-ecef-46a6-8c7c-5239ddf33f04/scratchpad/qa/evidence/round-1/`
+`smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-1/`
 
 | 번호 | 절대 경로 | 내용 |
 |---|---|---|
-| E01 | /private/tmp/claude-501/-Users-syous-Repositories-seorilabs-happy-farm/d34816eb-ecef-46a6-8c7c-5239ddf33f04/scratchpad/qa/evidence/round-1/shots/r1-sheet.jpg | 타이틀, 첫 진입, 재실행 |
-| E02 | /private/tmp/claude-501/-Users-syous-Repositories-seorilabs-happy-farm/d34816eb-ecef-46a6-8c7c-5239ddf33f04/scratchpad/qa/evidence/round-1/shots/r2-sheet-a.jpg | 스포트라이트, 칸 밖 10곳 탭 뒤 |
-| E03 | /private/tmp/claude-501/-Users-syous-Repositories-seorilabs-happy-farm/d34816eb-ecef-46a6-8c7c-5239ddf33f04/scratchpad/qa/evidence/round-1/shots/r2-sheet-b.jpg | 수확 직후, 보상 카드, 계속하기 뒤 |
-| E04 | /private/tmp/claude-501/-Users-syous-Repositories-seorilabs-happy-farm/d34816eb-ecef-46a6-8c7c-5239ddf33f04/scratchpad/qa/evidence/round-1/r2-onboarding-ko-pm.mp4 | 온보딩 전체 녹화(ko, Pro Max) |
-| E05 | /private/tmp/claude-501/-Users-syous-Repositories-seorilabs-happy-farm/d34816eb-ecef-46a6-8c7c-5239ddf33f04/scratchpad/qa/evidence/round-1/frames/r2b-sheet.jpg | 첫 수확 코인 입자 프레임 |
-| E06 | /private/tmp/claude-501/-Users-syous-Repositories-seorilabs-happy-farm/d34816eb-ecef-46a6-8c7c-5239ddf33f04/scratchpad/qa/evidence/round-1/shots/r2s-sheet.jpg | en 건너뛰기, 취소, 확정 |
-| E07 | /private/tmp/claude-501/-Users-syous-Repositories-seorilabs-happy-farm/d34816eb-ecef-46a6-8c7c-5239ddf33f04/scratchpad/qa/evidence/round-1/shots/r2e-sheet.jpg | en 보상 카드와 자동 닫힘, 시안 |
-| E08 | /private/tmp/claude-501/-Users-syous-Repositories-seorilabs-happy-farm/d34816eb-ecef-46a6-8c7c-5239ddf33f04/scratchpad/qa/evidence/round-1/shots/ac12-reward-en-vs-mock.jpg | 보상 시안 대 실행 |
-| E09 | /private/tmp/claude-501/-Users-syous-Repositories-seorilabs-happy-farm/d34816eb-ecef-46a6-8c7c-5239ddf33f04/scratchpad/qa/evidence/round-1/shots/ac12-ftue-en-vs-mock.jpg | 스포트라이트 시안 대 실행 |
-| E10 | /private/tmp/claude-501/-Users-syous-Repositories-seorilabs-happy-farm/d34816eb-ecef-46a6-8c7c-5239ddf33f04/scratchpad/qa/evidence/round-1/shots/r1-02-cell-zoom2.png | 스포트라이트 구멍과 테두리 확대 |
-| E11 | /private/tmp/claude-501/-Users-syous-Repositories-seorilabs-happy-farm/d34816eb-ecef-46a6-8c7c-5239ddf33f04/scratchpad/qa/evidence/round-1/shots/r3-sheet-a.jpg | 가기 칩, 상점 강조, 사지 않고 닫기 |
-| E12 | /private/tmp/claude-501/-Users-syous-Repositories-seorilabs-happy-farm/d34816eb-ecef-46a6-8c7c-5239ddf33f04/scratchpad/qa/evidence/round-1/shots/r3-sheet-b.jpg | 구매, 강조 해제, 출석 시트 |
-| E13 | /private/tmp/claude-501/-Users-syous-Repositories-seorilabs-happy-farm/d34816eb-ecef-46a6-8c7c-5239ddf33f04/scratchpad/qa/evidence/round-1/shots/r3c-sheet.jpg | 출석 다음 알림 안내 |
-| E14 | /private/tmp/claude-501/-Users-syous-Repositories-seorilabs-happy-farm/d34816eb-ecef-46a6-8c7c-5239ddf33f04/scratchpad/qa/evidence/round-1/r3-popups-ko-pm.mp4 | 팝업 순서 녹화 |
-| E15 | /private/tmp/claude-501/-Users-syous-Repositories-seorilabs-happy-farm/d34816eb-ecef-46a6-8c7c-5239ddf33f04/scratchpad/qa/evidence/round-1/frames/r3e-daily-open-sheet.jpg | 출석 시트가 열리며 딤 아래 지급 |
-| E16 | /private/tmp/claude-501/-Users-syous-Repositories-seorilabs-happy-farm/d34816eb-ecef-46a6-8c7c-5239ddf33f04/scratchpad/qa/evidence/round-1/frames/r3b-sheet.jpg | 받았어요 탭 때 반응 없음 |
-| E17 | /private/tmp/claude-501/-Users-syous-Repositories-seorilabs-happy-farm/d34816eb-ecef-46a6-8c7c-5239ddf33f04/scratchpad/qa/evidence/round-1/shots/r4-sheet-a.jpg | 씨앗 선택, 심기, 모두 심기 |
-| E18 | /private/tmp/claude-501/-Users-syous-Repositories-seorilabs-happy-farm/d34816eb-ecef-46a6-8c7c-5239ddf33f04/scratchpad/qa/evidence/round-1/frames/r4b-toast.jpg | 씨앗 선택 토스트 |
-| E19 | /private/tmp/claude-501/-Users-syous-Repositories-seorilabs-happy-farm/d34816eb-ecef-46a6-8c7c-5239ddf33f04/scratchpad/qa/evidence/round-1/shots/r4c-sheet.jpg | 모두 수확, 모두 심기, 재심기 |
-| E20 | /private/tmp/claude-501/-Users-syous-Repositories-seorilabs-happy-farm/d34816eb-ecef-46a6-8c7c-5239ddf33f04/scratchpad/qa/evidence/round-1/shots/r4c-popups.jpg | 광고 제안 뒤 공방 안내 |
-| E21 | /private/tmp/claude-501/-Users-syous-Repositories-seorilabs-happy-farm/d34816eb-ecef-46a6-8c7c-5239ddf33f04/scratchpad/qa/evidence/round-1/shots/r4d-02-zoom.jpg | 골드 64에서 목표 탭, 옅은 초록 비활성 가격 |
-| E22 | /private/tmp/claude-501/-Users-syous-Repositories-seorilabs-happy-farm/d34816eb-ecef-46a6-8c7c-5239ddf33f04/scratchpad/qa/evidence/round-1/frames/r4d-shortage-toast.jpg | 골드 부족 토스트 |
-| E23 | /private/tmp/claude-501/-Users-syous-Repositories-seorilabs-happy-farm/d34816eb-ecef-46a6-8c7c-5239ddf33f04/scratchpad/qa/evidence/round-1/shots/r4e-sheet.jpg | 첫 밭 해금 전 광고 제안 자동 시트 |
-| E24 | /private/tmp/claude-501/-Users-syous-Repositories-seorilabs-happy-farm/d34816eb-ecef-46a6-8c7c-5239ddf33f04/scratchpad/qa/evidence/round-1/shots/r9f-sheet.jpg | 상점 네 탭, 부족 구매 시도 |
-| E25 | /private/tmp/claude-501/-Users-syous-Repositories-seorilabs-happy-farm/d34816eb-ecef-46a6-8c7c-5239ddf33f04/scratchpad/qa/evidence/round-1/shots/coin-icons-zoom.jpg | 은색 🪙 이모지 대 금색 코인 |
-| E26 | /private/tmp/claude-501/-Users-syous-Repositories-seorilabs-happy-farm/d34816eb-ecef-46a6-8c7c-5239ddf33f04/scratchpad/qa/evidence/round-1/shots/r6a-sheet.jpg | 복귀 시트, 받고 시작하기 뒤 전면 광고 |
-| E27 | /private/tmp/claude-501/-Users-syous-Repositories-seorilabs-happy-farm/d34816eb-ecef-46a6-8c7c-5239ddf33f04/scratchpad/qa/evidence/round-1/shots/r6a-toolrow-zoom.jpg | Pro Max 도구 줄 "모두 수 / 확" |
-| E28 | /private/tmp/claude-501/-Users-syous-Repositories-seorilabs-happy-farm/d34816eb-ecef-46a6-8c7c-5239ddf33f04/scratchpad/qa/evidence/round-1/frames/r6b2-sheet.jpg | 바깥 탭으로 닫을 때 즉시 지급 |
-| E29 | /private/tmp/claude-501/-Users-syous-Repositories-seorilabs-happy-farm/d34816eb-ecef-46a6-8c7c-5239ddf33f04/scratchpad/qa/evidence/round-1/shots/r7d-sheet.jpg | 강제 종료 전후 |
-| E30 | /private/tmp/claude-501/-Users-syous-Repositories-seorilabs-happy-farm/d34816eb-ecef-46a6-8c7c-5239ddf33f04/scratchpad/qa/evidence/round-1/shots/r8b-sheet.jpg | 초기화 입력 확인과 새 농장 |
-| E31 | /private/tmp/claude-501/-Users-syous-Repositories-seorilabs-happy-farm/d34816eb-ecef-46a6-8c7c-5239ddf33f04/scratchpad/qa/evidence/round-1/shots/r9en-sheet-a.jpg | 헤더 칩과 탭이 여는 시트(en, ko는 r9ko-sheet-a/b.jpg) |
-| E32 | /private/tmp/claude-501/-Users-syous-Repositories-seorilabs-happy-farm/d34816eb-ecef-46a6-8c7c-5239ddf33f04/scratchpad/qa/evidence/round-1/shots/ac12-ko-main-vs-mock.jpg | 메인 시안 대 실행(ko, en은 ac12-en-main-vs-mock.jpg, 확대는 ac12-ko-top/bottom) |
-| E33 | /private/tmp/claude-501/-Users-syous-Repositories-seorilabs-happy-farm/d34816eb-ecef-46a6-8c7c-5239ddf33f04/scratchpad/qa/evidence/round-1/shots/r9-ko-06-goal-zoom2.jpg | 구역 목표 탭 뒤 강조 없음, 단어 중간 줄바꿈 |
-| E34 | /private/tmp/claude-501/-Users-syous-Repositories-seorilabs-happy-farm/d34816eb-ecef-46a6-8c7c-5239ddf33f04/scratchpad/qa/evidence/round-1/shots/r9e-sheet.jpg | 끌어내리기 시도(앞 시도는 r9d-sheet.jpg) |
-| E35 | /private/tmp/claude-501/-Users-syous-Repositories-seorilabs-happy-farm/d34816eb-ecef-46a6-8c7c-5239ddf33f04/scratchpad/qa/evidence/round-1/frames/r10e-mission-burst.jpg | 미션 수령 입자, 카운트업, 토스트 |
-| E36 | /private/tmp/claude-501/-Users-syous-Repositories-seorilabs-happy-farm/d34816eb-ecef-46a6-8c7c-5239ddf33f04/scratchpad/qa/evidence/round-1/frames/r10w2-sheet.jpg | 룰렛 결과 미리 노출 |
-| E37 | /private/tmp/claude-501/-Users-syous-Repositories-seorilabs-happy-farm/d34816eb-ecef-46a6-8c7c-5239ddf33f04/scratchpad/qa/evidence/round-1/shots/r11-sheet.jpg | 첫 세션 모두 수확 5회, 전면 광고 없음 |
-| E38 | /private/tmp/claude-501/-Users-syous-Repositories-seorilabs-happy-farm/d34816eb-ecef-46a6-8c7c-5239ddf33f04/scratchpad/qa/evidence/round-1/frames/r12b-press-sheet.jpg | 눌림 상태 프레임(스킨 이음매는 shots/skin-seam-zoom.png) |
-| E39 | /private/tmp/claude-501/-Users-syous-Repositories-seorilabs-happy-farm/d34816eb-ecef-46a6-8c7c-5239ddf33f04/scratchpad/qa/evidence/round-1/frames/r12c-sheet.jpg | 토스트 순차 표시 |
-| E40 | /private/tmp/claude-501/-Users-syous-Repositories-seorilabs-happy-farm/d34816eb-ecef-46a6-8c7c-5239ddf33f04/scratchpad/qa/evidence/round-1/shots/r13-se-en-sheet.jpg | SE en 메인과 시안(ko는 r13-se-ko-sheet.jpg) |
-| E41 | /private/tmp/claude-501/-Users-syous-Repositories-seorilabs-happy-farm/d34816eb-ecef-46a6-8c7c-5239ddf33f04/scratchpad/qa/evidence/round-1/shots/r13b-se-sheet.jpg | SE 4-grown ko, en, de 도구 줄 붕괴(확대는 r13b-se-toolrow-zoom.png) |
-| E42 | /private/tmp/claude-501/-Users-syous-Repositories-seorilabs-happy-farm/d34816eb-ecef-46a6-8c7c-5239ddf33f04/scratchpad/qa/evidence/round-1/shots/r13b-axl-sheet.jpg | SE 큰 글자 |
-| E43 | /private/tmp/claude-501/-Users-syous-Repositories-seorilabs-happy-farm/d34816eb-ecef-46a6-8c7c-5239ddf33f04/scratchpad/qa/evidence/round-1/shots/r7-sheet.jpg | 초기화 뒤 팝업 연쇄(공방 안내는 r7c-sheet.jpg) |
-| E44 | /private/tmp/claude-501/-Users-syous-Repositories-seorilabs-happy-farm/d34816eb-ecef-46a6-8c7c-5239ddf33f04/scratchpad/qa/evidence/round-1/frames/r2-sheet.jpg | Metro "Refreshing..." 배너(개발 빌드 흔적) |
-| E45 | /private/tmp/claude-501/-Users-syous-Repositories-seorilabs-happy-farm/d34816eb-ecef-46a6-8c7c-5239ddf33f04/scratchpad/qa/evidence/round-1/shots/r1-02-top.jpg | 새 농장 HUD "+27.5만/시" |
+| E01 | smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-1/shots/r1-sheet.jpg | 타이틀, 첫 진입, 재실행 |
+| E02 | smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-1/shots/r2-sheet-a.jpg | 스포트라이트, 칸 밖 10곳 탭 뒤 |
+| E03 | smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-1/shots/r2-sheet-b.jpg | 수확 직후, 보상 카드, 계속하기 뒤 |
+| E04 | smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-1/r2-onboarding-ko-pm.mp4 | 온보딩 전체 녹화(ko, Pro Max) |
+| E05 | smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-1/frames/r2b-sheet.jpg | 첫 수확 코인 입자 프레임 |
+| E06 | smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-1/shots/r2s-sheet.jpg | en 건너뛰기, 취소, 확정 |
+| E07 | smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-1/shots/r2e-sheet.jpg | en 보상 카드와 자동 닫힘, 시안 |
+| E08 | smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-1/shots/ac12-reward-en-vs-mock.jpg | 보상 시안 대 실행 |
+| E09 | smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-1/shots/ac12-ftue-en-vs-mock.jpg | 스포트라이트 시안 대 실행 |
+| E10 | smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-1/shots/r1-02-cell-zoom2.png | 스포트라이트 구멍과 테두리 확대 |
+| E11 | smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-1/shots/r3-sheet-a.jpg | 가기 칩, 상점 강조, 사지 않고 닫기 |
+| E12 | smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-1/shots/r3-sheet-b.jpg | 구매, 강조 해제, 출석 시트 |
+| E13 | smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-1/shots/r3c-sheet.jpg | 출석 다음 알림 안내 |
+| E14 | smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-1/r3-popups-ko-pm.mp4 | 팝업 순서 녹화 |
+| E15 | smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-1/frames/r3e-daily-open-sheet.jpg | 출석 시트가 열리며 딤 아래 지급 |
+| E16 | smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-1/frames/r3b-sheet.jpg | 받았어요 탭 때 반응 없음 |
+| E17 | smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-1/shots/r4-sheet-a.jpg | 씨앗 선택, 심기, 모두 심기 |
+| E18 | smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-1/frames/r4b-toast.jpg | 씨앗 선택 토스트 |
+| E19 | smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-1/shots/r4c-sheet.jpg | 모두 수확, 모두 심기, 재심기 |
+| E20 | smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-1/shots/r4c-popups.jpg | 광고 제안 뒤 공방 안내 |
+| E21 | smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-1/shots/r4d-02-zoom.jpg | 골드 64에서 목표 탭, 옅은 초록 비활성 가격 |
+| E22 | smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-1/frames/r4d-shortage-toast.jpg | 골드 부족 토스트 |
+| E23 | smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-1/shots/r4e-sheet.jpg | 첫 밭 해금 전 광고 제안 자동 시트 |
+| E24 | smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-1/shots/r9f-sheet.jpg | 상점 네 탭, 부족 구매 시도 |
+| E25 | smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-1/shots/coin-icons-zoom.jpg | 은색 🪙 이모지 대 금색 코인 |
+| E26 | smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-1/shots/r6a-sheet.jpg | 복귀 시트, 받고 시작하기 뒤 전면 광고 |
+| E27 | smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-1/shots/r6a-toolrow-zoom.jpg | Pro Max 도구 줄 "모두 수 / 확" |
+| E28 | smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-1/frames/r6b2-sheet.jpg | 바깥 탭으로 닫을 때 즉시 지급 |
+| E29 | smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-1/shots/r7d-sheet.jpg | 강제 종료 전후 |
+| E30 | smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-1/shots/r8b-sheet.jpg | 초기화 입력 확인과 새 농장 |
+| E31 | smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-1/shots/r9en-sheet-a.jpg | 헤더 칩과 탭이 여는 시트(en, ko는 r9ko-sheet-a/b.jpg) |
+| E32 | smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-1/shots/ac12-ko-main-vs-mock.jpg | 메인 시안 대 실행(ko, en은 ac12-en-main-vs-mock.jpg, 확대는 ac12-ko-top/bottom) |
+| E33 | smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-1/shots/r9-ko-06-goal-zoom2.jpg | 구역 목표 탭 뒤 강조 없음, 단어 중간 줄바꿈 |
+| E34 | smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-1/shots/r9e-sheet.jpg | 끌어내리기 시도(앞 시도는 r9d-sheet.jpg) |
+| E35 | smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-1/frames/r10e-mission-burst.jpg | 미션 수령 입자, 카운트업, 토스트 |
+| E36 | smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-1/frames/r10w2-sheet.jpg | 룰렛 결과 미리 노출 |
+| E37 | smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-1/shots/r11-sheet.jpg | 첫 세션 모두 수확 5회, 전면 광고 없음 |
+| E38 | smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-1/frames/r12b-press-sheet.jpg | 눌림 상태 프레임(스킨 이음매는 shots/skin-seam-zoom.png) |
+| E39 | smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-1/frames/r12c-sheet.jpg | 토스트 순차 표시 |
+| E40 | smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-1/shots/r13-se-en-sheet.jpg | SE en 메인과 시안(ko는 r13-se-ko-sheet.jpg) |
+| E41 | smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-1/shots/r13b-se-sheet.jpg | SE 4-grown ko, en, de 도구 줄 붕괴(확대는 r13b-se-toolrow-zoom.png) |
+| E42 | smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-1/shots/r13b-axl-sheet.jpg | SE 큰 글자 |
+| E43 | smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-1/shots/r7-sheet.jpg | 초기화 뒤 팝업 연쇄(공방 안내는 r7c-sheet.jpg) |
+| E44 | smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-1/frames/r2-sheet.jpg | Metro "Refreshing..." 배너(개발 빌드 흔적) |
+| E45 | smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-1/shots/r1-02-top.jpg | 새 농장 HUD "+27.5만/시" |

@@ -21,4 +21,4 @@
 1. 보상 연출의 날아가는 코인이 아직 💰 이모지다. HUD와 칩은 그린 코인 아이콘이라 맞지 않는다(iOS도 같음). 재설계 검수 수정에 포함한다.
 2. 긴 구역 이름(Campo Inicial, Starter Field)에서 구역 칩의 ▾가 잘려 선택 칩이라는 표시가 사라진다(iOS 영어도 같음). 재설계 검수 수정에 포함한다.
 
-증거 원본: `scratchpad/android/a01~a07*.png`(NAS 이관 대상).
+증거 원본: `smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/android-ac13/a01~a07*.png`(NAS 이관 대상).

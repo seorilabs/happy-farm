@@ -1,0 +1,351 @@
+{
+  "nativeDevelopment": {
+    "startedAt": "2026-11-26T18:39:42Z",
+    "completedAt": "2026-11-26T19:53:01Z",
+    "device": "iOS Simulator iPhone 16 Pro Max 509650D1-4B35-45C3-BB2F-4C10FDD6C759 (1320x2868, iOS 18.1) and iPhone SE 3rd gen BCC17F16-57F7-489D-AA07-041EAEB4AB0E (750x1334, iOS 18.1); Debug app built at 26e1bf7, JS served by Metro localhost:8081 from candidate 7c44df7da12f32c496e7620134334906c5311b2a",
+    "isolatedData": "No account. Simulator AsyncStorage overwritten per scene by QA seed.py (fresh/reward-step/1-initial/2-harvest/3-return/4-grown/daily-available) and reviewer seeds tools/seed_custom.py (late, late-daily, return-full, landmark, rich-mid, reward-step-inv, lab-low), tools/seed_wheel.py, tools/seed_settings.py; AdMob test ads; Firebase dev config; no physical device or real user save used",
+    "scenarios": [
+      {
+        "id": "app-launch-shell",
+        "status": "passed",
+        "featureIds": [
+          "app-launch-shell"
+        ],
+        "evidence": [
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/shots/a1-en-pm-01-title.png",
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/logs/log-summary.txt",
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/logs/metro-session-lines.txt",
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/frames/g3-restore-toast-sheet.jpg"
+        ]
+      },
+      {
+        "id": "title-startup",
+        "status": "passed",
+        "featureIds": [
+          "title-startup"
+        ],
+        "evidence": [
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/shots/a1-en-pm-sheet-1.jpg",
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/frames/a1/entry-full-frames.jpg",
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/video/g3-relaunch-ko-se.mp4"
+        ]
+      },
+      {
+        "id": "onboarding",
+        "status": "passed",
+        "featureIds": [
+          "onboarding"
+        ],
+        "evidence": [
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/video/a1-onboarding-en-pm.mp4",
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/shots/a1-en-pm-sheet-2.jpg",
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/frames/a1/harvest-full-frames.jpg",
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/shots/a2-ko-se-sheet.jpg",
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/shots/a3-ko-se-sheet.jpg"
+        ]
+      },
+      {
+        "id": "planting",
+        "status": "passed",
+        "featureIds": [
+          "planting"
+        ],
+        "evidence": [
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/shots/d1-en-pm-sheet-a.jpg",
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/shots/d1-en-pm-sheet-b.jpg",
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/frames/g2/short-gold-toast-zoom.png"
+        ]
+      },
+      {
+        "id": "growth-harvest",
+        "status": "passed",
+        "featureIds": [
+          "growth-harvest"
+        ],
+        "evidence": [
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/shots/d1-en-pm-sheet-b.jpg",
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/frames/d1/fert-double-116-121.jpg",
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/frames/d1/harvestall-135-140.jpg",
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/shots/c1-en-pm-sheet.jpg"
+        ]
+      },
+      {
+        "id": "shop",
+        "status": "passed",
+        "featureIds": [
+          "shop"
+        ],
+        "evidence": [
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/shots/e1-en-pm-sheet-a.jpg",
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/shots/e1-en-pm-sheet-b.jpg",
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/shots/e2-en-pm-sheet.jpg",
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/shots/e3-ko-se-sheet.jpg",
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/shots/q4-en-pm-sheet.jpg"
+        ]
+      },
+      {
+        "id": "welcome-back-offline",
+        "status": "passed",
+        "featureIds": [
+          "welcome-back-offline"
+        ],
+        "evidence": [
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/frames/f1/claim-10fps.jpg",
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/frames/f2/close-10fps.jpg",
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/shots/q2-en-pm-sheet.jpg",
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/shots/f4-en-se-sheet.jpg",
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/shots/f5-en-se-sheet.jpg",
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/shots/f6-en-se-sheet.jpg"
+        ]
+      },
+      {
+        "id": "save-restore",
+        "status": "passed",
+        "featureIds": [
+          "save-restore"
+        ],
+        "evidence": [
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/shots/g2-ko-se-sheet.jpg",
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/video/g3-relaunch-ko-se.mp4",
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/frames/g3-restore-toast-sheet.jpg",
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/shots/p-en-pm-sheet.jpg"
+        ]
+      },
+      {
+        "id": "reset-farm",
+        "status": "passed",
+        "featureIds": [
+          "reset-farm"
+        ],
+        "evidence": [
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/shots/g1-ko-se-sheet.jpg"
+        ]
+      },
+      {
+        "id": "hud-goals-status",
+        "status": "passed",
+        "featureIds": [
+          "hud-goals-status"
+        ],
+        "evidence": [
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/shots/h1-en-pm-sheet-a.jpg",
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/shots/o1-en-pm-sheet.jpg",
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/shots/o4-en-pm-sheet.jpg",
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/shots/hud-ko-unit-weight-zoom.png",
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/shots/o5-bg1-sheet.jpg"
+        ]
+      },
+      {
+        "id": "menus-sheets",
+        "status": "passed",
+        "featureIds": [
+          "menus-sheets"
+        ],
+        "evidence": [
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/shots/h1-en-pm-sheet-a.jpg",
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/shots/h1-en-pm-sheet-b.jpg",
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/shots/h2-en-pm-sheet.jpg",
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/shots/h5-h4-sheet.jpg",
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/shots/h3-en-pm-sheet.jpg",
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/shots/h4-en-se-sheet.jpg",
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/frames/k1/rapid.jpg"
+        ]
+      },
+      {
+        "id": "missions",
+        "status": "passed",
+        "featureIds": [
+          "missions"
+        ],
+        "evidence": [
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/shots/j2-ko-se-sheet.jpg",
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/shots/j4-en-se-sheet.jpg"
+        ]
+      },
+      {
+        "id": "daily-bonus-wheel",
+        "status": "passed",
+        "featureIds": [
+          "daily-bonus-wheel"
+        ],
+        "evidence": [
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/frames/j1/overview-28-48.jpg",
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/frames/j3/spin-4fps.jpg",
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/frames/q3/bonus-spin-after-ad.jpg",
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/shots/f6-en-se-sheet.jpg"
+        ]
+      },
+      {
+        "id": "collection-achievements",
+        "status": "passed",
+        "featureIds": [
+          "collection-achievements"
+        ],
+        "evidence": [
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/shots/l1-en-se-sheet-a.jpg",
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/shots/l1-en-se-sheet-b.jpg"
+        ]
+      },
+      {
+        "id": "production",
+        "status": "passed",
+        "featureIds": [
+          "production"
+        ],
+        "evidence": [
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/shots/m1-en-se-sheet-a.jpg",
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/shots/m2-en-se-sheet.jpg"
+        ]
+      },
+      {
+        "id": "research-automation",
+        "status": "passed",
+        "featureIds": [
+          "research-automation"
+        ],
+        "evidence": [
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/shots/n1-buy-sheet.jpg",
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/shots/n1-low-sheet.jpg",
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/shots/n2-en-se-sheet.jpg"
+        ]
+      },
+      {
+        "id": "prestige-map-landmark",
+        "status": "passed",
+        "featureIds": [
+          "prestige-map-landmark"
+        ],
+        "evidence": [
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/shots/o2-en-pm-sheet.jpg",
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/shots/o3-en-pm-sheet.jpg",
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/shots/o4-en-pm-sheet.jpg",
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/shots/o5-ko-se-map-skills.png"
+        ]
+      },
+      {
+        "id": "settings",
+        "status": "passed",
+        "featureIds": [
+          "settings"
+        ],
+        "evidence": [
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/shots/p-en-pm-sheet.jpg",
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/shots/b5-en-se-sheet.jpg"
+        ]
+      },
+      {
+        "id": "rewarded-ads",
+        "status": "passed",
+        "featureIds": [
+          "rewarded-ads"
+        ],
+        "evidence": [
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/shots/q1-en-pm-sheet.jpg",
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/shots/q1-en-pm-close-sheet.jpg",
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/shots/q2-en-pm-sheet.jpg",
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/frames/q3/bonus-spin-after-ad.jpg",
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/shots/q4-en-pm-sheet.jpg",
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/logs/supp-fullscreen-ad.txt"
+        ]
+      },
+      {
+        "id": "interstitial-ads",
+        "status": "passed",
+        "featureIds": [
+          "interstitial-ads"
+        ],
+        "evidence": [
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/shots/c1-en-pm-sheet.jpg",
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/shots/c2-en-pm-sheet.jpg",
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/shots/c4-en-pm-sheet.jpg",
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/frames/f1/claim-10fps.jpg",
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/logs/supp-fullscreen-ad.txt"
+        ]
+      },
+      {
+        "id": "ad-consent",
+        "status": "passed",
+        "featureIds": [
+          "ad-consent"
+        ],
+        "evidence": [
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/logs/log-summary.txt",
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/logs/simlog-pm.log",
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/logs/simlog-se.log",
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/logs/supp-admob-consent.txt"
+        ]
+      },
+      {
+        "id": "notifications",
+        "status": "passed",
+        "featureIds": [
+          "notifications"
+        ],
+        "evidence": [
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/shots/b1-ko-se-sheet.jpg",
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/shots/b4-en-se-sheet.jpg",
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/shots/b5-en-se-sheet.jpg",
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/frames/b3/gap-60s.jpg",
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/video/b3-coachmark-gap-ko-se.mp4"
+        ]
+      },
+      {
+        "id": "firebase-auth-analytics",
+        "status": "passed",
+        "featureIds": [
+          "firebase-auth-analytics"
+        ],
+        "evidence": [
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/logs/log-summary.txt",
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/logs/simlog-pm.log",
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/logs/simlog-se.log"
+        ]
+      },
+      {
+        "id": "platform-session-events",
+        "status": "passed",
+        "featureIds": [
+          "platform-session-events"
+        ],
+        "evidence": [
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/logs/log-summary.txt",
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/shots/bg1-en-se-sheet.jpg",
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/logs/simlog-se.log"
+        ]
+      },
+      {
+        "id": "update-gate",
+        "status": "passed",
+        "featureIds": [
+          "update-gate"
+        ],
+        "evidence": [
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/logs/svc-update-gate-farm-ui.txt",
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/logs/svc-update-gate-contract.txt",
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/shots/h1-en-pm-sheet-a.jpg"
+        ]
+      }
+    ]
+  },
+  "serviceRuntime": {
+    "startedAt": "2026-11-26T18:37:46Z",
+    "completedAt": "2026-11-26T18:37:53Z",
+    "commands": [
+      "cd /Users/syous/Repositories/seorilabs/happy-farm && pnpm exec jest scripts/__tests__/deploy-drift scripts/__tests__/app-store-lookup",
+      "cd /Users/syous/Repositories/seorilabs/happy-farm && pnpm exec jest packages/farm-ui/src/__tests__/FarmUpdateGate.test.tsx",
+      "cd /Users/syous/Repositories/seorilabs/happy-farm/apps/mobile && pnpm exec jest src/__tests__/updateGateContract.test.ts"
+    ],
+    "scenarios": [
+      {
+        "id": "release-observability",
+        "status": "passed",
+        "featureIds": [
+          "release-observability"
+        ],
+        "evidence": [
+          "smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-3/logs/svc-release-observability.txt"
+        ]
+      }
+    ]
+  }
+}

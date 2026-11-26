@@ -108,48 +108,48 @@
 
 모든 증거는 아래 폴더에 있고 저장소에는 넣지 않았다. 원본 Maestro 출력은 `maestro/`, 흐름 파일은 `flows/`, 보조 스크립트는 `tools/`, 녹화는 `video/`에 있다. 폴더 크기는 약 2.5GB(대부분 녹화)다.
 
-`/private/tmp/claude-501/-Users-syous-Repositories-seorilabs-happy-farm/d34816eb-ecef-46a6-8c7c-5239ddf33f04/scratchpad/qa/evidence/round-2/`
+`smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-2/`
 
 | 번호 | 절대 경로 | 내용 |
 |---|---|---|
-| E01 | /private/tmp/claude-501/-Users-syous-Repositories-seorilabs-happy-farm/d34816eb-ecef-46a6-8c7c-5239ddf33f04/scratchpad/qa/evidence/round-2/shots/a1-sheet-1.jpg | 타이틀, 스포트라이트, 칸 밖 탭 뒤, 수확 직후(ko Pro Max) |
-| E02 | /private/tmp/claude-501/-Users-syous-Repositories-seorilabs-happy-farm/d34816eb-ecef-46a6-8c7c-5239ddf33f04/scratchpad/qa/evidence/round-2/shots/a1-sheet-2.jpg | 보상 팝업, 계속하기 뒤 메인 |
-| E03 | /private/tmp/claude-501/-Users-syous-Repositories-seorilabs-happy-farm/d34816eb-ecef-46a6-8c7c-5239ddf33f04/scratchpad/qa/evidence/round-2/video/a1-launch-onboarding-ko-pm.mp4 | 온보딩 전체 녹화(ko Pro Max) |
-| E04 | /private/tmp/claude-501/-Users-syous-Repositories-seorilabs-happy-farm/d34816eb-ecef-46a6-8c7c-5239ddf33f04/scratchpad/qa/evidence/round-2/frames/a1/harvest-10fps.jpg | 코인이 골드 칩으로 날아가고 50→64, +0→+14 |
-| E05 | /private/tmp/claude-501/-Users-syous-Repositories-seorilabs-happy-farm/d34816eb-ecef-46a6-8c7c-5239ddf33f04/scratchpad/qa/evidence/round-2/shots/a1-02-spotlight-zoom-top.png | 말풍선, 사각 테두리와 구멍, 건너뛰기 링크(하단은 a1-02-spotlight-zoom-bottom.png) |
-| E06 | /private/tmp/claude-501/-Users-syous-Repositories-seorilabs-happy-farm/d34816eb-ecef-46a6-8c7c-5239ddf33f04/scratchpad/qa/evidence/round-2/shots/a1-02-farm-tab-undimmed-zoom.png | 가운데 탭 버튼 머리가 딤 위로 밝음(N1) |
-| E07 | /private/tmp/claude-501/-Users-syous-Repositories-seorilabs-happy-farm/d34816eb-ecef-46a6-8c7c-5239ddf33f04/scratchpad/qa/evidence/round-2/shots/a2-sheet.jpg | 건너뛰기 → 계속 안내받기 → 막힘 → 건너뛰기 확정 |
-| E08 | /private/tmp/claude-501/-Users-syous-Repositories-seorilabs-happy-farm/d34816eb-ecef-46a6-8c7c-5239ddf33f04/scratchpad/qa/evidence/round-2/frames/a3/wait2-2fps.jpg | 보상 팝업 무행동 약 8초 뒤 닫힘 |
-| E09 | /private/tmp/claude-501/-Users-syous-Repositories-seorilabs-happy-farm/d34816eb-ecef-46a6-8c7c-5239ddf33f04/scratchpad/qa/evidence/round-2/frames/enter-undimmed-ko-en.jpg | 진입 직후 딤 없는 0.48초 프레임 ko, en(N2) |
-| E10 | /private/tmp/claude-501/-Users-syous-Repositories-seorilabs-happy-farm/d34816eb-ecef-46a6-8c7c-5239ddf33f04/scratchpad/qa/evidence/round-2/frames/a1/tap-passthrough.jpg | 수확 직후 옛 안내 카드 깜빡임(N3, 동작 줄이기 실행은 frames/rm2/tap-passthrough.jpg) |
-| E11 | /private/tmp/claude-501/-Users-syous-Repositories-seorilabs-happy-farm/d34816eb-ecef-46a6-8c7c-5239ddf33f04/scratchpad/qa/evidence/round-2/shots/c1-sheet-a.jpg | en 진행 중 목표 칩, 상점 강조, 부족 토스트, 사지 않고 닫기 |
-| E12 | /private/tmp/claude-501/-Users-syous-Repositories-seorilabs-happy-farm/d34816eb-ecef-46a6-8c7c-5239ddf33f04/scratchpad/qa/evidence/round-2/frames/c1/overview-3s.jpg | 첫 세션 9분 3초 간격 프레임(원본 video/c1-first-session-en-pm.mp4) |
-| E13 | /private/tmp/claude-501/-Users-syous-Repositories-seorilabs-happy-farm/d34816eb-ecef-46a6-8c7c-5239ddf33f04/scratchpad/qa/evidence/round-2/shots/c2-sheet-a.jpg | 목표 준비 완료, 가기, 구매, 출석 시트(HUD 그대로) |
-| E14 | /private/tmp/claude-501/-Users-syous-Repositories-seorilabs-happy-farm/d34816eb-ecef-46a6-8c7c-5239ddf33f04/scratchpad/qa/evidence/round-2/frames/c2/daily-gotit-10fps.jpg | Got it 뒤 코인과 4→54, 알림 안내 |
-| E15 | /private/tmp/claude-501/-Users-syous-Repositories-seorilabs-happy-farm/d34816eb-ecef-46a6-8c7c-5239ddf33f04/scratchpad/qa/evidence/round-2/shots/c2-sheet-b.jpg | 알림 안내 → 공방 기능 안내 |
-| E16 | /private/tmp/claude-501/-Users-syous-Repositories-seorilabs-happy-farm/d34816eb-ecef-46a6-8c7c-5239ddf33f04/scratchpad/qa/evidence/round-2/shots/c3-sheet.jpg | 해금과 10분 경과 뒤 전면 광고(양성 경로) |
-| E17 | /private/tmp/claude-501/-Users-syous-Repositories-seorilabs-happy-farm/d34816eb-ecef-46a6-8c7c-5239ddf33f04/scratchpad/qa/evidence/round-2/shots/c1-08-toolrow-zoom.png | "Plant All 6 · 60" 은색 코인(목표 칩은 c1-08-goal-zoom.png) |
-| E18 | /private/tmp/claude-501/-Users-syous-Repositories-seorilabs-happy-farm/d34816eb-ecef-46a6-8c7c-5239ddf33f04/scratchpad/qa/evidence/round-2/shots/d1-ko-pm-sheet.jpg | 4-grown 도구 줄, 비료 한 번 누름과 해제, 모두 수확(확대 d1-ko-pm-02-toolrow-zoom.png) |
-| E19 | /private/tmp/claude-501/-Users-syous-Repositories-seorilabs-happy-farm/d34816eb-ecef-46a6-8c7c-5239ddf33f04/scratchpad/qa/evidence/round-2/frames/d1/toasts-crop.jpg | 비료 확인 토스트, 수확 토스트, 전체 비료 주 버튼 은색 코인 |
-| E20 | /private/tmp/claude-501/-Users-syous-Repositories-seorilabs-happy-farm/d34816eb-ecef-46a6-8c7c-5239ddf33f04/scratchpad/qa/evidence/round-2/shots/d3-sheet.jpg | 전체 비료 두 번 눌러 실행(74억→70.5억) |
-| E21 | /private/tmp/claude-501/-Users-syous-Repositories-seorilabs-happy-farm/d34816eb-ecef-46a6-8c7c-5239ddf33f04/scratchpad/qa/evidence/round-2/shots/d2-sheet.jpg | 수확 후 재심기 |
-| E22 | /private/tmp/claude-501/-Users-syous-Repositories-seorilabs-happy-farm/d34816eb-ecef-46a6-8c7c-5239ddf33f04/scratchpad/qa/evidence/round-2/shots/l-se-4grown-sheet.jpg | SE 4-grown ko·en·de·es(도구 줄 확대 l-se-4grown-toolrow-zoom.png, l-se-harvestall-3x.png) |
-| E23 | /private/tmp/claude-501/-Users-syous-Repositories-seorilabs-happy-farm/d34816eb-ecef-46a6-8c7c-5239ddf33f04/scratchpad/qa/evidence/round-2/shots/l-pm-4grown-sheet.jpg | Pro Max 4-grown en·de·es·ja·zh-Hans(2-harvest는 l-pm-2harvest-sheet.jpg, 확대 l-pm-4-grown-ja-zoom.png, l-pm-4-grown-zh-Hans-zoom.png) |
-| E24 | /private/tmp/claude-501/-Users-syous-Repositories-seorilabs-happy-farm/d34816eb-ecef-46a6-8c7c-5239ddf33f04/scratchpad/qa/evidence/round-2/shots/l-se-2h-1i-sheet.jpg | SE ko·en 2-harvest, 1-initial 목표 칩 |
-| E25 | /private/tmp/claude-501/-Users-syous-Repositories-seorilabs-happy-farm/d34816eb-ecef-46a6-8c7c-5239ddf33f04/scratchpad/qa/evidence/round-2/shots/l-se-axl-sheet.jpg | SE accessibility-extra-large |
-| E26 | /private/tmp/claude-501/-Users-syous-Repositories-seorilabs-happy-farm/d34816eb-ecef-46a6-8c7c-5239ddf33f04/scratchpad/qa/evidence/round-2/shots/d3-03-hud-zoom.png | HUD "70.5억" 단위 굵기(씨앗 카드는 d3-03-seed-zoom.png) |
-| E27 | /private/tmp/claude-501/-Users-syous-Repositories-seorilabs-happy-farm/d34816eb-ecef-46a6-8c7c-5239ddf33f04/scratchpad/qa/evidence/round-2/shots/e1-sheet-a.jpg | 구역 목표 강조, 상점 네 탭 높이 고정(구매·광고는 e1-sheet-b.jpg, 반영은 e1-ko-pm-10-after-ad-close.png) |
-| E28 | /private/tmp/claude-501/-Users-syous-Repositories-seorilabs-happy-farm/d34816eb-ecef-46a6-8c7c-5239ddf33f04/scratchpad/qa/evidence/round-2/frames/f1/claim-5fps.jpg | 받고 시작하기 → 코인 → 95.7억 → 광고(캡처 shots/f1-sheet.jpg, 녹화 video/f1-welcome-claim-ko-se.mp4) |
-| E29 | /private/tmp/claude-501/-Users-syous-Repositories-seorilabs-happy-farm/d34816eb-ecef-46a6-8c7c-5239ddf33f04/scratchpad/qa/evidence/round-2/frames/f2/close-10fps.jpg | 바깥 탭 닫기 → 코인 → 95.7억, 광고 없음(캡처 shots/f2-sheet.jpg) |
-| E30 | /private/tmp/claude-501/-Users-syous-Repositories-seorilabs-happy-farm/d34816eb-ecef-46a6-8c7c-5239ddf33f04/scratchpad/qa/evidence/round-2/shots/h1-sheet-a.jpg | 하단 탭과 헤더 칩이 여는 시트(나머지 h1-sheet-b.jpg) |
-| E31 | /private/tmp/claude-501/-Users-syous-Repositories-seorilabs-happy-farm/d34816eb-ecef-46a6-8c7c-5239ddf33f04/scratchpad/qa/evidence/round-2/shots/h2-sheet.jpg | 손잡이 끌기 400/300/500ms(추가 시도 h3-sheet.jpg, 되돌아감 frames/h3/last16s.jpg) |
-| E32 | /private/tmp/claude-501/-Users-syous-Repositories-seorilabs-happy-farm/d34816eb-ecef-46a6-8c7c-5239ddf33f04/scratchpad/qa/evidence/round-2/frames/j1/confirm-10fps.jpg | ko 출석 받았어요 → 코인과 4.85만→4.89만(캡처 shots/j1-sheet.jpg) |
-| E33 | /private/tmp/claude-501/-Users-syous-Repositories-seorilabs-happy-farm/d34816eb-ecef-46a6-8c7c-5239ddf33f04/scratchpad/qa/evidence/round-2/frames/j2/claim-5fps.jpg | 미션 수령 토스트 위치와 은색 받기 버튼(캡처 shots/j2-sheet.jpg) |
-| E34 | /private/tmp/claude-501/-Users-syous-Repositories-seorilabs-happy-farm/d34816eb-ecef-46a6-8c7c-5239ddf33f04/scratchpad/qa/evidence/round-2/frames/j3/spin-4fps.jpg | 룰렛 도는 동안 HUD 고정, 멈춘 뒤 상승, 토스트가 HUD를 가림(캡처 shots/j3-sheet.jpg) |
-| E35 | /private/tmp/claude-501/-Users-syous-Repositories-seorilabs-happy-farm/d34816eb-ecef-46a6-8c7c-5239ddf33f04/scratchpad/qa/evidence/round-2/shots/g-sheet.jpg | 설정 초기화, 취소, 입력 확인, 새 농장(초기화 뒤 팝업은 g-sheet-b.jpg) |
-| E36 | /private/tmp/claude-501/-Users-syous-Repositories-seorilabs-happy-farm/d34816eb-ecef-46a6-8c7c-5239ddf33f04/scratchpad/qa/evidence/round-2/shots/g6-sheet.jpg | 밀 4칸 심기, 강제 종료 뒤 복원(부족 토스트 frames/g8/short-toast-zoom.png) |
-| E37 | /private/tmp/claude-501/-Users-syous-Repositories-seorilabs-happy-farm/d34816eb-ecef-46a6-8c7c-5239ddf33f04/scratchpad/qa/evidence/round-2/frames/k1/toolrow-4fps.jpg | 눌림 상태(토스트 차례는 frames/k1/overview.jpg, 연타는 shots/k1-sheet.jpg) |
-| E38 | /private/tmp/claude-501/-Users-syous-Repositories-seorilabs-happy-farm/d34816eb-ecef-46a6-8c7c-5239ddf33f04/scratchpad/qa/evidence/round-2/shots/h1-ko-pm-06-stars-zoom.png | "10만G" 잔존(N5) |
-| E39 | /private/tmp/claude-501/-Users-syous-Repositories-seorilabs-happy-farm/d34816eb-ecef-46a6-8c7c-5239ddf33f04/scratchpad/qa/evidence/round-2/frames/rm1/confirm-10fps.jpg | 동작 줄이기 출석(캡처 shots/rm1-sheet.jpg, 온보딩 frames/rm2/tap-10fps.jpg) |
-| E40 | /private/tmp/claude-501/-Users-syous-Repositories-seorilabs-happy-farm/d34816eb-ecef-46a6-8c7c-5239ddf33f04/scratchpad/qa/evidence/round-2/compare/ | 시안 대 실행 ac12-main-en.jpg, ac12-main-ko.jpg, ac12-main-se.jpg, ac12-ftue-en.jpg, ac12-reward-en.jpg |
-| E41 | /private/tmp/claude-501/-Users-syous-Repositories-seorilabs-happy-farm/d34816eb-ecef-46a6-8c7c-5239ddf33f04/scratchpad/qa/evidence/round-2/shots/skin-seam-junction-r2.png | 3분할 스킨 경계 4배 확대(끝 조각은 skin-seam-zoom-r2.png) |
+| E01 | smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-2/shots/a1-sheet-1.jpg | 타이틀, 스포트라이트, 칸 밖 탭 뒤, 수확 직후(ko Pro Max) |
+| E02 | smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-2/shots/a1-sheet-2.jpg | 보상 팝업, 계속하기 뒤 메인 |
+| E03 | smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-2/video/a1-launch-onboarding-ko-pm.mp4 | 온보딩 전체 녹화(ko Pro Max) |
+| E04 | smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-2/frames/a1/harvest-10fps.jpg | 코인이 골드 칩으로 날아가고 50→64, +0→+14 |
+| E05 | smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-2/shots/a1-02-spotlight-zoom-top.png | 말풍선, 사각 테두리와 구멍, 건너뛰기 링크(하단은 a1-02-spotlight-zoom-bottom.png) |
+| E06 | smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-2/shots/a1-02-farm-tab-undimmed-zoom.png | 가운데 탭 버튼 머리가 딤 위로 밝음(N1) |
+| E07 | smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-2/shots/a2-sheet.jpg | 건너뛰기 → 계속 안내받기 → 막힘 → 건너뛰기 확정 |
+| E08 | smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-2/frames/a3/wait2-2fps.jpg | 보상 팝업 무행동 약 8초 뒤 닫힘 |
+| E09 | smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-2/frames/enter-undimmed-ko-en.jpg | 진입 직후 딤 없는 0.48초 프레임 ko, en(N2) |
+| E10 | smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-2/frames/a1/tap-passthrough.jpg | 수확 직후 옛 안내 카드 깜빡임(N3, 동작 줄이기 실행은 frames/rm2/tap-passthrough.jpg) |
+| E11 | smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-2/shots/c1-sheet-a.jpg | en 진행 중 목표 칩, 상점 강조, 부족 토스트, 사지 않고 닫기 |
+| E12 | smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-2/frames/c1/overview-3s.jpg | 첫 세션 9분 3초 간격 프레임(원본 video/c1-first-session-en-pm.mp4) |
+| E13 | smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-2/shots/c2-sheet-a.jpg | 목표 준비 완료, 가기, 구매, 출석 시트(HUD 그대로) |
+| E14 | smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-2/frames/c2/daily-gotit-10fps.jpg | Got it 뒤 코인과 4→54, 알림 안내 |
+| E15 | smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-2/shots/c2-sheet-b.jpg | 알림 안내 → 공방 기능 안내 |
+| E16 | smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-2/shots/c3-sheet.jpg | 해금과 10분 경과 뒤 전면 광고(양성 경로) |
+| E17 | smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-2/shots/c1-08-toolrow-zoom.png | "Plant All 6 · 60" 은색 코인(목표 칩은 c1-08-goal-zoom.png) |
+| E18 | smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-2/shots/d1-ko-pm-sheet.jpg | 4-grown 도구 줄, 비료 한 번 누름과 해제, 모두 수확(확대 d1-ko-pm-02-toolrow-zoom.png) |
+| E19 | smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-2/frames/d1/toasts-crop.jpg | 비료 확인 토스트, 수확 토스트, 전체 비료 주 버튼 은색 코인 |
+| E20 | smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-2/shots/d3-sheet.jpg | 전체 비료 두 번 눌러 실행(74억→70.5억) |
+| E21 | smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-2/shots/d2-sheet.jpg | 수확 후 재심기 |
+| E22 | smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-2/shots/l-se-4grown-sheet.jpg | SE 4-grown ko·en·de·es(도구 줄 확대 l-se-4grown-toolrow-zoom.png, l-se-harvestall-3x.png) |
+| E23 | smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-2/shots/l-pm-4grown-sheet.jpg | Pro Max 4-grown en·de·es·ja·zh-Hans(2-harvest는 l-pm-2harvest-sheet.jpg, 확대 l-pm-4-grown-ja-zoom.png, l-pm-4-grown-zh-Hans-zoom.png) |
+| E24 | smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-2/shots/l-se-2h-1i-sheet.jpg | SE ko·en 2-harvest, 1-initial 목표 칩 |
+| E25 | smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-2/shots/l-se-axl-sheet.jpg | SE accessibility-extra-large |
+| E26 | smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-2/shots/d3-03-hud-zoom.png | HUD "70.5억" 단위 굵기(씨앗 카드는 d3-03-seed-zoom.png) |
+| E27 | smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-2/shots/e1-sheet-a.jpg | 구역 목표 강조, 상점 네 탭 높이 고정(구매·광고는 e1-sheet-b.jpg, 반영은 e1-ko-pm-10-after-ad-close.png) |
+| E28 | smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-2/frames/f1/claim-5fps.jpg | 받고 시작하기 → 코인 → 95.7억 → 광고(캡처 shots/f1-sheet.jpg, 녹화 video/f1-welcome-claim-ko-se.mp4) |
+| E29 | smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-2/frames/f2/close-10fps.jpg | 바깥 탭 닫기 → 코인 → 95.7억, 광고 없음(캡처 shots/f2-sheet.jpg) |
+| E30 | smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-2/shots/h1-sheet-a.jpg | 하단 탭과 헤더 칩이 여는 시트(나머지 h1-sheet-b.jpg) |
+| E31 | smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-2/shots/h2-sheet.jpg | 손잡이 끌기 400/300/500ms(추가 시도 h3-sheet.jpg, 되돌아감 frames/h3/last16s.jpg) |
+| E32 | smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-2/frames/j1/confirm-10fps.jpg | ko 출석 받았어요 → 코인과 4.85만→4.89만(캡처 shots/j1-sheet.jpg) |
+| E33 | smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-2/frames/j2/claim-5fps.jpg | 미션 수령 토스트 위치와 은색 받기 버튼(캡처 shots/j2-sheet.jpg) |
+| E34 | smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-2/frames/j3/spin-4fps.jpg | 룰렛 도는 동안 HUD 고정, 멈춘 뒤 상승, 토스트가 HUD를 가림(캡처 shots/j3-sheet.jpg) |
+| E35 | smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-2/shots/g-sheet.jpg | 설정 초기화, 취소, 입력 확인, 새 농장(초기화 뒤 팝업은 g-sheet-b.jpg) |
+| E36 | smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-2/shots/g6-sheet.jpg | 밀 4칸 심기, 강제 종료 뒤 복원(부족 토스트 frames/g8/short-toast-zoom.png) |
+| E37 | smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-2/frames/k1/toolrow-4fps.jpg | 눌림 상태(토스트 차례는 frames/k1/overview.jpg, 연타는 shots/k1-sheet.jpg) |
+| E38 | smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-2/shots/h1-ko-pm-06-stars-zoom.png | "10만G" 잔존(N5) |
+| E39 | smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-2/frames/rm1/confirm-10fps.jpg | 동작 줄이기 출석(캡처 shots/rm1-sheet.jpg, 온보딩 frames/rm2/tap-10fps.jpg) |
+| E40 | smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-2/compare/ | 시안 대 실행 ac12-main-en.jpg, ac12-main-ko.jpg, ac12-main-se.jpg, ac12-ftue-en.jpg, ac12-reward-en.jpg |
+| E41 | smb://nas1dual/Data/Backup/agent-artifacts/happy-farm/2026-11-27/7c44df7/game-ui-review/round-2/shots/skin-seam-junction-r2.png | 3분할 스킨 경계 4배 확대(끝 조각은 skin-seam-zoom-r2.png) |
