@@ -3925,7 +3925,8 @@ function FarmGameBody({
   const showPlantAllAction =
     !showHarvestBatchActions &&
     selectedTool !== 'harvest' &&
-    onboardingStep == null &&
+    // 화면에 그리는 단계로 판정해 온보딩 진입 첫 프레임에도 숨긴다(2회차 N2와 같은 이유).
+    onboardingViewStep == null &&
     plantAllPreview.plantableCount > 0 &&
     plantAllPreview.emptyPlotCount >= PLANT_ALL_MIN_COUNT;
   const showFertilizeAllAction = fertilizeAllPreview.affordableCount >= FERTILIZE_ALL_MIN_COUNT;
