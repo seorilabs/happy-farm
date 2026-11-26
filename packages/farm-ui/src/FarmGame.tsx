@@ -136,7 +136,8 @@ import {
   formatHourlyGold,
   formatMoney,
   formatRemainingTime,
-  formatSignedPercent,
+  formatMultiplier,
+  roiPercentToMultiplier,
   getReturnSummary,
   getActiveFarmOfflineGoldPerHour,
   getActiveFarmOfflineCapMs,
@@ -243,7 +244,6 @@ import {
   performHarvestAll,
   performHarvestAndReplant,
   performPlantAll,
-  getEmptyPlotCount,
   getPlantAllPreview,
   getReadyPlotCount,
   recordHarvestBonusAdPrompt,
@@ -293,9 +293,19 @@ import {
   type SheetDwell,
 } from './sheetAnalytics';
 import { isFirstSessionPopupHoldActive } from './firstSessionPopups';
+import type { FarmUiIconKey } from './farmArt';
 import { findSpotlightPlotIndex, getPlotCellRect } from './ftueSpotlight';
 import { FtueSpotlight } from './components/FtueSpotlight';
-import { useDisplayFontStyle } from './components/GameUi';
+import {
+  GAME_UI_MAX_FONT_SCALE,
+  GameBadge,
+  GameText,
+  HudIconButton,
+  SkinFrame,
+  UiIcon,
+  useDisplayFontStyle,
+} from './components/GameUi';
+import { GameTabBar } from './components/GameTabBar';
 import { measureNodeInWindow } from './measureInWindow';
 import { useReduceMotion } from './useReduceMotion';
 import { LabSheet } from './components/LabSheet';
@@ -304,7 +314,7 @@ import { ProductionSheet, type ProductionTabKey } from './components/ProductionS
 import { StatsSheet, type FarmRecordStats } from './components/StatsSheet';
 import { WheelSheet } from './components/WheelSheet';
 import { AdRewardCard, SettingToggle, SheetAction, ShopCard, sheetPartStyles } from './components/SheetParts';
-import { GameFeedbackContext, GamePressable, PRESSED_DEPTH_STYLE } from './components/GamePressable';
+import { GameFeedbackContext, GamePressable, PRESSED_DEPTH_STYLE, PRESSED_SINK_STYLE } from './components/GamePressable';
 import { usePopInStyle } from './components/popIn';
 import { RewardBurstLayer, type RewardBurstSpec } from './components/RewardBurstLayer';
 import { CountUpText } from './components/CountUpText';
@@ -416,6 +426,12 @@ const SHEET_ANIMATION_DURATION_MS = 180;
 // 시트가 열릴 때 살짝 튕긴다(#606). 튕겨 올라간 만큼 아래가 비지 않도록 시트를 화면 아래로 더 늘린다.
 const SHEET_OVERSHOOT_GUTTER = 24;
 type GoldTargetMeasurer = (callback: (point: Point | null) => void) => void;
+// B안 헤더 재화 칩 높이(#606).
+const HUD_CHIP_HEIGHT = 52;
+// 하단 일괄 행동 버튼과 구역 선택 칩 높이(#606).
+const BATCH_ACTION_HEIGHT = 52;
+// 다음 목표 칩 높이(#606). 두 줄 문구와 진행 막대가 들어간다.
+const NEXT_GOAL_HEIGHT = 58;
 // 보상 연출 목표(골드 칩) 측정을 기다리는 최대 시간(#606).
 const REWARD_MEASURE_TIMEOUT_MS = 200;
 // 시트가 열린 뒤 자리 잡기까지의 시간(스프링). 보상 연출의 목표 측정을 이만큼 기다린다(#606).
@@ -602,6 +618,7 @@ type ActiveSheet =
   | { type: 'cooking' }
   | { type: 'decorationLayout' }
   | { type: 'resetConfirm' }
+  | { type: 'areaPicker' }
   | null;
 
 function getSheetAnalyticsTransitionKey(activeSheet: ActiveSheet): string | null {
@@ -1153,8 +1170,9 @@ function FarmGameBody({
   const bottomSafeInset = resolveBottomSafeInset(insets.bottom);
   const { width: windowWidth, height: windowHeight, fontScale } = useWindowDimensions();
   const useLargeTextLayout = fontScale >= 1.3;
-  const useScrollableLayout = useLargeTextLayout || windowHeight < 700;
-  const useStackedStats = useLargeTextLayout || windowWidth < 360;
+  // B안 레이아웃(#606)은 iPhone SE(667pt)에서도 도구 줄과 탭 바가 한 화면에 들어가, 밭만 안에서
+  // 스크롤한다(승인 시안 B-main-se). 큰 글자에서만 페이지 전체를 스크롤한다.
+  const useScrollableLayout = useLargeTextLayout;
   const [activeSheet, setActiveSheet] = useState<ActiveSheet>(null);
   const previousActiveSheetRef = useRef<ActiveSheet>(null);
   // iOS presents every RN Modal from one root view controller and refuses a new one while
@@ -3794,7 +3812,6 @@ function FarmGameBody({
     [visibleCropKeys, seedSortMode, cropEconomyByKey]
   );
   const readyPlotCount = useMemo(() => getReadyPlotCount(gameState), [gameState]);
-  const emptyPlotCount = useMemo(() => getEmptyPlotCount(gameState), [gameState]);
   // Plant-all affordance for the currently selected crop tool: how many empty
   // plots could be sown and the gold it costs. 'harvest' yields zeros so the
   // button stays hidden. Recomputed each tick so gold/plot changes stay live.
@@ -3831,7 +3848,8 @@ function FarmGameBody({
   const batchActionCount =
     (showHarvestBatchActions ? 2 : showPlantAllAction ? 1 : 0) +
     (showFertilizeAllAction ? 1 : 0);
-  const useCompactBatchActions = batchActionCount >= 3;
+  // 구역 선택 칩과 같은 줄이라 행동이 둘 이상이면 글자를 줄인다.
+  const useCompactBatchActions = batchActionCount >= 2;
   // 초보 밭은 2초마다 익어 이 행의 구성이 수시로 교체된다. 교체되는 순간 같은 좌표의
   // 탭이 다른 액션으로 실행돼, 전체 비료를 누르려던 탭이 "수확 후 재심기"로 실행되는
   // 것을 실기기에서 재현했다. 행 구성이 바뀐 직후 짧게 탭을 무시해, 손가락이 향하던
@@ -6089,40 +6107,6 @@ function FarmGameBody({
     );
   }
 
-  const toolHint = useMemo(() => {
-    if (!selectedAreaUnlocked) {
-      return messages.lockedAreaHint(
-        selectedAreaLabel.name,
-        getAreaUnlockRequirementText(gameState, selectedArea, locale)
-      );
-    }
-    if (selectedTool === 'harvest') {
-      // 수확 도구를 든 채 밭이 전부 비면 "밭을 눌러 수확할 수 있어요"가 남아, 실제로
-      // 밭을 누르면 "씨앗을 선택해 주세요" 토스트로 튕기는 모순이 생겼다(온보딩 직후
-      // 신규 유저가 그대로 겪는 경로). 지금 무엇을 할 수 있는지로 안내를 나눈다.
-      if (readyPlotCount > 0) {
-        return messages.harvestHint;
-      }
-      return emptyPlotCount > 0 ? messages.harvestHintEmpty : messages.harvestHintGrowing;
-    }
-    return messages.plantHint(
-      getLocalizedCropName(selectedTool),
-      formatMoney(getCropPurchaseCost(gameState, selectedTool), locale),
-      formatSignedPercent(getCropEconomy(cropEconomyByKey, selectedTool).roiPercent, locale)
-    );
-  }, [
-    cropEconomyByKey,
-    emptyPlotCount,
-    gameState,
-    getLocalizedCropName,
-    locale,
-    messages,
-    readyPlotCount,
-    selectedArea,
-    selectedAreaLabel.name,
-    selectedAreaUnlocked,
-    selectedTool,
-  ]);
 
   // Stable, index-based press handler so memoized PlotCells keep referential
   // equality across the 250ms tick and plant-pulse updates. handlePlotClick
@@ -6249,8 +6233,24 @@ function FarmGameBody({
       badge: claimableAchievementCount,
       onPress: openAchievements,
     },
+    // #606 B안: 헤더에서 빠진 농장 현황과 설정을 더보기로 옮겼다.
+    {
+      key: 'stats',
+      label: messages.statsButton,
+      accessibilityLabel: messages.sheetTitleStats,
+      badge: 0,
+      onPress: openStats,
+    },
+    {
+      key: 'settings',
+      label: messages.settingsButton,
+      accessibilityLabel: messages.settingsAccessibilityLabel,
+      badge: 0,
+      onPress: openSettings,
+    },
   ];
   const moreRollupBadge = moreMenuEntries.reduce((sum, entry) => sum + entry.badge, 0);
+  const firstSessionPopupHold = isFirstSessionPopupHoldActive(gameState, firstSessionStartedAtRef.current);
 
   // '더보기' 시트 내부 그룹화(#270): 항목을 성격별 섹션으로 묶어 스캔 비용을 낮춘다.
   // 일일 보너스는 수령 가능할 때만 일일 섹션에 추가되고, 항목 배지가 상단에 롤업된다(#294).
@@ -6259,6 +6259,7 @@ function FarmGameBody({
     { key: 'daily', title: messages.moreSectionDaily, entryKeys: ['dailyBonus', 'wheel', 'collection'] },
     { key: 'production', title: messages.moreSectionProduction, entryKeys: ['production', 'cooking'] },
     { key: 'growth', title: messages.moreSectionGrowth, entryKeys: ['lab', 'map', 'achievements'] },
+    { key: 'system', title: messages.moreSectionSystem, entryKeys: ['stats', 'settings'] },
   ];
 
   // Outline the target the current onboarding step points at to draw the eye.
@@ -6281,7 +6282,7 @@ function FarmGameBody({
   const pendingFeatureCoachmark =
     gameState.onboardingCompleted &&
     onboardingStep == null &&
-    !isFirstSessionPopupHoldActive(gameState, firstSessionStartedAtRef.current) &&
+    !firstSessionPopupHold &&
     firstHarvestNotice == null &&
     notificationPromptGeneration == null &&
     !isNotificationPromptOwed &&
@@ -6335,161 +6336,131 @@ function FarmGameBody({
         scrollEnabled={useScrollableLayout}
         contentContainerStyle={useScrollableLayout ? styles.scrollablePageContent : styles.viewportPageContent}
       >
-      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
-        {/* 헤더 밀도 완화(#355)로 제목 행 상시 요소를 줄였으므로, mobile 전용 줄바꿈
-            fallback(mobileHeaderTop/mobileTitleGroup)에 더는 의존하지 않는다. 핵심 행은
-            market와 무관하게 동일 레이아웃으로 렌더한다. */}
-        <View testID="header-top" style={[styles.headerTop, useLargeTextLayout && styles.wrappedHeaderTop]}>
-          <View testID="title-group" style={[styles.titleGroup, useLargeTextLayout && styles.fullWidthTitleGroup]}>
-            <Text style={styles.homeIcon}>🏡</Text>
-            <View style={styles.titleTextGroup}>
-              <Text style={styles.title}>{messages.appTitle}</Text>
-              <View style={[styles.subtitleRow, useLargeTextLayout && styles.stackedSubtitleRow]}>
-                <Text style={styles.subtitle}>{messages.appSubtitle}</Text>
-                {/* 헤더 밀도 완화(#355): 활성 칭호 배지와 오늘의 작물 배수 상세는 이
-                    단일 요약 chip 탭(openStats) 뒤 '농장 현황' 시트로 강등했다. 헤더에는
-                    어떤 작물이 featured인지 알리는 compact teaser + 진입 화살표만 남긴다. */}
-                <GamePressable
-                  testID="cotd-chip"
-                  accessibilityRole="button"
-                  accessibilityLabel={`${messages.cropOfTheDayLabel}, ${getLocalizedCropName(cropOfTheDay.cropKey)}`}
-                  hitSlop={6}
-                  style={styles.cotdChip}
-                  onPress={openStats}
-                >
-                  <Text style={styles.cotdChipText} numberOfLines={1}>
-                    🌱 {getCrop(cropOfTheDay.cropKey).icon} {getLocalizedCropName(cropOfTheDay.cropKey)} ›
-                  </Text>
-                </GamePressable>
-              </View>
-            </View>
-          </View>
-
-          <View style={styles.headerActions}>
-            <GamePressable
-              testID="prestige-stars-chip"
-              accessibilityRole="button"
-              accessibilityLabel={messages.prestigeStarsChipAccessibilityLabel(
-                gameState.prestige.stars,
-                purchasablePrestigeSkillCount
-              )}
-              hitSlop={6}
-              style={({ pressed }) => [styles.starsChip, pressed && styles.starsChipPressed]}
-              onPress={openMap}
+      <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
+        {/* #606 B안: 재화 칩(골드, 별)과 더보기, 그 아래 다음 목표 칩과 출석, 부스트. 제목과 설정은
+            타이틀 화면과 더보기로 옮기고, 메뉴는 하단 탭 바로 내렸다. */}
+        <View testID="hud-row" style={styles.hudRow}>
+          <GamePressable
+            testID="gold-chip"
+            accessibilityRole="button"
+            accessibilityLabel={`${messages.assetLabel} ${formatMoney(gameState.gold, locale)}, ${messages.productivity(
+              formatHourlyGold(farmProductivity.netProfitPerHour, locale)
+            )}`}
+            pressedStyle={PRESSED_SINK_STYLE}
+            style={styles.goldChipPressable}
+            onPress={() => {
+              trackNavTap('stats', 'hud');
+              openStats();
+            }}
+          >
+            <SkinFrame
+              skin="chip"
+              height={HUD_CHIP_HEIGHT}
+              fallbackStyle={styles.hudChipFallback}
+              contentStyle={styles.goldChipContent}
             >
-              <Text style={styles.starsChipText}>★ {gameState.prestige.stars}</Text>
-            </GamePressable>
-            <GamePressable pressedStyle={null}
-              accessibilityLabel={messages.settingsAccessibilityLabel}
-              hitSlop={8}
-              style={({ pressed }) => [styles.settingsButton, pressed && styles.settingsButtonPressed]}
-              onPress={openSettings}
-            >
-              <Text style={styles.settingsButtonText}>⚙</Text>
-            </GamePressable>
-          </View>
-        </View>
-
-        <View style={[styles.statsPanel, useStackedStats && styles.stackedStatsPanel]}>
-          <View style={styles.assetRow}>
-            {/* The whole asset block scales as one unit (anchored left so it
-                grows into its own space, not into the panel border) for a
-                consistent "cha-ching" on harvest. */}
-            <Animated.View style={[styles.assetPulse, { transform: [{ scale: goldPulseScale }] }]}>
-              <View ref={hudGoldRef} collapsable={false}>
-                <Text style={styles.coinIcon}>💰</Text>
-              </View>
-              <View style={styles.assetTextGroup}>
-                <Text style={styles.label}>{messages.assetLabel}</Text>
+              {/* The coin and number scale as one unit for a consistent "cha-ching" on harvest. */}
+              <Animated.View style={[styles.goldChipPulse, { transform: [{ scale: goldPulseScale }] }]}>
+                <View ref={hudGoldRef} collapsable={false}>
+                  <UiIcon name="coin" size={34} fallback="💰" />
+                </View>
                 <CountUpText
-                  style={[styles.money, displayFontStyle]}
+                  testID="hud-gold"
+                  maxFontSizeMultiplier={GAME_UI_MAX_FONT_SCALE}
+                  style={[styles.hudNumber, displayFontStyle]}
                   value={gameState.gold}
                   run={goldCountUp}
-                  format={(value) => `${formatMoney(value, locale)}G`}
+                  format={(value) => formatMoney(value, locale)}
                 />
-              </View>
-            </Animated.View>
-          </View>
-          <GamePressable
-            testID="productivity-summary"
-            accessibilityRole="button"
-            accessibilityLabel={messages.productivity(formatHourlyGold(farmProductivity.netProfitPerHour, locale))}
-            onPress={openStats}
-            style={[styles.summaryColumn, useStackedStats && styles.fullWidthSummary]}
-          >
-            <Text style={styles.productivityText}>
-              {messages.productivity(formatHourlyGold(farmProductivity.netProfitPerHour, locale))} ⓘ
-            </Text>
+              </Animated.View>
+              <Text style={styles.hudIncome} numberOfLines={1} maxFontSizeMultiplier={GAME_UI_MAX_FONT_SCALE}>
+                {messages.hudIncomePerHour(formatMoney(Math.max(0, farmProductivity.netProfitPerHour), locale))}
+              </Text>
+            </SkinFrame>
           </GamePressable>
-        </View>
-
-        {nextFarmGoal != null ? (
-          <NextGoalBar
-            reduceMotion={reduceMotion}
-            goal={nextFarmGoal}
-            messages={messages}
-            locale={locale}
-            getAreaName={(areaKey) => getLocalizedAreaLabel(areaKey).name}
-            onPress={openNextFarmGoal}
-          />
-        ) : null}
-
-        <ScrollView
-          testID="nav-row"
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.navRow}
-        >
-          <NavButton
-            testID="shop-nav-button"
-            label={messages.shopButton}
-            badge={onboardingStep != null ? 0 : shopBadgeCount}
-            onPress={() => {
-              trackNavTap('shop', 'header');
-              openShop();
-            }}
-          />
-          <NavButton
-            label={messages.missionsButton}
-            badge={onboardingStep != null ? 0 : missionClaimableCount}
-            accessibilityLabel={messages.missionsButtonAccessibilityLabel}
-            onPress={() => {
-              trackNavTap('missions', 'header');
-              openMissions();
-            }}
-          />
-          <NavButton
+          <GamePressable
+            testID="prestige-stars-chip"
+            accessibilityRole="button"
+            accessibilityLabel={messages.prestigeStarsChipAccessibilityLabel(
+              gameState.prestige.stars,
+              purchasablePrestigeSkillCount
+            )}
+            pressedStyle={PRESSED_SINK_STYLE}
+            onPress={openMap}
+          >
+            <SkinFrame
+              skin="chip"
+              height={HUD_CHIP_HEIGHT}
+              style={styles.starChip}
+              fallbackStyle={styles.hudChipFallback}
+              contentStyle={styles.starChipContent}
+            >
+              <UiIcon name="star" size={30} fallback="⭐" />
+              <GameText style={styles.hudNumber}>{gameState.prestige.stars}</GameText>
+            </SkinFrame>
+          </GamePressable>
+          <HudIconButton
             testID="more-nav-button"
-            label={messages.moreButton}
+            icon="more"
+            fallback="📂"
             badge={onboardingStep != null ? 0 : moreRollupBadge}
             accessibilityLabel={messages.moreButtonAccessibilityLabel}
             onPress={() => {
-              trackNavTap('more', 'header');
+              trackNavTap('more', 'hud');
               openMore();
             }}
           />
-          {/* 수확 부스트. 광고 보상 중 유일하게 "기다려서는 얻을 수 없는" 것이라
-              상점 안에 묻어두지 않고 메인에 꺼내 둔다. 부스트 중에는 남은 시간을
-              그대로 보여줘 언제 다시 볼지 판단할 수 있게 한다. 이 행은 가로
-              스크롤이라 버튼이 하나 늘어도 나머지가 좁아지지 않는다. */}
-          {/* 조건을 붙이지 않는다. isAdSupported 는 Platform 광고 정책 조회
-              결과에 묶여 있어 앱 시작 직후 false 이고, 그걸로 감싸면 버튼이
-              뒤늦게 끼어들어 네비 행이 밀리거나 조회 실패 시 아예 사라진다.
-              광고를 볼 수 없는 상태는 시트를 열었을 때 CTA 문구로 안내한다. */}
-          <NavButton
+        </View>
+
+        <View testID="goal-row" style={styles.goalRow}>
+          <View style={styles.goalSlot}>
+            {nextFarmGoal != null ? (
+              <NextGoalBar
+                reduceMotion={reduceMotion}
+                goal={nextFarmGoal}
+                messages={messages}
+                locale={locale}
+                getAreaName={(areaKey) => getLocalizedAreaLabel(areaKey).name}
+                onPress={openNextFarmGoal}
+              />
+            ) : null}
+          </View>
+          {/* 첫 세션 팝업 미루기(#606 AC-4) 동안에는 출석 버튼도 숨겨 첫 밭 목표에 집중시킨다. */}
+          {dailyBonusAvailable && onboardingStep == null && !firstSessionPopupHold ? (
+            <HudIconButton
+              testID="daily-hud-button"
+              icon="daily"
+              fallback="🎁"
+              badge="!"
+              accessibilityLabel={messages.dailyBonusButtonAccessibilityLabel}
+              onPress={() => {
+                trackNavTap('daily_bonus', 'hud');
+                openDailyBonus('hud');
+              }}
+            />
+          ) : null}
+          {/* 수확 부스트. 광고 보상 중 유일하게 기다려서는 얻을 수 없는 것이라 메인에 꺼내 둔다(사용자
+              결정 2026-11-26: 목표 칩 줄 출석 옆). 광고 지원 여부로 숨기지 않는다. 시작 직후에는 정책
+              조회 전이라 false여서 버튼이 늦게 끼어들기 때문이다. 볼 수 없으면 시트에서 안내한다. */}
+          <HudIconButton
             testID="boost-nav-button"
-            label={
+            fallback="⚡"
+            caption={
               harvestBonusBoost.active
-                ? messages.boostNavActiveLabel(formatDuration(safeBoostRemainingMs, locale))
-                : messages.boostNavLabel(HARVEST_BONUS_MULTIPLIER)
+                ? formatDuration(safeBoostRemainingMs, locale)
+                : `×${HARVEST_BONUS_MULTIPLIER}`
             }
-            accessibilityLabel={messages.boostNavAccessibilityLabel}
+            accessibilityLabel={
+              harvestBonusBoost.active
+                ? `${messages.boostNavAccessibilityLabel}, ${messages.boostNavActiveLabel(formatDuration(safeBoostRemainingMs, locale))}`
+                : `${messages.boostNavAccessibilityLabel}, ${messages.boostNavLabel(HARVEST_BONUS_MULTIPLIER)}`
+            }
             onPress={() => {
-              trackNavTap('harvest_bonus', 'header');
+              trackNavTap('harvest_bonus', 'hud');
               setActiveSheet({ type: 'harvestBonus' });
             }}
           />
-        </ScrollView>
+        </View>
       </View>
 
       {onboardingStep != null ? (
@@ -6583,20 +6554,44 @@ function FarmGameBody({
         </ScrollView>
       </View>
 
-      <View testID="tool-strip" style={[styles.toolStrip, { paddingBottom: bottomSafeInset + 10 }]}>
-        {batchActionCount > 0 ? (
-          // 밭 일괄 액션은 종류가 동시에 늘어나도 하나의 행만 사용한다. 3개일 때는 각
-          // 버튼을 같은 폭으로 축소해 하단 도구 영역이 두 행으로 커지지 않게 한다.
-          <View testID="farm-batch-action-row" style={[styles.toolActionRow, useLargeTextLayout && styles.stackedActionRow]}>
+      <View testID="tool-strip" style={styles.toolStrip}>
+        {/* #606 B안: 구역 선택 칩(정렬 아이콘 포함)과 밭 일괄 액션을 한 줄에 둔다. 구역 탭 줄과 안내
+            문구 줄은 없앴다(사용자 결정 2026-11-26). */}
+        <View
+          testID="farm-batch-action-row"
+          style={[styles.ctaRow, { flexWrap: useLargeTextLayout ? 'wrap' : 'nowrap' }]}
+        >
+          <AreaPickerChip
+            areaName={selectedAreaLabel.name}
+            locked={!selectedAreaUnlocked}
+            accessibilityLabel={messages.areaPickerAccessibilityLabel(selectedAreaLabel.name)}
+            onPress={() => setActiveSheet({ type: 'areaPicker' })}
+            sortAccessibilityLabel={visibleCropKeys.length > 1 ? messages.seedSortAccessibilityLabel : null}
+            onSortPress={() => {
+              const next = nextSeedSortMode(seedSortMode);
+              setSeedSortMode(next);
+              toast(
+                messages.seedSortLabel(
+                  next === 'profit'
+                    ? messages.seedSortProfit
+                    : next === 'growth'
+                      ? messages.seedSortGrowth
+                      : messages.seedSortDefault
+                )
+              );
+            }}
+          />
             {showHarvestBatchActions ? (
               <>
                 <HarvestAllButton
                   compact={useCompactBatchActions}
+                  icon={{ name: 'harvest', fallback: '🧺' }}
                   label={messages.harvestAllButton(readyPlotCount)}
                   onPress={guardFreshBatchAction(harvestAllCrops)}
                 />
                 <HarvestAllButton
-                  compact={useCompactBatchActions}
+                  variant="icon"
+                  icon={{ fallback: '🔁' }}
                   testID="harvest-replant-button"
                   label={messages.harvestReplantButton}
                   onPress={guardFreshBatchAction(harvestAllAndReplant)}
@@ -6617,6 +6612,7 @@ function FarmGameBody({
                 나타난다. 1탭 확인 → 2탭 실행으로 큰 골드 지출을 방어한다. */}
             {showFertilizeAllAction ? (
               <HarvestAllButton
+                variant={showHarvestBatchActions || showPlantAllAction ? 'secondary' : 'primary'}
                 compact={useCompactBatchActions}
                 testID="fertilize-all-button"
                 label={
@@ -6633,61 +6629,6 @@ function FarmGameBody({
                 onPress={guardFreshBatchAction(onFertilizeAllPress)}
               />
             ) : null}
-          </View>
-        ) : null}
-
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.areaTabs}>
-          {FARM_AREAS.map((area) => {
-            const unlocked = isAreaUnlocked(gameState, area.key);
-            const active = selectedArea === area.key;
-            const areaLabel = getLocalizedAreaLabel(area.key);
-            return (
-              <GamePressable pressedStyle={null}
-                key={area.key}
-                testID={`area-tab-${area.key}`}
-                style={({ pressed }) => [
-                  styles.areaTab,
-                  !unlocked && styles.lockedAreaTab,
-                  active && styles.activeAreaTab,
-                  pressed && styles.areaTabPressed,
-                ]}
-                onPress={() => selectArea(area.key)}
-              >
-                <Text style={[styles.areaTabName, active && styles.activeAreaTabName]}>
-                  {!unlocked ? '🔒 ' : ''}
-                  {areaLabel.name}
-                </Text>
-                <Text style={styles.areaTabCount}>{messages.areaCropCount(areaCropCounts[area.key] ?? 0)}</Text>
-              </GamePressable>
-            );
-          })}
-        </ScrollView>
-
-        {/* 선택 도구 안내와 정렬을 같은 행에 두어 정렬 버튼 왼쪽의 빈 면을 정보로 활용한다.
-            잠긴 구역/작물 1종인 구역은 정렬 버튼만 숨기고 안내가 전체 폭을 쓴다. */}
-        <View testID="seed-meta-row" style={[styles.seedMetaRow, useLargeTextLayout && styles.wrappedSeedMetaRow]}>
-          <Text style={styles.toolHint}>
-            {toolHint}
-          </Text>
-          {visibleCropKeys.length > 1 ? (
-            <GamePressable
-              testID="seed-sort-toggle"
-              style={styles.seedSortToggle}
-              onPress={() => setSeedSortMode((mode) => nextSeedSortMode(mode))}
-              accessibilityRole="button"
-              accessibilityLabel={messages.seedSortAccessibilityLabel}
-            >
-              <Text style={styles.seedSortToggleText}>
-                {messages.seedSortLabel(
-                  seedSortMode === 'profit'
-                    ? messages.seedSortProfit
-                    : seedSortMode === 'growth'
-                      ? messages.seedSortGrowth
-                      : messages.seedSortDefault
-                )}
-              </Text>
-            </GamePressable>
-          ) : null}
         </View>
 
         <View style={onboardingSeedHighlight ? styles.onboardingHighlight : undefined}>
@@ -6737,7 +6678,7 @@ function FarmGameBody({
                   cropKey={key}
                   name={getLocalizedCropName(key)}
                   cost={formatMoney(cropCost, locale)}
-                  roi={messages.roi(formatSignedPercent(getCropEconomy(cropEconomyByKey, key).roiPercent, locale))}
+                  multiplier={formatMultiplier(roiPercentToMultiplier(getCropEconomy(cropEconomyByKey, key).roiPercent))}
                   affordable={gameState.gold >= cropCost}
                   masteryIcon={masteryRank?.icon}
                   isNew={isNew}
@@ -6789,6 +6730,7 @@ function FarmGameBody({
         </View>
       </View>
 
+
       {isSpotlightActive ? (
         <FtueSpotlight
           layerRef={spotlightLayerRef}
@@ -6801,6 +6743,75 @@ function FarmGameBody({
         />
       ) : null}
       </ScrollView>
+
+      {/* 탭 바는 페이지 스크롤 밖에 두어 작은 화면이나 큰 글자에서 페이지가 스크롤돼도 화면 아래에
+          고정된다(#606 B안). 첫 수확 스포트라이트 동안에는 같은 어둡기로 덮고 탭을 막는다. */}
+      <GameTabBar
+        blocked={isSpotlightActive}
+        onBlockedTap={playPlotNudgeBurst}
+        bottomInset={bottomSafeInset}
+        tabs={[
+          {
+            key: 'shop',
+            testID: 'shop-nav-button',
+            label: messages.tabShop,
+            icon: 'shop',
+            fallback: '🏪',
+            badge: onboardingStep != null ? 0 : shopBadgeCount,
+            onPress: () => {
+              trackNavTap('shop', 'tab_bar');
+              openShop();
+            },
+          },
+          {
+            key: 'missions',
+            testID: 'missions-nav-button',
+            label: messages.tabMissions,
+            accessibilityLabel: messages.missionsButtonAccessibilityLabel,
+            icon: 'missions',
+            fallback: '📋',
+            badge: onboardingStep != null ? 0 : missionClaimableCount,
+            onPress: () => {
+              trackNavTap('missions', 'tab_bar');
+              openMissions();
+            },
+          },
+          {
+            key: 'farm',
+            testID: 'farm-nav-button',
+            label: messages.tabFarm,
+            icon: 'harvest',
+            fallback: '🌾',
+            current: true,
+            // 지금 보고 있는 농장 화면이라 누를 것이 없다(GameTabBar가 탭음도 내지 않는다).
+            onPress: () => undefined,
+          },
+          {
+            key: 'ranch',
+            testID: 'ranch-nav-button',
+            label: messages.tabRanch,
+            icon: 'ranch',
+            fallback: '🐄',
+            badge: onboardingStep != null ? 0 : animalsReadyCount + workshopReadyCount,
+            onPress: () => {
+              trackNavTap('production', 'tab_bar');
+              setActiveSheet({ type: 'production', tab: 'animals', source: 'tab_bar' });
+            },
+          },
+          {
+            key: 'cooking',
+            testID: 'cooking-nav-button',
+            label: messages.tabCooking,
+            icon: 'kitchen',
+            fallback: '🍲',
+            badge: onboardingStep != null ? 0 : cookingReadyBadge,
+            onPress: () => {
+              trackNavTap('cooking', 'tab_bar');
+              openCooking();
+            },
+          },
+        ]}
+      />
 
       {/* 시트가 열려 있으면 토스트는 Sheet의 overlay 슬롯에서만 렌더한다. 양쪽에 두면
           Modal에 가려 보이지 않는 사본이 접근성 트리에 하나 더 남는다. */}
@@ -7050,8 +7061,38 @@ function FarmGameBody({
           />
         ) : null}
 
+        {activeSheet?.type === 'areaPicker' ? (
+          <View testID="area-picker-list" style={styles.moreMenu}>
+            {FARM_AREAS.map((area) => {
+              const unlocked = isAreaUnlocked(gameState, area.key);
+              const active = selectedArea === area.key;
+              const areaLabel = getLocalizedAreaLabel(area.key);
+              return (
+                <GamePressable
+                  key={area.key}
+                  testID={`area-tab-${area.key}`}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: active }}
+                  pressedStyle={PRESSED_DEPTH_STYLE}
+                  style={[styles.areaPickerRow, active && styles.areaPickerRowActive, !unlocked && styles.areaPickerRowLocked]}
+                  onPress={() => {
+                    selectArea(area.key);
+                    setActiveSheet(null);
+                  }}
+                >
+                  <Text style={[styles.areaPickerName, active && styles.areaPickerNameActive]}>
+                    {!unlocked ? '🔒 ' : ''}
+                    {areaLabel.name}
+                  </Text>
+                  <Text style={styles.areaPickerCount}>{messages.areaCropCount(areaCropCounts[area.key] ?? 0)}</Text>
+                </GamePressable>
+              );
+            })}
+          </View>
+        ) : null}
+
         {activeSheet?.type === 'more' ? (
-          <View style={styles.moreMenu}>
+          <View testID="more-menu" style={styles.moreMenu}>
             {moreMenuSections.map((section, sectionIndex) => (
               <View
                 key={section.key}
@@ -7743,39 +7784,67 @@ function FarmGameBody({
   );
 }
 
-function NavButton({
-  label,
-  badge,
+// '더보기' 시트 안의 항목 버튼(#241). navRow에서 내려온 진입점을 전폭 행으로 나열하고,
+// 각 항목의 배지(claimable/actionable)를 우측에 그대로 노출해 발견성을 유지한다.
+// #606 B안: 구역 선택 칩. 누르면 구역 목록 시트를 열고, 오른쪽 작은 버튼은 씨앗 정렬을 바꾼다
+// (사용자 결정 2026-11-26: 안내 문구 줄을 없애고 정렬은 아이콘으로).
+function AreaPickerChip({
+  areaName,
+  locked,
   accessibilityLabel,
-  testID,
   onPress,
+  sortAccessibilityLabel,
+  onSortPress,
 }: {
-  label: string;
-  badge?: number;
-  accessibilityLabel?: string;
-  testID?: string;
+  areaName: string;
+  locked: boolean;
+  accessibilityLabel: string;
   onPress: () => void;
+  // 작물이 한 종류뿐이면 정렬할 것이 없어 null로 숨긴다.
+  sortAccessibilityLabel: string | null;
+  onSortPress: () => void;
 }) {
   return (
-    <GamePressable pressedStyle={null}
-      testID={testID}
-      accessibilityRole="button"
-      accessibilityLabel={accessibilityLabel}
-      style={({ pressed }) => [styles.navButton, pressed && styles.navButtonPressed]}
-      onPress={onPress}
-    >
-      <Text style={styles.navButtonText}>{label}</Text>
-      {badge != null && badge > 0 ? (
-        <View style={styles.collectionBadge}>
-          <Text style={styles.collectionBadgeText}>{badge}</Text>
-        </View>
+    <View style={styles.areaPickerChip}>
+      <GamePressable
+        testID="area-picker"
+        accessibilityRole="button"
+        accessibilityLabel={accessibilityLabel}
+        pressedStyle={null}
+        style={styles.areaPickerPressable}
+        onPress={onPress}
+      >
+        {({ pressed }) => (
+          <SkinFrame
+            skin="secondary"
+            height={BATCH_ACTION_HEIGHT}
+            pressed={pressed}
+            fallbackStyle={styles.batchSecondaryFallback}
+            contentStyle={[styles.areaPickerContent, sortAccessibilityLabel != null && styles.areaPickerContentWithSort]}
+          >
+            <GameText style={styles.areaPickerLabel} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+              {locked ? '🔒 ' : ''}
+              {areaName} ▾
+            </GameText>
+          </SkinFrame>
+        )}
+      </GamePressable>
+      {sortAccessibilityLabel != null ? (
+        <GamePressable
+          testID="seed-sort-toggle"
+          accessibilityRole="button"
+          accessibilityLabel={sortAccessibilityLabel}
+          hitSlop={6}
+          style={styles.areaSortButton}
+          onPress={onSortPress}
+        >
+          <Text allowFontScaling={false} style={styles.areaSortButtonText}>⇅</Text>
+        </GamePressable>
       ) : null}
-    </GamePressable>
+    </View>
   );
 }
 
-// '더보기' 시트 안의 항목 버튼(#241). navRow에서 내려온 진입점을 전폭 행으로 나열하고,
-// 각 항목의 배지(claimable/actionable)를 우측에 그대로 노출해 발견성을 유지한다.
 function MoreMenuButton({
   label,
   badge,
@@ -7808,11 +7877,17 @@ function MoreMenuButton({
 // breathes gently so the eye catches the call-to-action without nagging.
 function HarvestAllButton({
   compact = false,
+  variant = 'primary',
+  icon,
   label,
   onPress,
   testID,
 }: {
   compact?: boolean;
+  // #606 B안: 주요 행동 하나만 초록(primary)으로 두고 숨 쉬듯 움직인다. 나머지는 크림색 스킨이고,
+  // 재심기는 아이콘만 보인다(라벨은 접근성 이름으로 남긴다).
+  variant?: 'primary' | 'secondary' | 'icon';
+  icon?: { name?: FarmUiIconKey; fallback: string };
   label: string;
   onPress: () => void;
   testID?: string;
@@ -7827,65 +7902,87 @@ function HarvestAllButton({
     pulseRef.current = new Animated.Value(0);
   }
   const pulse = pulseRef.current;
+  const breathes = variant === 'primary';
 
   useEffect(() => {
-    const animation = Animated.sequence([
+    const steps: Animated.CompositeAnimation[] = [
       Animated.timing(entrance, {
         toValue: 1,
         duration: 260,
         easing: Easing.out(Easing.back(2.4)),
         useNativeDriver: true,
       }),
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(pulse, {
-            toValue: 1,
-            duration: 720,
-            easing: Easing.inOut(Easing.quad),
-            useNativeDriver: true,
-          }),
-          Animated.timing(pulse, {
-            toValue: 0,
-            duration: 720,
-            easing: Easing.inOut(Easing.quad),
-            useNativeDriver: true,
-          }),
-        ])
-      ),
-    ]);
+    ];
+    if (breathes) {
+      steps.push(
+        Animated.loop(
+          Animated.sequence([
+            Animated.timing(pulse, {
+              toValue: 1,
+              duration: 720,
+              easing: Easing.inOut(Easing.quad),
+              useNativeDriver: true,
+            }),
+            Animated.timing(pulse, {
+              toValue: 0,
+              duration: 720,
+              easing: Easing.inOut(Easing.quad),
+              useNativeDriver: true,
+            }),
+          ])
+        )
+      );
+    }
+    const animation = Animated.sequence(steps);
     animation.start();
     return () => animation.stop();
-  }, [entrance, pulse]);
+  }, [breathes, entrance, pulse]);
 
   const scale = Animated.multiply(
     entrance.interpolate({ inputRange: [0, 1], outputRange: [0.7, 1] }),
-    pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.05] })
+    pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.04] })
   );
 
   return (
     <GamePressable silent pressedStyle={null}
       testID={testID}
+      accessibilityRole="button"
       accessibilityLabel={label}
       hitSlop={6}
-      style={({ pressed }) => [
-        compact && styles.batchActionButtonCompact,
-        pressed && styles.harvestAllButtonPressed,
-      ]}
+      style={variant === 'icon' ? styles.batchIconAction : variant === 'primary' ? styles.batchPrimaryAction : styles.batchSecondaryAction}
       onPress={onPress}
     >
-      <Animated.View
-        style={[
-          styles.harvestAllButton,
-          compact && styles.harvestAllButtonCompact,
-          { opacity: entrance, transform: [{ scale }] },
-        ]}
-      >
-        <Text
-          style={[styles.harvestAllButtonText, compact && styles.harvestAllButtonTextCompact]}
-        >
-          {label}
-        </Text>
-      </Animated.View>
+      {({ pressed }) => (
+        <Animated.View style={{ opacity: entrance, transform: [{ scale }] }}>
+          <SkinFrame
+            skin={variant === 'primary' ? 'primary' : 'secondary'}
+            height={BATCH_ACTION_HEIGHT}
+            pressed={pressed}
+            style={variant === 'icon' ? styles.batchIconFrame : undefined}
+            fallbackStyle={variant === 'primary' ? styles.harvestAllButton : styles.batchSecondaryFallback}
+            contentStyle={styles.batchActionContent}
+          >
+            {icon != null ? (
+              icon.name != null ? (
+                <UiIcon name={icon.name} size={variant === 'icon' ? 30 : 26} fallback={icon.fallback} />
+              ) : (
+                <Text allowFontScaling={false} style={styles.batchActionEmoji}>{icon.fallback}</Text>
+              )
+            ) : null}
+            {variant !== 'icon' ? (
+              <GameText
+                tone={variant === 'primary' ? 'onPrimary' : 'ink'}
+                style={[styles.harvestAllButtonText, compact && styles.harvestAllButtonTextCompact]}
+                numberOfLines={2}
+                adjustsFontSizeToFit
+                minimumFontScale={0.75}
+              >
+                {label}
+              </GameText>
+            ) : null}
+          </SkinFrame>
+        </Animated.View>
+      )}
     </GamePressable>
   );
 }
@@ -8498,21 +8595,35 @@ function NextGoalBar({
       testID="next-goal-bar"
       accessibilityRole="button"
       accessibilityLabel={label}
-      style={[styles.nextGoalBar, ready && styles.nextGoalBarReady]}
-      pressedStyle={PRESSED_DEPTH_STYLE}
+      pressedStyle={PRESSED_SINK_STYLE}
       onPress={onPress}
     >
-      <View style={styles.nextGoalBody}>
-        <Text style={ready ? styles.nextGoalReadyText : styles.nextGoalLabel} numberOfLines={2}>
-          {label}
-        </Text>
-        {ratio != null ? (
-          <View style={styles.nextGoalTrack}>
-            <View style={[styles.nextGoalFill, { width: `${Math.round(ratio * 100)}%` }]} />
+      {({ pressed }) => (
+        <SkinFrame
+          skin="panel"
+          height={NEXT_GOAL_HEIGHT}
+          pressed={pressed}
+          fallbackStyle={[styles.nextGoalBar, ready && styles.nextGoalBarReady]}
+          contentStyle={styles.nextGoalInner}
+        >
+          <UiIcon name="goal" size={30} fallback="🚩" />
+          <View style={styles.nextGoalBody}>
+            <Text
+              style={ready ? styles.nextGoalReadyText : styles.nextGoalLabel}
+              numberOfLines={2}
+              maxFontSizeMultiplier={GAME_UI_MAX_FONT_SCALE}
+            >
+              {label}
+            </Text>
+            {ratio != null ? (
+              <View style={styles.nextGoalTrack}>
+                <View style={[styles.nextGoalFill, { width: `${Math.round(ratio * 100)}%` }]} />
+              </View>
+            ) : null}
           </View>
-        ) : null}
-      </View>
-      {ready ? <NextGoalGoButton label={messages.nextGoalGo} bounceEnabled={!reduceMotion} /> : null}
+          {ready ? <NextGoalGoButton label={messages.nextGoalGo} bounceEnabled={!reduceMotion} /> : null}
+        </SkinFrame>
+      )}
     </GamePressable>
   );
 }
@@ -8542,14 +8653,16 @@ function NextGoalGoButton({ label, bounceEnabled }: { label: string; bounceEnabl
     <Animated.View
       testID="next-goal-go"
       style={[
-        styles.nextGoalGo,
+        styles.nextGoalGoWrap,
         { transform: [{ translateY: bounce.interpolate({ inputRange: [0, 1], outputRange: [0, -4] }) }] },
       ]}
     >
-      <Text style={styles.nextGoalGoText}>{label}</Text>
-      <View style={styles.nextGoalGoBadge}>
-        <Text style={styles.nextGoalGoBadgeText}>!</Text>
-      </View>
+      <SkinFrame skin="primary" height={36} style={styles.nextGoalGoFrame} fallbackStyle={styles.nextGoalGo}>
+        <GameText tone="onPrimary" style={styles.nextGoalGoText} numberOfLines={1}>
+          {label}
+        </GameText>
+      </SkinFrame>
+      <GameBadge value="!" />
     </Animated.View>
   );
 }
@@ -9728,6 +9841,9 @@ function getSheetTitle(activeSheet: ActiveSheet, messages: FarmMessages) {
   if (activeSheet?.type === 'stats') {
     return messages.sheetTitleStats;
   }
+  if (activeSheet?.type === 'areaPicker') {
+    return messages.sheetTitleAreaPicker;
+  }
   return messages.sheetTitleShop;
 }
 
@@ -9803,6 +9919,9 @@ function getSheetDescription(
   if (activeSheet?.type === 'resetConfirm') {
     return messages.sheetDescriptionResetConfirm(messages.resetConfirmText);
   }
+  if (activeSheet?.type === 'areaPicker') {
+    return messages.sheetDescriptionAreaPicker;
+  }
   return messages.sheetDescriptionShop;
 }
 
@@ -9817,7 +9936,7 @@ const ToolButton = React.memo(function ToolButton({
   cropKey,
   name,
   cost,
-  roi,
+  multiplier,
   affordable,
   masteryIcon,
   isNew,
@@ -9836,7 +9955,8 @@ const ToolButton = React.memo(function ToolButton({
   cropKey?: CropKey;
   name: string;
   cost?: string;
-  roi?: string;
+  // 심은 값의 몇 배를 거두는지(#606, 예: ×2.0). 예전 "ROI +100%" 표기를 대신한다.
+  multiplier?: string;
   affordable?: boolean;
   masteryIcon?: string;
   isNew?: boolean;
@@ -9865,14 +9985,21 @@ const ToolButton = React.memo(function ToolButton({
       ]}
       onPress={() => onSelect(toolKey)}
     >
-      <CropGlyph cropKey={cropKey} emoji={icon} size={24} textStyle={styles.toolIcon} />
+      {toolKey === 'harvest' ? (
+        <UiIcon name="harvest" size={30} fallback={icon} />
+      ) : (
+        <CropGlyph cropKey={cropKey} emoji={icon} size={28} textStyle={styles.toolIcon} />
+      )}
       <Text style={styles.toolName}>
         {name}
       </Text>
       {cost != null ? (
-        <Text style={[styles.toolCost, affordable === false && styles.toolCostUnaffordable]}>{cost}</Text>
+        <View style={styles.toolCostRow}>
+          <UiIcon name="coin" size={14} fallback="💰" />
+          <GameText style={[styles.toolCost, affordable === false && styles.toolCostUnaffordable]}>{cost}</GameText>
+        </View>
       ) : null}
-      {roi != null ? <Text style={styles.toolRoi}>{roi}</Text> : null}
+      {multiplier != null ? <GameText style={styles.toolRoi}>{multiplier}</GameText> : null}
       {masteryIcon != null ? (
         <View pointerEvents="none" style={styles.toolMasteryBadge}>
           <Text style={styles.toolMasteryBadgeText}>{masteryIcon}</Text>

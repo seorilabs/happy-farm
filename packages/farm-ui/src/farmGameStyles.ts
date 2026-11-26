@@ -19,223 +19,75 @@ export const styles = StyleSheet.create({
   },
   viewportPageContent: { flex: 1 },
   scrollablePageContent: { flexGrow: 1 },
-  wrappedHeaderTop: { flexWrap: 'wrap' },
-  fullWidthTitleGroup: { flexBasis: '100%', flexGrow: 0 },
-  stackedStatsPanel: { flexDirection: 'column' },
-  fullWidthSummary: { maxWidth: '100%', alignItems: 'flex-start' },
-  stackedActionRow: { flexDirection: 'column', alignItems: 'stretch' },
-  wrappedSeedMetaRow: { flexDirection: 'column', alignItems: 'flex-start' },
-  stackedSubtitleRow: { flexDirection: 'column', alignItems: 'flex-start' },
   productivityBasis: { marginTop: 3, color: '#6b4a22', fontSize: 11, textAlign: 'right' },
   header: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 12,
     paddingBottom: 8,
     backgroundColor: '#f7ecd4',
     borderBottomWidth: 3,
     borderBottomColor: '#d8bd8c',
   },
-  headerTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-start',
-    gap: 12,
-  },
-  titleGroup: {
-    minWidth: 0,
-    flex: 1,
-    flexShrink: 1,
+  // #606 B안 헤더: 재화 칩 줄과 목표 칩 줄.
+  hudRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
-  homeIcon: {
-    fontSize: 26,
-  },
-  titleTextGroup: {
-    minWidth: 0,
+  goldChipPressable: {
     flex: 1,
-  },
-  title: {
-    color: '#6b4a22',
-    fontSize: 20,
-    fontWeight: '800',
-  },
-  subtitle: {
-    flexShrink: 0,
-    alignSelf: 'flex-start',
-    marginTop: 2,
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 8,
-    overflow: 'hidden',
-    color: '#8a6a34',
-    backgroundColor: '#e9dcb8',
-    fontSize: 11,
-    fontWeight: '800',
-  },
-  headerActions: {
-    flexShrink: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  subtitleRow: {
     minWidth: 0,
+  },
+  hudChipFallback: {
+    borderRadius: 26,
+    borderWidth: 2,
+    borderColor: '#e0c48a',
+    borderBottomWidth: 4,
+    borderBottomColor: '#c9a253',
+    backgroundColor: '#fffaf0',
+  },
+  goldChipContent: {
+    justifyContent: 'space-between',
+    paddingLeft: 8,
+    paddingRight: 16,
+    paddingBottom: 3,
+  },
+  goldChipPulse: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
+    // 금액은 줄이지 않고, 좁으면 시간당 수입 쪽이 말줄임된다.
+    flexShrink: 0,
   },
-  starsChip: {
-    minHeight: 34,
-    justifyContent: 'center',
-    overflow: 'hidden',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    backgroundColor: '#fff3d6',
-  },
-  starsChipPressed: {
-    opacity: 0.72,
-  },
-  starsChipText: {
-    lineHeight: 34,
-    color: '#8a4b0f',
-    fontSize: 13,
-    fontWeight: '900',
-  },
-  navRow: {
-    gap: 8,
-    paddingTop: 8,
-  },
-  navButton: {
-    minHeight: 34,
-    justifyContent: 'center',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    backgroundColor: '#fffdf5',
-    borderWidth: 2,
-    borderColor: '#dcc189',
-    // 입체감은 그림자가 아니라 두꺼운 아래 테두리로 낸다. iOS의 오프셋 그림자
-    // (shadowRadius: 0)는 Android에서 elevation의 블러 그림자로 대체되어
-    // 방향성이 사라지므로, 실기기 확인 후 양 플랫폼이 같게 보이는 쪽으로 맞췄다.
-    borderBottomWidth: 5,
-    borderBottomColor: '#cbae72',
-  },
-  // 눌림은 그림자 높이를 0으로 내리고 요소를 같은 양만큼 내려 표현한다.
-  // 색만 바꾸지 않으므로 색각 이상에서도 상태가 전달된다.
-  navButtonPressed: {
-    transform: [{ translateY: 3 }],
-    borderBottomWidth: 2,
-    marginBottom: 3,
-  },
-  navButtonText: {
-    color: '#6b4a22',
-    fontSize: 13,
-    fontWeight: '800',
-  },
-  settingsButton: {
-    width: 34,
-    height: 34,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: '#d8bd8c',
-    backgroundColor: '#fff8e6',
-  },
-  settingsButtonPressed: {
-    transform: [{ translateY: 2 }],
-    backgroundColor: '#f2e4c6',
-  },
-  settingsButtonText: {
-    color: '#8a6a34',
-    fontSize: 17,
-    fontWeight: '800',
-  },
-  statsPanel: {
-    marginTop: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 9,
-    borderWidth: 3,
-    borderColor: '#e8c976',
-    borderBottomWidth: 6,
-    borderBottomColor: '#dcb75c',
-    borderRadius: 16,
-    backgroundColor: '#fff9e8',
-    flexDirection: 'row',
-    alignItems: 'stretch',
-    justifyContent: 'space-between',
-    gap: 10,
-  },
-  assetRow: {
-    minWidth: 0,
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 9,
-  },
-  assetPulse: {
-    minWidth: 0,
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 9,
-    transformOrigin: 'left center',
-  },
-  coinIcon: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    overflow: 'hidden',
-    borderWidth: 2,
-    borderColor: '#a9720f',
-    backgroundColor: '#f6c343',
-    textAlign: 'center',
-    lineHeight: 30,
-    fontSize: 17,
-  },
-  assetTextGroup: {
-    minWidth: 0,
-    flex: 1,
-  },
-  label: {
-    color: '#a98a4e',
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  money: {
-    color: '#6b4a22',
+  hudNumber: {
+    color: '#5c3a16',
     fontSize: 24,
     fontWeight: '900',
   },
-  summaryColumn: {
-    flexShrink: 0,
-    maxWidth: '48%',
-    alignItems: 'flex-end',
-    justifyContent: 'center',
-  },
-  productivityText: {
-    marginTop: 3,
-    color: '#2f8a4a',
-    fontSize: 12,
-    fontWeight: '900',
-    textAlign: 'right',
-  },
-  // 오늘의 작물 chip: 제목 아래 배지 행의 남는 폭을 쓰고, 긴 언어에서는
-  // 말줄임해 우측 재화/설정 액션의 폭을 침범하지 않는다.
-  cotdChip: {
+  hudIncome: {
     minWidth: 0,
+    marginLeft: 6,
+    color: '#3f7d23',
+    fontSize: 12,
+    fontWeight: '800',
     flexShrink: 1,
-    marginTop: 2,
-    overflow: 'hidden',
-    borderRadius: 999,
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    backgroundColor: '#fdf3e2',
   },
-  cotdChipText: {
-    color: '#c47d11',
-    fontSize: 11,
-    fontWeight: '900',
+  starChip: {
+    minWidth: 84,
+  },
+  starChipContent: {
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingBottom: 3,
+  },
+  goalRow: {
+    marginTop: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  goalSlot: {
+    flex: 1,
+    minWidth: 0,
   },
   main: {
     flex: 1,
@@ -609,40 +461,118 @@ export const styles = StyleSheet.create({
   },
   toolStrip: {
     paddingTop: 10,
-    paddingHorizontal: 16,
+    paddingBottom: 8,
+    paddingHorizontal: 12,
     borderTopWidth: 3,
     borderTopColor: '#d8bd8c',
     backgroundColor: '#f3e6c9',
   },
-  toolActionRow: {
+  // #606 B안 하단: 구역 선택 칩과 일괄 행동 한 줄.
+  ctaRow: {
     flexDirection: 'row',
     flexWrap: 'nowrap',
     alignItems: 'center',
-    justifyContent: 'flex-end',
     gap: 8,
+    marginBottom: 8,
   },
-  batchActionButtonCompact: {
-    flex: 1,
-    minWidth: 0,
+  areaPickerChip: {
+    position: 'relative',
+    flexShrink: 0,
   },
-  toolHint: {
-    minWidth: 0,
-    flexShrink: 1,
-    flex: 1,
-    color: '#8a6a34',
-    fontSize: 13,
+  areaPickerPressable: {
+    width: 112,
+  },
+  areaPickerContent: {
+    paddingHorizontal: 12,
+    paddingBottom: 4,
+  },
+  areaPickerContentWithSort: {
+    paddingRight: 26,
+  },
+  areaPickerLabel: {
+    fontSize: 14,
+  },
+  areaSortButton: {
+    position: 'absolute',
+    top: 10,
+    right: 6,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ead8b0',
+  },
+  areaSortButtonText: {
+    color: '#6b4a22',
+    fontSize: 14,
     fontWeight: '900',
-    textAlign: 'left',
   },
-  // Holds the plant hint and the "Plant All" button side by side so the per-crop
-  // ROI hint stays visible while the batch-plant shortcut sits at the right edge.
-  toolHeaderRight: {
+  areaPickerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'flex-end',
-    gap: 8,
+    justifyContent: 'space-between',
+    minHeight: 52,
+    marginBottom: 8,
+    paddingHorizontal: 16,
+    borderRadius: 14,
+    borderWidth: 2,
+    borderColor: '#e4d3ae',
+    borderBottomWidth: 4,
+    borderBottomColor: '#dcc189',
+    backgroundColor: '#fffaf0',
+  },
+  areaPickerRowActive: {
+    borderColor: '#9fd36a',
+    borderBottomColor: '#4d8a22',
+    backgroundColor: '#f4fbe9',
+  },
+  areaPickerRowLocked: {
+    opacity: 0.72,
+  },
+  areaPickerName: {
+    color: '#5c3a16',
+    fontSize: 16,
+    fontWeight: '900',
+  },
+  areaPickerNameActive: {
+    color: '#2f6f1c',
+  },
+  areaPickerCount: {
+    color: '#8a6a3c',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  batchPrimaryAction: {
     flex: 1,
     minWidth: 0,
+  },
+  batchSecondaryAction: {
+    flexShrink: 1,
+    minWidth: 0,
+    maxWidth: 150,
+  },
+  batchIconAction: {
+    flexShrink: 0,
+  },
+  batchIconFrame: {
+    width: 58,
+  },
+  batchSecondaryFallback: {
+    borderRadius: 26,
+    borderWidth: 2,
+    borderColor: '#e0c48a',
+    borderBottomWidth: 4,
+    borderBottomColor: '#c9a253',
+    backgroundColor: '#fffaf0',
+  },
+  batchActionContent: {
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingBottom: 4,
+  },
+  batchActionEmoji: {
+    fontSize: 22,
   },
   harvestAllButton: {
     minHeight: 34,
@@ -656,21 +586,13 @@ export const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 3 },
     elevation: 3,
   },
-  harvestAllButtonCompact: {
-    width: '100%',
-    alignItems: 'center',
-    paddingHorizontal: 8,
-  },
-  harvestAllButtonPressed: {
-    opacity: 0.85,
-  },
   harvestAllButtonText: {
-    color: '#ffffff',
-    fontSize: 13,
+    // 글자색은 GameText tone(초록 위 흰색, 크림 위 갈색)이 정한다.
+    fontSize: 18,
     fontWeight: '900',
   },
   harvestAllButtonTextCompact: {
-    fontSize: 11,
+    fontSize: 14,
   },
   // Upgrade purchase delight (#289): card-local only, so frequent purchases
   // get tactile progress feedback without occupying the full screen.
@@ -762,73 +684,10 @@ export const styles = StyleSheet.create({
     lineHeight: 28,
     fontWeight: '900',
   },
-  areaTabs: {
-    gap: 8,
-    paddingTop: 10,
-    paddingBottom: 2,
-  },
-  areaTab: {
-    minHeight: 34,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 5,
-    borderWidth: 2,
-    borderColor: '#dcc189',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    backgroundColor: '#fffdf5',
-  },
-  activeAreaTab: {
-    borderColor: '#7fb844',
-    backgroundColor: '#d8f2b8',
-  },
-  areaTabPressed: {
-    transform: [{ translateY: 2 }],
-    backgroundColor: '#f2e4c6',
-  },
-  lockedAreaTab: {
-    backgroundColor: '#ece3cd',
-  },
-  areaTabName: {
-    color: '#6b4a22',
-    fontSize: 13,
-    fontWeight: '900',
-  },
-  activeAreaTabName: {
-    color: '#33660f',
-  },
-  areaTabCount: {
-    color: '#a98a4e',
-    fontSize: 11,
-    fontWeight: '800',
-  },
   toolScroll: {
     gap: 10,
     paddingTop: 8,
     paddingBottom: 4,
-  },
-  // The selected-tool hint fills the space that used to be empty beside sort.
-  seedMetaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-    marginTop: 2,
-  },
-  seedSortToggle: {
-    flexShrink: 0,
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(120, 87, 46, 0.35)',
-    backgroundColor: 'rgba(255, 255, 255, 0.6)',
-  },
-  seedSortToggleText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#7a572e',
   },
   toolButton: {
     width: 84,
@@ -880,6 +739,11 @@ export const styles = StyleSheet.create({
     color: '#c07a12',
     fontSize: 10,
     fontWeight: '900',
+  },
+  toolCostRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
   },
   toolCostUnaffordable: {
     color: '#b42318',
@@ -1203,23 +1067,6 @@ export const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
   },
-  collectionBadge: {
-    position: 'absolute',
-    top: -4,
-    right: -4,
-    minWidth: 18,
-    height: 18,
-    paddingHorizontal: 4,
-    borderRadius: 9,
-    backgroundColor: '#e5484d',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  collectionBadgeText: {
-    color: '#ffffff',
-    fontSize: 10,
-    fontWeight: '900',
-  },
   // '더보기' 시트 안의 항목 목록(#241): navRow에서 묶어 내린 진입점을 전폭 행으로 쌓는다.
   moreMenu: {
     gap: 8,
@@ -1315,13 +1162,7 @@ export const styles = StyleSheet.create({
     fontSize: 32,
   },
   nextGoalBar: {
-    // 다음 목표 칩(#606): Warm Wood 카드와 아래 두께.
-    marginTop: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
+    // 다음 목표 칩의 스킨 대체 스타일(#606).
     borderRadius: 14,
     borderWidth: 2,
     borderColor: '#e8c976',
@@ -1412,37 +1253,27 @@ export const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
   },
+  nextGoalInner: {
+    justifyContent: 'flex-start',
+    gap: 8,
+    paddingLeft: 10,
+    paddingRight: 10,
+    paddingBottom: 3,
+  },
+  nextGoalGoWrap: {
+    position: 'relative',
+  },
+  nextGoalGoFrame: {
+    minWidth: 64,
+  },
   nextGoalGo: {
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 14,
+    borderRadius: 18,
     backgroundColor: '#68b035',
     borderBottomWidth: 3,
     borderBottomColor: '#4d8a22',
   },
   nextGoalGoText: {
-    color: '#ffffff',
-    fontSize: 14,
-    fontWeight: '900',
-  },
-  nextGoalGoBadge: {
-    position: 'absolute',
-    top: -8,
-    right: -6,
-    minWidth: 18,
-    height: 18,
-    borderRadius: 9,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#e5484d',
-    borderWidth: 2,
-    borderColor: '#ffffff',
-  },
-  nextGoalGoBadgeText: {
-    color: '#ffffff',
-    fontSize: 11,
-    fontWeight: '900',
-    lineHeight: 13,
+    fontSize: 15,
   },
   masteryBackdrop: {
     ...ABSOLUTE_FILL,

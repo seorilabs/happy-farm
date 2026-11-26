@@ -98,14 +98,15 @@ describe('전면광고 연결 계약', () => {
     // isAdSupported 는 Platform 광고 정책 조회가 끝나야 true 가 된다. 그 값으로
     // 버튼을 감싸면 앱 시작 직후에는 없다가 뒤늦게 끼어들어 네비 행이 밀리고,
     // 조회가 실패하면 영영 보이지 않는다. 버튼을 감싸는 조건을 두지 않는다.
+    // #606 B안에서 부스트는 헤더의 목표 칩 줄(goal-row)로 옮겼다.
     const farmGame = readSource('packages/farm-ui/src/FarmGame.tsx');
-    const navRow = farmGame.slice(
-      farmGame.indexOf("testID=\"nav-row\""),
-      farmGame.indexOf('</ScrollView>')
+    const goalRow = farmGame.slice(
+      farmGame.indexOf('testID="goal-row"'),
+      farmGame.indexOf('<FarmOnboarding')
     );
 
-    expect(navRow).toContain('boost-nav-button');
-    expect(navRow).not.toContain('rewardedAd.isAdSupported ?');
+    expect(goalRow).toContain('boost-nav-button');
+    expect(goalRow).not.toContain('rewardedAd.isAdSupported ?');
   });
 
   test('앱 어디에도 인앱 결제 경로가 남아 있지 않다', () => {

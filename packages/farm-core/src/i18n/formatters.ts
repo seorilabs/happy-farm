@@ -180,6 +180,18 @@ export function formatSignedPercent(value: number, locale: SupportedLocale = DEF
   return `${rounded >= 0 ? '+' : ''}${rounded.toLocaleString(locale)}%`;
 }
 
+// 씨앗 카드의 수익 배수(#606). "ROI +100%" 같은 계산기 용어 대신 "×2.0"처럼 심은 값의 몇 배를
+// 거두는지 보인다. 금액 표기와 같이 소수점은 모든 언어에서 '.'를 쓴다.
+export function roiPercentToMultiplier(roiPercent: number): number {
+  return 1 + roiPercent / 100;
+}
+
+export function formatMultiplier(value: number): string {
+  if (!Number.isFinite(value)) return '×0.0';
+  // 1.45가 이진 소수로 1.4499…가 되어 내려가지 않게 아주 작은 값을 더해 반올림한다.
+  return `×${(Math.round((value + 1e-9) * 10) / 10).toFixed(1)}`;
+}
+
 export function formatHourlyGold(value: number, locale: SupportedLocale = DEFAULT_LOCALE) {
   const amount = formatMoney(Math.max(0, value), locale);
   return `${amount}${durationLabels(locale).hourlyGoldSuffix}`;

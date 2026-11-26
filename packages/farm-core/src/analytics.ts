@@ -119,7 +119,8 @@ export type MissionAnalyticsKind = 'daily' | 'weekly';
 
 // Stable acquisition path for the daily-bonus impression → claim funnel.
 // Keep these values untranslated so BigQuery cohorts remain joinable.
-export type DailyBonusSource = 'auto_popup' | 'more' | 'welcome_back';
+// hud: 메인 목표 칩 줄의 출석 버튼(#606 B안).
+export type DailyBonusSource = 'auto_popup' | 'more' | 'welcome_back' | 'hud';
 
 // Stable values for the manual-only harvest-combo summary. Keep these keys
 // untranslated so BigQuery cohorts stay joinable across every market.
@@ -133,7 +134,8 @@ export type HarvestSource = 'manual' | 'batch' | 'auto';
 export type HarvestRewardType = 'gold' | 'research_points';
 // 온보딩이 끝난 방식. confirm=계속하기, auto=시간 경과, interaction=후속 실제 조작.
 export type OnboardingCompletionSource = 'confirm' | 'auto' | 'interaction';
-export type AnimalsScreenSource = 'more' | 'welcome_back';
+// tab_bar: 하단 탭 바의 목장 탭(#606 B안).
+export type AnimalsScreenSource = 'more' | 'welcome_back' | 'tab_bar';
 export type AnimalProduceCollectionMode = 'single' | 'collect_all';
 
 export type GameAnalyticsContext = {
