@@ -114,15 +114,15 @@ export function useDisplayFontStyle(): TextStyle {
   return fontFamily != null ? { fontFamily, fontWeight: 'normal' } : SYSTEM_OUTLINE_STYLE;
 }
 
-// 서체가 없는 호스트(앱인토스)는 짙은 글자 아래에 또렷한 밝은 띠를 깔아 눌러 찍은 듯한 게임 글자로
-// 보이게 한다. 밝은 배경에서도 띠가 글자 아래로 드러나도록 번지지 않게(radius 0) 둔다.
+// 서체가 없는 호스트(앱인토스)는 짙은 글자 아래에 옅은 갈색 띠를 번지지 않게(radius 0) 깔아,
+// 밝은 칩 위에서도 두께가 있는 게임 글자로 보이게 한다.
 const SYSTEM_OUTLINE_STYLE: TextStyle = {
-  textShadowColor: 'rgba(255, 246, 220, 0.95)',
+  textShadowColor: 'rgba(92, 58, 22, 0.28)',
   textShadowOffset: { width: 0, height: 1.5 },
   textShadowRadius: 0,
 };
 
-// 숫자와 라틴 문자는 디스플레이 서체로, 없으면 시스템 굵은 글씨에 밝은 아래 띠를 준다.
+// 숫자와 라틴 문자는 디스플레이 서체로, 없으면 시스템 굵은 글씨에 옅은 갈색 아래 띠를 준다.
 // 한중일 글자는 서체에 없어 플랫폼이 시스템 글꼴로 자동 대체한다.
 export function GameText({
   tone = 'ink',

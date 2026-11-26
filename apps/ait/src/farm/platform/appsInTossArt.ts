@@ -12,6 +12,6 @@ export const appsInTossFarmArt: FarmArt = {
   cropIcon: (cropKey) => ({ uri: `${ART_BASE_URL}/crop_${cropKey}.png` }),
   stageIcon: (stage) => ({ uri: `${ART_BASE_URL}/stage_${stage}.png` }),
   // UI 스킨과 아이콘은 첫 렌더에 깜빡이지 않도록 base64로 넣는다(#606). 앱인토스는 커스텀 서체를
-  // 확인하지 못해 displayFontFamily 없이 시스템 굵은 글씨에 밝은 아래 띠를 준다.
+  // 확인하지 못해 displayFontFamily 없이 시스템 굵은 글씨에 옅은 갈색 아래 띠를 준다.
   ui: appsInTossUiArt,
 };
