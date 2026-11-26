@@ -1,0 +1,20 @@
+{
+  "style": "Soft 3D clay-render style casual mobile game UI surface. Matte polymer clay material with subtle smooth gradients, absolutely no outlines. Soft studio lighting from the top front-left, gentle ambient occlusion, one soft specular highlight along the top edge. Warm cozy farm palette: grass green #7CC043, leaf green #59A83B, terracotta orange #E8863C, cream #F4E7C8, soil brown #8A5A34, warm wood #C89A5B. The surface is horizontally centered and isolated on a flat pure magenta (#FF00FF) background, no shadow cast on the background, no text, no letters, no numbers, no icons, no watermark.",
+  "anchor": {"path": "../style/anchor.png", "prompt": "a plump ripe orange carrot with three lush green leaves sprouting from its top"},
+  "model": "gemini-3-pro-image",
+  "out_dir": ".",
+  "assets": [
+    {"name": "ui_skin_primary_normal", "aspect_ratio": "16:9", "transparent": false,
+     "final_canvas": {"mode": "preserve-layout", "width": 1376, "height": 768},
+     "prompt": "First image only controls material and lighting. A wide rounded pill-shaped green clay button slab seen straight from the front: flat leaf green #59A83B top face with a lighter grass green #7CC043 glossy band along the upper edge, and a thick darker green lip along the bottom edge that shows physical depth. The face is completely empty and flat so text can be placed on it. The slab spans about 80 percent of the frame width and 40 percent of its height, with left and right ends perfectly symmetric."},
+    {"name": "ui_skin_secondary_normal", "aspect_ratio": "16:9", "transparent": false,
+     "final_canvas": {"mode": "preserve-layout", "width": 1376, "height": 768},
+     "prompt": "First image only controls material and lighting. A wide rounded pill-shaped cream clay button slab seen straight from the front: flat cream #FFF6DF face with a soft warm wood #C89A5B rim, and a thick darker wood lip along the bottom edge that shows physical depth. The face is completely empty and flat. The slab spans about 80 percent of the frame width and 40 percent of its height, with left and right ends perfectly symmetric."},
+    {"name": "ui_skin_panel", "aspect_ratio": "16:9", "transparent": false,
+     "final_canvas": {"mode": "preserve-layout", "width": 1376, "height": 768},
+     "prompt": "First image only controls material and lighting. A wide rounded rectangle panel seen straight from the front: a smooth warm wood #C89A5B clay frame about 6 percent of the panel height thick, surrounding a flat empty cream #FBF3E0 inner face. Rounded corners, a slightly thicker darker wood edge along the bottom for depth. The panel spans about 86 percent of the frame width and 70 percent of its height, perfectly symmetric."},
+    {"name": "ui_skin_chip", "aspect_ratio": "16:9", "transparent": false,
+     "final_canvas": {"mode": "preserve-layout", "width": 1376, "height": 768},
+     "prompt": "First image only controls material and lighting. A wide short capsule-shaped chip seen straight from the front: flat empty cream #FFFDF5 face inside a soft warm wood #C89A5B clay rim, with a slightly thicker darker wood lip along the bottom edge. The capsule spans about 70 percent of the frame width and 24 percent of its height, left and right ends perfectly symmetric, face completely empty."}
+  ]
+}
