@@ -20,6 +20,41 @@ export type FarmStageArtKey = CropGrowthStage;
 export type FarmArt = {
   cropIcon?: (cropKey: CropKey) => ImageSourcePropType | null;
   stageIcon?: (stage: FarmStageArtKey) => ImageSourcePropType | null;
+  // 게임 UI 스킨과 아이콘(#606). 없으면 코드로 그린 View와 이모지로 그린다.
+  ui?: FarmUiArt;
+  // 숫자와 라틴 문자용 디스플레이 서체(#606). 호스트가 네이티브로 등록한 이름을 넘긴다.
+  // 없으면(AIT) 시스템 굵은 글씨에 외곽선을 입힌다.
+  displayFontFamily?: string;
+};
+
+export type FarmUiIconKey =
+  | 'coin'
+  | 'star'
+  | 'more'
+  | 'daily'
+  | 'goal'
+  | 'shop'
+  | 'missions'
+  | 'harvest'
+  | 'ranch'
+  | 'kitchen'
+  | 'settings'
+  | 'wheel'
+  | 'pointer';
+
+export type FarmSkinKey = 'primary' | 'secondary' | 'chip' | 'panel';
+
+// 가로 3분할 스킨: 왼쪽 끝, 늘어나는 가운데 한 줄, 오른쪽 끝. capRatio는 끝 조각 폭 / 높이다.
+export type FarmSkinArt = {
+  left: ImageSourcePropType;
+  center: ImageSourcePropType;
+  right: ImageSourcePropType;
+  capRatio: number;
+};
+
+export type FarmUiArt = {
+  icons: Partial<Record<FarmUiIconKey, ImageSourcePropType>>;
+  skins: Partial<Record<FarmSkinKey, FarmSkinArt>>;
 };
 
 const EMPTY_FARM_ART: FarmArt = {};
