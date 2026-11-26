@@ -28,6 +28,26 @@
       "rule": "foundation",
       "featureId": "interstitial-ads",
       "reason": "farm-core의 첫 세션 노출 조건만 바꾸고 apps/mobile/src/ads의 광고 SDK 호출 경로는 그대로다. 새 조건은 개발 환경의 고정 시계 단위 테스트로 확인한다."
+    },
+    {
+      "rule": "foundation",
+      "featureId": "rewarded-ads",
+      "reason": "Info.plist는 서체 등록 키(UIAppFonts)만 더했고 Podfile.lock은 package.json에 이미 선언된 safe-area-context 5.10.1로 맞췄다. 보상형 광고 SDK 호출, 광고 단위, 지급 검증 코드는 바꾸지 않았다. FarmGame과 balance 변경은 광고 제한 시점과 화면 배치뿐이며 개발 환경 전체 회귀와 단위 테스트로 확인한다."
+    },
+    {
+      "rule": "foundation",
+      "featureId": "notifications",
+      "reason": "알림 권한 요청과 예약 코드는 바꾸지 않았다. 첫 세션에 안내를 띄우는 순서만 바뀌었고 dailyBonus.ts는 문구의 금액 형식만 바뀌었다. 순서는 RNTL 테스트와 시뮬레이터 흐름(권한 안내 노출)으로 확인한다. Info.plist와 Podfile.lock 사유는 rewarded-ads와 같다."
+    },
+    {
+      "rule": "foundation",
+      "featureId": "firebase-auth-analytics",
+      "reason": "Firebase 초기화, 인증, 전송 경로는 바꾸지 않았다. analytics.ts에는 새 이벤트 타입과 파라미터만 더했고 계측 계약 테스트로 확인한다. Info.plist와 Podfile.lock 사유는 rewarded-ads와 같다."
+    },
+    {
+      "rule": "foundation",
+      "featureId": "platform-session-events",
+      "reason": "플랫폼 세션 이벤트 코드는 바꾸지 않았다. 겹친 경로는 Info.plist(서체 등록 키)와 Podfile.lock(safe-area-context 버전 동기화)뿐이다."
     }
   ],
   "release": {

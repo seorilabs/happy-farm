@@ -226,6 +226,7 @@ flowchart LR
 
 - v1 승인 커밋: `5bf45a8f43cf7ba2ca66c72d51803adafc082d91`
 - v2: v1 계획의 `environments`가 `["dev", "android"]`여서 L3에서 Android 전체 회귀가 요구되는 것을 확인했다. 사용자가 "dev만, 기기는 추가 확인 (권장)"을 골라 `["dev"]`로 고친 v2를 승인했다. 승인 커밋은 이 v2 커밋이다.
+- v3: 구현 뒤 중앙 검증기를 초안 근거로 미리 돌려 보니 심사 제출 직전 단계에서 rewarded-ads, notifications, firebase-auth-analytics, platform-session-events에 Android와 iOS 실기기 하한이 걸렸다. PR 3a(#613)의 `Info.plist`(서체 등록 키), `Podfile.lock`(safe-area-context 버전 동기화)과 `analytics.ts`(새 이벤트), `dailyBonus.ts`(금액 형식)가 이 기능들의 경로와 겹쳤기 때문이다. 광고, 알림, Firebase 호출 코드는 바뀌지 않았다. 2026-11-26 사용자가 "계획에 하한 낮춤 4건 추가 (권장)"을 골라 `test-plan.json`에 사유를 적은 `floorOverrides` 4건을 더했다. 기기 사용은 기존 승인대로 Android 1회(AC-13)뿐이다. 승인 커밋은 이 v3 커밋이다.
 - 실행 티켓: [#606](https://github.com/seorilabs/happy-farm/issues/606)
 - 기기 사용은 구현과 개발 환경 검수가 끝난 뒤 한 번에 묶어 실행한다. 승인 범위를 넘으면 다시 소명한다.
 
