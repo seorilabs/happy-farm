@@ -42,10 +42,13 @@ for (const file of files) {
 
 // 디스플레이 서체(scripts/build-display-font.py 결과)를 iOS 리소스와 Android assets/fonts로 복사한다.
 // iOS는 PostScript 이름, Android는 파일 이름으로 찾으므로 둘 다 Baloo2-ExtraBold다.
-const fontSource = fs.readFileSync(path.join(root, 'assets/fonts/Baloo2-ExtraBold.ttf'));
+// OFL 1.1 조건 2에 따라 배포하는 앱 패키지마다 저작권 고지와 라이선스 전문을 함께 넣는다.
+const fontFiles = ['Baloo2-ExtraBold.ttf', 'Baloo2-OFL.txt'];
 for (const dir of ['apps/mobile/src/fonts', 'apps/mobile/android/app/src/main/assets/fonts']) {
   if (!check) fs.mkdirSync(path.join(root, dir), { recursive: true });
-  writeOrCheck(path.join(root, dir, 'Baloo2-ExtraBold.ttf'), fontSource);
+  for (const file of fontFiles) {
+    writeOrCheck(path.join(root, dir, file), fs.readFileSync(path.join(root, 'assets/fonts', file)));
+  }
 }
 
 const identifier = (file) => file.replace(/\.png$/, '');
