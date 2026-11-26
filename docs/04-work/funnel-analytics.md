@@ -51,7 +51,7 @@ happy-farm 활성화·리텐션 퍼널 측정의 단일 기준 문서. 이벤트
 | **첫 유의미 수확** | `first_meaningful_harvest` | `crop`, `area`, `crop_tier`, `revenue`, `research_points_gained`, `reward_type`, `harvest_source`, context |
 | 첫 수확 보상 확인 | `onboarding_step_view` (`step` = `reward`, `step_index` = 3) | `step`, `step_index`, context |
 | 온보딩 완료 | `onboarding_complete` | `completion_source` (`confirm` / `auto` / `interaction`), context |
-| 데일리 보너스 노출 | `daily_bonus_opened` | `source` (`auto_popup` / `more` / `welcome_back`), context |
+| 데일리 보너스 노출 | `daily_bonus_opened` | `source` (`auto_popup` / `more` / `welcome_back` / `hud`), context. `hud`는 목표 칩 줄의 출석 버튼(#606 B안) |
 | 데일리 보너스 수령 | `daily_bonus_claimed` | `streak`, `reward_value`, `is_first_claim`, `source`, context |
 | **첫 데일리 클레임** | `first_daily_bonus_claimed` | `streak`, `reward_value`, `source`, context |
 
@@ -94,7 +94,7 @@ flowchart LR
 | `ftue_pointer_shown` | `step` | 첫 수확 스포트라이트 포인터 노출. 스포트라이트가 들어오는 PR부터 발화한다 |
 | `goal_chip_tapped` | `goal_kind`, `ready` | 다음 목표 칩 탭. 목표 칩이 들어오는 PR부터 발화한다 |
 
-`source`의 `tab_bar`, `hud`, `goal_chip`과 `location`의 `tab_bar`, `hud`는 하단 탭 바와 재화 칩이 들어오는 PR부터 쓰인다. 그 전에는 `nav`, `more_menu`, `auto_popup`, `other`만 나온다.
+B안 레이아웃부터 메인 화면의 메뉴 탭은 `header`가 아니라 하단 탭 바(`tab_bar`: 상점, 미션, 목장, 요리)와 헤더 칩(`hud`: 더보기, 출석, 부스트, 골드 칩의 농장 현황)에서 나온다. 그래서 개편 전후를 비교할 때 `header`와 `nav`는 개편 전 값, `tab_bar`와 `hud`는 개편 후 값으로 읽는다. 목장 탭으로 연 생산 시트의 `animals_screen` 출처는 `tab_bar`다.
 
 첫날 행동별 복귀, 온보딩 이탈 단계, 시트 경로 집계는 `analytics/queries/first-session-funnel.sql`에 있다. 스토어 설치만 남기고 비정상 버전을 빼는 표본 보정 조건이 쿼리 머리말에 있다.
 

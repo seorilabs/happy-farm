@@ -14,6 +14,7 @@ export function CountUpText({
   style,
   testID,
   numberOfLines,
+  maxFontSizeMultiplier,
 }: {
   value: number;
   run: CountUpRun | null;
@@ -21,6 +22,7 @@ export function CountUpText({
   style?: StyleProp<TextStyle>;
   testID?: string;
   numberOfLines?: number;
+  maxFontSizeMultiplier?: number;
 }) {
   const [, setFrame] = useState(0);
   const active = run != null && run.to === value;
@@ -38,7 +40,7 @@ export function CountUpText({
 
   const shown = active && run != null ? getCountUpValue(run, Date.now()) : value;
   return (
-    <Text testID={testID} style={style} numberOfLines={numberOfLines}>
+    <Text testID={testID} style={style} numberOfLines={numberOfLines} maxFontSizeMultiplier={maxFontSizeMultiplier}>
       {format(shown)}
     </Text>
   );

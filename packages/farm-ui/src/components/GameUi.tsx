@@ -11,16 +11,25 @@ import {
 } from 'react-native';
 
 import { useFarmArt, type FarmSkinKey, type FarmUiIconKey } from '../farmArt';
+import { GamePressable, PRESSED_SINK_STYLE } from './GamePressable';
 
 // 게임 UI 공통 부품(#606). 호스트가 스킨, 아이콘, 서체를 넘기지 않거나 이미지를 못 읽으면
 // 지금의 코드 스타일과 이모지로 그린다(설계의 에셋 실패 처리).
+
+// 스킨 틀은 높이가 정해져 있어 글자가 끝없이 커지면 잘린다. 게임 HUD처럼 틀 안 글자는 1.3배까지만
+// 키우고, 전체 문구는 접근성 이름으로 남긴다(#606 B안, fontScale 2 검수).
+export const GAME_UI_MAX_FONT_SCALE = 1.3;
 
 export function UiIcon({ name, size, fallback }: { name: FarmUiIconKey; size: number; fallback: string }) {
   const source = useFarmArt().ui?.icons[name];
   const [failed, setFailed] = useState(false);
   if (source == null || failed) {
     return (
-      <Text accessible={false} style={{ fontSize: size * 0.78, lineHeight: size, textAlign: 'center', width: size }}>
+      <Text
+        accessible={false}
+        allowFontScaling={false}
+        style={{ fontSize: size * 0.78, lineHeight: size, textAlign: 'center', width: size }}
+      >
         {fallback}
       </Text>
     );
@@ -70,26 +79,18 @@ export function SkinFrame({
   return (
     <View testID={testID} style={[{ height }, !useSkin && fallbackStyle, style]}>
       {useSkin ? (
+        // 정적 이미지는 원본 픽셀 크기를 기본 크기로 받아 top/bottom 지정을 무시한다(iOS 실행 화면에서
+        // 끝 조각이 120pt 높이로 그려졌다). 자리는 View가 잡고 이미지는 그 안을 100%로 채운다.
         <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-          <Image
-            testID={testID != null ? `${testID}-skin-left` : undefined}
-            source={art.left}
-            onError={() => setFailed(true)}
-            resizeMode="stretch"
-            style={[styles.slice, { left: 0, width: cap }]}
-          />
-          <Image
-            source={art.center}
-            onError={() => setFailed(true)}
-            resizeMode="stretch"
-            style={[styles.slice, { left: cap, right: cap }]}
-          />
-          <Image
-            source={art.right}
-            onError={() => setFailed(true)}
-            resizeMode="stretch"
-            style={[styles.slice, { right: 0, width: cap }]}
-          />
+          <View testID={testID != null ? `${testID}-skin-left` : undefined} style={[styles.slice, { left: 0, width: cap }]}>
+            <Image source={art.left} onError={() => setFailed(true)} resizeMode="stretch" style={styles.sliceImage} />
+          </View>
+          <View style={[styles.slice, { left: cap, right: cap }]}>
+            <Image source={art.center} onError={() => setFailed(true)} resizeMode="stretch" style={styles.sliceImage} />
+          </View>
+          <View style={[styles.slice, { right: 0, width: cap }]}>
+            <Image source={art.right} onError={() => setFailed(true)} resizeMode="stretch" style={styles.sliceImage} />
+          </View>
         </View>
       ) : null}
       {pressed || disabled ? (
@@ -133,6 +134,7 @@ export function GameText({
   const fontStyle = useDisplayFontStyle();
   return (
     <Text
+      maxFontSizeMultiplier={GAME_UI_MAX_FONT_SCALE}
       {...rest}
       style={[
         styles.text,
@@ -147,11 +149,149 @@ export function GameText({
   );
 }
 
+// 빨간 알림 배지. 숫자, 느낌표, 점 세 가지. 0이나 null이면 그리지 않는다.
+export type BadgeValue = number | '!' | 'dot' | null | undefined;
+
+export function GameBadge({ value, testID }: { value: BadgeValue; testID?: string }) {
+  if (value == null || value === 0) return null;
+  if (value === 'dot') {
+    return <View testID={testID} pointerEvents="none" style={[styles.badge, styles.badgeDot]} />;
+  }
+  return (
+    <View testID={testID} pointerEvents="none" style={styles.badge}>
+      <Text allowFontScaling={false} style={styles.badgeText}>
+        {value === '!' ? '!' : value > 99 ? '99+' : value}
+      </Text>
+    </View>
+  );
+}
+
+export const HUD_ICON_BUTTON_HEIGHT = 48;
+
+// 헤더의 정사각 아이콘 버튼(더보기, 출석, 부스트). 칩 스킨의 끝 조각 두 개로 둥근 네모를 만든다.
+export function HudIconButton({
+  testID,
+  icon,
+  fallback,
+  caption,
+  badge,
+  accessibilityLabel,
+  onPress,
+}: {
+  testID?: string;
+  icon?: FarmUiIconKey;
+  fallback: string;
+  // 아이콘 아래 작은 글자(부스트 배수나 남은 시간).
+  caption?: string;
+  badge?: BadgeValue;
+  accessibilityLabel: string;
+  onPress: () => void;
+}) {
+  const art = useFarmArt().ui?.skins.chip;
+  const width = art != null ? Math.round(HUD_ICON_BUTTON_HEIGHT * art.capRatio) * 2 : HUD_ICON_BUTTON_HEIGHT + 6;
+  return (
+    <GamePressable
+      testID={testID}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      pressedStyle={PRESSED_SINK_STYLE}
+      style={styles.hudIconButton}
+      onPress={onPress}
+    >
+      {({ pressed }) => (
+        <>
+          <SkinFrame
+            skin="chip"
+            height={HUD_ICON_BUTTON_HEIGHT}
+            pressed={pressed}
+            style={{ width }}
+            fallbackStyle={styles.chipFallback}
+            contentStyle={styles.hudIconContent}
+          >
+            {icon != null ? (
+              <UiIcon name={icon} size={caption != null ? 24 : 30} fallback={fallback} />
+            ) : (
+              <Text allowFontScaling={false} style={caption != null ? styles.hudEmojiSmall : styles.hudEmoji}>
+                {fallback}
+              </Text>
+            )}
+            {caption != null ? (
+              <GameText style={styles.hudCaption} numberOfLines={1} adjustsFontSizeToFit>
+                {caption}
+              </GameText>
+            ) : null}
+          </SkinFrame>
+          <GameBadge value={badge} />
+        </>
+      )}
+    </GamePressable>
+  );
+}
+
 const styles = StyleSheet.create({
+  badge: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    minWidth: 20,
+    height: 20,
+    paddingHorizontal: 5,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#e5484d',
+    borderWidth: 2,
+    borderColor: '#ffffff',
+  },
+  badgeDot: {
+    minWidth: 14,
+    width: 14,
+    height: 14,
+    top: -3,
+    right: -3,
+    paddingHorizontal: 0,
+  },
+  badgeText: {
+    color: '#ffffff',
+    fontSize: 11,
+    fontWeight: '900',
+    lineHeight: 14,
+  },
+  hudIconButton: {
+    position: 'relative',
+  },
+  hudIconContent: {
+    flexDirection: 'column',
+    paddingBottom: 3,
+  },
+  hudEmoji: {
+    fontSize: 24,
+  },
+  hudEmojiSmall: {
+    fontSize: 18,
+    lineHeight: 22,
+  },
+  hudCaption: {
+    fontSize: 10,
+    lineHeight: 12,
+    marginTop: -1,
+  },
+  chipFallback: {
+    borderRadius: 14,
+    borderWidth: 2,
+    borderColor: '#e0c48a',
+    borderBottomWidth: 4,
+    borderBottomColor: '#c9a253',
+    backgroundColor: '#fffaf0',
+  },
   slice: {
     position: 'absolute',
     top: 0,
     bottom: 0,
+  },
+  sliceImage: {
+    width: '100%',
+    height: '100%',
   },
   shade: {
     position: 'absolute',

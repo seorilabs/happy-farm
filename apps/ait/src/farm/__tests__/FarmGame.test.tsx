@@ -360,6 +360,17 @@ function nonTapEffectCalls(playEffect: jest.Mock) {
   return playEffect.mock.calls.filter(([key]) => key !== 'tap');
 }
 
+// #606 B안: 구역은 구역 선택 칩을 눌러 연 시트에서 고르고, 설정은 더보기 안에 있다.
+function pickArea(screen: ReturnType<typeof render>, areaKey: string) {
+  fireEvent.press(screen.getByTestId('area-picker'));
+  fireEvent.press(screen.getByTestId(`area-tab-${areaKey}`));
+}
+
+function openSettingsFromMore(screen: ReturnType<typeof render>) {
+  fireEvent.press(screen.getByTestId('more-nav-button'));
+  fireEvent.press(screen.getByLabelText('설정'));
+}
+
 async function renderGame(
   savedState: GameState | null,
   props: Partial<React.ComponentProps<typeof FarmGame>> = {},
@@ -536,7 +547,7 @@ describe('FarmGame UI flow', () => {
 
   test('열린 시트 안에 업데이트 안내를 넣고 뒤로 동작과 시트 상태를 유지한다', async () => {
     const view = await renderGame(createInitialState());
-    fireEvent.press(view.getByText(getFarmMessages(DEFAULT_LOCALE).shopButton));
+    fireEvent.press(view.getByTestId('shop-nav-button'));
     const close = jest.fn();
     view.rerender(<FarmGame persistence={mockPersistence} updateGate={{ node: <Text>Update notice</Text>, onRequestClose: close }} />);
     expect(within(getSheetModal(view)).getByText('Update notice')).toBeTruthy();
@@ -592,7 +603,7 @@ describe('FarmGame UI flow', () => {
       startupSnapshot: { gameState: savedState, settings: { locale: 'en-US' }, lastSeenAt: null },
     });
     expect(view.getByTestId('farm-root')).toBeTruthy();
-    expect(view.getByText('Gold')).toBeTruthy();
+    expect(view.getByTestId('gold-chip').props.accessibilityLabel).toMatch(/^Gold /);
     expect(mockPersistence.readPersistedGameState).not.toHaveBeenCalled();
     expect(mockPersistence.readPersistedGameSettings).not.toHaveBeenCalled();
     expect(mockPersistence.readLastSeenAt).not.toHaveBeenCalled();
@@ -635,7 +646,7 @@ describe('FarmGame UI flow', () => {
 
     // Area selection changes only the backdrop's area layer; the current time
     // phase/celestial presentation remains mounted and unchanged.
-    fireEvent.press(screen.getByTestId('area-tab-vegetable_field'));
+    pickArea(screen, 'vegetable_field');
     expect(screen.UNSAFE_getByProps({ testID: 'environment-area-layer-furrows' })).toBeTruthy();
     expect(backdropNow()).toBeTruthy();
 
@@ -655,11 +666,10 @@ describe('FarmGame UI flow', () => {
 
   test('keeps decorative ambience and hills behind farm content with navRow at three (#353, #361)', async () => {
     const screen = await renderGame({ ...createInitialState(), onboardingCompleted: true });
-    await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('hud-row')).toBeTruthy());
 
-    // AC-5: 계절 연출로 상시 진입점이 늘지 않는다 — navRow 개수가 그대로다
-    // (상점·미션·더보기 + 수확 부스트 4개).
-    expect(within(screen.getByTestId('nav-row')).getAllByRole('button')).toHaveLength(4);
+    // AC-5: 계절 연출로 상시 진입점이 늘지 않는다 — 하단 탭 바는 5개 그대로다(#606 B안).
+    expect(within(screen.getByTestId('game-tab-bar')).getAllByRole('tab')).toHaveLength(5);
 
     // AC-4: 계절 파티클은 농장 스테이지의 '배경' backdrop 레이어(child[0])로만 전달된다
     //       (시트/헤더 아님). 전달 값은 현재 로컬 월의 결정론 계절 파티클과 일치한다.
@@ -687,30 +697,31 @@ describe('FarmGame UI flow', () => {
   test('renders initial farm and supports a plant-grow-harvest loop', async () => {
     const screen = await renderGame(null);
 
-    await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
-    expect(screen.getByText('50G')).toBeTruthy();
+    await waitFor(() => expect(screen.getByTestId('hud-row')).toBeTruthy());
+    expect(screen.getByTestId('hud-gold')).toHaveTextContent('50');
     // 연구레벨 배지는 '농장 현황' 시트로 이동(#233) — 메인 화면에 상시 노출되지 않는다.
     expect(screen.queryByText('연구 Lv.1')).toBeNull();
-    expect(screen.getByText(/생산성 약 /)).toBeTruthy();
+    expect(screen.getByTestId('gold-chip').props.accessibilityLabel).toMatch(/생산성 약 /);
     expect(screen.queryByText('새 구역 조건')).toBeNull();
     expect(screen.getAllByText('빈 밭')).toHaveLength(6);
     expect(screen.getByText('당근')).toBeTruthy();
-    expect(screen.getByText('효율 +40%')).toBeTruthy();
+    // #606: 씨앗 카드는 수익 배수로 보인다(예전 "효율 +40%").
+    expect(within(screen.getByTestId('seed-tool-carrot')).getByText('×1.4')).toBeTruthy();
 
     // Use the stable testID added to each area tab so text duplication with the
     // next-goal bar in the header cannot cause a selector collision.
-    fireEvent.press(screen.getByTestId('area-tab-vegetable_field'));
+    pickArea(screen, 'vegetable_field');
     expect(screen.getByText('채소 밭 열기 조건')).toBeTruthy();
-    fireEvent.press(screen.getByTestId('area-tab-starter_field'));
+    pickArea(screen, 'starter_field');
 
     fireEvent.press(screen.getByText('당근'));
-    expect(screen.getByText('당근 심기 · 10G · 투자효율 +40%')).toBeTruthy();
+    expect(screen.getByTestId('seed-tool-carrot').props.accessibilityState).toEqual({ selected: true });
 
     const firstEmptyPlot = screen.getAllByText('빈 밭')[0];
     expect(firstEmptyPlot).toBeDefined();
     fireEvent.press(firstEmptyPlot!);
 
-    expect(screen.getByText('40G')).toBeTruthy();
+    expect(screen.getByTestId('hud-gold')).toHaveTextContent('40');
 
     await act(async () => {
       jest.advanceTimersByTime(2500);
@@ -720,7 +731,7 @@ describe('FarmGame UI flow', () => {
 
     fireEvent.press(screen.getByText('GET'));
 
-    expect(screen.getByText('54G')).toBeTruthy();
+    expect(screen.getByTestId('hud-gold')).toHaveTextContent('54');
     expect(screen.getAllByText('빈 밭')).toHaveLength(6);
     // Harvesting spawns a floating "+gold" burst at the tapped plot (gained 14G).
     expect(screen.getByText('+14')).toBeTruthy();
@@ -820,8 +831,8 @@ describe('FarmGame UI flow', () => {
     const state: GameState = { ...createInitialState(), onboardingCompleted: true };
     const screen = await renderGame(state);
 
-    await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
-    expect(screen.getByText('50G')).toBeTruthy();
+    await waitFor(() => expect(screen.getByTestId('hud-row')).toBeTruthy());
+    expect(screen.getByTestId('hud-gold')).toHaveTextContent('50');
     expect(screen.getAllByText('빈 밭')).toHaveLength(6);
 
     fireEvent.press(screen.getByText('당근'));
@@ -829,7 +840,7 @@ describe('FarmGame UI flow', () => {
     fireEvent.press(screen.getByText('🌱 모두 심기 5 · 50G'));
 
     // Gold is fully spent and only the one unaffordable plot remains empty.
-    expect(screen.getByText('0G')).toBeTruthy();
+    expect(screen.getByTestId('hud-gold')).toHaveTextContent('0');
     expect(screen.getAllByText('빈 밭')).toHaveLength(1);
     // With no gold left to fill the last plot, the shortcut disappears.
     expect(screen.queryByText('🌱 모두 심기 5 · 50G')).toBeNull();
@@ -853,9 +864,9 @@ describe('FarmGame UI flow', () => {
     // Default NOW (set in beforeEach) is a Wednesday → festival inactive → teaser.
     // 주말 축제 정보는 이제 상단 HUD가 아니라 '농장 현황' 시트에 있다(#233): chip으로 진입.
     const screen = await renderGame(null);
-    await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('hud-row')).toBeTruthy());
     expect(screen.queryByTestId('weekly-event-teaser')).toBeNull();
-    fireEvent.press(screen.getByTestId('cotd-chip'));
+    fireEvent.press(screen.getByTestId('gold-chip'));
     await waitFor(() => expect(screen.getByTestId('weekly-event-teaser')).toBeTruthy());
     expect(screen.queryByTestId('weekly-event-banner')).toBeNull();
   });
@@ -864,8 +875,8 @@ describe('FarmGame UI flow', () => {
     // Jump to a Friday (UTC) before rendering → festival live → banner, no teaser.
     jest.setSystemTime(Date.parse('2026-05-29T12:00:00.000Z'));
     const screen = await renderGame(null);
-    await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
-    fireEvent.press(screen.getByTestId('cotd-chip'));
+    await waitFor(() => expect(screen.getByTestId('hud-row')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('gold-chip'));
     await waitFor(() => expect(screen.getByTestId('weekly-event-banner')).toBeTruthy());
     expect(screen.queryByTestId('weekly-event-teaser')).toBeNull();
   });
@@ -881,11 +892,11 @@ describe('FarmGame UI flow', () => {
     };
     const expectedOfflinePerHour = getActiveFarmOfflineGoldPerHour(state);
     const screen = await renderGame(state, { preferredLocale: DEFAULT_LOCALE });
-    await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('hud-row')).toBeTruthy());
 
-    // 상시 노출은 시간당 순수익 + 제목 행의 오늘의 작물 chip. 보조 지표(연구레벨·
+    // 상시 노출은 골드 칩의 시간당 순수익뿐이다(#606 B안). 보조 지표(연구레벨·
     // 수익/성장 배수)는 메인 화면에 상시 노출되지 않는다.
-    expect(within(screen.getByTestId('title-group')).getByTestId('cotd-chip')).toBeTruthy();
+    expect(within(screen.getByTestId('gold-chip')).getByText(/\/시$/)).toBeTruthy();
     expect(screen.queryByTestId('stats-sheet')).toBeNull();
     expect(screen.queryByText(/연구 Lv\./)).toBeNull();
     expect(screen.queryByText(messages.profitLabel)).toBeNull();
@@ -893,7 +904,7 @@ describe('FarmGame UI flow', () => {
     expect(screen.queryByText(messages.statsOfflineIncomeLabel)).toBeNull();
 
     // chip 탭 → '농장 현황' 시트가 열리고, 이동한 보조 지표가 시트에 노출된다.
-    fireEvent.press(screen.getByTestId('cotd-chip'));
+    fireEvent.press(screen.getByTestId('gold-chip'));
     await waitFor(() => expect(screen.getByTestId('stats-sheet')).toBeTruthy());
     expect(screen.getByText(messages.sheetTitleStats)).toBeTruthy();
     expect(screen.getByText(/연구 Lv\./)).toBeTruthy();
@@ -918,10 +929,10 @@ describe('FarmGame UI flow', () => {
     const cotd = getCropOfTheDayStatus(NOW, state);
     const titleName = getTitleLabel('harvest_master', DEFAULT_LOCALE).name;
     const screen = await renderGame(state);
-    await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('hud-row')).toBeTruthy());
 
-    // 헤더의 제목 행에는 활성 칭호 배지가 더 이상 상시 노출되지 않는다(단일 요약 chip만 유지).
-    expect(within(screen.getByTestId('title-group')).queryByText(titleName)).toBeNull();
+    // 헤더에는 활성 칭호 배지가 상시 노출되지 않는다(#606 B안은 제목 행 자체가 없다).
+    expect(screen.queryByText(titleName)).toBeNull();
     // ★ 칩(#379)은 잔여 화폐 카운트/개척 지도 shortcut으로 헤더에 유지된다.
     expect(screen.getByTestId('prestige-stars-chip')).toBeTruthy();
     // 강등된 지표는 시트를 열기 전에는 노출되지 않는다.
@@ -929,7 +940,7 @@ describe('FarmGame UI flow', () => {
 
     // AC-2: 단일 요약 chip(openStats) 한 뎁스 뒤 '농장 현황' 시트에서 강등된 세 지표가
     // 모두 도달된다 — 오늘의 작물 상세(작물 + ⭐×배수)·활성 칭호·명성 별 분해(별 + 스킬).
-    fireEvent.press(screen.getByTestId('cotd-chip'));
+    fireEvent.press(screen.getByTestId('gold-chip'));
     await waitFor(() => expect(screen.getByTestId('stats-sheet')).toBeTruthy());
     expect(screen.getByTestId('stats-crop-of-the-day')).toBeTruthy();
     expect(screen.getByTestId('stats-crop-of-the-day-bonus')).toHaveTextContent(`⭐×${cotd.multiplier}`);
@@ -937,9 +948,8 @@ describe('FarmGame UI flow', () => {
     expect(screen.getByTestId('stats-prestige-stars')).toHaveTextContent('★ 2');
     expect(screen.getByTestId('stats-prestige-skills')).toBeTruthy();
 
-    // AC-2: 강등 정보를 옮기며 신규 탭 타깃/HUD 진입점을 만들지 않았다 — navRow는
-    // 상점·미션·더보기 + 수확 부스트 4개 그대로다.
-    expect(within(screen.getByTestId('nav-row')).getAllByRole('button')).toHaveLength(4);
+    // AC-2: 강등 정보를 옮기며 신규 진입점을 만들지 않았다 — 하단 탭 바는 5개 그대로다.
+    expect(within(screen.getByTestId('game-tab-bar')).getAllByRole('tab')).toHaveLength(5);
   });
 
   test('reaches all three demoted metrics via the single openStats header tab with no new entry point (#355 AC-2)', async () => {
@@ -953,7 +963,7 @@ describe('FarmGame UI flow', () => {
     const cotd = getCropOfTheDayStatus(NOW, state);
     const titleName = getTitleLabel('harvest_master', DEFAULT_LOCALE).name;
     const screen = await renderGame(state);
-    await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('hud-row')).toBeTruthy());
 
     // 강등된 세 정보는 시트를 열기 전(=헤더 상시 노출 아님)에는 렌더 트리에 없다.
     expect(screen.queryByTestId('stats-crop-of-the-day')).toBeNull();
@@ -961,7 +971,7 @@ describe('FarmGame UI flow', () => {
     expect(screen.queryByTestId('stats-active-title')).toBeNull();
 
     // 헤더의 단일 요약 탭(cotd-chip) '하나'만 눌러 openStats로 한 뎁스 뒤 시트에 도달한다.
-    fireEvent.press(screen.getByTestId('cotd-chip'));
+    fireEvent.press(screen.getByTestId('gold-chip'));
     await waitFor(() => expect(screen.getByTestId('stats-sheet')).toBeTruthy());
 
     // (a) 오늘의 작물 상세 — 작물 + ⭐×배수가 시트 안에 있다.
@@ -973,58 +983,50 @@ describe('FarmGame UI flow', () => {
     expect(screen.getByTestId('stats-prestige-stars')).toHaveTextContent('★ 2');
     expect(screen.getByTestId('stats-prestige-skills')).toBeTruthy();
 
-    // 신규 탭 타깃/HUD 진입점 증가 없음 — navRow는 상점·미션·더보기 +
-    // 수확 부스트 4개 그대로다.
-    expect(within(screen.getByTestId('nav-row')).getAllByRole('button')).toHaveLength(4);
+    // 신규 진입점 증가 없음 — 하단 탭 바는 5개 그대로다(#606 B안).
+    expect(within(screen.getByTestId('game-tab-bar')).getAllByRole('tab')).toHaveLength(5);
   });
 
-  test('keeps the navRow at exactly three NavButtons after the header declutter (#355 AC-4)', async () => {
+  test('#606 B안 메뉴는 하단 탭 바 5개와 헤더의 더보기, 부스트로 나뉜다', async () => {
     const screen = await renderGame({ ...createInitialState(), onboardingCompleted: true });
-    await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('hud-row')).toBeTruthy());
+    const messages = getFarmMessages(DEFAULT_LOCALE);
 
-    // navRow 진입점은 상점·미션·더보기 + 수확 부스트 4개다. #355 당시에는 3개였고
-    // 부스트는 그 뒤 광고 개편에서 더해졌다. #355 작업 자체가 진입점을 늘리지
-    // 않았다는 것이 이 단언의 의도다.
-    expect(within(screen.getByTestId('nav-row')).getAllByRole('button')).toHaveLength(4);
-    expect(screen.getByTestId('shop-nav-button')).toBeTruthy();
-    expect(screen.getByTestId('more-nav-button')).toBeTruthy();
-    expect(
-      screen.getByLabelText(getFarmMessages(DEFAULT_LOCALE).missionsButtonAccessibilityLabel)
-    ).toBeTruthy();
+    const tabBar = screen.getByTestId('game-tab-bar');
+    expect(within(tabBar).getAllByRole('tab')).toHaveLength(5);
+    for (const label of [messages.tabShop, messages.tabMissions, messages.tabFarm, messages.tabRanch, messages.tabCooking]) {
+      expect(within(tabBar).getByText(label)).toBeTruthy();
+    }
+    expect(within(tabBar).getByTestId('shop-nav-button')).toBeTruthy();
+    expect(within(screen.getByTestId('hud-row')).getByTestId('more-nav-button')).toBeTruthy();
+    expect(within(screen.getByTestId('goal-row')).getByTestId('boost-nav-button')).toBeTruthy();
   });
 
-  test('does not apply the mobile wrap fallback to the core header row on the mobile market (#355 AC-5)', async () => {
-    // 밀도를 낮춰 제거한 mobile 전용 줄바꿈 fallback(mobileHeaderTop=space-between /
-    // mobileTitleGroup)이 mobile market에서도 핵심 헤더 행에 적용되지 않음을 고정한다.
-    // fallback이 되살아나면 아래 assertion이 깨진다 → '줄바꿈 fallback 의존 없음' 회귀 가드.
+  test('#606 B안 헤더는 market과 관계없이 재화 칩 줄과 목표 칩 줄 두 줄이다', async () => {
     const screen = await renderGame({ ...createInitialState(), onboardingCompleted: true }, {
       market: 'mobile',
     });
-    await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('hud-row')).toBeTruthy());
+    const messages = getFarmMessages(DEFAULT_LOCALE);
 
-    const headerTopStyle = StyleSheet.flatten(screen.getByTestId('header-top').props.style);
-    // 제거한 mobileHeaderTop fallback의 space-between이 mobile에서도 적용되지 않고, 기본
-    // flex-start 레이아웃을 유지한다.
-    expect(headerTopStyle.justifyContent).toBe('flex-start');
-    expect(headerTopStyle.justifyContent).not.toBe('space-between');
-    // 핵심 행은 줄바꿈(wrap)으로 넘치지 않는다.
-    expect(headerTopStyle.flexWrap).toBe(Dimensions.get('window').fontScale >= 1.3 ? 'wrap' : undefined);
-    // 제거한 mobileTitleGroup fallback 없이 title-group이 기본 flex 레이아웃을 유지한다.
-    const titleGroupStyle = StyleSheet.flatten(screen.getByTestId('title-group').props.style);
-    expect(titleGroupStyle.flex).toBe(1);
-
-    // mobile에서도 핵심 상시 지표·단일 요약 chip·navRow 3개가 한 행 안에 유지된다.
-    expect(screen.getByTestId('cotd-chip')).toBeTruthy();
-    expect(within(screen.getByTestId('nav-row')).getAllByRole('button')).toHaveLength(4);
+    const hudRow = screen.getByTestId('hud-row');
+    expect(within(hudRow).getByTestId('gold-chip')).toBeTruthy();
+    expect(within(hudRow).getByTestId('prestige-stars-chip')).toBeTruthy();
+    expect(within(hudRow).getByTestId('more-nav-button')).toBeTruthy();
+    const goalRow = screen.getByTestId('goal-row');
+    expect(within(goalRow).getByTestId('next-goal-bar')).toBeTruthy();
+    // 제목과 설정 톱니는 헤더에서 빠졌다(타이틀 화면과 더보기로).
+    expect(screen.queryByTestId('title-group')).toBeNull();
+    expect(screen.queryByLabelText(messages.settingsAccessibilityLabel)).toBeNull();
   });
 
   test('shows a placeholder in the stats sheet when no title is equipped (#355)', async () => {
     const base = createInitialState();
     const state: GameState = { ...base, onboardingCompleted: true, activeTitle: null };
     const screen = await renderGame(state);
-    await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('hud-row')).toBeTruthy());
 
-    fireEvent.press(screen.getByTestId('cotd-chip'));
+    fireEvent.press(screen.getByTestId('gold-chip'));
     await waitFor(() => expect(screen.getByTestId('stats-sheet')).toBeTruthy());
     expect(screen.getByTestId('stats-active-title')).toHaveTextContent('—');
   });
@@ -1048,7 +1050,7 @@ describe('FarmGame UI flow', () => {
     };
     const screen = await renderGame(state);
 
-    fireEvent.press(screen.getByTestId('cotd-chip'));
+    fireEvent.press(screen.getByTestId('gold-chip'));
     await waitFor(() => expect(screen.getByTestId('farm-records-section')).toBeTruthy());
     expect(screen.getByTestId('stats-record-total-harvests')).toHaveTextContent('1,234');
     expect(screen.getByTestId('stats-record-crop-idle-gold')).toHaveTextContent(
@@ -1081,7 +1083,7 @@ describe('FarmGame UI flow', () => {
     const screen = await renderGame(state);
 
     fireEvent.press(screen.getAllByText('GET')[0]!);
-    fireEvent.press(screen.getByTestId('cotd-chip'));
+    fireEvent.press(screen.getByTestId('gold-chip'));
 
     await waitFor(() => expect(screen.getByTestId('stats-record-total-harvests')).toHaveTextContent('11'));
     expect(screen.getByTestId('stats-record-crop-idle-gold')).toHaveTextContent(
@@ -1161,7 +1163,7 @@ describe('FarmGame UI flow', () => {
       const state = badgeState();
       const featuredKey = getCropOfTheDayStatus(NOW, state).cropKey;
       const screen = await renderGame(state);
-      await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+      await waitFor(() => expect(screen.getByTestId('hud-row')).toBeTruthy());
 
       // 오늘의 작물 배지는 정확히 그 작물 하나에만, HUD 배너와 같은 ×2 로 노출된다.
       const cotdBadges = screen.getAllByTestId(/^seed-bonus-cotd-/);
@@ -1182,7 +1184,7 @@ describe('FarmGame UI flow', () => {
       // 이벤트 축에 따라 배지 아이콘이 달라진다: 판매=🎉, 변이=✨, 성장속도=⚡.
       const expectedBadge = `${status.axis === 'mutation' ? '✨' : status.axis === 'speed' ? '⚡' : '🎉'}×${status.multiplier}`;
       const screen = await renderGame(state);
-      await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+      await waitFor(() => expect(screen.getByTestId('hud-row')).toBeTruthy());
 
       // 축제 대상 구역(starter_field)의 모든 작물에 축제 배지가 붙는다.
       for (const cropKey of festivalCropKeys) {
@@ -1200,7 +1202,7 @@ describe('FarmGame UI flow', () => {
       const status = getWeeklyEventStatus(FRIDAY, state.unlockedAreas);
       const expectedWeeklyBadge = `${status.axis === 'mutation' ? '✨' : status.axis === 'speed' ? '⚡' : '🎉'}×${status.multiplier}`;
       const screen = await renderGame(state);
-      await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+      await waitFor(() => expect(screen.getByTestId('hud-row')).toBeTruthy());
 
       expect(within(screen.getByTestId(`seed-bonus-cotd-${featuredKey}`)).getByText('⭐×2')).toBeTruthy();
       expect(within(screen.getByTestId(`seed-bonus-weekly-${featuredKey}`)).getByText(expectedWeeklyBadge)).toBeTruthy();
@@ -1214,7 +1216,7 @@ describe('FarmGame UI flow', () => {
       expect(status.axis).toBe('mutation');
 
       const screen = await renderGame(state);
-      await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+      await waitFor(() => expect(screen.getByTestId('hud-row')).toBeTruthy());
       for (const cropKey of status.cropKeys) {
         expect(
           within(screen.getByTestId(`seed-bonus-weekly-${cropKey}`)).getByText(`✨×${status.multiplier}`),
@@ -1224,7 +1226,7 @@ describe('FarmGame UI flow', () => {
         );
       }
 
-      fireEvent.press(screen.getByTestId('cotd-chip'));
+      fireEvent.press(screen.getByTestId('gold-chip'));
       await waitFor(() => expect(screen.getByTestId('weekly-event-banner')).toBeTruthy());
       expect(screen.getByTestId('weekly-event-title')).toHaveTextContent(
         `✨ ${getFarmMessages('ko-KR').weeklyEventGoldenLabel}`,
@@ -1236,7 +1238,7 @@ describe('FarmGame UI flow', () => {
       const state = badgeState();
       const featuredKey = getCropOfTheDayStatus(NOW, state).cropKey;
       const screen = await renderGame(state);
-      await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+      await waitFor(() => expect(screen.getByTestId('hud-row')).toBeTruthy());
       const label = screen.getByTestId(`seed-tool-${featuredKey}`).props.accessibilityLabel as string;
       expect(label).toContain(getFarmMessages('ko-KR').cropOfTheDayLabel);
     });
@@ -1245,7 +1247,7 @@ describe('FarmGame UI flow', () => {
       const state = badgeState();
       const featuredKey = getCropOfTheDayStatus(NOW, state).cropKey;
       const screen = await renderGame(state, {}, { locale: 'en-US' });
-      await waitFor(() => expect(screen.getByText('Happy Farm')).toBeTruthy());
+      await waitFor(() => expect(screen.getByTestId('hud-row')).toBeTruthy());
       const label = screen.getByTestId(`seed-tool-${featuredKey}`).props.accessibilityLabel as string;
       expect(label).toContain(getFarmMessages('en-US').cropOfTheDayLabel);
     });
@@ -1268,7 +1270,7 @@ describe('FarmGame UI flow', () => {
       // Default useRewardedAd is unsupported (isAdSupported: false), so this also
       // covers the ad-unsupported (AIT) path: the sheet must open on fertilizer alone.
       const screen = await renderGame(state);
-      await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+      await waitFor(() => expect(screen.getByTestId('hud-row')).toBeTruthy());
 
       // Select a seed tool (so a plot tap isn't treated as a harvest), then tap
       // the growing plot to open the grow-faster sheet.
@@ -1286,7 +1288,7 @@ describe('FarmGame UI flow', () => {
       // The gold-fertilizer toast confirms it applied, gold dropped by exactly the
       // fertilizer cost, and the plot transitioned to ripe (state 2 renders GET).
       await waitFor(() => expect(screen.getByText(/비료로 바로 키웠어요/)).toBeTruthy());
-      expect(screen.getByText(`${formatMoney(100_000 - expectedCost, 'ko-KR')}G`)).toBeTruthy();
+      expect(screen.getByTestId('hud-gold')).toHaveTextContent(formatMoney(100_000 - expectedCost, 'ko-KR'));
       expect(screen.queryByText('100,000G')).toBeNull();
       expect(screen.getByText('GET')).toBeTruthy();
     });
@@ -1299,7 +1301,7 @@ describe('FarmGame UI flow', () => {
         gold: 1,
       };
       const screen = await renderGame(state);
-      await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+      await waitFor(() => expect(screen.getByTestId('hud-row')).toBeTruthy());
 
       fireEvent.press(screen.getByText('당근'));
       fireEvent.press(screen.getByTestId('plot-cell-0'));
@@ -1339,7 +1341,7 @@ describe('FarmGame UI flow', () => {
       expect(preview.totalCost).toBeGreaterThan(0);
 
       const screen = await renderGame(state);
-      await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+      await waitFor(() => expect(screen.getByTestId('hud-row')).toBeTruthy());
 
       // 조건부 버튼 노출(성장 중 + 지불 가능 3칸 ≥ 임계 2).
       const button = screen.getByTestId('fertilize-all-button');
@@ -1348,13 +1350,13 @@ describe('FarmGame UI flow', () => {
       // 1차 탭: 확인 단계 전환. 실행/차감/토스트 없음(골드 불변).
       fireEvent.press(button);
       expect(screen.queryByText(/곳을 비료로 바로 키웠어요/)).toBeNull();
-      expect(screen.getByText(`${formatMoney(100_000, 'ko-KR')}G`)).toBeTruthy();
+      expect(screen.getByTestId('hud-gold')).toHaveTextContent(formatMoney(100_000, 'ko-KR'));
       expect(screen.queryByText('GET')).toBeNull();
 
       // 2차 탭: 실행 → 완료 토스트 + 정확한 골드 차감 + 성장 완료(GET) 3칸.
       fireEvent.press(screen.getByTestId('fertilize-all-button'));
       await waitFor(() => expect(screen.getByText(/곳을 비료로 바로 키웠어요/)).toBeTruthy());
-      expect(screen.getByText(`${formatMoney(100_000 - preview.totalCost, 'ko-KR')}G`)).toBeTruthy();
+      expect(screen.getByTestId('hud-gold')).toHaveTextContent(formatMoney(100_000 - preview.totalCost, 'ko-KR'));
       expect(screen.getAllByText('GET')).toHaveLength(3);
       // 대상이 사라져 버튼도 사라진다.
       expect(screen.queryByTestId('fertilize-all-button')).toBeNull();
@@ -1378,7 +1380,7 @@ describe('FarmGame UI flow', () => {
       };
 
       const screen = await renderGame(state);
-      await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+      await waitFor(() => expect(screen.getByTestId('hud-row')).toBeTruthy());
 
       const actionRow = screen.getByTestId('farm-batch-action-row');
       const actions = within(actionRow);
@@ -1387,24 +1389,28 @@ describe('FarmGame UI flow', () => {
       const fertilizerButton = actions.getByTestId('fertilize-all-button');
 
       expect(screen.getAllByTestId('farm-batch-action-row')).toHaveLength(1);
+      // #606 B안: 구역 칩과 같은 한 줄에, 초록 주요 행동 하나만 늘어나고 재심기는 아이콘, 비료는 크림색이다.
+      // 큰 글자에서는 넘치지 않도록 줄을 바꾼다.
       expect(StyleSheet.flatten(actionRow.props.style)).toEqual(
-        expect.objectContaining({ flexDirection: Dimensions.get('window').fontScale >= 1.3 ? 'column' : 'row', flexWrap: 'nowrap' })
+        expect.objectContaining({
+          flexDirection: 'row',
+          flexWrap: Dimensions.get('window').fontScale >= 1.3 ? 'wrap' : 'nowrap',
+        })
       );
-      for (const button of [harvestButton, replantButton, fertilizerButton]) {
-        expect(StyleSheet.flatten(button.props.style)).toEqual(
-          expect.objectContaining({ flex: 1, minWidth: 0 })
-        );
-      }
+      expect(within(actionRow).getByTestId('area-picker')).toBeTruthy();
+      expect(StyleSheet.flatten(harvestButton.props.style)).toEqual(expect.objectContaining({ flex: 1, minWidth: 0 }));
+      expect(StyleSheet.flatten(replantButton.props.style)).toEqual(expect.objectContaining({ flexShrink: 0 }));
+      expect(StyleSheet.flatten(fertilizerButton.props.style)).toEqual(expect.objectContaining({ maxWidth: 150 }));
     });
 
     test('한 번 탭만으로는 실행되지 않는다(확인 게이트)', async () => {
       const state = createMultiGrowingState(100_000, 3);
       const screen = await renderGame(state);
-      await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+      await waitFor(() => expect(screen.getByTestId('hud-row')).toBeTruthy());
 
       fireEvent.press(screen.getByTestId('fertilize-all-button'));
       // 단일 탭: 골드 차감·완료·토스트 어느 것도 발생하지 않는다.
-      expect(screen.getByText(`${formatMoney(100_000, 'ko-KR')}G`)).toBeTruthy();
+      expect(screen.getByTestId('hud-gold')).toHaveTextContent(formatMoney(100_000, 'ko-KR'));
       expect(screen.queryByText('GET')).toBeNull();
       expect(screen.queryByText(/곳을 비료로 바로 키웠어요/)).toBeNull();
       // 버튼은 확인 라벨로 남아 있다(대상은 여전히 존재).
@@ -1415,7 +1421,7 @@ describe('FarmGame UI flow', () => {
       // 성장 중 1칸(임계 2 미만)이면 밭 시트 안 단일 비료로 충분하므로 노출하지 않는다.
       const state = createMultiGrowingState(100_000, 1);
       const screen = await renderGame(state);
-      await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+      await waitFor(() => expect(screen.getByTestId('hud-row')).toBeTruthy());
       expect(screen.queryByTestId('fertilize-all-button')).toBeNull();
     });
   });
@@ -1425,7 +1431,7 @@ describe('FarmGame UI flow', () => {
 
     test('소유 동물이 0마리면 스트립을 렌더하지 않는다', async () => {
       const screen = await renderGame({ ...createInitialState(), onboardingCompleted: true });
-      await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+      await waitFor(() => expect(screen.getByTestId('hud-row')).toBeTruthy());
       expect(screen.queryByTestId('animal-strip')).toBeNull();
     });
 
@@ -1437,7 +1443,7 @@ describe('FarmGame UI flow', () => {
         animals: { owned: [chicken.key], feeding: {} },
       };
       const screen = await renderGame(state);
-      await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+      await waitFor(() => expect(screen.getByTestId('hud-row')).toBeTruthy());
 
       const strip = screen.getByTestId('animal-strip');
       expect(strip).toBeTruthy();
@@ -1464,7 +1470,7 @@ describe('FarmGame UI flow', () => {
         animals: { owned: [chicken.key], feeding: { [chicken.key]: NOW - chicken.produceTimerMs } },
       };
       const screen = await renderGame(state);
-      await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+      await waitFor(() => expect(screen.getByTestId('hud-row')).toBeTruthy());
 
       const strip = screen.getByTestId('animal-strip');
       // 시각적 강조: ready 동물에 강조 뱃지가 스트립 안에 표시된다.
@@ -1647,7 +1653,7 @@ describe('FarmGame UI flow', () => {
     async function openMissionsSheet(adSupported: boolean) {
       const props = adSupported ? { useRewardedAd: () => createReadyRewardedAd() } : {};
       const screen = await renderGame({ ...createInitialState(), onboardingCompleted: true }, props);
-      await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+      await waitFor(() => expect(screen.getByTestId('hud-row')).toBeTruthy());
       fireEvent.press(screen.getByLabelText(messages.missionsButtonAccessibilityLabel));
       await waitFor(() => expect(screen.getByText(messages.missionsWeeklyTitle)).toBeTruthy());
       return screen;
@@ -1688,38 +1694,35 @@ describe('FarmGame UI flow', () => {
 
     test('shows the toggle for an unlocked multi-crop area and hides it in a locked area', async () => {
       const screen = await renderGame(completedState());
-      await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+      await waitFor(() => expect(screen.getByTestId('hud-row')).toBeTruthy());
 
-      // starter_field (default selection) is unlocked with 5 crops → toggle shown.
-      // 초기 상태는 첫 밭이 자라는 중이고 나머지는 빈 밭이라, 수확 도구 힌트는
-      // "수확하세요"가 아니라 "씨앗을 심어보세요"가 맞다.
-      const metaRow = screen.getByTestId('seed-meta-row');
-      expect(within(metaRow).getByText(messages.harvestHintEmpty)).toBeTruthy();
-      expect(within(metaRow).getByTestId('seed-sort-toggle')).toBeTruthy();
+      // starter_field (default selection) is unlocked with 5 crops → 구역 칩 옆에 정렬 아이콘이 보인다(#606 B안).
+      expect(screen.getByTestId('area-picker')).toBeTruthy();
+      expect(screen.getByTestId('seed-sort-toggle')).toBeTruthy();
 
       // A locked area renders no seed buttons, so there is nothing to sort.
-      fireEvent.press(screen.getByTestId('area-tab-vegetable_field'));
+      pickArea(screen, 'vegetable_field');
       expect(screen.queryByTestId('seed-sort-toggle')).toBeNull();
-      expect(screen.getByTestId('seed-meta-row')).toBeTruthy();
+      expect(screen.getByTestId('area-picker')).toBeTruthy();
     });
 
     test('cycles default → profit → growth → default on each press', async () => {
       const screen = await renderGame(completedState());
-      await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+      await waitFor(() => expect(screen.getByTestId('hud-row')).toBeTruthy());
 
+      // 정렬 아이콘은 글자 없이 바뀐 정렬 방식을 토스트로 알린다(#606 B안).
       const toggle = () => screen.getByTestId('seed-sort-toggle');
-      expect(screen.getByText(messages.seedSortLabel(messages.seedSortDefault))).toBeTruthy();
       fireEvent.press(toggle());
-      expect(screen.getByText(messages.seedSortLabel(messages.seedSortProfit))).toBeTruthy();
+      expect(await screen.findByText(messages.seedSortLabel(messages.seedSortProfit))).toBeTruthy();
       fireEvent.press(toggle());
-      expect(screen.getByText(messages.seedSortLabel(messages.seedSortGrowth))).toBeTruthy();
+      expect(await screen.findByText(messages.seedSortLabel(messages.seedSortGrowth), {}, { timeout: 4000 })).toBeTruthy();
       fireEvent.press(toggle());
-      expect(screen.getByText(messages.seedSortLabel(messages.seedSortDefault))).toBeTruthy();
+      expect(await screen.findByText(messages.seedSortLabel(messages.seedSortDefault), {}, { timeout: 4000 })).toBeTruthy();
     });
 
     test('reorders the rendered seed buttons to match the pure sorter for the active mode', async () => {
       const screen = await renderGame(completedState());
-      await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+      await waitFor(() => expect(screen.getByTestId('hud-row')).toBeTruthy());
 
       // Default mode = catalog order; capture it as the source of truth.
       const defaultOrder = renderedSeedOrder(screen);
@@ -1737,7 +1740,7 @@ describe('FarmGame UI flow', () => {
 
     test('activates the horizontal scroll indicator on the seed strip', async () => {
       const screen = await renderGame(completedState());
-      await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+      await waitFor(() => expect(screen.getByTestId('hud-row')).toBeTruthy());
       expect(screen.getByTestId('seed-strip-scroll').props.showsHorizontalScrollIndicator).toBe(true);
     });
   });
@@ -1768,20 +1771,36 @@ describe('FarmGame UI flow', () => {
 
     test('상시 navRow는 상점·미션·더보기만 노출하고 나머지는 더보기 뒤로 숨긴다', async () => {
       const screen = await renderGame(completedState());
-      await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+      await waitFor(() => expect(screen.getByTestId('hud-row')).toBeTruthy());
 
       // 상시 노출 진입점: 상점·미션·더보기(3개, 기존 7개에서 감소).
       expect(screen.getByTestId('shop-nav-button')).toBeTruthy();
       expect(screen.getByTestId('more-nav-button')).toBeTruthy();
       expect(screen.getByLabelText(messages.missionsButtonAccessibilityLabel)).toBeTruthy();
 
-      // 묶인 진입점은 더보기를 열기 전엔 렌더 트리에 없다.
+      // 묶인 진입점은 더보기를 열기 전엔 렌더 트리에 없다. 출석 보너스는 받을 수 있을 때만
+      // 목표 칩 줄에도 버튼이 생긴다(#606 B안, 아래 테스트).
+      expect(screen.queryByTestId('more-menu')).toBeNull();
       expect(screen.queryByLabelText(messages.wheelButtonAccessibilityLabel)).toBeNull();
-      expect(screen.queryByLabelText(messages.dailyBonusButtonAccessibilityLabel)).toBeNull();
+      expect(screen.queryByTestId('daily-hud-button')).toBeNull();
       expect(screen.queryByLabelText(messages.collectionButtonAccessibilityLabel)).toBeNull();
       expect(screen.queryByLabelText(messages.labButtonAccessibilityLabel)).toBeNull();
       expect(screen.queryByLabelText(messages.mapButtonAccessibilityLabel)).toBeNull();
       expect(screen.queryByLabelText(messages.achievementsButtonAccessibilityLabel)).toBeNull();
+    });
+
+    test('#606 출석 보너스를 받을 수 있으면 목표 칩 줄의 출석 버튼으로 바로 받는다(source=hud)', async () => {
+      const track = jest.fn();
+      const screen = await renderMoreMenuWithDailyBonus({ analytics: createFarmAnalytics(track) });
+
+      const dailyButton = screen.getByTestId('daily-hud-button');
+      expect(within(screen.getByTestId('goal-row')).getByTestId('daily-hud-button')).toBe(dailyButton);
+      fireEvent.press(dailyButton);
+      await waitFor(() => expect(screen.getByText(messages.sheetTitleDailyBonus)).toBeTruthy());
+      expect(track).toHaveBeenCalledWith('nav_tapped', expect.objectContaining({ target: 'daily_bonus', location: 'hud' }));
+      await waitFor(() =>
+        expect(track).toHaveBeenCalledWith('daily_bonus_opened', expect.objectContaining({ source: 'hud' }))
+      );
     });
 
     test('더보기 시트에서 출석 보너스·룰렛·도감·연구소·개척·업적에 모두 도달할 수 있다', async () => {
@@ -1791,7 +1810,7 @@ describe('FarmGame UI flow', () => {
 
       // 더보기 시트가 열리고 일일 보너스를 포함한 진입점이 모두 노출된다.
       expect(screen.getByText(messages.sheetTitleMore)).toBeTruthy();
-      expect(screen.getByLabelText(messages.dailyBonusButtonAccessibilityLabel)).toBeTruthy();
+      expect(within(screen.getByTestId('more-menu')).getByLabelText(messages.dailyBonusButtonAccessibilityLabel)).toBeTruthy();
       expect(screen.getByLabelText(messages.wheelButtonAccessibilityLabel)).toBeTruthy();
       expect(screen.getByLabelText(messages.collectionButtonAccessibilityLabel)).toBeTruthy();
       expect(screen.getByLabelText(messages.labButtonAccessibilityLabel)).toBeTruthy();
@@ -1812,7 +1831,7 @@ describe('FarmGame UI flow', () => {
 
       // 더보기를 열면 출석 보너스와 룰렛이 각자의 배지(1)를 유지한다.
       fireEvent.press(moreButton);
-      const dailyBonusEntry = screen.getByLabelText(messages.dailyBonusButtonAccessibilityLabel);
+      const dailyBonusEntry = within(screen.getByTestId('more-menu')).getByLabelText(messages.dailyBonusButtonAccessibilityLabel);
       const wheelEntry = screen.getByLabelText(messages.wheelButtonAccessibilityLabel);
       expect(within(dailyBonusEntry).getByText('1')).toBeTruthy();
       expect(within(wheelEntry).getByText('1')).toBeTruthy();
@@ -1895,7 +1914,7 @@ describe('FarmGame UI flow', () => {
       expect(screen.getByText(messages.moreSectionGrowth)).toBeTruthy();
 
       // 기존 동물·공방 두 행은 생산 한 행으로 합쳐져 출석 보너스를 포함해 7개다.
-      expect(screen.getByLabelText(messages.dailyBonusButtonAccessibilityLabel)).toBeTruthy();
+      expect(within(screen.getByTestId('more-menu')).getByLabelText(messages.dailyBonusButtonAccessibilityLabel)).toBeTruthy();
       expect(screen.getByLabelText(messages.wheelButtonAccessibilityLabel)).toBeTruthy();
       expect(screen.getByLabelText(messages.collectionButtonAccessibilityLabel)).toBeTruthy();
       expect(screen.getByLabelText(messages.labButtonAccessibilityLabel)).toBeTruthy();
@@ -1991,7 +2010,7 @@ describe('FarmGame UI flow', () => {
       const goldBefore = getLatestPersistedState().gold;
 
       // 더보기의 출석 보너스 진입점을 누르면 시트가 열리며(source=more) 추가 탭 없이 즉시 수령된다.
-      fireEvent.press(screen.getByLabelText(messages.dailyBonusButtonAccessibilityLabel));
+      fireEvent.press(within(screen.getByTestId('more-menu')).getByLabelText(messages.dailyBonusButtonAccessibilityLabel));
       await waitFor(() => expect(screen.getByText(messages.sheetTitleDailyBonus)).toBeTruthy());
       await waitFor(() =>
         expect(
@@ -2049,7 +2068,7 @@ describe('FarmGame UI flow', () => {
         dailyBonusState: { lastClaimedAt: NOW, streak: 3 },
       };
       const screen = await renderGame(claimedState, { analytics: createFarmAnalytics(track) });
-      await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+      await waitFor(() => expect(screen.getByTestId('hud-row')).toBeTruthy());
       expect(screen.queryByText(messages.sheetTitleDailyBonus)).toBeNull();
       fireEvent.press(screen.getByTestId('more-nav-button'));
       expect(screen.queryByLabelText(messages.dailyBonusButtonAccessibilityLabel)).toBeNull();
@@ -2255,7 +2274,7 @@ describe('FarmGame UI flow', () => {
       });
 
       await waitFor(() =>
-        expect(screen.getByText(`${formatMoney(state.gold + totalGold, DEFAULT_LOCALE)}G`)).toBeTruthy()
+        expect(screen.getByTestId('hud-gold')).toHaveTextContent(formatMoney(state.gold + totalGold, DEFAULT_LOCALE))
       );
       expect(await screen.findByText(messages.animalsCollectedAllToast(formatMoney(totalGold, DEFAULT_LOCALE), 2))).toBeTruthy();
       expect(screen.queryByTestId('animals-collect-all-action')).toBeNull();
@@ -2321,7 +2340,7 @@ describe('FarmGame UI flow', () => {
       });
 
       await waitFor(() =>
-        expect(screen.getByText(`${formatMoney(state.gold + totalGold, 'en-US')}G`)).toBeTruthy()
+        expect(screen.getByTestId('hud-gold')).toHaveTextContent(formatMoney(state.gold + totalGold, 'en-US'))
       );
       expect(await screen.findByText(messages.workshopCollectedAllToast(formatMoney(totalGold, 'en-US'), 2))).toBeTruthy();
       expect(screen.queryByTestId('workshop-collect-all-action')).toBeNull();
@@ -2567,13 +2586,13 @@ describe('FarmGame UI flow', () => {
       await waitFor(() => expect(screen.getByText(collectLabel)).toBeTruthy());
       expect(screen.queryByText(messages.saveLoadedToast)).toBeNull();
       // Starting gold is on display before collecting.
-      expect(screen.getByText(`${formatMoney(state.gold, DEFAULT_LOCALE)}G`)).toBeTruthy();
+      expect(screen.getByTestId('hud-gold')).toHaveTextContent(formatMoney(state.gold, DEFAULT_LOCALE));
 
       fireEvent.press(screen.getByText(collectLabel));
 
       // The offline gold was swept into the purse.
       await waitFor(() =>
-        expect(screen.getByText(`${formatMoney(state.gold + offlineGold, DEFAULT_LOCALE)}G`)).toBeTruthy()
+        expect(screen.getByTestId('hud-gold')).toHaveTextContent(formatMoney(state.gold + offlineGold, DEFAULT_LOCALE))
       );
     });
 
@@ -2611,7 +2630,7 @@ describe('FarmGame UI flow', () => {
       });
       expect(rewardedAd.showAd).toHaveBeenCalledTimes(1);
       expect(screen.getByText(messages.sheetTitleWelcomeBack)).toBeTruthy();
-      expect(screen.getByText(`${formatMoney(state.gold, DEFAULT_LOCALE)}G`)).toBeTruthy();
+      expect(screen.getByTestId('hud-gold')).toHaveTextContent(formatMoney(state.gold, DEFAULT_LOCALE));
 
       // Backdrop/swipe/back all share this close animation. While the SDK owns
       // the snapshot, closing must be vetoed before the sheet animates offscreen.
@@ -2629,7 +2648,7 @@ describe('FarmGame UI flow', () => {
       });
 
       await waitFor(() =>
-        expect(screen.getByText(`${formatMoney(state.gold + offlineGold * 2, DEFAULT_LOCALE)}G`)).toBeTruthy()
+        expect(screen.getByTestId('hud-gold')).toHaveTextContent(formatMoney(state.gold + offlineGold * 2, DEFAULT_LOCALE))
       );
       expect(screen.queryByText(messages.sheetTitleWelcomeBack)).toBeNull();
       expect(screen.getByText(messages.welcomeBackDoubleAdToast(formatMoney(offlineGold, DEFAULT_LOCALE)))).toBeTruthy();
@@ -2706,12 +2725,12 @@ describe('FarmGame UI flow', () => {
 
       // Failure/cancel never consumes the recap or records a rewarded use.
       expect(screen.getByText(messages.sheetTitleWelcomeBack)).toBeTruthy();
-      expect(screen.getByText(`${formatMoney(state.gold, DEFAULT_LOCALE)}G`)).toBeTruthy();
+      expect(screen.getByTestId('hud-gold')).toHaveTextContent(formatMoney(state.gold, DEFAULT_LOCALE));
       const collectLabel = messages.welcomeBackCollectAction(formatMoney(offlineGold, DEFAULT_LOCALE));
       fireEvent.press(screen.getByText(collectLabel));
 
       await waitFor(() =>
-        expect(screen.getByText(`${formatMoney(state.gold + offlineGold, DEFAULT_LOCALE)}G`)).toBeTruthy()
+        expect(screen.getByTestId('hud-gold')).toHaveTextContent(formatMoney(state.gold + offlineGold, DEFAULT_LOCALE))
       );
       expect(getLatestPersistedState().adUsage.offlineBonusAd.dailyCount).toBe(0);
     });
@@ -2780,7 +2799,7 @@ describe('FarmGame UI flow', () => {
       fireEvent.press(screen.getByLabelText(messages.sheetCloseAccessibilityLabel));
       await waitFor(() => expect(screen.queryByText(messages.sheetTitleWelcomeBack)).toBeNull());
       await waitFor(() =>
-        expect(screen.getByText(`${formatMoney(state.gold + offlineGold, DEFAULT_LOCALE)}G`)).toBeTruthy()
+        expect(screen.getByTestId('hud-gold')).toHaveTextContent(formatMoney(state.gold + offlineGold, DEFAULT_LOCALE))
       );
       expect(interstitial.showAd).not.toHaveBeenCalled();
       expect(getLatestPersistedState().adUsage.returnInterstitialAt).toBe(state.adUsage.returnInterstitialAt);
@@ -2842,7 +2861,7 @@ describe('FarmGame UI flow', () => {
       act(() => {
         jest.advanceTimersByTime(REWARD_BURST_TOTAL_MS);
       });
-      expect(screen.getByText(`${formatMoney(state.gold + offlineGold, DEFAULT_LOCALE)}G`)).toBeTruthy();
+      expect(screen.getByTestId('hud-gold')).toHaveTextContent(formatMoney(state.gold + offlineGold, DEFAULT_LOCALE));
       expect(screen.queryByTestId('reward-burst-layer')).toBeNull();
     });
 
@@ -2871,7 +2890,7 @@ describe('FarmGame UI flow', () => {
           jest.advanceTimersByTime(300);
         });
         expect(screen.queryByTestId('reward-burst-layer')).toBeNull();
-        expect(screen.getByText(`${formatMoney(state.gold + offlineGold, DEFAULT_LOCALE)}G`)).toBeTruthy();
+        expect(screen.getByTestId('hud-gold')).toHaveTextContent(formatMoney(state.gold + offlineGold, DEFAULT_LOCALE));
       } finally {
         reduceMotionSpy.mockRestore();
       }
@@ -2996,7 +3015,7 @@ describe('FarmGame UI flow', () => {
       fireEvent.press(screen.getByText(messages.welcomeBackConfirmAction));
 
       // Gold is unchanged: the close path settles nothing.
-      expect(screen.getByText(`${formatMoney(state.gold, DEFAULT_LOCALE)}G`)).toBeTruthy();
+      expect(screen.getByTestId('hud-gold')).toHaveTextContent(formatMoney(state.gold, DEFAULT_LOCALE));
     });
 
     test('ready animal row settles offline gold before opening the ranch sheet', async () => {
@@ -3024,7 +3043,7 @@ describe('FarmGame UI flow', () => {
 
       await waitFor(() => expect(screen.getByText(messages.sheetTitleProduction)).toBeTruthy());
       await waitFor(() =>
-        expect(screen.getByText(`${formatMoney(state.gold + offlineGold, DEFAULT_LOCALE)}G`)).toBeTruthy()
+        expect(screen.getByTestId('hud-gold')).toHaveTextContent(formatMoney(state.gold + offlineGold, DEFAULT_LOCALE))
       );
       await waitFor(() =>
         expect(
@@ -3093,7 +3112,7 @@ describe('FarmGame UI flow', () => {
       const track = jest.fn();
       const screen = await renderOnboardingGame(state, { analytics: createFarmAnalytics(track) });
       if (method === 'batch') {
-        fireEvent.press(screen.getByLabelText('🧺 모두 수확 2'));
+        fireEvent.press(screen.getByLabelText('모두 수확 2'));
       } else {
         fireEvent.press(screen.getByText('GET'));
       }
@@ -3125,7 +3144,7 @@ describe('FarmGame UI flow', () => {
         : plot);
       const track = jest.fn();
       const screen = await renderOnboardingGame(state, { analytics: createFarmAnalytics(track) });
-      fireEvent.press(screen.getByLabelText('🧺 모두 수확 10'));
+      fireEvent.press(screen.getByLabelText('모두 수확 10'));
       await waitFor(() => expect(screen.getByTestId('onboarding-reward-confirm')).toBeTruthy());
       expect(screen.queryByText(`⚡ ${messages.comboLabel(10)}`)).toBeNull();
       expect(screen.queryByTestId('mastery-rank-up-overlay')).toBeNull();
@@ -3157,7 +3176,7 @@ describe('FarmGame UI flow', () => {
         useRewardedAd: () => rewardedAd,
       });
 
-      await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+      await waitFor(() => expect(screen.getByTestId('hud-row')).toBeTruthy());
 
       // #427: selectSeed·plant 단계는 제거됐다. 첫 밭에 carrot이 자동 파종된 채 이미
       // 자라 있어, 신규 유저의 첫 인터랙션은 곧바로 harvest다(진행도 2/3).
@@ -3537,7 +3556,7 @@ describe('FarmGame UI flow', () => {
       );
       await waitFor(() => expect(screen.getByText(messages.onboardingRewardTitle)).toBeTruthy());
 
-      fireEvent.press(screen.getByLabelText('설정'));
+      openSettingsFromMore(screen);
 
       await waitFor(() => expect(screen.queryByTestId('onboarding-coachmark')).toBeNull());
       expect(screen.getByText(messages.sheetTitleSettings)).toBeTruthy();
@@ -3562,7 +3581,7 @@ describe('FarmGame UI flow', () => {
       const screen = await renderOnboardingGame(createRewardStepState(), { analytics: createFarmAnalytics(track) });
       await waitFor(() => expect(screen.getByText(messages.onboardingRewardTitle)).toBeTruthy());
 
-      fireEvent.press(screen.getByLabelText('설정'));
+      openSettingsFromMore(screen);
       fireEvent.press(screen.getByText(messages.resetFarmAction));
       fireEvent.changeText(screen.getByLabelText(messages.resetInputAccessibilityLabel), messages.resetConfirmText);
       fireEvent.press(screen.getByText(messages.resetDeleteAction));
@@ -3649,7 +3668,7 @@ describe('FarmGame UI flow', () => {
       const track = jest.fn();
       const screen = await renderOnboardingGame(null, { analytics: createFarmAnalytics(track) });
 
-      await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+      await waitFor(() => expect(screen.getByTestId('hud-row')).toBeTruthy());
       // #427: 신규 유저는 harvest(2/3)부터 시작한다 — 첫 발화 step은 selectSeed가 아니다.
       expect(track).toHaveBeenCalledWith(
         'onboarding_step_view',
@@ -3798,6 +3817,8 @@ describe('FarmGame UI flow', () => {
       for (const blocker of blockers) {
         expect(blocker.props.onStartShouldSetResponder()).toBe(true);
       }
+      // 페이지 스크롤 밖에 고정된 하단 탭 바도 같은 어둡기로 덮여 누름을 삼킨다(#606 B안).
+      expect(screen.getByTestId('game-tab-bar-blocker').props.onStartShouldSetResponder()).toBe(true);
       // 시작 화면에 보이던 상점, 미션, 더보기 배지 숫자가 온보딩 중에는 없다.
       for (const navId of ['shop-nav-button', 'more-nav-button']) {
         expect(within(screen.getByTestId(navId)).queryByText(/^\d+$/)).toBeNull();
@@ -3815,6 +3836,7 @@ describe('FarmGame UI flow', () => {
       fireEvent.press(await screen.findByText('GET'));
       await waitFor(() => expect(screen.getByText(messages.onboardingRewardTitle)).toBeTruthy());
       expect(screen.queryByTestId('ftue-spotlight')).toBeNull();
+      expect(screen.queryByTestId('game-tab-bar-blocker')).toBeNull();
       await act(async () => {
         jest.advanceTimersByTime(300);
       });
@@ -3852,7 +3874,7 @@ describe('FarmGame UI flow', () => {
     test('never shows for a returning player whose save is already complete', async () => {
       const screen = await renderOnboardingGame({ ...createInitialState(), onboardingCompleted: true });
 
-      await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+      await waitFor(() => expect(screen.getByTestId('hud-row')).toBeTruthy());
       expect(screen.queryByTestId('onboarding-coachmark')).toBeNull();
     });
   });
@@ -3862,12 +3884,12 @@ describe('FarmGame UI flow', () => {
     try {
       const screen = await renderGame(null);
 
-      await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+      await waitFor(() => expect(screen.getByTestId('hud-row')).toBeTruthy());
       expect(screen.getAllByText('빈 밭')).toHaveLength(6);
       // No sprout exists before the first plant.
       expect(screen.queryByText('🌱')).toBeNull();
 
-      fireEvent.press(screen.getByText('초보 밭'));
+      pickArea(screen, 'starter_field');
       fireEvent.press(screen.getByText('당근'));
       fireEvent.press(screen.getAllByText('빈 밭')[0]!);
 
@@ -3886,7 +3908,7 @@ describe('FarmGame UI flow', () => {
     const state: GameState = { ...createInitialState(), onboardingCompleted: true };
     const screen = await renderGame(state);
 
-    await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('hud-row')).toBeTruthy());
     const firstPlot = screen.getByTestId('plot-cell-0');
     expect(within(firstPlot).getByTestId('empty-plot-affordance-0')).toBeTruthy();
     expect(within(firstPlot).getByTestId('empty-plot-seed-0')).toBeTruthy();
@@ -3904,8 +3926,8 @@ describe('FarmGame UI flow', () => {
   test('advances all four emoji fallback stages when no host art is provided', async () => {
     const screen = await renderGame(null);
 
-    await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
-    fireEvent.press(screen.getByText('초보 밭'));
+    await waitFor(() => expect(screen.getByTestId('hud-row')).toBeTruthy());
+    pickArea(screen, 'starter_field');
     fireEvent.press(screen.getByText('당근'));
     fireEvent.press(screen.getAllByText('빈 밭')[0]!);
 
@@ -3937,8 +3959,8 @@ describe('FarmGame UI flow', () => {
     };
     const screen = await renderGame(null, { art: stageArt });
 
-    await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
-    fireEvent.press(screen.getByText('초보 밭'));
+    await waitFor(() => expect(screen.getByTestId('hud-row')).toBeTruthy());
+    pickArea(screen, 'starter_field');
     fireEvent.press(screen.getByText('당근'));
     fireEvent.press(screen.getAllByText('빈 밭')[0]!);
 
@@ -3971,7 +3993,7 @@ describe('FarmGame UI flow', () => {
   test('keeps rapid harvest state updates from overwriting each other', async () => {
     const screen = await renderGame(createReadyHarvestState());
 
-    await waitFor(() => expect(screen.getByText('50G')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('hud-gold')).toHaveTextContent('50'));
 
     const readyPlots = screen.getAllByText('GET');
     await act(async () => {
@@ -3979,7 +4001,7 @@ describe('FarmGame UI flow', () => {
       fireEvent.press(readyPlots[1]!);
     });
 
-    await waitFor(() => expect(screen.getByText('78G')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('hud-gold')).toHaveTextContent('78'));
     expect(screen.getAllByText('빈 밭')).toHaveLength(6);
   });
 
@@ -3987,7 +4009,7 @@ describe('FarmGame UI flow', () => {
     const messages = getFarmMessages(DEFAULT_LOCALE);
     const screen = await renderGame(createReadyHarvestState());
 
-    await waitFor(() => expect(screen.getByText('50G')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('hud-gold')).toHaveTextContent('50'));
 
     // The two ripe carrot tiles announce a harvest call-to-action with the crop name.
     expect(screen.getAllByLabelText(messages.plotReadyAccessibilityLabel('당근'))).toHaveLength(2);
@@ -4000,47 +4022,45 @@ describe('FarmGame UI flow', () => {
   test('renders the shared farm UI in English when the saved locale is en-US', async () => {
     const screen = await renderGame(null, {}, { locale: 'en-US' });
 
-    await waitFor(() => expect(screen.getByText('Happy Farm')).toBeTruthy());
-    expect(screen.getByText(/Potential /)).toBeTruthy();
+    await waitFor(() => expect(screen.getByTestId('hud-row')).toBeTruthy());
+    expect(screen.getByTestId('gold-chip').props.accessibilityLabel).toMatch(/Potential /);
     expect(screen.getAllByText('Empty')).toHaveLength(6);
     expect(screen.getByText('Carrot')).toBeTruthy();
 
     // Use the stable testID on each area tab to avoid colliding with the
     // next-goal bar in the header that also shows the area name.
-    fireEvent.press(screen.getByTestId('area-tab-vegetable_field'));
+    pickArea(screen, 'vegetable_field');
     expect(screen.getByText('Vegetable Field requirements')).toBeTruthy();
-    fireEvent.press(screen.getByTestId('area-tab-starter_field'));
+    pickArea(screen, 'starter_field');
 
-    fireEvent.press(screen.getByText('Carrot'));
-    expect(screen.getByText('Plant Carrot · 10G · ROI +40%')).toBeTruthy();
+    // #606: 씨앗 카드는 "ROI +40%" 대신 수익 배수(×1.4)를 보인다.
+    expect(within(screen.getByTestId('seed-tool-carrot')).getByText('×1.4')).toBeTruthy();
   });
 
   test('uses the preferred locale when no saved locale exists', async () => {
     const screen = await renderGame(null, { preferredLocale: 'en-US' }, null);
 
-    await waitFor(() => expect(screen.getByText('Happy Farm')).toBeTruthy());
-    expect(screen.getByText(/Potential /)).toBeTruthy();
+    await waitFor(() => expect(screen.getByTestId('hud-row')).toBeTruthy());
+    expect(screen.getByTestId('gold-chip').props.accessibilityLabel).toMatch(/Potential /);
   });
 
   test('uses the preferred locale when legacy settings do not include a locale', async () => {
     const screen = await renderGame(null, { preferredLocale: 'en-US' }, { soundEffectsEnabled: false });
 
-    await waitFor(() => expect(screen.getByText('Happy Farm')).toBeTruthy());
-    expect(screen.getByText(/Potential /)).toBeTruthy();
+    await waitFor(() => expect(screen.getByTestId('hud-row')).toBeTruthy());
+    expect(screen.getByTestId('gold-chip').props.accessibilityLabel).toMatch(/Potential /);
   });
 
   test('renders a late-game save without overflowing critical one-line UI text', async () => {
     const lateGame = createLateGameState();
     const screen = await renderGame(lateGame);
-    const lateMoney = `${formatMoney(lateGame.gold)}G`;
+    await waitFor(() => expect(screen.getByTestId('hud-gold')).toHaveTextContent(formatMoney(lateGame.gold)));
 
-    await waitFor(() => expect(screen.getByText(lateMoney)).toBeTruthy());
-
-    expect(screen.getByText(lateMoney).props.numberOfLines).toBeUndefined();
+    // 큰 금액도 한 줄을 강제로 자르지 않는다.
+    expect(screen.getByTestId('hud-gold').props.numberOfLines).toBeUndefined();
     expect(screen.getAllByText('GET')).toHaveLength(MAX_PLOTS);
-    expect(screen.getByText('전설 구역')).toBeTruthy();
 
-    fireEvent.press(screen.getByText('전설 구역'));
+    pickArea(screen, 'legend_field');
 
     expect(screen.getByText('세계수')).toBeTruthy();
   });
@@ -4049,9 +4069,9 @@ describe('FarmGame UI flow', () => {
     const lateGame = createLateGameState();
     const screen = await renderGame(lateGame);
 
-    await waitFor(() => expect(screen.getByText(`${formatMoney(lateGame.gold)}G`)).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('hud-gold')).toHaveTextContent(formatMoney(lateGame.gold)));
 
-    fireEvent.press(screen.getByText('🏪 상점'));
+    fireEvent.press(screen.getByTestId('shop-nav-button'));
 
     expect(screen.getByText('농장 관리소')).toBeTruthy();
     // 확장 탭(기본): 지역 해금 + 부지 확장.
@@ -4065,9 +4085,9 @@ describe('FarmGame UI flow', () => {
   test('anchors sheet drag gestures to the visible handle hit target', async () => {
     const screen = await renderGame(null);
 
-    await waitFor(() => expect(screen.getByText('50G')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('hud-gold')).toHaveTextContent('50'));
 
-    fireEvent.press(screen.getByText('🏪 상점'));
+    fireEvent.press(screen.getByTestId('shop-nav-button'));
 
     const dragHandle = screen.getByTestId('sheet-drag-handle');
     expect(dragHandle.props.style).toEqual(
@@ -4087,9 +4107,9 @@ describe('FarmGame UI flow', () => {
     const messages = getFarmMessages(DEFAULT_LOCALE);
     const screen = await renderGame(shopReadyState, { analytics: createFarmAnalytics(track) });
 
-    await waitFor(() => expect(screen.getByText(`${formatMoney(shopReadyState.gold)}G`)).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('hud-gold')).toHaveTextContent(formatMoney(shopReadyState.gold)));
 
-    fireEvent.press(screen.getByText('🏪 상점'));
+    fireEvent.press(screen.getByTestId('shop-nav-button'));
 
     fireEvent.press(screen.getByText('밭 개간하기'));
     expect(screen.getByText('현재 7칸 · 작물을 심을 공간을 1칸 늘려요')).toBeTruthy();
@@ -4104,15 +4124,9 @@ describe('FarmGame UI flow', () => {
     expect(screen.getByTestId('upgrade-burst-speed', { includeHiddenElements: true })).toBeTruthy();
     // 앞선 밭 개간·미션 토스트 뒤에 차례로 나온다(#606 토스트 큐).
     expect(await screen.findByText(messages.researchCompletedToast, {}, { timeout: 4000 })).toBeTruthy();
-    expect(
-      screen.getByText(
-        `${formatMoney(
-          shopReadyState.gold -
+    expect(screen.getByTestId('hud-gold')).toHaveTextContent(formatMoney(shopReadyState.gold -
             getPlotCost(shopReadyState.unlockedPlotCount) -
-            getUpgradeCost('speed', shopReadyState.upgrades.speed)
-        )}G`
-      )
-    ).toBeTruthy();
+            getUpgradeCost('speed', shopReadyState.upgrades.speed)));
     expect(track.mock.calls.filter(([eventName]) => eventName === 'upgrade_purchased')).toEqual([
       [
         'upgrade_purchased',
@@ -4160,8 +4174,8 @@ describe('FarmGame UI flow', () => {
       useInterstitialAd: () => interstitial,
     });
 
-    await waitFor(() => expect(screen.getByText(`${formatMoney(shopReadyState.gold)}G`)).toBeTruthy());
-    fireEvent.press(screen.getByText('🏪 상점'));
+    await waitFor(() => expect(screen.getByTestId('hud-gold')).toHaveTextContent(formatMoney(shopReadyState.gold)));
+    fireEvent.press(screen.getByTestId('shop-nav-button'));
     fireEvent.press(screen.getByText('밭 개간하기'));
     await act(async () => {
       await Promise.resolve();
@@ -4197,7 +4211,7 @@ describe('FarmGame UI flow', () => {
       useRewardedAd: () => rewarded,
     });
 
-    await waitFor(() => expect(screen.getByText(`${formatMoney(shopReadyState.gold)}G`)).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('hud-gold')).toHaveTextContent(formatMoney(shopReadyState.gold)));
     fireEvent.press(screen.getByTestId('boost-nav-button'));
     fireEvent.press(screen.getByText(HARVEST_BONUS_CTA));
     await waitFor(() => expect(rewarded.showAd).toHaveBeenCalledTimes(1));
@@ -4217,7 +4231,7 @@ describe('FarmGame UI flow', () => {
 
   describe('배치(일괄) 업그레이드 구매 (#426)', () => {
     const openUpgradeTab = (screen: ReturnType<typeof render>) => {
-      fireEvent.press(screen.getByText('🏪 상점'));
+      fireEvent.press(screen.getByTestId('shop-nav-button'));
       fireEvent.press(screen.getByTestId('shop-tab-upgrade'));
     };
 
@@ -4229,7 +4243,7 @@ describe('FarmGame UI flow', () => {
       const max = getUpgradeBatchPurchase('speed', 1, state.gold, UPGRADE_BATCH_MAX_SCAN);
       const screen = await renderGame(state);
 
-      await waitFor(() => expect(screen.getByText(`${formatMoney(state.gold)}G`)).toBeTruthy());
+      await waitFor(() => expect(screen.getByTestId('hud-gold')).toHaveTextContent(formatMoney(state.gold)));
       openUpgradeTab(screen);
 
       const tenButton = screen.getByTestId('upgrade-batch-ten-speed');
@@ -4249,13 +4263,13 @@ describe('FarmGame UI flow', () => {
       const track = jest.fn();
       const screen = await renderGame(state, { analytics: createFarmAnalytics(track) });
 
-      await waitFor(() => expect(screen.getByText(`${formatMoney(state.gold)}G`)).toBeTruthy());
+      await waitFor(() => expect(screen.getByTestId('hud-gold')).toHaveTextContent(formatMoney(state.gold)));
       openUpgradeTab(screen);
 
       fireEvent.press(screen.getByTestId('upgrade-batch-ten-speed'));
 
       // 골드가 10레벨 전액만큼 한 번에 차감된다.
-      await waitFor(() => expect(screen.getByText(`${formatMoney(state.gold - tenCost)}G`)).toBeTruthy());
+      await waitFor(() => expect(screen.getByTestId('hud-gold')).toHaveTextContent(formatMoney(state.gold - tenCost)));
       const batchCalls = track.mock.calls.filter(([name]) => name === 'upgrade_batch_purchased');
       expect(batchCalls).toHaveLength(1);
       expect(batchCalls[0]![1]).toEqual(
@@ -4278,12 +4292,12 @@ describe('FarmGame UI flow', () => {
       const track = jest.fn();
       const screen = await renderGame(state, { analytics: createFarmAnalytics(track) });
 
-      await waitFor(() => expect(screen.getByText(`${formatMoney(state.gold)}G`)).toBeTruthy());
+      await waitFor(() => expect(screen.getByTestId('hud-gold')).toHaveTextContent(formatMoney(state.gold)));
       openUpgradeTab(screen);
 
       fireEvent.press(screen.getByTestId('upgrade-batch-max-speed'));
 
-      await waitFor(() => expect(screen.getByText(`${formatMoney(state.gold - preview.totalCost)}G`)).toBeTruthy());
+      await waitFor(() => expect(screen.getByTestId('hud-gold')).toHaveTextContent(formatMoney(state.gold - preview.totalCost)));
       const batchCalls = track.mock.calls.filter(([name]) => name === 'upgrade_batch_purchased');
       expect(batchCalls).toHaveLength(1);
       expect(batchCalls[0]![1]).toEqual(
@@ -4302,14 +4316,14 @@ describe('FarmGame UI flow', () => {
       const track = jest.fn();
       const screen = await renderGame(state, { analytics: createFarmAnalytics(track) });
 
-      await waitFor(() => expect(screen.getByText(`${formatMoney(state.gold)}G`)).toBeTruthy());
+      await waitFor(() => expect(screen.getByTestId('hud-gold')).toHaveTextContent(formatMoney(state.gold)));
       openUpgradeTab(screen);
 
       const tenButton = screen.getByTestId('upgrade-batch-ten-speed');
       expect(tenButton.props.accessibilityState.disabled).toBe(true);
       fireEvent.press(tenButton);
 
-      expect(screen.getByText(`${formatMoney(state.gold)}G`)).toBeTruthy();
+      expect(screen.getByTestId('hud-gold')).toHaveTextContent(formatMoney(state.gold));
       expect(track.mock.calls.filter(([name]) => name === 'upgrade_batch_purchased')).toHaveLength(0);
     });
 
@@ -4319,7 +4333,7 @@ describe('FarmGame UI flow', () => {
       const track = jest.fn();
       const screen = await renderGame(state, { analytics: createFarmAnalytics(track) });
 
-      await waitFor(() => expect(screen.getByText(`${formatMoney(state.gold)}G`)).toBeTruthy());
+      await waitFor(() => expect(screen.getByTestId('hud-gold')).toHaveTextContent(formatMoney(state.gold)));
       openUpgradeTab(screen);
 
       const maxButton = screen.getByTestId('upgrade-batch-max-speed');
@@ -4328,7 +4342,7 @@ describe('FarmGame UI flow', () => {
         fireEvent.press(maxButton);
       });
 
-      await waitFor(() => expect(screen.getByText(`${formatMoney(state.gold - preview.totalCost)}G`)).toBeTruthy());
+      await waitFor(() => expect(screen.getByTestId('hud-gold')).toHaveTextContent(formatMoney(state.gold - preview.totalCost)));
       expect(track.mock.calls.filter(([name]) => name === 'upgrade_batch_purchased')).toHaveLength(1);
     });
   });
@@ -4338,8 +4352,8 @@ describe('FarmGame UI flow', () => {
     const track = jest.fn();
     const screen = await renderGame(shopReadyState, { analytics: createFarmAnalytics(track) });
 
-    await waitFor(() => expect(screen.getByText(`${formatMoney(shopReadyState.gold)}G`)).toBeTruthy());
-    fireEvent.press(screen.getByText('🏪 상점'));
+    await waitFor(() => expect(screen.getByTestId('hud-gold')).toHaveTextContent(formatMoney(shopReadyState.gold)));
+    fireEvent.press(screen.getByTestId('shop-nav-button'));
     fireEvent.press(screen.getByTestId('shop-tab-upgrade'));
 
     const speedUpgrade = screen.getByText('🧪 고속 성장 비료');
@@ -4349,11 +4363,7 @@ describe('FarmGame UI flow', () => {
     });
 
     expect(screen.getByText('현재 연구 Lv.1 · 성장속도 Lv.2 / 수익률 Lv.1')).toBeTruthy();
-    expect(
-      screen.getByText(
-        `${formatMoney(shopReadyState.gold - getUpgradeCost('speed', shopReadyState.upgrades.speed))}G`
-      )
-    ).toBeTruthy();
+    expect(screen.getByTestId('hud-gold')).toHaveTextContent(formatMoney(shopReadyState.gold - getUpgradeCost('speed', shopReadyState.upgrades.speed)));
     expect(track.mock.calls.filter(([eventName]) => eventName === 'upgrade_purchased')).toEqual([
       [
         'upgrade_purchased',
@@ -4373,8 +4383,8 @@ describe('FarmGame UI flow', () => {
     const track = jest.fn();
     const screen = await renderGame(shopReadyState, { analytics: createFarmAnalytics(track) });
 
-    await waitFor(() => expect(screen.getByText(`${formatMoney(shopReadyState.gold)}G`)).toBeTruthy());
-    fireEvent.press(screen.getByText('🏪 상점'));
+    await waitFor(() => expect(screen.getByTestId('hud-gold')).toHaveTextContent(formatMoney(shopReadyState.gold)));
+    fireEvent.press(screen.getByTestId('shop-nav-button'));
     fireEvent.press(screen.getByTestId('shop-tab-upgrade'));
     fireEvent.press(screen.getByText('🧪 고속 성장 비료'));
     await waitFor(() =>
@@ -4389,7 +4399,7 @@ describe('FarmGame UI flow', () => {
     await waitFor(() =>
       expect(screen.getByText('현재 연구 Lv.1 · 성장속도 Lv.3 / 수익률 Lv.1')).toBeTruthy()
     );
-    expect(screen.getByText(`${formatMoney(shopReadyState.gold - firstCost - secondCost)}G`)).toBeTruthy();
+    expect(screen.getByTestId('hud-gold')).toHaveTextContent(formatMoney(shopReadyState.gold - firstCost - secondCost));
     expect(
       track.mock.calls
         .filter(([eventName]) => eventName === 'upgrade_purchased')
@@ -4402,8 +4412,8 @@ describe('FarmGame UI flow', () => {
     const speedCost = getUpgradeCost('speed', shopReadyState.upgrades.speed);
     const screen = await renderGame({ ...shopReadyState, gold: speedCost });
 
-    await waitFor(() => expect(screen.getByText(`${formatMoney(speedCost)}G`)).toBeTruthy());
-    fireEvent.press(screen.getByText('🏪 상점'));
+    await waitFor(() => expect(screen.getByTestId('hud-gold')).toHaveTextContent(formatMoney(speedCost)));
+    fireEvent.press(screen.getByTestId('shop-nav-button'));
     fireEvent.press(screen.getByTestId('shop-tab-upgrade'));
     fireEvent.press(screen.getByText('🧪 고속 성장 비료'));
 
@@ -4412,7 +4422,7 @@ describe('FarmGame UI flow', () => {
     });
     const burst = screen.getByTestId('upgrade-burst-speed', { includeHiddenElements: true });
     expect(StyleSheet.flatten(burst.parent?.props.style).opacity).toBeUndefined();
-    expect(screen.getByText('0G')).toBeTruthy();
+    expect(screen.getByTestId('hud-gold')).toHaveTextContent('0');
   });
 
   test('cleans up an active purchase burst when the shop closes early', async () => {
@@ -4420,8 +4430,8 @@ describe('FarmGame UI flow', () => {
     const messages = getFarmMessages(DEFAULT_LOCALE);
     const screen = await renderGame(shopReadyState);
 
-    await waitFor(() => expect(screen.getByText(`${formatMoney(shopReadyState.gold)}G`)).toBeTruthy());
-    fireEvent.press(screen.getByText('🏪 상점'));
+    await waitFor(() => expect(screen.getByTestId('hud-gold')).toHaveTextContent(formatMoney(shopReadyState.gold)));
+    fireEvent.press(screen.getByTestId('shop-nav-button'));
     fireEvent.press(screen.getByTestId('shop-tab-upgrade'));
     fireEvent.press(screen.getByText('🧪 고속 성장 비료'));
     expect(screen.getByTestId('upgrade-burst-speed', { includeHiddenElements: true })).toBeTruthy();
@@ -4617,7 +4627,7 @@ describe('FarmGame UI flow', () => {
     const rewardedAd = createReadyRewardedAd();
     const screen = await renderGame(null, { useRewardedAd: () => rewardedAd });
 
-    await waitFor(() => expect(screen.getByText('50G')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('hud-gold')).toHaveTextContent('50'));
 
     fireEvent.press(screen.getByTestId('boost-nav-button'));
     expect(screen.getByText(HARVEST_BONUS_SHEET_TITLE)).toBeTruthy();
@@ -4631,8 +4641,9 @@ describe('FarmGame UI flow', () => {
     // 가리는 회귀를 막는 것이 이 테스트의 목적이다).
     await waitFor(() => expect(screen.getAllByText('당근').length).toBeGreaterThan(0));
     fireEvent.press(screen.getAllByText('당근')[0]!);
-    // 투자효율 수치는 부스트 적용 여부에 따라 달라지므로 값을 박지 않는다.
-    await waitFor(() => expect(screen.getByText(/당근 심기 · 10G/)).toBeTruthy());
+    await waitFor(() =>
+      expect(screen.getByTestId('seed-tool-carrot').props.accessibilityState).toEqual({ selected: true })
+    );
   }, 30_000);
 
   test.each(['onError', 'failedToShow'] as const)(
@@ -4650,7 +4661,7 @@ describe('FarmGame UI flow', () => {
         useRewardedAd: useFullScreenAd,
         adGroupIds: { rewarded: 'ait.rewarded.test' },
       });
-      await waitFor(() => expect(screen.getByText('50G')).toBeTruthy());
+      await waitFor(() => expect(screen.getByTestId('hud-gold')).toHaveTextContent('50'));
       fireEvent.press(screen.getByTestId('boost-nav-button'));
       fireEvent.press(screen.getByText(HARVEST_BONUS_CTA));
       expect(mockAitShowAd).toHaveBeenCalledTimes(1);
@@ -4708,7 +4719,7 @@ describe('FarmGame UI flow', () => {
       useRewardedAd: () => rewardedAd,
     });
 
-    await waitFor(() => expect(screen.getByText(`${formatMoney(state.gold)}G`)).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('hud-gold')).toHaveTextContent(formatMoney(state.gold)));
     fireEvent.press(screen.getByTestId('shop-nav-button'));
     fireEvent.press(screen.getByTestId('shop-tab-rewards'));
     expect(screen.getByText('랜드마크 축제 물자')).toBeTruthy();
@@ -4751,9 +4762,9 @@ describe('FarmGame UI flow', () => {
     // Enough gold to afford the discounted plot (the ad no longer gives it free).
     const screen = await renderGame({ ...createInitialState(), gold: 1000 }, { useRewardedAd: () => rewardedAd });
 
-    await waitFor(() => expect(screen.getByText('🏪 상점')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('shop-nav-button')).toBeTruthy());
 
-    fireEvent.press(screen.getByText('🏪 상점'));
+    fireEvent.press(screen.getByTestId('shop-nav-button'));
     expect(screen.getByText('농장 관리소')).toBeTruthy();
 
     fireEvent.press(screen.getByTestId('shop-tab-rewards'));
@@ -4763,7 +4774,7 @@ describe('FarmGame UI flow', () => {
     await waitFor(() => expect(screen.queryByText('농장 관리소')).toBeNull());
 
     // The discounted gold was charged (sink preserved) and a plot was unlocked.
-    fireEvent.press(screen.getByText('🏪 상점'));
+    fireEvent.press(screen.getByTestId('shop-nav-button'));
     expect(screen.getByText('현재 7칸 · 작물을 심을 공간을 1칸 늘려요')).toBeTruthy();
   }, 30_000);
 
@@ -4772,7 +4783,7 @@ describe('FarmGame UI flow', () => {
     const track = jest.fn();
     const rewardedAd = { ...createRewardedAd({ status: 'earned', claimId: 'already-paid' }), acknowledgeReward: jest.fn(async () => {}) };
     const screen = await renderGame(state, { analytics: createFarmAnalytics(track), useRewardedAd: () => rewardedAd });
-    await waitFor(() => expect(screen.getByText('50G')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('hud-gold')).toHaveTextContent('50'));
     fireEvent.press(screen.getByTestId('boost-nav-button'));
     fireEvent.press(screen.getByText(HARVEST_BONUS_CTA));
     await waitFor(() => expect(rewardedAd.showAd).toHaveBeenCalledTimes(1));
@@ -4786,7 +4797,7 @@ describe('FarmGame UI flow', () => {
   test('확인된 새 claim ID는 지급 상태와 함께 한 번 저장한다 (#479)', async () => {
     const rewardedAd = { ...createRewardedAd({ status: 'earned', claimId: 'new-claim' }), acknowledgeReward: jest.fn(async () => {}) };
     const screen = await renderGame(null, { useRewardedAd: () => rewardedAd });
-    await waitFor(() => expect(screen.getByText('50G')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('hud-gold')).toHaveTextContent('50'));
     fireEvent.press(screen.getByTestId('boost-nav-button'));
     fireEvent.press(screen.getByText(HARVEST_BONUS_CTA));
     await waitFor(() => expect(rewardedAd.acknowledgeReward).toHaveBeenCalledTimes(1));
@@ -4798,18 +4809,20 @@ describe('FarmGame UI flow', () => {
     const rewardedAd = createRewardedAd({ status: 'dismissed' });
     const screen = await renderGame(null, { useRewardedAd: () => rewardedAd });
 
-    await waitFor(() => expect(screen.getByText('50G')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('hud-gold')).toHaveTextContent('50'));
 
     fireEvent.press(screen.getByTestId('boost-nav-button'));
     fireEvent.press(screen.getByText(HARVEST_BONUS_CTA));
 
     await waitFor(() => expect(rewardedAd.showAd).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(screen.queryByText(HARVEST_BONUS_SHEET_TITLE)).toBeNull());
-    expect(screen.getByText('50G')).toBeTruthy();
+    expect(screen.getByTestId('hud-gold')).toHaveTextContent('50');
 
     await waitFor(() => expect(screen.getAllByText('당근').length).toBeGreaterThan(0));
     fireEvent.press(screen.getAllByText('당근')[0]!);
-    await waitFor(() => expect(screen.getByText(/당근 심기 · 10G/)).toBeTruthy());
+    await waitFor(() =>
+      expect(screen.getByTestId('seed-tool-carrot').props.accessibilityState).toEqual({ selected: true })
+    );
   }, 30_000);
 
   test('normalizes thrown rewarded ad failures and closes the active sheet', async () => {
@@ -4820,7 +4833,7 @@ describe('FarmGame UI flow', () => {
       useRewardedAd: () => rewardedAd,
     });
 
-    await waitFor(() => expect(screen.getByText('50G')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('hud-gold')).toHaveTextContent('50'));
 
     fireEvent.press(screen.getByTestId('boost-nav-button'));
     fireEvent.press(screen.getByText(HARVEST_BONUS_CTA));
@@ -4835,7 +4848,7 @@ describe('FarmGame UI flow', () => {
         reason: 'show_ad_threw',
       })
     );
-    expect(screen.getByText('50G')).toBeTruthy();
+    expect(screen.getByTestId('hud-gold')).toHaveTextContent('50');
   }, 30_000);
 
   test('재시도로 첫 show 실패 후 두 번째에서 보상을 지급한다 (#374 AC3)', async () => {
@@ -4846,7 +4859,7 @@ describe('FarmGame UI flow', () => {
       useRewardedAd: () => rewardedAd,
     });
 
-    await waitFor(() => expect(screen.getByText('50G')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('hud-gold')).toHaveTextContent('50'));
 
     fireEvent.press(screen.getByTestId('boost-nav-button'));
     fireEvent.press(screen.getByText(HARVEST_BONUS_CTA));
@@ -4871,7 +4884,7 @@ describe('FarmGame UI flow', () => {
       useRewardedAd: () => rewardedAd,
     });
 
-    await waitFor(() => expect(screen.getByText('50G')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('hud-gold')).toHaveTextContent('50'));
 
     fireEvent.press(screen.getByTestId('boost-nav-button'));
     fireEvent.press(screen.getByText(HARVEST_BONUS_CTA));
@@ -4898,9 +4911,9 @@ describe('FarmGame UI flow', () => {
       useRewardedAd: () => rewardedAd,
     });
 
-    await waitFor(() => expect(screen.getByText('50G')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('hud-gold')).toHaveTextContent('50'));
 
-    fireEvent.press(screen.getByText('🏪 상점'));
+    fireEvent.press(screen.getByTestId('shop-nav-button'));
     expect(rewardedAd.reloadAd).not.toHaveBeenCalled();
     fireEvent.press(screen.getByTestId('shop-tab-rewards'));
 
@@ -4935,7 +4948,7 @@ describe('FarmGame UI flow', () => {
       useRewardedAd: () => rewardedAd,
     });
 
-    await waitFor(() => expect(screen.getByText(`${formatMoney(state.gold)}G`)).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('hud-gold')).toHaveTextContent(formatMoney(state.gold)));
 
     fireEvent.press(screen.getByTestId('shop-nav-button'));
     fireEvent.press(screen.getByTestId('shop-tab-rewards'));
@@ -4953,7 +4966,7 @@ describe('FarmGame UI flow', () => {
     const rewardedAd = createReadyRewardedAd();
     const screen = await renderGame(createGrowingCropState(), { useRewardedAd: () => rewardedAd });
 
-    await waitFor(() => expect(screen.getByText('100G')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('hud-gold')).toHaveTextContent('100'));
 
     fireEvent.press(screen.getByText('당근'));
     fireEvent.press(screen.getByText('🌱'));
@@ -4991,7 +5004,7 @@ describe('FarmGame UI flow', () => {
     fireEvent.press(screen.getAllByText('빈 밭')[0]!);
     expect(await screen.findByText(/20G.*당근/)).toBeTruthy();
     expect(screen.getByTestId('seed-tool-sweet_potato').props.accessibilityState.selected).toBe(true);
-    expect(screen.getByText('115G')).toBeTruthy();
+    expect(screen.getByTestId('hud-gold')).toHaveTextContent('115');
   });
 
   describe('crop-ready analytics batching', () => {
@@ -5100,7 +5113,7 @@ describe('FarmGame UI flow', () => {
     };
     const screen = await renderGame(state);
 
-    await waitFor(() => expect(screen.getByText('50G')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('hud-gold')).toHaveTextContent('50'));
 
     fireEvent.press(within(screen.getByTestId('plot-cell-0')).getByText('GET'));
 
@@ -5127,7 +5140,7 @@ describe('FarmGame UI flow', () => {
     };
     const screen = await renderGame(state);
 
-    await waitFor(() => expect(screen.getByText('50G')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('hud-gold')).toHaveTextContent('50'));
     fireEvent.press(within(screen.getByTestId('plot-cell-0')).getByText('GET'));
 
     expect(screen.getByText('숙련도 달성!')).toBeTruthy();
@@ -5149,7 +5162,7 @@ describe('FarmGame UI flow', () => {
     };
     const screen = await renderGame(state);
 
-    await waitFor(() => expect(screen.getByText('50G')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('hud-gold')).toHaveTextContent('50'));
     fireEvent.press(within(screen.getByTestId('plot-cell-0')).getByText('GET'));
 
     expect(screen.getByText('숙련도 달성!')).toBeTruthy();
@@ -5229,7 +5242,7 @@ describe('FarmGame UI flow', () => {
       fireEvent.press(within(screen.getByTestId('plot-cell-0')).getByText('GET'));
 
       await waitFor(() => expect(cropHarvestEvents(track)).toHaveLength(1));
-      await waitFor(() => expect(screen.getByText(`${50 + CROPS.carrot!.sell}G`)).toBeTruthy());
+      await waitFor(() => expect(screen.getByTestId('hud-gold')).toHaveTextContent(`${50 + CROPS.carrot!.sell}`));
       expect(cropHarvestEvents(track)).toEqual([
         expect.objectContaining({
           harvest_source: 'manual',
@@ -5253,7 +5266,7 @@ describe('FarmGame UI flow', () => {
       fireEvent.press(within(screen.getByTestId('plot-cell-0')).getByText('GET'));
 
       await waitFor(() => expect(cropHarvestEvents(track)).toHaveLength(1));
-      expect(screen.getByText('50G')).toBeTruthy();
+      expect(screen.getByTestId('hud-gold')).toHaveTextContent('50');
       expect(cropHarvestEvents(track)).toEqual([
         expect.objectContaining({
           harvest_source: 'manual',
@@ -5270,10 +5283,10 @@ describe('FarmGame UI flow', () => {
       const track = jest.fn();
       const screen = await renderGame(createReadyHarvestState(), { analytics: createFarmAnalytics(track) });
 
-      fireEvent.press(screen.getByLabelText('🧺 모두 수확 2'));
+      fireEvent.press(screen.getByLabelText('모두 수확 2'));
 
       await waitFor(() => expect(cropHarvestEvents(track)).toHaveLength(2));
-      await waitFor(() => expect(screen.getByText(`${50 + CROPS.carrot!.sell * 2}G`)).toBeTruthy());
+      await waitFor(() => expect(screen.getByTestId('hud-gold')).toHaveTextContent(`${50 + CROPS.carrot!.sell * 2}`));
       const events = cropHarvestEvents(track);
       expect(events).toEqual([
         expect.objectContaining({ harvest_source: 'batch', reward_type: 'gold' }),
@@ -5296,7 +5309,7 @@ describe('FarmGame UI flow', () => {
         jest.advanceTimersByTime(GAME_TICK_INTERVAL_MS + 50);
       });
 
-      await waitFor(() => expect(screen.getByText(`${50 + CROPS.carrot!.sell * 2}G`)).toBeTruthy());
+      await waitFor(() => expect(screen.getByTestId('hud-gold')).toHaveTextContent(`${50 + CROPS.carrot!.sell * 2}`));
       expect(cropHarvestEvents(track)).toHaveLength(0);
       expect(track.mock.calls.filter(([name]) => name === 'first_meaningful_harvest')).toEqual([
         ['first_meaningful_harvest', expect.objectContaining({ harvest_source: 'auto' })],
@@ -5330,7 +5343,7 @@ describe('FarmGame UI flow', () => {
   test('shows first-harvest celebration card when harvesting for the very first time', async () => {
     // createReadyHarvestState has harvestedCropKeys: [] → qualifies as first harvest
     const screen = await renderGame(createReadyHarvestState());
-    await waitFor(() => expect(screen.getByText('50G')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('hud-gold')).toHaveTextContent('50'));
 
     fireEvent.press(within(screen.getByTestId('plot-cell-0')).getByText('GET'));
 
@@ -5346,7 +5359,7 @@ describe('FarmGame UI flow', () => {
       harvestedCropKeys: ['carrot'],
     };
     const screen = await renderGame(state);
-    await waitFor(() => expect(screen.getByText('50G')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('hud-gold')).toHaveTextContent('50'));
 
     fireEvent.press(within(screen.getByTestId('plot-cell-0')).getByText('GET'));
 
@@ -5356,7 +5369,7 @@ describe('FarmGame UI flow', () => {
 
   test('first-harvest overlay auto-dismisses after the celebration duration', async () => {
     const screen = await renderGame(createReadyHarvestState());
-    await waitFor(() => expect(screen.getByText('50G')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('hud-gold')).toHaveTextContent('50'));
 
     fireEvent.press(within(screen.getByTestId('plot-cell-0')).getByText('GET'));
     expect(screen.getByText('첫 수확 완료! 🎉')).toBeTruthy();
@@ -5370,7 +5383,7 @@ describe('FarmGame UI flow', () => {
 
   test('first-harvest overlay dismisses immediately on tap', async () => {
     const screen = await renderGame(createReadyHarvestState());
-    await waitFor(() => expect(screen.getByText('50G')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('hud-gold')).toHaveTextContent('50'));
 
     fireEvent.press(within(screen.getByTestId('plot-cell-0')).getByText('GET'));
     expect(screen.getByText('첫 수확 완료! 🎉')).toBeTruthy();
@@ -5383,14 +5396,14 @@ describe('FarmGame UI flow', () => {
   test('collects every ripe plot in one tap via the Harvest All shortcut', async () => {
     const screen = await renderGame(createReadyHarvestState());
 
-    await waitFor(() => expect(screen.getByText('50G')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('hud-gold')).toHaveTextContent('50'));
 
     // Two ripe carrots surface the batch shortcut in place of the tool hint.
-    expect(screen.getByText('🧺 모두 수확 2')).toBeTruthy();
-    fireEvent.press(screen.getByLabelText('🧺 모두 수확 2'));
+    expect(screen.getByText('모두 수확 2')).toBeTruthy();
+    fireEvent.press(screen.getByLabelText('모두 수확 2'));
 
     // Both plots collected at once: +14G each, with a single batch toast.
-    await waitFor(() => expect(screen.getByText('78G')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('hud-gold')).toHaveTextContent('78'));
     expect(await screen.findByText(/한 번에 수확했어요/)).toBeTruthy();
     // No ripe plots remain, so neither the GET badge nor the shortcut shows.
     expect(screen.queryByText('GET')).toBeNull();
@@ -5407,14 +5420,14 @@ describe('FarmGame UI flow', () => {
     const onMutationFlash = jest.fn();
     __setMutationFlashTestHook(onMutationFlash);
     const screen = await renderGame(state);
-    await waitFor(() => expect(screen.getByText('🧺 모두 수확 2')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('모두 수확 2')).toBeTruthy());
 
     // At prism rank 0.001 resolves to giant, while 0 resolves to prism.
     const randomSpy = jest.spyOn(Math, 'random')
       .mockReturnValueOnce(0.001)
       .mockReturnValueOnce(0);
     try {
-      fireEvent.press(screen.getByLabelText('🧺 모두 수확 2'));
+      fireEvent.press(screen.getByLabelText('모두 수확 2'));
     } finally {
       randomSpy.mockRestore();
     }
@@ -5430,9 +5443,9 @@ describe('FarmGame UI flow', () => {
     // 옆에 함께 노출된다. 기본 도구는 'harvest'이므로 재심 작물은 첫 익은 밭 작물(당근)로
     // 폴백한다.
     const screen = await renderGame(createReadyHarvestState());
-    await waitFor(() => expect(screen.getByText('50G')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('hud-gold')).toHaveTextContent('50'));
 
-    expect(screen.getByText('🧺 모두 수확 2')).toBeTruthy();
+    expect(screen.getByText('모두 수확 2')).toBeTruthy();
     const replantButton = screen.getByTestId('harvest-replant-button');
     expect(replantButton).toBeTruthy();
 
@@ -5441,7 +5454,7 @@ describe('FarmGame UI flow', () => {
     // 당근 2곳 수확(+14G×2 → 78G) 후, 빈 밭 전체(방금 비운 2곳 + 기존 빈 4곳 = 6곳)에
     // 당근 재심(−10G×6=60G) → 18G. 모든 밭이 성장 중이라 '빈 밭'이 사라지고, 익은 밭이
     // 없어 수확 단축 버튼도 사라진다.
-    await waitFor(() => expect(screen.getByText('18G')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('hud-gold')).toHaveTextContent('18'));
     // 결과 토스트가 수확·재심 수를 함께 알린다(부분/전체 인지).
     expect(await screen.findByText(/2곳 수확하고 6곳 다시 심었어요/)).toBeTruthy();
     expect(screen.queryByText('GET')).toBeNull();
@@ -5465,7 +5478,7 @@ describe('FarmGame UI flow', () => {
       jest.advanceTimersByTime(GAME_TICK_INTERVAL_MS + 50);
     });
 
-    await waitFor(() => expect(screen.getByText(`${formatMoney(expectedGold)}G`)).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('hud-gold')).toHaveTextContent(formatMoney(expectedGold)));
     expect(screen.queryByText('GET')).toBeNull();
   });
 
@@ -5514,7 +5527,7 @@ describe('FarmGame UI flow', () => {
     };
     const screen = await renderGame(state);
 
-    await waitFor(() => expect(screen.getByText('★ 0')).toBeTruthy());
+    await waitFor(() => expect(within(screen.getByTestId('prestige-stars-chip')).getByText('0')).toBeTruthy());
 
     // 개척(지도) 진입점은 navRow 과밀 정리(#241) 이후 '더보기' 시트 뒤에 있다.
     fireEvent.press(screen.getByTestId('more-nav-button'));
@@ -5527,8 +5540,8 @@ describe('FarmGame UI flow', () => {
     fireEvent.press(screen.getByText(/설원/));
     fireEvent.press(screen.getByText(/개척하고 ★3 받기/));
 
-    await waitFor(() => expect(screen.getByText('★ 3')).toBeTruthy());
-    expect(screen.getByText('50G')).toBeTruthy();
+    await waitFor(() => expect(within(screen.getByTestId('prestige-stars-chip')).getByText('3')).toBeTruthy());
+    expect(screen.getByTestId('hud-gold')).toHaveTextContent('50');
 
     fireEvent.press(screen.getByTestId('more-nav-button'));
     fireEvent.press(screen.getByText('🗺️ 개척'));
@@ -5647,8 +5660,8 @@ describe('FarmGame UI flow', () => {
     // 로 반려됐다. 결제 계획이 없으므로 구매·복원 동선이 다시 붙지 않게 막는다.
     const screen = await renderGame(null);
 
-    await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
-    fireEvent.press(screen.getByLabelText('설정'));
+    await waitFor(() => expect(screen.getByTestId('hud-row')).toBeTruthy());
+    openSettingsFromMore(screen);
 
     expect(screen.getByText('설정')).toBeTruthy();
     expect(screen.queryByTestId('ad-free-purchase')).toBeNull();
@@ -5660,11 +5673,11 @@ describe('FarmGame UI flow', () => {
   test('keeps reset behind the settings sheet', async () => {
     const screen = await renderGame(null);
 
-    await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('hud-row')).toBeTruthy());
 
     expect(screen.queryByText('농장 기록 초기화')).toBeNull();
 
-    fireEvent.press(screen.getByLabelText('설정'));
+    openSettingsFromMore(screen);
 
     expect(screen.getByText('설정')).toBeTruthy();
     expect(screen.getByText('농장 기록 초기화')).toBeTruthy();
@@ -5682,8 +5695,8 @@ describe('FarmGame UI flow', () => {
       privacySettings: { isSupported: false, openAdPrivacyOptions, openAdDataPolicy },
     });
 
-    await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
-    fireEvent.press(screen.getByLabelText('설정'));
+    await waitFor(() => expect(screen.getByTestId('hud-row')).toBeTruthy());
+    openSettingsFromMore(screen);
 
     expect(screen.getByText(messages.adInfoSection)).toBeTruthy();
     expect(screen.getByTestId('ad-data-notice')).toHaveTextContent(messages.adDataNotice);
@@ -5705,8 +5718,8 @@ describe('FarmGame UI flow', () => {
       },
     });
 
-    await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
-    fireEvent.press(screen.getByLabelText('설정'));
+    await waitFor(() => expect(screen.getByTestId('hud-row')).toBeTruthy());
+    openSettingsFromMore(screen);
 
     expect(screen.getByTestId('ad-data-notice')).toBeTruthy();
     fireEvent.press(screen.getByTestId('ad-privacy-options'));
@@ -5717,8 +5730,8 @@ describe('FarmGame UI flow', () => {
   test('AC-8 shows no ad data section when the host passes no privacy settings', async () => {
     const screen = await renderGame(null);
 
-    await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
-    fireEvent.press(screen.getByLabelText('설정'));
+    await waitFor(() => expect(screen.getByTestId('hud-row')).toBeTruthy());
+    openSettingsFromMore(screen);
 
     expect(screen.queryByTestId('ad-data-notice')).toBeNull();
     expect(screen.queryByTestId('ad-data-policy')).toBeNull();
@@ -5727,9 +5740,9 @@ describe('FarmGame UI flow', () => {
   test('switches and persists the UI language from the settings language selector', async () => {
     const screen = await renderGame(null);
 
-    await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('hud-row')).toBeTruthy());
 
-    fireEvent.press(screen.getByLabelText('설정'));
+    openSettingsFromMore(screen);
     // 언어 섹션과 두 언어 옵션(한국어/English)이 노출된다.
     expect(screen.getByText('언어')).toBeTruthy();
     expect(screen.getByTestId('language-option-ko-KR')).toBeTruthy();
@@ -5738,8 +5751,9 @@ describe('FarmGame UI flow', () => {
     // 영어 옵션을 선택하면 UI가 즉시 영어로 전환된다.
     fireEvent.press(screen.getByTestId('language-option-en-US'));
 
-    await waitFor(() => expect(screen.getByText('Happy Farm')).toBeTruthy());
-    expect(screen.queryByText('행복 농장')).toBeNull();
+    // 메인 화면에는 제목이 없어(#606 B안) 하단 탭 이름으로 언어 전환을 확인한다.
+    await waitFor(() => expect(screen.getByText('Shop')).toBeTruthy());
+    expect(screen.queryByText('상점')).toBeNull();
 
     // 선택한 언어가 설정 저장소에 반영(저장)된다.
     await waitFor(() =>
@@ -5762,7 +5776,7 @@ describe('FarmGame UI flow', () => {
       },
     });
 
-    await waitFor(() => expect(screen.getByText(`${formatMoney(lateGame.gold)}G`)).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('hud-gold')).toHaveTextContent(formatMoney(lateGame.gold)));
 
     fireEvent.press(screen.getAllByText('GET')[0]!);
 
@@ -5788,7 +5802,7 @@ describe('FarmGame UI flow', () => {
         },
         { soundEffectsEnabled: false, hapticsEnabled: false }
       );
-      await waitFor(() => expect(screen.getByText('50G')).toBeTruthy());
+      await waitFor(() => expect(screen.getByTestId('hud-gold')).toHaveTextContent('50'));
       vibrateSpy.mockClear();
 
       fireEvent.press(within(screen.getByTestId('plot-cell-0')).getByText('GET'));
@@ -5846,7 +5860,7 @@ describe('FarmGame UI flow', () => {
         },
         savedSettings
       );
-      await waitFor(() => expect(screen.getByText(`${formatMoney(lateGame.gold)}G`)).toBeTruthy());
+      await waitFor(() => expect(screen.getByTestId('hud-gold')).toHaveTextContent(formatMoney(lateGame.gold)));
       // 도감 진입점은 navRow 과밀 정리(#241) 이후 '더보기' 시트 뒤에 있다.
       fireEvent.press(screen.getByLabelText(claimMessages.moreButtonAccessibilityLabel));
       fireEvent.press(screen.getByLabelText(claimMessages.collectionButtonAccessibilityLabel));
@@ -5896,7 +5910,7 @@ describe('FarmGame UI flow', () => {
         },
         { soundEffectsEnabled: true }
       );
-      await waitFor(() => expect(screen.getByText(`${formatMoney(lateGame.gold)}G`)).toBeTruthy());
+      await waitFor(() => expect(screen.getByTestId('hud-gold')).toHaveTextContent(formatMoney(lateGame.gold)));
       // 도감 진입점은 navRow 과밀 정리(#241) 이후 '더보기' 시트 뒤에 있다.
       fireEvent.press(screen.getByLabelText(claimMessages.moreButtonAccessibilityLabel));
       fireEvent.press(screen.getByLabelText(claimMessages.collectionButtonAccessibilityLabel));
@@ -6143,7 +6157,7 @@ describe('FarmGame UI flow', () => {
         { audio: createEffectAudio(playEffect) },
         { soundEffectsEnabled: true }
       );
-      await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+      await waitFor(() => expect(screen.getByTestId('hud-row')).toBeTruthy());
 
       fireEvent.press(screen.getByText('당근'));
       fireEvent.press(screen.getByTestId('plot-cell-0'));
@@ -6162,14 +6176,14 @@ describe('FarmGame UI flow', () => {
         { audio: createEffectAudio(playEffect) },
         { soundEffectsEnabled: false }
       );
-      await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+      await waitFor(() => expect(screen.getByTestId('hud-row')).toBeTruthy());
 
       fireEvent.press(screen.getByText('당근'));
       fireEvent.press(screen.getByTestId('plot-cell-0'));
 
       // The plant itself lands (gold drops by the seed cost)…
       await waitFor(() =>
-        expect(screen.getByText(`${formatMoney(state.gold - carrotCost)}G`)).toBeTruthy()
+        expect(screen.getByTestId('hud-gold')).toHaveTextContent(formatMoney(state.gold - carrotCost))
       );
       // …but no effect sound is requested.
       expect(playEffect).not.toHaveBeenCalled();
@@ -6183,7 +6197,7 @@ describe('FarmGame UI flow', () => {
         { audio: createEffectAudio(playEffect) },
         { soundEffectsEnabled: true }
       );
-      await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+      await waitFor(() => expect(screen.getByTestId('hud-row')).toBeTruthy());
 
       fireEvent.press(screen.getByTestId('more-nav-button'));
       fireEvent.press(screen.getByLabelText(messages.wheelButtonAccessibilityLabel));
@@ -6208,7 +6222,7 @@ describe('FarmGame UI flow', () => {
         analytics: createFarmAnalytics(track),
         useRewardedAd: () => rewardedAd,
       });
-      await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+      await waitFor(() => expect(screen.getByTestId('hud-row')).toBeTruthy());
 
       fireEvent.press(screen.getByTestId('more-nav-button'));
       fireEvent.press(screen.getByLabelText(messages.wheelButtonAccessibilityLabel));
@@ -6287,7 +6301,7 @@ describe('FarmGame UI flow', () => {
         analytics: createFarmAnalytics(track),
         useRewardedAd: () => rewardedAd,
       });
-      await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+      await waitFor(() => expect(screen.getByTestId('hud-row')).toBeTruthy());
 
       fireEvent.press(screen.getByTestId('more-nav-button'));
       fireEvent.press(screen.getByLabelText(messages.wheelButtonAccessibilityLabel));
@@ -6332,7 +6346,7 @@ describe('FarmGame UI flow', () => {
       };
       const random = jest.spyOn(Math, 'random').mockReturnValue(0);
       const screen = await renderGame(state, { useRewardedAd: () => rewardedAd });
-      await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+      await waitFor(() => expect(screen.getByTestId('hud-row')).toBeTruthy());
 
       fireEvent.press(screen.getByTestId('more-nav-button'));
       fireEvent.press(screen.getByLabelText(messages.wheelButtonAccessibilityLabel));
@@ -6429,7 +6443,7 @@ describe('FarmGame UI flow', () => {
         const screen = await renderGame(createPrismPityHarvestState(2), {
           analytics: createFarmAnalytics(track),
         });
-        fireEvent.press(screen.getByLabelText('🧺 모두 수확 2'));
+        fireEvent.press(screen.getByLabelText('모두 수확 2'));
 
         await waitFor(() => {
           const events = track.mock.calls.filter(([name]) => name === 'mutation_discovered');
@@ -6494,7 +6508,7 @@ describe('FarmGame UI flow', () => {
         { analytics: createFarmAnalytics(track), audio: createEffectAudio(playEffect) },
         { soundEffectsEnabled: true }
       );
-      await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+      await waitFor(() => expect(screen.getByTestId('hud-row')).toBeTruthy());
 
       fireEvent.press(screen.getByTestId('more-nav-button'));
       fireEvent.press(screen.getByLabelText(messages.labButtonAccessibilityLabel));
@@ -6729,7 +6743,7 @@ describe('FarmGame UI flow', () => {
 
       fireEvent.press(screen.getAllByText('GET')[0]!);
       await waitFor(() => expect(track).toHaveBeenCalledWith('crop_harvested', expect.anything()));
-      fireEvent.press(screen.getByLabelText(messages.settingsAccessibilityLabel));
+      openSettingsFromMore(screen);
       fireEvent.press(screen.getByText(messages.resetFarmAction));
       fireEvent.changeText(screen.getByLabelText(messages.resetInputAccessibilityLabel), messages.resetConfirmText);
       fireEvent.press(screen.getByText(messages.resetDeleteAction));
@@ -6998,8 +7012,8 @@ describe('FarmGame UI flow', () => {
       const track = jest.fn();
       const screen = await renderGame(createReadyHarvestState(), { analytics: createFarmAnalytics(track) });
 
-      await waitFor(() => expect(screen.getByText('🧺 모두 수확 2')).toBeTruthy());
-      fireEvent.press(screen.getByLabelText('🧺 모두 수확 2'));
+      await waitFor(() => expect(screen.getByText('모두 수확 2')).toBeTruthy());
+      fireEvent.press(screen.getByLabelText('모두 수확 2'));
       await act(async () => {
         jest.advanceTimersByTime(COMBO_WINDOW_MS);
       });
@@ -7022,7 +7036,7 @@ describe('FarmGame UI flow', () => {
         jest.advanceTimersByTime(GAME_TICK_INTERVAL_MS + COMBO_WINDOW_MS + 50);
       });
 
-      await waitFor(() => expect(screen.getByText(`${formatMoney(expectedGold)}G`)).toBeTruthy());
+      await waitFor(() => expect(screen.getByTestId('hud-gold')).toHaveTextContent(formatMoney(expectedGold)));
       expect(trackedParams(track, 'harvest_combo_completed')).toHaveLength(0);
     });
   });
@@ -7141,7 +7155,7 @@ describe('FarmGame UI flow', () => {
     const harvestBonusCta = `광고 보고 30분 동안 수확 ${HARVEST_BONUS_MULTIPLIER}배`;
     const screen = await renderGame(lateGame, { useRewardedAd: () => rewardedAd });
 
-    await waitFor(() => expect(screen.getByText(`${formatMoney(lateGame.gold)}G`)).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('hud-gold')).toHaveTextContent(formatMoney(lateGame.gold)));
 
     fireEvent.press(screen.getAllByText('GET')[0]!);
 
@@ -7181,11 +7195,11 @@ describe('FarmGame UI flow', () => {
     const carrotRevenue = carrot.sell;
     const screen = await renderGame(readyHarvestState, { useRewardedAd: () => rewardedAd });
 
-    await waitFor(() => expect(screen.getByText(`${formatMoney(readyHarvestState.gold)}G`)).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('hud-gold')).toHaveTextContent(formatMoney(readyHarvestState.gold)));
 
     fireEvent.press(screen.getAllByText('GET')[0]!);
 
-    expect(screen.getByText(`${formatMoney(readyHarvestState.gold + carrotRevenue)}G`)).toBeTruthy();
+    expect(screen.getByTestId('hud-gold')).toHaveTextContent(formatMoney(readyHarvestState.gold + carrotRevenue));
     expect(screen.getByText(harvestBonusCta)).toBeTruthy();
 
     fireEvent.press(screen.getByText(harvestBonusCta));
@@ -7196,14 +7210,10 @@ describe('FarmGame UI flow', () => {
     // 부스트가 실제로 다음 수확 골드에 적용되는지(핵심 동작) 먼저 확인한다.
     // 첫 수확은 배율 없이, 두 번째 수확만 부스트가 붙으므로 누적은 (1 + 배율)배다.
     fireEvent.press(screen.getAllByText('GET')[0]!);
-    expect(
-      screen.getByText(
-        `${formatMoney(readyHarvestState.gold + Math.floor(carrotRevenue * (1 + HARVEST_BONUS_MULTIPLIER)))}G`
-      )
-    ).toBeTruthy();
+    expect(screen.getByTestId('hud-gold')).toHaveTextContent(formatMoney(readyHarvestState.gold + Math.floor(carrotRevenue * (1 + HARVEST_BONUS_MULTIPLIER))));
 
     // 부스트 지표 표기는 상단 HUD가 아니라 '농장 현황' 시트로 이동했다(#233).
-    fireEvent.press(screen.getByTestId('cotd-chip'));
+    fireEvent.press(screen.getByTestId('gold-chip'));
     await waitFor(() => expect(screen.getByText('부스트')).toBeTruthy());
     expect(screen.getByText(`×${HARVEST_BONUS_MULTIPLIER.toFixed(1)}`)).toBeTruthy();
   });
@@ -7212,9 +7222,9 @@ describe('FarmGame UI flow', () => {
     const messages = getFarmMessages(DEFAULT_LOCALE);
     const screen = await renderGame(createActiveBoostState(NOW), { preferredLocale: DEFAULT_LOCALE });
 
-    await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('hud-row')).toBeTruthy());
     // 부스트 배수·잔여시간은 '농장 현황' 시트로 이동(#233): chip으로 시트를 연다.
-    fireEvent.press(screen.getByTestId('cotd-chip'));
+    fireEvent.press(screen.getByTestId('gold-chip'));
     await waitFor(() => expect(screen.getByText(messages.boostLabel)).toBeTruthy());
     expect(screen.getByText(`×${HARVEST_BONUS_MULTIPLIER.toFixed(1)}`)).toBeTruthy();
     // Assert the remaining-time element has a non-zero time value.
@@ -7298,7 +7308,7 @@ describe('FarmGame UI flow', () => {
     mockPersistence.readLastSeenAt.mockResolvedValueOnce(NOW - 30_000);
     const screen = await renderGame(createReadyHarvestState());
 
-    await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('hud-row')).toBeTruthy());
     expect(screen.queryByText('다시 오셨네요!')).toBeNull();
   });
 
@@ -7340,7 +7350,7 @@ describe('FarmGame UI flow', () => {
         useRewardedAd: () => createReadyRewardedAd(),
       });
 
-      await waitFor(() => expect(screen.getByText(`${formatMoney(shopReadyState.gold)}G`)).toBeTruthy());
+      await waitFor(() => expect(screen.getByTestId('hud-gold')).toHaveTextContent(formatMoney(shopReadyState.gold)));
 
       // 상점 기본 확장 탭에는 광고 카드가 없으므로 false impression이 없어야 한다.
       fireEvent.press(screen.getByTestId('shop-nav-button'));
@@ -7358,7 +7368,7 @@ describe('FarmGame UI flow', () => {
       // 다른 탭에서 실제 상태가 바뀌어도 보이지 않는 광고 노출은 추가하지 않는다.
       fireEvent.press(screen.getByTestId('shop-tab-expand'));
       fireEvent.press(screen.getByText('밭 개간하기'));
-      expect(screen.getByText(`${formatMoney(shopReadyState.gold - plotCost)}G`)).toBeTruthy();
+      expect(screen.getByTestId('hud-gold')).toHaveTextContent(formatMoney(shopReadyState.gold - plotCost));
       expect(impressionTypes(track)).toEqual(['rewardedGold', 'plotDiscountAd']);
 
       // 보상 탭 재진입은 새로운 실제 노출이다.
@@ -7407,7 +7417,7 @@ describe('FarmGame UI flow', () => {
       const track = jest.fn();
       const screen = await renderGame(state, { analytics: createFarmAnalytics(track) });
 
-      await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+      await waitFor(() => expect(screen.getByTestId('hud-row')).toBeTruthy());
 
       // 더보기 → 도감 진입: collection_screen 1건.
       fireEvent.press(screen.getByTestId('more-nav-button'));
@@ -7446,11 +7456,11 @@ describe('FarmGame UI flow', () => {
         analytics: createFarmAnalytics(track),
         useRewardedAd: () => rewardedAd,
       });
-      await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+      await waitFor(() => expect(screen.getByTestId('hud-row')).toBeTruthy());
 
       // 씨앗 도구를 선택해 밭 탭이 수확이 아닌 성장 가속으로 해석되게 한 뒤, 성장 중인
       // 밭을 눌러 시트를 연다: growthAd impression 1건.
-      fireEvent.press(screen.getByTestId('area-tab-legend_field'));
+      pickArea(screen, 'legend_field');
       fireEvent.press(screen.getByTestId('seed-tool-world_tree'));
       fireEvent.press(screen.getByTestId('plot-cell-0'));
       expect(impressionTypes(track)).toEqual(['growthAd']);
@@ -7482,7 +7492,7 @@ describe('FarmGame UI flow', () => {
         analytics: createFarmAnalytics(track),
         useRewardedAd: () => rewardedAd,
       });
-      await waitFor(() => expect(screen.getByText(`${formatMoney(lateGame.gold)}G`)).toBeTruthy());
+      await waitFor(() => expect(screen.getByTestId('hud-gold')).toHaveTextContent(formatMoney(lateGame.gold)));
 
       // 수확(GET)하면 수확 보너스 넛지 시트가 열린다: harvestBonusAd impression 1건.
       fireEvent.press(screen.getAllByText('GET')[0]!);
@@ -7762,7 +7772,7 @@ describe('NextGoalBar', () => {
     // One expanded plot, gold=50, no crops harvested → harvest is the bottleneck.
     const screen = await renderGame({ ...createInitialState(), unlockedPlotCount: createInitialState().unlockedPlotCount + 1 });
 
-    await waitFor(() => expect(screen.getByText('50G')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('hud-gold')).toHaveTextContent('50'));
 
     expect(screen.queryByText('농장 관리소')).toBeNull();
     fireEvent.press(screen.getByTestId('next-goal-bar'));
@@ -7779,7 +7789,7 @@ describe('NextGoalBar', () => {
     };
     const screen = await renderGame(goldState);
 
-    await waitFor(() => expect(screen.getByText('100G')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('hud-gold')).toHaveTextContent('100'));
 
     expect(screen.queryByText('농장 관리소')).toBeNull();
     fireEvent.press(screen.getByTestId('next-goal-bar'));
@@ -7797,7 +7807,7 @@ describe('NextGoalBar', () => {
     };
     const screen = await renderGame(upgradeState);
 
-    await waitFor(() => expect(screen.getByText('300G')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('hud-gold')).toHaveTextContent('300'));
 
     expect(screen.queryByText('농장 관리소')).toBeNull();
     fireEvent.press(screen.getByTestId('next-goal-bar'));
@@ -8045,7 +8055,7 @@ describe('NextGoalBar', () => {
       });
       const screen = await renderGame(createPostAhaState(), { notifications }, pendingSettings);
 
-      await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+      await waitFor(() => expect(screen.getByTestId('hud-row')).toBeTruthy());
       expect(screen.queryByTestId('notification-prompt-card')).toBeNull();
       await act(async () => {
         resolveSettings?.({ harvestNotificationsEnabled: true });
@@ -8183,8 +8193,8 @@ describe('NextGoalBar', () => {
         { harvestNotificationsEnabled: true, comebackRemindersEnabled: true }
       );
 
-      await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
-      fireEvent.press(screen.getByLabelText(promptMessages.settingsAccessibilityLabel));
+      await waitFor(() => expect(screen.getByTestId('hud-row')).toBeTruthy());
+      openSettingsFromMore(screen);
       fireEvent.press(screen.getByText(promptMessages.harvestNotificationsLabel));
       await waitFor(() =>
         expect(mockPersistence.writePersistedGameSettings).toHaveBeenCalledWith(
@@ -8238,7 +8248,7 @@ describe('NextGoalBar', () => {
         { notifications }
       );
 
-      await waitFor(() => expect(screen.getByText('50G')).toBeTruthy());
+      await waitFor(() => expect(screen.getByTestId('hud-gold')).toHaveTextContent('50'));
       expect(screen.queryByTestId('notification-prompt-card')).toBeNull();
     });
 
@@ -8251,7 +8261,7 @@ describe('NextGoalBar', () => {
         { preserveOnboarding: true }
       );
 
-      await waitFor(() => expect(screen.getByText('50G')).toBeTruthy());
+      await waitFor(() => expect(screen.getByTestId('hud-gold')).toHaveTextContent('50'));
       expect(screen.queryByTestId('notification-prompt-card')).toBeNull();
     });
 
@@ -8259,7 +8269,7 @@ describe('NextGoalBar', () => {
       const notifications = createNotificationsMock({ isSupported: false });
       const screen = await renderGame(createPostAhaState(), { notifications });
 
-      await waitFor(() => expect(screen.getByText('50G')).toBeTruthy());
+      await waitFor(() => expect(screen.getByTestId('hud-gold')).toHaveTextContent('50'));
       expect(screen.queryByTestId('notification-prompt-card')).toBeNull();
     });
   });
@@ -8271,18 +8281,18 @@ describe('NextGoalBar', () => {
 // 보정이 빠지면 raw 0이 쓰여 값이 각각 10/136이 되어야 하므로, 34/160 검증으로
 // bottomSafeInset 배선을 확인할 수 있다.
 describe('하단 safe-area 인셋 적용 (#236)', () => {
-  test('툴 스트립 하단 여백이 보정된 bottomSafeInset(=24)+10 으로 적용된다', async () => {
+  test('맨 아래 탭 바가 보정된 bottomSafeInset(=24)만큼 하단 여백을 둔다 (#606 B안)', async () => {
     const screen = await renderGame(null);
 
-    await waitFor(() => expect(screen.getByText('50G')).toBeTruthy());
-    const toolStrip = StyleSheet.flatten(screen.getByTestId('tool-strip').props.style);
-    expect(toolStrip.paddingBottom).toBe(34);
+    await waitFor(() => expect(screen.getByTestId('hud-gold')).toHaveTextContent('50'));
+    const tabBar = StyleSheet.flatten(screen.getByTestId('game-tab-bar').props.style);
+    expect(tabBar.paddingBottom).toBe(24);
   });
 
   test('발견 배너 bottom 오프셋이 보정된 bottomSafeInset(=24)+136 으로 적용된다', async () => {
     const screen = await renderGame(null);
 
-    await waitFor(() => expect(screen.getByText('50G')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('hud-gold')).toHaveTextContent('50'));
     const banner = StyleSheet.flatten(screen.getByTestId('discovery-banner').props.style);
     expect(banner.bottom).toBe(160);
   });
@@ -8324,7 +8334,7 @@ describe('하단 safe-area 인셋 적용 (#236)', () => {
         ...animalsUnlockedState(),
         seenFeatureCoachmarks: ['animals'],
       });
-      await waitFor(() => expect(resumed.getByText('600G')).toBeTruthy());
+      await waitFor(() => expect(resumed.getByTestId('hud-gold')).toHaveTextContent('600'));
       expect(resumed.queryByTestId('feature-coachmark-card')).toBeNull();
     });
 
@@ -8347,7 +8357,8 @@ describe('하단 safe-area 인셋 적용 (#236)', () => {
         const screen = await renderGame(animalsUnlockedState());
         await waitFor(() => expect(screen.getByTestId('feature-coachmark-card')).toBeTruthy());
 
-        fireEvent.press(screen.getByLabelText('설정'));
+        // 한 번에 시트를 여는 진입점(골드 칩 → 농장 현황)으로 연다.
+        fireEvent.press(screen.getByTestId('gold-chip'));
 
         expect(screen.getByTestId('feature-coachmark-card')).toBeTruthy();
         expect(getSheetModal(screen).props.visible).toBe(false);
@@ -8358,7 +8369,7 @@ describe('하단 safe-area 인셋 적용 (#236)', () => {
 
         await waitFor(() => expect(screen.queryByTestId('feature-coachmark-card')).toBeNull());
         expect(getSheetModal(screen).props.visible).toBe(true);
-        expect(screen.getByText(messages.sheetTitleSettings)).toBeTruthy();
+        expect(screen.getAllByText(messages.sheetTitleStats).length).toBeGreaterThan(0);
       } finally {
         mockModalControl.autoShow = true;
       }
@@ -8373,7 +8384,7 @@ describe('하단 safe-area 인셋 적용 (#236)', () => {
           const screen = await renderGame(animalsUnlockedState());
           await waitFor(() => expect(screen.getByTestId('feature-coachmark-card')).toBeTruthy());
 
-          fireEvent.press(screen.getByLabelText('설정'));
+          fireEvent.press(screen.getByTestId('gold-chip'));
           expect(getSheetModal(screen).props.visible).toBe(false);
 
           await waitFor(() => expect(getSheetModal(screen).props.visible).toBe(true), { timeout: 5000 });
@@ -8463,57 +8474,11 @@ describe('E2E 실기기 플레이에서 드러난 결함 회귀', () => {
   const messages = getFarmMessages(DEFAULT_LOCALE);
   const completedState = (): GameState => ({ ...createInitialState(), onboardingCompleted: true });
 
-  test('밭이 전부 비면 수확이 아니라 심기를 안내한다', async () => {
-    // 밭이 전부 비었는데도 "밭을 눌러 수확할 수 있어요"가 남아, 실제로 누르면
-    // "씨앗을 선택해 주세요"로 튕기는 모순이 있었다(온보딩 직후 신규 유저 경로).
-    const base = completedState();
-    const screen = await renderGame({
-      ...base,
-      plots: base.plots.map((plot) => ({ ...plot, cropType: null, startTime: null, state: 0 as const })),
-    });
-    await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
-    const metaRow = screen.getByTestId('seed-meta-row');
-    expect(within(metaRow).getByText(messages.harvestHintEmpty)).toBeTruthy();
-    expect(within(metaRow).queryByText(messages.harvestHint)).toBeNull();
-  });
-
-  test('밭이 전부 성장 중이면 심으라고 안내하지 않는다', async () => {
-    const base = completedState();
-    const screen = await renderGame({
-      ...base,
-      plots: base.plots.map((plot) => ({
-        ...plot,
-        cropType: 'carrot' as const,
-        startTime: Date.now(),
-        state: 1 as const,
-      })),
-    });
-    await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
-    const metaRow = screen.getByTestId('seed-meta-row');
-    expect(within(metaRow).getByText(messages.harvestHintGrowing)).toBeTruthy();
-    expect(within(metaRow).queryByText(messages.harvestHint)).toBeNull();
-  });
-
-  test('익은 밭이 있을 때만 수확을 안내한다', async () => {
-    const base = completedState();
-    const screen = await renderGame({
-      ...base,
-      plots: base.plots.map((plot) => ({
-        ...plot,
-        cropType: 'carrot' as const,
-        startTime: Date.now() - 600_000,
-        state: 2 as const,
-      })),
-    });
-    await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
-    expect(within(screen.getByTestId('seed-meta-row')).getByText(messages.harvestHint)).toBeTruthy();
-  });
-
   test('시트가 열려 있어도 토스트가 시트와 같은 윈도우에 한 번만 렌더된다', async () => {
     // 시트는 RN Modal이라 별도 네이티브 윈도우에 그려진다. 같은 트리의 토스트는 그
     // 뒤에 가려, 실기기에서는 밭 개간 성공 토스트조차 화면에 나타나지 않았다.
     const screen = await renderGame({ ...completedState(), gold: 100_000 });
-    await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('hud-row')).toBeTruthy());
 
     fireEvent.press(screen.getByTestId('shop-nav-button'));
     await waitFor(() => expect(screen.getByText(messages.sheetTitleShop)).toBeTruthy());
@@ -8544,7 +8509,7 @@ describe('E2E 실기기 플레이에서 드러난 결함 회귀', () => {
       })),
     };
     const screen = await renderGame(state);
-    await waitFor(() => expect(screen.getByText('행복 농장')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('hud-row')).toBeTruthy());
 
     const readyCount = state.plots.filter((plot) => plot.id < state.unlockedPlotCount).length;
     await act(async () => {
@@ -8577,15 +8542,15 @@ describe('#606 첫 세션 계측과 전면 광고 유예', () => {
     jest.useRealTimers();
   });
 
-  test('상점 내비 탭은 nav_tapped와 sheet_opened(nav)를, 닫기는 sheet_closed를 남긴다', async () => {
+  test('상점 탭은 nav_tapped(tab_bar)와 sheet_opened(tab_bar)를, 닫기는 sheet_closed를 남긴다', async () => {
     const track = jest.fn();
     const screen = await renderGame(createInitialState(), { analytics: createFarmAnalytics(track) });
     const messages = getFarmMessages(DEFAULT_LOCALE);
 
     fireEvent.press(screen.getByTestId('shop-nav-button'));
-    expect(track).toHaveBeenCalledWith('nav_tapped', expect.objectContaining({ target: 'shop', location: 'header' }));
+    expect(track).toHaveBeenCalledWith('nav_tapped', expect.objectContaining({ target: 'shop', location: 'tab_bar' }));
     await waitFor(() =>
-      expect(track).toHaveBeenCalledWith('sheet_opened', expect.objectContaining({ sheet: 'shop', source: 'nav' }))
+      expect(track).toHaveBeenCalledWith('sheet_opened', expect.objectContaining({ sheet: 'shop', source: 'tab_bar' }))
     );
 
     fireEvent.press(screen.getByLabelText(messages.sheetCloseAccessibilityLabel));
@@ -8636,7 +8601,7 @@ describe('#606 첫 세션 계측과 전면 광고 유예', () => {
 
     fireEvent.press(screen.getByTestId('more-nav-button'));
     await waitFor(() =>
-      expect(track).toHaveBeenCalledWith('sheet_opened', expect.objectContaining({ sheet: 'more', source: 'nav' }))
+      expect(track).toHaveBeenCalledWith('sheet_opened', expect.objectContaining({ sheet: 'more', source: 'hud' }))
     );
 
     fireEvent.press(screen.getByLabelText(messages.wheelButtonAccessibilityLabel));
